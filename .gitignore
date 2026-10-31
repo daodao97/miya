@@ -1,0 +1,12 @@
+# Local build output and MyGo staging files
+/build/
+/.mygo/
+/miya
+/Miya
+
+# Backups and local machine files
+*.bak
+.DS_Store
+.env
+.env.*
+!.env.example

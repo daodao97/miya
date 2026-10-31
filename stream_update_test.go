@@ -1,0 +1,54 @@
+package main
+
+import (
+	"encoding/json"
+	"testing"
+
+	"miya/internal/claude"
+)
+
+// Streamed text must not write the sidebar's cache on the UI thread for
+// every delta, which made replies show in bursts.
+func TestStreamingDeltasDoNotRewriteThreadCache(t *testing.T) {
+	writes := 0
+	old := persistThreadListCache
+	persistThreadListCache = func(map[string][]Thread) { writes++ }
+	t.Cleanup(func() { persistThreadListCache = old })
+
+	c := testController()
+	c.cwd = "/work/demo"
+	c.projectCache = map[string][]Thread{}
+	c.handle(event("turn/started", `{"threadId":"t1","turn":{"id":"turn1"}}`))
+	writes = 0
+	for i := 0; i < 100; i++ {
+		c.handle(event("item/agentMessage/delta", `{"threadId":"t1","turnId":"turn1","itemId":"a","delta":"word "}`))
+	}
+	if got := len(c.threads()[0].Messages[0].Content); got != 500 {
+		t.Fatalf("deltas lost: %d bytes", got)
+	}
+	if writes != 0 {
+		t.Fatalf("Codex deltas wrote the cache %d times", writes)
+	}
+
+	c.setThreads(append(c.threads(), Thread{ID: 3, Agent: "claude-code", ServerID: "s3"}))
+	emit := func(s string) {
+		var f claude.Frame
+		if err := json.Unmarshal([]byte(s), &f); err != nil {
+			t.Fatal(err)
+		}
+		c.handleClaude(3, f)
+	}
+	emit(`{"type":"stream_event","event":{"type":"message_start","message":{"id":"m1"}}}`)
+	writes = 0
+	for i := 0; i < 100; i++ {
+		emit(`{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"word "}}}`)
+	}
+	if writes != 0 {
+		t.Fatalf("Claude deltas wrote the cache %d times", writes)
+	}
+
+	c.handle(event("thread/name/updated", `{"threadId":"t1","name":"Renamed"}`))
+	if writes == 0 {
+		t.Fatal("a new title was not saved")
+	}
+}

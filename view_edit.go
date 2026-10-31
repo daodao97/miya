@@ -1,0 +1,87 @@
+package main
+
+import (
+	"strings"
+
+	"github.com/egoist/mygo/ui"
+)
+
+// userGroupView shows a user message, with an edit button while the pointer
+// is on it when its agent can send it again.
+func (app *chatApp) userGroupView(c *ui.Context, g messageGroup) {
+	m := g.Messages[0]
+	// The phone holds no agent to rewind with.
+	editable := !app.mobile && app.c.canRewind(app.c.current(), m)
+	col := ui.Column(c).FillWidth().Gap(4)
+	hovered := col.Hovered()
+	col.Children(func() {
+		if g.ShowTimestamp {
+			ui.Text(c, formatMessageTimestamp(g.Timestamp)).AlignSelf(ui.End).TextColor(muted).FontSize(11)
+		}
+		if app.editing == m.ID && editable {
+			app.editMessageView(c.Key("edit"), m)
+			return
+		}
+		app.messageView(c.Key(messageViewKey(m)), m, false)
+		if !editable {
+			return
+		}
+		ui.Row(c).Height(24).Justify(ui.End).Children(func() {
+			if !hovered {
+				return
+			}
+			b := quiet(c.Key("edit-message")).Size(24, 24).PaddingX(4).Justify(ui.Center).Label("编辑消息").Tooltip("编辑并重新发送")
+			b.Children(func() { icon(c, "edit", 14, muted) })
+			if b.Clicked() {
+				app.startEdit(m)
+			}
+		})
+	})
+}
+
+// startEdit edits a message's text, without the attachment lines the
+// composer added to it.
+func (app *chatApp) startEdit(m Message) {
+	var keep []string
+	for _, l := range strings.Split(attachmentImagePlaceholder.ReplaceAllString(m.Content, ""), "\n") {
+		if !strings.HasPrefix(l, "📎 ") {
+			keep = append(keep, l)
+		}
+	}
+	app.editing, app.editText = m.ID, strings.TrimSpace(strings.Join(keep, "\n"))
+}
+
+func (app *chatApp) submitEdit(m Message) {
+	if strings.TrimSpace(app.editText) == "" {
+		return
+	}
+	app.editing = 0
+	app.c.rewind(app.c.current().ID, m.ID, app.editText)
+}
+
+func (app *chatApp) editMessageView(c *ui.Context, m Message) {
+	ui.Column(c).AlignSelf(ui.End).FillWidth().MaxWidth(560).Background(bubble).Radius(16).Padding(12).Gap(8).Children(func() {
+		in := ui.TextAreaBase(c.Key("input"), &app.editText).Lines(1, 12).FillWidth().FontSize(13).Label("编辑消息").AutoFocus()
+		in.OnTextKey(func(k ui.TextKey) bool {
+			switch {
+			case k.Key == ui.KeyEnter && k.Mods == 0:
+				app.editText = k.Text()
+				app.submitEdit(m)
+				return true
+			case k.Key == ui.KeyEscape:
+				app.editing = 0
+				return true
+			}
+			return false
+		})
+		ui.Text(c, "将从这条消息重新开始，之后的对话会被替换；已修改的文件不会恢复。").FontSize(11).TextColor(muted)
+		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
+			if ui.Button(c.Key("cancel"), "取消").Clicked() {
+				app.editing = 0
+			}
+			if ui.PrimaryButton(c.Key("send"), "发送").Disabled(strings.TrimSpace(app.editText) == "").Clicked() {
+				app.submitEdit(m)
+			}
+		})
+	})
+}

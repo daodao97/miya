@@ -1,0 +1,215 @@
+package main
+
+import (
+	"bufio"
+	"bytes"
+	"encoding/json"
+	"errors"
+	"net"
+	"sync"
+	"time"
+)
+
+var errServiceClosed = errors.New("后台服务连接已断开")
+
+// serviceClient is a window's connection to the service.
+type serviceClient struct {
+	conn    net.Conn
+	wmu     sync.Mutex
+	mu      sync.Mutex
+	next    int64
+	pending map[int64]chan svcMessage
+	events  func(svcMessage)
+	closed  chan struct{}
+	once    sync.Once
+}
+
+func newServiceClient(conn net.Conn) *serviceClient {
+	cl := &serviceClient{conn: conn, pending: map[int64]chan svcMessage{}, closed: make(chan struct{})}
+	go cl.read()
+	return cl
+}
+
+func dialService(sock string) (*serviceClient, error) {
+	conn, err := net.DialTimeout("unix", sock, 2*time.Second)
+	if err != nil {
+		return nil, err
+	}
+	return newServiceClient(conn), nil
+}
+
+// setEvents sets what receives the service's events, on the reading goroutine.
+func (cl *serviceClient) setEvents(f func(svcMessage)) {
+	cl.mu.Lock()
+	cl.events = f
+	cl.mu.Unlock()
+}
+
+func (cl *serviceClient) read() {
+	defer cl.Close()
+	r := bufio.NewReaderSize(cl.conn, 64<<10)
+	for {
+		line, err := r.ReadBytes('\n')
+		if len(bytes.TrimSpace(line)) > 0 {
+			var m svcMessage
+			if json.Unmarshal(line, &m) == nil {
+				cl.mu.Lock()
+				ch, events := cl.pending[m.ID], cl.events
+				if m.ID != 0 {
+					delete(cl.pending, m.ID)
+				}
+				cl.mu.Unlock()
+				switch {
+				case m.ID != 0 && ch != nil:
+					ch <- m
+				case m.ID == 0 && events != nil:
+					events(m)
+				}
+			}
+		}
+		if err != nil {
+			return
+		}
+	}
+}
+
+// Close ends the connection; waiting calls fail.
+func (cl *serviceClient) Close() {
+	cl.once.Do(func() {
+		close(cl.closed)
+		cl.conn.Close()
+		cl.mu.Lock()
+		for id, ch := range cl.pending {
+			ch <- svcMessage{ID: id, Error: errServiceClosed.Error()}
+			delete(cl.pending, id)
+		}
+		cl.mu.Unlock()
+	})
+}
+
+func (cl *serviceClient) send(req svcRequest) error {
+	data, err := json.Marshal(req)
+	if err != nil {
+		return err
+	}
+	cl.wmu.Lock()
+	defer cl.wmu.Unlock()
+	_ = cl.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+	_, err = cl.conn.Write(append(data, '\n'))
+	return err
+}
+
+// call sends a request and waits for its result.
+func (cl *serviceClient) call(op string, args, out any) error {
+	if cl == nil {
+		return errServiceClosed
+	}
+	raw, err := json.Marshal(args)
+	if err != nil {
+		return err
+	}
+	ch := make(chan svcMessage, 1)
+	cl.mu.Lock()
+	select {
+	case <-cl.closed:
+		cl.mu.Unlock()
+		return errServiceClosed
+	default:
+	}
+	cl.next++
+	id := cl.next
+	cl.pending[id] = ch
+	cl.mu.Unlock()
+	forget := func() {
+		cl.mu.Lock()
+		delete(cl.pending, id)
+		cl.mu.Unlock()
+	}
+	if err := cl.send(svcRequest{ID: id, Op: op, Args: raw}); err != nil {
+		forget()
+		return err
+	}
+	select {
+	case m := <-ch:
+		if m.Error != "" {
+			return errors.New(m.Error)
+		}
+		if out != nil && len(m.Result) > 0 {
+			return json.Unmarshal(m.Result, out)
+		}
+		return nil
+	case <-time.After(15 * time.Second):
+		forget()
+		return errors.New("后台服务没有响应")
+	}
+}
+
+// notify sends a request without waiting.
+func (cl *serviceClient) notify(op string, args any) {
+	if cl == nil {
+		return
+	}
+	raw, err := json.Marshal(args)
+	if err != nil {
+		return
+	}
+	_ = cl.send(svcRequest{Op: op, Args: raw})
+}
+
+// connectService connects to the service, starting it when none runs, and
+// replaces one built from another executable once it is idle.
+func connectService(workspace string) (*serviceClient, svcState, error) {
+	sock := serviceSocket()
+	cl, err := dialService(sock)
+	if err != nil {
+		if cl, err = startService(sock, workspace); err != nil {
+			return nil, svcState{}, err
+		}
+	}
+	exe, exeTime := executableInfo()
+	var h svcHello
+	if err := cl.call("hello", nil, &h); err != nil {
+		cl.Close()
+		return nil, svcState{}, err
+	}
+	if h.Version != serviceVersion || h.Exe != exe || !h.ExeTime.Equal(exeTime) {
+		switch {
+		case !h.Busy:
+			_ = cl.call("quit", nil, nil)
+			cl.Close()
+			waitProcessGone(h.PID, 3*time.Second)
+			if cl, err = startService(sock, workspace); err != nil {
+				return nil, svcState{}, err
+			}
+		case h.Version == serviceVersion:
+			// A turn runs in the older service: use it, and let it end once idle.
+			cl.notify("quitWhenIdle", nil)
+		default:
+			cl.Close()
+			return nil, svcState{}, errors.New("后台服务版本不兼容，且有对话正在运行")
+		}
+	}
+	var st svcState
+	if err := cl.call("state", nil, &st); err != nil {
+		cl.Close()
+		return nil, svcState{}, err
+	}
+	return cl, st, nil
+}
+
+func startService(sock, workspace string) (*serviceClient, error) {
+	if err := spawnService(workspace); err != nil {
+		return nil, err
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		time.Sleep(30 * time.Millisecond)
+		cl, err := dialService(sock)
+		if err == nil {
+			return cl, nil
+		}
+		if time.Now().After(deadline) {
+			return nil, err
+		}
+	}
+}

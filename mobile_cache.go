@@ -1,0 +1,218 @@
+package main
+
+import (
+	"compress/gzip"
+
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+	"time"
+
+	"miya/internal/remote"
+)
+
+// The phone keeps what it last saw of each desktop on disk, so it shows
+// the conversations at once after a relaunch and asks the desktop only for
+// what changed. Each desktop has a directory of its own, named by its link.
+const (
+	phoneDiskThreads = 50
+	cacheFlushDelay  = 800 * time.Millisecond
+	stateKey         = "\x00state"
+	stateFile        = "state.json.gz"
+)
+
+type phoneSavedState struct {
+	Host  string     `json:"host"`
+	State phoneState `json:"state"`
+}
+
+// cacheName names a file or directory without the value it stands for.
+func cacheName(s string) string {
+	h := sha256.Sum256([]byte(s))
+	return hex.EncodeToString(h[:12])
+}
+
+// openDiskCache uses the directory of the desktop at link, showing what it
+// last saw of the desktop until the desktop answers.
+func (m *mobileApp) openDiskCache(link string) {
+	m.flushCache(true)
+	dir := ""
+	if m.dataDir != "" && link != "" {
+		dir = filepath.Join(m.dataDir, "threads", cacheName(link))
+	}
+	if dir != m.cacheDir {
+		m.msgCache, m.msgKeys = nil, nil
+	}
+	m.cacheDir = dir
+	if dir == "" || len(m.state.Projects) > 0 {
+		return
+	}
+	var saved phoneSavedState
+	if readGzipJSON(filepath.Join(dir, stateFile), &saved) == nil {
+		// Approvals may have been answered since; the desktop sends them.
+		saved.State.Approvals = nil
+		m.state = saved.State
+		if m.host == "" {
+			m.host = saved.Host
+		}
+	}
+}
+
+// dropDiskCache forgets the current desktop's conversations.
+func (m *mobileApp) dropDiskCache() {
+	if m.flushTimer != nil {
+		m.flushTimer.Stop()
+		m.flushTimer = nil
+	}
+	dir := m.cacheDir
+	m.dirty, m.cacheDir, m.msgCache, m.msgKeys = nil, "", nil, nil
+	if dir != "" {
+		os.RemoveAll(dir)
+	}
+}
+
+func (m *mobileApp) loadDisk(serverID string) []Message {
+	if m.cacheDir == "" || serverID == "" {
+		return nil
+	}
+	var msgs []Message
+	if readGzipJSON(filepath.Join(m.cacheDir, cacheName(serverID)+".json.gz"), &msgs) != nil {
+		return nil
+	}
+	return msgs
+}
+
+// persist saves v under key shortly, with whatever else changed meanwhile.
+func (m *mobileApp) persist(key string, v any) {
+	if m.cacheDir == "" {
+		return
+	}
+	if m.dirty == nil {
+		m.dirty = map[string]any{}
+	}
+	m.dirty[key] = v
+	if m.flushTimer == nil {
+		m.flushTimer = time.AfterFunc(cacheFlushDelay, func() { runOnMain(func() { m.flushCache(false) }) })
+	}
+}
+
+func (m *mobileApp) persistState() {
+	m.persist(stateKey, phoneSavedState{Host: m.host, State: m.state})
+}
+
+// flushCache writes what changed, in the background unless wait is set, as
+// when iOS is about to suspend the app.
+func (m *mobileApp) flushCache(wait bool) {
+	if m.flushTimer != nil {
+		m.flushTimer.Stop()
+		m.flushTimer = nil
+	}
+	dir, dirty := m.cacheDir, m.dirty
+	m.dirty = nil
+	if dir == "" || len(dirty) == 0 {
+		return
+	}
+	write := func() {
+		for key, v := range dirty {
+			name := stateFile
+			if key != stateKey {
+				name = cacheName(key) + ".json.gz"
+			}
+			writeGzipJSON(filepath.Join(dir, name), v)
+		}
+		pruneCache(dir, phoneDiskThreads)
+	}
+	if wait {
+		write()
+	} else {
+		go write()
+	}
+}
+
+// pruneCache keeps the keep most recently written conversations.
+func pruneCache(dir string, keep int) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	type file struct {
+		name string
+		at   time.Time
+	}
+	var files []file
+	for _, e := range entries {
+		if e.Name() == stateFile || !strings.HasSuffix(e.Name(), ".json.gz") {
+			continue
+		}
+		if info, err := e.Info(); err == nil {
+			files = append(files, file{e.Name(), info.ModTime()})
+		}
+	}
+	if len(files) <= keep {
+		return
+	}
+	sort.Slice(files, func(i, j int) bool { return files[i].at.Before(files[j].at) })
+	for _, f := range files[:len(files)-keep] {
+		os.Remove(filepath.Join(dir, f.name))
+	}
+}
+
+func readGzipJSON(path string, v any) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	z, err := gzip.NewReader(f)
+	if err != nil {
+		return err
+	}
+	defer z.Close()
+	return json.NewDecoder(z).Decode(v)
+}
+
+// writeGzipJSON replaces path atomically: a process ended midway leaves the
+// old file, never half of one.
+func writeGzipJSON(path string, v any) error {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(dir, ".tmp-*")
+	if err != nil {
+		return err
+	}
+	name := tmp.Name()
+	defer os.Remove(name)
+	z, _ := gzip.NewWriterLevel(tmp, gzip.BestSpeed)
+	err = json.NewEncoder(z).Encode(v)
+	if cerr := z.Close(); err == nil {
+		err = cerr
+	}
+	if cerr := tmp.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		return err
+	}
+	return os.Rename(name, path)
+}
+
+// subscribeRequestFor is subscribeRequest for a conversation known by its
+// ServerID, as after a relaunch before the list arrives.
+func (m *mobileApp) subscribeRequestFor(serverID string, id int) (r remote.Request) {
+	r = m.subscribeRequest(id)
+	if r.ServerID != serverID {
+		r.ServerID, r.Project, r.Agent, r.Have = serverID, "", "", nil
+	}
+	if len(r.Have) == 0 {
+		for _, msg := range m.cachedMessages(serverID) {
+			r.Have = append(r.Have, remote.Seen{ID: msg.ID, FP: messageFingerprint(msg)})
+		}
+	}
+	return r
+}

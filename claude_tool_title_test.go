@@ -1,0 +1,32 @@
+package main
+
+import (
+	"os"
+	"testing"
+)
+
+func TestClaudeToolTitles(t *testing.T) {
+	home, _ := os.UserHomeDir()
+	tool := func(content, status string) Message {
+		return Message{Role: "tool", Kind: "claudeTool", Content: content, Status: status}
+	}
+	for _, tc := range []struct {
+		m          Message
+		title, ico string
+	}{
+		{tool("Bash\n{\"command\":\"rtk ls -la\\necho hi\",\"description\":\"List\"}\nout", "completed"), "Ran rtk ls -la", "terminal-2"},
+		{tool("Bash\n{\"command\":\"go test\"}", "inProgress"), "Running go test", "terminal-2"},
+		{tool("Read\n{\"file_path\":\""+home+"/w/main.go\"}\npackage main", "completed"), "已读取 ~/w/main.go", "file-text"},
+		{tool("Edit\n{\"file_path\":\"/tmp/a.go\",\"old_string\":\"x\"}", "failed"), "Failed · /tmp/a.go", "edit"},
+		{tool("Grep\n{\"pattern\":\"func main\"}", "completed"), "已搜索 func main", "folder"},
+		{tool("mcp__x__lookup\n{\"query\":\"weather\"}", "completed"), "mcp__x__lookup · weather", ""},
+		{tool("Read", "completed"), "Read", "file-text"},
+	} {
+		if got := activityTitle(tc.m); got != tc.title {
+			t.Errorf("title %q, want %q", got, tc.title)
+		}
+		if tc.ico != "" && activityIcon(tc.m) != tc.ico {
+			t.Errorf("%q icon %q, want %q", tc.title, activityIcon(tc.m), tc.ico)
+		}
+	}
+}
