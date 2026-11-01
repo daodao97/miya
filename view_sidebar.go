@@ -25,7 +25,7 @@ func (app *chatApp) sidebarView(c *ui.Context) {
 					app.newThread()
 				}
 				if app.nav(c.Key("nav-automations"), "clock", "Automations").Clicked() {
-					app.section = "Automations"
+					app.showAutomations()
 				}
 				if app.nav(c.Key("nav-skills"), "stack-2", "Skills").Clicked() {
 					app.section = "Skills"
@@ -168,7 +168,11 @@ func (app *chatApp) threadRow(c *ui.Context, t Thread) {
 		}
 		row.Children(func() {
 			agent := threadAgent(t)
-			agentIcon(c, agent, 14)
+			if t.Automation != "" {
+				icon(c, "clock", 14, agentTint(agent))
+			} else {
+				agentIcon(c, agent, 14)
+			}
 			ui.Text(c, t.Title).Grow(1).MinWidth(0).SingleLine().Ellipsis("…").TextColor(ink)
 			ui.Box(c.Key("status-actions")).Size(24, 24).Shrink(0).Children(func() {
 				// Keep the menu anchor built when the pointer leaves the row
@@ -248,18 +252,18 @@ func (app *chatApp) sectionView(c *ui.Context) {
 	}
 	ui.Scroll(c.Key("section:" + app.section)).Grow(1).MinHeight(0).Children(func() {
 		ui.Column(c).Padding(pad).Gap(20).Children(func() {
-			if app.section != "Settings" {
+			if app.section != "Settings" && app.section != "Automations" {
 				ui.Text(c, tr(app.section)).FontSize(26).FontWeight(600).SingleLine().Ellipsis("…")
 			}
 			switch app.section {
 			case "Automations":
-				ui.Text(c, "Schedule recurring work for your projects.").TextColor(muted)
+				app.automationsView(c)
 			case "Skills":
 				ui.Text(c, "Reusable instructions for the way you work.").TextColor(muted)
 			case "Settings":
 				app.settingsView(c)
 			}
-			if quiet(c.Key("back")).AlignSelf(ui.Start).Children(func() { ui.Text(c, tr("Back to chat")) }).Clicked() {
+			if app.section != "Automations" && quiet(c.Key("back")).AlignSelf(ui.Start).Children(func() { ui.Text(c, tr("Back to chat")) }).Clicked() {
 				app.section = ""
 			}
 		})

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -48,7 +49,8 @@ func (app *chatApp) startEdit(m Message) {
 			keep = append(keep, l)
 		}
 	}
-	app.editing, app.editText = m.ID, strings.TrimSpace(strings.Join(keep, "\n"))
+	body, _ := app.threadReferenceContent(strings.TrimSpace(strings.Join(keep, "\n")))
+	app.editing, app.editText = m.ID, body
 }
 
 func (app *chatApp) submitEdit(m Message) {
@@ -61,19 +63,13 @@ func (app *chatApp) submitEdit(m Message) {
 
 func (app *chatApp) editMessageView(c *ui.Context, m Message) {
 	ui.Column(c).AlignSelf(ui.End).FillWidth().MaxWidth(560).Background(bubble).Radius(16).Padding(12).Gap(8).Children(func() {
-		in := ui.TextAreaBase(c.Key("input"), &app.editText).Lines(1, 12).FillWidth().FontSize(13).Label("编辑消息").AutoFocus()
-		in.OnTextKey(func(k ui.TextKey) bool {
-			switch {
-			case k.Key == ui.KeyEnter && k.Mods == 0:
-				app.editText = k.Text()
-				app.submitEdit(m)
-				return true
-			case k.Key == ui.KeyEscape:
-				app.editing = 0
-				return true
-			}
-			return false
-		})
+		in := app.threadInput(c.Key("input"), &app.editInput, app.editText, strconv.Itoa(m.ID), "编辑消息", "", 13, 536, 1, 12, func(text string) { app.editText = text }).AutoFocus()
+		if in.Shortcut(0, ui.KeyEnter) {
+			app.submitEdit(m)
+		}
+		if in.Shortcut(0, ui.KeyEscape) {
+			app.editing = 0
+		}
 		ui.Text(c, "将从这条消息重新开始，之后的对话会被替换；已修改的文件不会恢复。").FontSize(11).TextColor(muted)
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
 			if ui.Button(c.Key("cancel"), "取消").Clicked() {

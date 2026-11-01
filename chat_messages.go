@@ -245,10 +245,16 @@ func itemMessage(item codex.Item) (Message, bool) {
 		}
 	case "collabagenttoolcall":
 		m.Role = "tool"
-		m.Content = item.Status + " · " + item.Tool + "\n" + jsonText(item.AgentsStates)
+		m.Agents = codexSubAgents(item)
+		if len(m.Agents) > 0 {
+			// The agents list shows their states; what was sent to them stays.
+			m.Content = codexCollabContent(item, m.Agents)
+		} else {
+			m.Content = item.Status + " · " + item.Tool + "\n" + jsonText(item.AgentsStates)
+		}
 	case "subagentactivity":
 		m.Role = "activity"
-		m.Content = "Sub-agent activity"
+		m.Content = codexSubAgentActivity(item)
 	case "websearch":
 		m.Role = "tool"
 		m.Content = "Web search · " + item.Query + "\n" + jsonText(item.Result)
@@ -289,7 +295,7 @@ func itemMessage(item codex.Item) (Message, bool) {
 }
 
 func messageLabel(kind string) string {
-	labels := map[string]string{"reasoning": "Thinking", "plan": "Plan", "commandexecution": "Command", "filechange": "File changes", "diff": "Changes", "mcptoolcall": "MCP tool", "dynamictoolcall": "Tool", "collabagenttoolcall": "Agent task", "subagentactivity": "Agent activity", "websearch": "Web search", "imageview": "Image", "imagegeneration": "Generated image", "enteredreviewmode": "Review started", "exitedreviewmode": "Review completed", "contextcompaction": "Context compacted", "sleep": "Waiting", "functioncalloutput": "Tool result", "hookprompt": "Hook"}
+	labels := map[string]string{"reasoning": "Thinking", "plan": "Plan", "commandexecution": "Command", "filechange": "File changes", "diff": "Changes", "mcptoolcall": "MCP tool", "dynamictoolcall": "Tool", "collabagenttoolcall": "Agent task", "subagentactivity": "Agent activity", "websearch": "Web search", "imageview": "Image", "imagegeneration": "Generated image", "enteredreviewmode": "Review started", "exitedreviewmode": "Review completed", "contextcompaction": "Context compacted", "sleep": "Waiting", "functioncalloutput": "Tool result", "hookprompt": "Hook", "handoff": "交付"}
 	if label := labels[strings.ToLower(kind)]; label != "" {
 		return label
 	}
@@ -304,7 +310,7 @@ func messageIcon(kind string) string {
 		return "file-text"
 	case "reasoning", "sleep":
 		return "clock"
-	case "plan", "collabagenttoolcall", "subagentactivity":
+	case "plan", "collabagenttoolcall", "subagentactivity", "handoff":
 		return "stack-2"
 	default:
 		return "message-circle"

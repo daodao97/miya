@@ -3,6 +3,7 @@ package remote
 import (
 	"bufio"
 	"compress/flate"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -23,13 +24,14 @@ var ErrLineTooLong = errors.New("remote: message too long")
 // one; the peer reads them after DecompressReceives. Send is safe for
 // concurrent use; Receive is not.
 type Conn struct {
-	c       net.Conn
-	r       *bufio.Reader
-	wmu     sync.Mutex
-	fw      *flate.Writer
-	written atomic.Int64
-	once    sync.Once
-	onClose func()
+	dialPort func(context.Context, uint16) (net.Conn, error)
+	c        net.Conn
+	r        *bufio.Reader
+	wmu      sync.Mutex
+	fw       *flate.Writer
+	written  atomic.Int64
+	once     sync.Once
+	onClose  func()
 }
 
 func newConn(c net.Conn, onClose func()) *Conn {
@@ -124,4 +126,16 @@ func (c *Conn) Close() error {
 		}
 	})
 	return err
+}
+
+// FilesPort is an HTTP file server inside the desktop's Tailcat overlay.
+const FilesPort = 4244
+
+// DialFiles reuses this connection's tunnel and identity. It never binds a
+// public listening socket or consumes another phone key slot.
+func (c *Conn) DialFiles(ctx context.Context) (net.Conn, error) {
+	if c.dialPort == nil {
+		return nil, errors.New("remote: file transport unavailable")
+	}
+	return c.dialPort(ctx, FilesPort)
 }

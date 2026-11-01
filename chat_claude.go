@@ -128,9 +128,14 @@ func (c *chatController) sendClaude(req sendRequest) int {
 	text, paths, policy := req.Text, req.Attachments, req.Policy
 	t := c.threadWithID(req.ThreadID)
 	cwd := c.cwd
-	if t.ID == 0 {
+	if t.ID != 0 {
+		cwd = c.threadWorkspace(t.ID)
+	} else {
+		if req.Project != "" {
+			cwd = req.Project
+		}
 		t = Thread{ID: c.nextID(), Agent: agentClaude, PermissionPolicy: policy, ServerID: newClaudeSessionID(), Title: conversationTitle("", text, ""), Project: filepath.Base(cwd), Loaded: true, HistoryLoaded: true}
-		c.setThreads(append([]Thread{t}, c.threads()...))
+		c.addThread(cwd, t)
 	}
 	id := t.ID
 	now := time.Now().UnixMilli()
@@ -153,9 +158,9 @@ func (c *chatController) sendClaude(req sendRequest) int {
 			c.dispatch(func() { c.finishClaude(id, cwd, err) })
 			return
 		}
-		run, err := claude.Start(c.ctx, claude.Options{Binary: c.claudeBinary, Args: c.claudeArgs, Env: c.claudeEnv, Cwd: cwd, SessionID: t.ServerID, Resume: t.Resumed, PermissionMode: claudePermissionMode(policy), Model: req.Model, Effort: req.Effort, Content: content}, func(f claude.Frame) {
+		run, err := claude.Start(c.ctx, claude.Options{Binary: c.claudeBinary, Args: append(append([]string(nil), c.claudeArgs...), claudeMCPArgs(cwd)...), Env: append(append([]string(nil), c.claudeEnv...), claudeMCPEnv()...), Cwd: cwd, SessionID: t.ServerID, Resume: t.Resumed, PermissionMode: claudePermissionMode(policy), Model: req.Model, Effort: req.Effort, Content: content}, func(f claude.Frame) {
 			c.dispatch(func() {
-				if c.cwd == cwd {
+				if c.threadWorkspace(id) == cwd {
 					c.handleClaude(id, f)
 				}
 			})
@@ -165,7 +170,7 @@ func (c *chatController) sendClaude(req sendRequest) int {
 				c.finishClaude(id, cwd, err)
 				return
 			}
-			if c.cwd != cwd {
+			if c.threadWorkspace(id) != cwd {
 				go run.Stop()
 				return
 			}
@@ -181,7 +186,9 @@ func (c *chatController) sendClaude(req sendRequest) int {
 }
 
 func (c *chatController) finishClaude(id int, cwd string, err error) {
-	if c.cwd == cwd {
+	// The run's conversation may be in a background project.
+	here := c.threadWorkspace(id) == cwd
+	if here {
 		sid := c.threadWithID(id).ServerID
 		go func() {
 			path := findClaudeSession(cwd, sid)
@@ -193,7 +200,7 @@ func (c *chatController) finishClaude(id int, cwd string, err error) {
 				return
 			}
 			c.dispatch(func() {
-				if c.cwd != cwd {
+				if c.threadWorkspace(id) != cwd {
 					return
 				}
 				c.update(id, func(t *Thread) {
@@ -205,7 +212,7 @@ func (c *chatController) finishClaude(id int, cwd string, err error) {
 		}()
 	}
 	delete(c.claudeRuns, id)
-	if c.cwd != cwd {
+	if !here {
 		return
 	}
 	c.update(id, func(t *Thread) {
@@ -287,6 +294,18 @@ func (c *chatController) handleClaude(id int, f claude.Frame) {
 			t.ServerID = f.SessionID
 			t.Resumed = true
 		}
+		if f.Type == "system" && strings.HasPrefix(f.Subtype, "task_") {
+			claudeTaskFrame(t, f)
+			return
+		}
+		// A sub-agent's own frames are steps of its Task call, not messages
+		// of the conversation.
+		if f.ParentToolUseID != "" {
+			if f.Type == "assistant" {
+				claudeSubAgentStep(t, f.ParentToolUseID, f.Message.Content)
+			}
+			return
+		}
 		switch f.Type {
 		case "stream_event":
 			var e struct {
@@ -314,11 +333,13 @@ func (c *chatController) handleClaude(id int, f claude.Frame) {
 		case "assistant":
 			for i, b := range f.Message.Content {
 				if b.Type == "text" {
-					key := fmt.Sprintf("%s:%d", f.Message.ID, i)
+					key := claudeTextKey(t, f.Message.ID, i, b.Text)
 					c.upsert(t, Message{Role: "assistant", Kind: "agentMessage", ItemID: key, Content: b.Text})
 				}
 				if b.Type == "tool_use" {
-					c.upsert(t, Message{Role: "tool", Kind: "claudeTool", ItemID: b.ID, Content: b.Name + "\n" + string(b.Input), Status: "inProgress"})
+					m := Message{Role: "tool", Kind: "claudeTool", ItemID: b.ID, Content: b.Name + "\n" + string(b.Input), Status: "inProgress", Agents: claudeSubAgent(b.ID, b.Name, b.Input, "inProgress")}
+					keepSubAgents(t, &m)
+					c.upsert(t, m)
 				}
 			}
 		case "user":
@@ -330,7 +351,11 @@ func (c *chatController) handleClaude(id int, f claude.Frame) {
 							if b.IsError {
 								t.Messages[i].Status = "failed"
 							}
-							t.Messages[i].Content += "\n" + bounded(string(b.Content))
+							output := claudeVisibleText(claudeBlocks(b.Content))
+							if shown := claudeToolOutput(t.Messages[i], output); shown != "" {
+								t.Messages[i].Content += "\n" + bounded(shown)
+							}
+							claudeFinishSubAgents(&t.Messages[i], output)
 						}
 					}
 				}
@@ -451,4 +476,35 @@ func stalledHint(t Thread, waitingForUser bool, now time.Time) string {
 		return ""
 	}
 	return fmt.Sprintf("已 %s 没有收到回应，可能是网络或代理问题，可以停止后重试", formatElapsed(quiet.Milliseconds()))
+}
+
+// claudeTextKey is the message a complete text block of a reply fills in.
+// Claude Code sends each block of a reply in its own assistant frame, where
+// it is at index 0, while streamed deltas carry the block's index in the
+// whole reply; so the block completes the streamed message of its text, and
+// an unstreamed block takes the first key no other text holds.
+func claudeTextKey(t *Thread, messageID string, index int, text string) string {
+	prefix := messageID + ":"
+	partial := ""
+	used := map[string]bool{}
+	for _, m := range t.Messages {
+		if m.Role != "assistant" || !strings.HasPrefix(m.ItemID, prefix) {
+			continue
+		}
+		if m.Content == text {
+			return m.ItemID
+		}
+		if partial == "" && m.Content != "" && strings.HasPrefix(text, m.Content) {
+			partial = m.ItemID
+		}
+		used[m.ItemID] = true
+	}
+	if partial != "" {
+		return partial
+	}
+	for k := index; ; k++ {
+		if key := fmt.Sprintf("%s:%d", messageID, k); !used[key] {
+			return key
+		}
+	}
 }

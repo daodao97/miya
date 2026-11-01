@@ -4,11 +4,49 @@ package main
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"miya/internal/codex"
 	"miya/internal/remote"
 )
+
+func TestPhonePreviewRequestChecksConversationAndWorksBeforeSubscribe(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "photo.png")
+	if err := os.WriteFile(path, testPNG(t), 0600); err != nil {
+		t.Fatal(err)
+	}
+	source := localImageDataURI(path)
+	c := serverController(t.TempDir(), "")
+	c.setThreads([]Thread{{ID: 1, ServerID: "s1", HistoryLoaded: true, Messages: []Message{{ID: 1, Role: "user", Images: []string{source}}}}})
+	conn, _ := serveTestPhone(t, c)
+	for _, ref := range []string{source, "file:///unmentioned/private.png"} {
+		conn.requests <- remote.Request{Op: "image", Thread: 1, ServerID: "s1", ImageSource: ref}
+		for {
+			select {
+			case frame := <-conn.frames:
+				if frame.Type != "image" {
+					continue
+				}
+				var preview phoneImagePreview
+				if err := json.Unmarshal(frame.Data, &preview); err != nil || preview.Source != ref {
+					t.Fatalf("wrong preview reply: %v", err)
+				}
+				if ref == source {
+					if frame.Error != "" || len(preview.Data) == 0 {
+						t.Fatal("cached message could not fetch its image before subscribe", frame.Error)
+					}
+				} else if frame.Error == "" || len(preview.Data) != 0 {
+					t.Fatal("unmentioned file was exposed")
+				}
+			case <-conn.ctx.Done():
+				t.Fatal("no preview response")
+			}
+			break
+		}
+	}
+}
 
 func TestPhoneQueueRetainsPerMessageModelAndCanRemove(t *testing.T) {
 	c, _ := queueController(t)

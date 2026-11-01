@@ -37,7 +37,9 @@ func Connect(ctx context.Context, raw string) (*Conn, error) {
 		return nil, errors.New("无法连接桌面端，请确认 Miya 桌面端已开启手机连接")
 	}
 	t.used.Store(true)
-	return newConn(nc, t.close), nil
+	conn := newConn(nc, t.close)
+	conn.dialPort = t.client.DialTCPPort
+	return conn, nil
 }
 
 func networkError(err error) error {

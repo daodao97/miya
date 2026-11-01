@@ -14,10 +14,15 @@ type Message struct {
 	ID             int
 	Role, Content  string
 	ItemID, TurnID string
+	// Agents are the sub-agents the message started or reports on, as its
+	// agent's adapter normalized them.
+	Agents []SubAgent `json:",omitempty"`
 }
 
 type Thread struct {
-	Agent                       string
+	Agent string
+	// Automation is the automation that started the conversation.
+	Automation                  string `json:",omitempty"`
 	ClaudeMessageID             string
 	Usage                       *codex.TokenUsage
 	PermissionPolicy            string

@@ -15,6 +15,7 @@ const ProtocolVersion = 4
 //	        metadata, the order of its messages and those that changed.
 //	        Every frame after hello is compressed (Conn.CompressSends).
 //	commands Data is a project's Claude Code slash commands
+//	image   Data is a requested attachment thumbnail
 //	sent    answers a send: Thread took the message, or Error says why not
 //	ping    keeps an idle connection checked
 type Frame struct {
@@ -46,6 +47,7 @@ type SendOptions struct {
 }
 
 type Request struct {
+	ImageSource     string          `json:"imageSource,omitempty"`
 	ApprovalVersion string          `json:"approvalVersion,omitempty"`
 	Options         *SendOptions    `json:"options,omitempty"`
 	Steer           bool            `json:"steer,omitempty"`

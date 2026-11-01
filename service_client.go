@@ -138,10 +138,22 @@ func (cl *serviceClient) call(op string, args, out any) error {
 			return json.Unmarshal(m.Result, out)
 		}
 		return nil
-	case <-time.After(15 * time.Second):
+	case <-time.After(serviceCallTimeout(op)):
 		forget()
 		return errors.New("后台服务没有响应")
 	}
+}
+
+// serviceCallTimeout is how long a request may take: most answer at once,
+// a draft waits for an agent, and a confirmation card for the person.
+func serviceCallTimeout(op string) time.Duration {
+	switch op {
+	case "automationDraft":
+		return 3 * time.Minute
+	case "mcpAutomationCreate", "mcpAutomationUpdate":
+		return miyaRequestTimeout + time.Minute
+	}
+	return 15 * time.Second
 }
 
 // notify sends a request without waiting.

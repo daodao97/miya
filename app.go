@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"mime"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,6 +12,7 @@ import (
 	"miya/internal/codex"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/markdown"
 )
@@ -23,6 +23,10 @@ type chatApp struct {
 	c     *chatController
 	theme *ui.Theme
 	md    markdown.Options
+	// imagePreview resolves message attachments on the phone's filesystem.
+	imagePreview func(string) ui.ImageSource
+	// referenceThread resolves titles in the phone's global conversation list.
+	referenceThread func(int) (Thread, bool)
 
 	sidebar   bool
 	section   string // "", "Settings", "Automations" or "Skills"
@@ -56,12 +60,17 @@ type chatApp struct {
 	dark, themed bool
 
 	// editing is the user message being edited, 0 for none.
-	editing  int
-	editText string
+	editing   int
+	editText  string
+	editInput inlineThreadInput
 
-	complete completion
-	account  accountView
-	quota    quotaView
+	complete   completion
+	autos      automationsUI
+	account    accountView
+	quota      quotaView
+	usage      *desktopUsage
+	openWindow func()
+	quitting   bool
 
 	panels       map[int]*panelState
 	panelVisible bool
@@ -119,6 +128,13 @@ func main() {
 		mobileMain()
 		return
 	}
+	// Agents Miya runs start it as their MCP server for the conversations.
+	if len(os.Args) > 1 && os.Args[1] == "-mcp" {
+		if err := runMCP(); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 	if len(os.Args) > 1 && os.Args[1] == "-server" {
 		if err := runService(); err != nil {
 			log.Fatal(err)
@@ -133,6 +149,11 @@ func main() {
 		desktopPhone = newPhoneHost(app.c)
 	}
 	open := func() {
+		if w := currentWindow(); w != nil && !w.IsDestroyed() {
+			w.Show()
+			w.Focus()
+			return
+		}
 		w := mygo.NewWindow(mygo.WindowOptions{
 			Title:                "Codex Chat",
 			Width:                1180,
@@ -146,16 +167,30 @@ func main() {
 			Content:              ui.View(app.view),
 		})
 		setAppWindow(w)
+		w.OnClose(func(e *mygo.CloseEvent) {
+			if !app.quitting && runtime.GOOS == "darwin" && app.usage != nil && app.usage.tray != nil {
+				e.PreventDefault()
+				w.Hide()
+			}
+		})
+		w.OnClosed(func() {
+			if currentWindow() == w {
+				setAppWindow(nil)
+			}
+		})
 	}
+	app.openWindow = open
 	mygo.App.WhenReady(func() {
 		watchSystemAppearance()
 		open()
+		app.startUsage()
 	})
 	mygo.App.OnActivate(func(hasVisibleWindows bool) {
-		if !hasVisibleWindows {
+		if !app.quitting && !hasVisibleWindows && (app.usage == nil || app.usage.panel == nil) {
 			open()
 		}
 	})
+	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) { app.quitting = true; app.stopUsage() })
 	mygo.App.OnQuit(runCleanups)
 	if err := mygo.App.Run(); err != nil {
 		log.Fatal(err)
@@ -250,20 +285,16 @@ func (app *chatApp) attachFiles() {
 
 // pasteAttachments turns files or an image on the clipboard into
 // attachments. It reports whether it found any, so that text pastes as text.
-func (app *chatApp) pasteAttachments() bool {
-	if paths, err := mygo.Clipboard.ReadFiles(); err == nil && len(paths) > 0 {
+func (app *chatApp) pasteAttachments(clipboard transfer.Data) bool {
+	if paths, err := clipboard.Files(); err == nil && len(paths) > 0 {
 		app.c.addAttachments(paths)
 		return true
 	}
-	data := mygo.Clipboard.ReadImage()
-	if len(data) == 0 {
+	data, err := clipboard.Read(transfer.PNG)
+	if err != nil || len(data) == 0 {
 		return false
 	}
-	ext := ".png"
-	if known, _ := mime.ExtensionsByType("image/png"); len(known) > 0 {
-		ext = known[0]
-	}
-	file, err := os.CreateTemp("", "codex-clipboard-*"+ext)
+	file, err := os.CreateTemp("", "codex-clipboard-*.png")
 	if err != nil {
 		return false
 	}

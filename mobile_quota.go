@@ -91,7 +91,7 @@ func (m *mobileApp) drawerQuotas(c *ui.Context) {
 				name = "Claude"
 			}
 			cc := c.Key(q.Agent)
-			button := quiet(cc).Height(44).Padding(0, 8).Gap(6).Radius(12).Label(name + " 额度")
+			button := m.phoneButton(cc).MinHeight(44).Padding(0, 8).Gap(6).Radius(12).Label(name + " 额度")
 			button.Children(func() {
 				track, fill := "#4a4a50", "#dedee3"
 				if !m.dark {
@@ -101,7 +101,7 @@ func (m *mobileApp) drawerQuotas(c *ui.Context) {
 					ui.Image(cc.Key("track"), ringSVG(100, track)).Size(24, 24).Absolute().Left(0).Top(0)
 					ui.Image(cc.Key("used"), ringSVG(q.Windows[0].UsedPercent, fill)).Size(24, 24).Absolute().Left(0).Top(0)
 				})
-				ui.Text(cc, name).FontSize(16).FontWeight(500).TextColor(p.ink)
+				ui.Text(cc, name).FontSize(m.font(16)).FontWeight(500).TextColor(p.ink)
 			})
 			if button.Clicked() {
 				m.quotaOpen = !m.quotaOpen || m.quotaAgent != q.Agent
@@ -116,10 +116,10 @@ func (m *mobileApp) drawerQuotas(c *ui.Context) {
 					Shadow(0, 4, 16, 0, ui.RGBA(0, 0, 0, 0.2)).TextColor(p.ink)
 				for i, w := range q.Windows {
 					ui.Row(cc.Key(i)).FillWidth().Gap(10).AlignItems(ui.Center).Children(func() {
-						ui.Text(cc, w.Label).FontSize(13).TextColor(p.muted)
-						ui.Text(cc, fmt.Sprintf("已用 %.0f%%", w.UsedPercent)).FontSize(13).FontWeight(600).Grow(1)
+						ui.Text(cc, w.Label).FontSize(m.font(13)).TextColor(p.muted)
+						ui.Text(cc, fmt.Sprintf("已用 %.0f%%", w.UsedPercent)).FontSize(m.font(13)).FontWeight(600).Grow(1)
 						if reset := quotaResetLabel(w.ResetsAt); reset != "" {
-							ui.Text(cc, reset).FontSize(12).TextColor(p.muted)
+							ui.Text(cc, reset).FontSize(m.font(12)).TextColor(p.muted)
 						}
 					})
 				}

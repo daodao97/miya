@@ -19,7 +19,10 @@
     "minimumSystemVersion": "15.0",
     "infoPlist": {
       "NSCameraUsageDescription": "扫描 Miya 桌面端的二维码以查看会话。",
-      "NSLocalNetworkUsageDescription": "连接同一 Wi-Fi 下的 Miya 桌面端，通过局域网加密直连降低延迟。"
+      "NSLocalNetworkUsageDescription": "连接同一 Wi-Fi 下的 Miya 桌面端，通过局域网加密直连降低延迟。",
+      "NSAppTransportSecurity": {
+        "NSAllowsLocalNetworking": true
+      }
     },
     "buildNumber": "1",
     "developmentTeam": "XNDA84PBM3",
@@ -29,6 +32,15 @@
         "com.apple.token"
       ]
     },
-    "pushNotifications": true
+    "pushNotifications": true,
+    "native": {
+      "sources": [
+        "resources/ios/MiyaFiles.swift"
+      ],
+      "frameworks": [
+        "WebKit",
+        "QuickLook"
+      ]
+    }
   }
 }

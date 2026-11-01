@@ -47,9 +47,6 @@ func TestMobileDrawerQuotaInspection(t *testing.T) {
 	tt := ui.NewTester(m.viewRoot, 390, 844)
 	tt.Frame()
 	openMobileDrawer(t, tt)
-	if _, ok := tt.Find("新会话"); ok {
-		t.Fatal("drawer still offers new conversation")
-	}
 	if _, ok := tt.Find("Claude 额度"); ok {
 		t.Fatal("missing agent quota must be hidden")
 	}

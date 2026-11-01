@@ -213,9 +213,11 @@ func (c *chatController) finishRewind(id, messageID int, text string, err error,
 // sendRequest is one message to send, with what the window chose for it.
 type sendRequest struct {
 	// ThreadID is the conversation, 0 to start one of Agent.
-	ThreadID    int
-	Agent       string
-	Text        string
+	ThreadID int
+	Agent    string
+	Text     string
+	// Project is a new conversation's project, "" the open one.
+	Project     string
 	Attachments []string
 	// Model, Effort and Policy default to the app's settings and the
 	// conversation's permission choice.
@@ -261,6 +263,22 @@ func (c *chatController) threadWorkspace(id int) string {
 	return c.cwd
 }
 
+// addThread adds a new conversation to a project's list: the open
+// project's, or a background one's, whose runs go on unseen.
+func (c *chatController) addThread(project string, t Thread) {
+	if project == "" || project == c.cwd {
+		c.setThreads(append([]Thread{t}, c.threads()...))
+		return
+	}
+	if c.projectCache == nil {
+		c.projectCache = map[string][]Thread{}
+	}
+	c.projectCache[project] = append([]Thread{t}, c.projectCache[project]...)
+	if c.revision != nil {
+		c.setRevision(c.revision() + 1)
+	}
+}
+
 // submit sends a message without reading any window's state. It returns
 // the conversation that took it, or 0 when it cannot be sent now.
 func (c *chatController) submit(req sendRequest) int {
@@ -269,6 +287,20 @@ func (c *chatController) submit(req sendRequest) int {
 		_ = c.remote.call("submit", req, &id)
 		return id
 	}
+	// References to other conversations become their context here, where
+	// every conversation's messages are; the referenced ones then follow.
+	task := threadRefTask(req.Text)
+	var sources []Thread
+	req.Text, sources = expandThreadRefs(req.Text, req.ThreadID, c.resolveThreadRef)
+	id := c.submitExpanded(req)
+	if id != 0 && len(sources) > 0 {
+		c.noteHandoffs(sources, id, task)
+	}
+	return id
+}
+
+// submitExpanded starts or queues req, its references already expanded.
+func (c *chatController) submitExpanded(req sendRequest) int {
 	req.Text = strings.TrimSpace(req.Text)
 	if req.Text == "" && len(req.Attachments) == 0 {
 		return 0

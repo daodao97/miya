@@ -37,11 +37,13 @@ func runService() error {
 	os.Chmod(sock, 0o600)
 	ex := newExecutor()
 	runOnMain = ex.push
+	miyaMCPEnabled = true
 	var s *service
 	ready := make(chan struct{})
 	ex.push(func() {
 		c := newChatController()
 		s = newService(c, ex)
+		c.startAutomations(automationsPath(), true)
 		s.exe, s.exeTime = executableInfo()
 		setInvalidateHook(s.markDirty)
 		// Phones read the service's controller, which holds every project.

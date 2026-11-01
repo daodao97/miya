@@ -125,7 +125,7 @@ func TestAllProtocolItemTypes(t *testing.T) {
 		{"fileChange", `{"status":"completed","changes":[{"path":"a.go","diff":"+new"}]}`, "tool", "+new"},
 		{"mcpToolCall", `{"status":"completed","server":"local","tool":"lookup","result":{"answer":42}}`, "tool", "42"},
 		{"dynamicToolCall", `{"status":"failed","tool":"custom","error":{"message":"not available"}}`, "tool", "not available"},
-		{"collabAgentToolCall", `{"tool":"spawnAgent","status":"completed","agentsStates":{"child":{"status":"done"}}}`, "tool", "child"},
+		{"collabAgentToolCall", `{"tool":"spawnAgent","status":"completed","agentsStates":{"child":{"status":"done"}}}`, "tool", ""},
 		{"subAgentActivity", `{}`, "activity", "activity"},
 		{"webSearch", `{"query":"test"}`, "tool", "test"},
 		{"imageView", `{"path":"/tmp/test.png"}`, "tool", "test.png"},
@@ -151,6 +151,10 @@ func TestAllProtocolItemTypes(t *testing.T) {
 			m, ok := itemMessage(item)
 			if !ok || m.Role != f.role || !strings.Contains(m.Content, f.contains) {
 				t.Fatalf("bad mapping: %+v", m)
+			}
+			// Collab agent states moved from the text to the agents list.
+			if f.kind == "collabAgentToolCall" && (len(m.Agents) != 1 || m.Agents[0].ID != "child" || m.Agents[0].Status != subAgentCompleted) {
+				t.Fatalf("collab agents lost: %+v", m.Agents)
 			}
 			if strings.Contains(m.Content, "private detail") {
 				t.Fatal("raw reasoning was exposed")

@@ -13,6 +13,7 @@ import (
 
 func TestMobileModelSettingsRemainLocalAndKeepDraft(t *testing.T) {
 	m := testMobileApp()
+	m.startConversation("/a", agentCodex)
 	m.dataDir = t.TempDir()
 	m.draft = "未发送的内容"
 	m.state.Agents = []phoneAgentOptions{{Agent: agentCodex, Current: remote.SendOptions{Model: "first", Effort: "low", Policy: "on-request"}, Models: []phoneModelOption{

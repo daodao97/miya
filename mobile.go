@@ -24,6 +24,8 @@ import (
 // into them and answers their approvals. The desktop's background service
 // runs the agents; the phone holds only what the desktop sent it.
 type mobileApp struct {
+	filesProxy                   *phoneFileProxy
+	filesCancel                  context.CancelFunc
 	approvalID                   json.RawMessage
 	options                      map[string]remote.SendOptions
 	optionsAgent                 string
@@ -46,12 +48,14 @@ type mobileApp struct {
 	pal  mobilePalette
 	dark bool
 	// themed reports pal and the theme set for the current appearance.
-	themed bool
+	themed            bool
+	textScale         float32
+	instantNavigation bool
 
 	loaded     bool
 	link, host string
 	state      phoneState
-	// selected is the home page's project; empty for the desktop's.
+	// selected filters the home page by project; empty shows all projects.
 	selected         string
 	menu             bool
 	quotaOpen        bool
@@ -73,14 +77,18 @@ type mobileApp struct {
 
 	// The conversation page shows open, or a new conversation in newProject
 	// when open is 0.
-	open       int
-	title      string
-	newProject string
-	newAgent   string
-	draft      string
-	pairInput  mobileTextField
+	open        int
+	title       string
+	newProject  string
+	newAgent    string
+	draft       string
+	inlineInput inlineThreadInput
+	pairInput   mobileTextField
 	// images are photos to attach to the next message, as cache copies.
 	images []string
+	// previewPaths maps desktop image sources to phone-local thumbnails.
+	// An empty value reserves an in-flight lookup or download.
+	previewPaths map[string]string
 	// commands are Claude Code\'s slash commands, by project; asked
 	// marks those requested on this connection.
 	commands map[string][]composerChoice
@@ -139,7 +147,7 @@ func (m *mobileApp) applyPalette(dark bool) {
 	hover, chosen, bubble = p.surface, p.surface, p.bubble
 	t.Background, t.Surface, t.SurfaceHover, t.Border = p.bg, p.surface, p.line, p.line
 	t.Text, t.TextMuted, t.Accent, t.AccentText = p.ink, p.muted, p.ink, p.bg
-	t.FontSize = 15
+	t.FontSize = m.font(17)
 	m.view.theme = t
 }
 
@@ -200,6 +208,11 @@ func newMobileApp() *mobileApp {
 		},
 		LoadImage: func(src string) (ui.ImageSource, error) { return loadImage(imageSourcePath(src)) },
 	}
+	m.view.imagePreview = m.messageImage
+	m.view.referenceThread = func(id int) (Thread, bool) {
+		t, _ := m.find(id)
+		return t, t.ID == id && id != 0
+	}
 	return m
 }
 
@@ -215,7 +228,7 @@ func mobileMain() {
 		})
 	})
 	mygo.App.WhenReady(func() {
-		m.win = mygo.NewWindow(mygo.WindowOptions{Title: "Miya", Width: 390, Height: 844, BackgroundColor: "light-dark(#ffffff, #000000)", Content: ui.View(m.viewRoot)})
+		m.win = mygo.NewWindow(mygo.WindowOptions{Title: "Miya", Width: 390, Height: 844, ExtendIntoSafeArea: true, Content: ui.View(m.viewRoot)})
 		setAppWindow(m.win)
 		m.setupPush()
 		go m.loadSaved()
@@ -304,6 +317,7 @@ func (m *mobileApp) connect(link string) {
 	m.readPending = nil
 	m.approvalPending = nil
 	m.disconnect()
+	m.previewPaths = nil
 	if link != m.link {
 		m.state, m.host, m.selected = phoneState{}, "", ""
 		m.home()
@@ -318,6 +332,14 @@ func (m *mobileApp) connect(link string) {
 
 // disconnect ends the connection but keeps the paired desktop.
 func (m *mobileApp) disconnect() {
+	if m.filesCancel != nil {
+		m.filesCancel()
+		m.filesCancel = nil
+	}
+	if m.filesProxy != nil {
+		m.filesProxy.Close()
+		m.filesProxy = nil
+	}
 	m.generation++
 	if m.cancel != nil {
 		m.cancel()
@@ -340,6 +362,7 @@ func (m *mobileApp) forget() {
 	m.disconnect()
 	m.link, m.host, m.state, m.status, m.err, m.menu = "", "", phoneState{}, "", "", false
 	m.home()
+	m.previewPaths = nil
 	m.dropDiskCache()
 	if store := m.store; store != nil {
 		go store.Delete("desktop-link")
@@ -374,6 +397,9 @@ func (m *mobileApp) run(ctx context.Context, gen int, link string) {
 		}
 		m.onMain(gen, func() {
 			m.conn, m.connected, m.status = nil, false, message
+			if m.filesProxy != nil {
+				m.filesProxy.setConn(nil)
+			}
 			if m.sending {
 				m.sending, m.sendErr = false, "连接已断开，消息可能没有发出"
 			}
@@ -408,6 +434,10 @@ func (m *mobileApp) read(gen int, conn *remote.Conn) (greeted bool, err error) {
 			m.onMain(gen, func() {
 				m.host, m.connected, m.status, m.err = host, true, "", ""
 				m.conn = conn
+				if m.filesProxy != nil {
+					m.filesProxy.setConn(conn)
+				}
+				m.previewPaths = nil // Retry previews requested while offline.
 				if open := m.open; open != 0 {
 					r := m.subscribeRequest(open)
 					go conn.Send(r)
@@ -453,6 +483,11 @@ func (m *mobileApp) read(gen int, conn *remote.Conn) (greeted bool, err error) {
 				m.onMain(gen, func() {
 					m.receiveThread(id, d)
 				})
+			}
+		case "image":
+			var preview phoneImagePreview
+			if json.Unmarshal(f.Data, &preview) == nil && f.Error == "" {
+				m.onMain(gen, func() { m.receiveImage(preview) })
 			}
 		case "commands":
 			var pc phoneCommands
@@ -652,8 +687,13 @@ func (m *mobileApp) leave() {
 	m.resetComposer()
 }
 
-// home returns to the new-conversation page at once.
+// home returns to the conversation list at once.
 func (m *mobileApp) home() {
+	if m.nav != nil && m.nav.Path() != "/" {
+		// Resetting/replacing a draft reuses one controller; there is no
+		// independent outgoing conversation to animate in this case.
+		m.instantNavigation = true
+	}
 	m.router().Reset("/")
 	m.leave()
 }
@@ -661,8 +701,7 @@ func (m *mobileApp) home() {
 func (m *mobileApp) router() *ui.Router {
 	if m.nav == nil {
 		m.nav = ui.NewRouter("/")
-		// Edge drags preview the home page; taps change page at once.
-		m.nav.Transition = ui.TransitionNone
+		m.nav.Animation = &ui.Animation{Duration: 280 * time.Millisecond, Ease: ui.EaseOut}
 	}
 	return m.nav
 }
@@ -728,8 +767,10 @@ func (m *mobileApp) sent(id int, msg string) {
 	m.sending = false
 	if msg != "" {
 		m.sendErr = msg
+		mobileFeedback(mygo.HapticError)
 		return
 	}
+	mobileFeedback(mygo.HapticLight)
 	m.draft, m.sendErr = "", ""
 	m.clearImages()
 	if m.open == 0 && m.newProject != "" && id != 0 {
@@ -801,24 +842,43 @@ func (m *mobileApp) connectionLine() string {
 }
 
 func (m *mobileApp) viewRoot(c *ui.Context) {
+	m.textScale = c.Preferences().TextScale
 	// Before SetTheme, the theme is the system's appearance.
 	if dark := c.Theme().Dark; !m.themed || dark != m.dark {
 		m.applyPalette(dark)
 	}
+	m.view.theme.FontSize = m.font(17)
 	c.SetTheme(m.view.theme)
 	p := m.pal
-	// MyGo reports the status bar and home indicator but does not avoid
-	// them; the content keeps clear of them here, as Retty's does.
+	// Honor any safe-area padding supplied by the host.
 	safe := c.SafeArea()
-	ui.Column(c).Fill().Padding(safe.Top, safe.Right, safe.Bottom, safe.Left).Background(p.bg).TextColor(p.ink).FontSize(15).Children(func() {
+	pageColor := p.bg
+	contentSafe := safe
+	if m.loaded && m.link != "" {
+		if m.router().Path() == "/" {
+			pageColor = m.homeBackground()
+		}
+		// Keep the router's bounds fixed throughout navigation. Each page
+		// owns its safe-area padding, including the outgoing page, so a
+		// history change cannot resize or vertically shift the list.
+		contentSafe = ui.SafeArea{}
+	}
+	// MyGo uses the opaque root fill for the surrounding iOS safe area,
+	// including the status bar and home indicator.
+	c.Root().Background(pageColor)
+	ui.Column(c).Fill().Padding(contentSafe.Top, contentSafe.Right, contentSafe.Bottom, contentSafe.Left).Background(pageColor).TextColor(p.ink).FontSize(m.font(15)).Children(func() {
 		switch {
 		case !m.loaded:
 			ui.Spinner(c).Margin(ui.Auto)
 		case m.link == "":
 			m.pairView(c)
 		default:
+			transition := m.router().Transition
+			if m.instantNavigation {
+				m.router().Transition = ui.TransitionNone
+			}
 			m.router().View(c, func(page *ui.Route) {
-				page.Page().Background(p.bg)
+				page.Page().Background(p.bg).Padding(safe.Top, safe.Right, safe.Bottom, safe.Left)
 				switch page.Path() {
 				case "/thread":
 					m.threadView(c)
@@ -829,13 +889,18 @@ func (m *mobileApp) viewRoot(c *ui.Context) {
 				case "/approval":
 					m.approvalPage(c)
 				default:
+					// The sliding drawer and list pad their controls separately;
+					// their backgrounds cover the whole screen.
+					page.Page().Background(m.homeBackground()).Padding(0)
 					m.listPage(c)
 				}
 			})
+			m.router().Transition = transition
+			m.instantNavigation = false
 		}
 	})
 	// The back button and the edge gesture both leave through the router.
-	if m.nav != nil && m.nav.Path() == "/" && (m.open != 0 || m.newProject != "") {
+	if m.nav != nil && m.nav.Path() == "/" && !m.nav.Transitioning() && (m.open != 0 || m.newProject != "") {
 		m.leave()
 		c.Invalidate()
 	}
@@ -843,7 +908,7 @@ func (m *mobileApp) viewRoot(c *ui.Context) {
 
 // circle is a round floating button, as the header's.
 func (m *mobileApp) circle(c *ui.Context, key, label string, child func()) ui.Element {
-	b := quiet(c.Key(key)).Size(44, 44).Padding(0).Radius(22).Background(m.pal.surface).Justify(ui.Center).Label(label)
+	b := m.phoneButton(c.Key(key)).Size(44, 44).Padding(0).Radius(22).Background(m.pal.surface).Justify(ui.Center).Label(label)
 	b.Children(child)
 	return b
 }
@@ -854,8 +919,8 @@ func (m *mobileApp) pill(c *ui.Context, key, label string, primary bool) ui.Elem
 	if primary {
 		bg, fg = m.pal.ink, m.pal.bg
 	}
-	b := quiet(c.Key(key)).Height(38).Padding(0, 16).Radius(19).Background(bg).Justify(ui.Center).Label(label)
-	b.Children(func() { ui.Text(c, label).FontSize(14).FontWeight(500).TextColor(fg) })
+	b := m.phoneButton(c.Key(key)).MinHeight(44).Padding(10, 16).Radius(22).Background(bg).Justify(ui.Center).Label(label)
+	b.Children(func() { ui.Text(c, label).FontSize(m.font(14)).FontWeight(500).TextColor(fg) })
 	return b
 }
 
@@ -873,20 +938,21 @@ func (m *mobileApp) pairView(c *ui.Context) {
 		ui.Row(c).Size(64, 64).Radius(18).Background(p.surface).Justify(ui.Center).AlignItems(ui.Center).Children(func() {
 			icon(c, "terminal-2", 30, p.ink)
 		})
-		ui.Text(c, "连接 Miya 桌面端").FontSize(26).FontWeight(700).Margin(10, 0, 0, 0)
-		ui.Text(c, "在电脑上打开 Miya，进入「设置 → Phone」开启手机连接，然后扫描二维码。连接后可以查看会话、继续对话和处理审批。").FontSize(15).TextColor(p.muted).LineHeight(1.5)
-		scan := quiet(c.Key("scan")).FillWidth().Height(52).Radius(16).Background(p.ink).Justify(ui.Center).Gap(8).Label("扫码连接")
+		ui.Text(c, "连接 Miya 桌面端").FontSize(m.font(26)).FontWeight(700).Margin(10, 0, 0, 0)
+		ui.Text(c, "在电脑上打开 Miya，进入「设置 → Phone」开启手机连接，然后扫描二维码。连接后可以查看会话、继续对话和处理审批。").FontSize(m.font(15)).TextColor(p.muted).LineHeight(1.5)
+		scan := m.phoneButton(c.Key("scan")).FillWidth().MinHeight(52).Radius(16).Background(p.ink).Justify(ui.Center).Gap(8).Label("扫码连接")
 		scan.Children(func() {
 			if m.scanning {
 				ui.Spinner(c).TextColor(p.bg)
 			}
-			ui.Text(c, "扫码连接").FontSize(16).FontWeight(600).TextColor(p.bg)
+			ui.Text(c, "扫码连接").FontSize(m.font(16)).FontWeight(600).TextColor(p.bg)
 		})
 		if scan.Clicked() {
 			m.scan()
 		}
-		ui.Row(c).FillWidth().Height(52).Padding(0, 6, 0, 16).Gap(8).AlignItems(ui.Center).Background(p.surface).Radius(16).Children(func() {
-			input := ui.TextInput(c.Key("paste"), &m.paste).Label("桌面连接码").Placeholder("或粘贴连接码").Grow(1).MinWidth(0).Background(p.surface).Border(0, p.surface)
+		ui.Row(c).FillWidth().MinHeight(52).Padding(0, 6, 0, 16).Gap(8).AlignItems(ui.Center).Background(p.surface).Radius(16).Children(func() {
+			input := ui.TextInput(c.Key("paste"), &m.paste).Label("桌面连接码").Placeholder("或粘贴连接码").Grow(1).MinWidth(0).Background(p.surface).Border(0, p.surface).
+				InputOptions(ui.InputOptions{Keyboard: ui.KeyboardASCII, Correction: ui.CorrectionOff, Capitalization: ui.CapitalizeNone, Return: ui.ReturnGo})
 			m.pairInput.restore(input)
 			if m.pill(c, "paste-code", "粘贴", false).KeepFocus().Clicked() {
 				m.pairInput.paste(c, input, &m.paste, false)
@@ -896,24 +962,23 @@ func (m *mobileApp) pairView(c *ui.Context) {
 			}
 		})
 		if m.err != "" {
-			ui.Text(c, m.err).TextColor(danger).FontSize(14)
+			ui.Text(c, m.err).TextColor(danger).FontSize(m.font(14))
 		}
 	})
 }
 
 func (m *mobileApp) listView(c *ui.Context) {
 	p := m.pal
-	proj := m.selectedProject()
-	ui.Row(c).FillWidth().Height(64).Padding(0, 16).Gap(12).AlignItems(ui.Center).Children(func() {
-		if m.circle(c, "menu", "桌面连接", func() { m.menuIcon(c) }).Clicked() {
+	ui.Row(c).FillWidth().MinHeight(52).Padding(0, 12).Gap(12).AlignItems(ui.Center).Children(func() {
+		if m.homeAction(c, "menu", "桌面连接", "layout-sidebar").Clicked() {
 			m.menu = !m.drawerVisible
 		}
 		ui.Column(c).Grow(1).MinWidth(0).AlignItems(ui.Center).Gap(3).Children(func() {
-			title := proj.Name
-			if title == "" {
-				title = "Miya"
+			title := "Miya"
+			if m.selected != "" {
+				title = m.project(m.selected).Name
 			}
-			ui.Text(c, title).FontSize(16).FontWeight(600).SingleLine().Ellipsis("…")
+			ui.Text(c, title).FontSize(m.font(16)).FontWeight(600).SingleLine().Ellipsis("…")
 			ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 				dot, label := p.muted, m.connectionLine()
 				if label == "" {
@@ -923,12 +988,15 @@ func (m *mobileApp) listView(c *ui.Context) {
 					}
 				}
 				ui.Box(c.Key("dot")).Size(6, 6).Radius(3).Background(dot)
-				ui.Text(c, label).FontSize(12).TextColor(p.muted).SingleLine().Ellipsis("…")
+				ui.Text(c, strings.TrimSuffix(label, ".local")).FontSize(m.font(11)).TextColor(p.muted).SingleLine().Ellipsis("…")
 			})
 		})
-		if m.circle(c, "settings", "设置", func() { icon(c, "settings", 20, p.ink) }).Clicked() {
+		if m.homeAction(c, "files", "项目文件", "folder").Disabled(!m.connected || m.selectedProject().Path == "").Clicked() {
 			m.menu = false
-			m.router().Push("/settings")
+			m.openProjectFiles(m.selectedProject().Path)
+		}
+		if m.homeAction(c, "new-conversation", "新会话", "edit").Disabled(m.selectedProject().Path == "").Clicked() {
+			m.startConversation(m.selectedProject().Path, m.composerAgent())
 		}
 	})
 	if len(m.state.Projects) == 0 {
@@ -941,12 +1009,11 @@ func (m *mobileApp) listView(c *ui.Context) {
 		})
 		return
 	}
-	m.newConversationView(c, proj)
-	m.composer(c, m.composerAgent(), false)
+	m.conversationHome(c)
 }
 
-// selectedProject is the home page's project: the one chosen in the
-// drawer, else the desktop's open project.
+// selectedProject is where a new conversation starts: the chosen project,
+// else the desktop's open project.
 func (m *mobileApp) selectedProject() phoneProject {
 	if m.selected != "" {
 		for _, p := range m.state.Projects {
@@ -969,7 +1036,7 @@ func (m *mobileApp) selectedProject() phoneProject {
 func (m *mobileApp) listPage(c *ui.Context) {
 	p := m.pal
 	safe := c.SafeArea()
-	screen := c.Root().Bounds().W - safe.Left - safe.Right
+	screen := c.Root().Bounds().W
 	w := min(float32(320), screen*0.84)
 	m.drawerW = w
 	if m.link == "" {
@@ -1006,12 +1073,12 @@ func (m *mobileApp) listPage(c *ui.Context) {
 		}
 		m.quotaDrawerShown = quotaShown
 		row.Children(func() {
-			ui.Column(c.Key("drawer")).Width(w).FillHeight().Background(p.drawer).Padding(8, 16, 12, 16).Gap(14).Children(func() {
+			ui.Column(c.Key("drawer")).Width(w).FillHeight().Background(p.drawer).Padding(safe.Top+8, 16, safe.Bottom+12, safe.Left+16).Gap(14).Children(func() {
 				if m.drawerVisible || m.menu || m.drawerDragging {
 					m.drawerContent(c)
 				}
 			})
-			ui.Column(c.Key("main")).Width(screen).FillHeight().Background(p.bg).Children(func() {
+			ui.Column(c.Key("main")).Width(screen).FillHeight().Background(m.homeBackground()).Padding(safe.Top, safe.Right, safe.Bottom, safe.Left).Children(func() {
 				m.listView(c)
 				if m.drawerVisible {
 					// The scrim covers the list: a tap on it closes the drawer,
@@ -1060,36 +1127,53 @@ func (m *mobileApp) drawerContent(c *ui.Context) {
 	if host == "" {
 		host = "桌面端"
 	}
-	ui.Column(c).FillWidth().MinWidth(0).Gap(3).Padding(4, 4, 8, 4).Children(func() {
-		ui.Text(c, host).FontSize(17).FontWeight(600).SingleLine().Ellipsis("…")
-		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-			dot, label := p.muted, m.connectionLine()
-			if label == "" {
-				dot, label = p.ok, "已连接 · Tailcat 加密"
-			}
-			ui.Box(c.Key("dot")).Size(6, 6).Radius(3).Background(dot)
-			ui.Text(c, label).FontSize(12).TextColor(p.muted).SingleLine().Ellipsis("…")
+	ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
+		ui.Column(c).Grow(1).MinWidth(0).Gap(3).Padding(4, 4, 8, 4).Children(func() {
+			ui.Text(c, host).FontSize(m.font(17)).FontWeight(600).SingleLine().Ellipsis("…")
+			ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+				dot, label := p.muted, m.connectionLine()
+				if label == "" {
+					dot, label = p.ok, "已连接 · Tailcat 加密"
+				}
+				ui.Box(c.Key("dot")).Size(6, 6).Radius(3).Background(dot)
+				ui.Text(c, label).FontSize(m.font(12)).TextColor(p.muted).SingleLine().Ellipsis("…")
+			})
 		})
+		if m.homeAction(c, "settings", "设置", "settings").Clicked() {
+			m.menu = false
+			m.router().Push("/settings")
+		}
 	})
 	if m.err != "" {
-		ui.Text(c, m.err).FontSize(13).TextColor(danger).LineHeight(1.4)
+		ui.Text(c, m.err).FontSize(m.font(13)).TextColor(danger).LineHeight(1.4)
 	}
 	m.drawerQuotas(c.Key("drawer-quotas"))
 
-	ui.Text(c, "项目").FontSize(13).FontWeight(500).TextColor(p.muted).Margin(6, 6, 0, 6)
+	ui.Text(c, "项目").FontSize(m.font(13)).FontWeight(500).TextColor(p.muted).Margin(6, 6, 0, 6)
 	ui.Scroll(c.Key("drawer-projects")).FillWidth().Grow(1).MinHeight(0).Children(func() {
 		ui.Column(c).FillWidth().Gap(2).Children(func() {
-			shown := m.selectedProject().Path
+			all := m.phoneButton(c.Key("all-projects")).FillWidth().MinHeight(44).Padding(0, 12).Gap(12).Radius(12).Label("全部会话")
+			if m.selected == "" {
+				all.Background(p.surface)
+			}
+			all.Children(func() {
+				icon(c, "stack-2", 18, p.muted)
+				ui.Text(c, "全部会话").FontSize(m.font(15))
+			})
+			if all.Clicked() {
+				m.showProject("")
+			}
+			shown := m.selected
 			for _, pr := range m.state.Projects {
-				row := quiet(c.Key("drawer:"+pr.Path)).FillWidth().Height(44).Padding(0, 12).Gap(12).Radius(12).Label("项目 " + pr.Name)
+				row := m.phoneButton(c.Key("drawer:"+pr.Path)).FillWidth().MinHeight(44).Padding(0, 12).Gap(12).Radius(12).Label("项目 " + pr.Name)
 				if pr.Path == shown {
 					row.Background(p.surface)
 				}
 				row.Children(func() {
 					icon(c, "folder", 18, p.muted)
-					ui.Text(c, pr.Name).FontSize(15).Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
+					ui.Text(c, pr.Name).FontSize(m.font(15)).Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
 					if pr.Current {
-						ui.Text(c, "桌面当前").FontSize(11).TextColor(p.muted)
+						ui.Text(c, "桌面当前").FontSize(m.font(11)).TextColor(p.muted)
 					}
 					busy := 0
 					for _, t := range pr.Threads {
@@ -1098,16 +1182,13 @@ func (m *mobileApp) drawerContent(c *ui.Context) {
 						}
 					}
 					if busy > 0 {
-						ui.Spinner(c).FontSize(12)
+						ui.Spinner(c).FontSize(m.font(12))
 					} else if len(pr.Threads) > 0 {
-						ui.Text(c, fmt.Sprint(len(pr.Threads))).FontSize(13).TextColor(p.muted)
+						ui.Text(c, fmt.Sprint(len(pr.Threads))).FontSize(m.font(13)).TextColor(p.muted)
 					}
 				})
 				if row.Clicked() {
 					m.showProject(pr.Path)
-				}
-				for _, thread := range pr.Threads {
-					m.drawerThread(c.Key(pr.Path), thread)
 				}
 			}
 		})
@@ -1127,7 +1208,7 @@ func (m *mobileApp) drawerContent(c *ui.Context) {
 // bounce, keeping the speed of a throw.
 var drawerMotion = ui.Animation{Spring: ui.SpringOptions{Duration: 380 * time.Millisecond}}
 
-// showProject starts a draft in the chosen project on the home page.
+// showProject filters the home page to the chosen project's conversations.
 func (m *mobileApp) showProject(path string) {
 	m.home()
 	m.menu, m.selected = false, path
@@ -1140,10 +1221,10 @@ func (m *mobileApp) threadStatus(c *ui.Context, t Thread) {
 	case len(m.approvalsFor(t.ServerID)) > 0:
 		ui.Row(c).Gap(5).AlignItems(ui.Center).Children(func() {
 			ui.Box(c.Key("dot")).Size(7, 7).Radius(4).Background(p.warn)
-			ui.Text(c, "待审批").FontSize(12).TextColor(p.warn)
+			ui.Text(c, "待审批").FontSize(m.font(12)).TextColor(p.warn)
 		})
 	case t.Busy:
-		ui.Spinner(c).FontSize(13)
+		ui.Spinner(c).FontSize(m.font(13))
 	default:
 		if _, unread := m.unreadFor(t); unread {
 			ui.Box(c).Size(8, 8).Radius(4).Background(p.ok)
@@ -1173,12 +1254,12 @@ func (m *mobileApp) threadView(c *ui.Context) {
 	if title == "" {
 		title = "会话"
 	}
-	ui.Row(c).FillWidth().Height(64).Padding(0, 12).Gap(8).AlignItems(ui.Center).Children(func() {
+	ui.Row(c).FillWidth().MinHeight(64).Padding(0, 12).Gap(8).AlignItems(ui.Center).Children(func() {
 		if m.circle(c, "back", "返回", func() { icon(c, "arrow-left", 20, p.ink) }).Clicked() {
 			m.router().Back()
 		}
 		ui.Column(c).Grow(1).MinWidth(0).AlignItems(ui.Center).Gap(2).Children(func() {
-			ui.Text(c, nativeText(title)).FontSize(16).FontWeight(600).SingleLine().Ellipsis("…")
+			ui.Text(c, nativeText(title)).FontSize(m.font(16)).FontWeight(600).SingleLine().Ellipsis("…")
 			sub := agentName(agent)
 			if proj.Name != "" {
 				sub += " · " + proj.Name
@@ -1186,11 +1267,13 @@ func (m *mobileApp) threadView(c *ui.Context) {
 			if line := m.connectionLine(); line != "" {
 				sub = line
 			}
-			ui.Text(c, sub).FontSize(12).TextColor(p.muted).SingleLine().Ellipsis("…")
+			ui.Text(c, sub).FontSize(m.font(12)).TextColor(p.muted).SingleLine().Ellipsis("…")
 		})
+		if m.circle(c, "files", "项目文件", func() { icon(c, "folder", 20, p.ink) }).Disabled(!m.connected || proj.Path == "").Clicked() {
+			m.openProjectFiles(proj.Path)
+		}
 		if m.circle(c, "new", "新会话", func() { icon(c, "edit", 20, p.ink) }).Clicked() {
-			m.home()
-			m.selected, m.newAgent = proj.Path, agent
+			m.startConversation(proj.Path, agent)
 		}
 	})
 	ui.Column(c).Grow(1).MinHeight(0).FillWidth().Children(func() {
@@ -1209,43 +1292,31 @@ func (m *mobileApp) threadView(c *ui.Context) {
 func (m *mobileApp) newConversationView(c *ui.Context, proj phoneProject) {
 	p := m.pal
 	agent := m.composerAgent()
-	ui.Column(c).Grow(1).MinHeight(100).AlignItems(ui.Center).Justify(ui.Center).Gap(14).Padding(24).Children(func() {
-		agentIcon(c, agent, 46)
-		ui.Text(c, "Let’s build").FontSize(28).FontWeight(600)
-		pick := quiet(c.Key("pick-project")).Height(40).Gap(8).Label("选择项目")
-		pick.Children(func() {
-			ui.Text(c, proj.Name).FontSize(24).TextColor(p.muted).SingleLine().Ellipsis("…")
-			icon(c, "chevron-down", 16, p.muted)
-		})
-		if pick.Clicked() {
-			m.home()
-			m.menu = true
-		}
-		ui.Row(c).Gap(8).Children(func() {
-			for _, a := range []string{agentCodex, agentClaude} {
-				if m.pill(c, "agent:"+a, agentName(a), agent == a).Clicked() {
-					m.newAgent = a
+	ui.Scroll(c.Key("draft-intro")).Grow(1).FillWidth().MinHeight(0).Children(func() {
+		ui.Column(c).FillWidth().MinHeight(220).AlignItems(ui.Center).Justify(ui.Center).Gap(14).Padding(24).Children(func() {
+			agentIcon(c, agent, 46)
+			ui.Text(c, "Let’s build").FontSize(m.font(28)).FontWeight(600)
+			pick := m.phoneButton(c.Key("pick-project")).MinHeight(44).Gap(8).Label("选择项目")
+			pick.Children(func() {
+				ui.Text(c, proj.Name).FontSize(m.font(24)).TextColor(p.muted).SingleLine().Ellipsis("…")
+				icon(c, "chevron-down", 16, p.muted)
+			})
+			pick.PopoverMenuButton(func(menu *ui.Menu) {
+				for _, project := range m.state.Projects {
+					if menu.Item(project.Name).Radio(project.Path == m.newProject).Chosen() {
+						m.newProject = project.Path
+					}
 				}
-			}
+			})
+			ui.Row(c).FillWidth().Wrap().Justify(ui.Center).Gap(8).Children(func() {
+				for _, a := range []string{agentCodex, agentClaude} {
+					if m.pill(c, "agent:"+a, agentName(a), agent == a).Clicked() {
+						m.newAgent = a
+					}
+				}
+			})
 		})
 	})
-}
-
-func (m *mobileApp) drawerThread(c *ui.Context, t Thread) {
-	p := m.pal
-	title := t.Title
-	if title == "" {
-		title = "未命名会话"
-	}
-	item := quiet(c.Key(t.ID)).FillWidth().Height(44).Padding(0, 10, 0, 24).Gap(8).Radius(12).Label(nativeText(title))
-	item.Children(func() {
-		agentIcon(c, threadAgent(t), 16)
-		ui.Text(c, nativeText(title)).FontSize(14).Grow(1).MinWidth(0).SingleLine().Ellipsis("…").TextColor(p.ink)
-		m.threadStatus(c, t)
-	})
-	if item.Clicked() {
-		m.openThread(t)
-	}
 }
 
 func (m *mobileApp) composerAgent() string {
@@ -1262,11 +1333,16 @@ func (m *mobileApp) composerAgent() string {
 // effort, and a button that sends, or stops a running turn.
 func (m *mobileApp) composer(c *ui.Context, agent string, busy bool) {
 	p := m.pal
+	owner := fmt.Sprintf("%s:%d", m.composerProject(), m.open)
+	if m.inlineInput.doc != nil && m.inlineInput.owner == owner {
+		m.inlineInput.sync(m.draft, func(text string) { m.draft = text })
+	}
 	ui.Column(c).FillWidth().Padding(6, 12, 10, 12).Gap(6).Children(func() {
 		if m.sendErr != "" {
-			ui.Text(c, m.sendErr).FontSize(13).TextColor(danger).Margin(0, 8)
+			ui.Text(c, m.sendErr).FontSize(m.font(13)).TextColor(danger).Margin(0, 8)
 		}
 		m.commandMenu(c, agent, m.composerProject())
+		m.threadMenu(c, m.composerProject())
 		m.queueView(c)
 		m.thumbnails(c)
 		ui.Column(c.Key("composer-box")).FillWidth().Padding(6, 6, 6, 10).Background(p.surface).Radius(26).Children(func() {
@@ -1274,59 +1350,64 @@ func (m *mobileApp) composer(c *ui.Context, agent string, busy bool) {
 			effort := strings.ToUpper(firstNonEmpty(opts.Effort, "默认"))
 			hasDraft := strings.TrimSpace(m.draft) != "" || len(m.images) > 0
 			steerAvailable := busy && hasDraft
-			right := float32(46)
+			showEffort := effort != "" && c.Root().Bounds().W >= 360 && m.textScale <= 1.3 && !steerAvailable
+			right := float32(52)
 			if steerAvailable {
-				right += 64
+				right += 72
 			}
-			if effort != "" {
-				w, _ := c.MeasureText(0, ui.Span{Text: effort, Size: 12})
-				right += w + 8
+			if showEffort {
+				w, _ := c.MeasureText(0, ui.Span{Text: effort, Size: m.font(12)})
+				right += max(44, w) + 8
 			}
 			safe := c.SafeArea()
-			width := c.Root().Bounds().W - safe.Left - safe.Right - 24 - 16 - 76 - right
-			_, h := c.MeasureText(max(1, width), ui.Span{Text: m.draft, Size: 16})
-			_, line := c.MeasureText(0, ui.Span{Text: "M", Size: 16})
+			width := c.Root().Bounds().W - safe.Left - safe.Right - 24 - 16 - 90 - right
+			style := mentionStyle(c, m.font(16))
+			text := inlineThreadText(m.draft, true, style, m.view.referenceTitle)
+			_, h := ui.ShapeRichText(inlineThreadSpans(text, m.font(16)), style.font, max(1, width)).Size()
+			_, line := c.MeasureText(0, ui.Span{Text: "M", Size: m.font(16)})
 			expanded := strings.Contains(m.draft, "\n") || h > line*1.5 || steerAvailable
-			area := ui.Column(c.Key("input-area")).FillWidth().Padding(0, right, 0, 76)
+			area := ui.Column(c.Key("input-area")).FillWidth().MinHeight(44).Justify(ui.Center).Padding(0, right, 0, 90)
 			if expanded {
-				area.Padding(4, 8, 46, 4)
+				area.MinHeight(0).Justify(ui.Start).Padding(4, 8, 54, 4)
 			}
 			area.Children(func() {
 				placeholder := agentName(agent)
 				if opts.Model != "" {
 					placeholder = opts.Model
 				}
-				input := ui.TextAreaBase(c.Key("composer"), &m.draft).Label("消息").Placeholder(placeholder).Lines(1, 6).
-					MinWidth(0).FillWidth().FontSize(16).TextColor(p.ink)
+				inputWidth := width
 				if expanded {
-					input.MinHeight(0).Padding(3, 0)
-				} else {
-					input.MinHeight(38).Padding(9, 0)
+					inputWidth = c.Root().Bounds().W - safe.Left - safe.Right - 24 - 28
 				}
+				input := m.view.threadInput(c.Key("composer"), &m.inlineInput, m.draft, fmt.Sprintf("%s:%d", m.composerProject(), m.open), "消息", placeholder, m.font(16), inputWidth, 1, 6, func(text string) { m.draft = text })
+				// EditorBase paints within its own bounds; its element padding
+				// does not inset the text. Center it using the enclosing column.
+				input.MinHeight(0).Padding(0)
 			})
-			ui.Row(c.Key("left-tools")).Absolute().Left(10).Bottom(6).Width(68).Height(38).Gap(8).AlignItems(ui.Center).Children(func() {
-				add := quiet(c.Key("attach")).Size(40, 38).Padding(0).Justify(ui.Center).Label("添加图片")
+			ui.Row(c.Key("left-tools")).Absolute().Left(4).Bottom(6).Width(88).MinHeight(44).AlignItems(ui.Center).Children(func() {
+				// Bring the icons closer within separate 44-point hit areas.
+				add := m.phoneButton(c.Key("attach")).Size(44, 44).Padding(0, 6, 0, 0).Justify(ui.End).Label("添加图片")
 				add.Children(func() { icon(c, "plus", 20, p.muted) })
 				if add.Clicked() {
 					m.addPhotos()
 				}
-				agentButton := quiet(c.Key("agent")).Size(20, 38).Padding(0).Justify(ui.Center).Label("模型设置")
+				agentButton := m.phoneButton(c.Key("agent")).Size(44, 44).Padding(0, 0, 0, 6).Justify(ui.Start).Label("模型设置")
 				agentButton.Children(func() { agentIcon(c, agent, 20) })
 				if agentButton.Clicked() {
 					m.openOptions(agent)
 				}
 			})
-			ui.Row(c.Key("right-tools")).Absolute().Right(6).Bottom(6).Width(right - 8).Height(38).Gap(8).AlignItems(ui.Center).Children(func() {
+			ui.Row(c.Key("right-tools")).Absolute().Right(6).Bottom(6).Width(right - 8).MinHeight(44).Gap(8).AlignItems(ui.Center).Children(func() {
 				if steerAvailable {
-					b := quiet(c.Key("steer")).Size(56, 38).Padding(0).Justify(ui.Center).Label("立即引导").Disabled(m.sending)
-					b.Children(func() { ui.Text(c, "立即引导").FontSize(12).TextColor(p.ink) })
+					b := m.phoneButton(c.Key("steer")).Size(64, 44).Padding(0).Justify(ui.Center).Label("立即引导").Disabled(m.sending)
+					b.Children(func() { ui.Text(c, "引导").FontSize(m.font(12)).TextColor(p.ink) })
 					if b.Clicked() {
 						m.sendDraft(true)
 					}
 				}
-				if effort != "" {
-					b := quiet(c.Key("effort")).Height(38).Shrink(0).Padding(0).Label("推理强度")
-					b.Children(func() { ui.Text(c, effort).FontSize(12).TextColor(p.muted) })
+				if showEffort {
+					b := m.phoneButton(c.Key("effort")).MinHeight(44).Shrink(0).Padding(0).Label("推理强度")
+					b.Children(func() { ui.Text(c, effort).FontSize(m.font(12)).TextColor(p.muted) })
 					if b.Clicked() {
 						m.openOptions(agent)
 					}
@@ -1340,10 +1421,10 @@ func (m *mobileApp) composer(c *ui.Context, agent string, busy bool) {
 				} else if canSend {
 					bg, fg = p.ink, p.bg
 				}
-				b := quiet(c.Key("send")).Size(38, 38).Shrink(0).Padding(0).Radius(19).Background(bg).Justify(ui.Center).Label(label)
+				b := m.phoneButton(c.Key("send")).Size(44, 44).Shrink(0).Padding(0).Radius(22).Background(bg).Justify(ui.Center).Label(label)
 				b.Children(func() {
 					if m.sending {
-						ui.Spinner(c).FontSize(12).TextColor(fg)
+						ui.Spinner(c).FontSize(m.font(12)).TextColor(fg)
 					} else {
 						icon(c, name, 18, fg)
 					}
@@ -1420,8 +1501,10 @@ func (m *mobileApp) thumbnails(c *ui.Context) {
 				} else {
 					icon(c, "file", 22, p.muted)
 				}
-				rm := quiet(c.Key("rm")).Absolute().Top(4).Right(4).Size(22, 22).Padding(0).Radius(11).Background(ui.RGBA(0, 0, 0, 0.6)).Justify(ui.Center).Label("移除图片")
-				rm.Children(func() { icon(c, "x", 12, ui.Hex("#ffffff")) })
+				rm := m.phoneButton(c.Key("rm")).Absolute().Top(0).Right(0).Size(44, 44).Padding(0).Justify(ui.Center).Label("移除图片")
+				rm.Children(func() {
+					ui.Box(c).Size(22, 22).Radius(11).Background(ui.RGBA(0, 0, 0, 0.6)).AlignItems(ui.Center).Justify(ui.Center).Children(func() { icon(c, "x", 12, ui.Hex("#ffffff")) })
+				})
 				if rm.Clicked() {
 					m.removeImage(i)
 				}
@@ -1478,21 +1561,21 @@ func (m *mobileApp) commandMenu(c *ui.Context, agent, project string) {
 		switch {
 		case !known:
 			ui.Row(c).Gap(8).Padding(10).AlignItems(ui.Center).Children(func() {
-				ui.Spinner(c).FontSize(12)
-				ui.Text(c, "正在读取 Claude Code 命令…").FontSize(13).TextColor(p.muted)
+				ui.Spinner(c).FontSize(m.font(12))
+				ui.Text(c, "正在读取 Claude Code 命令…").FontSize(m.font(13)).TextColor(p.muted)
 			})
 		case len(shown) == 0:
-			ui.Text(c, "没有匹配的命令").FontSize(13).TextColor(p.muted).Padding(10)
+			ui.Text(c, "没有匹配的命令").FontSize(m.font(13)).TextColor(p.muted).Padding(10)
 		default:
 			ui.Scroll(c.Key("command-list")).FillWidth().MaxHeight(260).Children(func() {
 				ui.Column(c).FillWidth().Children(func() {
 					for _, cmd := range shown {
-						item := quiet(c.Key("cmd:"+cmd.Name)).FillWidth().Height(52).Padding(0, 10).Radius(12).Label("/" + cmd.Name)
+						item := m.phoneButton(c.Key("cmd:"+cmd.Name)).FillWidth().MinHeight(52).Padding(0, 10).Radius(12).Label("/" + cmd.Name)
 						item.Children(func() {
 							ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
-								ui.Text(c, "/"+cmd.Name).FontSize(15).FontWeight(500).SingleLine().Ellipsis("…")
+								ui.Text(c, "/"+cmd.Name).FontSize(m.font(15)).FontWeight(500).SingleLine().Ellipsis("…")
 								if cmd.Detail != "" {
-									ui.Text(c, cmd.Detail).FontSize(12).TextColor(p.muted).SingleLine().Ellipsis("…")
+									ui.Text(c, cmd.Detail).FontSize(m.font(12)).TextColor(p.muted).SingleLine().Ellipsis("…")
 								}
 							})
 						})

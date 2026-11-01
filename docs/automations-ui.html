@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang='zh-CN'>
+<head>
+<meta charset='utf-8'>
+<title>Miya · Automations UI 原型</title>
+<style>
+:root{--ink:#18181b;--muted:#71717a;--faint:#a1a1aa;--line:#ececef;--side:#fafafa;--sub:#f4f4f5;--ok:#15803d;--okbg:#ecfdf3;--bad:#dc2626;--badbg:#fef2f2;--warn:#b45309;--warnbg:#fffbeb;--run:#2563eb;--runbg:#eff6ff;--code:#1f2023;--r:12px}
+*{box-sizing:border-box}
+body{margin:0;font:13px/1.55 -apple-system,BlinkMacSystemFont,'PingFang SC','Helvetica Neue',sans-serif;color:var(--ink);display:flex;height:100vh;background:#fff;-webkit-font-smoothing:antialiased}
+svg.i{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+svg.i.s{width:14px;height:14px}
+svg.i.f{fill:currentColor;stroke:none}
+.side{width:260px;flex:none;background:var(--side);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:52px 12px 14px}
+.nav{display:flex;gap:10px;align-items:center;padding:7px 10px;border-radius:8px;cursor:pointer;font-weight:500}
+.nav .i{color:var(--muted)}
+.nav:hover{background:#f1f1f3}.nav.on{background:#ececef}
+.count{margin-left:auto;font-size:11px;color:#fff;background:var(--ink);border-radius:9px;padding:0 7px;line-height:17px;font-weight:500}
+.sec{color:var(--faint);font-size:11px;margin:26px 10px 6px;font-weight:500}
+.thread{padding:6px 10px 6px 34px;border-radius:8px;display:flex;gap:8px;align-items:center;cursor:pointer;color:#3f3f46}
+.thread:hover{background:#f1f1f3}
+.thread .i{color:var(--faint)}
+.mini{width:14px;height:14px;border-radius:4px;flex:none;display:inline-block}
+.cc{background:linear-gradient(135deg,#e08a65,#c9653f)}.cx{background:linear-gradient(135deg,#6b7cff,#a35cff)}
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+.top{height:52px;flex:none;display:flex;align-items:center;padding:0 20px;font-weight:600}
+.page{flex:1;overflow:auto;padding:16px 48px 110px}
+.view{display:none;max-width:860px;margin:0 auto}
+.view.on{display:block;animation:fade .18s ease}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}}
+h1{font-size:24px;font-weight:650;margin:0;letter-spacing:-.01em}
+.desc{color:var(--muted);margin-top:4px}
+.head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:18px}
+.btn{display:inline-flex;align-items:center;gap:6px;height:32px;border:1px solid var(--line);background:#fff;border-radius:9px;padding:0 12px;font:inherit;font-weight:500;cursor:pointer;color:var(--ink);transition:background .15s}
+.btn:hover{background:var(--sub)}
+.btn.pri{background:var(--ink);color:#fff;border-color:var(--ink)}.btn.pri:hover{background:#000}
+.btn.ghost{border-color:transparent;background:none;color:var(--muted)}.btn.ghost:hover{background:var(--sub);color:var(--ink)}
+.tabs{display:inline-flex;gap:2px;background:var(--sub);padding:3px;border-radius:10px;margin-bottom:14px}
+.tabs span{padding:4px 12px;border-radius:8px;color:var(--muted);cursor:pointer;font-weight:500}
+.tabs span.on{background:#fff;color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.06)}
+.tabs em{font-style:normal;color:var(--faint);margin-left:4px;font-weight:400}
+.list{display:flex;flex-direction:column;gap:8px}
+.auto{display:grid;grid-template-columns:36px 1fr 160px 150px 34px 64px;gap:14px;align-items:center;padding:14px 16px;border:1px solid var(--line);border-radius:var(--r);background:#fff;cursor:pointer;transition:border-color .15s,box-shadow .15s;position:relative;overflow:hidden}
+.auto:hover{border-color:#dcdce0;box-shadow:0 4px 14px rgba(0,0,0,.04)}
+.auto.off{background:#fcfcfd}
+.auto.off .name,.auto.off .when{color:var(--faint)}
+.auto.off .tile{filter:grayscale(1);opacity:.5}
+.tile{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;color:#fff;flex:none}
+.tile.lg{width:48px;height:48px;border-radius:13px}
+.tile.lg svg.i{width:22px;height:22px}
+.name{font-weight:600;font-size:14px}
+.sub{color:var(--muted);font-size:12px;display:flex;gap:6px;align-items:center;margin-top:1px;flex-wrap:wrap}
+.dot{width:3px;height:3px;border-radius:50%;background:var(--faint)}
+.when{font-weight:500}
+.when small{display:block;color:var(--muted);font-weight:400;font-size:12px}
+.badge{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 9px;border-radius:11px;font-size:12px;font-weight:500;white-space:nowrap}
+.b-ok{color:var(--ok);background:var(--okbg)}.b-bad{color:var(--bad);background:var(--badbg)}.b-run{color:var(--run);background:var(--runbg)}.b-off{color:var(--muted);background:var(--sub)}.b-warn{color:var(--warn);background:var(--warnbg)}
+.badge small{font-size:11px;opacity:.75;font-weight:400}
+.prog{position:absolute;left:0;bottom:0;height:2px;background:var(--run);width:33%;animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.35}}
+.tg{width:30px;height:18px;border-radius:9px;background:#d4d4d8;position:relative;display:inline-block;cursor:pointer;flex:none;transition:background .2s}
+.tg::after{content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2);transition:left .2s}
+.tg.on{background:var(--ink)}.tg.on::after{left:14px}
+.acts{display:flex;gap:2px;justify-content:flex-end;opacity:0;transition:opacity .15s}
+.auto:hover .acts{opacity:1}
+.ib{width:28px;height:28px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;color:var(--muted)}
+.ib:hover{background:var(--sub);color:var(--ink)}
+.spin{width:12px;height:12px;border:2px solid rgba(37,99,235,.2);border-top-color:var(--run);border-radius:50%;display:inline-block;animation:r .8s linear infinite;flex:none}
+.spin.gray{border-color:#e4e4e7;border-top-color:#71717a}
+@keyframes r{to{transform:rotate(360deg)}}
+.hintcard{display:flex;gap:12px;align-items:flex-start;margin-top:16px;padding:14px 16px;border:1px dashed #dcdce0;border-radius:var(--r);color:var(--muted)}
+.hintcard b{color:var(--ink);font-weight:500}
+.hintcard .i{color:var(--ink);margin-top:2px}
+.narrow{max-width:680px}
+.composer{border:1px solid var(--line);border-radius:16px;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.03);transition:border-color .15s,box-shadow .15s}
+.composer:focus-within{border-color:#cfcfd4;box-shadow:0 4px 18px rgba(0,0,0,.06)}
+.composer textarea{display:block;width:100%;border:0;outline:none;resize:none;font:inherit;font-size:15px;line-height:1.65;padding:16px 18px 6px;min-height:100px;color:var(--ink);background:transparent}
+.composer.small textarea{min-height:44px;font-size:13px;padding:12px 16px 2px}
+.cbar{display:flex;align-items:center;gap:4px;padding:6px 10px 10px}
+.pick{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 9px;border-radius:8px;font-weight:500;cursor:pointer;color:#3f3f46}
+.pick:hover{background:var(--sub)}
+.pick .i{color:var(--muted)}
+.cbar .right{margin-left:auto;color:var(--muted);font-size:12px;display:flex;align-items:center;gap:8px}
+.send{width:30px;height:30px;border-radius:50%;background:var(--ink);color:#fff;display:inline-flex;align-items:center;justify-content:center}
+.send.dim{background:#e4e4e7}
+.statebar{display:flex;align-items:center;justify-content:space-between;margin:22px 2px 8px}
+.statebar .lbl{font-weight:600;display:flex;gap:6px;align-items:center}
+.demo{font-size:11px;color:var(--faint);display:flex;gap:2px;align-items:center}
+.demo span{padding:2px 8px;border-radius:6px;cursor:pointer}
+.demo span.on{background:var(--sub);color:var(--ink)}
+.preview{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#fff}
+.prow{display:grid;grid-template-columns:22px 70px 1fr 26px;gap:8px;align-items:start;padding:12px 14px;border-top:1px solid var(--line)}
+.prow:first-child{border-top:0}
+.prow:hover{background:#fcfcfd}
+.prow .ic{color:var(--muted);padding-top:2px}
+.prow .k{color:var(--muted)}
+.prow .ed{opacity:0;color:var(--muted);cursor:pointer;padding-top:1px}
+.prow:hover .ed{opacity:1}
+.prow.warn{background:var(--warnbg)}
+.prow.warn .k,.prow.warn .ic{color:var(--warn)}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:1px 8px;border-radius:6px;background:var(--sub);font-size:12px;margin:5px 4px 0 0;color:var(--muted)}
+.chip.first{background:var(--ink);color:#fff}
+.code{font-family:ui-monospace,Menlo,monospace;font-size:12px;background:var(--sub);padding:1px 6px;border-radius:5px;color:var(--ink)}
+.soft{color:var(--muted)}
+.more{color:var(--ink);font-size:12px;cursor:pointer;margin-left:4px}
+.skel{height:10px;border-radius:5px;background:linear-gradient(90deg,#f1f1f3 25%,#e6e6e9 50%,#f1f1f3 75%);background-size:200% 100%;animation:sh 1.2s linear infinite;margin:5px 0}
+@keyframes sh{to{background-position:-200% 0}}
+.fixin{display:inline-flex;align-items:center;gap:6px;margin-top:8px;border:1px solid #f3d9a4;background:#fff;border-radius:8px;padding:4px 8px;color:var(--ink);font-size:12px}
+.formfoot{display:flex;align-items:center;justify-content:space-between;margin-top:20px}
+.lbltg{display:flex;gap:8px;align-items:center;color:var(--muted)}
+.back{display:inline-flex;gap:4px;align-items:center;color:var(--muted);cursor:pointer;margin-bottom:14px}
+.back:hover{color:var(--ink)}
+.dhead{display:flex;gap:14px;align-items:center}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:22px 0 12px}
+.stat{border:1px solid var(--line);border-radius:var(--r);padding:12px 14px}
+.stat .l{color:var(--muted);font-size:12px}
+.stat .v{font-size:18px;font-weight:600;margin-top:2px}
+.stat .v small{font-size:12px;color:var(--muted);font-weight:400;margin-left:4px}
+.panel{border:1px solid var(--line);border-radius:var(--r);padding:16px}
+.panel h4{margin:0 0 6px;font-size:12px;color:var(--muted);font-weight:500}
+.instr{font-size:14px;line-height:1.7}
+.setrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.setrow .chip{background:#fff;border:1px solid var(--line);color:#3f3f46;padding:3px 10px;margin:0}
+.sec2{display:flex;justify-content:space-between;align-items:baseline;margin:26px 0 8px}
+.sec2 h3{margin:0;font-size:14px}
+.tl{position:relative;padding-left:22px}
+.tl::before{content:'';position:absolute;left:6px;top:14px;bottom:14px;width:1px;background:var(--line)}
+.ti{position:relative;display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 12px;border-radius:10px;cursor:pointer}
+.ti:hover{background:var(--sub)}
+.ti::before{content:'';position:absolute;left:-20px;top:17px;width:9px;height:9px;border-radius:50%;background:#d4d4d8;box-shadow:0 0 0 3px #fff;box-sizing:border-box}
+.ti.ok::before{background:#22c55e}.ti.bad::before{background:#ef4444}.ti.int::before{background:#a1a1aa}.ti.skip::before{background:#fff;border:1.5px solid #d4d4d8}
+.ti .t{font-weight:500}
+.ti .m{color:var(--muted);font-size:12px}
+.lnk{color:var(--faint);display:inline-flex;gap:4px;align-items:center;font-size:12px;white-space:nowrap}
+.ti:hover .lnk{color:var(--ink)}
+.chatwrap{max-width:720px;margin:0 auto}
+.bubble{margin-left:auto;background:var(--sub);border-radius:18px;padding:10px 15px;max-width:76%;width:fit-content;margin-bottom:6px;line-height:1.6}
+.act{color:var(--muted);font-size:12px;display:flex;gap:6px;align-items:center;margin:16px 0 8px}
+.reply{margin:12px 0 24px;line-height:1.7}
+.ccard{border:1px solid var(--line);border-radius:16px;background:#fff;box-shadow:0 8px 28px rgba(0,0,0,.06);overflow:hidden}
+.ccard .hd{display:flex;gap:12px;align-items:center;padding:14px 16px}
+.ccard .tt{font-weight:600}
+.ccard .ss{color:var(--muted);font-size:12px}
+.ccard .preview{border:0;border-top:1px solid var(--line);border-radius:0}
+.ccard .prow{grid-template-columns:22px 70px 1fr}
+.ccard .ft{display:flex;align-items:center;gap:8px;padding:12px 16px;background:#fafafa;border-top:1px solid var(--line)}
+.ccard .ft .sp{flex:1}
+.diff s{color:var(--faint);margin-right:6px}
+.round{display:flex;align-items:center;gap:10px;color:var(--faint);font-size:12px;margin:24px 0 14px}
+.round::before,.round::after{content:'';flex:1;height:1px;background:var(--line)}
+.autotag{display:inline-flex;gap:6px;align-items:center;font-size:12px;color:var(--muted);background:var(--sub);border-radius:8px;padding:3px 10px}
+.fail{border:1px solid #fbd5d5;background:var(--badbg);border-radius:14px;padding:12px 14px;margin:6px 0}
+.fail .h{display:flex;gap:8px;align-items:center;color:var(--bad);font-weight:600;margin-bottom:8px}
+.fail .h span{color:var(--muted);font-weight:400;font-size:12px;margin-left:auto}
+.term{background:var(--code);color:#e4e4e7;border-radius:9px;padding:10px 12px;font-family:ui-monospace,Menlo,monospace;font-size:12px;white-space:pre-wrap;line-height:1.6}
+.done{display:flex;gap:10px;align-items:center;border-radius:14px;padding:12px 14px;background:var(--okbg);color:var(--ok);font-weight:500;margin-top:20px}
+.done span{color:#4b7a5c;font-weight:400}
+.phones{display:flex;gap:32px;justify-content:center;margin-top:6px}
+.phone{width:300px;height:620px;border:10px solid #111;border-radius:44px;background:#f2f2f7;position:relative;overflow:hidden;padding:48px 14px 14px;flex:none;box-shadow:0 20px 50px rgba(0,0,0,.15)}
+.phone::before{content:'';position:absolute;top:10px;left:50%;transform:translateX(-50%);width:90px;height:26px;border-radius:14px;background:#111}
+.phone.lock{background:linear-gradient(165deg,#4a5a7c,#9aa8c4 60%,#c9cfdc)}
+.clock{text-align:center;color:#fff;margin:8px 0 26px}
+.clock b{display:block;font-size:60px;font-weight:300;line-height:1.1}
+.clock span{font-size:14px;opacity:.85}
+.notif{background:rgba(255,255,255,.82);backdrop-filter:blur(12px);border-radius:18px;padding:10px 12px;margin-bottom:8px;font-size:12px;line-height:1.45}
+.notif .h{display:flex;gap:6px;align-items:center;color:#52525b;font-size:11px;margin-bottom:3px}
+.notif .h em{margin-left:auto;font-style:normal;color:#71717a}
+.appicon{width:20px;height:20px;border-radius:6px;background:var(--ink);color:#fff;font-size:11px;font-weight:600;display:inline-flex;align-items:center;justify-content:center}
+.ptitle{font-size:24px;font-weight:700;margin:0 4px 4px}
+.grp{font-size:12px;color:var(--muted);margin:14px 4px 6px;font-weight:500}
+.item{background:#fff;border-radius:14px;padding:11px 12px;margin-bottom:6px;display:flex;gap:10px;align-items:center}
+.item .tile{width:30px;height:30px;border-radius:9px}
+.item .tile svg.i{width:14px;height:14px}
+.item .t{font-weight:600;font-size:13px}
+.item .m{color:var(--muted);font-size:11px}
+.item .badge{margin-left:auto;height:20px;font-size:11px}
+.note{max-width:720px;margin:24px auto 0;color:var(--muted);font-size:12px;text-align:center}
+.switch{position:fixed;bottom:16px;left:calc(50% + 130px);transform:translateX(-50%);background:var(--ink);padding:4px;border-radius:12px;display:flex;gap:2px;z-index:9;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+.switch button{background:none;border:0;color:#a1a1aa;padding:6px 12px;border-radius:8px;font:inherit;cursor:pointer;white-space:nowrap}
+.switch button:hover{color:#fff}
+.switch button.on{background:#fff;color:var(--ink)}
+</style>
+</head>
+<body>
+<svg width='0' height='0' style='position:absolute'>
+  <symbol id='clock' viewBox='0 0 24 24'><circle cx='12' cy='12' r='9'/><path d='M12 7v5l3 3'/></symbol>
+  <symbol id='pencil' viewBox='0 0 24 24'><path d='M4 20h4L18.5 9.5a2.8 2.8 0 0 0-4-4L4 16v4'/><path d='M13.5 6.5l4 4'/></symbol>
+  <symbol id='stack' viewBox='0 0 24 24'><path d='M12 4 4 8l8 4 8-4-8-4'/><path d='m4 12 8 4 8-4'/><path d='m4 16 8 4 8-4'/></symbol>
+  <symbol id='folder' viewBox='0 0 24 24'><path d='M5 4h4l3 3h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2'/></symbol>
+  <symbol id='gear' viewBox='0 0 24 24'><circle cx='12' cy='12' r='3'/><path d='M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1'/></symbol>
+  <symbol id='play' viewBox='0 0 24 24'><path d='M7 4v16l13-8z'/></symbol>
+  <symbol id='ext' viewBox='0 0 24 24'><path d='M12 6H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6'/><path d='M11 13l9-9M15 4h5v5'/></symbol>
+  <symbol id='dots' viewBox='0 0 24 24'><circle cx='5' cy='12' r='1'/><circle cx='12' cy='12' r='1'/><circle cx='19' cy='12' r='1'/></symbol>
+  <symbol id='plus' viewBox='0 0 24 24'><path d='M12 5v14M5 12h14'/></symbol>
+  <symbol id='check' viewBox='0 0 24 24'><path d='m5 12 5 5L20 7'/></symbol>
+  <symbol id='x' viewBox='0 0 24 24'><path d='M18 6 6 18M6 6l12 12'/></symbol>
+  <symbol id='alert' viewBox='0 0 24 24'><circle cx='12' cy='12' r='9'/><path d='M12 8v4M12 16h.01'/></symbol>
+  <symbol id='spark' viewBox='0 0 24 24'><path d='M12 3l1.8 4.7 4.7 1.8-4.7 1.8L12 16l-1.8-4.7-4.7-1.8 4.7-1.8z'/><path d='M19 15l.7 1.8 1.8.7-1.8.7L19 20l-.7-1.8-1.8-.7 1.8-.7z'/></symbol>
+  <symbol id='term' viewBox='0 0 24 24'><path d='m5 7 5 5-5 5M12 18h7'/></symbol>
+  <symbol id='repeat' viewBox='0 0 24 24'><path d='M4 12V9a3 3 0 0 1 3-3h12l-3-3M20 12v3a3 3 0 0 1-3 3H5l3 3'/></symbol>
+  <symbol id='msg' viewBox='0 0 24 24'><path d='M4 20l1.3-3.9A8 8 0 1 1 8 19.5z'/></symbol>
+  <symbol id='left' viewBox='0 0 24 24'><path d='m15 6-6 6 6 6'/></symbol>
+  <symbol id='down' viewBox='0 0 24 24'><path d='m6 9 6 6 6-6'/></symbol>
+  <symbol id='bell' viewBox='0 0 24 24'><path d='M10 5a2 2 0 1 1 4 0 7 7 0 0 1 4 6v3l2 3H4l2-3v-3a7 7 0 0 1 4-6M9 17v1a3 3 0 0 0 6 0v-1'/></symbol>
+  <symbol id='up' viewBox='0 0 24 24'><path d='M12 19V5M5 12l7-7 7 7'/></symbol>
+  <symbol id='power' viewBox='0 0 24 24'><path d='M7 6a7 7 0 1 0 10 0M12 4v8'/></symbol>
+  <symbol id='target' viewBox='0 0 24 24'><circle cx='12' cy='12' r='9'/><circle cx='12' cy='12' r='5'/><circle cx='12' cy='12' r='1'/></symbol>
+  <symbol id='text' viewBox='0 0 24 24'><path d='M4 6h16M4 12h16M4 18h10'/></symbol>
+  <symbol id='tag' viewBox='0 0 24 24'><path d='M4 4h7l9 9-7 7-9-9z'/><circle cx='8' cy='8' r='1'/></symbol>
+</svg>
+
+<aside class='side'>
+  <div class='nav'><svg class='i'><use href='#pencil'/></svg>New thread</div>
+  <div class='nav on' data-go='list'><svg class='i'><use href='#clock'/></svg>Automations<span class='count'>2</span></div>
+  <div class='nav'><svg class='i'><use href='#stack'/></svg>Skills</div>
+  <div class='sec'>Projects</div>
+  <div class='nav'><svg class='i'><use href='#folder'/></svg>demo</div>
+  <div class='thread'><span class='mini cc'></span>登录修复</div>
+  <div class='thread' data-go='run'><svg class='i s'><use href='#clock'/></svg>每日 Issue 分拣 · 11月1日</div>
+  <div class='thread'><svg class='i s'><use href='#clock'/></svg>CI 修复 · 11:00<span class='spin gray' style='margin-left:auto'></span></div>
+  <div style='flex:1'></div>
+  <div class='nav'><svg class='i'><use href='#gear'/></svg>Settings</div>
+</aside>
+
+<main class='main'>
+  <div class='top' id='toptitle'>Automations</div>
+  <div class='page'>
+
+  <!-- 1 列表 -->
+  <section class='view on' id='list'>
+    <div class='head'>
+      <div><h1>Automations</h1><div class='desc'>按计划在项目里新开一个对话执行指令，结束后推送到手机。</div></div>
+      <button class='btn pri' data-go='form'><svg class='i s'><use href='#plus'/></svg>新建</button>
+    </div>
+    <div class='tabs'><span class='on'>全部<em>4</em></span><span>运行中<em>1</em></span><span>需要关注<em>1</em></span><span>已暂停<em>1</em></span></div>
+    <div class='list'>
+      <div class='auto' data-go='detail'>
+        <div class='tile cc'><svg class='i'><use href='#clock'/></svg></div>
+        <div><div class='name'>每日 Issue 分拣</div><div class='sub'>demo<i class='dot'></i>Claude Code<i class='dot'></i>完成标准 go test</div></div>
+        <div class='when'>工作日 9:00<small>下次 周一 09:00</small></div>
+        <div><span class='badge b-ok'><svg class='i s'><use href='#check'/></svg>通过 <small>第 2 轮</small></span></div>
+        <span class='tg on'></span>
+        <div class='acts'><span class='ib' title='立即运行'><svg class='i s'><use href='#play'/></svg></span><span class='ib' title='打开上次对话'><svg class='i s'><use href='#ext'/></svg></span></div>
+      </div>
+      <div class='auto'>
+        <div class='tile cx'><svg class='i'><use href='#clock'/></svg></div>
+        <div><div class='name'>CI 修复</div><div class='sub'>demo<i class='dot'></i>Codex<i class='dot'></i>完成标准 make ci</div></div>
+        <div class='when'>每小时<small>11:00 开始</small></div>
+        <div><span class='badge b-run'><span class='spin'></span>运行中 <small>1/3 轮</small></span></div>
+        <span class='tg on'></span>
+        <div class='acts'><span class='ib' title='打开对话'><svg class='i s'><use href='#ext'/></svg></span><span class='ib'><svg class='i s'><use href='#dots'/></svg></span></div>
+        <div class='prog'></div>
+      </div>
+      <div class='auto'>
+        <div class='tile cx'><svg class='i'><use href='#clock'/></svg></div>
+        <div><div class='name'>依赖更新检查</div><div class='sub'>Miya<i class='dot'></i>Codex<i class='dot'></i>完成标准 go build</div></div>
+        <div class='when'>每周一 10:00<small>下次 11月3日 10:00</small></div>
+        <div><span class='badge b-bad'><svg class='i s'><use href='#x'/></svg>失败 <small>3/3 轮</small></span></div>
+        <span class='tg on'></span>
+        <div class='acts'><span class='ib'><svg class='i s'><use href='#play'/></svg></span><span class='ib'><svg class='i s'><use href='#ext'/></svg></span></div>
+      </div>
+      <div class='auto off'>
+        <div class='tile cc'><svg class='i'><use href='#clock'/></svg></div>
+        <div><div class='name'>仓库日报</div><div class='sub'>retty<i class='dot'></i>Claude Code<i class='dot'></i>单轮</div></div>
+        <div class='when'>每天 18:00<small>上次 10月30日</small></div>
+        <div><span class='badge b-off'>已暂停</span></div>
+        <span class='tg'></span>
+        <div class='acts'><span class='ib'><svg class='i s'><use href='#play'/></svg></span><span class='ib'><svg class='i s'><use href='#ext'/></svg></span></div>
+      </div>
+    </div>
+    <div class='hintcard'><svg class='i'><use href='#spark'/></svg><div>在任意对话里描述要定期做的事，例如 <b>「每个工作日 9 点看一下新 Issue，能修的修掉并跑测试」</b>，确认后会出现在这里。有启用的自动化时，Miya 登录后会启动后台服务，关掉窗口也照常运行。</div></div>
+  </section>
+
+  <!-- 2 新建 -->
+  <section class='view narrow' id='form'>
+    <div class='back' data-go='list'><svg class='i s'><use href='#left'/></svg>Automations</div>
+    <div class='head'><div><h1>新建自动化</h1><div class='desc'>写一句话说明做什么、什么时候做，Miya 会整理出时间、完成标准和轮数。</div></div></div>
+    <div class='composer'>
+      <textarea>每个工作日早上 9 点看一下最近 24 小时的新 Issue，能修的修掉并保证 go test 通过，修不过就多试两次，修不了的列出来告诉我。</textarea>
+      <div class='cbar'>
+        <span class='pick'><svg class='i s'><use href='#folder'/></svg>demo<svg class='i s'><use href='#down'/></svg></span>
+        <span class='pick'><span class='mini cc'></span>Claude Code<svg class='i s'><use href='#down'/></svg></span>
+        <span class='right'>可用 @#对话 引用其他对话</span>
+      </div>
+    </div>
+
+    <div class='statebar'>
+      <div class='lbl'><svg class='i s'><use href='#spark'/></svg>整理结果</div>
+      <div class='demo'>预览状态<span class='on' data-pv='pv-ok'>已整理</span><span data-pv='pv-loading'>整理中</span><span data-pv='pv-miss'>需补充</span></div>
+    </div>
+
+    <div class='preview pv' id='pv-ok'>
+      <div class='prow'><svg class='i s ic'><use href='#tag'/></svg><span class='k'>名称</span><span>每日 Issue 分拣</span><svg class='i s ed'><use href='#pencil'/></svg></div>
+      <div class='prow'><svg class='i s ic'><use href='#clock'/></svg><span class='k'>时间</span><div>工作日 9:00 <span class='code'>0 9 * * 1-5</span><div><span class='chip first'>周一 11/3 09:00</span><span class='chip'>周二 11/4 09:00</span><span class='chip'>周三 11/5 09:00</span></div></div><svg class='i s ed'><use href='#pencil'/></svg></div>
+      <div class='prow'><svg class='i s ic'><use href='#target'/></svg><span class='k'>完成标准</span><div><span class='code'>go test ./...</span> 通过<div class='soft' style='font-size:12px;margin-top:2px'>不通过时把输出发回同一个对话继续修</div></div><svg class='i s ed'><use href='#pencil'/></svg></div>
+      <div class='prow'><svg class='i s ic'><use href='#repeat'/></svg><span class='k'>轮数</span><span>最多 3 轮 <span class='soft'>，来自「多试两次」</span></span><svg class='i s ed'><use href='#pencil'/></svg></div>
+      <div class='prow'><svg class='i s ic'><use href='#text'/></svg><span class='k'>指令</span><span class='soft'>查看最近 24 小时新开的 Issue。值得处理的直接修复并补测试，修不了的列出来说明原因。没有新 Issue 时回复「无事可报」。<span class='more'>展开</span></span><svg class='i s ed'><use href='#pencil'/></svg></div>
+    </div>
+
+    <div class='preview pv' id='pv-loading' style='display:none'>
+      <div class='prow'><svg class='i s ic'><use href='#tag'/></svg><span class='k'>名称</span><div><div class='skel' style='width:40%'></div></div><span></span></div>
+      <div class='prow'><svg class='i s ic'><use href='#clock'/></svg><span class='k'>时间</span><div><div class='skel' style='width:55%'></div><div class='skel' style='width:80%'></div></div><span></span></div>
+      <div class='prow'><svg class='i s ic'><use href='#target'/></svg><span class='k'>完成标准</span><div><div class='skel' style='width:35%'></div></div><span></span></div>
+      <div class='prow'><svg class='i s ic'><use href='#repeat'/></svg><span class='k'>轮数</span><div><div class='skel' style='width:25%'></div></div><span></span></div>
+      <div class='prow'><svg class='i s ic'><use href='#text'/></svg><span class='k'>指令</span><div><div class='skel'></div><div class='skel' style='width:70%'></div></div><span></span></div>
+    </div>
+
+    <div class='preview pv' id='pv-miss' style='display:none'>
+      <div class='prow'><svg class='i s ic'><use href='#tag'/></svg><span class='k'>名称</span><span>Issue 分拣</span><svg class='i s ed'><use href='#pencil'/></svg></div>
+      <div class='prow warn'><svg class='i s ic'><use href='#alert'/></svg><span class='k'>时间</span><div>句子里没写时间，暂定每天 9:00 <span class='code'>0 9 * * *</span><div><span class='fixin'><svg class='i s'><use href='#pencil'/></svg>补充时间，例如「工作日早上 9 点」</span></div></div><span></span></div>
+      <div class='prow'><svg class='i s ic'><use href='#target'/></svg><span class='k'>完成标准</span><span class='soft'>未提到测试或验证，不检查</span><svg class='i s ed'><use href='#pencil'/></svg></div>
+      <div class='prow'><svg class='i s ic'><use href='#repeat'/></svg><span class='k'>轮数</span><span class='soft'>1 轮</span><svg class='i s ed'><use href='#pencil'/></svg></div>
+      <div class='prow'><svg class='i s ic'><use href='#text'/></svg><span class='k'>指令</span><span class='soft'>查看新开的 Issue，能修的修掉，修不了的列出来说明原因。</span><svg class='i s ed'><use href='#pencil'/></svg></div>
+    </div>
+
+    <div class='formfoot'>
+      <label class='lbltg'><span class='tg on'></span>创建后启用</label>
+      <div style='display:flex;gap:8px'><button class='btn ghost' data-go='list'>取消</button><button class='btn'><svg class='i s'><use href='#play'/></svg>创建并运行一次</button><button class='btn pri' data-go='list'>创建</button></div>
+    </div>
+  </section>
+
+  <!-- 3 详情 -->
+  <section class='view' id='detail'>
+    <div class='back' data-go='list'><svg class='i s'><use href='#left'/></svg>Automations</div>
+    <div class='head' style='align-items:center'>
+      <div class='dhead'>
+        <div class='tile lg cc'><svg class='i'><use href='#clock'/></svg></div>
+        <div><h1>每日 Issue 分拣</h1><div class='sub' style='font-size:13px'>demo<i class='dot'></i>Claude Code<i class='dot'></i>工作日 9:00</div></div>
+      </div>
+      <div style='display:flex;gap:8px;align-items:center'><span class='tg on'></span><button class='btn' data-go='form'><svg class='i s'><use href='#pencil'/></svg>编辑</button><button class='btn pri'><svg class='i s'><use href='#play'/></svg>立即运行</button></div>
+    </div>
+    <div class='stats'>
+      <div class='stat'><div class='l'>下次运行</div><div class='v'>周一 09:00<small>2 天后</small></div></div>
+      <div class='stat'><div class='l'>最近 10 次</div><div class='v'>8 次通过<small>1 失败 · 1 中断</small></div></div>
+      <div class='stat'><div class='l'>平均</div><div class='v'>1.6 轮<small>每次 9 分钟</small></div></div>
+    </div>
+    <div class='panel'>
+      <h4>指令</h4>
+      <div class='instr'>查看最近 24 小时新开的 Issue。值得处理的直接修复并补测试，修不了的列出来说明原因。没有新 Issue 时回复「无事可报」。</div>
+      <div class='setrow'><span class='chip'><svg class='i s'><use href='#clock'/></svg>0 9 * * 1-5</span><span class='chip'><svg class='i s'><use href='#target'/></svg>go test ./...</span><span class='chip'><svg class='i s'><use href='#repeat'/></svg>最多 3 轮</span></div>
+    </div>
+    <div class='sec2'><h3>运行历史</h3><span class='soft' style='font-size:12px'>最近 20 次</span></div>
+    <div class='tl'>
+      <div class='ti ok' data-go='run'><div><div class='t'>修复 #142 时区判断，补了测试</div><div class='m'>11月1日 周五 09:00 · 第 2/3 轮 · 14 分钟</div></div><span class='lnk'>打开对话<svg class='i s'><use href='#ext'/></svg></span></div>
+      <div class='ti ok'><div><div class='t'>无事可报</div><div class='m'>10月31日 周四 09:00 · 第 1/3 轮 · 2 分钟</div></div><span class='lnk'>打开对话<svg class='i s'><use href='#ext'/></svg></span></div>
+      <div class='ti bad'><div><div class='t'>TestLogin 仍未通过</div><div class='m'>10月30日 周三 09:00 · 3/3 轮 · 31 分钟</div></div><span class='lnk'>打开对话<svg class='i s'><use href='#ext'/></svg></span></div>
+      <div class='ti int'><div><div class='t'>在对话中手动停止</div><div class='m'>10月29日 周二 09:00 · 第 1/3 轮 · 6 分钟</div></div><span class='lnk'>打开对话<svg class='i s'><use href='#ext'/></svg></span></div>
+      <div class='ti skip'><div><div class='t soft'>已跳过，上一次仍在运行</div><div class='m'>10月28日 周一 09:00</div></div></div>
+      <div class='ti ok'><div><div class='t'>补跑一次，电脑睡眠时错过了 2 次</div><div class='m'>10月27日 周日 08:12 · 第 1/3 轮 · 3 分钟</div></div><span class='lnk'>打开对话<svg class='i s'><use href='#ext'/></svg></span></div>
+    </div>
+  </section>
+
+  <!-- 4 一句话创建 -->
+  <section class='view' id='chat'>
+    <div class='chatwrap'>
+      <div class='bubble'>每个工作日早上 9 点帮我看一下新 Issue，能修的修掉并跑测试，修不了的告诉我</div>
+      <div class='act'><svg class='i s'><use href='#stack'/></svg>create_automation</div>
+      <div class='ccard'>
+        <div class='hd'><div class='tile cc'><svg class='i'><use href='#clock'/></svg></div><div><div class='tt'>创建自动化</div><div class='ss'>从这段对话整理，启用后才会运行</div></div></div>
+        <div class='preview'>
+          <div class='prow'><svg class='i s ic'><use href='#tag'/></svg><span class='k'>名称</span><span>每日 Issue 分拣</span></div>
+          <div class='prow'><svg class='i s ic'><use href='#folder'/></svg><span class='k'>项目</span><span>demo · <span class='mini cc' style='vertical-align:-2px'></span> Claude Code</span></div>
+          <div class='prow'><svg class='i s ic'><use href='#clock'/></svg><span class='k'>时间</span><span>工作日 9:00 <span class='code'>0 9 * * 1-5</span> <span class='soft'>下次 周一 09:00</span></span></div>
+          <div class='prow'><svg class='i s ic'><use href='#target'/></svg><span class='k'>完成标准</span><span><span class='code'>go test ./...</span> 通过，最多 3 轮</span></div>
+          <div class='prow'><svg class='i s ic'><use href='#text'/></svg><span class='k'>指令</span><span class='soft'>查看最近 24 小时新开的 Issue。值得处理的直接修复并补测试，修不了的列出来说明原因。</span></div>
+        </div>
+        <div class='ft'><button class='btn ghost'><svg class='i s'><use href='#pencil'/></svg>在页面里编辑</button><span class='sp'></span><button class='btn'>取消</button><button class='btn pri'>启用</button></div>
+      </div>
+      <div class='reply'>确认后，它会在每个工作日 9:00 在 demo 项目里新开一个对话执行。测试没通过会自动再修，最多 3 轮。</div>
+      <div class='bubble'>改成只在周一跑</div>
+      <div class='act'><svg class='i s'><use href='#stack'/></svg>update_automation</div>
+      <div class='ccard'>
+        <div class='hd'><div class='tile cc'><svg class='i'><use href='#clock'/></svg></div><div><div class='tt'>修改「每日 Issue 分拣」</div><div class='ss'>其他设置不变</div></div></div>
+        <div class='preview'><div class='prow diff'><svg class='i s ic'><use href='#clock'/></svg><span class='k'>时间</span><span><s>工作日 9:00</s><b>每周一 9:00</b> <span class='code'>0 9 * * 1</span></span></div></div>
+        <div class='ft'><span class='sp'></span><button class='btn'>取消</button><button class='btn pri'>确认修改</button></div>
+      </div>
+      <div class='composer small' style='margin-top:36px'><textarea placeholder='输入消息… / 命令 · @ 文件或对话'></textarea><div class='cbar'><span class='pick'><svg class='i s'><use href='#plus'/></svg></span><span class='pick'><span class='mini cc'></span>Claude Code</span><span class='right'><span class='send dim'><svg class='i s'><use href='#up'/></svg></span></span></div></div>
+    </div>
+  </section>
+
+  <!-- 5 多轮运行 -->
+  <section class='view' id='run'>
+    <div class='chatwrap'>
+      <span class='autotag'><svg class='i s'><use href='#clock'/></svg>自动化 · 每日 Issue 分拣 · 11月1日 09:00</span>
+      <div class='round'>第 1 轮</div>
+      <div class='bubble'>查看最近 24 小时新开的 Issue。值得处理的直接修复并补测试，修不了的列出来说明原因。</div>
+      <div class='act'><svg class='i s'><use href='#stack'/></svg>3 activities<svg class='i s'><use href='#down'/></svg></div>
+      <div class='reply'>新增 2 个 Issue。#142 登录在 UTC+8 下提前过期，已修复并补测试。#143 是功能请求，需要你决定是否做。</div>
+      <div class='fail'>
+        <div class='h'><svg class='i s'><use href='#term'/></svg>检查未通过<span>Miya 自动发回 · go test ./...</span></div>
+        <div class='term'>--- FAIL: TestTokenExpiry (0.00s)
+    token_test.go:41: expired = true, want false
+FAIL    demo/auth    0.012s</div>
+      </div>
+      <div class='round'>第 2 轮</div>
+      <div class='act'><svg class='i s'><use href='#stack'/></svg>2 activities<svg class='i s'><use href='#down'/></svg></div>
+      <div class='reply'>测试里的固定时间没带时区，改用 time.FixedZone 后测试通过。</div>
+      <div class='done'><svg class='i'><use href='#check'/></svg>检查通过<span>第 2/3 轮 · 用时 14 分钟 · 已推送到手机</span></div>
+      <div class='composer small' style='margin-top:28px'><textarea placeholder='继续追问，或用 @ 交给另一个 agent'></textarea><div class='cbar'><span class='pick'><svg class='i s'><use href='#plus'/></svg></span><span class='pick'><span class='mini cc'></span>Claude Code</span><span class='right'><span class='send dim'><svg class='i s'><use href='#up'/></svg></span></span></div></div>
+    </div>
+  </section>
+
+  <!-- 6 手机 -->
+  <section class='view' id='phone'>
+    <div class='phones'>
+      <div class='phone lock'>
+        <div class='clock'><span>11月1日 星期五</span><b>9:14</b></div>
+        <div class='notif'><div class='h'><span class='appicon'>M</span>Miya<em>现在</em></div><b>每日 Issue 分拣 · 通过（第 2 轮）</b><br>新增 2 个 Issue，#142 已修复并补测试，#143 需要你决定</div>
+        <div class='notif'><div class='h'><span class='appicon'>M</span>Miya<em>11:02</em></div><b>CI 修复 · 等待审批</b><br>Bash：make ci</div>
+        <div class='notif'><div class='h'><span class='appicon'>M</span>Miya<em>周一</em></div><b>依赖更新检查 · 失败（3/3 轮）</b><br>go build 仍然报错，打开对话查看</div>
+      </div>
+      <div class='phone'>
+        <div class='ptitle'>会话</div>
+        <div class='grp'>待审批</div>
+        <div class='item'><div class='tile cx'><svg class='i'><use href='#clock'/></svg></div><div><div class='t'>CI 修复 · 11:00</div><div class='m'>demo · Bash: make ci</div></div><span class='badge b-warn'>审批</span></div>
+        <div class='grp'>运行中</div>
+        <div class='item'><div class='tile cx'><svg class='i'><use href='#clock'/></svg></div><div><div class='t'>依赖更新检查</div><div class='m'>Miya · Codex</div></div><span class='badge b-run'><span class='spin'></span>2/3</span></div>
+        <div class='grp'>未读</div>
+        <div class='item'><div class='tile cc'><svg class='i'><use href='#clock'/></svg></div><div><div class='t'>每日 Issue 分拣 · 11月1日</div><div class='m'>demo · Claude Code</div></div><span class='badge b-ok'>通过</span></div>
+        <div class='grp'>最近会话</div>
+        <div class='item'><div class='tile cc'><svg class='i'><use href='#msg'/></svg></div><div><div class='t'>登录修复</div><div class='m'>demo · Claude Code</div></div></div>
+      </div>
+    </div>
+    <div class='note'>手机第一版不做管理页。自动化对话按现有分组出现在首页，推送点开直接进入对话。在手机上的对话里也可以一句话创建，同样会弹出确认卡片。</div>
+  </section>
+
+  </div>
+</main>
+
+<div class='switch'>
+  <button data-go='list' class='on'>1 列表</button>
+  <button data-go='form'>2 新建</button>
+  <button data-go='detail'>3 详情</button>
+  <button data-go='chat'>4 一句话创建</button>
+  <button data-go='run'>5 多轮运行</button>
+  <button data-go='phone'>6 手机</button>
+</div>
+
+<script>
+var titles = {list:'Automations', form:'Automations', detail:'Automations', chat:'登录页提示', run:'每日 Issue 分拣 · 11月1日', phone:'手机端'};
+function show(id) {
+  document.querySelectorAll('.view').forEach(function (v) { v.classList.toggle('on', v.id === id); });
+  document.querySelectorAll('.switch button').forEach(function (b) { b.classList.toggle('on', b.dataset.go === id); });
+  document.getElementById('toptitle').textContent = titles[id];
+  document.querySelector('.page').scrollTop = 0;
+}
+document.querySelectorAll('[data-go]').forEach(function (e) {
+  e.addEventListener('click', function (ev) { ev.preventDefault(); ev.stopPropagation(); show(e.dataset.go); });
+});
+document.querySelectorAll('.tg').forEach(function (t) {
+  t.addEventListener('click', function (ev) {
+    ev.stopPropagation();
+    t.classList.toggle('on');
+    var card = t.closest('.auto');
+    if (card) { card.classList.toggle('off', !t.classList.contains('on')); }
+  });
+});
+document.querySelectorAll('[data-pv]').forEach(function (s) {
+  s.addEventListener('click', function () {
+    document.querySelectorAll('[data-pv]').forEach(function (x) { x.classList.toggle('on', x === s); });
+    document.querySelectorAll('.pv').forEach(function (p) { p.style.display = p.id === s.dataset.pv ? '' : 'none'; });
+  });
+});
+document.querySelectorAll('.tabs span').forEach(function (s) {
+  s.addEventListener('click', function () {
+    s.parentNode.querySelectorAll('span').forEach(function (x) { x.classList.toggle('on', x === s); });
+  });
+});
+</script>
+</body>
+</html>

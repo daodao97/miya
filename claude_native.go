@@ -337,10 +337,12 @@ func parseClaudeSession(path string) ([]Message, error) {
 					if b.IsError {
 						out[i].Status = "failed"
 					}
-					if output := claudeVisibleText(claudeBlocks(b.Content)); output != "" {
-						out[i].Content += "\n" + bounded(output)
+					output := claudeVisibleText(claudeBlocks(b.Content))
+					if shown := claudeToolOutput(out[i], output); shown != "" {
+						out[i].Content += "\n" + bounded(shown)
 					}
 					out[i].CompletedAtMs = at
+					claudeFinishSubAgents(&out[i], output)
 				}
 			}
 			if results || e.IsMeta {
@@ -364,7 +366,7 @@ func parseClaudeSession(path string) ([]Message, error) {
 					}
 				case "tool_use":
 					tools[b.ID] = len(out)
-					out = append(out, Message{Role: "tool", Kind: "claudeTool", Status: "completed", Content: b.Name + "\n" + string(b.Input), ItemID: b.ID, StartedAtMs: turnStart, CompletedAtMs: at})
+					out = append(out, Message{Role: "tool", Kind: "claudeTool", Status: "completed", Content: b.Name + "\n" + string(b.Input), ItemID: b.ID, StartedAtMs: turnStart, CompletedAtMs: at, Agents: claudeSubAgent(b.ID, b.Name, b.Input, "completed")})
 				}
 			}
 		}

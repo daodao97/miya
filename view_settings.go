@@ -16,12 +16,12 @@ import (
 func (app *chatApp) settingsView(c *ui.Context) {
 	cc := app.c
 	ui.Column(c).Gap(12).Children(func() {
-		ui.Tabs(c.Key("settings-tabs"), &app.settingsTab, "General", "Account", "Phone").AlignSelf(ui.Start)
+		ui.Tabs(c.Key("settings-tabs"), &app.settingsTab, "General", "Account", "Phone", "用量").AlignSelf(ui.Start)
 		if app.settingsTab == 0 {
 			card(c).Padding(24).Gap(24).Children(func() {
 				app.languageSettings(c)
 				app.appearanceSettings(c)
- notificationSettings(c)
+				notificationSettings(c)
 				zh := cc.locale() == "zh"
 				ui.Column(c).Gap(10).Children(func() {
 					ui.Text(c, map[bool]string{true: "ChatGPT 应如何工作？", false: "How should ChatGPT operate?"}[zh]).FontWeight(600)
@@ -35,6 +35,8 @@ func (app *chatApp) settingsView(c *ui.Context) {
 			})
 		} else if app.settingsTab == 1 {
 			app.account.view(c)
+		} else if app.settingsTab == 3 {
+			app.usageSettings(c)
 		} else {
 			app.phoneSettings(c)
 		}
@@ -360,7 +362,7 @@ func (s *quotaView) view(c *ui.Context) {
 				ui.Column(c.Key(i)).FillWidth().Gap(6).Children(func() {
 					ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(12).Children(func() {
 						ui.Text(c, label).Grow(1).FontSize(12)
-						ui.Text(c, fmt.Sprintf("已用 %.0f%%", pct)).FontSize(11).TextColor(muted)
+						ui.Text(c, fmt.Sprintf("剩余 %.0f%%", 100-pct)).FontSize(11).TextColor(muted)
 					})
 					progressBar(c, pct, ink)
 				})

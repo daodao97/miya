@@ -121,7 +121,12 @@ func (app *chatApp) messageList(c *ui.Context, t Thread) {
 				} else {
 					waveText(c.Key("working"), "clock", threadWorkingLabel(t))
 					if hint := stalledHint(t, len(app.c.approvals()) > 0, time.Now()); hint != "" {
-						ui.Text(c, "· "+hint).Grow(1).MinWidth(0).FontSize(12).TextColor(warnInk)
+						if app.mobile {
+							ui.Box(c).Grow(1).MinWidth(0)
+							ui.Text(c, "暂未响应").Shrink(0).SingleLine().FontSize(12).TextColor(warnInk).Tooltip(hint)
+						} else {
+							ui.Text(c, "· "+hint).Grow(1).MinWidth(0).FontSize(12).TextColor(warnInk)
+						}
 					}
 				}
 			})
@@ -164,6 +169,11 @@ func (app *chatApp) groupView(c *ui.Context, g messageGroup) {
 				c.WriteClipboard(messageGroupText(g))
 				app.copied[g.ID] = true
 			}
+			h := quiet(c.Key("handoff")).Size(28, 28).PaddingX(6).Justify(ui.Center).Label("交付到新对话").Tooltip("交付到新对话")
+			h.Children(func() { icon(c, "arrow-right", 15, muted) })
+			if h.Clicked() {
+				app.handoffToNewThread()
+			}
 		})
 	})
 }
@@ -180,9 +190,18 @@ func (app *chatApp) activityRunView(c *ui.Context, run activityRun, streaming bo
 	expanded := app.open[-run.ID]
 	ui.Column(c).FillWidth().Gap(4).Children(func() {
 		header := quiet(c.Key("header")).PaddingX(0).AlignSelf(ui.Start)
+		// Sub-agents inside a collapsed run still show that they work.
+		agents := latestSubAgents(run.Messages)
 		header.Children(func() {
 			icon(c, "stack-2", 14, muted)
-			mutedText(c, fmt.Sprintf("%d activities", len(run.Messages)))
+			if subAgentsActive(agents) {
+				ui.Spinner(c).FontSize(12)
+			}
+			label := fmt.Sprintf("%d activities", len(run.Messages))
+			if s := subAgentCounts(agents); s != "" {
+				label += " · " + s
+			}
+			mutedText(c, label)
 			app.chevron(c, expanded)
 		})
 		if header.Clicked() {
@@ -214,17 +233,25 @@ func (app *chatApp) messageView(c *ui.Context, m Message, streaming bool) {
 	case "user":
 		ui.Column(c).FillWidth().Gap(8).Children(func() {
 			if len(m.Images) > 0 {
-				ui.Row(c).AlignSelf(ui.End).Gap(8).Children(func() {
+				ui.Row(c).FillWidth().Wrap().Justify(ui.End).Gap(8).Children(func() {
 					for _, src := range m.Images {
-						if img := cachedImage(src); img != nil {
-							ui.Image(c.Key(src), img).Size(80, 80).Fit(ui.Cover).Radius(8)
+						loader := cachedImage
+						if app.imagePreview != nil {
+							loader = app.imagePreview
+						}
+						if img := loader(src); img != nil {
+							ui.Image(c.Key(src), img).Size(80, 80).Fit(ui.Cover).Radius(8).Label("图片预览")
+						} else {
+							ui.Box(c.Key(src)).Size(80, 80).Radius(8).Background(bubble).Label("图片预览").AlignItems(ui.Center).Justify(ui.Center).Children(func() {
+								icon(c, "file", 24, muted)
+							})
 						}
 					}
 				})
 			}
 			// Short prompts stay compact; long ones wrap within a bounded bubble.
-			ui.Column(c).AlignSelf(ui.End).MaxWidth(560).MinWidth(0).Background(bubble).Radius(16).Padding(14).Children(func() {
-				app.markdown(c, m, false)
+			ui.Column(c).AlignSelf(ui.End).MaxWidth(560).MinWidth(0).Background(bubble).Radius(16).Padding(14).Gap(8).Children(func() {
+				app.threadMessage(c, m)
 			})
 		})
 		return
@@ -236,6 +263,9 @@ func (app *chatApp) messageView(c *ui.Context, m Message, streaming bool) {
 	expanded := app.open[m.ID] && !isReasoning
 	ui.Column(c).FillWidth().Gap(6).Children(func() {
 		title := nativeText(activityTitle(m))
+		if s := subAgentSummary(m.Agents); s != "" {
+			title += " · " + nativeText(s)
+		}
 		header := quiet(c.Key("header")).FillWidth().Height(28).PaddingX(0).Label(title)
 		header.Children(func() {
 			icon(c, activityIcon(m), 14, muted)
@@ -243,7 +273,7 @@ func (app *chatApp) messageView(c *ui.Context, m Message, streaming bool) {
 			if m.Status == "failed" && !isReasoning {
 				color = failed
 			}
-			if m.Status == "inProgress" || m.Status == "in_progress" {
+			if m.Status == "inProgress" || m.Status == "in_progress" || subAgentsActive(m.Agents) {
 				ui.Spinner(c).FontSize(12)
 			}
 			ui.Text(c, title).Grow(1).MinWidth(0).SingleLine().Ellipsis("…").FontSize(12).TextColor(color)
@@ -278,6 +308,11 @@ func activityTitle(m Message) string {
 	switch strings.ToLower(m.Kind) {
 	case "claudetool":
 		return claudeToolTitle(m)
+	case "handoff":
+		if len(m.Agents) > 0 {
+			return "已交付到对话 #" + strings.TrimPrefix(m.Agents[0].ID, "thread:")
+		}
+		return messageLabel(m.Kind)
 	case "reasoning":
 		if active {
 			return tr("Thinking…")
@@ -370,6 +405,21 @@ func (app *chatApp) activityDetail(c *ui.Context, m Message) {
 		})
 		return
 	}
+	if len(m.Agents) > 0 {
+		ui.Column(c).FillWidth().MinWidth(0).Gap(8).Children(func() {
+			subAgentList(c, m.Agents)
+			// An adapter leaves the content empty when the list says it all.
+			if strings.TrimSpace(m.Content) != "" {
+				app.activityBody(c, m)
+			}
+		})
+		return
+	}
+	app.activityBody(c, m)
+}
+
+// activityBody is an activity's own detail: its plan text, diff or output.
+func (app *chatApp) activityBody(c *ui.Context, m Message) {
 	kind := strings.ToLower(m.Kind)
 	switch {
 	case kind == "reasoning" || kind == "plan":

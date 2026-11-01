@@ -13,25 +13,30 @@ type Model struct {
 	} `json:"supportedReasoningEfforts"`
 }
 type Item struct {
-	ID           string          `json:"id"`
-	Type         string          `json:"type"`
-	Text         string          `json:"text"`
-	Content      json.RawMessage `json:"content"`
-	Summary      []string        `json:"summary"`
-	Server       string          `json:"server"`
-	Tool         string          `json:"tool"`
-	Query        string          `json:"query"`
-	Path         string          `json:"path"`
-	SavedPath    string          `json:"savedPath"`
-	Review       string          `json:"review"`
-	Arguments    json.RawMessage `json:"arguments"`
-	Result       json.RawMessage `json:"result"`
-	ToolError    json.RawMessage `json:"error"`
-	AgentsStates json.RawMessage `json:"agentsStates"`
-	Output       json.RawMessage `json:"output"`
-	Failure      json.RawMessage `json:"failure"`
-	DurationMS   int64           `json:"durationMs"`
-	ExitCode     *int            `json:"exitCode"`
+	ID                string          `json:"id"`
+	Type              string          `json:"type"`
+	Text              string          `json:"text"`
+	Content           json.RawMessage `json:"content"`
+	Summary           []string        `json:"summary"`
+	Server            string          `json:"server"`
+	Tool              string          `json:"tool"`
+	Query             string          `json:"query"`
+	Path              string          `json:"path"`
+	SavedPath         string          `json:"savedPath"`
+	Review            string          `json:"review"`
+	Arguments         json.RawMessage `json:"arguments"`
+	Result            json.RawMessage `json:"result"`
+	ToolError         json.RawMessage `json:"error"`
+	AgentsStates      json.RawMessage `json:"agentsStates"`
+	ReceiverThreadIDs []string        `json:"receiverThreadIds"`
+	Prompt            string          `json:"prompt"`
+	AgentPath         string          `json:"agentPath"`
+	AgentThreadID     string          `json:"agentThreadId"`
+	Kind              string          `json:"kind"`
+	Output            json.RawMessage `json:"output"`
+	Failure           json.RawMessage `json:"failure"`
+	DurationMS        int64           `json:"durationMs"`
+	ExitCode          *int            `json:"exitCode"`
 
 	CommandActions []struct {
 		Type  string `json:"type"`

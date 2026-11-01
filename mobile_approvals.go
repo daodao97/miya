@@ -76,7 +76,7 @@ func (m *mobileApp) approvalCard(c *ui.Context, a codex.Approval) {
 	ui.Column(c).Margin(0, 12, 8, 12).Padding(14).Gap(10).Background(p.surface).Border(1, p.warn).Radius(18).Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			icon(c, "shield-exclamation", 16, p.warn)
-			ui.Text(c, requestAgent(a)+" 请求确认").FontSize(14).FontWeight(600)
+			ui.Text(c, requestAgent(a)+" 请求确认").FontSize(m.font(14)).FontWeight(600)
 		})
 		switch a.Method {
 		case "item/tool/requestUserInput", "mcpServer/elicitation/request":
@@ -89,7 +89,7 @@ func (m *mobileApp) approvalCard(c *ui.Context, a codex.Approval) {
 				m.router().Push("/approval")
 			}
 		default:
-			ui.Scroll(c).MaxHeight(140).Children(func() { ui.Text(c, m.view.c.approvalDetail(a)).FontSize(13).LineHeight(1.45).Selectable() })
+			ui.Scroll(c).MaxHeight(140).Children(func() { ui.Text(c, m.view.c.approvalDetail(a)).FontSize(m.font(13)).LineHeight(1.45).Selectable() })
 			ui.Row(c).Gap(8).Children(func() {
 				if m.pill(c, "allow", "允许一次", true).Disabled(m.approvalPending[id]).Clicked() {
 					m.submitApproval(a, nil, true, false)
@@ -100,17 +100,17 @@ func (m *mobileApp) approvalCard(c *ui.Context, a codex.Approval) {
 			})
 		}
 		if message := m.view.formErrors[id]; message != "" {
-			ui.Text(c, message).FontSize(13).TextColor(danger)
+			ui.Text(c, message).FontSize(m.font(13)).TextColor(danger)
 		}
 	})
 }
 func (m *mobileApp) approvalPage(c *ui.Context) {
 	p := m.pal
-	ui.Row(c).FillWidth().Height(64).Padding(0, 12).Gap(8).AlignItems(ui.Center).Children(func() {
+	ui.Row(c).FillWidth().MinHeight(64).Padding(0, 12).Gap(8).AlignItems(ui.Center).Children(func() {
 		if m.circle(c, "back", "返回", func() { icon(c, "arrow-left", 20, p.ink) }).Clicked() {
 			m.router().Back()
 		}
-		ui.Text(c, "确认请求").Grow(1).TextAlign(ui.Center).FontSize(16).FontWeight(600)
+		ui.Text(c, "确认请求").Grow(1).TextAlign(ui.Center).FontSize(m.font(16)).FontWeight(600)
 		ui.Box(c).Size(44, 44)
 	})
 	var approval *codex.Approval
@@ -128,17 +128,17 @@ func (m *mobileApp) approvalPage(c *ui.Context) {
 	a := *approval
 	ui.Scroll(c).FillWidth().Grow(1).MinHeight(0).Children(func() {
 		ui.Column(c).FillWidth().Padding(20, 16).Gap(16).Children(func() {
-			ui.Text(c, requestAgent(a)).FontSize(20).FontWeight(600)
+			ui.Text(c, requestAgent(a)).FontSize(m.font(20)).FontWeight(600)
 			if a.Method == "item/tool/requestUserInput" {
 				m.questionFields(c, a)
 			} else {
 				m.elicitationFields(c, a)
 			}
 			if message := m.view.formErrors[string(a.ID)]; message != "" {
-				ui.Text(c, message).TextColor(danger).FontSize(13)
+				ui.Text(c, message).TextColor(danger).FontSize(m.font(13))
 			}
 			if m.approvalPending[string(a.ID)] {
-				ui.Text(c, "正在提交…").TextColor(p.muted).FontSize(13)
+				ui.Text(c, "正在提交…").TextColor(p.muted).FontSize(m.font(13))
 			}
 		})
 	})
@@ -152,14 +152,14 @@ func (m *mobileApp) questionFields(c *ui.Context, a codex.Approval) {
 			if q.Header != "" {
 				ui.Text(c, q.Header).FontWeight(600)
 			}
-			ui.Text(c, q.Question).FontSize(15).LineHeight(1.45)
+			ui.Text(c, q.Question).FontSize(m.font(15)).LineHeight(1.45)
 			for i, option := range q.Options {
-				b := quiet(c.Key(i)).FillWidth().MinHeight(44).Padding(12).Background(p.surface).Radius(12).Label(option.Label)
+				b := m.phoneButton(c.Key(i)).FillWidth().MinHeight(44).Padding(12).Background(p.surface).Radius(12).Label(option.Label)
 				b.Children(func() {
 					ui.Column(c).FillWidth().Gap(4).Children(func() {
 						ui.Text(c, option.Label).FontWeight(500)
 						if option.Description != "" {
-							ui.Text(c, option.Description).FontSize(13).TextColor(p.muted)
+							ui.Text(c, option.Description).FontSize(m.font(13)).TextColor(p.muted)
 						}
 					})
 				})
@@ -171,7 +171,7 @@ func (m *mobileApp) questionFields(c *ui.Context, a codex.Approval) {
 				}
 			}
 			value := fields[q.ID]
-			input := ui.TextInput(c.Key("answer"), &value).FillWidth().MinHeight(44).FontSize(16).Placeholder("也可以输入自己的回答").Label(firstNonEmpty(q.Header, q.Question))
+			input := ui.TextInput(c.Key("answer"), &value).FillWidth().MinHeight(44).FontSize(m.font(16)).Placeholder("也可以输入自己的回答").Label(firstNonEmpty(q.Header, q.Question))
 			if q.IsSecret {
 				input.Password()
 			}
@@ -201,10 +201,10 @@ func (m *mobileApp) elicitationFields(c *ui.Context, a codex.Approval) {
 	p := m.pal
 	id := string(a.ID)
 	fields := m.fieldsFor(a)
-	ui.Text(c, a.Message).FontSize(15).LineHeight(1.45).Selectable()
+	ui.Text(c, a.Message).FontSize(m.font(15)).LineHeight(1.45).Selectable()
 	if a.Mode == "url" {
-		ui.Text(c, "先在浏览器完成操作，再回到这里确认。").FontSize(13).TextColor(p.muted)
-		ui.Link(c, a.URL, a.URL).FontSize(14)
+		ui.Text(c, "先在浏览器完成操作，再回到这里确认。").FontSize(m.font(13)).TextColor(p.muted)
+		ui.Link(c, a.URL, a.URL).FontSize(m.font(14))
 	} else {
 		var schema phoneFormSchema
 		_ = json.Unmarshal(a.RequestedSchema, &schema)
@@ -222,7 +222,7 @@ func (m *mobileApp) elicitationFields(c *ui.Context, a codex.Approval) {
 				}
 				ui.Text(c, label).FontWeight(500)
 				if field.Description != "" {
-					ui.Text(c, field.Description).FontSize(13).TextColor(p.muted)
+					ui.Text(c, field.Description).FontSize(m.font(13)).TextColor(p.muted)
 				}
 				switch {
 				case len(field.Enum) > 0:
@@ -243,7 +243,7 @@ func (m *mobileApp) elicitationFields(c *ui.Context, a codex.Approval) {
 					})
 				default:
 					value := fields[key]
-					if ui.TextInput(c.Key("value"), &value).FillWidth().MinHeight(44).FontSize(16).Label(firstNonEmpty(field.Title, key)).Changed() {
+					if ui.TextInput(c.Key("value"), &value).FillWidth().MinHeight(44).FontSize(m.font(16)).Label(firstNonEmpty(field.Title, key)).Changed() {
 						fields[key] = value
 					}
 				}

@@ -151,6 +151,7 @@ func (c *chatController) watchService(cl *serviceClient) {
 func (c *chatController) applyState(s svcState) {
 	c.fastMode = s.FastMode
 	c.cwd = s.Cwd
+	c.projectCache = s.ProjectThreads
 	c.mirror.projectBusy = s.ProjectBusy
 	threads := s.Threads
 	for i := range threads {

@@ -167,6 +167,7 @@ func (app *chatApp) attachmentPreview(c *ui.Context, path string) {
 
 // completion is the composer's menu of slash commands and project files.
 type completion struct {
+	input      inlineThreadInput
 	open       bool
 	choices    []composerChoice
 	selected   int
@@ -194,8 +195,11 @@ func (m *completion) visible(app *chatApp) bool {
 // edit records an edit of the draft and opens the menu for the token at the
 // caret: commands after a leading slash, files after an at sign.
 func (m *completion) edit(app *chatApp, value string) {
+	m.editAt(app, value, composerEditEnd(app.c.draft(), value))
+}
+
+func (m *completion) editAt(app *chatApp, value string, end int) {
 	c := app.c
-	end := composerEditEnd(c.draft(), value)
 	c.rememberDraft(value)
 	app.notice = ""
 	app.closeMenus()
@@ -214,6 +218,9 @@ func (m *completion) edit(app *chatApp, value string) {
 		return
 	}
 	m.state = "Searching project files…"
+	// Conversations of the workspace come first; files follow as found.
+	refs := app.threadChoices(m.token.Query)
+	m.choices = refs
 	ctx, stop := context.WithTimeout(c.ctx, 4*time.Second)
 	m.cancel = stop
 	version, root, query := m.generation, c.cwd, m.token.Query
@@ -236,7 +243,7 @@ func (m *completion) edit(app *chatApp, value string) {
 				m.state = "Unable to search files: " + err.Error()
 				return
 			}
-			m.choices = results
+			m.choices = append(append([]composerChoice(nil), refs...), results...)
 			m.state = "No matching files"
 		})
 	}()
@@ -251,6 +258,11 @@ func (m *completion) choose(app *chatApp, index int) {
 	choice, token, value := m.choices[index], m.token, m.source
 	m.close()
 	if token.Kind == '@' {
+		if id, ok := threadChoiceID(choice.Name); ok {
+			c.rememberDraft(insertThreadReference(value, token, id))
+			c.prefetchThread(id)
+			return
+		}
 		c.rememberDraft(insertFileReference(value, token, choice.Name))
 		return
 	}
@@ -277,70 +289,48 @@ func (app *chatApp) composerInput(c *ui.Context) {
 	}
 	label := "Message " + cc.currentBackend().Name()
 	ui.Column(c).FillWidth().MinWidth(0).Gap(4).Children(func() {
-		draft := cc.draft()
-		in := ui.TextAreaBase(c.Key("composer"), &draft).Lines(2, 10).Padding(2).FillWidth().FontSize(13).
-			Placeholder(placeholder).Label(label).Disabled(cur.ReadOnly || cur.Loading).AutoFocus()
-		in.OnPaste(func(text string) bool {
-			if text != "" {
-				return false
+		width := min(float32(744), max(200, c.Root().Bounds().W-340))
+		in := app.threadInput(c.Key("composer"), &m.input, cc.draft(), fmt.Sprintf("%s:%d", cc.cwd, cur.ID), label, placeholder, 13, width, 2, 10, func(text string) {
+			_, caret := m.input.doc.Selection()
+			end := len(inlineThreadRaw(m.input.doc.Text().Slice(0, caret)))
+			m.editAt(app, text, end)
+		}).
+			Disabled(cur.ReadOnly || cur.Loading).AutoFocus()
+		if m.input.moved {
+			m.close()
+		}
+		visible := m.visible(app)
+		if in.Shortcut(0, ui.KeyEnter) {
+			if visible {
+				m.choose(app, m.selected)
+			} else if !cur.Loading || cur.Busy {
+				app.send()
 			}
-			return app.pasteAttachments()
-		})
-		in.OnTextKey(func(k ui.TextKey) bool {
-			if k.Text() != cc.draft() {
-				m.edit(app, k.Text())
+			m.input.setRaw(cc.draft())
+		}
+		if in.Shortcut(ui.Cmd, ui.KeyEnter) {
+			if cur.Busy && !visible {
+				app.sendDraft(true)
+				m.input.setRaw(cc.draft())
 			}
-			visible := m.visible(app)
-			switch k.Key {
-			case ui.KeyEnter:
-				if k.Mods == ui.Cmd && cc.current().Busy && !visible {
-					app.sendDraft(true)
-					k.SetText(cc.draft())
-					return true
-				}
-				if k.Mods != 0 {
-					return false // Shift+Enter breaks the line
-				}
-				if visible {
-					m.choose(app, m.selected)
-				} else if !cc.current().Loading || cc.current().Busy {
-					if name, ok := slashCommand(cc.draft()); ok && name == "mention" {
-						m.edit(app, "@")
-					} else {
-						app.send()
-					}
-				}
-				k.SetText(cc.draft())
-				return true
-			case ui.KeyTab:
-				if visible {
-					m.choose(app, m.selected)
-					k.SetText(cc.draft())
-					return true
-				}
-			case ui.KeyUp, ui.KeyDown:
-				if visible && len(m.choices) > 0 {
+		}
+		if visible {
+			if in.Shortcut(0, ui.KeyTab) {
+				m.choose(app, m.selected)
+				m.input.setRaw(cc.draft())
+			}
+			for _, key := range []ui.Key{ui.KeyUp, ui.KeyDown} {
+				if in.Shortcut(0, key) && len(m.choices) > 0 {
 					step := 1
-					if k.Key == ui.KeyUp {
+					if key == ui.KeyUp {
 						step = -1
 					}
 					m.selected = (m.selected + step + len(m.choices)) % len(m.choices)
-					return true
 				}
-			case ui.KeyEscape:
-				if visible {
-					m.close()
-					return true
-				}
-			case ui.KeyLeft, ui.KeyRight, ui.KeyHome, ui.KeyEnd:
-				// Moving the caret invalidates the edited range. Reopen on the
-				// next edit instead of inserting at the old position.
+			}
+			if in.Shortcut(0, ui.KeyEscape) {
 				m.close()
 			}
-			return false
-		})
-		if in.Changed() {
-			m.edit(app, draft)
 		}
 		if in.Clicked() {
 			m.close()
@@ -355,6 +345,12 @@ func (app *chatApp) composerInput(c *ui.Context) {
 			title := tr("Commands")
 			if m.token.Kind == '@' {
 				title = tr("Project files")
+				for _, choice := range m.choices {
+					if _, ok := threadChoiceID(choice.Name); ok {
+						title = "对话与项目文件"
+						break
+					}
+				}
 			}
 			ui.Text(c, title).FontSize(11).TextColor(muted).Padding(6)
 			if len(m.choices) == 0 {
@@ -367,6 +363,9 @@ func (app *chatApp) composerInput(c *ui.Context) {
 					text, detail := "/"+item.Name, item.Detail
 					if m.token.Kind == '@' {
 						text, detail = item.Name, ""
+						if _, ok := threadChoiceID(item.Name); ok {
+							detail = item.Detail
+						}
 					}
 					row := quiet(c.Key("choice:" + item.Name)).FillWidth().Column().AlignItems(ui.Start).Height(0).MinHeight(40).Padding(8).Gap(2).Label(text)
 					if i == m.selected {

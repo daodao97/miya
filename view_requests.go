@@ -9,7 +9,12 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-func requestAgent(a codex.Approval) string { return approvalOwner(a).Name() }
+func requestAgent(a codex.Approval) string {
+	if isMiyaApproval(a) {
+		return "Miya"
+	}
+	return approvalOwner(a).Name()
+}
 
 func (app *chatApp) approvalView(c *ui.Context, a codex.Approval) {
 	switch a.Method {

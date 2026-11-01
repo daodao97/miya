@@ -2,6 +2,9 @@ package remote
 
 import (
 	"context"
+	"io"
+	"net"
+	"net/http"
 	"os"
 	"strings"
 	"testing"
@@ -90,5 +93,66 @@ func TestBridgeEndToEnd(t *testing.T) {
 	defer b2.Close()
 	if b2.Link() != link {
 		t.Errorf("link changed across restart")
+	}
+}
+
+// Verify HTTP and chat share a single Tailcat client without coupling their
+// framing. Only a generated test string passes through the public relay.
+func TestFilesHTTPOverExistingTunnel(t *testing.T) {
+	if os.Getenv("MIYA_REMOTE_E2E") != "1" {
+		t.Skip("set MIYA_REMOTE_E2E=1")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	content := "<!doctype html><h1>Tailcat file preview</h1>"
+	bridge, err := Start(ctx, Options{StateDir: t.TempDir(), Files: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		http.ServeContent(w, r, "index.html", time.Time{}, strings.NewReader(content))
+	}), Serve: func(ctx context.Context, c *Conn) {
+		if c.Send(Frame{Type: "hello", Version: ProtocolVersion}) != nil {
+			return
+		}
+		for {
+			var request Request
+			if c.Receive(&request) != nil {
+				return
+			}
+			if c.Send(Frame{Type: "thread", Thread: request.Thread}) != nil {
+				return
+			}
+		}
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer bridge.Close()
+	conn, err := Connect(ctx, bridge.Link())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	var hello Frame
+	if err = conn.Receive(&hello); err != nil {
+		t.Fatal(err)
+	}
+	transport := &http.Transport{DialContext: func(ctx context.Context, network, address string) (net.Conn, error) { return conn.DialFiles(ctx) }}
+	defer transport.CloseIdleConnections()
+	client := &http.Client{Transport: transport}
+	req, _ := http.NewRequestWithContext(ctx, "GET", "http://desktop/index.html", nil)
+	response, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := io.ReadAll(response.Body)
+	response.Body.Close()
+	if err != nil || string(data) != content {
+		t.Fatalf("file response %q: %v", data, err)
+	}
+	if err = conn.Send(Request{Op: "subscribe", Thread: 42}); err != nil {
+		t.Fatal(err)
+	}
+	var reply Frame
+	if err = conn.Receive(&reply); err != nil || reply.Thread != 42 {
+		t.Fatalf("HTTP disrupted chat: %+v %v", reply, err)
 	}
 }

@@ -101,7 +101,9 @@ func withToolchainPath(env []string) []string {
 	return append(append([]string(nil), env...), value)
 }
 
-func Start(ctx context.Context, binary, cwd string) (*Client, error) {
+// Start runs the app-server for cwd; args follow app-server, such as -c
+// config overrides.
+func Start(ctx context.Context, binary, cwd string, args ...string) (*Client, error) {
 	if !filepath.IsAbs(cwd) {
 		return nil, errors.New("workspace must be an absolute path")
 	}
@@ -118,7 +120,7 @@ func Start(ctx context.Context, binary, cwd string) (*Client, error) {
 			return nil, err
 		}
 	}
-	cmd := exec.Command(binary, "app-server", "--listen", "stdio://")
+	cmd := exec.Command(binary, append([]string{"app-server", "--listen", "stdio://"}, args...)...)
 	configureProcess(cmd)
 	cmd.Dir = cwd
 	// Authentication and provider configuration remain owned by Codex.

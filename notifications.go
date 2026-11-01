@@ -31,7 +31,8 @@ func (c *chatController) installNotifications() {
 		}
 		set(next)
 		for _, t := range next {
-			if old, ok := previous[t.ID]; ok {
+			// An automation tells how its whole run ended instead.
+			if old, ok := previous[t.ID]; ok && t.Automation == "" {
 				if n, yes := completionNotice(old, t); yes {
 					c.deliverNotice(n, "completion")
 				}
@@ -51,12 +52,10 @@ func (c *chatController) installApprovalNotifications() {
 			if previous[string(a.ID)] {
 				continue
 			}
-			for _, t := range c.threads() {
-				if t.ServerID == a.ThreadID {
-					sum := sha256.Sum256(append([]byte(a.ThreadID), a.ID...))
-					c.deliverNotice(taskNotice{ID: fmt.Sprintf("miya-wait-%x", sum[:16]), Thread: strconv.Itoa(t.ID), Title: "Miya · 需要你的确认", Body: t.Title}, "waiting")
-					break
-				}
+			// Claude Code's approvals and background projects' too.
+			if t, ok := c.approvalThread(a); ok {
+				sum := sha256.Sum256(append([]byte(a.ThreadID), a.ID...))
+				c.deliverNotice(taskNotice{ID: fmt.Sprintf("miya-wait-%x", sum[:16]), Thread: strconv.Itoa(t.ID), Title: "Miya · 需要你的确认", Body: t.Title}, "waiting")
 			}
 		}
 	}

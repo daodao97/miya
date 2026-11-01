@@ -9,6 +9,7 @@ import (
 
 func TestMobileMessagePasteReplacesSelectionAndKeepsCaret(t *testing.T) {
 	m := testMobileApp()
+	m.startConversation("/a", agentCodex)
 	m.draft = "你好👋尾"
 	tt := ui.NewTester(m.viewRoot, 390, 750)
 	tt.Frame()
@@ -53,6 +54,7 @@ func TestMobilePairCodePaste(t *testing.T) {
 
 func TestMobileComposerExpandsWithoutLosingFocus(t *testing.T) {
 	m := testMobileApp()
+	m.startConversation("/a", agentCodex)
 	m.state.Model, m.state.Effort = "gpt-6.1-sol", "high"
 	tt := ui.NewTester(m.viewRoot, 390, 750)
 	tt.Frame()

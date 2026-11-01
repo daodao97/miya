@@ -64,6 +64,10 @@ func (c *chatController) respond(a codex.Approval, result any) {
 	if !found {
 		return
 	}
+	if isMiyaApproval(a) {
+		c.respondMiya(a, result)
+		return
+	}
 	approvalOwner(a).Respond(c, a, result)
 }
 func approvalResult(a codex.Approval, allow bool) any {

@@ -36,6 +36,17 @@ func tr(english string) string {
 }
 
 type chatController struct {
+	// auto is the automations, in the controller that runs them.
+	auto *automationState
+	// miyaPending are the answers Miya's own cards wait for.
+	miyaPending map[string]chan bool
+	miyaSerial  int
+	// threadHistory holds referenced conversations' prefetched messages.
+	threadHistory map[int][]Message
+	// handoffs link referenced conversations to where they were sent.
+	handoffs []handoff
+	// delegationParent is the conversation that handed each its work.
+	delegationParent      map[int]int
 	mcpSessionAccess      map[string]bool
 	fastMode              bool
 	push                  *pushHub
@@ -708,6 +719,9 @@ func (c *chatController) update(id int, fn func(*Thread)) {
 				done := items[i].ID
 				c.dispatch(func() { c.drainQueue(done) })
 			}
+			if len(c.handoffs) > 0 {
+				c.refreshHandoffs(id)
+			}
 			return
 		}
 	}
@@ -793,7 +807,7 @@ func (c *chatController) connect() {
 	c.setHistoryStatus("Loading conversations…")
 	go func() {
 		ctx, done := context.WithTimeout(connectionCtx, 15*time.Second)
-		client, err := codex.Start(ctx, "", cwd)
+		client, err := codex.Start(ctx, "", cwd, codexMCPArgs(cwd)...)
 		done()
 		if err != nil {
 			c.dispatch(func() {
@@ -1055,6 +1069,11 @@ func (c *chatController) changeWorkspace(path string) error {
 	}
 	cached := append([]Thread(nil), c.threads()...)
 	for i := range cached {
+		// A running conversation goes on in the background, as Codex's do;
+		// its frames follow it to the project it stays in.
+		if cached[i].Busy || c.claudeRuns[cached[i].ID] != nil {
+			continue
+		}
 		if threadAgent(cached[i]) != agentCodex {
 			backendOf(cached[i]).Suspend(c, cached[i])
 			cached[i].Loaded = false
@@ -1183,9 +1202,7 @@ func (c *chatController) attachmentInputs(paths []string) []map[string]any {
 	return inputs
 }
 func (c *chatController) selectThread(t Thread) {
-	if c.remote == nil {
-		c.update(t.ID, func(t *Thread) { t.LastActivityAt = time.Now().UnixMilli() })
-	}
+	// Viewing history does not count as conversation activity.
 	c.setActive(t.ID)
 	c.setDraft(t.Draft)
 	c.setAttachments(nil)
@@ -1349,8 +1366,9 @@ func (c *chatController) sendCodex(req sendRequest) int {
 	}
 	if t.ID == 0 {
 		// Use the first request until the agent supplies a named title.
-		t = Thread{PermissionPolicy: req.Policy, ID: c.nextID(), Title: conversationTitle("", text, ""), Project: filepath.Base(c.cwd), Age: "now", Loaded: true}
-		c.setThreads(append([]Thread{t}, c.threads()...))
+		project := firstNonEmpty(req.Project, c.cwd)
+		t = Thread{PermissionPolicy: req.Policy, ID: c.nextID(), Title: conversationTitle("", text, ""), Project: filepath.Base(project), Age: "now", Loaded: true}
+		c.addThread(project, t)
 	}
 	id := t.ID
 	client := c.client

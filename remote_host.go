@@ -34,6 +34,7 @@ type phoneProject struct {
 }
 
 type phoneState struct {
+	Files         bool                   `json:"files,omitempty"`
 	Projects      []phoneProject         `json:"projects"`
 	Status        string                 `json:"status"`
 	Approvals     []codex.Approval       `json:"approvals"`
@@ -55,7 +56,7 @@ func listThread(t Thread) Thread {
 }
 
 func (c *chatController) phoneSnapshot() phoneState {
-	s := phoneState{Status: c.status(), Approvals: c.approvals(), Agents: c.phoneAgentOptions(), Quotas: c.phoneQuotas()}
+	s := phoneState{Files: true, Status: c.status(), Approvals: c.approvals(), Agents: c.phoneAgentOptions(), Quotas: c.phoneQuotas()}
 	if c.agent != nil {
 		s.Agent = c.agent()
 	}
@@ -332,6 +333,42 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 				return
 			}
 			switch r.Op {
+			case "image":
+				preview := phoneImagePreview{Source: r.ImageSource}
+				var imageErr error
+				allowed := sync != nil && r.Thread == sub && (r.ServerID == "" || r.ServerID == subscription.ServerID) && sync.images[r.ImageSource]
+				if !allowed {
+					// A cached message can request its image before subscribe
+					// finishes. Validate against that conversation's history too.
+					target, ok := onMain(ctx, c.dispatch, func() phoneThread { return c.phoneThreadFor(r) })
+					if !ok {
+						return
+					}
+					if target.found {
+						messages := target.thread.Messages
+						if !hasHistory(target.thread) {
+							messages, _ = readOnlyHistory(ctx, target)
+						}
+						for _, message := range messages {
+							for _, source := range message.Images {
+								allowed = allowed || source == r.ImageSource
+							}
+						}
+					}
+				}
+				if !allowed {
+					imageErr = fmt.Errorf("图片不在当前会话中")
+				} else {
+					preview.Data, imageErr = phonePreview(r.ImageSource)
+				}
+				data, _ := json.Marshal(preview)
+				frame := remote.Frame{Type: "image", Data: data}
+				if imageErr != nil {
+					frame.Error = imageErr.Error()
+				}
+				if !send(frame) {
+					return
+				}
 			case "quota":
 				if _, ok := onMain(ctx, c.dispatch, func() bool { c.refreshQuota(); return true }); !ok {
 					return
@@ -569,6 +606,7 @@ func (p *phoneHost) start() {
 		b, err := remote.Start(ctx, remote.Options{
 			StateDir: dir,
 			Serve:    c.servePhone,
+			Files:    c.fileServer(),
 			OnPeers: func(n int) {
 				runOnMain(func() {
 					if p.generation == gen {
@@ -776,10 +814,11 @@ type phoneThreadDelta struct {
 // phoneThreadSync is what one phone holds of the conversation it watches,
 // as the service's windows have theirs (svcPeer.diff).
 type phoneThreadSync struct {
-	sent  map[int]uint64
-	order []int
-	meta  []byte
-	fresh bool
+	images map[string]bool
+	sent   map[int]uint64
+	order  []int
+	meta   []byte
+	fresh  bool
 }
 
 // newPhoneThreadSync starts from what the phone said it holds; without it
@@ -809,6 +848,12 @@ func (s *phoneThreadSync) update(t Thread) (phoneThreadDelta, bool) {
 		}
 		s.fresh, s.meta = false, meta
 		return d, true
+	}
+	s.images = make(map[string]bool)
+	for _, m := range msgs {
+		for _, source := range m.Images {
+			s.images[source] = true
+		}
 	}
 	same := !s.fresh && len(msgs) == len(s.order)
 	for i, m := range msgs {

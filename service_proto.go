@@ -69,6 +69,8 @@ type svcState struct {
 	QuotaLimits        accountLimits      `json:"quotaLimits"`
 	QuotaStatus        string             `json:"quotaStatus"`
 	Phone              phoneStatus        `json:"phone"`
+
+	ProjectThreads map[string][]Thread `json:"projectThreads,omitempty"`
 }
 
 // svcMessages updates a conversation's messages: Order lists them all by
@@ -174,8 +176,15 @@ func messageFingerprint(m Message) uint64 {
 	}
 	h.Write([]byte(head))
 	h.Write([]byte(tail))
+	for _, image := range m.Images {
+		fmt.Fprintf(h, "|%d:", len(image))
+		h.Write([]byte(image))
+	}
 	for _, p := range m.Plan {
 		h.Write([]byte(p.Status + "|" + p.Step))
+	}
+	for _, a := range m.Agents {
+		fmt.Fprintf(h, "|%s|%s|%s|%s|%d", a.ID, a.Name, a.Status, a.Detail, a.Steps)
 	}
 	if m.Item != nil {
 		fmt.Fprintf(h, "|%d", len(m.Item.Changes))

@@ -42,8 +42,10 @@ type Frame struct {
 	Subtype   string `json:"subtype"`
 	SessionID string `json:"session_id"`
 	UUID      string `json:"uuid"`
-	RequestID string `json:"request_id"`
-	Request   struct {
+	// ParentToolUseID is the Task call whose sub-agent sent the frame.
+	ParentToolUseID string `json:"parent_tool_use_id"`
+	RequestID       string `json:"request_id"`
+	Request         struct {
 		Subtype   string          `json:"subtype"`
 		ToolName  string          `json:"tool_name"`
 		Input     json.RawMessage `json:"input"`
@@ -62,6 +64,15 @@ type Frame struct {
 	Result  string   `json:"result"`
 	IsError bool     `json:"is_error"`
 	Errors  []string `json:"errors"`
+	// Task frames (system task_started, task_progress, task_updated and
+	// task_notification) report a sub-agent's state.
+	TaskID      string          `json:"task_id"`
+	ToolUseID   string          `json:"tool_use_id"`
+	Description string          `json:"description"`
+	Summary     string          `json:"summary"`
+	Status      json.RawMessage `json:"status"`
+	Usage       json.RawMessage `json:"usage"`
+	Patch       json.RawMessage `json:"patch"`
 }
 type Block struct {
 	Type, ID, Name, Text string

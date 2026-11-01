@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"sync"
 	"time"
@@ -13,6 +14,8 @@ import (
 
 // Options configures the desktop side.
 type Options struct {
+	// Files serves ordinary HTTP over the same private overlay on FilesPort.
+	Files http.Handler
 	// StateDir persists the identity and relay, keeping the QR code stable
 	// across restarts. Empty uses an ephemeral identity.
 	StateDir string
@@ -27,6 +30,7 @@ type Options struct {
 type Bridge struct {
 	server   *tailcat.Server
 	listener net.Listener
+	files    *http.Server
 	lock     *os.File
 	ctx      context.Context
 	cancel   context.CancelFunc
@@ -60,6 +64,15 @@ func Start(ctx context.Context, options Options) (*Bridge, error) {
 			b.Close()
 			return nil, err
 		}
+	}
+	if options.Files != nil {
+		files, err := b.server.Listen(ctx, "tcp", fmt.Sprintf(":%d", FilesPort))
+		if err != nil {
+			b.Close()
+			return nil, err
+		}
+		b.files = &http.Server{Handler: options.Files, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: time.Minute, MaxHeaderBytes: 32 << 10}
+		go b.files.Serve(files)
 	}
 	go b.accept()
 	return b, nil
@@ -124,6 +137,9 @@ func (b *Bridge) Close() {
 	b.mu.Unlock()
 	if b.cancel != nil {
 		b.cancel()
+	}
+	if b.files != nil {
+		b.files.Close()
 	}
 	b.listener.Close()
 	// Keep the overlay alive long enough to deliver TCP FINs.

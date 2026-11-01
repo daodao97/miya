@@ -118,14 +118,16 @@ func (s *service) request(p *svcPeer, req svcRequest) {
 	}
 	done := make(chan svcMessage, 1)
 	s.exec.push(func() {
-		msg := svcMessage{ID: req.ID}
 		res, err := s.handle(p, req)
-		if err != nil {
-			msg.Error = err.Error()
-		} else if res != nil {
-			msg.Result, _ = json.Marshal(res)
+		if d, ok := res.(deferred); ok && err == nil {
+			// Work that waits on other programs runs off the executor.
+			go func() {
+				res, err := d()
+				done <- svcReply(req, res, err)
+			}()
+			return
 		}
-		done <- msg
+		done <- svcReply(req, res, err)
 	})
 	select {
 	case msg := <-done:
@@ -134,6 +136,17 @@ func (s *service) request(p *svcPeer, req svcRequest) {
 		}
 	case <-s.quit:
 	}
+}
+
+// svcReply is the reply to a request.
+func svcReply(req svcRequest, res any, err error) svcMessage {
+	msg := svcMessage{ID: req.ID}
+	if err != nil {
+		msg.Error = err.Error()
+	} else if res != nil {
+		msg.Result, _ = json.Marshal(res)
+	}
+	return msg
 }
 
 // handle runs a window's request on the executor.
@@ -166,6 +179,21 @@ func (s *service) handle(p *svcPeer, req svcRequest) (any, error) {
 		_ = arg(&id)
 		p.sub, p.sent, p.order = id, nil, nil
 		s.markDirty()
+	case "mcpThreads", "mcpRead", "mcpStatus", "mcpDelegate", "mcpAutomationList", "mcpAutomationCreate", "mcpAutomationUpdate", "mcpReportResult":
+		var r mcpRequest
+		if err := arg(&r); err != nil {
+			return nil, err
+		}
+		return c.mcpHandle(req.Op, r)
+	case "automationList", "automationDraft", "automationSave", "automationToggle", "automationDelete", "automationRunNow":
+		var r automationRequest
+		if err := arg(&r); err != nil {
+			return nil, err
+		}
+		return c.automationOp(req.Op, r)
+	case "prefetch":
+		_ = arg(&id)
+		c.prefetchThread(id)
 	case "submit":
 		var r sendRequest
 		if err := arg(&r); err != nil {
@@ -187,7 +215,6 @@ func (s *service) handle(p *svcPeer, req svcRequest) (any, error) {
 		case "delete":
 			c.deleteThread(t)
 		case "open":
-			c.update(t.ID, func(t *Thread) { t.LastActivityAt = time.Now().UnixMilli() })
 			backendOf(t).Open(c, t)
 		case "resume":
 			c.resume(t, nil)
@@ -436,8 +463,9 @@ func (s *service) watchIdle(every time.Duration) {
 				s.stop()
 				return
 			}
-			// A connected phone keeps the service up, as a window does.
-			if busy || len(s.peerList()) > 0 || desktopPhone.connected() {
+			// A connected phone keeps the service up, as a window does, and so
+			// does an automation that is on.
+			if busy || len(s.peerList()) > 0 || desktopPhone.connected() || s.c.automationsEnabled() {
 				s.idleSince = time.Time{}
 				return
 			}
@@ -463,10 +491,24 @@ func (c *chatController) snapshotState() svcState {
 		t.Messages = nil
 		threads[i] = t
 	}
+	projectThreads := make(map[string][]Thread, len(c.projectCache))
+	for path, cached := range c.projectCache {
+		if path == c.cwd {
+			continue
+		}
+		items := make([]Thread, len(cached))
+		for i, t := range cached {
+			t = listThread(t)
+			t.Queue = nil
+			items[i] = t
+		}
+		projectThreads[path] = items
+	}
 	return svcState{
-		FastMode:    c.fastMode,
-		ProjectBusy: busy,
-		Cwd:         c.cwd, Projects: c.projects(), Threads: threads, Approvals: c.approvals(),
+		FastMode:       c.fastMode,
+		ProjectBusy:    busy,
+		ProjectThreads: projectThreads,
+		Cwd:            c.cwd, Projects: c.projects(), Threads: threads, Approvals: c.approvals(),
 		Status: c.status(), HistoryStatus: c.historyStatus(), Ready: c.ready(),
 		Models: c.models(), Model: c.model(), Effort: c.effort(), PermissionPolicy: c.permissionPolicy(), Locale: c.locale(),
 		ClaudeCommand: c.claudeCommand, ClaudeError: c.claudeError, ClaudeBinary: c.claudeBinary, ClaudeArgs: c.claudeArgs, ClaudeEnv: c.claudeEnv, ClaudeModel: c.claudeModel, ClaudeEffort: c.claudeEffort, ClaudeDefaultModel: c.claudeDefaultModel,
