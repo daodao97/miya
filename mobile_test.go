@@ -22,7 +22,11 @@ func testMobileApp() *mobileApp {
 
 func openMobileDrawer(t *testing.T, tt *ui.Tester) {
 	t.Helper()
-	if err := tt.Click("桌面端连接"); err != nil {
+	label := "桌面端连接"
+	if _, ok := tt.Find("打开侧边栏"); ok {
+		label = "打开侧边栏"
+	}
+	if err := tt.Click(label); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
@@ -30,39 +34,35 @@ func openMobileDrawer(t *testing.T, tt *ui.Tester) {
 	tt.Frame()
 }
 
-func TestMobileHomeShowsConversations(t *testing.T) {
+func TestMobileHomeStartsNewConversation(t *testing.T) {
 	m := testMobileApp()
 	tt := ui.NewTester(m.viewRoot, 390, 750)
 	tt.Frame()
-	for _, label := range []string{"Miya", "新建对话", "thread-one", "thread-two"} {
+	for _, label := range []string{"Miya", "新建对话", "Let’s build", "消息", "发送", "选择项目"} {
 		if _, ok := tt.Find(label); !ok {
-			t.Fatalf("the home page should show %q", label)
+			t.Fatalf("the new-conversation page should show %q", label)
 		}
 	}
-	for _, label := range []string{"Let’s build", "消息", "发送", "项目文件", "新对话"} {
+	for _, label := range []string{"thread-one", "thread-two", "全部对话"} {
 		if _, ok := tt.Find(label); ok {
-			t.Fatalf("composing should require tapping new conversation: %s", label)
+			t.Fatalf("conversation navigation belongs in the drawer: %s", label)
 		}
 	}
+	m.draft = "未发送的消息"
 	if err := tt.Click("新建对话"); err != nil {
 		t.Fatal(err)
 	}
-	if m.router().Path() != "/thread" || m.newProject != "/a" || !tt.HasText("Let’s build") {
-		t.Fatal("new conversation should open a draft in the current project")
-	}
-	if err := tt.Click("返回"); err != nil {
-		t.Fatal(err)
-	}
-	if m.newProject != "" || !tt.HasText("thread-two") {
-		t.Fatal("back should return to the conversation list")
+	if m.router().Path() != "/" || m.composerProject() != "/a" || m.draft != "" || !tt.HasText("Let’s build") {
+		t.Fatal("new conversation should reset the draft on the home page")
 	}
 }
 
-func TestMobileOpensConversationAndGoesBack(t *testing.T) {
+func TestMobileOpensConversationAndDrawer(t *testing.T) {
 	m := testMobileApp()
 	m.state.Approvals = nil
 	tt := ui.NewTester(m.viewRoot, 390, 750)
 	tt.Frame()
+	openMobileDrawer(t, tt)
 	if err := tt.Click("thread-one"); err != nil {
 		t.Fatal(err)
 	}
@@ -86,12 +86,15 @@ func TestMobileOpensConversationAndGoesBack(t *testing.T) {
 		t.Fatal("the conversation's more menu should offer files and a new conversation")
 	}
 	tt.Key(0, ui.KeyEscape)
-	if err := tt.Click("返回"); err != nil {
+	openMobileDrawer(t, tt)
+	if m.open != 1 || m.router().Path() != "/thread" || !m.menu {
+		t.Fatalf("opening the drawer left the conversation: open = %d, path = %q", m.open, m.router().Path())
+	}
+	if err := tt.Click("新建对话"); err != nil {
 		t.Fatal(err)
 	}
-	tt.Frame()
 	if m.open != 0 || m.router().Path() != "/" {
-		t.Fatalf("after back: open = %d, path = %q", m.open, m.router().Path())
+		t.Fatal("New thread should return to the home composer")
 	}
 }
 
@@ -124,40 +127,37 @@ func TestMobileDrawer(t *testing.T) {
 	// Let it slide in before tapping inside it.
 	tt.Advance(time.Second)
 	tt.Frame()
-	if r, ok := tt.Find("更换桌面端"); !ok || r.X < 0 {
+	if r, ok := tt.Find("设置"); !ok || r.X < 0 {
 		t.Fatalf("the drawer should have slid in: %v, %v", r, ok)
 	}
-	if _, ok := tt.Find("更换桌面端"); !ok {
-		t.Error("the drawer should offer to switch desktops")
+	if _, ok := tt.Find("设置"); !ok {
+		t.Error("the drawer should offer settings")
 	}
-	for _, title := range []string{"thread-one", "thread-two"} {
-		if r, ok := tt.Find(title); ok && r.X < m.drawerW {
-			t.Errorf("conversation %q should appear only on the home page, not in the drawer", title)
-		}
+	if !tt.HasText("thread-one") || tt.HasText("thread-two") {
+		t.Fatal("only the expanded project's conversations should appear in the drawer")
 	}
 	if err := tt.Click("项目 proj-b"); err != nil {
 		t.Fatal(err)
 	}
-	tt.Frame()
-	if m.menu || m.selected != "/b" {
-		t.Fatalf("choosing a project should close the drawer on it: menu = %v, selected = %q", m.menu, m.selected)
+	if !m.menu || m.selected != "/b" || m.expandedProject != "/b" {
+		t.Fatalf("choosing a project should expand it inside the drawer: menu = %v, selected = %q", m.menu, m.selected)
 	}
-	tt.Advance(time.Second)
-	tt.Frame()
-	if !tt.HasText("thread-two") || tt.HasText("thread-one") || tt.HasText("Let’s build") {
-		t.Error("the home page should show only the chosen project's conversations")
+	if !tt.HasText("thread-two") || tt.HasText("thread-one") {
+		t.Fatal("switching projects did not replace the expanded conversation list")
 	}
-	// It slides out, then is gone.
-	tt.Advance(time.Second)
-	tt.Frame()
-	if r, ok := tt.Find("更换桌面端"); ok && r.X >= 0 {
-		t.Errorf("the drawer should have slid away: %v", r)
+	if err := tt.Click("项目 proj-b"); err != nil {
+		t.Fatal(err)
+	}
+	if m.expandedProject != "" || tt.HasText("thread-two") {
+		t.Fatal("tapping the open project should collapse its conversations")
 	}
 	if err := tt.Click("新建对话"); err != nil {
 		t.Fatal(err)
 	}
-	if m.newProject != "/b" {
-		t.Fatal("new conversations should use the selected project")
+	tt.Advance(time.Second)
+	tt.Frame()
+	if m.menu || m.router().Path() != "/" || m.composerProject() != "/b" || !tt.HasText("Let’s build") {
+		t.Fatal("the new-conversation action should use the selected project")
 	}
 }
 
@@ -188,7 +188,7 @@ func TestMobileDrawerFollowsDrags(t *testing.T) {
 	if !m.menu {
 		t.Fatalf("dragging right should open the drawer (offset %v)", m.drawerOffset)
 	}
-	if r, ok := tt.Find("更换桌面端"); !ok || r.X < 0 {
+	if r, ok := tt.Find("设置"); !ok || r.X < 0 {
 		t.Fatalf("the drawer should show: %v, %v", r, ok)
 	}
 	drag(tt, 370, 60, 400)

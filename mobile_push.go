@@ -23,6 +23,9 @@ func (m *mobileApp) setupPush() {
 		if m.pushDisabled {
 			return 0
 		}
+		if len(m.desktops.Items) > 1 {
+			return mygo.PresentNotificationDefault
+		}
 		target := notificationTarget(e.Data)
 		current := m.view.c.current()
 		viewing := target.Thread != 0 && target.Thread == m.open
@@ -36,9 +39,7 @@ func (m *mobileApp) setupPush() {
 	})
 	mygo.App.OnNotification(func(e mygo.NotificationEvent) {
 		if e.Clicked {
-			m.pushOpenRef = notificationTarget(e.Data)
-			m.pushOpen = m.pushOpenRef.Thread
-			m.openPushThread()
+			m.openNotification(e.Data)
 		}
 	})
 }

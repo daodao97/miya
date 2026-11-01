@@ -68,7 +68,7 @@ func TestMobileDrawerBackgroundCoversSafeArea(t *testing.T) {
 					}
 					saveMobileNativeSnapshot(t, tt, fmt.Sprintf("drawer-%s-dark-%v-landscape-%v", phase, dark, landscape))
 				}
-				if button, ok := tt.Find("更换桌面端"); !ok || button.Y < safe.Top || button.Y+button.H > float32(height)-safe.Bottom || button.X < safe.Left {
+				if button, ok := tt.Find("设置"); !ok || button.Y < safe.Top || button.Y+button.H > float32(height)-safe.Bottom || button.X < safe.Left {
 					t.Fatalf("drawer controls entered unsafe area: %v", button)
 				}
 				m.menu = false
@@ -76,6 +76,71 @@ func TestMobileDrawerBackgroundCoversSafeArea(t *testing.T) {
 				tt.Advance(time.Second)
 				checkClosed()
 			})
+		}
+	}
+}
+
+func TestMobileDrawerClosingFramesMatchRestingPage(t *testing.T) {
+	for _, dark := range []bool{false, true} {
+		for _, conversation := range []bool{false, true} {
+			for _, closeWith := range []string{"tap", "drag"} {
+				t.Run(fmt.Sprintf("dark=%v/conversation=%v/%s", dark, conversation, closeWith), func(t *testing.T) {
+					m := testMobileApp()
+					if conversation {
+						m.openThread(m.state.Projects[0].Threads[0])
+					}
+					m.draft = "保留草稿"
+					tt := ui.NewTester(m.viewRoot, 390, 844)
+					tt.SetDark(dark)
+					tt.SetSafeArea(ui.SafeArea{Top: 59, Bottom: 34})
+					tt.Frame()
+					points := [][2]int{{5, 5}, {374, 422}}
+					want := make([]color.RGBA, len(points))
+					for i, point := range points {
+						want[i] = tt.Image().RGBAAt(point[0], point[1])
+					}
+					path := m.router().Path()
+					m.menu = true
+					tt.Frame()
+					tt.Advance(time.Second)
+					if closeWith == "tap" {
+						tt.ClickAt(370, 400)
+					} else {
+						tt.Press(370, 400)
+						tt.Frame()
+						for step := 1; step <= 8; step++ {
+							tt.Advance(120 * time.Millisecond)
+							tt.Move(370-270*float32(step)/8, 400)
+							tt.Frame()
+						}
+						tt.Release(100, 400)
+						tt.Frame()
+					}
+					nearClosed := false
+					for frame := 0; frame < 90; frame++ {
+						tt.Advance(16 * time.Millisecond)
+						scrim, visible := tt.Find("关闭侧边栏")
+						if visible && scrim.X <= 2 {
+							nearClosed = true
+							for i, point := range points {
+								got := tt.Image().RGBAAt(point[0], point[1])
+								for channel := 0; channel < 3; channel++ {
+									a, b := []uint8{got.R, got.G, got.B}[channel], []uint8{want[i].R, want[i].G, want[i].B}[channel]
+									if delta := int(a) - int(b); delta < -2 || delta > 2 {
+										t.Fatalf("page changes color as the drawer settles at x=%v: pixel %v = %v, resting page = %v", scrim.X, point, got, want[i])
+									}
+								}
+							}
+						}
+						if !visible {
+							break
+						}
+					}
+					if !nearClosed || m.menu || m.drawerVisible || m.router().Path() != path || m.draft != "保留草稿" {
+						t.Fatal("closing the drawer skipped its settling frames or changed the page/draft")
+					}
+				})
+			}
 		}
 	}
 }

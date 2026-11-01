@@ -262,7 +262,11 @@ func (app *chatApp) messageView(c *ui.Context, m Message, streaming bool) {
 				})
 			}
 			// Short prompts stay compact; long ones wrap within a bounded bubble.
-			ui.Column(c).AlignSelf(ui.End).MaxWidth(560).MinWidth(0).Background(bubble).Radius(16).Padding(14).Gap(8).Children(func() {
+			prompt := ui.Column(c).AlignSelf(ui.End).MaxWidth(560).MinWidth(0).Background(bubble).Radius(16).Padding(14).Gap(8)
+			if app.mobile {
+				prompt.MaxWidthPercent(100)
+			}
+			prompt.Children(func() {
 				app.threadMessage(c, m)
 			})
 		})

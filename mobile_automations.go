@@ -69,9 +69,11 @@ func (m *mobileApp) automationsPage(c *ui.Context, detail bool) {
 		c.After(time.Second)
 	}
 	ui.Row(c).FillWidth().MinHeight(52).Padding(0, 12).Gap(8).AlignItems(ui.Center).Children(func() {
-		if m.homeAction(c, "back", "返回", "arrow-left").Clicked() {
-			m.router().Back()
+		path := "/automations"
+		if detail {
+			path = "/automation"
 		}
+		m.navigationBack(c, path)
 		title := "自动化"
 		if detail {
 			title = "自动化详情"

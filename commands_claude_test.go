@@ -61,6 +61,7 @@ func TestMobileCommandMenu(t *testing.T) {
 	m.asked = map[string]bool{"/a": true}
 	tt := ui.NewTester(m.viewRoot, 390, 750)
 	tt.Frame()
+	openMobileDrawer(t, tt)
 	if err := tt.Click("thread-one"); err != nil {
 		t.Fatal(err)
 	}

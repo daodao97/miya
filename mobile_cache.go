@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"miya/internal/remote"
@@ -28,6 +29,11 @@ const (
 type phoneSavedState struct {
 	Host  string     `json:"host"`
 	State phoneState `json:"state"`
+}
+
+type mobileCacheWork struct {
+	mu      sync.Mutex
+	pending sync.WaitGroup
 }
 
 // cacheName names a file or directory without the value it stands for.
@@ -70,6 +76,7 @@ func (m *mobileApp) dropDiskCache() {
 	}
 	dir := m.cacheDir
 	m.dirty, m.cacheDir, m.msgCache, m.msgKeys = nil, "", nil, nil
+	m.cacheWork.pending.Wait()
 	if dir != "" {
 		os.RemoveAll(dir)
 	}
@@ -113,10 +120,15 @@ func (m *mobileApp) flushCache(wait bool) {
 	}
 	dir, dirty := m.cacheDir, m.dirty
 	m.dirty = nil
+	if wait {
+		m.cacheWork.pending.Wait()
+	}
 	if dir == "" || len(dirty) == 0 {
 		return
 	}
 	write := func() {
+		m.cacheWork.mu.Lock()
+		defer m.cacheWork.mu.Unlock()
 		for key, v := range dirty {
 			name := stateFile
 			if key != stateKey {
@@ -129,7 +141,11 @@ func (m *mobileApp) flushCache(wait bool) {
 	if wait {
 		write()
 	} else {
-		go write()
+		m.cacheWork.pending.Add(1)
+		go func() {
+			defer m.cacheWork.pending.Done()
+			write()
+		}()
 	}
 }
 

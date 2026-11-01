@@ -32,15 +32,26 @@ func (m *mobileApp) sendOptions(agent string) remote.SendOptions {
 	return o
 }
 func (m *mobileApp) saveOptions() {
-	if m.dataDir == "" {
+	dir := firstNonEmpty(m.cacheDir, m.dataDir)
+	if dir == "" {
 		return
 	}
 	data, err := json.Marshal(m.options)
 	if err != nil {
 		return
 	}
-	if os.MkdirAll(m.dataDir, 0700) == nil {
-		_ = os.WriteFile(filepath.Join(m.dataDir, "message-options.json"), data, 0600)
+	if os.MkdirAll(dir, 0700) == nil {
+		_ = os.WriteFile(filepath.Join(dir, "message-options.json"), data, 0600)
+	}
+}
+
+func (m *mobileApp) loadDesktopOptions() {
+	m.options = nil
+	if m.cacheDir == "" {
+		return
+	}
+	if data, err := os.ReadFile(filepath.Join(m.cacheDir, "message-options.json")); err == nil {
+		_ = json.Unmarshal(data, &m.options)
 	}
 }
 func (m *mobileApp) setOptions(agent string, o remote.SendOptions) {
@@ -58,9 +69,7 @@ func (m *mobileApp) optionsView(c *ui.Context) {
 	a := m.agentOptions(agent)
 	o := m.sendOptions(agent)
 	ui.Row(c).FillWidth().MinHeight(64).Padding(0, 12).Gap(8).AlignItems(ui.Center).Children(func() {
-		if m.circle(c, "back", "返回", func() { icon(c, "arrow-left", 20, p.ink) }).Clicked() {
-			m.router().Back()
-		}
+		m.navigationBack(c, "/options")
 		ui.Text(c, "对话设置").Grow(1).TextAlign(ui.Center).FontSize(m.font(16)).FontWeight(600)
 		ui.Box(c).Size(44, 44)
 	})

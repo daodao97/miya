@@ -60,12 +60,19 @@ func TestMobileAutomationsNavigationAndRun(t *testing.T) {
 	if m.open != 1 || m.router().Path() != "/thread" {
 		t.Fatal("run did not open its renumbered conversation")
 	}
-	if err := tt.Click("返回"); err != nil {
+	openMobileDrawer(t, tt)
+	if m.router().Path() != "/thread" || m.open != 1 || !m.menu {
+		t.Fatal("the conversation's arrow should open the drawer without leaving the run")
+	}
+	if err := tt.Click("自动化"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if m.router().Path() != "/automation" || m.open != 0 {
-		t.Fatal("back did not restore the automation detail and unsubscribe")
+	if m.router().Path() != "/automations" || m.open != 0 {
+		t.Fatal("the drawer should return to automations and unsubscribe the conversation")
+	}
+	if err := tt.Click("仓库日报"); err != nil {
+		t.Fatal(err)
 	}
 	for _, dark := range []bool{false, true} {
 		tt.SetDark(dark)
@@ -182,7 +189,7 @@ func TestMobileAutomationsLongContentAndTextScaling(t *testing.T) {
 			name := fmt.Sprintf("mobile-automation-list-%d-dark-%v", width, dark)
 			automationSnapshot(t, tt, name)
 			tt.SetPreferences(ui.Preferences{TextScale: 1.6})
-			for _, label := range []string{v.Name, "返回", "刷新自动化"} {
+			for _, label := range []string{v.Name, "打开侧边栏", "刷新自动化"} {
 				r, ok := tt.Find(label)
 				if !ok || r.X < 0 || r.X+r.W > float32(width) || r.H < 44 {
 					t.Fatalf("%q is clipped or too small at large text size: %v", label, r)

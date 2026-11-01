@@ -107,9 +107,7 @@ func (m *mobileApp) approvalCard(c *ui.Context, a codex.Approval) {
 func (m *mobileApp) approvalPage(c *ui.Context) {
 	p := m.pal
 	ui.Row(c).FillWidth().MinHeight(64).Padding(0, 12).Gap(8).AlignItems(ui.Center).Children(func() {
-		if m.circle(c, "back", "返回", func() { icon(c, "arrow-left", 20, p.ink) }).Clicked() {
-			m.router().Back()
-		}
+		m.navigationBack(c, "/approval")
 		ui.Text(c, "确认请求").Grow(1).TextAlign(ui.Center).FontSize(m.font(16)).FontWeight(600)
 		ui.Box(c).Size(44, 44)
 	})

@@ -1,30 +1,12 @@
 package main
 
-import (
-	"fmt"
-	"sort"
-
-	"github.com/egoist/mygo/ui"
-)
-
-type mobileHomeThread struct {
-	thread   Thread
-	project  phoneProject
-	priority int
-}
+import "github.com/egoist/mygo/ui"
 
 func (m *mobileApp) homeBackground() ui.Color {
 	if m.dark {
 		return ui.Hex("#0c0c0d")
 	}
 	return ui.Hex("#f6f6f4")
-}
-
-func (m *mobileApp) homeSurface() ui.Color {
-	if m.dark {
-		return ui.Hex("#19191b")
-	}
-	return ui.Hex("#ffffff")
 }
 
 func (m *mobileApp) homeAccent() ui.Color {
@@ -44,131 +26,101 @@ func (m *mobileApp) homeAction(c *ui.Context, key, label, glyph string) ui.Eleme
 	return b
 }
 
-func (m *mobileApp) conversationActions(button ui.Element, project, agent string) {
-	button.PopoverMenuButton(func(menu *ui.Menu) {
-		if menu.Item("项目文件").Disabled(!m.connected || project == "").Chosen() {
-			m.menu = false
-			m.openProjectFiles(project)
-		}
-		if menu.Item("新对话").Disabled(project == "").Chosen() {
-			m.startConversation(project, agent)
-		}
-	})
-}
-
-// homeThreads gives attention to conversations needing action before recency.
-// Sorting a separate slice leaves the desktop's project order untouched.
-func (m *mobileApp) homeThreads() []mobileHomeThread {
-	var rows []mobileHomeThread
-	for _, project := range m.state.Projects {
-		if m.selected != "" && project.Path != m.selected {
-			continue
-		}
-		for _, thread := range project.Threads {
-			priority := 0
-			if len(m.approvalsFor(thread.ServerID)) > 0 {
-				priority = 3
-			} else if thread.Busy {
-				priority = 2
-			} else if _, unread := m.unreadFor(thread); unread {
-				priority = 1
-			}
-			rows = append(rows, mobileHomeThread{thread, project, priority})
-		}
+func (m *mobileApp) conversationActions(c *ui.Context, button ui.Element, project, agent string) {
+	if button.Clicked() {
+		c.Blur()
+		m.conversationMenu = true
+		m.conversationMenuProject, m.conversationMenuAgent = project, agent
 	}
-	sort.SliceStable(rows, func(i, j int) bool {
-		if rows[i].priority != rows[j].priority {
-			return rows[i].priority > rows[j].priority
-		}
-		return rows[i].thread.LastActivityAt > rows[j].thread.LastActivityAt
-	})
-	return rows
 }
 
-// startConversation makes composing explicit and leaves the list below it
-// in the navigation stack, so the back button and edge gesture return there.
+// startConversation selects a workspace and returns to the same new-conversation
+// page used at launch, just as the desktop's New thread action does.
 func (m *mobileApp) startConversation(project, agent string) {
 	if project == "" {
 		project = m.selectedProject().Path
 	}
-	if project == "" {
-		return
-	}
 	m.home()
 	m.menu = false
-	m.newProject, m.newAgent, m.title = project, agent, ""
-	m.router().Push("/thread")
+	m.drawerSearch, m.drawerQuery = false, ""
+	m.selected, m.newAgent, m.title = project, agent, ""
+	if project != "" {
+		m.expandedProject, m.projectsExpanded = project, true
+	}
 }
 
-func (m *mobileApp) conversationHome(c *ui.Context) {
+func (m *mobileApp) drawerProject(c *ui.Context, project phoneProject) {
 	p := m.pal
-	rows := m.homeThreads()
-	if len(rows) == 0 {
-		ui.Column(c).Grow(1).MinHeight(0).Padding(28).Gap(12).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
-			icon(c, "message-circle", 36, p.muted)
-			ui.Text(c, "还没有对话").FontSize(m.font(20)).FontWeight(600)
-			ui.Text(c, "新建一个对话，开始处理项目中的任务。").FontSize(m.font(14)).TextColor(p.muted).TextAlign(ui.Center)
-		})
-		return
-	}
-	ui.Scroll(c.Key("home-conversations")).FillWidth().Grow(1).MinHeight(0).Children(func() {
-		ui.Column(c).FillWidth().Padding(0, 20, 24, 20).Children(func() {
-			for start := 0; start < len(rows); {
-				end := start + 1
-				for end < len(rows) && rows[end].priority == rows[start].priority {
-					end++
+	expanded := m.expandedProject == project.Path
+	ui.Column(c).FillWidth().Children(func() {
+		ui.Row(c).FillWidth().AlignItems(ui.Center).Children(func() {
+			row := m.phoneButton(c.Key("open")).Grow(1).MinWidth(0).MinHeight(44).Padding(0).Gap(10).Radius(10).Label("项目 " + project.Name)
+			if row.Pressed() {
+				row.Background(p.surface)
+			}
+			row.Children(func() {
+				icon(c, "folder", 18, p.muted)
+				ui.Text(c, project.Name).FontSize(m.font(15)).Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
+				busy := false
+				for _, thread := range project.Threads {
+					busy = busy || thread.Busy
 				}
-				group := rows[start:end]
-				label := []string{"最近对话", "未读", "运行中", "待审批"}[group[0].priority]
-				ui.Text(c, label).FontSize(m.font(13)).TextColor(p.muted).Margin(20, 16, 7, 16)
-				ui.Column(c.Key(group[0].priority)).FillWidth().Radius(14).Clip().Background(m.homeSurface()).Children(func() {
-					for i, row := range group {
-						m.homeThread(c.Key(row.project.Path), row)
-						if i < len(group)-1 {
-							ui.Box(c.Key(fmt.Sprintf("separator:%d:%s", row.thread.ID, row.project.Path))).FillWidth().Height(0.5).Margin(0, 0, 0, 60).Background(p.line)
-						}
+				if busy && !expanded {
+					ui.Spinner(c).FontSize(m.font(12)).Label("项目进行中：" + project.Name)
+				} else {
+					glyph := "chevron-right"
+					if expanded {
+						glyph = "chevron-down"
 					}
-				})
-				start = end
+					icon(c, glyph, 12, p.muted)
+				}
+			})
+			if row.Clicked() {
+				m.showProject(project.Path)
+			}
+		})
+		if !expanded {
+			return
+		}
+		ui.Column(c.Key("threads")).FillWidth().Children(func() {
+			if len(project.Threads) == 0 {
+				ui.Text(c, "还没有对话").Padding(8, 0).FontSize(m.font(14)).TextColor(p.muted)
+			}
+			more := m.threadListExpanded[project.Path]
+			for _, thread := range displayedThreads(project.Threads, more) {
+				m.drawerThread(c.Key(thread.ID), thread)
+			}
+			if len(project.Threads) > collapsedThreadCount {
+				label := "展开显示"
+				if more {
+					label = "收起"
+				}
+				button := m.phoneButton(c.Key("more-threads")).FillWidth().MinHeight(44).Padding(0).Radius(10).Label(label)
+				button.Children(func() { ui.Text(c, label).FontSize(m.font(15)).TextColor(p.muted) })
+				if button.Clicked() {
+					if m.threadListExpanded == nil {
+						m.threadListExpanded = map[string]bool{}
+					}
+					m.threadListExpanded[project.Path] = !more
+				}
 			}
 		})
 	})
 }
 
-func (m *mobileApp) homeThread(c *ui.Context, row mobileHomeThread) {
-	p, t := m.pal, row.thread
-	title := firstNonEmpty(t.Title, "未命名对话")
-	item := m.phoneButton(c.Key(t.ID)).FillWidth().MinHeight(72).Padding(10, 14).Gap(12).Radius(0).Background(ui.Transparent).Label(nativeText(title))
-	if item.Pressed() {
-		item.Background(p.line)
+func (m *mobileApp) drawerThread(c *ui.Context, thread Thread) {
+	p := m.pal
+	title := firstNonEmpty(thread.Title, "未命名对话")
+	row := m.phoneButton(c).FillWidth().MinHeight(48).Padding(0).Gap(10).Radius(10).Background(ui.Transparent).Label(nativeText(title))
+	if thread.ID == m.open || row.Pressed() {
+		row.Background(p.surface)
 	}
-	item.Children(func() {
-		ui.Row(c).Size(32, 32).Shrink(0).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
-			agentIcon(c, threadAgent(t), 25)
-		})
-		ui.Column(c).Grow(1).MinWidth(0).Gap(5).Children(func() {
-			ui.Text(c, nativeText(title)).FontSize(m.font(16)).FontWeight(600).SingleLine().Ellipsis("…")
-			detail := row.project.Name + " · " + agentName(threadAgent(t))
-			ui.Text(c, detail).FontSize(m.font(12)).TextColor(p.muted).SingleLine().Ellipsis("…")
-		})
-		ui.Column(c).Gap(9).AlignItems(ui.End).Children(func() {
-			if t.Age != "" {
-				ui.Text(c, t.Age).FontSize(m.font(11)).TextColor(p.muted).SingleLine()
-			}
-			ui.Row(c).Gap(7).AlignItems(ui.Center).Children(func() {
-				switch row.priority {
-				case 3:
-					icon(c, "alert-circle", 13, p.warn)
-				case 2:
-					ui.Spinner(c).FontSize(m.font(12)).TextColor(m.pal.muted)
-				case 1:
-					ui.Box(c).Size(7, 7).Radius(4).Background(m.homeAccent())
-				}
-				icon(c, "chevron-right", 12, p.muted)
-			})
-		})
+	row.Children(func() {
+		agentIcon(c, threadAgent(thread), 18)
+		ui.Text(c, nativeText(title)).FontSize(m.font(16)).FontWeight(400).Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
+		m.threadStatus(c, thread)
 	})
-	if item.Clicked() {
-		m.openThread(t)
+	if row.Clicked() {
+		m.openThread(thread)
 	}
 }

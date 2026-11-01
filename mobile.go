@@ -24,6 +24,9 @@ import (
 // into them and answers their approvals. The desktop's background service
 // runs the agents; the phone holds only what the desktop sent it.
 type mobileApp struct {
+	conversationMenu             bool
+	conversationMenuProject      string
+	conversationMenuAgent        string
 	filesProxy                   *phoneFileProxy
 	filesCancel                  context.CancelFunc
 	approvalID                   json.RawMessage
@@ -40,7 +43,14 @@ type mobileApp struct {
 	pushDisabled, pushRequesting bool
 	pushOpen                     int
 	win                          *mygo.Window
-	store                        *mygo.SecureStore
+	store                        mobileSecretStore
+	desktops                     mobileDesktops
+	desktopSessions              map[string]mobileDesktopSession
+	desktopWrites                desktopPersistence
+	desktopError                 string
+	desktopNotice                string
+	desktopLoadFailed            bool
+	dialDesktop                  func(context.Context, string) (*remote.Conn, error)
 	// view renders a conversation with the desktop's own message views, over
 	// a controller that only holds what the desktop sent.
 	view *chatApp
@@ -56,12 +66,17 @@ type mobileApp struct {
 	link, host string
 	state      phoneState
 	autos      mobileAutomations
-	// selected filters the home page by project; empty shows all projects.
-	selected         string
-	menu             bool
-	quotaOpen        bool
-	quotaAgent       string
-	quotaDrawerShown bool
+	// selected is the phone's workspace for new conversations.
+	selected           string
+	expandedProject    string
+	projectsExpanded   bool
+	threadListExpanded map[string]bool
+	drawerSearch       bool
+	drawerQuery        string
+	menu               bool
+	quotaOpen          bool
+	quotaAgent         string
+	quotaDrawerShown   bool
 	// drawerOffset is where the list page's row rests or is dragged to:
 	// 0 closed, drawerW open.
 	drawerOffset   ui.Point
@@ -69,6 +84,8 @@ type mobileApp struct {
 	drawerDragging bool
 	// drawerVisible makes a tap on the list beside the drawer close it.
 	drawerVisible bool
+	// Last committed target, so each action gives feedback before animation.
+	drawerFeedbackOpen bool
 	// pressX is where the last press on the list page began, across it.
 	pressX float32
 	// rowPressed is whether the list page's row was pressed last frame.
@@ -100,6 +117,7 @@ type mobileApp struct {
 	// dataDir is the app\'s user data; cacheDir the current desktop\'s
 	// conversations on disk, and dirty what is yet to be written there.
 	dataDir, cacheDir string
+	cacheWork         mobileCacheWork
 	dirty             map[string]any
 	flushTimer        *time.Timer
 	asked             map[string]bool
@@ -132,7 +150,7 @@ var (
 	}
 	darkPalette = mobilePalette{
 		bg: ui.Hex("#000000"), surface: ui.Hex("#1c1c1e"), ink: ui.Hex("#f2f2f2"), muted: ui.Hex("#8e8e93"),
-		line: ui.Hex("#2c2c2e"), bubble: ui.Hex("#1c1c1e"), ok: ui.Hex("#3dd68c"), warn: ui.Hex("#f5a524"), drawer: ui.Hex("#141416"),
+		line: ui.Hex("#2c2c2e"), bubble: ui.Hex("#1c1c1e"), ok: ui.Hex("#3dd68c"), warn: ui.Hex("#f5a524"), drawer: ui.Hex("#000000"),
 	}
 )
 
@@ -264,7 +282,6 @@ func mobileMain() {
 // loadSaved reads the tunnel secret and the paired desktop off the main
 // thread, as Keychain reads may block.
 func (m *mobileApp) loadSaved() {
-	var link string
 	var pushID string
 	dataDir, _ := mygo.App.Path(mygo.PathUserData)
 	if m.store != nil {
@@ -290,22 +307,28 @@ func (m *mobileApp) loadSaved() {
 				remote.SetKeySlotFile(filepath.Join(dir, "client-key-slot"))
 			}
 		}
-		if saved, err := m.store.Get("desktop-link"); err == nil {
-			if _, err := remote.ParseLink(string(saved)); err == nil {
-				link = string(saved)
-			}
+	}
+	saved, migrated, desktopErr := readMobileDesktops(m.store)
+	if migrated {
+		if item, ok := saved.find(saved.Active); ok {
+			migrateDesktopOptions(dataDir, item.Link)
 		}
 	}
 	runOnMain(func() {
 		m.loaded = true
 		m.pushID = pushID
 		m.dataDir = dataDir
-		if data, err := os.ReadFile(filepath.Join(dataDir, "message-options.json")); err == nil {
-			_ = json.Unmarshal(data, &m.options)
+		m.desktopLoadFailed = desktopErr != nil
+		if desktopErr != nil {
+			m.desktopError, m.err = desktopErr.Error(), desktopErr.Error()
+			return
 		}
-		if link != "" && m.link == "" {
-			m.connect(link)
+		m.desktopError = ""
+		m.restoreDesktops(saved)
+		if item, ok := m.desktops.find(m.desktops.Active); ok && m.link == "" {
+			m.connect(item.Link)
 		}
+		m.saveDesktops()
 		m.requestPush()
 	})
 }
@@ -320,17 +343,44 @@ func (m *mobileApp) onMain(gen int, f func()) {
 }
 
 func (m *mobileApp) connect(link string) {
+	if m.desktopLoadFailed {
+		m.err = "请先重新读取已保存的桌面列表"
+		return
+	}
+	item, err := m.desktops.remember(link, "")
+	if err != nil {
+		m.err = err.Error()
+		return
+	}
+	link = item.Link
+	changed := link != m.link
+	if changed && m.link != "" {
+		m.saveDesktopSession()
+		m.persistState()
+		m.flushCache(true)
+	}
 	m.readPending = nil
 	m.approvalPending = nil
 	m.disconnect()
 	m.previewPaths = nil
-	if link != m.link {
-		m.state, m.host, m.selected = phoneState{}, "", ""
-		m.autos = mobileAutomations{}
-		m.home()
+	if changed {
+		m.resetDesktopState()
 	}
+	m.desktops.Active = item.ID
 	m.link, m.err, m.status = link, "", "正在连接桌面端…"
 	m.openDiskCache(link)
+	if m.host != "" {
+		_, _ = m.desktops.remember(link, m.host)
+	}
+	if m.host == "" {
+		m.host = item.Name
+	}
+	if changed {
+		m.loadDesktopOptions()
+		m.restoreDesktopSession(item.ID)
+	}
+	m.updateBadge()
+	m.saveDesktops()
 	m.asked = nil
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancel = cancel
@@ -339,6 +389,10 @@ func (m *mobileApp) connect(link string) {
 
 // disconnect ends the connection but keeps the paired desktop.
 func (m *mobileApp) disconnect() {
+	m.disconnectDesktop(false)
+}
+
+func (m *mobileApp) disconnectDesktop(unregister bool) {
 	if m.filesCancel != nil {
 		m.filesCancel()
 		m.filesCancel = nil
@@ -348,12 +402,27 @@ func (m *mobileApp) disconnect() {
 		m.filesProxy = nil
 	}
 	m.generation++
-	if m.cancel != nil {
-		m.cancel()
-		m.cancel = nil
-	}
-	if conn := m.conn; conn != nil {
-		go conn.Close()
+	conn, cancel := m.conn, m.cancel
+	m.cancel = nil
+	if unregister && conn != nil {
+		registration, _ := json.Marshal(pushRegistration{ID: m.pushID, Token: m.pushToken, Disabled: true})
+		hasPushID := m.pushID != ""
+		go func() {
+			if hasPushID {
+				_ = conn.Send(remote.Request{Op: "push", Push: registration})
+			}
+			if cancel != nil {
+				cancel()
+			}
+			conn.Close()
+		}()
+	} else {
+		if cancel != nil {
+			cancel()
+		}
+		if conn != nil {
+			go conn.Close()
+		}
 	}
 	m.conn, m.connected = nil, false
 	m.autos.loading = false
@@ -364,23 +433,16 @@ func (m *mobileApp) disconnect() {
 
 // forget unpairs the desktop.
 func (m *mobileApp) forget() {
-	m.pushDisabled = true
-	m.updateBadge()
-	m.syncPush()
-	m.disconnect()
-	m.link, m.host, m.state, m.status, m.err, m.menu = "", "", phoneState{}, "", "", false
-	m.autos = mobileAutomations{}
-	m.home()
-	m.previewPaths = nil
-	m.dropDiskCache()
-	if store := m.store; store != nil {
-		go store.Delete("desktop-link")
-	}
+	m.removeDesktop(m.currentDesktopID())
 }
 
 func (m *mobileApp) run(ctx context.Context, gen int, link string) {
 	for attempt := 0; ; attempt++ {
-		conn, err := remote.Connect(ctx, link)
+		dial := m.dialDesktop
+		if dial == nil {
+			dial = remote.Connect
+		}
+		conn, err := dial(ctx, link)
 		if err == nil {
 			if ctx.Err() != nil {
 				conn.Close()
@@ -442,6 +504,7 @@ func (m *mobileApp) read(gen int, conn *remote.Conn) (greeted bool, err error) {
 			host := f.Host
 			m.onMain(gen, func() {
 				m.host, m.connected, m.status, m.err = host, true, "", ""
+				_, _ = m.desktops.remember(m.link, host)
 				m.conn = conn
 				m.autos.loading, m.autos.requestedAt = false, time.Time{}
 				if m.filesProxy != nil {
@@ -454,9 +517,7 @@ func (m *mobileApp) read(gen int, conn *remote.Conn) (greeted bool, err error) {
 				}
 				m.badgeRevision = 0
 				m.syncPush()
-				if store, link := m.store, m.link; store != nil {
-					go store.Set("desktop-link", []byte(link))
-				}
+				m.saveDesktops()
 			})
 		case "automations":
 			data, message := f.Data, f.Error
@@ -678,6 +739,14 @@ func (m *mobileApp) resetComposer() {
 }
 
 func (m *mobileApp) openThread(t Thread) {
+	m.drawerSearch, m.drawerQuery = false, ""
+	if _, project := m.find(t.ID); project.Path != "" {
+		m.selected, m.expandedProject, m.projectsExpanded = project.Path, project.Path, true
+	}
+	if m.open == t.ID && m.router().Path() == "/thread" {
+		m.menu = false
+		return
+	}
 	m.open, m.title, m.newProject, m.menu = t.ID, t.Title, "", false
 	m.resetComposer()
 	// Show what the phone holds at once; the desktop sends what changed.
@@ -688,7 +757,7 @@ func (m *mobileApp) openThread(t Thread) {
 	}
 	m.showThread(t)
 	m.subscribe(t.ID)
-	m.router().Push("/thread")
+	m.openDrawerPage("/thread")
 	m.markOpenRead()
 }
 
@@ -700,7 +769,7 @@ func (m *mobileApp) leave() {
 	m.resetComposer()
 }
 
-// home returns to the conversation list at once.
+// home returns to the new-conversation page at once.
 func (m *mobileApp) home() {
 	if m.nav != nil && m.nav.Path() != "/" {
 		// Resetting/replacing a draft reuses one controller; there is no
@@ -714,6 +783,7 @@ func (m *mobileApp) home() {
 func (m *mobileApp) router() *ui.Router {
 	if m.nav == nil {
 		m.nav = ui.NewRouter("/")
+		m.nav.Transition = ui.TransitionStack
 		m.nav.Animation = &ui.Animation{Duration: 280 * time.Millisecond, Ease: ui.EaseOut}
 	}
 	return m.nav
@@ -886,35 +956,40 @@ func (m *mobileApp) viewRoot(c *ui.Context) {
 		case m.link == "":
 			m.pairView(c)
 		default:
+			// Drawer destinations share the edge gesture; child pages pop.
+			m.router().InteractiveBack = !mobilePageHasDrawer(m.router().Path())
 			transition := m.router().Transition
-			if m.instantNavigation {
+			instant := m.instantNavigation
+			m.instantNavigation = false
+			if instant {
 				m.router().Transition = ui.TransitionNone
 			}
 			m.router().View(c, func(page *ui.Route) {
 				page.Page().Background(p.bg).Padding(safe.Top, safe.Right, safe.Bottom, safe.Left)
+				if mobilePageHasDrawer(page.Path()) {
+					page.Page().Padding(0)
+					m.listPage(c, page.Path())
+					return
+				}
 				switch page.Path() {
-				case "/thread":
-					m.threadView(c)
-				case "/settings":
-					m.settingsView(c)
-				case "/automations", "/automation":
-					m.automationsPage(c, page.Path() == "/automation")
+				case "/automation":
+					m.automationsPage(c, true)
 				case "/options":
 					m.optionsView(c)
 				case "/approval":
 					m.approvalPage(c)
+				case "/desktop/add":
+					m.addDesktopView(c)
 				default:
-					// The sliding drawer and list pad their controls separately;
-					// their backgrounds cover the whole screen.
-					page.Page().Background(m.homeBackground()).Padding(0)
-					m.listPage(c)
+					page.Page().Padding(0)
+					m.listPage(c, "/")
 				}
 			})
 			m.router().Transition = transition
-			m.instantNavigation = false
 		}
 	})
-	// The back button and the edge gesture both leave through the router.
+	m.conversationActionsSheet(c)
+	// Release the conversation after navigation reaches the new-conversation page.
 	if m.nav != nil && m.nav.Path() == "/" && !m.nav.Transitioning() && (m.open != 0 || m.newProject != "") {
 		m.leave()
 		c.Invalidate()
@@ -979,6 +1054,11 @@ func (m *mobileApp) pairView(c *ui.Context) {
 		if m.err != "" {
 			ui.Text(c, m.err).TextColor(danger).FontSize(m.font(14))
 		}
+		if m.desktopLoadFailed {
+			if m.pill(c, "reload-desktops", "重新读取桌面列表", false).Clicked() {
+				go m.loadSaved()
+			}
+		}
 	})
 }
 
@@ -989,11 +1069,7 @@ func (m *mobileApp) listView(c *ui.Context) {
 			m.menu = !m.drawerVisible
 		}
 		ui.Column(c).Grow(1).MinWidth(0).AlignItems(ui.Center).Gap(3).Children(func() {
-			title := "Miya"
-			if m.selected != "" {
-				title = m.project(m.selected).Name
-			}
-			ui.Text(c, title).FontSize(m.font(16)).FontWeight(600).SingleLine().Ellipsis("…")
+			ui.Text(c, "Miya").FontSize(m.font(16)).FontWeight(600).SingleLine().Ellipsis("…")
 			ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 				dot, label := p.muted, m.connectionLine()
 				if label == "" {
@@ -1020,7 +1096,8 @@ func (m *mobileApp) listView(c *ui.Context) {
 		})
 		return
 	}
-	m.conversationHome(c)
+	m.newConversationView(c, m.selectedProject())
+	m.composer(c, m.composerAgent(), false)
 }
 
 // selectedProject is where a new conversation starts: the chosen project,
@@ -1044,7 +1121,7 @@ func (m *mobileApp) selectedProject() phoneProject {
 // A clickable element takes the presses on it, so a drag starting on one
 // would not reach the row: the edge and the scrim are plain areas that let
 // drags through, as the drawer's empty space does.
-func (m *mobileApp) listPage(c *ui.Context) {
+func (m *mobileApp) listPage(c *ui.Context, path string) {
 	p := m.pal
 	safe := c.SafeArea()
 	screen := c.Root().Bounds().W
@@ -1062,7 +1139,7 @@ func (m *mobileApp) listPage(c *ui.Context) {
 		m.drawerOffset = ui.Point{X: want}
 	}
 	ui.Box(c.Key("drawer-clip")).Fill().Clip().Children(func() {
-		row := ui.Row(c.Key("drawer-row")).Width(w+screen).Shrink(0).FillHeight().Margin(0, 0, 0, -w).AlignItems(ui.Stretch)
+		row := ui.Row(c.Key("drawer-row")).Width(w+screen).Shrink(0).FillHeight().Margin(0, 0, 0, -w).AlignItems(ui.Stretch).Background(p.drawer)
 		row.Draggable(&m.drawerOffset, ui.DraggableOptions{
 			Axis:      ui.Horizontal,
 			Bounds:    &ui.Rect{W: w},
@@ -1084,20 +1161,41 @@ func (m *mobileApp) listPage(c *ui.Context) {
 		}
 		m.quotaDrawerShown = quotaShown
 		row.Children(func() {
-			ui.Column(c.Key("drawer")).Width(w).FillHeight().Background(p.drawer).Padding(safe.Top+8, 16, safe.Bottom+12, safe.Left+16).Gap(14).Children(func() {
+			ui.Column(c.Key("drawer")).Width(w).FillHeight().Background(p.drawer).Padding(safe.Top+12, 24, safe.Bottom+16, safe.Left+24).Gap(12).Children(func() {
 				if m.drawerVisible || m.menu || m.drawerDragging {
 					m.drawerContent(c)
 				}
 			})
-			ui.Column(c.Key("main")).Width(screen).FillHeight().Background(m.homeBackground()).Padding(safe.Top, safe.Right, safe.Bottom, safe.Left).Children(func() {
-				m.listView(c)
+			background := m.homeBackground()
+			if path != "/" {
+				background = p.bg
+			}
+			if m.dark {
+				background = background.Mix(ui.Hex("#141414"), shown)
+			}
+			// Keep the same clip while moving, and restore the resting page
+			// continuously instead of changing its surface on the final frame.
+			main := ui.Column(c.Key("main")).Width(screen).FillHeight().Background(background).
+				Padding(safe.Top, safe.Right, safe.Bottom, safe.Left).Radius(32*shown, 0, 0, 32*shown).Clip()
+			main.Children(func() {
+				switch path {
+				case "/thread":
+					m.threadView(c)
+				case "/automations":
+					m.automationsPage(c, false)
+				case "/settings":
+					m.settingsView(c)
+				case "/desktops":
+					m.desktopsView(c)
+				default:
+					m.listView(c)
+				}
 				if m.drawerVisible {
 					// The scrim covers the list: a tap on it closes the drawer,
 					// a drag on it moves the drawer.
 					ui.Box(c.Key("scrim")).Label("关闭侧边栏").Absolute().Top(0).Left(0).Right(0).Bottom(0).Background(ui.RGBA(0, 0, 0, 0.45*shown))
 				} else {
-					// The left edge pulls the drawer out, as iOS's edge swipe
-					// goes back.
+					// Reserve the left edge for pulling out the drawer.
 					ui.Box(c.Key("edge")).Absolute().Top(0).Left(0).Bottom(0).Width(24)
 				}
 			})
@@ -1128,99 +1226,81 @@ func (m *mobileApp) listPage(c *ui.Context) {
 			m.rowPressed, m.pressOpen = false, false
 		}
 	})
+	// Buttons and scrim taps commit during this frame; drags commit on
+	// release. Give feedback now, without waiting for the slide to finish.
+	if !m.drawerDragging && m.drawerFeedbackOpen != m.menu {
+		m.drawerFeedbackOpen = m.menu
+		mobileFeedback(mygo.HapticSoft)
+	}
 }
 
 // drawerContent is the drawer: the desktop, its agent quotas, the
 // projects to show, and the connection's actions.
 func (m *mobileApp) drawerContent(c *ui.Context) {
 	p := m.pal
-	host := m.host
-	if host == "" {
-		host = "桌面端"
-	}
 	ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
-		ui.Column(c).Grow(1).MinWidth(0).Gap(3).Padding(4, 4, 8, 4).Children(func() {
-			ui.Text(c, host).FontSize(m.font(17)).FontWeight(600).SingleLine().Ellipsis("…")
-			ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-				dot, label := p.muted, m.connectionLine()
-				if label == "" {
-					dot, label = p.ok, "已连接 · Tailcat 加密"
-				}
-				ui.Box(c.Key("dot")).Size(6, 6).Radius(3).Background(dot)
-				ui.Text(c, label).FontSize(m.font(12)).TextColor(p.muted).SingleLine().Ellipsis("…")
-			})
-		})
-		if m.homeAction(c, "settings", "设置", "settings").Clicked() {
-			m.menu = false
-			m.router().Push("/settings")
+		m.drawerDesktopSwitcher(c)
+		label := "搜索对话"
+		if m.drawerSearch {
+			label = "关闭搜索"
+		}
+		if m.circle(c, "search", label, func() { icon(c, "search", 22, p.ink) }).Clicked() {
+			m.drawerSearch = !m.drawerSearch
+			m.drawerQuery = ""
 		}
 	})
+	if m.drawerSearch {
+		ui.TextInput(c.Key("drawer-query"), &m.drawerQuery).FillWidth().MinHeight(44).Padding(10, 12).Radius(12).
+			Background(p.surface).Border(0, p.surface).FontSize(m.font(16)).Label("搜索对话").Placeholder("搜索对话标题").AutoFocus()
+	}
 	if m.err != "" {
 		ui.Text(c, m.err).FontSize(m.font(13)).TextColor(danger).LineHeight(1.4)
 	}
 	m.drawerQuotas(c.Key("drawer-quotas"))
 
 	ui.Scroll(c.Key("drawer-projects")).FillWidth().Grow(1).MinHeight(0).Children(func() {
-		ui.Column(c).FillWidth().Gap(2).Children(func() {
-			automations := m.phoneButton(c.Key("automations")).FillWidth().MinHeight(44).Padding(0, 12).Gap(12).Radius(12).Label("自动化")
+		ui.Column(c).FillWidth().Children(func() {
+			if m.drawerSearch {
+				matches := matchingThreadRefs(m.state.Projects, 0, strings.TrimSpace(m.drawerQuery))
+				if len(matches) == 0 {
+					ui.Text(c, "没有匹配的对话").Padding(12, 0).FontSize(m.font(14)).TextColor(p.muted)
+				}
+				for _, match := range matches {
+					m.drawerThread(c.Key(match.ID), match.Thread)
+				}
+				return
+			}
+			automations := m.phoneButton(c.Key("automations")).FillWidth().MinHeight(48).Padding(0).Gap(12).Radius(12).Label("自动化")
 			automations.Children(func() {
-				icon(c, "clock", 18, p.muted)
-				ui.Text(c, "自动化").FontSize(m.font(15))
+				icon(c, "clock", 21, p.ink)
+				ui.Text(c, "自动化").FontSize(m.font(17)).FontWeight(400)
 			})
 			if automations.Clicked() {
-				m.menu = false
 				m.autos.requestedAt = time.Time{}
-				m.router().Push("/automations")
+				m.openDrawerPage("/automations")
 			}
-			ui.Text(c, "项目").FontSize(m.font(13)).FontWeight(500).TextColor(p.muted).Margin(12, 6, 6, 6)
-			all := m.phoneButton(c.Key("all-projects")).FillWidth().MinHeight(44).Padding(0, 12).Gap(12).Radius(12).Label("全部对话")
-			if m.selected == "" {
-				all.Background(p.surface)
+			ui.Box(c.Key("navigation-separator")).FillWidth().Height(1).Margin(16, 0, 12, 0).Background(p.line)
+			ui.Text(c, "项目").FontSize(m.font(13)).TextColor(p.muted).Margin(0, 0, 6, 0)
+			if !m.projectsExpanded && len(m.state.Projects) > 0 {
+				m.expandedProject, m.projectsExpanded = m.selectedProject().Path, true
 			}
-			all.Children(func() {
-				icon(c, "stack-2", 18, p.muted)
-				ui.Text(c, "全部对话").FontSize(m.font(15))
-			})
-			if all.Clicked() {
-				m.showProject("")
-			}
-			shown := m.selected
 			for _, pr := range m.state.Projects {
-				row := m.phoneButton(c.Key("drawer:"+pr.Path)).FillWidth().MinHeight(44).Padding(0, 12).Gap(12).Radius(12).Label("项目 " + pr.Name)
-				if pr.Path == shown {
-					row.Background(p.surface)
-				}
-				row.Children(func() {
-					icon(c, "folder", 18, p.muted)
-					ui.Text(c, pr.Name).FontSize(m.font(15)).Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
-					if pr.Current {
-						ui.Text(c, "桌面端当前").FontSize(m.font(11)).TextColor(p.muted)
-					}
-					busy := 0
-					for _, t := range pr.Threads {
-						if t.Busy {
-							busy++
-						}
-					}
-					if busy > 0 {
-						ui.Spinner(c).FontSize(m.font(12))
-					} else if len(pr.Threads) > 0 {
-						ui.Text(c, fmt.Sprint(len(pr.Threads))).FontSize(m.font(13)).TextColor(p.muted)
-					}
-				})
-				if row.Clicked() {
-					m.showProject(pr.Path)
-				}
+				m.drawerProject(c.Key("drawer:"+pr.Path), pr)
 			}
 		})
 	})
-	ui.Row(c).FillWidth().Gap(8).Children(func() {
-		if m.pill(c, "reconnect", "重新连接", true).Grow(1).Clicked() {
-			m.menu = false
-			m.connect(m.link)
+	ui.Row(c).FillWidth().Gap(12).AlignItems(ui.Center).Children(func() {
+		newThread := m.phoneButton(c.Key("new-thread")).MinWidth(0).Shrink(1).MinHeight(48).Padding(0, 20).Gap(10).Radius(24).Background(p.ink).TextColor(p.bg).Label("新建对话")
+		newThread.Children(func() {
+			icon(c, "edit", 21, p.bg)
+			ui.Text(c, "新建对话").FontSize(m.font(16)).FontWeight(600).MinWidth(0).Shrink(1).SingleLine().Ellipsis("…")
+		})
+		if newThread.Clicked() {
+			m.startConversation(m.selectedProject().Path, m.composerAgent())
 		}
-		if m.pill(c, "forget", "更换桌面端", false).Grow(1).Clicked() {
-			m.forget()
+		ui.Spacer(c)
+		if m.circle(c, "settings", "设置", func() { icon(c, "settings", 22, p.ink) }).Size(48, 48).Radius(24).Clicked() {
+			m.openDrawerPage("/settings")
 		}
 	})
 }
@@ -1229,13 +1309,17 @@ func (m *mobileApp) drawerContent(c *ui.Context) {
 // bounce, keeping the speed of a throw.
 var drawerMotion = ui.Animation{Spring: ui.SpringOptions{Duration: 380 * time.Millisecond}}
 
-// showProject filters the home page to the chosen project's conversations.
+// showProject selects the phone's workspace and toggles its conversation list.
 func (m *mobileApp) showProject(path string) {
-	m.home()
-	m.menu, m.selected = false, path
+	m.selected, m.projectsExpanded = path, true
+	if m.expandedProject == path {
+		m.expandedProject = ""
+	} else {
+		m.expandedProject = path
+	}
 }
 
-// threadStatus marks a conversation waiting for an answer, running, or done.
+// threadStatus marks conversations waiting for approval, running, or unread.
 func (m *mobileApp) threadStatus(c *ui.Context, t Thread) {
 	p := m.pal
 	switch {
@@ -1249,8 +1333,6 @@ func (m *mobileApp) threadStatus(c *ui.Context, t Thread) {
 	default:
 		if _, unread := m.unreadFor(t); unread {
 			ui.Box(c).Size(8, 8).Radius(4).Background(p.ok)
-		} else {
-			icon(c, "check", 14, p.muted)
 		}
 	}
 }
@@ -1276,9 +1358,7 @@ func (m *mobileApp) threadView(c *ui.Context) {
 		title = "对话"
 	}
 	ui.Row(c).FillWidth().MinHeight(64).Padding(0, 12).Gap(8).AlignItems(ui.Center).Children(func() {
-		if m.circle(c, "back", "返回", func() { icon(c, "arrow-left", 20, p.ink) }).Clicked() {
-			m.router().Back()
-		}
+		m.navigationBack(c, "/thread")
 		ui.Column(c).Grow(1).MinWidth(0).AlignItems(ui.Center).Gap(2).Children(func() {
 			ui.Text(c, nativeText(title)).FontSize(m.font(16)).FontWeight(600).SingleLine().Ellipsis("…")
 			sub := agentName(agent)
@@ -1291,7 +1371,7 @@ func (m *mobileApp) threadView(c *ui.Context) {
 			ui.Text(c, sub).FontSize(m.font(12)).TextColor(p.muted).SingleLine().Ellipsis("…")
 		})
 		more := m.circle(c, "more", "更多", func() { icon(c, "dots", 20, p.ink) })
-		m.conversationActions(more, proj.Path, agent)
+		m.conversationActions(c, more, proj.Path, agent)
 	})
 	ui.Column(c).Grow(1).MinHeight(0).FillWidth().Children(func() {
 		if m.open == 0 {
@@ -1320,8 +1400,12 @@ func (m *mobileApp) newConversationView(c *ui.Context, proj phoneProject) {
 			})
 			pick.PopoverMenuButton(func(menu *ui.Menu) {
 				for _, project := range m.state.Projects {
-					if menu.Item(project.Name).Radio(project.Path == m.newProject).Chosen() {
-						m.newProject = project.Path
+					if menu.Item(project.Name).Radio(project.Path == proj.Path).Chosen() {
+						m.selected = project.Path
+						m.expandedProject, m.projectsExpanded = project.Path, true
+						if m.newProject != "" {
+							m.newProject = project.Path
+						}
 					}
 				}
 			})
@@ -1397,10 +1481,14 @@ func (m *mobileApp) composer(c *ui.Context, agent string, busy bool) {
 				if expanded {
 					inputWidth = c.Root().Bounds().W - safe.Left - safe.Right - 24 - 28
 				}
-				input := m.view.threadInput(c.Key("composer"), &m.inlineInput, m.draft, fmt.Sprintf("%s:%d", m.composerProject(), m.open), "消息", placeholder, m.font(16), inputWidth, 1, 6, func(text string) { m.draft = text })
-				// EditorBase paints within its own bounds; its element padding
-				// does not inset the text. Center it using the enclosing column.
-				input.MinHeight(0).Padding(0)
+				// Clip in a parent: EditorBase's custom drawing can extend beyond
+				// its own bounds when it scrolls a long paragraph to the caret.
+				ui.Column(c.Key("editor-clip")).FillWidth().Clip().Children(func() {
+					input := m.view.threadInput(c.Key("composer"), &m.inlineInput, m.draft, fmt.Sprintf("%s:%d", m.composerProject(), m.open), "消息", placeholder, m.font(16), inputWidth, 1, 6, func(text string) { m.draft = text })
+					// EditorBase padding does not inset its text. Center it
+					// using the enclosing column instead.
+					input.MinHeight(0).Padding(0)
+				})
 			})
 			ui.Row(c.Key("left-tools")).Absolute().Left(4).Bottom(6).Width(88).MinHeight(44).AlignItems(ui.Center).Children(func() {
 				// Bring the icons closer within separate 44-point hit areas.
