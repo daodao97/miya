@@ -170,24 +170,25 @@ func (app *chatApp) threadRow(c *ui.Context, t Thread) {
 			agent := threadAgent(t)
 			agentIcon(c, agent, 14)
 			ui.Text(c, t.Title).Grow(1).MinWidth(0).SingleLine().Ellipsis("…").TextColor(ink)
-			if t.Busy && !t.Loading && !hovered {
-				ui.Spinner(c).FontSize(13).Label(tr("Working…"))
-			}
+			ui.Box(c.Key("status-actions")).Size(24, 24).Shrink(0).Children(func() {
+				// Keep the menu anchor built when the pointer leaves the row
+				// for its dropdown, while sharing one slot with run status.
+				more := quiet(c.Key("more")).Size(24, 24).PaddingX(4).Justify(ui.Center).Label("对话操作").Tooltip("更多")
+				more.Children(func() { icon(c, "dots", 16, muted) })
+				more.PopoverMenuButton(func(m *ui.Menu) { app.threadMenu(m, t) })
+				if !hovered {
+					more.Invisible()
+					if t.Busy && !t.Loading {
+						ui.Row(c.Key("running")).Absolute().Top(0).Right(0).Bottom(0).Left(0).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
+							ui.Spinner(c).FontSize(13).Label(tr("Working…"))
+						})
+					}
+				}
+			})
 		})
 		if row.Clicked() {
 			app.selectThread(t)
 		}
-		if !hovered {
-			return
-		}
-		ui.Row(c).Absolute().Right(6).Top(4).Gap(2).Padding(1).Background(chosen).Radius(6).Children(func() {
-			archive := quiet(c.Key("archive")).Size(24, 24).PaddingX(4).Justify(ui.Center).Label("归档对话").Tooltip("归档对话")
-			archive.Children(func() { icon(c, "archive", 14, muted) })
-			archive.OnClick(func() { app.c.archiveThread(t) })
-			remove := quiet(c.Key("delete")).Size(24, 24).PaddingX(4).Justify(ui.Center).Label("删除对话").Tooltip("删除对话")
-			remove.Children(func() { icon(c, "trash-2", 14, muted) })
-			remove.OnClick(func() { app.c.deleteThread(t) })
-		})
 	})
 }
 

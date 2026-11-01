@@ -188,7 +188,7 @@ func TestSlashStatusShowsNotice(t *testing.T) {
 func TestSidebarSelectsAndArchivesThreads(t *testing.T) {
 	app, tt := testApp(t)
 	c := app.c
-	c.setThreads([]Thread{{ID: 1, Title: "First thread"}, {ID: 2, Title: "Second thread", Agent: "claude-code", HistoryLoaded: true}})
+	c.setThreads([]Thread{{ID: 1, Title: "First thread", Busy: true}, {ID: 2, Title: "Second thread", Agent: "claude-code", HistoryLoaded: true}})
 	tt.Frame()
 	if err := tt.Click("Second thread"); err != nil {
 		t.Fatal(err)
@@ -196,11 +196,32 @@ func TestSidebarSelectsAndArchivesThreads(t *testing.T) {
 	if c.active() != 2 || c.currentAgent() != "claude-code" {
 		t.Fatalf("thread not selected: active %d agent %s", c.active(), c.currentAgent())
 	}
-	if err := tt.RightClick("First thread"); err != nil {
+	tt.Move(1100, 780)
+	if tt.HasText("对话操作") || !tt.HasText(tr("Working…")) {
+		t.Fatal("unhovered conversations should only show run status")
+	}
+	first, _ := tt.Find("First thread")
+	tt.Move(first.X+first.W/2, first.Y+first.H/2)
+	if !tt.HasText("对话操作") || tt.HasText(tr("Working…")) {
+		t.Fatal("hovering should replace run status with the more button")
+	}
+	if title, _ := tt.Find("First thread"); title != first {
+		t.Fatal("hovering changed the title's layout")
+	}
+	if tt.HasText("归档对话") || tt.HasText("删除对话") {
+		t.Fatal("destructive actions are exposed before opening the menu")
+	}
+	if err := tt.Click("对话操作"); err != nil {
 		t.Fatal(err)
 	}
-	if err := tt.ChooseMenuItem("归档对话"); err != nil {
-		t.Fatalf("no archive item in %q: %v", tt.Menu(), err)
+	if len(c.threads()) != 2 || c.active() != 2 {
+		t.Fatal("opening the actions menu changed the conversation")
+	}
+	if !tt.HasText("归档对话") || !tt.HasText("删除对话") {
+		t.Fatalf("conversation actions are missing from the dropdown: %q", tt.Texts())
+	}
+	if err := tt.Click("归档对话"); err != nil {
+		t.Fatal(err)
 	}
 	tt.Frame()
 	if tt.HasText("First thread") || len(c.threads()) != 1 {
