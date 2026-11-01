@@ -130,7 +130,7 @@ func TestPanelOpensFilesEditsAndSaves(t *testing.T) {
 	if err := tt.Click("显示右侧面板"); err != nil {
 		t.Fatal(err)
 	}
-	if !tt.HasText("打开一个面板") || !tt.HasText("在此工作区中启动 Shell") {
+	if !tt.HasText("打开一个面板") || !tt.HasText("在此工作区中打开终端") {
 		t.Fatalf("chooser missing: %q", tt.Texts())
 	}
 	if err := tt.Click("文件"); err != nil {

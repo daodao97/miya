@@ -225,6 +225,9 @@ type sendRequest struct {
 	ExplicitSettings      bool
 	// Steer adds the message to a running turn instead of queueing it.
 	Steer bool
+	// KeepSessionSettings is used by native task controls, which must work
+	// even after the user has changed the next message's launch settings.
+	KeepSessionSettings bool
 }
 
 func (c *chatController) threadWithID(id int) Thread {
@@ -287,6 +290,13 @@ func (c *chatController) submit(req sendRequest) int {
 		_ = c.remote.call("submit", req, &id)
 		return id
 	}
+	if _, ok, _ := parseGoalCommand(req.Text); ok && (req.ThreadID == 0 && req.Agent != agentClaude || req.ThreadID != 0 && threadAgent(c.threadWithID(req.ThreadID)) == agentCodex) {
+		id, message := c.codexGoalCommand(req)
+		if message != "" {
+			c.setStatus(message)
+		}
+		return id
+	}
 	// References to other conversations become their context here, where
 	// every conversation's messages are; the referenced ones then follow.
 	task := threadRefTask(req.Text)
@@ -309,7 +319,7 @@ func (c *chatController) submitExpanded(req sendRequest) int {
 		req.Text = "Please inspect the attached file(s)."
 	}
 	t := c.threadWithID(req.ThreadID)
-	if req.ThreadID != 0 && t.ID == 0 || t.ReadOnly {
+	if req.ThreadID != 0 && t.ID == 0 || t.ReadOnly || t.TaskPending {
 		return 0
 	}
 	if t.Busy || t.Loading {
@@ -348,7 +358,7 @@ func (c *chatController) returnDraft(id int, text string, attachments []string) 
 // it shows that conversation and holds nothing newer.
 func (c *chatController) restoreDraft(id int, text string, attachments []string) {
 	if c.active() == id && strings.TrimSpace(c.draft()) == "" {
-		c.setDraft(text)
+		c.rememberDraft(text)
 		c.setAttachments(attachments)
 	}
 }

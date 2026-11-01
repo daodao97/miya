@@ -224,7 +224,7 @@ func TestEditMessageInPlace(t *testing.T) {
 	if err := tt.Click("编辑消息"); err != nil {
 		t.Fatalf("no edit button: %v", err)
 	}
-	if app.editing != 10 || app.editText != "original prompt" || !tt.HasText("将从这条消息重新开始，之后的对话会被替换；已修改的文件不会恢复。") {
+	if app.editing != 10 || app.editText != "original prompt" || !tt.HasText("从这条消息重新开始。之后的消息会删除，Miya 不会撤销已经改动的文件。") {
 		t.Fatalf("editor not open: %d %q", app.editing, app.editText)
 	}
 	tt.Key(0, ui.KeyEscape)

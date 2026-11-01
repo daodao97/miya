@@ -189,6 +189,101 @@ func TestServiceKeepsTurnsRunningAfterTheWindowQuits(t *testing.T) {
 	})
 }
 
+func TestServiceRetriesFailedResponseInSameSession(t *testing.T) {
+	f := newServiceFixture(t)
+	// This headless fixture has no native event loop for notification APIs.
+	persistSetting("notifications-completion", "off")
+	a := f.window()
+	f.waitWindow("Claude to be ready", func() bool { return a.claudeBinary != "" })
+	f.serv.do(func() {
+		th := failedResponse()
+		th.Agent = agentClaude
+		f.srv.c.setThreads([]Thread{th})
+	})
+	f.waitWindow("the failed conversation", func() bool { return a.threadWithID(1).ID == 1 })
+	f.win.do(func() { a.selectThread(a.threadWithID(1)) })
+	f.waitWindow("the failed response", func() bool { return len(a.threadWithID(1).Messages) == 3 })
+	f.win.do(func() {
+		a.setDraft("keep this draft")
+		if err := a.retryResponse(retryRequest{ThreadID: 1, MessageID: 12}); err != nil {
+			t.Error(err)
+		}
+	})
+	f.waitWindow("the continued response", func() bool {
+		th := a.threadWithID(1)
+		return !th.Busy && assistantText(th) == "partial done"
+	})
+	f.win.do(func() {
+		th := a.threadWithID(1)
+		if th.ServerID != "s1" || th.Messages[1].Content != "构建完成" || a.draft() != "keep this draft" {
+			t.Fatalf("retry lost the session, completed work or draft: %+v", th)
+		}
+		count := len(th.Messages)
+		if err := a.retryResponse(retryRequest{ThreadID: 1, MessageID: 12}); err == nil {
+			t.Error("a stale retry from another window was accepted")
+		}
+		if len(a.threadWithID(1).Messages) != count {
+			t.Error("a stale retry submitted another message")
+		}
+	})
+}
+
+func TestServiceDraftSurvivesStaleSnapshotsAndQuickSwitches(t *testing.T) {
+	f := newServiceFixture(t)
+	persistSetting("notifications-completion", "off")
+	f.serv.do(func() {
+		f.srv.c.setThreads([]Thread{
+			{ID: 1, ServerID: "s1", Agent: agentClaude, Busy: true, HistoryLoaded: true},
+			{ID: 2, ServerID: "s2", Agent: agentClaude, HistoryLoaded: true},
+		})
+	})
+	t.Cleanup(func() {
+		f.serv.do(func() {
+			f.srv.c.update(1, func(th *Thread) { th.Busy, th.Queue = false, nil })
+		})
+	})
+	a := f.window()
+	var stale svcState
+	f.serv.do(func() { stale = f.srv.c.snapshotState() })
+	stale.Threads[0].Draft = "已经发送的消息"
+	f.win.do(func() {
+		a.selectThread(a.threadWithID(1))
+		a.rememberDraft("已经发送的消息")
+		a.send()
+		var confirmed svcState
+		if err := a.remote.call("state", nil, &confirmed); err != nil {
+			t.Error(err)
+		} else if confirmed.Threads[0].Draft != "" {
+			t.Errorf("the service kept a sent draft: %q", confirmed.Threads[0].Draft)
+		}
+		a.applyState(stale)
+		a.selectThread(a.threadWithID(2))
+		a.selectThread(a.threadWithID(1))
+		if a.draft() != "" {
+			t.Errorf("a stale snapshot resurrected a sent draft: %q", a.draft())
+		}
+		a.rememberDraft("对话一尚未发送")
+		a.selectThread(a.threadWithID(2))
+		a.rememberDraft("对话二尚未发送")
+		a.applyState(stale)
+		a.selectThread(a.threadWithID(1))
+		if a.draft() != "对话一尚未发送" {
+			t.Errorf("lost the latest draft of conversation one: %q", a.draft())
+		}
+		a.selectThread(a.threadWithID(2))
+		if a.draft() != "对话二尚未发送" {
+			t.Errorf("lost the latest draft of conversation two: %q", a.draft())
+		}
+	})
+	var confirmed svcState
+	if err := a.remote.call("state", nil, &confirmed); err != nil {
+		t.Fatal(err)
+	}
+	if confirmed.Threads[0].Draft != "对话一尚未发送" || confirmed.Threads[1].Draft != "对话二尚未发送" {
+		t.Errorf("latest drafts were not persisted at the service: %+v", confirmed.Threads)
+	}
+}
+
 func TestServicePublishesOnlyChangedMessages(t *testing.T) {
 	p := &svcPeer{sub: 7}
 	th := Thread{ID: 7, Messages: []Message{{ID: 1, Role: "user", Content: "hi"}, {ID: 2, Role: "assistant", Content: "a"}}}

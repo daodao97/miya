@@ -16,6 +16,7 @@ import (
 type composerChoice struct{ Name, Detail string }
 
 var composerCommands = []composerChoice{
+	{"goal", "Set a goal · /goal pause · /goal resume · /goal clear"},
 	{"new", "Start a new conversation"},
 	{"model", "Choose the model"},
 	{"fast", "Toggle Codex fast mode"},

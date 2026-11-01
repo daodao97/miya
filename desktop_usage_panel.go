@@ -236,12 +236,12 @@ func usagePanelWindow(c *ui.Context, w agentusage.Window, p desktopPalette) {
 }
 
 func usagePanelEmpty(c *ui.Context, r agentusage.Reading, busy bool) {
-	title, message := "暂无额度数据", "刷新以读取本机账户。"
+	title, message := "暂无额度数据", "刷新以读取本机账号。"
 	if r.Error != "" {
 		title, message = "读取失败", r.Error
 	}
 	if busy {
-		title, message = "读取中", "正在查询 "+usageAgentName(r.Agent)+" 账户。"
+		title, message = "读取中", "正在查询 "+usageAgentName(r.Agent)+" 账号。"
 	}
 	ui.Column(c).FillWidth().Gap(8).Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {

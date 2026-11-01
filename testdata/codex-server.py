@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Deterministic app-server fixture. Never executes tools or changes user files."""
 import json,sys,os
-threads={}; pending={}; serial=0; loaded=set()
+threads={}; pending={}; serial=0; loaded=set(); goals={}
 
 # A persisted thread exists on disk but must be resumed in each new process.
 if os.environ.get('QUICKGUI_FIXTURE_RESUME') == '1':
@@ -65,6 +65,14 @@ for line in sys.stdin:
    emit({'id':r['id'],'error':{'code':-32600,'message':'no rollout found for thread id '+tid}});continue
   if method=='thread/resume':loaded.add(tid)
   reply(r,{'thread':threads[tid]})
+ elif method=='thread/goal/get':reply(r,{'goal':goals.get(p['threadId'])})
+ elif method=='thread/goal/set':
+  tid=p['threadId'];goal=goals.setdefault(tid,{'threadId':tid,'objective':'','status':'active','tokensUsed':0,'timeUsedSeconds':0,'tokenBudget':None})
+  for key in ('objective','status','tokenBudget'):
+   if key in p:goal[key]=p[key]
+  reply(r,{'goal':goal});notify('thread/goal/updated',threadId=tid,goal=goal)
+ elif method=='thread/goal/clear':
+  tid=p['threadId'];goals.pop(tid,None);reply(r,{});notify('thread/goal/cleared',threadId=tid)
  elif method=='turn/start':
   if p['threadId'] not in loaded:
    emit({'id':r['id'],'error':{'code':-32600,'message':'thread not found: '+p['threadId']}});continue

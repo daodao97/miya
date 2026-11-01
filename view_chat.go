@@ -225,9 +225,21 @@ func (app *chatApp) chevron(c *ui.Context, open bool) {
 func (app *chatApp) messageView(c *ui.Context, m Message, streaming bool) {
 	switch m.Role {
 	case "error":
-		ui.Row(c).FillWidth().Padding(16).Gap(10).Border(1, line).Radius(16).Children(func() {
+		ui.Row(c).FillWidth().AlignItems(ui.Center).Padding(16).Gap(10).Border(1, line).Radius(16).Children(func() {
 			icon(c, "alert-circle", 16, warnInk)
 			ui.Text(c, nativeText(tr(m.Content))).Grow(1).MinWidth(0).Selectable()
+			if t := app.c.current(); retryableError(t, m) {
+				size := float32(28)
+				if app.mobile {
+					size = 44
+				}
+				b := quiet(c.Key("retry-response")).Size(size, size).Shrink(0).PaddingX(6).Justify(ui.Center).
+					Disabled(t.Busy || t.Loading).Label("重试回复").Tooltip("重试回复")
+				b.Children(func() { icon(c, "refresh", 16, muted) })
+				if b.Clicked() {
+					app.retryResponse(m)
+				}
+			}
 		})
 		return
 	case "user":

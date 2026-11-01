@@ -67,6 +67,12 @@ func (c *chatController) handle(f codex.Frame) {
 			}
 		}
 		switch f.Method {
+		case "thread/goal/updated":
+			t.goalRevision++
+			applyCodexGoal(t, e.Goal)
+		case "thread/goal/cleared":
+			t.goalRevision++
+			applyCodexGoal(t, nil)
 		case "thread/closed":
 			resetCodexSession(t)
 			t.Status = ""

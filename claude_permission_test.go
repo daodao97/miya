@@ -31,13 +31,13 @@ func TestClaudeRunUsesThePermissionPicker(t *testing.T) {
 	c.claudeBinary, c.claudeEnv = bin, []string{"MIYA_OUT=" + out}
 	c.setAgent("claude-code")
 	tt.Frame()
-	if err := tt.Click("请求批准"); err != nil {
+	if err := tt.Click("需要时询问"); err != nil {
 		t.Fatalf("no permission picker for Claude Code in %q: %v", tt.Texts(), err)
 	}
-	if !tt.HasText("Claude Code 应如何工作？") {
+	if !tt.HasText("Claude Code 的权限") {
 		t.Fatalf("picker title %q", tt.Texts())
 	}
-	if err := tt.Click("完全访问权限"); err != nil {
+	if err := tt.Click("完全访问"); err != nil {
 		t.Fatal(err)
 	}
 	// Keep the run's later updates queued: this test reads only what

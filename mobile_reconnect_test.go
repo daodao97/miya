@@ -83,7 +83,7 @@ func TestMobileReconnectKeepsIdentityBeforeListArrives(t *testing.T) {
 	}
 	// Both old and new desktops can temporarily report a missing thread.
 	for _, sid := range []string{"", "s1"} {
-		m.receiveThread(1, phoneThreadDelta{Thread: Thread{ID: 1, ServerID: sid, Status: "会话已不在桌面端"}, Reset: true})
+		m.receiveThread(1, phoneThreadDelta{Thread: Thread{ID: 1, ServerID: sid, Status: "对话已不在桌面端"}, Reset: true})
 		if cur := m.view.c.current(); cur.ServerID != "s1" {
 			t.Fatalf("missing-thread frame erased the stable identity: %+v", cur)
 		}

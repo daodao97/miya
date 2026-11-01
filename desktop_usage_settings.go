@@ -10,7 +10,7 @@ func (app *chatApp) usageSettings(c *ui.Context) {
 		ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
 			ui.Column(c).Grow(1).Gap(4).Children(func() {
 				ui.Text(c, "本机订阅").FontSize(16).FontWeight(600)
-				ui.Text(c, "每 3 分钟刷新。账户与本机 CLI 一致。").FontSize(12).TextColor(muted)
+				ui.Text(c, "每 3 分钟刷新。读取本机 Codex 和 Claude Code 当前登录的账号。").FontSize(12).TextColor(muted)
 			})
 			if ui.Button(c, "刷新").Label("刷新订阅额度").Disabled(d.busy).Clicked() {
 				app.refreshUsage()
@@ -31,14 +31,14 @@ func (app *chatApp) usageSettings(c *ui.Context) {
 				}
 			})
 			ui.Row(c).FillWidth().Gap(12).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, "显示账户").Grow(1)
+				ui.Text(c, "显示账号").Grow(1)
 				agents, index := []string{"", "codex", "claude"}, 0
 				for i, agent := range agents {
 					if d.prefs.agent == agent {
 						index = i
 					}
 				}
-				if ui.Segmented(c, &index, "自动", "Codex", "Claude").Label("托盘账户").Changed() {
+				if ui.Segmented(c, &index, "自动", "Codex", "Claude").Label("托盘账号").Changed() {
 					d.prefs.agent = agents[index]
 					persistSetting("usageTrayAgent", d.prefs.agent)
 					app.syncUsageTray()

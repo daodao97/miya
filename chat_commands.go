@@ -32,6 +32,9 @@ func (c *chatController) threadCommand(threadID int, agent, command, policy stri
 		c.fastMode = r.FastMode
 		return r.Thread, r.Message
 	}
+	if _, ok, _ := parseGoalCommand("/" + command); ok && (threadID == 0 && agent != agentClaude || threadID != 0 && threadAgent(c.threadWithID(threadID)) == agentCodex) {
+		return c.codexGoalCommand(sendRequest{ThreadID: threadID, Agent: agentCodex, Text: "/" + command, Policy: policy, Model: c.model(), Effort: c.effort()})
+	}
 	t := c.threadWithID(threadID)
 	b := backendOf(t)
 	if t.ID == 0 {

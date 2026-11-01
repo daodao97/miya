@@ -19,7 +19,7 @@ func mobileHomeFixture() *mobileApp {
 		{ID: 3, ServerID: "older", Title: "修复登录问题", Agent: agentClaude, LastActivityAt: 200},
 	}
 	m.state.Projects[1].Threads = []Thread{
-		{ID: 4, ServerID: "busy", Title: "实现手机端会话列表", Busy: true, LastActivityAt: 300},
+		{ID: 4, ServerID: "busy", Title: "实现手机端对话列表", Busy: true, LastActivityAt: 300},
 		{ID: 5, ServerID: "unread", Title: "补充接口测试", Agent: agentClaude, LastActivityAt: 400},
 	}
 	m.state.Approvals = []codex.Approval{{ID: json.RawMessage(`1`), ThreadID: "approval"}}
@@ -34,7 +34,7 @@ func TestMobileHomePrioritizesActionAcrossProjects(t *testing.T) {
 	tt := ui.NewTester(m.viewRoot, 390, 844)
 	tt.Frame()
 	var previous float32 = -1
-	for _, label := range []string{"更新部署配置", "实现手机端会话列表", "补充接口测试", "整理项目文档", "修复登录问题"} {
+	for _, label := range []string{"更新部署配置", "实现手机端对话列表", "补充接口测试", "整理项目文档", "修复登录问题"} {
 		r, ok := tt.Find(label)
 		if !ok || r.Y <= previous {
 			t.Fatalf("conversation %q is missing or out of order: %v", label, r)
@@ -44,7 +44,7 @@ func TestMobileHomePrioritizesActionAcrossProjects(t *testing.T) {
 	if m.state.Projects[0].Threads[0].ServerID != "recent" {
 		t.Fatal("home sorting changed the desktop's thread order")
 	}
-	if err := tt.Click("实现手机端会话列表"); err != nil {
+	if err := tt.Click("实现手机端对话列表"); err != nil {
 		t.Fatal(err)
 	}
 	if m.open != 4 || m.router().Path() != "/thread" || m.view.c.current().ServerID != "busy" {
@@ -58,11 +58,14 @@ func TestMobileHomeProjectFilterAndEmptyState(t *testing.T) {
 	m.showProject("/b")
 	tt := ui.NewTester(m.viewRoot, 320, 568)
 	tt.Frame()
-	if !tt.HasText("还没有会话") || tt.HasText("thread-one") {
+	if !tt.HasText("还没有对话") || tt.HasText("thread-one") {
 		t.Fatal("empty project should show an empty state without other projects' sessions")
 	}
-	if err := tt.Click("新会话"); err != nil {
+	if err := tt.Click("新建对话"); err != nil {
 		t.Fatal(err)
+	}
+	if m.newProject != "/b" || m.router().Path() != "/thread" {
+		t.Fatal("home action did not start a conversation in the selected project")
 	}
 	m.draft = "保留这条草稿"
 	if err := tt.Click("选择项目"); err != nil {
@@ -78,7 +81,7 @@ func TestMobileHomeProjectFilterAndEmptyState(t *testing.T) {
 		t.Fatal(err)
 	}
 	openMobileDrawer(t, tt)
-	if err := tt.Click("全部会话"); err != nil {
+	if err := tt.Click("全部对话"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Advance(drawerMotion.Spring.Duration * 2)

@@ -252,7 +252,7 @@ func (m *mobileApp) elicitationFields(c *ui.Context, a codex.Approval) {
 	}
 	pending := m.approvalPending[id]
 	ui.Row(c).FillWidth().Wrap().Gap(10).Children(func() {
-		if rememberableMCPAccess(a) && m.pill(c, "remember", "此会话始终允许", false).Disabled(pending).Clicked() {
+		if rememberableMCPAccess(a) && m.pill(c, "remember", "此对话始终允许", false).Disabled(pending).Clicked() {
 			m.submitApproval(a, nil, false, true)
 		}
 		if m.pill(c, "confirm", "确认", true).Disabled(pending).Clicked() {

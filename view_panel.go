@@ -40,7 +40,7 @@ func (k surfaceKind) icon() string {
 }
 
 func (k surfaceKind) description() string {
-	return [...]string{"打开本地应用或网址", "在此工作区中启动 Shell", "浏览并阅读工作区文件", "审阅文件更改"}[k]
+	return [...]string{"打开本地应用或网址", "在此工作区中打开终端", "浏览并阅读工作区文件", "审阅文件更改"}[k]
 }
 
 // Browsers and terminals open as many tabs as asked; the files and the
@@ -353,7 +353,7 @@ func (app *chatApp) panelTab(c *ui.Context, p *panelState, i int, s *panelSurfac
 		}
 		ui.Text(c, label).Grow(1).MinWidth(0).SingleLine().Ellipsis("…").FontSize(12).TextColor(color)
 		if p.dirty(s) {
-			ui.Box(c.Key("dirty")).Size(7, 7).Radius(4).Shrink(0).Background(ui.Hex("#e0a030")).Tooltip("有未保存的更改 — 按 ⌘S 保存")
+			ui.Box(c.Key("dirty")).Size(7, 7).Radius(4).Shrink(0).Background(ui.Hex("#e0a030")).Tooltip("有未保存的更改，按 ⌘S 保存")
 		}
 		x := ui.ButtonBase(c.Key("close")).Size(16, 16).Shrink(0).Radius(4).Justify(ui.Center).AlignItems(ui.Center).Label("关闭" + label)
 		if x.Hovered() {
@@ -475,7 +475,12 @@ func (app *chatApp) browserView(c *ui.Context, s *panelSurface) {
 func (app *chatApp) startTerminal(s *panelSurface, dir string) {
 	s.starting, s.termErr = true, ""
 	goAsync(func() {
-		t, err := terminal.New(terminal.Options{Dir: dir})
+		t, err := terminal.New(terminal.Options{
+			Dir:                     dir,
+			CopyOnSelect:            terminal.CopyOnSelectClipboard,
+			SelectOnDrag:            true,
+			SelectOnDragInAltScreen: true,
+		})
 		app.c.dispatch(func() {
 			s.starting = false
 			if err != nil {
@@ -529,12 +534,14 @@ func (app *chatApp) terminalView(c *ui.Context, p *panelState, s *panelSurface) 
 	case s.termErr != "":
 		restart("终端不可用", s.termErr)
 	case s.term == nil:
-		restart("终端不可用", "请重新打开终端面板以启动 Shell")
+		restart("终端不可用", "请关闭后重新打开终端面板")
 	case terminalExited(s.term):
-		restart("Shell 已退出", fmt.Sprintf("退出码 %d", s.term.ExitCode()))
+		restart("终端已退出", fmt.Sprintf("退出码 %d", s.term.ExitCode()))
 	default:
 		ui.Box(c).Grow(1).MinHeight(0).Background(canvas).Padding(6, 4, 4, 8).Children(func() {
-			terminal.View(c, s.term).Fill().AutoFocus()
+			// Keep the terminal distinct from the loading state's children so
+			// AutoFocus runs when the asynchronously created terminal appears.
+			terminal.View(c.Key("terminal"), s.term).Fill().AutoFocus()
 		})
 	}
 }

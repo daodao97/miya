@@ -60,10 +60,10 @@ type ResetAttempt struct {
 
 func NewResetAttempt(r Reading) (ResetAttempt, error) {
 	if r.Agent != "codex" || r.Resets == nil || r.Resets.Count <= 0 {
-		return ResetAttempt{}, errors.New("当前账户没有可用重置卡，请先刷新")
+		return ResetAttempt{}, errors.New("当前账号没有可用重置卡，请先刷新")
 	}
 	if r.AccountKey == "" || r.Home == "" {
-		return ResetAttempt{}, errors.New("CLI 未提供账户标识，请更新 Codex 后刷新")
+		return ResetAttempt{}, errors.New("CLI 未提供账号标识，请更新 Codex 后刷新")
 	}
 	var b [16]byte
 	if _, err := rand.Read(b[:]); err != nil {
@@ -102,7 +102,7 @@ func UseCodexReset(ctx context.Context, attempt ResetAttempt) (ResetResult, erro
 
 func useCodexReset(ctx context.Context, binary, home string, attempt ResetAttempt) (ResetResult, error) {
 	if attempt.Key == "" || attempt.AccountKey == "" || attempt.Home != home {
-		return ResetResult{}, errors.New("用卡操作缺少账户确认，请刷新后重试")
+		return ResetResult{}, errors.New("用卡操作缺少账号确认，请刷新后重试")
 	}
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
@@ -113,7 +113,7 @@ func useCodexReset(ctx context.Context, binary, home string, attempt ResetAttemp
 			return err
 		}
 		if current.AccountKey != attempt.AccountKey {
-			return errors.New("Codex 登录账户已变化，未使用重置卡；请刷新后重新确认")
+			return errors.New("Codex 登录账号已变化，未使用重置卡；请刷新后重新确认")
 		}
 		params := map[string]string{"idempotencyKey": attempt.Key}
 		if attempt.CreditID != "" {

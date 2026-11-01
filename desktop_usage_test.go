@@ -84,7 +84,7 @@ func TestUsagePanelScrollKeepsControlsAvailable(t *testing.T) {
 	assertUsageControls(t, tt, app.usage.height())
 	saveUsageImage(t, tt, "usage-scrolled")
 	r.Windows = nil
-	r.Error = strings.Repeat("本机账户尚未登录，请先在 CLI 登录后刷新。", 12)
+	r.Error = strings.Repeat("本机账号尚未登录，请先在 CLI 登录后刷新。", 12)
 	tt.SetSize(usagePanelWidth, app.usage.height())
 	tt.Scroll(160, 100, 0, 500)
 	assertUsageControls(t, tt, app.usage.height())

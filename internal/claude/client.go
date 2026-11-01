@@ -36,7 +36,13 @@ type Options struct {
 	Args, Env                                             []string
 }
 type Frame struct {
-	Type string `json:"type"`
+	Type           string          `json:"type"`
+	ToolUseResult  json.RawMessage `json:"tool_use_result"`
+	CommandState   string          `json:"state"`
+	WakeupSource   string          `json:"wakeup_source"`
+	SchedulesKnown bool            `json:"-"`
+	Schedules      []ScheduledTask `json:"-"`
+	KeepingAlive   bool            `json:"-"`
 	// Model is the model a system init frame reports.
 	Model     string `json:"model"`
 	Subtype   string `json:"subtype"`
@@ -57,13 +63,10 @@ type Frame struct {
 		Error     string `json:"error"`
 	} `json:"response"`
 	Event   json.RawMessage `json:"event"`
-	Message struct {
-		ID      string  `json:"id"`
-		Content []Block `json:"content"`
-	} `json:"message"`
-	Result  string   `json:"result"`
-	IsError bool     `json:"is_error"`
-	Errors  []string `json:"errors"`
+	Message Message         `json:"message"`
+	Result  string          `json:"result"`
+	IsError bool            `json:"is_error"`
+	Errors  []string        `json:"errors"`
 	// Task frames (system task_started, task_progress, task_updated and
 	// task_notification) report a sub-agent's state.
 	TaskID      string          `json:"task_id"`
@@ -74,6 +77,44 @@ type Frame struct {
 	Usage       json.RawMessage `json:"usage"`
 	Patch       json.RawMessage `json:"patch"`
 }
+
+// Message is a frame's message. Claude Code mostly sends an object whose
+// content is a block list, but some frames carry a plain string message, and
+// user messages may carry a plain string content; both decode to text blocks.
+type Message struct {
+	ID      string  `json:"id"`
+	Content []Block `json:"content"`
+}
+
+func (m *Message) UnmarshalJSON(b []byte) error {
+	*m = Message{}
+	var s string
+	if json.Unmarshal(b, &s) == nil {
+		if s != "" {
+			m.Content = []Block{{Type: "text", Text: s}}
+		}
+		return nil
+	}
+	var raw struct {
+		ID      string          `json:"id"`
+		Content json.RawMessage `json:"content"`
+	}
+	if err := json.Unmarshal(b, &raw); err != nil {
+		return err
+	}
+	m.ID = raw.ID
+	if len(raw.Content) == 0 || string(raw.Content) == "null" {
+		return nil
+	}
+	if json.Unmarshal(raw.Content, &s) == nil {
+		if s != "" {
+			m.Content = []Block{{Type: "text", Text: s}}
+		}
+		return nil
+	}
+	return json.Unmarshal(raw.Content, &m.Content)
+}
+
 type Block struct {
 	Type, ID, Name, Text string
 	Input                json.RawMessage `json:"input"`
@@ -85,10 +126,15 @@ type Client struct {
 	mu sync.Mutex
 	// open is true while the turn takes more user messages: after the
 	// first is written, until the result or the process ends.
-	open   bool
-	in     io.WriteCloser
-	cancel context.CancelFunc
-	done   chan struct{}
+	open                          bool
+	idle                          bool
+	stopping                      bool
+	model, effort, permissionMode string
+	controls                      map[string]chan error
+	nextControl                   int
+	in                            io.WriteCloser
+	cancel                        context.CancelFunc
+	done                          chan struct{}
 }
 
 func (c *Client) Write(v any) error {
@@ -103,8 +149,77 @@ var ErrNotSteerable = errors.New("Claude Code 当前回合不接受追加消息"
 func (c *Client) closeInput() {
 	c.mu.Lock()
 	c.open = false
+	c.idle = false
 	c.in.Close()
 	c.mu.Unlock()
+}
+
+// Send reuses an idle process that owns native schedules. Starting a new
+// process for this turn would discard session-only /loop jobs.
+func (c *Client) Send(sessionID string, content []map[string]any) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if (!c.idle && !c.open) || c.stopping {
+		return ErrNotSteerable
+	}
+	if err := json.NewEncoder(c.in).Encode(map[string]any{"type": "user", "session_id": sessionID, "parent_tool_use_id": nil, "message": map[string]any{"role": "user", "content": content}}); err != nil {
+		return err
+	}
+	c.idle, c.open = false, true
+	return nil
+}
+
+// SendWithOptions applies supported native controls before reusing a session.
+// Effort is a launch setting in stream-json; refuse a change rather than
+// silently running with the old value or discarding live session schedules.
+func (c *Client) SendWithOptions(ctx context.Context, o Options) error {
+	c.mu.Lock()
+	model, mode, effort := c.model, c.permissionMode, c.effort
+	c.mu.Unlock()
+	if effort != o.Effort {
+		return errors.New("请先停止循环，再更改推理强度并重新启动循环")
+	}
+	if mode != o.PermissionMode {
+		if err := c.control(ctx, map[string]any{"subtype": "set_permission_mode", "mode": o.PermissionMode}); err != nil {
+			return err
+		}
+		c.mu.Lock()
+		c.permissionMode = o.PermissionMode
+		c.mu.Unlock()
+	}
+	if model != o.Model {
+		if err := c.control(ctx, map[string]any{"subtype": "set_model", "model": o.Model}); err != nil {
+			return err
+		}
+		c.mu.Lock()
+		c.model = o.Model
+		c.mu.Unlock()
+	}
+	return c.Send(o.SessionID, o.Content)
+}
+
+func (c *Client) control(ctx context.Context, request map[string]any) error {
+	c.mu.Lock()
+	c.nextControl++
+	id := fmt.Sprintf("settings-%d", c.nextControl)
+	reply := make(chan error, 1)
+	if c.controls == nil {
+		c.controls = map[string]chan error{}
+	}
+	c.controls[id] = reply
+	c.mu.Unlock()
+	defer func() { c.mu.Lock(); delete(c.controls, id); c.mu.Unlock() }()
+	if err := c.Write(map[string]any{"type": "control_request", "request_id": id, "request": request}); err != nil {
+		return err
+	}
+	select {
+	case err := <-reply:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-c.done:
+		return errors.New("Claude Code 会话已退出")
+	}
 }
 
 // Steerable reports whether Steer would be written to the running turn.
@@ -129,6 +244,9 @@ func (c *Client) Reply(id string, response any) error {
 	return c.Write(map[string]any{"type": "control_response", "response": map[string]any{"subtype": "success", "request_id": id, "response": response}})
 }
 func (c *Client) Stop() {
+	c.mu.Lock()
+	c.stopping, c.idle, c.open = true, false, false
+	c.mu.Unlock()
 	_ = c.Write(map[string]any{"type": "control_request", "request_id": "interrupt", "request": map[string]any{"subtype": "interrupt"}})
 	go func() {
 		select {
@@ -187,7 +305,7 @@ func Start(parent context.Context, o Options, onFrame func(Frame), onDone func(e
 		cancel()
 		return nil, err
 	}
-	c := &Client{in: in, cancel: cancel, done: make(chan struct{})}
+	c := &Client{in: in, cancel: cancel, done: make(chan struct{}), model: o.Model, effort: o.Effort, permissionMode: o.PermissionMode}
 	if err = c.Write(map[string]any{"type": "control_request", "request_id": "initialize", "request": map[string]any{"subtype": "initialize", "hooks": map[string]any{}}}); err != nil {
 		cancel()
 	}
@@ -198,6 +316,7 @@ func Start(parent context.Context, o Options, onFrame func(Frame), onDone func(e
 		scanner := bufio.NewScanner(out)
 		scanner.Buffer(make([]byte, 65536), 16*1024*1024)
 		initialized, finished := false, false
+		var schedules scheduleTracker
 		var runErr error
 		timer := time.AfterFunc(30*time.Second, func() { c.cancel() })
 		defer timer.Stop()
@@ -207,6 +326,22 @@ func Start(parent context.Context, o Options, onFrame func(Frame), onDone func(e
 				runErr = fmt.Errorf("Claude Code 协议解析失败: %w", e)
 				cancel()
 				break
+			}
+			if f.Type == "control_response" && f.Response.RequestID != "initialize" {
+				c.mu.Lock()
+				reply := c.controls[f.Response.RequestID]
+				c.mu.Unlock()
+				if reply != nil {
+					var err error
+					if f.Response.Subtype == "error" {
+						err = errors.New(f.Response.Error)
+					}
+					select {
+					case reply <- err:
+					default:
+					}
+					continue
+				}
 			}
 			if f.Type == "control_response" && f.Response.RequestID == "initialize" {
 				if f.Response.Subtype == "error" {
@@ -226,13 +361,26 @@ func Start(parent context.Context, o Options, onFrame func(Frame), onDone func(e
 				c.mu.Unlock()
 				continue
 			}
-			onFrame(f)
+			schedules.apply(&f)
+			if f.Type == "command_lifecycle" && f.CommandState == "started" {
+				c.mu.Lock()
+				c.open, c.idle = true, false
+				c.mu.Unlock()
+			}
 			if f.Type == "result" {
 				finished = true
-				c.closeInput()
-				// Allow Claude to flush its session before reaping background services.
-				timer.Reset(5 * time.Second)
+				c.mu.Lock()
+				keep := schedules.active() && !c.stopping && !f.IsError
+				f.KeepingAlive = keep
+				c.open, c.idle = false, keep
+				c.mu.Unlock()
+				if !keep {
+					c.closeInput()
+					// Allow Claude to flush its session before reaping background services.
+					timer.Reset(5 * time.Second)
+				}
 			}
+			onFrame(f)
 		}
 		if e := scanner.Err(); e != nil && runErr == nil {
 			runErr = e

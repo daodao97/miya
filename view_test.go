@@ -160,7 +160,7 @@ func TestQuestionNeedsEveryAnswer(t *testing.T) {
 	if len(app.c.approvals()) != 1 {
 		t.Fatal("submitted without an answer")
 	}
-	if err := tt.Click("Blue — calm"); err != nil {
+	if err := tt.Click("Blue · calm"); err != nil {
 		t.Fatal(err)
 	}
 	if err := tt.Click("Submit answers"); err != nil {
@@ -234,10 +234,10 @@ func TestSettingsGeneralAndAccount(t *testing.T) {
 	if err := tt.Click("Settings"); err != nil {
 		t.Fatal(err)
 	}
-	if !tt.HasText("Interface language") || !tt.HasText("完全访问权限") {
+	if !tt.HasText("Interface language") || !tt.HasText("完全访问") {
 		t.Fatalf("general settings missing: %q", tt.Texts())
 	}
-	if err := tt.Click("完全访问权限"); err != nil {
+	if err := tt.Click("完全访问"); err != nil {
 		t.Fatal(err)
 	}
 	if app.c.permissionPolicy() != "never" {

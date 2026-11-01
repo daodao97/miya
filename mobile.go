@@ -55,6 +55,7 @@ type mobileApp struct {
 	loaded     bool
 	link, host string
 	state      phoneState
+	autos      mobileAutomations
 	// selected filters the home page by project; empty shows all projects.
 	selected         string
 	menu             bool
@@ -209,6 +210,11 @@ func newMobileApp() *mobileApp {
 		LoadImage: func(src string) (ui.ImageSource, error) { return loadImage(imageSourcePath(src)) },
 	}
 	m.view.imagePreview = m.messageImage
+	m.view.onRetry = func(req retryRequest) {
+		r := m.threadRequest("retry", req.ThreadID)
+		r.MessageID = req.MessageID
+		m.sendPhoneAction(r)
+	}
 	m.view.referenceThread = func(id int) (Thread, bool) {
 		t, _ := m.find(id)
 		return t, t.ID == id && id != 0
@@ -320,6 +326,7 @@ func (m *mobileApp) connect(link string) {
 	m.previewPaths = nil
 	if link != m.link {
 		m.state, m.host, m.selected = phoneState{}, "", ""
+		m.autos = mobileAutomations{}
 		m.home()
 	}
 	m.link, m.err, m.status = link, "", "正在连接桌面端…"
@@ -349,6 +356,7 @@ func (m *mobileApp) disconnect() {
 		go conn.Close()
 	}
 	m.conn, m.connected = nil, false
+	m.autos.loading = false
 	if m.sending {
 		m.sending, m.sendErr = false, "连接已断开，消息可能没有发出"
 	}
@@ -361,6 +369,7 @@ func (m *mobileApp) forget() {
 	m.syncPush()
 	m.disconnect()
 	m.link, m.host, m.state, m.status, m.err, m.menu = "", "", phoneState{}, "", "", false
+	m.autos = mobileAutomations{}
 	m.home()
 	m.previewPaths = nil
 	m.dropDiskCache()
@@ -434,6 +443,7 @@ func (m *mobileApp) read(gen int, conn *remote.Conn) (greeted bool, err error) {
 			m.onMain(gen, func() {
 				m.host, m.connected, m.status, m.err = host, true, "", ""
 				m.conn = conn
+				m.autos.loading, m.autos.requestedAt = false, time.Time{}
 				if m.filesProxy != nil {
 					m.filesProxy.setConn(conn)
 				}
@@ -448,6 +458,9 @@ func (m *mobileApp) read(gen int, conn *remote.Conn) (greeted bool, err error) {
 					go store.Set("desktop-link", []byte(link))
 				}
 			})
+		case "automations":
+			data, message := f.Data, f.Error
+			m.onMain(gen, func() { m.receiveAutomations(data, message) })
 		case "action":
 			message := f.Error
 			m.onMain(gen, func() {
@@ -820,11 +833,11 @@ func scanError(err error) string {
 	case errors.Is(err, mygo.ErrScanCanceled):
 		return ""
 	case errors.Is(err, mygo.ErrUnsupported):
-		return "请在 iPhone 上扫码，或粘贴桌面连接码"
+		return "请在 iPhone 上扫码，或粘贴桌面端连接码"
 	case errors.Is(err, mygo.ErrCameraDenied):
 		return "请在系统设置中允许 Miya 使用相机，或粘贴连接码"
 	case errors.Is(err, mygo.ErrCameraUnavailable):
-		return "相机不可用，请粘贴桌面连接码"
+		return "相机不可用，请粘贴桌面端连接码"
 	}
 	return "暂时无法打开相机"
 }
@@ -884,6 +897,8 @@ func (m *mobileApp) viewRoot(c *ui.Context) {
 					m.threadView(c)
 				case "/settings":
 					m.settingsView(c)
+				case "/automations", "/automation":
+					m.automationsPage(c, page.Path() == "/automation")
 				case "/options":
 					m.optionsView(c)
 				case "/approval":
@@ -939,7 +954,7 @@ func (m *mobileApp) pairView(c *ui.Context) {
 			icon(c, "terminal-2", 30, p.ink)
 		})
 		ui.Text(c, "连接 Miya 桌面端").FontSize(m.font(26)).FontWeight(700).Margin(10, 0, 0, 0)
-		ui.Text(c, "在电脑上打开 Miya，进入「设置 → Phone」开启手机连接，然后扫描二维码。连接后可以查看会话、继续对话和处理审批。").FontSize(m.font(15)).TextColor(p.muted).LineHeight(1.5)
+		ui.Text(c, "打开 Miya 桌面端，进入「设置 → Phone」开启手机连接，再扫描二维码。").FontSize(m.font(15)).TextColor(p.muted).LineHeight(1.5)
 		scan := m.phoneButton(c.Key("scan")).FillWidth().MinHeight(52).Radius(16).Background(p.ink).Justify(ui.Center).Gap(8).Label("扫码连接")
 		scan.Children(func() {
 			if m.scanning {
@@ -951,7 +966,7 @@ func (m *mobileApp) pairView(c *ui.Context) {
 			m.scan()
 		}
 		ui.Row(c).FillWidth().MinHeight(52).Padding(0, 6, 0, 16).Gap(8).AlignItems(ui.Center).Background(p.surface).Radius(16).Children(func() {
-			input := ui.TextInput(c.Key("paste"), &m.paste).Label("桌面连接码").Placeholder("或粘贴连接码").Grow(1).MinWidth(0).Background(p.surface).Border(0, p.surface).
+			input := ui.TextInput(c.Key("paste"), &m.paste).Label("桌面端连接码").Placeholder("或粘贴连接码").Grow(1).MinWidth(0).Background(p.surface).Border(0, p.surface).
 				InputOptions(ui.InputOptions{Keyboard: ui.KeyboardASCII, Correction: ui.CorrectionOff, Capitalization: ui.CapitalizeNone, Return: ui.ReturnGo})
 			m.pairInput.restore(input)
 			if m.pill(c, "paste-code", "粘贴", false).KeepFocus().Clicked() {
@@ -970,7 +985,7 @@ func (m *mobileApp) pairView(c *ui.Context) {
 func (m *mobileApp) listView(c *ui.Context) {
 	p := m.pal
 	ui.Row(c).FillWidth().MinHeight(52).Padding(0, 12).Gap(12).AlignItems(ui.Center).Children(func() {
-		if m.homeAction(c, "menu", "桌面连接", "layout-sidebar").Clicked() {
+		if m.homeAction(c, "menu", "桌面端连接", "layout-sidebar").Clicked() {
 			m.menu = !m.drawerVisible
 		}
 		ui.Column(c).Grow(1).MinWidth(0).AlignItems(ui.Center).Gap(3).Children(func() {
@@ -991,11 +1006,7 @@ func (m *mobileApp) listView(c *ui.Context) {
 				ui.Text(c, strings.TrimSuffix(label, ".local")).FontSize(m.font(11)).TextColor(p.muted).SingleLine().Ellipsis("…")
 			})
 		})
-		if m.homeAction(c, "files", "项目文件", "folder").Disabled(!m.connected || m.selectedProject().Path == "").Clicked() {
-			m.menu = false
-			m.openProjectFiles(m.selectedProject().Path)
-		}
-		if m.homeAction(c, "new-conversation", "新会话", "edit").Disabled(m.selectedProject().Path == "").Clicked() {
+		if m.homeAction(c, "new-conversation", "新建对话", "edit").Clicked() {
 			m.startConversation(m.selectedProject().Path, m.composerAgent())
 		}
 	})
@@ -1149,16 +1160,26 @@ func (m *mobileApp) drawerContent(c *ui.Context) {
 	}
 	m.drawerQuotas(c.Key("drawer-quotas"))
 
-	ui.Text(c, "项目").FontSize(m.font(13)).FontWeight(500).TextColor(p.muted).Margin(6, 6, 0, 6)
 	ui.Scroll(c.Key("drawer-projects")).FillWidth().Grow(1).MinHeight(0).Children(func() {
 		ui.Column(c).FillWidth().Gap(2).Children(func() {
-			all := m.phoneButton(c.Key("all-projects")).FillWidth().MinHeight(44).Padding(0, 12).Gap(12).Radius(12).Label("全部会话")
+			automations := m.phoneButton(c.Key("automations")).FillWidth().MinHeight(44).Padding(0, 12).Gap(12).Radius(12).Label("自动化")
+			automations.Children(func() {
+				icon(c, "clock", 18, p.muted)
+				ui.Text(c, "自动化").FontSize(m.font(15))
+			})
+			if automations.Clicked() {
+				m.menu = false
+				m.autos.requestedAt = time.Time{}
+				m.router().Push("/automations")
+			}
+			ui.Text(c, "项目").FontSize(m.font(13)).FontWeight(500).TextColor(p.muted).Margin(12, 6, 6, 6)
+			all := m.phoneButton(c.Key("all-projects")).FillWidth().MinHeight(44).Padding(0, 12).Gap(12).Radius(12).Label("全部对话")
 			if m.selected == "" {
 				all.Background(p.surface)
 			}
 			all.Children(func() {
 				icon(c, "stack-2", 18, p.muted)
-				ui.Text(c, "全部会话").FontSize(m.font(15))
+				ui.Text(c, "全部对话").FontSize(m.font(15))
 			})
 			if all.Clicked() {
 				m.showProject("")
@@ -1173,7 +1194,7 @@ func (m *mobileApp) drawerContent(c *ui.Context) {
 					icon(c, "folder", 18, p.muted)
 					ui.Text(c, pr.Name).FontSize(m.font(15)).Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
 					if pr.Current {
-						ui.Text(c, "桌面当前").FontSize(m.font(11)).TextColor(p.muted)
+						ui.Text(c, "桌面端当前").FontSize(m.font(11)).TextColor(p.muted)
 					}
 					busy := 0
 					for _, t := range pr.Threads {
@@ -1198,7 +1219,7 @@ func (m *mobileApp) drawerContent(c *ui.Context) {
 			m.menu = false
 			m.connect(m.link)
 		}
-		if m.pill(c, "forget", "更换桌面", false).Grow(1).Clicked() {
+		if m.pill(c, "forget", "更换桌面端", false).Grow(1).Clicked() {
 			m.forget()
 		}
 	})
@@ -1246,13 +1267,13 @@ func (m *mobileApp) threadView(c *ui.Context) {
 		agent = listed.Agent
 	}
 	if m.open == 0 {
-		title, agent, busy, proj = "新会话", m.newAgent, false, m.project(m.newProject)
+		title, agent, busy, proj = "新对话", m.newAgent, false, m.project(m.newProject)
 	}
 	if agent == "" {
 		agent = agentCodex
 	}
 	if title == "" {
-		title = "会话"
+		title = "对话"
 	}
 	ui.Row(c).FillWidth().MinHeight(64).Padding(0, 12).Gap(8).AlignItems(ui.Center).Children(func() {
 		if m.circle(c, "back", "返回", func() { icon(c, "arrow-left", 20, p.ink) }).Clicked() {
@@ -1269,12 +1290,8 @@ func (m *mobileApp) threadView(c *ui.Context) {
 			}
 			ui.Text(c, sub).FontSize(m.font(12)).TextColor(p.muted).SingleLine().Ellipsis("…")
 		})
-		if m.circle(c, "files", "项目文件", func() { icon(c, "folder", 20, p.ink) }).Disabled(!m.connected || proj.Path == "").Clicked() {
-			m.openProjectFiles(proj.Path)
-		}
-		if m.circle(c, "new", "新会话", func() { icon(c, "edit", 20, p.ink) }).Clicked() {
-			m.startConversation(proj.Path, agent)
-		}
+		more := m.circle(c, "more", "更多", func() { icon(c, "dots", 20, p.ink) })
+		m.conversationActions(more, proj.Path, agent)
 	})
 	ui.Column(c).Grow(1).MinHeight(0).FillWidth().Children(func() {
 		if m.open == 0 {
@@ -1344,6 +1361,7 @@ func (m *mobileApp) composer(c *ui.Context, agent string, busy bool) {
 		m.commandMenu(c, agent, m.composerProject())
 		m.threadMenu(c, m.composerProject())
 		m.queueView(c)
+		m.taskStatus(c)
 		m.thumbnails(c)
 		ui.Column(c.Key("composer-box")).FillWidth().Padding(6, 6, 6, 10).Background(p.surface).Radius(26).Children(func() {
 			opts := m.sendOptions(agent)
@@ -1544,13 +1562,17 @@ func (m *mobileApp) requestCommands(project string) {
 // draft is a slash and a command's beginning.
 func (m *mobileApp) commandMenu(c *ui.Context, agent, project string) {
 	d := m.draft
-	if agent != agentClaude || !strings.HasPrefix(d, "/") || strings.ContainsAny(d, " \n") {
+	if !strings.HasPrefix(d, "/") || strings.ContainsAny(d, " \n") {
 		return
 	}
-	m.requestCommands(project)
 	p := m.pal
 	q := strings.ToLower(d[1:])
 	cmds, known := m.commands[project]
+	if agent == agentClaude {
+		m.requestCommands(project)
+	} else {
+		cmds, known = []composerChoice{{Name: "goal", Detail: "设置目标 · /goal pause · /goal resume · /goal clear"}}, true
+	}
 	var shown []composerChoice
 	for _, cmd := range cmds {
 		if strings.Contains(strings.ToLower(cmd.Name), q) {

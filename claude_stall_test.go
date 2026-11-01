@@ -18,7 +18,7 @@ func TestClaudeEmptyResultExplained(t *testing.T) {
 	c.handleClaude(1, f)
 	msgs := c.threads()[0].Messages
 	last := msgs[len(msgs)-1].Content
-	if !strings.Contains(last, "没有收到模型回复") || !strings.Contains(last, "代理") || !strings.Contains(last, "stop_reason=null") {
+	if !strings.Contains(last, "没有返回回复") || !strings.Contains(last, "代理") || !strings.Contains(last, "stop_reason=null") {
 		t.Fatalf("message %q", last)
 	}
 	// A real error after a reply keeps Claude Code's own words.
@@ -63,7 +63,7 @@ func TestStalledHintShowsInConversation(t *testing.T) {
 	c.setActive(1)
 	tt.Frame()
 	for _, s := range tt.Texts() {
-		if strings.Contains(s, "没有收到回应") {
+		if strings.Contains(s, "未收到回应") {
 			return
 		}
 	}

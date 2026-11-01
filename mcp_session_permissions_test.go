@@ -81,13 +81,13 @@ func TestMCPApplicationAccessCardAllowsForSession(t *testing.T) {
 	a := appAccessRequest()
 	app.c.setApprovals([]codex.Approval{a})
 	tt.Frame()
-	if !tt.HasText("此会话始终允许") || !tt.HasText("允许一次") {
+	if !tt.HasText("此对话始终允许") || !tt.HasText("允许一次") {
 		t.Fatalf("missing choices: %q", tt.Texts())
 	}
 	if tt.HasText("MCP form JSON") || tt.HasText("{}") {
 		t.Fatal("application access showed an empty JSON form")
 	}
-	if err := tt.Click("此会话始终允许"); err != nil {
+	if err := tt.Click("此对话始终允许"); err != nil {
 		t.Fatal(err)
 	}
 	if !app.c.rememberedMCPAccess(a) || len(app.c.approvals()) != 0 {

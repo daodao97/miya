@@ -70,7 +70,7 @@ func (app *chatApp) editMessageView(c *ui.Context, m Message) {
 		if in.Shortcut(0, ui.KeyEscape) {
 			app.editing = 0
 		}
-		ui.Text(c, "将从这条消息重新开始，之后的对话会被替换；已修改的文件不会恢复。").FontSize(11).TextColor(muted)
+		ui.Text(c, "从这条消息重新开始。之后的消息会删除，Miya 不会撤销已经改动的文件。").FontSize(11).TextColor(muted)
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
 			if ui.Button(c.Key("cancel"), "取消").Clicked() {
 				app.editing = 0

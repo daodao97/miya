@@ -34,7 +34,7 @@ func (app *chatApp) queueView(c *ui.Context, t Thread) {
 				}
 				ui.Text(c, text).Grow(1).MinWidth(0).SingleLine().Ellipsis("…").FontSize(12)
 				if t.Busy && !t.Loading {
-					now := quiet(c.Key("steer")).Size(24, 24).PaddingX(4).Justify(ui.Center).Label("立即引导").Tooltip("插入当前回合")
+					now := quiet(c.Key("steer")).Size(24, 24).PaddingX(4).Justify(ui.Center).Label("立即引导").Tooltip("把消息插入当前回合")
 					now.Children(func() { icon(c, "arrow-up", 13, muted) })
 					now.OnClick(func() { app.c.steerQueued(t.ID, q.ID) })
 				}

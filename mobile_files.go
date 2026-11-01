@@ -15,7 +15,7 @@ func (m *mobileApp) openProjectFiles(project string) {
 		return
 	}
 	if !m.state.Files {
-		go mygo.Dialog.Message(mygo.MessageOptions{Parent: m.win, Title: "项目文件", Message: "请先更新电脑端 Miya；有任务运行时，后台将在空闲后自动更新。"})
+		go mygo.Dialog.Message(mygo.MessageOptions{Parent: m.win, Title: "项目文件", Message: "请先更新桌面端 Miya。后台有任务时，会在空闲后自动更新。"})
 		return
 	}
 	proxy, err := newPhoneFileProxy(m.conn, project)

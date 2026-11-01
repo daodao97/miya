@@ -15,6 +15,7 @@ const ProtocolVersion = 4
 //	        metadata, the order of its messages and those that changed.
 //	        Every frame after hello is compressed (Conn.CompressSends).
 //	commands Data is a project's Claude Code slash commands
+//	automations Data is the requested automation list and run history
 //	image   Data is a requested attachment thumbnail
 //	sent    answers a send: Thread took the message, or Error says why not
 //	ping    keeps an idle connection checked
@@ -35,6 +36,7 @@ type Frame struct {
 //	           Project when Thread is 0
 //	stop       stop Thread's running turn
 //	commands   send the Claude Code commands of Project
+//	automations send the automation list and run history (read-only)
 //	respond    answer the approval whose ID is Approval, allowing it or not
 //
 // SendOptions are explicit per-message settings chosen on the phone.
@@ -52,6 +54,7 @@ type Request struct {
 	Options         *SendOptions    `json:"options,omitempty"`
 	Steer           bool            `json:"steer,omitempty"`
 	QueuedID        int             `json:"queuedId,omitempty"`
+	MessageID       int             `json:"messageId,omitempty"`
 	Result          json.RawMessage `json:"result,omitempty"`
 	Remember        bool            `json:"remember,omitempty"`
 	ReadVersion     uint64          `json:"readVersion,omitempty"`

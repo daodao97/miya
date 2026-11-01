@@ -16,7 +16,7 @@ func (m *mobileApp) setupPush() {
 	})
 	mygo.App.OnPushRegistrationError(func(err error) {
 		log.Printf("miya: APNs registration failed: %v", err)
-		m.pushError = "无法注册通知，请检查签名和系统通知设置"
+		m.pushError = "无法注册通知，请检查系统通知设置"
 		invalidate()
 	})
 	mygo.App.SetNotificationPresentationHandler(func(e mygo.NotificationEvent) mygo.NotificationPresentation {

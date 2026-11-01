@@ -102,6 +102,11 @@ type svcThreadValue struct {
 	Value  string `json:"value"`
 }
 
+type svcTaskAction struct {
+	Thread       int
+	Task, Action string
+}
+
 type svcRespond struct {
 	Remember bool            `json:"remember,omitempty"`
 	ID       json.RawMessage `json:"id"`

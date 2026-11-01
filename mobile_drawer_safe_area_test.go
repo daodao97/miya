@@ -35,7 +35,7 @@ func TestMobileDrawerBackgroundCoversSafeArea(t *testing.T) {
 					}
 				}
 				checkClosed()
-				if header, ok := tt.Find("桌面连接"); !ok || header.Y < safe.Top || header.X < safe.Left {
+				if header, ok := tt.Find("桌面端连接"); !ok || header.Y < safe.Top || header.X < safe.Left {
 					t.Fatalf("home controls entered unsafe area: %v", header)
 				}
 				m.menu = true
@@ -47,7 +47,13 @@ func TestMobileDrawerBackgroundCoversSafeArea(t *testing.T) {
 					}
 					drawer := m.pal.drawer
 					wantDrawer := color.RGBA{R: drawer.R, G: drawer.G, B: drawer.B, A: 255}
-					for _, y := range []int{5, height / 2, height - 5} {
+					// While sliding, navigation rows can pass through the
+					// left edge; check that edge's middle once settled.
+					samples := []int{5, height - 5}
+					if phase == "open" {
+						samples = append(samples, height/2)
+					}
+					for _, y := range samples {
 						if got := tt.Image().RGBAAt(5, y); got != wantDrawer {
 							t.Fatalf("%s drawer background stops at safe area y=%d: %v want %v", phase, y, got, wantDrawer)
 						}
@@ -62,7 +68,7 @@ func TestMobileDrawerBackgroundCoversSafeArea(t *testing.T) {
 					}
 					saveMobileNativeSnapshot(t, tt, fmt.Sprintf("drawer-%s-dark-%v-landscape-%v", phase, dark, landscape))
 				}
-				if button, ok := tt.Find("更换桌面"); !ok || button.Y < safe.Top || button.Y+button.H > float32(height)-safe.Bottom || button.X < safe.Left {
+				if button, ok := tt.Find("更换桌面端"); !ok || button.Y < safe.Top || button.Y+button.H > float32(height)-safe.Bottom || button.X < safe.Left {
 					t.Fatalf("drawer controls entered unsafe area: %v", button)
 				}
 				m.menu = false

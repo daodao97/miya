@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
@@ -91,7 +92,7 @@ func (c *chatController) loadClaudeHistory(t Thread) {
 				t.Loading = false
 				t.HistoryLoaded = true
 				if err != nil {
-					t.Status = "本地记录不可用；发送消息可继续 Claude Code 会话。"
+					t.Status = "本地记录不可用。发送消息可继续此对话。"
 					return
 				}
 				t.Messages = stored.Messages
@@ -134,10 +135,11 @@ func (c *chatController) sendClaude(req sendRequest) int {
 		if req.Project != "" {
 			cwd = req.Project
 		}
-		t = Thread{ID: c.nextID(), Agent: agentClaude, PermissionPolicy: policy, ServerID: newClaudeSessionID(), Title: conversationTitle("", text, ""), Project: filepath.Base(cwd), Loaded: true, HistoryLoaded: true}
+		t = Thread{ID: c.nextID(), Agent: agentClaude, PermissionPolicy: policy, ServerID: newClaudeSessionID(), Title: conversationTitle("", claudePromptTitle(text), ""), Project: filepath.Base(cwd), Loaded: true, HistoryLoaded: true}
 		c.addThread(cwd, t)
 	}
 	id := t.ID
+	pendingUserID := c.nextID()
 	now := time.Now().UnixMilli()
 	c.update(id, func(t *Thread) {
 		t.Busy = true
@@ -147,15 +149,53 @@ func (c *chatController) sendClaude(req sendRequest) int {
 		t.LastActivityAt = now
 		t.Status = "Claude Code 正在运行…"
 		shown, images := attachmentDisplay(text, paths)
-		t.Messages = append(t.Messages, Message{ID: c.nextID(), Role: "user", Content: shown, Images: images, SentAtMs: now})
+		t.Messages = append(t.Messages, Message{ID: pendingUserID, Role: "user", Content: shown, Images: images, SentAtMs: now})
+		name, _, _ := strings.Cut(text, " ")
+		if name == "/loop" || name == "/proactive" {
+			setThreadTask(t, ThreadTask{ID: "loop:pending", Kind: "loop", Title: strings.TrimSpace(strings.TrimPrefix(text, name)), Status: "starting"})
+		}
 	})
 	if c.claudeRuns == nil {
 		c.claudeRuns = map[int]*claude.Client{}
 	}
+	existing := c.claudeRuns[id]
+	reject := func(err error) {
+		c.dispatch(func() {
+			if existing == nil {
+				c.finishClaude(id, cwd, err)
+				return
+			}
+			c.update(id, func(t *Thread) {
+				t.Busy, t.TaskStopping = existing.Steerable(), false
+				t.Status = err.Error()
+				for i, m := range t.Messages {
+					if m.ID == pendingUserID {
+						t.Messages = append(t.Messages[:i:i], t.Messages[i+1:]...)
+						break
+					}
+				}
+				t.Messages = append(t.Messages, Message{ID: c.nextID(), Role: "error", Content: err.Error()})
+			})
+			c.returnDraft(id, text, paths)
+		})
+	}
 	go func() {
 		content, err := claudeInput(text, paths)
 		if err != nil {
-			c.dispatch(func() { c.finishClaude(id, cwd, err) })
+			reject(err)
+			return
+		}
+		if existing != nil {
+			ctx, cancel := context.WithTimeout(c.parentContext(), 10*time.Second)
+			defer cancel()
+			if req.KeepSessionSettings {
+				err = existing.Send(t.ServerID, content)
+			} else {
+				err = existing.SendWithOptions(ctx, claude.Options{SessionID: t.ServerID, Content: content, Model: req.Model, Effort: req.Effort, PermissionMode: claudePermissionMode(policy)})
+			}
+			if err != nil {
+				reject(err)
+			}
 			return
 		}
 		run, err := claude.Start(c.ctx, claude.Options{Binary: c.claudeBinary, Args: append(append([]string(nil), c.claudeArgs...), claudeMCPArgs(cwd)...), Env: append(append([]string(nil), c.claudeEnv...), claudeMCPEnv()...), Cwd: cwd, SessionID: t.ServerID, Resume: t.Resumed, PermissionMode: claudePermissionMode(policy), Model: req.Model, Effort: req.Effort, Content: content}, func(f claude.Frame) {
@@ -217,7 +257,15 @@ func (c *chatController) finishClaude(id int, cwd string, err error) {
 	}
 	c.update(id, func(t *Thread) {
 		t.Busy = false
+		t.TaskStopping = false
 		t.CompletedAtMs = time.Now().UnixMilli()
+		state := "interrupted"
+		if t.StopRequested {
+			state = "stopped"
+		} else if err != nil {
+			state = "failed"
+		}
+		stopClaudeTasks(t, state)
 		t.Status = ""
 		if t.StopRequested {
 			t.Status = "Stopped"
@@ -290,6 +338,14 @@ func (c *chatController) handleClaude(id int, f claude.Frame) {
 	}
 	c.update(id, func(t *Thread) {
 		t.LastOutputAtMs = time.Now().UnixMilli()
+		if f.SchedulesKnown {
+			applyClaudeSchedules(t, f.Schedules)
+		}
+		if f.Type == "command_lifecycle" && f.CommandState == "started" {
+			t.Busy, t.StopRequested = true, false
+			t.StartedAtMs, t.CompletedAtMs = time.Now().UnixMilli(), 0
+			t.Status = "Claude Code 正在运行…"
+		}
 		if f.SessionID != "" {
 			t.ServerID = f.SessionID
 			t.Resumed = true
@@ -361,6 +417,16 @@ func (c *chatController) handleClaude(id int, f claude.Frame) {
 				}
 			}
 		case "result":
+			t.TaskStopping = false
+			if f.IsError {
+				stopClaudeTasks(t, "failed")
+			}
+			if f.KeepingAlive {
+				t.Busy = false
+				t.CompletedAtMs = time.Now().UnixMilli()
+				t.Status = ""
+				saveClaudeHistory(*t)
+			}
 			if f.IsError {
 				message := strings.Join(f.Errors, "\n")
 				if message == "" {
@@ -451,9 +517,9 @@ func claudeErrorMessage(message string, hadOutput, customCommand bool) string {
 	if hadOutput && !strings.Contains(message, "ede_diagnostic") {
 		return message
 	}
-	hint := "没有收到模型回复（Claude Code 返回了空结果）。请检查网络和 Claude Code 的登录状态后重试。"
+	hint := "Claude Code 没有返回回复。请检查网络和登录状态后重试。"
 	if customCommand {
-		hint = "没有收到模型回复（Claude Code 返回了空结果）。当前使用自定义启动命令，请检查其中的代理或 API 设置（设置 → 常规），或清空启动命令后重试。"
+		hint = "Claude Code 没有返回回复。请在「设置 → 常规」中检查自定义启动命令的代理或 API 设置，或清空启动命令后重试。"
 	}
 	return hint + "\n\n原始信息：" + message
 }
@@ -475,7 +541,7 @@ func stalledHint(t Thread, waitingForUser bool, now time.Time) string {
 	if quiet < claudeStallAfter {
 		return ""
 	}
-	return fmt.Sprintf("已 %s 没有收到回应，可能是网络或代理问题，可以停止后重试", formatElapsed(quiet.Milliseconds()))
+	return fmt.Sprintf("已 %s 未收到回应。可能是网络或代理问题，可停止后重试", formatElapsed(quiet.Milliseconds()))
 }
 
 // claudeTextKey is the message a complete text block of a reply fills in.

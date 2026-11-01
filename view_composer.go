@@ -38,12 +38,13 @@ func (app *chatApp) composerArea(c *ui.Context) {
 				}
 			})
 			app.queueView(c, cur)
+			app.taskStatus(c, cur)
 			if cur.ReadOnly {
 				ui.Row(c).AlignItems(ui.Center).Padding(18).Gap(12).Border(1, line).Radius(16).Children(func() {
 					icon(c, "lock", 18, muted)
 					ui.Column(c).Grow(1).Gap(4).Children(func() {
 						ui.Text(c, "已在另一个应用中打开").FontWeight(600)
-						mutedText(c, "请先在那边关闭会话，才能在这里继续。")
+						mutedText(c, "请先在那边关闭对话，才能在这里继续。")
 					})
 					if quiet(c.Key("retry-readonly")).Disabled(cur.Loading).Children(func() { ui.Text(c, "重试") }).Clicked() {
 						cc.resume(cur, nil)
@@ -107,9 +108,9 @@ func (app *chatApp) composerBox(c *ui.Context) {
 			case cur.Busy:
 				label = "加入队列"
 			}
-			disabled := cur.ReadOnly || !cc.backendReady() || (!cur.Busy && (cur.Loading || !hasDraft))
+			disabled := cur.ReadOnly || cur.TaskPending || !cc.backendReady() || (!cur.Busy && (cur.Loading || !hasDraft))
 			if cur.Busy && hasDraft {
-				q := quiet(c.Key("steer-draft")).Label("立即引导").Tooltip("插入当前回合（⌘Enter）")
+				q := quiet(c.Key("steer-draft")).Label("立即引导").Tooltip("把消息插入当前回合 · ⌘Enter")
 				q.Children(func() {
 					icon(c, "arrow-up", 14, muted)
 					ui.Text(c, "立即引导")
@@ -285,7 +286,7 @@ func (app *chatApp) composerInput(c *ui.Context) {
 	m := &app.complete
 	placeholder := "输入消息… / 命令 · @ 文件"
 	if cur.Busy {
-		placeholder = "回复进行中：Enter 加入队列，⌘Enter 立即引导"
+		placeholder = "Enter 加入队列，⌘Enter 立即引导"
 	}
 	label := "Message " + cc.currentBackend().Name()
 	ui.Column(c).FillWidth().MinWidth(0).Gap(4).Children(func() {
@@ -499,7 +500,7 @@ func (app *chatApp) permissionsPicker(c *ui.Context) {
 	ui.PopoverBase(c, b, &app.permissionsOpen, func(p ui.Element) {
 		p.AttachTo(b, ui.AnchorTopRight, ui.AnchorBottomRight).Margin(0, 0, 10, 0).
 			Width(390).Padding(16).Gap(10).Background(canvas).Border(1, border).Radius(12).Shadow(0, 8, 24, 0, shadow)
-		title := cc.currentBackend().Name() + " 应如何工作？"
+		title := cc.currentBackend().Name() + " 的权限"
 		ui.Text(c, title).FontWeight(600)
 		permissionOptions(c, selected, func(v string) {
 			cc.setCurrentPermissionPolicy(v)
@@ -515,9 +516,9 @@ type permissionChoice struct {
 
 func permissionChoices() []permissionChoice {
 	return []permissionChoice{
-		{value: "on-request", title: "请求批准", detail: "编辑外部文件和使用互联网时始终询问", icon: "hand-stop", color: muted},
-		{value: "on-failure", title: "帮我批准", detail: "仅对检测到的风险操作请求批准", icon: "shield-check", color: muted},
-		{value: "never", title: "完全访问权限", detail: "可不受限制地访问互联网和你电脑上的任何文件", icon: "shield-exclamation", color: ui.Hex("#db6b3d")},
+		{value: "on-request", title: "需要时询问", detail: "编辑外部文件和使用互联网时始终询问", icon: "hand-stop", color: muted},
+		{value: "on-failure", title: "自动审批", detail: "仅对检测到的风险操作请求批准", icon: "shield-check", color: muted},
+		{value: "never", title: "完全访问", detail: "可不受限制地访问互联网和你电脑上的任何文件", icon: "shield-exclamation", color: ui.Hex("#db6b3d")},
 	}
 }
 

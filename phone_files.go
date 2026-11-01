@@ -86,7 +86,7 @@ func (s desktopFileServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	projects, err := s.projects(ctx)
 	if err != nil {
-		http.Error(w, "电脑暂时无法响应，请稍后重试", 503)
+		http.Error(w, "桌面端暂时无法响应，请稍后重试", 503)
 		return
 	}
 	var project fileProject

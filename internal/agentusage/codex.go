@@ -141,7 +141,7 @@ func (rpc *codexRPC) read() (Reading, error) {
 	}
 	r.At = time.Now()
 	if len(r.Windows) == 0 && r.Resets == nil {
-		return r, errors.New("当前账户未提供订阅额度")
+		return r, errors.New("当前账号未提供订阅额度")
 	}
 	return r, nil
 }

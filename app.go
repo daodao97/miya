@@ -27,6 +27,8 @@ type chatApp struct {
 	imagePreview func(string) ui.ImageSource
 	// referenceThread resolves titles in the phone's global conversation list.
 	referenceThread func(int) (Thread, bool)
+	// onRetry routes the shared error-card action through the phone bridge.
+	onRetry func(retryRequest)
 
 	sidebar   bool
 	section   string // "", "Settings", "Automations" or "Skills"
@@ -228,6 +230,10 @@ func (app *chatApp) sendDraft(steer bool) {
 	if command, ok := slashCommand(c.draft()); ok && !claudeTakesCommand(c.currentAgent(), command) {
 		app.notice = ""
 		clear := func() { c.rememberDraft(""); app.menu = "" }
+		if _, goal, _ := parseGoalCommand("/" + command); goal {
+			app.notice = c.runThreadCommand(command)
+			return
+		}
 		switch command {
 		case "new":
 			app.newThread()

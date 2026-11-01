@@ -151,7 +151,7 @@ func Start(ctx context.Context, binary, cwd string, args ...string) (*Client, er
 		}
 		close(c.exited)
 	}()
-	if err = c.Call(ctx, "initialize", map[string]any{"clientInfo": map[string]string{"name": "quickgui_chat", "title": "QuickGUI Chat", "version": "0.1.0"}}, nil); err != nil {
+	if err = c.Call(ctx, "initialize", map[string]any{"clientInfo": map[string]string{"name": "quickgui_chat", "title": "QuickGUI Chat", "version": "0.1.0"}, "capabilities": map[string]any{"experimentalApi": true}}, nil); err != nil {
 		c.Close()
 		return nil, err
 	}

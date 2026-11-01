@@ -35,6 +35,7 @@ type phoneProject struct {
 
 type phoneState struct {
 	Files         bool                   `json:"files,omitempty"`
+	Automations   bool                   `json:"automations,omitempty"`
 	Projects      []phoneProject         `json:"projects"`
 	Status        string                 `json:"status"`
 	Approvals     []codex.Approval       `json:"approvals"`
@@ -56,7 +57,7 @@ func listThread(t Thread) Thread {
 }
 
 func (c *chatController) phoneSnapshot() phoneState {
-	s := phoneState{Files: true, Status: c.status(), Approvals: c.approvals(), Agents: c.phoneAgentOptions(), Quotas: c.phoneQuotas()}
+	s := phoneState{Files: true, Automations: c.auto != nil, Status: c.status(), Approvals: c.approvals(), Agents: c.phoneAgentOptions(), Quotas: c.phoneQuotas()}
 	if c.agent != nil {
 		s.Agent = c.agent()
 	}
@@ -258,9 +259,9 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 			t := s.t.thread
 			switch {
 			case !s.t.found:
-				t = Thread{ID: sub, ServerID: subscription.ServerID, Agent: subscription.Agent, Status: "会话已不在桌面端"}
+				t = Thread{ID: sub, ServerID: subscription.ServerID, Agent: subscription.Agent, Status: "对话已不在桌面端"}
 				if s.loading {
-					t.Loading, t.Status = true, "正在加载会话…"
+					t.Loading, t.Status = true, "正在加载对话…"
 				}
 			case hasHistory(t) || t.Loading:
 				// The desktop's own copy is live; prefer it.
@@ -357,7 +358,7 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 					}
 				}
 				if !allowed {
-					imageErr = fmt.Errorf("图片不在当前会话中")
+					imageErr = fmt.Errorf("图片不在当前对话中")
 				} else {
 					preview.Data, imageErr = phonePreview(r.ImageSource)
 				}
@@ -367,6 +368,21 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 					frame.Error = imageErr.Error()
 				}
 				if !send(frame) {
+					return
+				}
+			case "automations":
+				frame, ok := onMain(ctx, c.dispatch, func() remote.Frame {
+					result, err := c.automationOp("automationList", automationRequest{})
+					frame := remote.Frame{Type: "automations"}
+					if err == nil {
+						frame.Data, err = json.Marshal(result)
+					}
+					if err != nil {
+						frame.Error = err.Error()
+					}
+					return frame
+				})
+				if !ok || !send(frame) {
 					return
 				}
 			case "quota":
@@ -394,7 +410,7 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 					}
 					if message == "" && !registration.Disabled {
 						if _, err := apns.OpenProvider(serviceDir()); err != nil {
-							message = "手机已注册；桌面尚未配置 APNs，请运行 mygo push setup"
+							message = "手机已注册；桌面端尚未配置 APNs，请运行 mygo push setup"
 						}
 					}
 				}
@@ -449,6 +465,32 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 					}
 					return true
 				})
+			case "task":
+				message, _ := onMain(ctx, c.dispatch, func() string {
+					t := c.phoneThreadFor(r)
+					if !t.found {
+						return "对话已不在桌面端"
+					}
+					id, action, _ := strings.Cut(r.Text, " ")
+					return c.taskAction(t.thread.ID, id, action)
+				})
+				if !send(remote.Frame{Type: "action", Thread: r.Thread, Error: message}) {
+					return
+				}
+			case "retry":
+				message, _ := onMain(ctx, c.dispatch, func() string {
+					t := c.phoneThreadFor(r)
+					if !t.found {
+						return "对话已不在桌面端"
+					}
+					if err := c.retryResponse(retryRequest{ThreadID: t.thread.ID, MessageID: r.MessageID}); err != nil {
+						return err.Error()
+					}
+					return ""
+				})
+				if !send(remote.Frame{Type: "action", Thread: r.Thread, Error: message}) {
+					return
+				}
 			case "dequeue", "steer-queued", "drain-queue":
 				message, _ := onMain(ctx, c.dispatch, func() string {
 					if err := c.phoneQueueAction(r); err != nil {
@@ -513,7 +555,7 @@ func readOnlyHistory(ctx context.Context, t phoneThread) ([]Message, string) {
 		}
 	}
 	if err != nil && len(messages) == 0 {
-		return nil, "无法读取会话：" + err.Error()
+		return nil, "无法读取对话：" + err.Error()
 	}
 	for i := range messages {
 		messages[i].ID = i + 1
@@ -749,14 +791,14 @@ func (c *chatController) phoneSend(r remote.Request, paths []string) phoneSendRe
 			if c.connecting || !c.ready() || c.historyStatus() == "Loading conversations…" {
 				return phoneSendResult{}
 			}
-			return phoneSendResult{err: "会话已不在桌面端"}
+			return phoneSendResult{err: "对话已不在桌面端"}
 		}
 		project = resolved.cwd
 		if project == c.cwd {
 			t := resolved.thread
 			switch {
 			case t.ReadOnly:
-				return phoneSendResult{err: "这个会话正被另一个 Codex 进程占用，只能查看"}
+				return phoneSendResult{err: "另一个 Codex 进程正在使用此对话，只能查看"}
 			case t.Loading:
 				return phoneSendResult{}
 			}

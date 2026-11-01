@@ -13,8 +13,8 @@ func activityOrderFixture(t *testing.T, agent string) (*chatApp, *ui.Tester) {
 	app, _ := testApp(t)
 	c := app.c
 	c.setThreads([]Thread{
-		{ID: 1, Agent: agent, ServerID: "old", Title: "旧会话", LastActivityAt: 100, HistoryLoaded: true},
-		{ID: 2, Agent: agent, ServerID: "recent", Title: "最近会话", LastActivityAt: 200, HistoryLoaded: true},
+		{ID: 1, Agent: agent, ServerID: "old", Title: "旧对话", LastActivityAt: 100, HistoryLoaded: true},
+		{ID: 2, Agent: agent, ServerID: "recent", Title: "最近对话", LastActivityAt: 200, HistoryLoaded: true},
 	})
 	c.setActive(2)
 	c.setProjects([]Project{{Name: "其他项目", Path: "/other"}, {Name: "demo", Path: c.cwd}})
@@ -32,19 +32,19 @@ func TestOpeningConversationDoesNotChangeActivityOrder(t *testing.T) {
 			c := app.c
 			beforeProjects := append([]Project(nil), c.projects()...)
 			tt.Frame()
-			beforeOld, _ := tt.Find("旧会话")
-			beforeRecent, _ := tt.Find("最近会话")
+			beforeOld, _ := tt.Find("旧对话")
+			beforeRecent, _ := tt.Find("最近对话")
 			if beforeOld.Y <= beforeRecent.Y {
 				t.Fatal("fixture must put the older conversation below the recent one")
 			}
-			if err := tt.Click("旧会话"); err != nil {
+			if err := tt.Click("旧对话"); err != nil {
 				t.Fatal(err)
 			}
 			tt.Frame()
 			c.rememberDraft("只是写草稿，还没发送")
 			tt.Frame()
-			afterOld, _ := tt.Find("旧会话")
-			afterRecent, _ := tt.Find("最近会话")
+			afterOld, _ := tt.Find("旧对话")
+			afterRecent, _ := tt.Find("最近对话")
 			if c.active() != 1 || c.current().LastActivityAt != 100 {
 				t.Fatalf("opening a conversation changed activity: %+v", c.current())
 			}

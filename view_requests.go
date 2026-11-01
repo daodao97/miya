@@ -94,7 +94,7 @@ func (app *chatApp) questionField(c *ui.Context, q codex.Question, answers map[s
 			b.Children(func() {
 				text := o.Label
 				if o.Description != "" {
-					text += " — " + o.Description
+					text += " · " + o.Description
 				}
 				ui.Text(c, text).Grow(1).MinWidth(0)
 			})
@@ -144,14 +144,14 @@ func (app *chatApp) elicitationView(c *ui.Context, a codex.Approval) {
 			ui.Text(c, msg).TextColor(danger).FontSize(11)
 		}
 		if rememberable {
-			ui.Text(c, "始终允许仅对当前会话访问此应用生效，后台服务退出后失效。").FontSize(12).TextColor(muted)
+			ui.Text(c, "只在当前对话里允许。后台服务退出后需要重新允许。").FontSize(12).TextColor(muted)
 		}
 		ui.Row(c).Wrap().Gap(8).Children(func() {
 			label := "Confirm"
 			if rememberable {
 				label = "允许一次"
 			}
-			if rememberable && ui.Button(c.Key("always-allow"), "此会话始终允许").Clicked() {
+			if rememberable && ui.Button(c.Key("always-allow"), "此对话始终允许").Clicked() {
 				if err := app.c.respondMCPAlways(a); err != nil {
 					app.formErrors[id] = err.Error()
 				} else {

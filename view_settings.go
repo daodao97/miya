@@ -24,10 +24,10 @@ func (app *chatApp) settingsView(c *ui.Context) {
 				notificationSettings(c)
 				zh := cc.locale() == "zh"
 				ui.Column(c).Gap(10).Children(func() {
-					ui.Text(c, map[bool]string{true: "ChatGPT 应如何工作？", false: "How should ChatGPT operate?"}[zh]).FontWeight(600)
+					ui.Text(c, map[bool]string{true: "新对话的默认权限", false: "Default permissions for new conversations"}[zh]).FontWeight(600)
 					ui.Text(c, map[bool]string{
-						true:  "新对话会使用此默认设置。你也可以在输入框中为当前对话修改权限。",
-						false: "New conversations use this default. Change permissions in the composer for the current conversation.",
+						true:  "可以在输入框中为当前对话单独修改。",
+						false: "Change them for the current conversation from the composer.",
 					}[zh]).TextColor(muted).FontSize(12).LineHeight(1.5)
 					permissionOptions(c.Key("default-permissions"), cc.selectedPermissionPolicy(), cc.setPermissionPolicy)
 				})

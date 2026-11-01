@@ -20,7 +20,11 @@ type Message struct {
 }
 
 type Thread struct {
-	Agent string
+	Agent        string
+	Tasks        []ThreadTask `json:",omitempty"`
+	TaskPending  bool         `json:",omitempty"`
+	TaskStopping bool         `json:",omitempty"`
+	goalRevision uint64
 	// Automation is the automation that started the conversation.
 	Automation                  string `json:",omitempty"`
 	ClaudeMessageID             string

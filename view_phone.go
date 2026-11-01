@@ -24,7 +24,7 @@ func (app *chatApp) phoneSettings(c *ui.Context) {
 	}
 	card(c).Padding(24).Gap(16).Children(func() {
 		ui.Text(c, "手机连接").FontWeight(600)
-		ui.Text(c, "用 Miya 手机端扫描二维码，通过 Tailcat 端到端加密隧道查看本机的项目和会话。手机端可以查看会话、继续对话和处理审批，但不能修改桌面端的设置。").TextColor(muted).FontSize(12).LineHeight(1.5)
+		ui.Text(c, "用 Miya 手机端扫码连接。手机可以继续对话和处理审批，不能修改设置。连接经 Tailcat 端到端加密。").TextColor(muted).FontSize(12).LineHeight(1.5)
 		switch {
 		case st.Busy:
 			ui.Row(c).Gap(8).Children(func() {
@@ -58,7 +58,7 @@ func (app *chatApp) phoneSettings(c *ui.Context) {
 					act("stop")
 				}
 			})
-			ui.Text(c, "连接码即查看权限，请勿分享。重置后，已扫码的手机需要重新扫描。").TextColor(muted).FontSize(12)
+			ui.Text(c, "连接码等同于查看权限，请勿分享。重置后，手机需要重新扫码。").TextColor(muted).FontSize(12)
 		}
 		if st.Message != "" {
 			ui.Text(c, st.Message).TextColor(danger).FontSize(12)

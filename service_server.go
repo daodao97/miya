@@ -200,6 +200,12 @@ func (s *service) handle(p *svcPeer, req svcRequest) (any, error) {
 			return nil, err
 		}
 		return c.submit(r), nil
+	case "retry":
+		var r retryRequest
+		if err := arg(&r); err != nil {
+			return nil, err
+		}
+		return nil, c.retryResponse(r)
 	case "stop":
 		_ = arg(&id)
 		c.stopThread(id)
@@ -244,6 +250,12 @@ func (s *service) handle(p *svcPeer, req svcRequest) (any, error) {
 		var a svcRewind
 		_ = arg(&a)
 		c.rewind(a.Thread, a.Message, a.Text)
+	case "task":
+		var a svcTaskAction
+		if err := json.Unmarshal(req.Args, &a); err != nil {
+			return nil, err
+		}
+		return c.taskAction(a.Thread, a.Task, a.Action), nil
 	case "command":
 		var a svcCommand
 		_ = arg(&a)
@@ -339,7 +351,7 @@ func (s *service) busy() bool {
 		return true
 	}
 	for _, t := range s.c.threads() {
-		if t.Busy {
+		if t.Busy || t.TaskPending || activeThreadGoal(t) {
 			return true
 		}
 	}
@@ -348,7 +360,7 @@ func (s *service) busy() bool {
 			continue
 		}
 		for _, t := range threads {
-			if t.Busy {
+			if t.Busy || t.TaskPending || activeThreadGoal(t) {
 				return true
 			}
 		}

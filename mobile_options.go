@@ -67,8 +67,8 @@ func (m *mobileApp) optionsView(c *ui.Context) {
 	ui.Scroll(c).FillWidth().Grow(1).MinHeight(0).Children(func() {
 		ui.Column(c).FillWidth().Padding(16).Gap(14).Children(func() {
 			ui.Text(c, agentName(agent)).FontSize(m.font(20)).FontWeight(600)
-			ui.Text(c, "用于从手机发送的新消息，不修改电脑默认设置。").FontSize(m.font(13)).TextColor(p.muted)
-			if m.pill(c, "defaults", "使用电脑默认", false).Clicked() {
+			ui.Text(c, "用于从手机发送的新消息，不修改桌面端默认设置。").FontSize(m.font(13)).TextColor(p.muted)
+			if m.pill(c, "defaults", "使用桌面端默认", false).Clicked() {
 				delete(m.options, agent)
 				m.saveOptions()
 			}
@@ -88,7 +88,7 @@ func (m *mobileApp) optionsView(c *ui.Context) {
 					}
 				}
 				if len(a.Models) == 0 {
-					ui.Text(c, "连接电脑后可选择模型").Padding(10).TextColor(p.muted)
+					ui.Text(c, "连接桌面端后可选择模型").Padding(10).TextColor(p.muted)
 				}
 			})
 			ui.Text(c, "推理强度").FontSize(m.font(13)).TextColor(p.muted)
@@ -115,7 +115,7 @@ func (m *mobileApp) optionsView(c *ui.Context) {
 				}
 			})
 			ui.Text(c, "权限模式").FontSize(m.font(13)).TextColor(p.muted)
-			for _, policy := range []struct{ value, label, detail string }{{"on-request", "需要时询问", "敏感操作由你确认"}, {"on-failure", "协助审批", "由自动审批审核处理，需要时再询问你"}, {"never", "完全访问", "允许 Agent 不经询问执行操作"}} {
+			for _, policy := range []struct{ value, label, detail string }{{"on-request", "需要时询问", "敏感操作由你确认"}, {"on-failure", "自动审批", "由自动审批处理，需要时再询问你"}, {"never", "完全访问", "允许 agent 不经询问执行操作"}} {
 				b := m.phoneButton(c.Key("policy:" + policy.value)).FillWidth().MinHeight(56).Padding(12).Gap(12).Background(p.surface).Radius(14).Label(policy.label)
 				b.Children(func() {
 					ui.Column(c).Grow(1).MinWidth(0).Gap(4).Children(func() {

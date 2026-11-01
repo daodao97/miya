@@ -55,7 +55,7 @@ func (c *chatController) respondMCPAlways(a codex.Approval) error {
 			continue
 		}
 		if !rememberableMCPAccess(pending) {
-			return errors.New("此请求不支持会话内始终允许")
+			return errors.New("此请求不支持对话内始终允许")
 		}
 		if c.mcpSessionAccess == nil {
 			c.mcpSessionAccess = map[string]bool{}

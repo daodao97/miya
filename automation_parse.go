@@ -189,7 +189,7 @@ func automationFromDraft(d automationDraft, agent, project, request string) (Aut
 		a.Schedule = defaultAutomationSchedule
 	}
 	if _, err := parseCron(a.Schedule); err != nil {
-		return Automation{}, false, fmt.Errorf("整理出的时间 %q 无效，请把时间写得更具体一些", a.Schedule)
+		return Automation{}, false, fmt.Errorf("整理出的时间 %q 无效，请写得更具体", a.Schedule)
 	}
 	if strings.TrimSpace(a.Instructions) == "" {
 		a.Instructions = a.Request

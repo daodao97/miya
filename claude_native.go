@@ -190,7 +190,7 @@ func summarizeClaudeSession(path string) (claudeSession, bool) {
 					Content json.RawMessage `json:"content"`
 				}
 				_ = json.Unmarshal(e.Message, &m)
-				prompt = claudeVisibleText(claudeBlocks(m.Content))
+				prompt = claudePromptTitle(claudeVisibleText(claudeBlocks(m.Content)))
 			}
 		}
 		return true
@@ -219,7 +219,7 @@ func summarizeClaudeSession(path string) (claudeSession, bool) {
 		// Sessions without a prompt hold nothing to show.
 		return claudeSession{}, false
 	}
-	s.Title = clippedTitle(firstNonEmpty(custom, aiTitle, summary, prompt, "Claude Code 会话"))
+	s.Title = clippedTitle(firstNonEmpty(custom, aiTitle, summary, prompt, "Claude Code 对话"))
 	return s, true
 }
 
@@ -406,6 +406,9 @@ func (c *chatController) loadClaudeSessionsAt(cwd string) {
 			for _, s := range sessions {
 				at := s.UpdatedAt.UnixMilli()
 				if i, ok := known[s.ID]; ok {
+					if !items[i].Busy {
+						items[i].Title = s.Title
+					}
 					// The CLI may have continued it since: show it where it now sorts.
 					if at > items[i].LastActivityAt && !items[i].Busy {
 						items[i].LastActivityAt = max(items[i].LastActivityAt, at)

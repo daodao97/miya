@@ -33,7 +33,7 @@ func (m *mobileApp) settingsView(c *ui.Context) {
 			})
 			ui.Text(c, "请同时在系统设置中允许 Miya 发送通知。").FontSize(m.font(12)).TextColor(p.muted).Margin(0, 12)
 			ui.Row(c).FillWidth().Padding(14, 12).Gap(10).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, fmt.Sprintf("未读会话 %d", len(m.state.Notifications.Unread))).Grow(1).FontSize(m.font(14))
+				ui.Text(c, fmt.Sprintf("未读对话 %d", len(m.state.Notifications.Unread))).Grow(1).FontSize(m.font(14))
 				if m.pill(c, "read-all", "全部标为已读", false).Disabled(len(m.state.Notifications.Unread) == 0 || !m.connected).Clicked() {
 					m.markAllRead()
 				}

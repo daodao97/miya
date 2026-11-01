@@ -105,7 +105,7 @@ func (c *chatController) phoneSendRequest(r remote.Request, paths []string, agen
 func (c *chatController) phoneQueueAction(r remote.Request) error {
 	target := c.phoneThreadFor(r)
 	if !target.found {
-		return errors.New("会话已不在桌面端")
+		return errors.New("对话已不在桌面端")
 	}
 	if target.cwd != c.cwd {
 		return errors.New("请先在此项目发送消息，再管理队列")

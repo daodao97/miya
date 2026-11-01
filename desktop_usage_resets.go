@@ -200,7 +200,7 @@ func usageResetOutcome(outcome string) string {
 	case "nothingToReset":
 		return "当前没有可重置的周期，未消耗卡片"
 	case "noCredit":
-		return "当前账户已无可用重置卡"
+		return "当前账号已无可用重置卡"
 	}
 	return "请刷新确认重置卡状态"
 }

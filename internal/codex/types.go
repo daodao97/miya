@@ -77,6 +77,7 @@ type PlanStep struct {
 	Status string `json:"status"`
 }
 type Event struct {
+	Goal        *Goal           `json:"goal"`
 	RequestID   json.RawMessage `json:"requestId"`
 	Diff        string          `json:"diff"`
 	Explanation string          `json:"explanation"`
@@ -94,6 +95,20 @@ type Event struct {
 		Message string `json:"message"`
 	} `json:"error"`
 	WillRetry bool `json:"willRetry"`
+}
+
+// Goal is persisted and scheduled by the Codex app-server.
+type Goal struct {
+	ThreadID        string `json:"threadId"`
+	Objective       string `json:"objective"`
+	Status          string `json:"status"`
+	TokenBudget     *int64 `json:"tokenBudget"`
+	TokensUsed      int64  `json:"tokensUsed"`
+	TimeUsedSeconds int64  `json:"timeUsedSeconds"`
+}
+
+type GoalResponse struct {
+	Goal *Goal `json:"goal"`
 }
 type Approval struct {
 	Permissions     json.RawMessage `json:"permissions"`

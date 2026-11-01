@@ -91,7 +91,7 @@ func (claudeBackend) Rewind(c *chatController, t Thread, m Message, text string)
 		var err error
 		if prompt > 0 {
 			if path := findClaudeSession(cwd, old); path == "" {
-				err = errors.New("找不到 Claude Code 的会话记录")
+				err = errors.New("找不到 Claude Code 的对话记录")
 			} else {
 				forked, err = forkClaudeSessionBefore(path, prompt)
 			}

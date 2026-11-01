@@ -15,23 +15,23 @@ type mobileHomeThread struct {
 
 func (m *mobileApp) homeBackground() ui.Color {
 	if m.dark {
-		return ui.Hex("#000000")
+		return ui.Hex("#0c0c0d")
 	}
-	return ui.Hex("#f2f2f7")
+	return ui.Hex("#f6f6f4")
 }
 
 func (m *mobileApp) homeSurface() ui.Color {
 	if m.dark {
-		return ui.Hex("#1c1c1e")
+		return ui.Hex("#19191b")
 	}
 	return ui.Hex("#ffffff")
 }
 
 func (m *mobileApp) homeAccent() ui.Color {
 	if m.dark {
-		return ui.Hex("#0a84ff")
+		return ui.Hex("#f2f2f2")
 	}
-	return ui.Hex("#007aff")
+	return ui.Hex("#1a1a1a")
 }
 
 // Navigation actions keep a full touch target without a filled button disc.
@@ -42,6 +42,18 @@ func (m *mobileApp) homeAction(c *ui.Context, key, label, glyph string) ui.Eleme
 	}
 	b.Children(func() { icon(c, glyph, 23, m.homeAccent()) })
 	return b
+}
+
+func (m *mobileApp) conversationActions(button ui.Element, project, agent string) {
+	button.PopoverMenuButton(func(menu *ui.Menu) {
+		if menu.Item("项目文件").Disabled(!m.connected || project == "").Chosen() {
+			m.menu = false
+			m.openProjectFiles(project)
+		}
+		if menu.Item("新对话").Disabled(project == "").Chosen() {
+			m.startConversation(project, agent)
+		}
+	})
 }
 
 // homeThreads gives attention to conversations needing action before recency.
@@ -94,8 +106,8 @@ func (m *mobileApp) conversationHome(c *ui.Context) {
 	if len(rows) == 0 {
 		ui.Column(c).Grow(1).MinHeight(0).Padding(28).Gap(12).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
 			icon(c, "message-circle", 36, p.muted)
-			ui.Text(c, "还没有会话").FontSize(m.font(20)).FontWeight(600)
-			ui.Text(c, "新建一个会话，开始处理项目中的任务。").FontSize(m.font(14)).TextColor(p.muted).TextAlign(ui.Center)
+			ui.Text(c, "还没有对话").FontSize(m.font(20)).FontWeight(600)
+			ui.Text(c, "新建一个对话，开始处理项目中的任务。").FontSize(m.font(14)).TextColor(p.muted).TextAlign(ui.Center)
 		})
 		return
 	}
@@ -107,7 +119,7 @@ func (m *mobileApp) conversationHome(c *ui.Context) {
 					end++
 				}
 				group := rows[start:end]
-				label := []string{"最近会话", "未读", "运行中", "待审批"}[group[0].priority]
+				label := []string{"最近对话", "未读", "运行中", "待审批"}[group[0].priority]
 				ui.Text(c, label).FontSize(m.font(13)).TextColor(p.muted).Margin(20, 16, 7, 16)
 				ui.Column(c.Key(group[0].priority)).FillWidth().Radius(14).Clip().Background(m.homeSurface()).Children(func() {
 					for i, row := range group {
@@ -125,7 +137,7 @@ func (m *mobileApp) conversationHome(c *ui.Context) {
 
 func (m *mobileApp) homeThread(c *ui.Context, row mobileHomeThread) {
 	p, t := m.pal, row.thread
-	title := firstNonEmpty(t.Title, "未命名会话")
+	title := firstNonEmpty(t.Title, "未命名对话")
 	item := m.phoneButton(c.Key(t.ID)).FillWidth().MinHeight(72).Padding(10, 14).Gap(12).Radius(0).Background(ui.Transparent).Label(nativeText(title))
 	if item.Pressed() {
 		item.Background(p.line)
@@ -148,7 +160,7 @@ func (m *mobileApp) homeThread(c *ui.Context, row mobileHomeThread) {
 				case 3:
 					icon(c, "alert-circle", 13, p.warn)
 				case 2:
-					ui.Spinner(c).FontSize(m.font(12)).TextColor(m.homeAccent())
+					ui.Spinner(c).FontSize(m.font(12)).TextColor(m.pal.muted)
 				case 1:
 					ui.Box(c).Size(7, 7).Radius(4).Background(m.homeAccent())
 				}

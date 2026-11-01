@@ -22,7 +22,7 @@ func testMobileApp() *mobileApp {
 
 func openMobileDrawer(t *testing.T, tt *ui.Tester) {
 	t.Helper()
-	if err := tt.Click("桌面连接"); err != nil {
+	if err := tt.Click("桌面端连接"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
@@ -34,17 +34,17 @@ func TestMobileHomeShowsConversations(t *testing.T) {
 	m := testMobileApp()
 	tt := ui.NewTester(m.viewRoot, 390, 750)
 	tt.Frame()
-	for _, label := range []string{"Miya", "新会话", "thread-one", "thread-two"} {
+	for _, label := range []string{"Miya", "新建对话", "thread-one", "thread-two"} {
 		if _, ok := tt.Find(label); !ok {
 			t.Fatalf("the home page should show %q", label)
 		}
 	}
-	for _, label := range []string{"Let’s build", "消息", "发送"} {
+	for _, label := range []string{"Let’s build", "消息", "发送", "项目文件", "新对话"} {
 		if _, ok := tt.Find(label); ok {
 			t.Fatalf("composing should require tapping new conversation: %s", label)
 		}
 	}
-	if err := tt.Click("新会话"); err != nil {
+	if err := tt.Click("新建对话"); err != nil {
 		t.Fatal(err)
 	}
 	if m.router().Path() != "/thread" || m.newProject != "/a" || !tt.HasText("Let’s build") {
@@ -76,6 +76,16 @@ func TestMobileOpensConversationAndGoesBack(t *testing.T) {
 	if _, ok := tt.Find("发送"); !ok {
 		t.Error("the conversation page should have a send button")
 	}
+	if _, ok := tt.Find("项目文件"); ok {
+		t.Fatal("project files should be inside the conversation's more menu")
+	}
+	if err := tt.Click("更多"); err != nil {
+		t.Fatal(err)
+	}
+	if !tt.HasText("项目文件") || !tt.HasText("新对话") {
+		t.Fatal("the conversation's more menu should offer files and a new conversation")
+	}
+	tt.Key(0, ui.KeyEscape)
 	if err := tt.Click("返回"); err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +114,7 @@ func TestMobileDrawer(t *testing.T) {
 	m := testMobileApp()
 	tt := ui.NewTester(m.viewRoot, 390, 750)
 	tt.Frame()
-	if err := tt.Click("桌面连接"); err != nil {
+	if err := tt.Click("桌面端连接"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
@@ -114,10 +124,10 @@ func TestMobileDrawer(t *testing.T) {
 	// Let it slide in before tapping inside it.
 	tt.Advance(time.Second)
 	tt.Frame()
-	if r, ok := tt.Find("更换桌面"); !ok || r.X < 0 {
+	if r, ok := tt.Find("更换桌面端"); !ok || r.X < 0 {
 		t.Fatalf("the drawer should have slid in: %v, %v", r, ok)
 	}
-	if _, ok := tt.Find("更换桌面"); !ok {
+	if _, ok := tt.Find("更换桌面端"); !ok {
 		t.Error("the drawer should offer to switch desktops")
 	}
 	for _, title := range []string{"thread-one", "thread-two"} {
@@ -140,10 +150,10 @@ func TestMobileDrawer(t *testing.T) {
 	// It slides out, then is gone.
 	tt.Advance(time.Second)
 	tt.Frame()
-	if r, ok := tt.Find("更换桌面"); ok && r.X >= 0 {
+	if r, ok := tt.Find("更换桌面端"); ok && r.X >= 0 {
 		t.Errorf("the drawer should have slid away: %v", r)
 	}
-	if err := tt.Click("新会话"); err != nil {
+	if err := tt.Click("新建对话"); err != nil {
 		t.Fatal(err)
 	}
 	if m.newProject != "/b" {
@@ -178,7 +188,7 @@ func TestMobileDrawerFollowsDrags(t *testing.T) {
 	if !m.menu {
 		t.Fatalf("dragging right should open the drawer (offset %v)", m.drawerOffset)
 	}
-	if r, ok := tt.Find("更换桌面"); !ok || r.X < 0 {
+	if r, ok := tt.Find("更换桌面端"); !ok || r.X < 0 {
 		t.Fatalf("the drawer should show: %v, %v", r, ok)
 	}
 	drag(tt, 370, 60, 400)

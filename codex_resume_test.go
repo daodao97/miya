@@ -112,6 +112,35 @@ func codexTurnRequests(t *testing.T, path string) []string {
 	return methods
 }
 
+func TestCodexRetriesFailedTurnWithoutReplacingHistory(t *testing.T) {
+	c, d, logPath := codexResumeFixture(t)
+	c.submit(sendRequest{ThreadID: 1, Text: "error"})
+	waitCodexResume(t, c, d, func() bool {
+		th := c.threadWithID(1)
+		return !th.Busy && len(th.Messages) > 0 && th.Messages[len(th.Messages)-1].Role == "error"
+	})
+	before := c.threadWithID(1)
+	req := retryRequest{ThreadID: 1, MessageID: before.Messages[len(before.Messages)-1].ID}
+	if err := c.retryResponse(req); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.retryResponse(req); err == nil {
+		t.Fatal("duplicate retry was accepted")
+	}
+	waitCodexResume(t, c, d, func() bool {
+		th := c.threadWithID(1)
+		return !th.Busy && th.Messages[len(th.Messages)-1].Role == "assistant"
+	})
+	after := c.threadWithID(1)
+	if after.ServerID != before.ServerID || after.Messages[0].Content != before.Messages[0].Content {
+		t.Fatal("retry replaced the original session or history")
+	}
+	methods := strings.Join(codexTurnRequests(t, logPath), ",")
+	if strings.Count(methods, "turn/start") != 2 || strings.Contains(methods, "thread/start") {
+		t.Fatalf("retry sent unexpected requests: %s", methods)
+	}
+}
+
 func sendCodexPhoneMessage(t *testing.T, c *chatController, d *testDispatch, text string) {
 	t.Helper()
 	result := c.phoneSend(remote.Request{Thread: 1, Text: text}, nil)

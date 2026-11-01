@@ -18,10 +18,13 @@ import (
 type mirrorState struct {
 	projectBusy map[string]bool
 	messages    map[int][]Message
-	setActive   func(int)
-	setEffort   func(string)
-	setPolicy   func(string)
-	setLocale   func(string)
+	// Draft edits belong to this window, including explicit clears after a
+	// send. Older service snapshots must not replace them during navigation.
+	drafts    map[int]string
+	setActive func(int)
+	setEffort func(string)
+	setPolicy func(string)
+	setLocale func(string)
 	// reconnect connects again after the service went away; nil does not.
 	reconnect func() (*serviceClient, svcState, error)
 	// phone is the service's phone connection, for the settings.
@@ -54,7 +57,7 @@ func newWindowController() *chatController {
 }
 
 func newMirrorController() *chatController {
-	c := &chatController{mirror: &mirrorState{messages: map[int][]Message{}}, projectCache: map[string][]Thread{}}
+	c := &chatController{mirror: &mirrorState{messages: map[int][]Message{}, drafts: map[int]string{}}, projectCache: map[string][]Thread{}}
 	c.ctx, c.cancel = context.WithCancel(context.Background())
 	c.agent, c.setAgent = createSignal(agentBackends[0].ID())
 	c.draftPermission, c.setDraftPermission = createSignal("")
@@ -153,8 +156,11 @@ func (c *chatController) applyState(s svcState) {
 	c.cwd = s.Cwd
 	c.projectCache = s.ProjectThreads
 	c.mirror.projectBusy = s.ProjectBusy
-	threads := s.Threads
+	threads := append([]Thread(nil), s.Threads...)
 	for i := range threads {
+		if draft, ok := c.mirror.drafts[threads[i].ID]; ok {
+			threads[i].Draft = draft
+		}
 		if m, ok := c.mirror.messages[threads[i].ID]; ok {
 			threads[i].Messages = m
 		}

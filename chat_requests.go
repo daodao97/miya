@@ -36,7 +36,7 @@ func (c *chatController) serverRequest(f codex.Frame) {
 			client := c.client
 			go func() {
 				if err := client.Reply(a.ID, mcpAccessAccepted()); err != nil {
-					c.dispatch(func() { c.setStatus("会话授权回复失败：" + err.Error()) })
+					c.dispatch(func() { c.setStatus("对话授权回复失败：" + err.Error()) })
 				}
 			}()
 			return

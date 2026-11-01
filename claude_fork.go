@@ -84,7 +84,7 @@ func forkClaudeSessionBefore(path string, prompt int) (string, error) {
 		n++
 	}
 	if cut <= 0 {
-		return "", errors.New("在 Claude Code 的会话记录中找不到这条消息")
+		return "", errors.New("在 Claude Code 的对话记录中找不到这条消息")
 	}
 	id := newClaudeSessionID()
 	var out bytes.Buffer

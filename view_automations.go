@@ -192,7 +192,7 @@ func (app *chatApp) automationList(c *ui.Context) {
 	a := &app.autos
 	ui.Row(c).FillWidth().AlignItems(ui.End).Gap(16).Children(func() {
 		ui.Column(c).Grow(1).MinWidth(0).Gap(4).Children(func() {
-			ui.Text(c, "Automations").FontSize(26).FontWeight(600)
+			ui.Text(c, tr("Automations")).FontSize(26).FontWeight(600)
 			ui.Text(c, "按计划在项目里新开一个对话执行指令，结束后推送到手机。").TextColor(muted)
 		})
 		if ui.PrimaryButton(c.Key("new"), "新建").Clicked() {
@@ -212,7 +212,7 @@ func (app *chatApp) automationList(c *ui.Context) {
 		ui.Column(c).FillWidth().Padding(28).Gap(6).AlignItems(ui.Center).Border(1, line).Radius(12).Children(func() {
 			icon(c, "clock", 22, muted)
 			ui.Text(c, "还没有自动化").FontWeight(600)
-			ui.Text(c, "点「新建」写一句话，或者在任意对话里让 agent 帮你创建。").FontSize(12).TextColor(muted)
+			ui.Text(c, "点「新建」写一句话，或在任意对话里让 agent 创建。").FontSize(12).TextColor(muted)
 		})
 	default:
 		ui.Column(c).FillWidth().Gap(8).Children(func() {
@@ -223,7 +223,7 @@ func (app *chatApp) automationList(c *ui.Context) {
 	}
 	ui.Row(c).FillWidth().Gap(12).Padding(14, 16, 14, 16).Border(1, line).Radius(12).AlignItems(ui.Start).Children(func() {
 		icon(c, "message-circle", 16, ink)
-		ui.Text(c, "在任意对话里描述要定期做的事，例如「每个工作日 9 点看一下新 Issue，能修的修掉并跑测试」，确认后会出现在这里。有启用的自动化时，Miya 登录后会启动后台服务，关掉窗口也照常运行。").
+		ui.Text(c, "在任意对话里描述要定期做的事，确认后会显示在这里。关闭窗口后，已启用的自动化照常运行。").
 			Grow(1).MinWidth(0).FontSize(12).LineHeight(1.6).TextColor(muted)
 	})
 }
@@ -416,7 +416,7 @@ func (app *chatApp) automationDetail(c *ui.Context) {
 				app.loadAutomations()
 			})
 		}
-		ui.Text(c, "带上上次结果：每次运行附上上一次的结构化结果，让 agent 对比").FontSize(12).TextColor(muted)
+		ui.Text(c, "每次运行附上上一次的结构化结果，让 agent 对比变化").FontSize(12).TextColor(muted)
 	})
 	ui.Row(c).FillWidth().AlignItems(ui.End).Margin(8, 0, 0, 0).Children(func() {
 		ui.Text(c, "运行历史").FontWeight(600).Grow(1)
@@ -580,7 +580,7 @@ func (app *chatApp) automationForm(c *ui.Context) {
 		}
 		ui.Column(c).Gap(4).Children(func() {
 			ui.Text(c, title).FontSize(24).FontWeight(600)
-			ui.Text(c, "写一句话说明做什么、什么时候做，agent 会整理出时间、完成标准和轮数。").TextColor(muted)
+			ui.Text(c, "用一句话说明做什么、何时做，agent 会整理出时间、完成标准和轮数。").TextColor(muted)
 		})
 		app.automationComposer(c)
 		app.draftStatus(c)
@@ -619,7 +619,7 @@ func (app *chatApp) automationComposer(c *ui.Context) {
 	a := &app.autos
 	ui.Column(c).FillWidth().Border(1, line).Radius(16).Background(canvas).Children(func() {
 		in := ui.TextAreaBase(c.Key("request"), &a.request).Label("要做什么").
-			Placeholder("例如：每个工作日早上 9 点看一下新 Issue，能修的修掉并保证 go test 通过，修不过就多试两次，修不了的列出来告诉我").
+			Placeholder("例如：每个工作日 9 点检查新 Issue，修复能修的并保证 go test 通过，修不了的列给我").
 			Lines(3, 8).FillWidth().Padding(16, 18, 6, 18).FontSize(15).LineHeight(1.6)
 		if in.Changed() {
 			app.scheduleDraft()
@@ -790,7 +790,7 @@ func (app *chatApp) draftRow(c *ui.Context, key, symbol, label, raw string, warn
 		ui.Text(c, label).Width(64).Shrink(0).TextColor(color)
 		if a.editing != key {
 			value()
-			if toolButton(c.Key("edit"), "edit", "改"+label).Clicked() {
+			if toolButton(c.Key("edit"), "edit", "修改"+label).Clicked() {
 				a.editing, a.editText, a.editErr = key, raw, ""
 			}
 			return
@@ -932,7 +932,7 @@ func (app *chatApp) reportView(c *ui.Context, r AutomationRun, latest bool) {
 			head.Children(func() {
 				label := "结构化结果"
 				if rep.Auto {
-					label = "自动摘要（agent 没有上报结果）"
+					label = "自动摘要 · agent 未上报结果"
 				}
 				ui.Text(c, label).FontSize(12).FontWeight(600).TextColor(muted)
 				if rep.NeedsUser {

@@ -31,7 +31,7 @@ func newPhoneFileProxy(conn *remote.Conn, project string) (*phoneFileProxy, erro
 	err := p.start(project, func(ctx context.Context) (net.Conn, error) {
 		current := p.conn.Load()
 		if current == nil {
-			return nil, errors.New("电脑连接已断开")
+			return nil, errors.New("桌面端连接已断开")
 		}
 		return current.DialFiles(ctx)
 	})
@@ -74,7 +74,7 @@ func (p *phoneFileProxy) start(project string, dial func(context.Context) (net.C
 		r.Header.Del("Cookie")
 		r.Header.Del("Authorization")
 	}, ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
-		http.Error(w, "无法连接电脑文件服务。请确认桌面端已更新且保持在线，然后重试。", http.StatusBadGateway)
+		http.Error(w, "无法连接桌面端文件服务。请确认桌面端已更新并在线后重试。", http.StatusBadGateway)
 	}}
 	p.server = &http.Server{ReadHeaderTimeout: 10 * time.Second, IdleTimeout: time.Minute, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")

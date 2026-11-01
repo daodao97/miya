@@ -90,7 +90,7 @@ func parseClaude(data []byte) ([]Window, error) {
 		windows = append(windows, Window{Name: name, Used: Percent(used), Reset: m[4]})
 	}
 	if len(windows) == 0 {
-		return nil, errors.New("当前账户未提供订阅额度")
+		return nil, errors.New("当前账号未提供订阅额度")
 	}
 	return windows, nil
 }

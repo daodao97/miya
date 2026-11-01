@@ -1,11 +1,53 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestClaudeCommandTitles(t *testing.T) {
+	for _, tc := range []struct{ prompt, want string }{
+		{"修复  登录\n问题", "修复 登录 问题"},
+		{"/unslop README.md", "/unslop README.md"},
+		{"<command-message>unslop</command-message> <command-name>/unslop</command-name>", "/unslop"},
+		{"<command-message>unslop</command-message>\n<command-name>/unslop</command-name>\n<command-args>清理 README.md 的文案</command-args>", "/unslop 清理 README.md 的文案"},
+		{"<command-message>review</command-message>", "/review"},
+	} {
+		if got := claudePromptTitle(tc.prompt); got != tc.want {
+			t.Errorf("title of %q = %q; want %q", tc.prompt, got, tc.want)
+		}
+	}
+}
+
+func TestClaudeCachedCommandTitleRefreshesWithoutNewActivity(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
+	inlineDispatch.Store(true)
+	t.Cleanup(func() { inlineDispatch.Store(false) })
+	c := testController()
+	c.cwd = t.TempDir()
+	c.active, c.setActive = createSignal(0)
+	prompt := "<command-message>unslop</command-message> <command-name>/unslop</command-name> <command-args>README.md</command-args>"
+	entry, err := json.Marshal(map[string]any{"type": "user", "cwd": c.cwd, "message": map[string]string{"content": prompt}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := writeClaudeSession(t, c.cwd, "command", string(entry))
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	at := info.ModTime().UnixMilli()
+	c.setThreads([]Thread{{ID: 1, Agent: agentClaude, ServerID: "command", Title: clippedTitle(prompt), LastActivityAt: at}})
+	c.loadClaudeSessionsSync()
+	th := c.threadWithID(1)
+	if th.Title != "/unslop README.md" || th.LastActivityAt != at {
+		t.Fatalf("cached title was not repaired without changing activity: %+v", th)
+	}
+}
 
 func TestConversationTitlePriority(t *testing.T) {
 	for _, tc := range []struct{ name, preview, existing, want string }{

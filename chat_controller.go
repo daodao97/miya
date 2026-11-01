@@ -20,10 +20,11 @@ import (
 var appLocale atomic.Value
 
 var translations = map[string]string{
+	"New thread": "新建对话", "Automations": "自动化", "Skills": "技能", "Projects": "项目", "Settings": "设置", "Open": "打开", "Commit": "提交",
 	"Reconnecting…": "正在重连…",
-	"Thinking…":     "思考中…", "Thought": "已思考", "Ran ": "已运行 ", "Running ": "正在运行 ", "Failed · ": "失败 · ", "Stopped · ": "已停止 · ", "Edited": "已编辑", "Editing": "正在编辑", "Failed to edit": "编辑失败", "Proposed plan": "建议计划", "Changes in this turn": "本轮更改", "No matching commands": "没有匹配的命令", "Searching project files…": "正在搜索项目文件…", "No matching files": "没有匹配的文件", "Project files": "项目文件", "Commands": "命令", "Ask Codex anything… / commands · @ files": "询问 Codex… / 命令 · @ 文件", "Message Codex": "发送消息给 Codex", "Copy code": "复制代码", "Copied": "已复制", "Copy failed": "复制失败", "Reconnect": "重新连接", "Close": "关闭", "Local": "本地", "Not connected yet": "尚未连接",
+	"Thinking…":     "思考中…", "Thought": "已思考", "Ran ": "已运行 ", "Running ": "正在运行 ", "Failed · ": "失败 · ", "Stopped · ": "已停止 · ", "Edited": "已编辑", "Editing": "正在编辑", "Failed to edit": "编辑失败", "Proposed plan": "建议计划", "Changes in this turn": "本回合更改", "No matching commands": "没有匹配的命令", "Searching project files…": "正在搜索项目文件…", "No matching files": "没有匹配的文件", "Project files": "项目文件", "Commands": "命令", "Ask Codex anything… / commands · @ files": "询问 Codex… / 命令 · @ 文件", "Message Codex": "发送消息给 Codex", "Copy code": "复制代码", "Copied": "已复制", "Copy failed": "复制失败", "Reconnect": "重新连接", "Close": "关闭", "Local": "本地", "Not connected yet": "尚未连接",
 	"Worked for ": "已工作 ", "Working for ": "工作中 ", "seconds": "秒",
-	"Connecting to Codex…": "正在连接 Codex…", "Connected · Codex app-server": "已连接 · Codex 应用服务器", "Connection lost. Reconnect to retry.": "连接已断开，请重新连接。", "History unavailable": "历史记录不可用", "Working…": "工作中…", "Starting…": "正在启动…", "Codex is reconnecting…": "Codex 正在重新连接…", "Loading conversation…": "正在加载对话…", "Stopped": "已停止", "Turn failed": "回合失败",
+	"Connecting to Codex…": "正在连接 Codex…", "Connected · Codex app-server": "已连接 Codex", "Connection lost. Reconnect to retry.": "连接已断开，请重新连接。", "History unavailable": "历史记录不可用", "Working…": "工作中…", "Starting…": "正在启动…", "Codex is reconnecting…": "Codex 正在重新连接…", "Loading conversation…": "正在加载对话…", "Stopped": "已停止", "Turn failed": "回合失败",
 }
 
 func tr(english string) string {
@@ -699,6 +700,7 @@ func (c *chatController) update(id int, fn func(*Thread)) {
 	for i := range items {
 		if items[i].ID == id {
 			items[i].Messages = append([]Message(nil), items[i].Messages...)
+			items[i].Tasks = append([]ThreadTask(nil), items[i].Tasks...)
 			before := threadMetaOf(items[i])
 			wasBusy := items[i].Busy
 			fn(&items[i])
@@ -738,6 +740,7 @@ func (c *chatController) update(id int, fn func(*Thread)) {
 			items := append([]Thread(nil), cached...)
 			old := items[i]
 			items[i].Messages = append([]Message(nil), old.Messages...)
+			items[i].Tasks = append([]ThreadTask(nil), old.Tasks...)
 			fn(&items[i])
 			c.projectCache[path] = items
 			if threadMetaOf(items[i]) != threadMetaOf(old) {
@@ -1157,6 +1160,12 @@ func (c *chatController) rememberDraft(value string) {
 	c.setDraft(value)
 	if c.remote != nil {
 		if c.active() != 0 {
+			if c.mirror != nil {
+				if c.mirror.drafts == nil {
+					c.mirror.drafts = map[int]string{}
+				}
+				c.mirror.drafts[c.active()] = value
+			}
 			c.forward("draft", svcThreadValue{Thread: c.active(), Value: value})
 		}
 		return
@@ -1203,8 +1212,17 @@ func (c *chatController) attachmentInputs(paths []string) []map[string]any {
 }
 func (c *chatController) selectThread(t Thread) {
 	// Viewing history does not count as conversation activity.
+	if latest := c.threadWithID(t.ID); latest.ID != 0 {
+		t = latest
+	}
 	c.setActive(t.ID)
-	c.setDraft(t.Draft)
+	draft := t.Draft
+	if c.mirror != nil {
+		if local, ok := c.mirror.drafts[t.ID]; ok {
+			draft = local
+		}
+	}
+	c.setDraft(draft)
 	c.setAttachments(nil)
 	if c.remote != nil {
 		c.forward("open", t.ID)
@@ -1288,7 +1306,7 @@ func (c *chatController) resume(t Thread, after *sendRequest) {
 				t.HistoryLoaded = true
 				t.ReadOnly = readOnly
 				if readOnly {
-					t.Status = "只读：线程正在其他窗口运行"
+					t.Status = "只读 · 此对话正在其他窗口运行"
 				} else {
 					t.Status = ""
 				}
@@ -1305,6 +1323,9 @@ func (c *chatController) resume(t Thread, after *sendRequest) {
 					}
 				}
 			})
+			if err == nil {
+				c.refreshCodexGoal(t.ID)
+			}
 			if after != nil && (err != nil || readOnly || c.submit(*after) == 0) {
 				c.returnDraft(t.ID, after.Text, after.Attachments)
 			}
@@ -1349,7 +1370,7 @@ func (c *chatController) sendDraft(steer bool) {
 	req := sendRequest{Steer: steer, ThreadID: c.current().ID, Text: c.draft(), Attachments: append([]string(nil), c.attachments()...), Agent: c.currentAgent(), Model: c.currentBackend().Model(c), Effort: c.currentBackend().Effort(c), Policy: c.currentPermissionPolicy()}
 	if id := c.submit(req); id != 0 {
 		c.setActive(id)
-		c.setDraft("")
+		c.rememberDraft("")
 		c.setAttachments(nil)
 	}
 }
@@ -1492,7 +1513,7 @@ func (c *chatController) stopThread(id int) {
 		return
 	}
 	t := c.threadWithID(id)
-	if !t.Busy {
+	if !t.Busy && c.claudeRuns[t.ID] == nil {
 		return
 	}
 	c.update(t.ID, func(t *Thread) { t.StopRequested = true; t.Status = "Stopping…" })
