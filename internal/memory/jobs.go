@@ -1,0 +1,579 @@
+package memory
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+	"time"
+	"unicode/utf8"
+)
+
+const MaxExtractionInput = 16000
+
+type Evidence struct {
+	ID     string `json:"id"`
+	Kind   string `json:"kind"`
+	Text   string `json:"text"`
+	Source Source `json:"source"`
+}
+
+type ExtractionJob struct {
+	ExtractorAgent string     `json:"extractorAgent,omitempty"`
+	Key            string     `json:"key"`
+	Session        string     `json:"session"`
+	TurnID         string     `json:"turnId"`
+	TaskKey        string     `json:"taskKey"`
+	Evidence       []Evidence `json:"evidence,omitempty"`
+	Related        []Stamp    `json:"related,omitempty"`
+	Candidates     []Entry    `json:"candidates,omitempty"`
+	Fingerprint    string     `json:"fingerprint,omitempty"`
+	State          string     `json:"state"`
+	Attempts       int        `json:"attempts"`
+	CreatedAt      time.Time  `json:"createdAt"`
+	CompletedAt    time.Time  `json:"completedAt,omitzero"`
+	DurationMs     int64      `json:"durationMs,omitempty"`
+	Error          string     `json:"error,omitempty"`
+	Accepted       int        `json:"accepted,omitempty"`
+	Rejected       int        `json:"rejected,omitempty"`
+}
+
+type Candidate struct {
+	Action     string `json:"action"`
+	ID         string `json:"id"`
+	Version    uint64 `json:"version"`
+	Kind       string `json:"kind"`
+	Content    string `json:"content"`
+	TaskKey    string `json:"task_key"`
+	EvidenceID string `json:"evidence_id"`
+	Quote      string `json:"quote"`
+	ValidUntil string `json:"valid_until"`
+}
+
+func knowledgeFingerprint(d document) string {
+	b, _ := json.Marshal(struct {
+		Entries    []Entry
+		Settings   Settings
+		Tombstones []tombstone
+	}{latest(d), d.Settings, d.Tombstones})
+	v := sha256.Sum256(b)
+	return hex.EncodeToString(v[:])
+}
+
+func (s *Store) scopesOnDisk() []Scope {
+	seen := map[Scope]bool{}
+	for scope := range s.scopes {
+		seen[scope] = true
+	}
+	files, _ := filepath.Glob(filepath.Join(s.root, "projects", "*.json"))
+	for _, file := range files {
+		b, err := os.ReadFile(file)
+		if err != nil {
+			continue
+		}
+		var d document
+		if json.Unmarshal(b, &d) == nil && d.Scope.valid() && s.path(d.Scope) == file {
+			seen[d.Scope] = true
+		}
+	}
+	out := make([]Scope, 0, len(seen))
+	for scope := range seen {
+		if scope.Kind == "project" {
+			out = append(out, scope)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ProjectKey < out[j].ProjectKey })
+	return out
+}
+
+func jobRelated(s *Store, scope Scope, job ExtractionJob) []Entry {
+	var text strings.Builder
+	for _, e := range job.Evidence {
+		if e.Kind == "user_statement" {
+			text.WriteString(e.Text)
+			text.WriteByte('\n')
+		}
+	}
+	entries, _ := s.search(scope, text.String(), job.TaskKey, 5)
+	var out []Entry
+	for _, e := range entries {
+		if e.Scope == scope {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+func (s *Store) EnqueueExtraction(scope Scope, job ExtractionJob) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	d, err := s.load(scope)
+	if err != nil {
+		return false, err
+	}
+	if d.Settings.Disabled || !d.Settings.AutoExtract || d.DisabledSessions[job.Session] {
+		return false, nil
+	}
+	if job.Session == "" || job.TurnID == "" || len(job.Evidence) == 0 {
+		return false, errors.New("提炼缺少来源回合")
+	}
+	sum := sha256.Sum256([]byte(job.Session + "\x00" + job.TurnID))
+	job.Key = hex.EncodeToString(sum[:])
+	for _, old := range d.Jobs {
+		if old.Key == job.Key {
+			return false, nil
+		}
+	}
+	count := 0
+	for _, sc := range s.scopesOnDisk() {
+		doc, err := s.load(sc)
+		if err != nil {
+			continue
+		}
+		for _, j := range doc.Jobs {
+			if j.State == "pending" || j.State == "running" {
+				count++
+			}
+		}
+	}
+	if count >= 100 {
+		return false, errors.New("记忆提炼队列已满，已跳过此回合")
+	}
+	job.State, job.CreatedAt = "pending", s.now()
+	job.Candidates = jobRelated(s, scope, job)
+	for _, e := range job.Candidates {
+		job.Related = append(job.Related, stampOf(e))
+	}
+	job.Candidates = nil
+	b, _ := json.Marshal(job)
+	if utf8.RuneCount(b) > MaxExtractionInput-512 {
+		return false, errors.New("提炼输入超过上限，已跳过此回合")
+	}
+	d.Jobs = append(d.Jobs, job)
+	// Keep at most 100 terminal records per scope, without retaining evidence.
+	terminal := 0
+	kept := make([]ExtractionJob, 0, len(d.Jobs))
+	for i := len(d.Jobs) - 1; i >= 0; i-- {
+		j := d.Jobs[i]
+		if j.State != "pending" && j.State != "running" {
+			terminal++
+			if terminal > 100 || s.now().Sub(j.CreatedAt) > 30*24*time.Hour {
+				continue
+			}
+		}
+		kept = append(kept, j)
+	}
+	for i, j := 0, len(kept)-1; i < j; i, j = i+1, j-1 {
+		kept[i], kept[j] = kept[j], kept[i]
+	}
+	d.Jobs = kept
+	return true, s.commit(d)
+}
+
+func finishJob(j *ExtractionJob, state, message string, now time.Time) {
+	j.State, j.Error, j.CompletedAt = state, message, now
+	j.Evidence, j.Candidates = nil, nil
+}
+
+func (s *Store) RecoverExtractions() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, scope := range s.scopesOnDisk() {
+		d, err := s.load(scope)
+		if err != nil {
+			continue
+		}
+		changed := false
+		for i := range d.Jobs {
+			j := &d.Jobs[i]
+			if j.State == "running" {
+				changed = true
+				if j.Attempts >= 2 {
+					finishJob(j, "failed", "提炼被中断，重试次数已用完", s.now())
+				} else {
+					j.State = "pending"
+				}
+			}
+		}
+		if changed {
+			if err = s.commit(d); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (s *Store) ClaimExtraction() (Scope, ExtractionJob, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, scope := range s.scopesOnDisk() {
+		d, err := s.load(scope)
+		if err != nil {
+			continue
+		}
+		for i := range d.Jobs {
+			j := &d.Jobs[i]
+			if j.State != "pending" {
+				continue
+			}
+			if d.Settings.Disabled || !d.Settings.AutoExtract || d.DisabledSessions[j.Session] {
+				finishJob(j, "canceled", "项目已停用自动提炼", s.now())
+				if err = s.commit(d); err != nil {
+					return Scope{}, ExtractionJob{}, false, err
+				}
+				continue
+			}
+			j.ExtractorAgent = d.Settings.ExtractionAgent()
+			j.Candidates = jobRelated(s, scope, *j)
+			// Candidate context is optional; never trim user evidence to fit it.
+			for {
+				b, _ := json.Marshal(j)
+				if utf8.RuneCount(b) <= MaxExtractionInput || len(j.Candidates) == 0 {
+					break
+				}
+				j.Candidates = j.Candidates[:len(j.Candidates)-1]
+			}
+			j.Fingerprint = knowledgeFingerprint(d)
+			j.State = "running"
+			j.Attempts++
+			if err = s.commit(d); err != nil {
+				return Scope{}, ExtractionJob{}, false, err
+			}
+			return scope, *j, true, nil
+		}
+	}
+	return Scope{}, ExtractionJob{}, false, nil
+}
+
+func sameSource(a, b Source) bool {
+	if a.Thread == "" || a.Thread != b.Thread {
+		return false
+	}
+	if a.LocalTurnID != "" && a.LocalTurnID == b.LocalTurnID {
+		return true
+	}
+	return a.MessageID != "" && a.MessageID == b.MessageID || a.TurnID != "" && a.TurnID == b.TurnID
+}
+
+func scrubForgottenJobs(d *document, id string, sources []Source) {
+	for i := range d.Jobs {
+		j := &d.Jobs[i]
+		hit := false
+		for _, v := range j.Related {
+			if v.ID == id {
+				hit = true
+			}
+		}
+		for _, e := range j.Candidates {
+			if e.ID == id {
+				hit = true
+			}
+		}
+		for _, e := range j.Evidence {
+			for _, src := range sources {
+				if sameSource(e.Source, src) {
+					hit = true
+				}
+			}
+		}
+		if hit {
+			finishJob(j, "canceled", "引用的记忆已忘记", time.Now())
+		}
+	}
+}
+
+func deletionRequest(text string) bool {
+	lower := strings.ToLower(text)
+	lower = strings.TrimSpace(lower)
+	for _, word := range []string{"忘记", "请忘记", "帮我忘记", "不要再记", "删除这条记忆", "forget", "please forget", "remove this memory", "delete this memory"} {
+		if strings.HasPrefix(lower, word) {
+			return true
+		}
+	}
+	return false
+}
+
+func validateCandidate(d document, job ExtractionJob, c Candidate) (Mutation, string, error) {
+	var ev Evidence
+	for _, e := range job.Evidence {
+		if e.ID == c.EvidenceID {
+			ev = e
+			break
+		}
+	}
+	if ev.ID == "" || strings.TrimSpace(c.Quote) == "" || !strings.Contains(ev.Text, c.Quote) {
+		return Mutation{}, "", errors.New("提炼证据不属于本轮")
+	}
+	if ev.Kind != "user_statement" && ev.Kind != "tool_result" && ev.Kind != "assistant_report" {
+		return Mutation{}, "", errors.New("无效证据类别")
+	}
+	if ev.Kind == "assistant_report" && c.Kind != "progress" {
+		return Mutation{}, "", errors.New("助手报告不能成为已验证事实")
+	}
+	if c.Kind == "preference" && ev.Kind != "user_statement" {
+		return Mutation{}, "", errors.New("偏好必须来自用户声明")
+	}
+	if c.Action != "add" {
+		offered := false
+		for _, e := range job.Candidates {
+			if e.ID == c.ID && e.Version == c.Version {
+				offered = true
+			}
+		}
+		if !offered {
+			return Mutation{}, "", errors.New("修改目标不在候选列表")
+		}
+		i, err := target(d, c.ID, c.Version)
+		if err != nil {
+			return Mutation{}, "", err
+		}
+		_ = i
+	} else if c.ID != "" || c.Version != 0 {
+		return Mutation{}, "", errors.New("新增不能指定目标")
+	}
+	if c.Action == "forget" && (ev.Kind != "user_statement" || !deletionRequest(c.Quote)) {
+		return Mutation{}, "", errors.New("遗忘需要用户明确要求")
+	}
+	source := ev.Source
+	source.Quote, source.EvidenceKind = c.Quote, ev.Kind
+	for _, mark := range d.Tombstones {
+		for _, old := range mark.Sources {
+			if sameSource(source, old) {
+				return Mutation{}, "", errors.New("已忘记的来源不能回灌")
+			}
+		}
+		sum := sha256.Sum256([]byte(c.Content))
+		digest := hex.EncodeToString(sum[:])
+		for _, v := range mark.Digests {
+			if v == digest {
+				return Mutation{}, "", errors.New("已忘记的正文不能自动写回")
+			}
+		}
+	}
+	m := Mutation{ID: c.ID, Version: c.Version, Kind: c.Kind, Content: strings.TrimSpace(c.Content), TaskKey: c.TaskKey, Sources: []Source{source}, ObservedAt: source.ObservedAt}
+	if c.ValidUntil != "" {
+		until, err := time.Parse(time.RFC3339, c.ValidUntil)
+		if err != nil {
+			return Mutation{}, "", err
+		}
+		m.ValidUntil = until
+	}
+	if c.Kind == "progress" && (job.TaskKey == "" || c.TaskKey != job.TaskKey) {
+		return Mutation{}, "", errors.New("项目进展任务身份不匹配")
+	}
+	if c.Action != "forget" {
+		if err := validate(m, d.Scope); err != nil {
+			return Mutation{}, "", err
+		}
+	}
+	return m, ev.Kind, nil
+}
+
+// CompleteExtraction commits all accepted candidates and terminal job state
+// atomically. Any intervening explicit mutation invalidates the whole result.
+func (s *Store) CompleteExtraction(scope Scope, key string, candidates []Candidate, duration time.Duration, runError error, requeue bool) ([]Entry, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	d, err := s.load(scope)
+	if err != nil {
+		return nil, err
+	}
+	index := -1
+	for i := range d.Jobs {
+		if d.Jobs[i].Key == key {
+			index = i
+			break
+		}
+	}
+	if index < 0 || d.Jobs[index].State != "running" {
+		return nil, nil
+	}
+	j := d.Jobs[index]
+	j.DurationMs = duration.Milliseconds()
+	if runError != nil {
+		if requeue {
+			j.State = "pending"
+			j.Attempts--
+		} else if j.Attempts < 2 {
+			j.State = "pending"
+			j.Error = "提炼调用失败，等待重试"
+		} else {
+			finishJob(&j, "failed", "提炼调用失败，已停止重试", s.now())
+		}
+		d.Jobs[index] = j
+		return nil, s.commit(d)
+	}
+	if d.Settings.Disabled || !d.Settings.AutoExtract || d.DisabledSessions[j.Session] || j.Fingerprint != knowledgeFingerprint(d) {
+		finishJob(&j, "stale", "记忆或设置已变化，未采用旧结果", s.now())
+		d.Jobs[index] = j
+		return nil, s.commit(d)
+	}
+	var accepted []Entry
+	if len(candidates) > 3 {
+		finishJob(&j, "failed", "提炼结果超过三项", s.now())
+		d.Jobs[index] = j
+		return nil, s.commit(d)
+	}
+	for _, candidate := range candidates {
+		m, _, err := validateCandidate(d, j, candidate)
+		if err != nil {
+			j.Rejected++
+			continue
+		}
+		if candidate.Action == "forget" {
+			s.searchIndex = nil
+			i, _ := target(d, m.ID, m.Version)
+			old := d.Entries[i]
+			mark := tombstone{ID: old.ID, Version: old.Version, Revision: d.Revision + 1}
+			kept := make([]Entry, 0, len(d.Entries))
+			for _, e := range d.Entries {
+				if e.ID != old.ID {
+					kept = append(kept, e)
+					continue
+				}
+				sum := sha256.Sum256([]byte(e.Content))
+				mark.Digests = append(mark.Digests, hex.EncodeToString(sum[:]))
+				for _, src := range e.Sources {
+					src.Quote = ""
+					mark.Sources = append(mark.Sources, src)
+				}
+			}
+			e := Entry{ID: old.ID, Version: old.Version + 1, Scope: scope, State: "forgotten", CreatedAt: old.CreatedAt, UpdatedAt: s.now()}
+			d.Entries = append(kept, e)
+			d.Tombstones = append(d.Tombstones, mark)
+			scrubForgottenJobs(&d, old.ID, mark.Sources)
+			accepted = append(accepted, e)
+			continue
+		}
+		if candidate.Action != "add" && candidate.Action != "supersede" && candidate.Action != "conflict" {
+			j.Rejected++
+			continue
+		}
+		duplicate := false
+		for _, e := range latest(d) {
+			if e.State == "active" && normalized(e.Content) == normalized(m.Content) {
+				duplicate = true
+			}
+		}
+		if duplicate {
+			continue
+		}
+		e := Entry{Scope: scope, Kind: m.Kind, Content: m.Content, TaskKey: m.TaskKey, Sources: m.Sources, ObservedAt: m.ObservedAt, ValidUntil: m.ValidUntil, State: "active", Version: 1, CreatedAt: s.now(), UpdatedAt: s.now()}
+		if e.Kind == "progress" && e.ValidUntil.IsZero() {
+			e.ValidUntil = e.ObservedAt.Add(7 * 24 * time.Hour)
+		}
+		if m.ID != "" {
+			i, err := target(d, m.ID, m.Version)
+			if err != nil {
+				j.Rejected++
+				continue
+			}
+			old := d.Entries[i]
+			if candidate.Action == "conflict" {
+				d.Entries[i].State = "superseded"
+				conflict := old
+				conflict.Version++
+				conflict.Supersedes = old.Version
+				conflict.State = "conflicted"
+				conflict.UpdatedAt = s.now()
+				d.Entries = append(d.Entries, conflict)
+				e.State = "conflicted"
+			} else {
+				d.Entries[i].State = "superseded"
+				e.ID, e.Version, e.Supersedes, e.CreatedAt = old.ID, old.Version+1, old.Version, old.CreatedAt
+				e.Sources = append(append([]Source(nil), old.Sources...), m.Sources...)
+				if len(e.Sources) > 8 {
+					e.Sources = e.Sources[len(e.Sources)-8:]
+				}
+			}
+		}
+		if e.ID == "" {
+			e.ID, err = newID()
+			if err != nil {
+				return nil, err
+			}
+		}
+		d.Entries = append(d.Entries, e)
+		accepted = append(accepted, e)
+	}
+	j.Accepted = len(accepted)
+	finishJob(&j, "completed", "", s.now())
+	d.Jobs[index] = j
+	if err = s.commit(d); err != nil {
+		return nil, err
+	}
+	return accepted, nil
+}
+
+type ExtractionStatus struct {
+	Pending        int   `json:"pending"`
+	Completed      int   `json:"completed"`
+	Failed         int   `json:"failed"`
+	Rejected       int   `json:"rejected"`
+	Accepted       int   `json:"accepted"`
+	LastDurationMs int64 `json:"lastDurationMs"`
+}
+
+func (s *Store) ExtractionStatus(scope Scope) (ExtractionStatus, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	d, err := s.load(scope)
+	if err != nil {
+		return ExtractionStatus{}, err
+	}
+	var out ExtractionStatus
+	for _, j := range d.Jobs {
+		switch j.State {
+		case "pending", "running":
+			out.Pending++
+		case "completed":
+			out.Completed++
+		default:
+			out.Failed++
+		}
+		out.Accepted += j.Accepted
+		out.Rejected += j.Rejected
+		if j.DurationMs > 0 {
+			out.LastDurationMs = j.DurationMs
+		}
+	}
+	return out, nil
+}
+
+func (j ExtractionJob) InputJSON() ([]byte, error) {
+	b, err := json.Marshal(j)
+	if err == nil && utf8.RuneCount(b) > MaxExtractionInput {
+		return nil, fmt.Errorf("提炼输入超过 %d 字符", MaxExtractionInput)
+	}
+	return b, err
+}
+
+func (s *Store) ConfigureSession(scope Scope, session string, disabled bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	d, err := s.load(scope)
+	if err != nil {
+		return err
+	}
+	if d.DisabledSessions == nil {
+		d.DisabledSessions = map[string]bool{}
+	}
+	if disabled {
+		d.DisabledSessions[session] = true
+		delete(d.Sessions, session)
+		for i := range d.Jobs {
+			if d.Jobs[i].Session == session && (d.Jobs[i].State == "pending" || d.Jobs[i].State == "running") {
+				finishJob(&d.Jobs[i], "canceled", "当前会话已禁用自动记忆", s.now())
+			}
+		}
+	} else {
+		delete(d.DisabledSessions, session)
+	}
+	return s.commit(d)
+}

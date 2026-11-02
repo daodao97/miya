@@ -260,7 +260,7 @@ func (c *chatController) mcpDelegate(r mcpRequest) (mcpDelegateResult, error) {
 		}
 		text += "\n\n" + referenceText(ref, threadRefTitle(caller))
 	}
-	id := c.submit(sendRequest{ThreadID: r.Thread, Agent: agent, Project: c.threadWorkspace(caller.ID), Text: text})
+	id := c.submit(sendRequest{ThreadID: r.Thread, Agent: agent, Project: c.threadWorkspace(caller.ID), Text: text, MemoryControl: true})
 	if id == 0 {
 		return mcpDelegateResult{}, errors.New(firstNonEmpty(c.lastSubmitError, "交付失败：目标 agent 还没有就绪，或对话是只读的"))
 	}

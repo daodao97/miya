@@ -36,13 +36,15 @@ type Options struct {
 	Args, Env                                             []string
 }
 type Frame struct {
-	Type           string          `json:"type"`
-	ToolUseResult  json.RawMessage `json:"tool_use_result"`
-	CommandState   string          `json:"state"`
-	WakeupSource   string          `json:"wakeup_source"`
-	SchedulesKnown bool            `json:"-"`
-	Schedules      []ScheduledTask `json:"-"`
-	KeepingAlive   bool            `json:"-"`
+	Type             string          `json:"type"`
+	ToolUseResult    json.RawMessage `json:"tool_use_result"`
+	CommandState     string          `json:"state"`
+	WakeupSource     string          `json:"wakeup_source"`
+	SchedulesKnown   bool            `json:"-"`
+	Schedules        []ScheduledTask `json:"-"`
+	KeepingAlive     bool            `json:"-"`
+	WaitingForAgents bool            `json:"-"`
+	AgentTasks       []AgentTask     `json:"-"`
 	// Model is the model a system init frame reports.
 	Model     string `json:"model"`
 	Subtype   string `json:"subtype"`
@@ -154,8 +156,8 @@ func (c *Client) closeInput() {
 	c.mu.Unlock()
 }
 
-// Send reuses an idle process that owns native schedules. Starting a new
-// process for this turn would discard session-only /loop jobs.
+// Send reuses an idle process that owns background work. Starting a new
+// process would discard its native schedules and background agents.
 func (c *Client) Send(sessionID string, content []map[string]any) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -317,6 +319,7 @@ func Start(parent context.Context, o Options, onFrame func(Frame), onDone func(e
 		scanner.Buffer(make([]byte, 65536), 16*1024*1024)
 		initialized, finished := false, false
 		var schedules scheduleTracker
+		var agents agentTracker
 		var runErr error
 		timer := time.AfterFunc(30*time.Second, func() { c.cancel() })
 		defer timer.Stop()
@@ -362,15 +365,17 @@ func Start(parent context.Context, o Options, onFrame func(Frame), onDone func(e
 				continue
 			}
 			schedules.apply(&f)
-			if f.Type == "command_lifecycle" && f.CommandState == "started" {
+			agents.apply(&f)
+			if f.ParentToolUseID == "" && (f.Type == "command_lifecycle" && f.CommandState == "started" || f.Type == "assistant" || f.Type == "stream_event") {
+				finished = false
 				c.mu.Lock()
-				c.open, c.idle = true, false
+				c.open, c.idle = !c.stopping, false
 				c.mu.Unlock()
 			}
-			if f.Type == "result" {
+			if f.Type == "result" && f.ParentToolUseID == "" {
 				finished = true
 				c.mu.Lock()
-				keep := schedules.active() && !c.stopping && !f.IsError
+				keep := (schedules.active() || agents.active()) && !c.stopping && !f.IsError
 				f.KeepingAlive = keep
 				c.open, c.idle = false, keep
 				c.mu.Unlock()
@@ -387,11 +392,13 @@ func Start(parent context.Context, o Options, onFrame func(Frame), onDone func(e
 		}
 
 		e := cmd.Wait()
-		if runErr == nil && !finished {
+		if runErr == nil && (!finished || agents.active()) {
 			if !initialized {
 				runErr = errors.New("Claude Code 初始化失败或超时，请检查 CLI 登录状态")
 			} else if e != nil {
 				runErr = e
+			} else if agents.active() {
+				runErr = errors.New("Claude Code 在子 agent 完成前退出")
 			} else {
 				runErr = errors.New("Claude Code 在返回结果前退出")
 			}

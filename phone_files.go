@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"io/fs"
@@ -106,6 +107,30 @@ func (s desktopFileServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer root.Close()
+	if parts[1] == ".miya-references" {
+		files, err := indexProjectFiles(ctx, project.Path)
+		if err != nil {
+			http.Error(w, "无法搜索项目文件，请稍后重试", http.StatusServiceUnavailable)
+			return
+		}
+		// Keep suggestions inside the selected project, including when rg
+		// reports a symlink or a file disappears during indexing.
+		valid := files[:0]
+		for _, name := range files {
+			if ctx.Err() != nil {
+				http.Error(w, "文件搜索已超时", http.StatusServiceUnavailable)
+				return
+			}
+			if info, err := root.Stat(name); err == nil && info.Mode().IsRegular() {
+				valid = append(valid, name)
+			}
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		if r.Method != "HEAD" {
+			_ = json.NewEncoder(w).Encode(fileChoices(valid, r.URL.Query().Get("q")))
+		}
+		return
+	}
 	name := strings.TrimSuffix(parts[1], "/")
 	if name == "" {
 		name = "."

@@ -120,15 +120,38 @@ func (claudeBackend) Steer(c *chatController, t Thread, req sendRequest) bool {
 	if run == nil || !run.Steerable() {
 		return false
 	}
-	content, err := claudeInput(req.Text, req.Attachments)
-	if err != nil || run.Steer(t.ServerID, content) != nil {
-		return false
-	}
 	shown, images := attachmentDisplay(req.Text, req.Attachments)
 	now := time.Now().UnixMilli()
+	pending := c.nextID()
+	localTurn := c.beginMemoryTurn(t, req, pending)
 	c.update(t.ID, func(t *Thread) {
 		t.LastOutputAtMs, t.LastActivityAt = now, now
-		t.Messages = append(t.Messages, Message{ID: c.nextID(), Role: "user", Content: shown, Images: images, Parts: req.Parts, SentAtMs: now})
+		t.Messages = append(t.Messages, Message{ID: pending, Role: "user", Content: shown, Images: images, Parts: req.Parts, SentAtMs: now, MemoryTurnID: localTurn, MemoryControl: req.MemoryControl || req.KeepSessionSettings})
 	})
+	project, session := c.threadWorkspace(t.ID), c.threadRef(t).URL()
+	go func() {
+		mem := c.prepareMemoryInput(t, req, project, session)
+		content, err := claudeInput(mem.text(req.Text), req.Attachments)
+		if err == nil {
+			err = run.Steer(t.ServerID, content)
+		}
+		mem.finish(err == nil)
+		if err != nil {
+			c.dispatch(func() {
+				c.update(t.ID, func(t *Thread) {
+					for i, m := range t.Messages {
+						if m.ID == pending {
+							t.Messages = append(t.Messages[:i:i], t.Messages[i+1:]...)
+							break
+						}
+					}
+				})
+				req.Steer = false
+				if c.submit(req) == 0 {
+					c.returnDraft(t.ID, req.Text, req.Attachments)
+				}
+			})
+		}
+	}()
 	return true
 }

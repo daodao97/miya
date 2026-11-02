@@ -35,17 +35,35 @@ func claudeSubAgentStatus(toolStatus string) string {
 
 // claudeTaskStatus normalizes a task frame's status, "" when it tells none.
 func claudeTaskStatus(s string) string {
-	switch strings.ToLower(s) {
-	case "pending", "running", "started":
-		return subAgentRunning
-	case "completed", "success", "done":
-		return subAgentCompleted
-	case "failed", "error", "errored":
-		return subAgentFailed
-	case "killed", "stopped", "cancelled", "canceled", "interrupted", "aborted":
-		return subAgentInterrupted
+	return claude.TaskStatus(s)
+}
+
+func applyClaudeAgentTasks(t *Thread, tasks []claude.AgentTask) {
+	for _, task := range tasks {
+		if a := claudeTaskAgent(t, task.ToolUseID, task.ID); a != nil {
+			a.ID, a.Status = task.ID, task.Status
+			if a.Name == "" {
+				a.Name = firstLine(task.Name)
+			}
+			if task.Detail != "" {
+				a.Detail = firstLine(task.Detail)
+			}
+			if task.Steps > a.Steps {
+				a.Steps = task.Steps
+			}
+		}
 	}
-	return ""
+}
+
+func interruptClaudeAgents(t *Thread, status string) {
+	for i := range t.Messages {
+		for j := range t.Messages[i].Agents {
+			a := &t.Messages[i].Agents[j]
+			if subAgentActive(a.Status) {
+				a.Status, a.Detail = status, "进程已结束，未收到子任务完成通知"
+			}
+		}
+	}
 }
 
 // claudeTaskFrame applies a system task frame, Claude Code's own report of a
@@ -136,7 +154,20 @@ func claudeSubAgentStep(t *Thread, parent string, blocks []claude.Block) {
 // claudeFinishSubAgents settles a Task call's sub-agent as its result
 // arrives, the result's first line its last word. A background sub-agent's
 // call returns as it starts; its task frames tell when it ends.
-func claudeFinishSubAgents(m *Message, output string) {
+func claudeFinishSubAgents(m *Message, output string, metadata json.RawMessage) {
+	id, async := claude.AsyncAgentResult(metadata, output)
+	if async && m.Status != "failed" {
+		for i := range m.Agents {
+			if id != "" {
+				m.Agents[i].ID = id
+			}
+			// A repeated acknowledgement must not reopen a finished task.
+			if subAgentActive(m.Agents[i].Status) {
+				m.Agents[i].Detail = "已在后台启动，等待完成通知"
+			}
+		}
+		return
+	}
 	if _, input := claudeToolCall(*m); input["run_in_background"] == true && m.Status != "failed" {
 		return
 	}
@@ -200,6 +231,9 @@ func claudeTaskReport(output string) (string, int) {
 // report without its wrapping, any other tool's output as it is.
 func claudeToolOutput(m Message, output string) string {
 	if len(m.Agents) > 0 {
+		if _, async := claude.AsyncAgentResult(nil, output); async {
+			return "子 agent 已在后台启动，等待完成通知。"
+		}
 		if text, _ := claudeTaskReportText(output); text != "" {
 			return text
 		}

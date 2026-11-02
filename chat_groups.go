@@ -33,6 +33,20 @@ func displayedThreads(all []Thread, expanded bool) []Thread {
 
 func threadMessageGroups(t Thread, groups []messageGroup) []messageGroup {
 	if !t.Busy {
+		// Older services recorded completion only on the thread. Recover its
+		// latest response without mutating the controller's message slice.
+		if len(groups) > 0 && t.StartedAtMs > 0 && t.CompletedAtMs >= t.StartedAtMs {
+			g := &groups[len(groups)-1]
+			if !g.User {
+				g.Messages = append([]Message(nil), g.Messages...)
+				for i := range g.Messages {
+					if g.Messages[i].CompletedAtMs == 0 {
+						g.Messages[i].StartedAtMs = t.StartedAtMs
+						g.Messages[i].CompletedAtMs = t.CompletedAtMs
+					}
+				}
+			}
+		}
 		return groups
 	}
 	for i := range groups {
@@ -142,6 +156,9 @@ func turnElapsedLabel(messages []Message, active bool) string {
 		return ""
 	}
 	if end == 0 {
+		if !active {
+			return ""
+		}
 		end = time.Now().UnixMilli()
 	}
 	verb := tr("Worked for ")

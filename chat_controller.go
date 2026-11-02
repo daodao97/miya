@@ -41,6 +41,9 @@ type chatController struct {
 	memory         *memory.Store // non-nil only in the background service
 	memoryCalls    int           // executor-owned; pending IO prevents idle service exit
 	memoryRevision uint64
+	memoryEngine   *memoryEngine
+	memoryTurns    map[int]memoryTurn
+	memoryResults  map[string]bool
 
 	// auto is the automations, in the controller that runs them.
 	auto *automationState
@@ -312,6 +315,7 @@ var persistThreadListCache = writeThreadListCache
 
 // threadMeta is what the sidebar's cache keeps of a conversation.
 type threadMeta struct {
+	MemoryDisabled                       bool
 	ID                                   int
 	ServerID, Title, Agent, Project, Age string
 	LastActivityAt                       int64
@@ -319,7 +323,7 @@ type threadMeta struct {
 }
 
 func threadMetaOf(t Thread) threadMeta {
-	return threadMeta{t.ID, t.ServerID, t.Title, t.Agent, t.Project, t.Age, t.LastActivityAt, t.Resumed}
+	return threadMeta{t.MemoryDisabled, t.ID, t.ServerID, t.Title, t.Agent, t.Project, t.Age, t.LastActivityAt, t.Resumed}
 }
 
 func writeThreadListCache(projects map[string][]Thread) {
@@ -335,7 +339,8 @@ func writeThreadListCache(projects map[string][]Thread) {
 	for project, threads := range projects {
 		for _, thread := range threads {
 			metadata[project] = append(metadata[project], Thread{
-				ID: thread.ID, ServerID: thread.ServerID, Title: thread.Title, Agent: thread.Agent,
+				MemoryDisabled: thread.MemoryDisabled,
+				ID:             thread.ID, ServerID: thread.ServerID, Title: thread.Title, Agent: thread.Agent,
 				Resumed: threadAgent(thread) != agentCodex && thread.Resumed,
 				Project: thread.Project, Age: thread.Age, LastActivityAt: thread.LastActivityAt,
 			})
@@ -1341,6 +1346,7 @@ func (c *chatController) resume(t Thread, after *sendRequest) {
 					if turn.Status == "inProgress" && !readOnly {
 						t.Busy = true
 						t.TurnID = turn.ID
+						t.StartedAtMs, t.CompletedAtMs = codexTurnTimes(turn)
 						t.Status = "Working…"
 					}
 				}
@@ -1366,6 +1372,7 @@ func (c *chatController) historyMessages(remote codex.Thread) []Message {
 func prepareHistoryMessages(remote codex.Thread) []Message {
 	var out []Message
 	for _, turn := range remote.Turns {
+		start, end := codexTurnTimes(turn)
 		for _, item := range turn.Items {
 			if m, ok := itemMessage(item); ok {
 				if m.Status == "" {
@@ -1377,11 +1384,12 @@ func prepareHistoryMessages(remote codex.Thread) []Message {
 					m.Parts = messageParts(own)
 				}
 				m.TurnID = turn.ID
+				m.SentAtMs, m.StartedAtMs, m.CompletedAtMs = start, start, end
 				out = append(out, m)
 			}
 		}
 		if turn.Error != nil {
-			out = append(out, Message{Role: "error", Kind: "error", Status: "failed", Content: turn.Error.Message, TurnID: turn.ID, ItemID: "turn-error"})
+			out = append(out, Message{Role: "error", Kind: "error", Status: "failed", Content: turn.Error.Message, TurnID: turn.ID, ItemID: "turn-error", SentAtMs: start, StartedAtMs: start, CompletedAtMs: end})
 		}
 	}
 	return out
@@ -1430,6 +1438,8 @@ func (c *chatController) sendCodex(req sendRequest) int {
 	model, effort, policy := req.Model, req.Effort, req.Policy
 	serviceTier := loadSetting("codexServiceTier")
 	sentAt := time.Now().UnixMilli()
+	pendingUserID := c.nextID()
+	localTurn := c.beginMemoryTurn(t, req, pendingUserID)
 	c.update(id, func(t *Thread) {
 		t.Busy = true
 		t.LastActivityAt = sentAt
@@ -1437,7 +1447,7 @@ func (c *chatController) sendCodex(req sendRequest) int {
 		t.Draft = ""
 		t.StopRequested = false
 		content, images := attachmentDisplay(text, attachments)
-		t.Messages = append(t.Messages, Message{ID: c.nextID(), Role: "user", Content: content, Images: images, Parts: req.Parts, ItemID: "pending-user", SentAtMs: sentAt})
+		t.Messages = append(t.Messages, Message{ID: pendingUserID, Role: "user", Content: content, Images: images, Parts: req.Parts, ItemID: "pending-user", SentAtMs: sentAt, MemoryTurnID: localTurn, MemoryControl: req.MemoryControl || req.KeepSessionSettings})
 	})
 	go func() {
 		ctx, cancel := context.WithTimeout(c.ctx, 45*time.Second)
@@ -1475,8 +1485,10 @@ func (c *chatController) sendCodex(req sendRequest) int {
 			Turn codex.Turn `json:"turn"`
 		}
 		if err == nil {
-			input := []map[string]any{{"type": "text", "text": text, "text_elements": []any{}}}
-			input = append(input, fileMentionInputs(text, cwd)...)
+			mem := c.prepareMemoryInput(t, req, cwd, c.threadRef(Thread{ServerID: serverID}).URL())
+			input := []map[string]any{{"type": "text", "text": mem.text(text), "text_elements": []any{}}}
+			own, _ := splitReferenceContext(text)
+			input = append(input, fileMentionInputs(own, cwd)...)
 			input = append(input, c.attachmentInputs(attachments)...)
 			params := map[string]any{"threadId": serverID, "cwd": cwd, "input": input, "approvalPolicy": approvalForPermissionPolicy(policy), "approvalsReviewer": reviewerForPermissionPolicy(policy), "sandboxPolicy": turnSandboxForPermissionPolicy(policy)}
 			if model != "" {
@@ -1495,9 +1507,11 @@ func (c *chatController) sendCodex(req sendRequest) int {
 				missingThread = true
 				err = client.Call(ctx, "thread/resume", map[string]any{"threadId": serverID, "cwd": cwd, "sandbox": sandboxForPermissionPolicy(policy), "approvalPolicy": approvalForPermissionPolicy(policy), "approvalsReviewer": reviewerForPermissionPolicy(policy)}, nil)
 				if err == nil {
+					input[0]["text"] = mem.text(text)
 					err = client.Call(ctx, "turn/start", params, &result)
 				}
 			}
+			mem.finish(err == nil)
 		}
 		c.dispatch(func() {
 			if c.client != client {

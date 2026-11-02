@@ -52,6 +52,7 @@ func (c *chatController) handle(f codex.Frame) {
 	if target.ID == 0 {
 		return
 	}
+	completedMemory := false
 	c.update(target.ID, func(t *Thread) {
 		// Only fresh model output proves an upstream reconnection succeeded.
 		// Commands may still produce output while the model stream retries.
@@ -87,6 +88,9 @@ func (c *chatController) handle(f codex.Frame) {
 			t.Busy = true
 			t.Status = "Working…"
 			t.StartedAtMs = now
+			if start, _ := codexTurnTimes(e.Turn); start > 0 {
+				t.StartedAtMs = start
+			}
 			t.CompletedAtMs = 0
 		case "item/agentMessage/delta", "item/plan/delta", "item/reasoning/summaryTextDelta", "item/reasoning/summaryPartAdded", "item/commandExecution/outputDelta", "item/fileChange/outputDelta":
 			role, kind := "assistant", "agentMessage"
@@ -119,6 +123,9 @@ func (c *chatController) handle(f codex.Frame) {
 			now := time.Now().UnixMilli()
 			t.Messages = append(t.Messages, Message{ID: c.nextID(), Role: role, Kind: kind, Status: "inProgress", Content: e.Delta, ItemID: e.ItemID, TurnID: e.TurnID, SentAtMs: now, StartedAtMs: now})
 		case "item/started", "item/completed":
+			if f.Method == "item/completed" && strings.EqualFold(e.Item.Type, "contextCompaction") {
+				t.MemoryEpoch++
+			}
 			if e.Item.Type == "userMessage" {
 				for i := range t.Messages {
 					// The server sends started and completed as separate events.
@@ -179,14 +186,22 @@ func (c *chatController) handle(f codex.Frame) {
 			if t.TurnID != "" && t.TurnID != e.Turn.ID {
 				return
 			}
+			completedMemory = e.Turn.Status == "completed" && !t.StopRequested && e.Turn.Error == nil
 			t.CompletedAtMs = time.Now().UnixMilli()
+			start, end := codexTurnTimes(e.Turn)
+			if start > 0 {
+				t.StartedAtMs = start
+			}
+			if end > 0 {
+				t.CompletedAtMs = end
+			}
 			for i := range t.Messages {
 				m := &t.Messages[i]
 				if m.TurnID == e.Turn.ID && m.Status == "inProgress" {
 					m.Status = e.Turn.Status
 				}
 				if m.TurnID == e.Turn.ID {
-					if m.StartedAtMs == 0 {
+					if t.StartedAtMs > 0 {
 						m.StartedAtMs = t.StartedAtMs
 					}
 					m.CompletedAtMs = t.CompletedAtMs
@@ -235,6 +250,9 @@ func (c *chatController) handle(f codex.Frame) {
 			}
 		}
 	})
+	if completedMemory {
+		c.completedMemoryTurn(target.ID, e.Turn.ID)
+	}
 }
 func (c *chatController) clearApprovals(thread, turn string) {
 	out := []codex.Approval{}

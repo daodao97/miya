@@ -17,6 +17,9 @@ var mentionPlaceholder = regexp.MustCompile("\ue000([0-9]+)\ue001")
 // Replace only explicit reference objects; Markdown keeps ownership of code,
 // lists and formatting. Titles and IDs never serve as reverse lookup keys.
 func (app *chatApp) threadMessage(c *ui.Context, message Message) {
+	if message.Role == "user" {
+		message.Content = claudeCommandText(message.Content)
+	}
 	content, tags := app.threadReferenceContent(message.Content)
 	if len(tags) == 0 {
 		message.Content = content

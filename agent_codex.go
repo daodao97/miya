@@ -25,6 +25,7 @@ func resetCodexSession(t *Thread) {
 	t.Resumed, t.ReadOnly = false, false
 	t.Loaded, t.Loading, t.Busy, t.StopRequested = false, false, false, false
 	t.TurnID = ""
+	t.MemoryEpoch++
 	if t.Status == "Working…" || t.Status == "Starting…" || t.Status == "Stopping…" {
 		t.Status = ""
 	}
@@ -156,18 +157,22 @@ func (codexBackend) Steer(c *chatController, t Thread, req sendRequest) bool {
 	content, images := attachmentDisplay(req.Text, req.Attachments)
 	sentAt := time.Now().UnixMilli()
 	pending := c.nextID()
+	localTurn := c.beginMemoryTurn(t, req, pending)
 	c.update(t.ID, func(t *Thread) {
 		t.LastActivityAt = sentAt
-		t.Messages = append(t.Messages, Message{ID: pending, Role: "user", Content: content, Images: images, Parts: req.Parts, ItemID: "pending-user", SentAtMs: sentAt})
+		t.Messages = append(t.Messages, Message{ID: pending, Role: "user", Content: content, Images: images, Parts: req.Parts, ItemID: "pending-user", SentAtMs: sentAt, MemoryTurnID: localTurn, MemoryControl: req.MemoryControl || req.KeepSessionSettings})
 	})
-	input := []map[string]any{{"type": "text", "text": req.Text, "text_elements": []any{}}}
-	input = append(input, fileMentionInputs(req.Text, cwd)...)
-	input = append(input, c.attachmentInputs(req.Attachments)...)
-	params := map[string]any{"threadId": t.ServerID, "expectedTurnId": t.TurnID, "input": input}
 	go func() {
+		mem := c.prepareMemoryInput(t, req, cwd, c.threadRef(t).URL())
+		input := []map[string]any{{"type": "text", "text": mem.text(req.Text), "text_elements": []any{}}}
+		own, _ := splitReferenceContext(req.Text)
+		input = append(input, fileMentionInputs(own, cwd)...)
+		input = append(input, c.attachmentInputs(req.Attachments)...)
+		params := map[string]any{"threadId": t.ServerID, "expectedTurnId": t.TurnID, "input": input}
 		ctx, cancel := context.WithTimeout(c.parentContext(), 30*time.Second)
 		defer cancel()
 		err := client.Call(ctx, "turn/steer", params, nil)
+		mem.finish(err == nil)
 		if err == nil {
 			return
 		}

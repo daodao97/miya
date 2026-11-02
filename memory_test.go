@@ -53,6 +53,24 @@ func attachMemory(t *testing.T, c *chatController) {
 	c.memory = memory.New(filepath.Join(t.TempDir(), "memory"))
 }
 
+func TestMemoryAutomaticFeaturesCanStopAfterClaudeBecomesUnavailable(t *testing.T) {
+	app, _ := testApp(t)
+	c := app.c
+	attachMemory(t, c)
+	c.claudeBinary = "configured-claude"
+	settings := memory.Settings{AutoExtract: true, AutoInject: true}
+	completeMemory(t, c, "memoryConfigure", memoryRequest{Settings: &settings})
+	c.claudeBinary = ""
+	settings.Disabled = true
+	completeMemory(t, c, "memoryConfigure", memoryRequest{Settings: &settings})
+	settings.AutoExtract = false
+	completeMemory(t, c, "memoryConfigure", memoryRequest{Settings: &settings})
+	list := completeMemory(t, c, "memoryList", memoryRequest{}).(memoryList)
+	if !list.Settings.Disabled || list.Settings.AutoExtract {
+		t.Fatal("unavailable provider prevented stopping automation")
+	}
+}
+
 func TestMemoryConcurrentProjectsUseArgumentsForBothAdapters(t *testing.T) {
 	for _, agent := range []string{agentCodex, agentClaude} {
 		t.Run(agent, func(t *testing.T) {

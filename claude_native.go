@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"miya/internal/claude"
+	"miya/internal/memory"
 	"os"
 	"path/filepath"
 	"sort"
@@ -63,18 +65,24 @@ type claudeSession struct {
 
 // claudeEntry is the part of a line the app reads.
 type claudeEntry struct {
-	Type        string          `json:"type"`
-	UUID        string          `json:"uuid"`
-	ParentUUID  string          `json:"parentUuid"`
-	SessionID   string          `json:"sessionId"`
-	Cwd         string          `json:"cwd"`
-	Timestamp   string          `json:"timestamp"`
-	IsSidechain bool            `json:"isSidechain"`
-	IsMeta      bool            `json:"isMeta"`
-	AITitle     string          `json:"aiTitle"`
-	CustomTitle string          `json:"customTitle"`
-	Summary     string          `json:"summary"`
-	Message     json.RawMessage `json:"message"`
+	Type          string          `json:"type"`
+	UUID          string          `json:"uuid"`
+	ParentUUID    string          `json:"parentUuid"`
+	SessionID     string          `json:"sessionId"`
+	Cwd           string          `json:"cwd"`
+	Timestamp     string          `json:"timestamp"`
+	IsSidechain   bool            `json:"isSidechain"`
+	IsMeta        bool            `json:"isMeta"`
+	AITitle       string          `json:"aiTitle"`
+	CustomTitle   string          `json:"customTitle"`
+	Summary       string          `json:"summary"`
+	Message       json.RawMessage `json:"message"`
+	ToolUseResult json.RawMessage `json:"toolUseResult"`
+	Subtype       string          `json:"subtype"`
+	TaskID        string          `json:"task_id"`
+	ToolUseID     string          `json:"tool_use_id"`
+	Status        json.RawMessage `json:"status"`
+	Patch         json.RawMessage `json:"patch"`
 }
 
 type claudeBlock struct {
@@ -112,7 +120,7 @@ func claudeVisibleText(blocks []claudeBlock) string {
 		if b.Type != "text" {
 			continue
 		}
-		text := strings.TrimSpace(b.Text)
+		text := strings.TrimSpace(memory.StripContext(b.Text))
 		if text == "" || strings.HasPrefix(text, "[Request interrupted by user") || strings.HasPrefix(text, "<system-reminder>") || strings.HasPrefix(text, "<local-command-") {
 			continue
 		}
@@ -325,9 +333,17 @@ func parseClaudeSession(path string) ([]Message, error) {
 		_ = json.Unmarshal(e.Message, &m)
 		blocks := claudeBlocks(m.Content)
 		switch e.Type {
+		case "system":
+			claudeTaskFrame(&Thread{Messages: out}, claude.Frame{Subtype: e.Subtype, TaskID: e.TaskID, ToolUseID: e.ToolUseID, Status: e.Status, Patch: e.Patch, Summary: e.Summary})
 		case "user":
 			results := false
 			for _, b := range blocks {
+				if b.Type == "text" {
+					if f, ok := claude.TaskNotification(b.Text); ok {
+						claudeTaskFrame(&Thread{Messages: out}, f)
+						results = true
+					}
+				}
 				if b.Type != "tool_result" {
 					continue
 				}
@@ -342,7 +358,7 @@ func parseClaudeSession(path string) ([]Message, error) {
 						out[i].Content += "\n" + bounded(shown)
 					}
 					out[i].CompletedAtMs = at
-					claudeFinishSubAgents(&out[i], output)
+					claudeFinishSubAgents(&out[i], output, e.ToolUseResult)
 				}
 			}
 			if results || e.IsMeta {
@@ -367,8 +383,18 @@ func parseClaudeSession(path string) ([]Message, error) {
 					}
 				case "tool_use":
 					tools[b.ID] = len(out)
-					out = append(out, Message{Role: "tool", Kind: "claudeTool", Status: "completed", Content: b.Name + "\n" + string(b.Input), ItemID: b.ID, StartedAtMs: turnStart, CompletedAtMs: at, Agents: claudeSubAgent(b.ID, b.Name, b.Input, "completed")})
+					out = append(out, Message{Role: "tool", Kind: "claudeTool", Status: "completed", Content: b.Name + "\n" + string(b.Input), ItemID: b.ID, StartedAtMs: turnStart, CompletedAtMs: at, Agents: claudeSubAgent(b.ID, b.Name, b.Input, "inProgress")})
 				}
+			}
+		}
+	}
+	// A historical launch acknowledgement is not evidence of completion, and
+	// a history read cannot establish whether another process still owns it.
+	for i := range out {
+		for j := range out[i].Agents {
+			a := &out[i].Agents[j]
+			if subAgentActive(a.Status) {
+				a.Status, a.Detail = subAgentUnconfirmed, "历史记录中没有子任务完成通知"
 			}
 		}
 	}

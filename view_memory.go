@@ -139,26 +139,102 @@ func (app *chatApp) memoryView(c *ui.Context) {
 		})
 		ui.Text(c, "本机保存，Codex 与 Claude 共享。当前要求和项目文件优先。遗忘会清除 Miya 正文，不会删除 Agent 历史或备份。").FontSize(12).TextColor(muted).LineHeight(1.5)
 		if m.scope != "user" {
-			card(c.Key("memory-settings")).Gap(8).Children(func() {
+			card(c.Key("memory-settings")).Gap(16).Children(func() {
 				enabled := !m.list.Settings.Disabled
-				ui.Row(c).AlignItems(ui.Center).Gap(10).Children(func() {
+				ui.Row(c).FillWidth().AlignItems(ui.Start).Gap(10).Children(func() {
 					if ui.Switch(c.Key("enabled"), &enabled).Label("在当前项目使用记忆工具").Disabled(m.busy || m.loading).Changed() {
 						settings := m.list.Settings
 						settings.Disabled = !enabled
 						app.memoryAction("memoryConfigure", memoryRequest{Project: app.c.cwd, Settings: &settings}, nil)
 					}
-					ui.Text(c, "在当前项目使用记忆工具").FontSize(13)
+					ui.Column(c).Grow(1).MinWidth(0).Gap(3).Children(func() {
+						ui.Text(c, "在当前项目使用记忆工具").FontSize(13)
+						ui.Text(c, "项目总开关：允许 Agent 查询、保存、纠正和忘记记忆，并使用下方自动功能。关闭后保留已有记忆，仍可在此管理。").FontSize(12).TextColor(muted).LineHeight(1.5).FillWidth().Wrap()
+					})
 				})
 				useUser := m.list.Settings.UseUserPreferences
-				ui.Row(c).AlignItems(ui.Center).Gap(10).Children(func() {
+				ui.Row(c).FillWidth().AlignItems(ui.Start).Gap(10).Children(func() {
 					if ui.Switch(c.Key("user-preferences"), &useUser).Label("查询时包含用户偏好").Disabled(m.busy || m.loading).Changed() {
 						settings := m.list.Settings
 						settings.UseUserPreferences = useUser
 						app.memoryAction("memoryConfigure", memoryRequest{Project: app.c.cwd, Settings: &settings}, nil)
 					}
-					ui.Text(c, "查询时包含用户偏好").FontSize(13)
+					ui.Column(c).Grow(1).MinWidth(0).Gap(3).Children(func() {
+						ui.Text(c, "查询时包含用户偏好").FontSize(13)
+						ui.Text(c, "检索当前项目记忆时，一并查找「用户偏好」中保存的跨项目偏好，例如解释语言和个人习惯。").FontSize(12).TextColor(muted).LineHeight(1.5).FillWidth().Wrap()
+					})
 				})
-				ui.Text(c, "当前阶段使用本地关键词查询；自动注入与自动提炼尚未启用。").FontSize(12).TextColor(muted)
+				inject := m.list.Settings.AutoInject
+				ui.Row(c).FillWidth().AlignItems(ui.Start).Gap(10).Children(func() {
+					if ui.Switch(c.Key("auto-inject"), &inject).Label("发送时自动召回相关记忆").Disabled(m.busy || m.loading || !enabled).Changed() {
+						settings := m.list.Settings
+						settings.AutoInject = inject
+						app.memoryAction("memoryConfigure", memoryRequest{Project: app.c.cwd, Settings: &settings}, nil)
+					}
+					ui.Column(c).Grow(1).MinWidth(0).Gap(3).Children(func() {
+						ui.Text(c, "发送时自动召回相关记忆").FontSize(13)
+						ui.Text(c, "每次发送前，在本地查找相关记忆并附给当前 Agent。查找不额外调用模型；附加内容会占用对话上下文。").FontSize(12).TextColor(muted).LineHeight(1.5).FillWidth().Wrap()
+					})
+				})
+				extract := m.list.Settings.AutoExtract
+				ui.Row(c).FillWidth().AlignItems(ui.Start).Gap(10).Children(func() {
+					if ui.Switch(c.Key("auto-extract"), &extract).Label("回合完成后自动提炼记忆").Disabled(m.busy || m.loading || !enabled || !m.list.ExtractorAvailable && !m.list.Settings.AutoExtract).Changed() {
+						settings := m.list.Settings
+						settings.AutoExtract = extract
+						app.memoryAction("memoryConfigure", memoryRequest{Project: app.c.cwd, Settings: &settings}, nil)
+					}
+					ui.Column(c).Grow(1).MinWidth(0).Gap(3).Children(func() {
+						ui.Text(c, "回合完成后自动提炼记忆").FontSize(13)
+						ui.Text(c, "成功回合结束后，使用选定的 Agent 提炼并保存值得保留的信息，每轮最多三项，可撤销。会使用所选 Agent 的额度。").FontSize(12).TextColor(muted).LineHeight(1.5).FillWidth().Wrap()
+						if len(m.list.Extractors) > 0 {
+							ui.Row(c).FillWidth().Wrap().AlignItems(ui.Center).Gap(6).Margin(4, 0, 0, 0).Children(func() {
+								ui.Text(c, "提炼 Agent").FontSize(12).TextColor(muted)
+								for _, option := range m.list.Extractors {
+									agent := option.Agent
+									button := quiet(c.Key("extractor:" + agent)).Height(28).PaddingX(9).Gap(6).Label("记忆提炼 Agent：" + backendFor(agent).Name()).Disabled(m.busy || m.loading)
+									if agent == m.list.Settings.ExtractionAgent() {
+										button.Background(chosen)
+									}
+									button.Children(func() {
+										agentIcon(c, agent, 16)
+										ui.Text(c, backendFor(agent).Name()).FontSize(12)
+										if !option.Available {
+											ui.Text(c, "未配置").FontSize(11).TextColor(muted)
+										}
+									})
+									if button.Clicked() && agent != m.list.Settings.ExtractionAgent() {
+										settings := m.list.Settings
+										settings.ExtractorAgent = agent
+										app.memoryAction("memoryConfigure", memoryRequest{Project: app.c.cwd, Settings: &settings}, nil)
+									}
+								}
+							})
+							ui.Text(c, "独立于对话 Agent，按项目保存，使用所选 Agent 的默认模型。").FontSize(12).TextColor(muted).LineHeight(1.5).FillWidth().Wrap()
+						} else {
+							ui.Text(c, "当前后台尚不支持选择提炼 Agent，升级后可配置。").FontSize(12).TextColor(muted).FillWidth().Wrap()
+						}
+						if !m.list.ExtractorAvailable {
+							ui.Text(c, "当前没有可用的 "+backendFor(m.list.Settings.ExtractionAgent()).Name()+"，自动提炼暂不可用。").FontSize(12).TextColor(muted).FillWidth().Wrap()
+						}
+					})
+				})
+				if cur := app.c.current(); cur.ID != 0 {
+					sessionEnabled := !cur.MemoryDisabled
+					ui.Row(c).FillWidth().AlignItems(ui.Start).Gap(10).Children(func() {
+						if ui.Switch(c.Key("session-memory"), &sessionEnabled).Label("在当前会话使用自动记忆").Disabled(m.busy || m.loading).Changed() {
+							disabled := !sessionEnabled
+							app.memoryAction("memorySessionConfigure", memoryRequest{Project: app.c.cwd, Thread: cur.ID, SessionDisabled: &disabled}, nil)
+						}
+						ui.Column(c).Grow(1).MinWidth(0).Gap(3).Children(func() {
+							ui.Text(c, "在当前会话使用自动记忆").FontSize(13)
+							ui.Text(c, "跟随项目的自动召回、自动提炼开关。关闭后只停用当前会话的自动功能，手动记忆工具仍可使用。").FontSize(12).TextColor(muted).LineHeight(1.5).FillWidth().Wrap()
+						})
+					})
+				}
+				status := m.list.Extraction
+				if status.Pending+status.Completed+status.Failed > 0 {
+					ui.Text(c, fmt.Sprintf("提炼：等待 %d · 完成 %d · 跳过或失败 %d · 已保存 %d · 校验拒绝 %d", status.Pending, status.Completed, status.Failed, status.Accepted, status.Rejected)).FontSize(12).TextColor(muted).Wrap()
+				}
 			})
 		}
 		if m.err != "" {
@@ -217,6 +293,8 @@ func memoryStateLabel(state string) string {
 		return "已提升"
 	case "superseded":
 		return "已更新"
+	case "conflicted":
+		return "有冲突，待核实"
 	}
 	return state
 }
@@ -448,9 +526,12 @@ func (app *chatApp) memoryNoticeView(c *ui.Context, n *memoryNotice) {
 		if e.Content != "" {
 			ui.Text(c, e.Content).FontSize(12).LineHeight(1.4).Selectable()
 		}
-		if e.State != "active" && e.State != "expired" {
+		if e.State != "active" && e.State != "expired" && e.State != "conflicted" {
 			ui.Text(c, memoryStateLabel(e.State)).FontSize(12).TextColor(muted)
 			return
+		}
+		if e.State == "conflicted" {
+			ui.Text(c, memoryStateLabel(e.State)).FontSize(12).TextColor(muted)
 		}
 		if ui.Button(c.Key("undo"), "撤销记忆").Disabled(app.memories.busy).Clicked() {
 			app.memoryAction("memoryForget", memoryRequest{Project: n.Project, Scope: n.Scope, ID: n.ID, Version: n.Version}, nil)

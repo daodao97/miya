@@ -60,8 +60,10 @@ func (c *chatController) drainQueue(id int) {
 	queue := append([]queuedMessage(nil), t.Queue...)
 	req := queue[len(queue)-1].sendRequest
 	req.ThreadID, req.Steer, req.Attachments = id, false, nil
+	req.MemoryControl = false
 	texts := make([]string, 0, len(queue))
 	for _, q := range queue {
+		req.MemoryControl = req.MemoryControl || q.MemoryControl
 		if s := strings.TrimSpace(q.Text); s != "" {
 			texts = append(texts, s)
 		}

@@ -28,7 +28,7 @@ func TestMemoryManagementPageAndPromotionPreview(t *testing.T) {
 			app.settingsTab = 4
 			app.memories = memoryUI{scope: "project", project: c.cwd, list: list, loadedAt: time.Now()}
 			tt.Frame()
-			for _, want := range []string{"共享记忆", "当前项目", "用户偏好", "本周暂缓手机协议升级", "忘记", "编辑", "提升到项目文件…", "在当前项目使用记忆工具", "查询时包含用户偏好"} {
+			for _, want := range []string{"共享记忆", "当前项目", "用户偏好", "本周暂缓手机协议升级", "忘记", "编辑", "提升到项目文件…", "在当前项目使用记忆工具", "查询时包含用户偏好", "发送时自动召回相关记忆", "回合完成后自动提炼记忆"} {
 				if !tt.HasText(want) {
 					t.Fatalf("missing %s: %q", want, tt.Texts())
 				}
@@ -58,6 +58,37 @@ func TestMemoryManagementPageAndPromotionPreview(t *testing.T) {
 			automationSnapshot(t, tt, fmt.Sprintf("memory-promotion-dark-%v", dark))
 		})
 	}
+}
+
+func TestMemoryExtractorPickerSavesAgentWithoutEnablingAutomation(t *testing.T) {
+	fakeMemoryCodex(t)
+	app, tt := testApp(t)
+	c := app.c
+	attachMemory(t, c)
+	c.claudeBinary = "configured-claude"
+	d := &testDispatch{}
+	c.run = d.push
+	list := completeMemory(t, c, "memoryList", memoryRequest{}).(memoryList)
+	d.drain()
+	app.section = "Settings"
+	app.settingsTab = 4
+	app.memoryRevisionSeen = c.memoryRevision
+	app.memories = memoryUI{scope: "project", project: c.cwd, list: list, loadedAt: time.Now()}
+	tt.Frame()
+	if err := tt.Click("记忆提炼 Agent：Codex"); err != nil {
+		t.Fatal(err)
+	}
+	scope, _ := memory.ProjectScope(c.cwd)
+	waitCodexResume(t, c, d, func() bool {
+		_, settings, _, err := c.memory.List(scope)
+		return err == nil && settings.ExtractionAgent() == agentCodex && !app.memories.busy
+	})
+	_, settings, _, _ := c.memory.List(scope)
+	if settings.AutoExtract || settings.AutoInject {
+		t.Fatal("choosing extractor unexpectedly enabled automation")
+	}
+	tt.Frame()
+	d.drain()
 }
 func TestMemoryNoticeAlwaysVisibleAndContainsScopeAndUndo(t *testing.T) {
 	app, tt := testApp(t)

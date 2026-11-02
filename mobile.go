@@ -29,6 +29,7 @@ type mobileApp struct {
 	conversationMenuAgent        string
 	filesProxy                   *phoneFileProxy
 	filesCancel                  context.CancelFunc
+	fileRefs                     *mobileFileReferences
 	approvalID                   json.RawMessage
 	options                      map[string]remote.SendOptions
 	optionsAgent                 string
@@ -409,6 +410,7 @@ func (m *mobileApp) disconnect() {
 }
 
 func (m *mobileApp) disconnectDesktop(unregister bool) {
+	m.clearFileReferences()
 	if !m.retryAt.IsZero() {
 		m.status = ""
 	}

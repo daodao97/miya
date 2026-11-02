@@ -139,17 +139,24 @@ func (c *chatController) sendClaude(req sendRequest) int {
 		c.addThread(cwd, t)
 	}
 	id := t.ID
+	if c.claudeRuns[id] == nil {
+		t.MemoryEpoch++
+		epoch := t.MemoryEpoch
+		c.update(id, func(t *Thread) { t.MemoryEpoch = epoch })
+	}
 	pendingUserID := c.nextID()
+	localTurn := c.beginMemoryTurn(t, req, pendingUserID)
 	now := time.Now().UnixMilli()
 	c.update(id, func(t *Thread) {
 		t.Busy = true
 		t.StopRequested = false
 		t.StartedAtMs = now
+		t.CompletedAtMs = 0
 		t.LastOutputAtMs = now
 		t.LastActivityAt = now
 		t.Status = "Claude Code 正在运行…"
 		shown, images := attachmentDisplay(text, paths)
-		t.Messages = append(t.Messages, Message{ID: pendingUserID, Role: "user", Content: shown, Images: images, Parts: req.Parts, SentAtMs: now})
+		t.Messages = append(t.Messages, Message{ID: pendingUserID, Role: "user", Content: shown, Images: images, Parts: req.Parts, SentAtMs: now, MemoryTurnID: localTurn, MemoryControl: req.MemoryControl || req.KeepSessionSettings})
 		name, _, _ := strings.Cut(text, " ")
 		if name == "/loop" || name == "/proactive" {
 			setThreadTask(t, ThreadTask{ID: "loop:pending", Kind: "loop", Title: strings.TrimSpace(strings.TrimPrefix(text, name)), Status: "starting"})
@@ -180,8 +187,10 @@ func (c *chatController) sendClaude(req sendRequest) int {
 		})
 	}
 	go func() {
-		content, err := claudeInput(text, paths)
+		mem := c.prepareMemoryInput(t, req, cwd, c.threadRef(t).URL())
+		content, err := claudeInput(mem.text(text), paths)
 		if err != nil {
+			mem.finish(false)
 			reject(err)
 			return
 		}
@@ -196,6 +205,7 @@ func (c *chatController) sendClaude(req sendRequest) int {
 			if err != nil {
 				reject(err)
 			}
+			mem.finish(err == nil)
 			return
 		}
 		run, err := claude.Start(c.ctx, claude.Options{Binary: c.claudeBinary, Args: append(append([]string(nil), c.claudeArgs...), claudeMCPArgs(cwd)...), Env: append(append([]string(nil), c.claudeEnv...), claudeMCPEnv()...), Cwd: cwd, SessionID: t.ServerID, Resume: t.Resumed, PermissionMode: claudePermissionMode(policy), Model: req.Model, Effort: req.Effort, Content: content}, func(f claude.Frame) {
@@ -205,6 +215,7 @@ func (c *chatController) sendClaude(req sendRequest) int {
 				}
 			})
 		}, func(err error) { c.dispatch(func() { c.finishClaude(id, cwd, err) }) })
+		mem.finish(err == nil)
 		c.dispatch(func() {
 			if err != nil {
 				c.finishClaude(id, cwd, err)
@@ -278,6 +289,11 @@ func (c *chatController) finishClaude(id int, cwd string, err error) {
 			state = "failed"
 		}
 		stopClaudeTasks(t, state)
+		agentState := subAgentInterrupted
+		if state == "failed" {
+			agentState = subAgentFailed
+		}
+		interruptClaudeAgents(t, agentState)
 		t.Status = ""
 		if t.StopRequested {
 			t.Status = "Stopped"
@@ -297,6 +313,7 @@ func (c *chatController) finishClaude(id int, cwd string, err error) {
 				}
 			}
 		}
+		completeClaudeTiming(t)
 		saveClaudeHistory(*t)
 	})
 	pending := []codex.Approval{}
@@ -351,14 +368,18 @@ func (c *chatController) handleClaude(id int, f claude.Frame) {
 		return
 	}
 	c.update(id, func(t *Thread) {
+		defer func() { applyClaudeAgentTasks(t, f.AgentTasks) }()
 		now := time.Now().UnixMilli()
 		t.LastOutputAtMs = now
 		if f.SchedulesKnown {
 			applyClaudeSchedules(t, f.Schedules)
 		}
 		if f.Type == "command_lifecycle" && f.CommandState == "started" {
+			if !t.Busy {
+				t.StartedAtMs = now
+			}
 			t.Busy, t.StopRequested = true, false
-			t.StartedAtMs, t.CompletedAtMs = time.Now().UnixMilli(), 0
+			t.CompletedAtMs = 0
 			t.Status = "Claude Code 正在运行…"
 		}
 		if f.SessionID != "" {
@@ -426,7 +447,7 @@ func (c *chatController) handleClaude(id int, f claude.Frame) {
 							if shown := claudeToolOutput(t.Messages[i], output); shown != "" {
 								t.Messages[i].Content += "\n" + bounded(shown)
 							}
-							claudeFinishSubAgents(&t.Messages[i], output)
+							claudeFinishSubAgents(&t.Messages[i], output, f.ToolUseResult)
 						}
 					}
 				}
@@ -439,10 +460,14 @@ func (c *chatController) handleClaude(id int, f claude.Frame) {
 				stopClaudeTasks(t, "failed")
 			}
 			if f.KeepingAlive {
-				t.Busy = false
-				t.CompletedAtMs = time.Now().UnixMilli()
-				t.Status = ""
-				saveClaudeHistory(*t)
+				t.Busy = f.WaitingForAgents
+				if f.WaitingForAgents {
+					t.CompletedAtMs = 0
+					t.Status = "等待子 agent 完成…"
+				} else {
+					t.CompletedAtMs = now
+					t.Status = ""
+				}
 			}
 			if f.IsError || emptyResult {
 				message := strings.Join(f.Errors, "\n")
@@ -462,8 +487,15 @@ func (c *chatController) handleClaude(id int, f claude.Frame) {
 				// Some CLI transports only provide the final result text.
 				t.Messages = append(t.Messages, Message{ID: c.nextID(), Role: "assistant", Kind: "agentMessage", Content: f.Result, SentAtMs: now, StartedAtMs: now})
 			}
+			if f.KeepingAlive && !f.WaitingForAgents {
+				completeClaudeTiming(t)
+				saveClaudeHistory(*t)
+			}
 		}
 	})
+	if f.Type == "result" && f.ParentToolUseID == "" && !f.WaitingForAgents && !f.IsError && c.threadWithID(id).Status == "" {
+		c.completedMemoryTurn(id, f.UUID)
+	}
 }
 func (c *chatController) respondClaude(a codex.Approval, result any) bool {
 	var id string

@@ -101,6 +101,10 @@ func withToolchainPath(env []string) []string {
 	return append(append([]string(nil), env...), value)
 }
 
+// CommandEnv is the CLI environment used by the app-server and isolated jobs.
+// Packaged apps need the toolchain paths even when Finder supplied a short PATH.
+func CommandEnv() []string { return withToolchainPath(os.Environ()) }
+
 // Start runs the app-server for cwd; args follow app-server, such as -c
 // config overrides.
 func Start(ctx context.Context, binary, cwd string, args ...string) (*Client, error) {
@@ -124,7 +128,7 @@ func Start(ctx context.Context, binary, cwd string, args ...string) (*Client, er
 	configureProcess(cmd)
 	cmd.Dir = cwd
 	// Authentication and provider configuration remain owned by Codex.
-	cmd.Env = withToolchainPath(os.Environ())
+	cmd.Env = CommandEnv()
 	input, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, err

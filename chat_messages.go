@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"mime"
 	"miya/internal/codex"
+	"miya/internal/memory"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -123,6 +124,7 @@ func nativeText(value string) string {
 }
 
 func cleanUserText(text string) string {
+	text = memory.StripContext(text)
 	text = attachmentEnvelope.ReplaceAllString(text, "")
 	text = attachmentInstruction.ReplaceAllString(text, "")
 	text = attachmentTempPath.ReplaceAllString(text, "")
@@ -175,6 +177,7 @@ func itemMessage(item codex.Item) (Message, bool) {
 		for _, v := range parts {
 			switch v.Type {
 			case "text":
+				v.Text = memory.StripContext(v.Text)
 				for _, uri := range attachmentImages(v.Text) {
 					m.Images = append(m.Images, uri)
 				}

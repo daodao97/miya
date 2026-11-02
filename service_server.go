@@ -67,6 +67,7 @@ func newService(c *chatController, ex *executor) *service {
 	c.push = newPushHub()
 	c.run = ex.push
 	c.onDraftReturned = s.draftReturned
+	c.memoryEngine = newMemoryEngine(c)
 	return s
 }
 
@@ -77,7 +78,14 @@ func (s *service) markDirty() {
 	}
 }
 
-func (s *service) stop() { s.quitOnce.Do(func() { close(s.quit) }) }
+func (s *service) stop() {
+	s.quitOnce.Do(func() {
+		if s.c.memoryEngine != nil {
+			s.c.memoryEngine.cancel()
+		}
+		close(s.quit)
+	})
+}
 
 func (s *service) serve(ln net.Listener) {
 	for {
@@ -188,7 +196,7 @@ func (s *service) handle(p *svcPeer, req svcRequest) (any, error) {
 			return nil, err
 		}
 		return c.mcpHandle(req.Op, r)
-	case "memoryList", "memoryGet", "memorySave", "memoryForget", "memoryConfigure", "memoryPromoteUser", "memoryPromotionPreview", "memoryPromoteFile":
+	case "memoryList", "memoryGet", "memorySave", "memoryForget", "memoryConfigure", "memorySessionConfigure", "memoryPromoteUser", "memoryPromotionPreview", "memoryPromoteFile":
 		var r memoryRequest
 		if err := arg(&r); err != nil {
 			return nil, err
@@ -355,6 +363,9 @@ func (s *service) handle(p *svcPeer, req svcRequest) (any, error) {
 		s.stop()
 	case "quitWhenIdle":
 		s.quitWhenIdle = true
+		if c.memoryEngine != nil {
+			c.memoryEngine.pause()
+		}
 	default:
 		return nil, fmt.Errorf("unknown operation %q", req.Op)
 	}
@@ -363,7 +374,7 @@ func (s *service) handle(p *svcPeer, req svcRequest) (any, error) {
 
 // busy reports a turn running or starting, which quitting would end.
 func (s *service) busy() bool {
-	if s.c.memoryCalls > 0 || len(s.c.claudeRuns) > 0 {
+	if s.c.memoryCalls > 0 || s.c.memoryEngine != nil && s.c.memoryEngine.busy.Load() || len(s.c.claudeRuns) > 0 {
 		return true
 	}
 	for _, t := range s.c.threads() {

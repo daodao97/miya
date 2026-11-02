@@ -95,12 +95,20 @@ func (e *Entry) UnmarshalJSON(data []byte) error {
 }
 
 // Disabled affects automatic use and MCP, never the management interface.
-// Automatic features remain off until their subsequent delivery stages.
+// Automatic features default off and are enabled independently per project.
 type Settings struct {
-	Disabled           bool `json:"disabled,omitempty"`
-	UseUserPreferences bool `json:"useUserPreferences,omitempty"`
-	AutoInject         bool `json:"autoInject,omitempty"`
-	AutoExtract        bool `json:"autoExtract,omitempty"`
+	Disabled           bool   `json:"disabled,omitempty"`
+	UseUserPreferences bool   `json:"useUserPreferences,omitempty"`
+	AutoInject         bool   `json:"autoInject,omitempty"`
+	AutoExtract        bool   `json:"autoExtract,omitempty"`
+	ExtractorAgent     string `json:"extractorAgent,omitempty"`
+}
+
+func (s Settings) ExtractionAgent() string {
+	if s.ExtractorAgent == "" {
+		return "claude-code"
+	}
+	return s.ExtractorAgent
 }
 
 type Mutation struct {

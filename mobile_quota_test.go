@@ -47,6 +47,10 @@ func TestMobileDrawerQuotaInspection(t *testing.T) {
 	tt := ui.NewTester(m.viewRoot, 390, 844)
 	tt.Frame()
 	openMobileDrawer(t, tt)
+	if !tt.HasText("19") {
+		t.Fatal("quota ring should show the remaining percentage")
+	}
+	saveMobileNativeSnapshot(t, tt, "drawer-quota-remaining")
 	if _, ok := tt.Find("Claude 额度"); ok {
 		t.Fatal("missing agent quota must be hidden")
 	}

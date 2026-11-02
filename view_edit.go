@@ -43,6 +43,7 @@ func (app *chatApp) userGroupView(c *ui.Context, g messageGroup) {
 // startEdit edits a message's text, without the attachment lines the
 // composer added to it.
 func (app *chatApp) startEdit(m Message) {
+	m.Content = claudeCommandText(m.Content)
 	var keep []string
 	for _, l := range strings.Split(attachmentImagePlaceholder.ReplaceAllString(m.Content, ""), "\n") {
 		if !strings.HasPrefix(l, "📎 ") {

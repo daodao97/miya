@@ -212,6 +212,8 @@ func (c *chatController) finishRewind(id, messageID int, text string, err error,
 
 // sendRequest is one message to send, with what the window chose for it.
 type sendRequest struct {
+	// Internal/MCP/automation messages do not become automatic memories.
+	MemoryControl bool `json:"memoryControl,omitempty"`
 	// ThreadID is the conversation, 0 to start one of Agent.
 	ThreadID int
 	Agent    string

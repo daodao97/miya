@@ -8,12 +8,20 @@ import (
 var claudeCommandTitleParts = regexp.MustCompile(`(?s)<command-(message|name|args)>(.*?)</command-(?:message|name|args)>`)
 
 // Claude's native transcript wraps slash commands in protocol tags. Use the
-// invocation as the title, without changing the stored prompt or its display.
+// invocation as the title, without changing the stored prompt.
 func claudePromptTitle(text string) string {
-	text = claudeReferenceTitle(text)
+	return clippedTitle(claudeCommandText(claudeReferenceTitle(text)))
+}
+
+// Normalize only a leading native command envelope. Literal XML examples in
+// prose or code remain untouched, and command arguments keep their full length.
+func claudeCommandText(text string) string {
+	if !strings.HasPrefix(strings.TrimSpace(text), "<command-") {
+		return text
+	}
 	parts := claudeCommandTitleParts.FindAllStringSubmatch(text, -1)
 	if len(parts) == 0 {
-		return clippedTitle(text)
+		return text
 	}
 	var message, name, args string
 	for _, part := range parts {
@@ -31,7 +39,13 @@ func claudePromptTitle(text string) string {
 		name = "/" + name
 	}
 	rest := strings.TrimSpace(claudeCommandTitleParts.ReplaceAllString(text, ""))
-	return clippedTitle(strings.Join([]string{name, args, rest}, " "))
+	var invocation []string
+	for _, part := range []string{name, args, rest} {
+		if part != "" {
+			invocation = append(invocation, part)
+		}
+	}
+	return strings.Join(invocation, " ")
 }
 
 // Leading conversation references provide context; the request following

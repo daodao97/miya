@@ -3,6 +3,7 @@ package main
 import "miya/internal/codex"
 
 type Message struct {
+	MemoryControl  bool          `json:"memoryControl,omitempty"`
 	MemoryTurnID   string        `json:"memoryTurnId,omitempty"`
 	Memory         *memoryNotice `json:"memory,omitempty"`
 	HandoffTitle   string        `json:"handoffTitle,omitempty"`
@@ -24,6 +25,8 @@ type Message struct {
 }
 
 type Thread struct {
+	MemoryDisabled       bool   `json:"memoryDisabled,omitempty"`
+	MemoryEpoch          uint64 `json:"memoryEpoch,omitempty"`
 	CompletionNoticeBody string `json:"completionNoticeBody,omitempty"`
 	Agent                string
 	Tasks                []ThreadTask `json:",omitempty"`

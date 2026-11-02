@@ -54,10 +54,13 @@ type Item struct {
 	} `json:"changes"`
 }
 type Turn struct {
-	ID     string `json:"id"`
-	Status string `json:"status"`
-	Items  []Item `json:"items"`
-	Error  *struct {
+	ID          string `json:"id"`
+	Status      string `json:"status"`
+	Items       []Item `json:"items"`
+	StartedAt   int64  `json:"startedAt"`
+	CompletedAt int64  `json:"completedAt"`
+	DurationMS  *int64 `json:"durationMs"`
+	Error       *struct {
 		Message string `json:"message"`
 	} `json:"error"`
 }

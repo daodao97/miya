@@ -170,7 +170,7 @@ func (c *chatController) startAutomationRun(id string, catchUp bool) error {
 	thread := 0
 	if info, err := os.Stat(a.Project); err != nil || !info.IsDir() {
 		run.Result, run.Summary, run.Finished = runFailed, "项目目录不存在："+a.Project, now
-	} else if thread = s.submit(sendRequest{Agent: a.Agent, Project: a.Project, Text: automationRunMessage(a, prev)}); thread == 0 {
+	} else if thread = s.submit(sendRequest{Agent: a.Agent, Project: a.Project, Text: automationRunMessage(a, prev), MemoryControl: true}); thread == 0 {
 		run.Result, run.Summary, run.Finished = runFailed, backendFor(a.Agent).Name()+" 还没有就绪", now
 	}
 	if thread != 0 {
@@ -264,7 +264,7 @@ func (c *chatController) afterAutomationCheck(id string, r *activeAutomationRun,
 	r.round++
 	s.store.updateLastRun(id, func(run *AutomationRun) { run.Round = r.round })
 	s.persist()
-	if s.submit(sendRequest{ThreadID: r.thread, Text: automationCheckMessage(a, r.round-1, output)}) == 0 {
+	if s.submit(sendRequest{ThreadID: r.thread, Text: automationCheckMessage(a, r.round-1, output), MemoryControl: true}) == 0 {
 		c.finishAutomationRun(id, runFailed, "无法开始下一轮")
 	}
 }

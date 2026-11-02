@@ -9,28 +9,38 @@ import (
 	"strings"
 	"time"
 
+	"miya/internal/codex"
 	"miya/internal/memory"
 )
 
 type memoryRequest struct {
-	Project    string           `json:"project,omitempty"`
-	Scope      string           `json:"scope,omitempty"`
-	ID         string           `json:"id,omitempty"`
-	Version    uint64           `json:"version,omitempty"`
-	Kind       string           `json:"kind,omitempty"`
-	Content    string           `json:"content,omitempty"`
-	TaskKey    string           `json:"taskKey,omitempty"`
-	ValidUntil string           `json:"validUntil,omitempty"`
-	Settings   *memory.Settings `json:"settings,omitempty"`
-	Thread     int              `json:"thread,omitempty"`
-	File       string           `json:"file,omitempty"`
+	Project         string           `json:"project,omitempty"`
+	Scope           string           `json:"scope,omitempty"`
+	ID              string           `json:"id,omitempty"`
+	Version         uint64           `json:"version,omitempty"`
+	Kind            string           `json:"kind,omitempty"`
+	Content         string           `json:"content,omitempty"`
+	TaskKey         string           `json:"taskKey,omitempty"`
+	ValidUntil      string           `json:"validUntil,omitempty"`
+	Settings        *memory.Settings `json:"settings,omitempty"`
+	SessionDisabled *bool            `json:"sessionDisabled,omitempty"`
+	Thread          int              `json:"thread,omitempty"`
+	File            string           `json:"file,omitempty"`
 	// Promotion is a two-step preview/commit, with exact proposed file bytes.
 	Preview string `json:"preview,omitempty"`
 }
 type memoryList struct {
-	Entries  []memory.Entry  `json:"entries"`
-	Settings memory.Settings `json:"settings"`
-	Revision uint64          `json:"revision"`
+	Entries            []memory.Entry          `json:"entries"`
+	Settings           memory.Settings         `json:"settings"`
+	Revision           uint64                  `json:"revision"`
+	Extraction         memory.ExtractionStatus `json:"extraction"`
+	ExtractorAvailable bool                    `json:"extractorAvailable"`
+	Extractors         []memoryExtractorOption `json:"extractors,omitempty"`
+}
+
+type memoryExtractorOption struct {
+	Agent     string `json:"agent"`
+	Available bool   `json:"available"`
 }
 type memoryPromotion struct {
 	File   string `json:"file"`
@@ -88,6 +98,29 @@ func (c *chatController) memoryOp(op string, r memoryRequest) (any, error) {
 		return nil, err
 	}
 	store := c.memory
+	if op == "memorySessionConfigure" {
+		t := c.threadWithID(r.Thread)
+		threadScope, _ := memory.ProjectScope(c.threadWorkspace(t.ID))
+		if t.ID == 0 || r.SessionDisabled == nil || scope.Kind != "project" || threadScope != scope {
+			return nil, errors.New("缺少当前项目的会话设置")
+		}
+		disabled := *r.SessionDisabled
+		session := c.threadRef(t).URL()
+		return c.memoryDeferred(func() (any, error) {
+			if err := store.ConfigureSession(scope, session, disabled); err != nil {
+				return nil, err
+			}
+			c.dispatch(func() {
+				c.update(t.ID, func(t *Thread) { t.MemoryDisabled = disabled })
+				if disabled {
+					delete(c.memoryTurns, t.ID)
+				}
+				c.memoryChanged()
+			})
+			return nil, nil
+		}), nil
+	}
+	claudeAvailable := c.claudeBinary != ""
 	// Resolve the target conversation before leaving the scheduler.
 	thread := r.Thread
 	if thread != 0 && c.threadWithID(thread).ID == 0 {
@@ -98,12 +131,27 @@ func (c *chatController) memoryOp(op string, r memoryRequest) (any, error) {
 		if err != nil {
 			return nil, err
 		}
+		_, codexErr := codex.Binary()
+		extractors := []memoryExtractorOption{{Agent: agentCodex, Available: codexErr == nil}, {Agent: agentClaude, Available: claudeAvailable}}
+		available := func(agent string) bool {
+			for _, option := range extractors {
+				if option.Agent == agent {
+					return option.Available
+				}
+			}
+			return false
+		}
 		if op == "memoryList" {
-			return memoryList{entries, settings, revision}, nil
+			status, _ := store.ExtractionStatus(scope)
+			return memoryList{Entries: entries, Settings: settings, Revision: revision, Extraction: status, ExtractorAvailable: available(settings.ExtractionAgent()), Extractors: extractors}, nil
 		}
 		if op == "memoryConfigure" {
 			if r.Settings == nil || scope.Kind != "project" {
 				return nil, errors.New("缺少项目记忆设置")
+			}
+			selected := r.Settings.ExtractionAgent()
+			if r.Settings.AutoExtract && !r.Settings.Disabled && !available(selected) && !(settings.AutoExtract && settings.ExtractionAgent() == selected) {
+				return nil, fmt.Errorf("自动提炼需要先配置可用的 %s", backendFor(selected).Name())
 			}
 			err := store.Configure(scope, *r.Settings)
 			if err == nil {

@@ -91,15 +91,18 @@ func (m *mobileApp) drawerQuotas(c *ui.Context) {
 				name = "Claude"
 			}
 			cc := c.Key(q.Agent)
-			button := m.phoneButton(cc).MinHeight(44).Padding(0, 8).Gap(6).Radius(12).Label(name + " 额度")
+			button := m.phoneButton(cc).MinHeight(44).Padding(0).Gap(5).Radius(12).Label(name + " 额度")
 			button.Children(func() {
 				track, fill := "#4a4a50", "#dedee3"
 				if !m.dark {
 					track, fill = "#dddde2", "#505058"
 				}
-				ui.Box(cc).Size(24, 24).Children(func() {
-					ui.Image(cc.Key("track"), ringSVG(100, track)).Size(24, 24).Absolute().Left(0).Top(0)
-					ui.Image(cc.Key("used"), ringSVG(q.Windows[0].UsedPercent, fill)).Size(24, 24).Absolute().Left(0).Top(0)
+				remaining := math.Max(0, math.Min(100, 100-q.Windows[0].UsedPercent))
+				size := m.font(28)
+				ui.Box(cc).Size(size, size).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
+					ui.Image(cc.Key("track"), ringSVG(100, track)).Size(size, size).Absolute().Left(0).Top(0)
+					ui.Image(cc.Key("remaining"), ringSVG(remaining, fill)).Size(size, size).Absolute().Left(0).Top(0)
+					ui.Text(cc, fmt.Sprintf("%.0f", remaining)).FontSize(m.font(10)).FontWeight(600).TextColor(p.ink)
 				})
 				ui.Text(cc, name).FontSize(m.font(16)).FontWeight(500).TextColor(p.ink)
 			})

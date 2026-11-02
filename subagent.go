@@ -27,6 +27,7 @@ const (
 	subAgentCompleted   = "completed"
 	subAgentFailed      = "failed"
 	subAgentInterrupted = "interrupted"
+	subAgentUnconfirmed = "unconfirmed"
 )
 
 func subAgentActive(status string) bool {
@@ -52,6 +53,8 @@ func subAgentStatusLabel(status string) string {
 		return "失败"
 	case subAgentInterrupted:
 		return "已中断"
+	case subAgentUnconfirmed:
+		return "未确认完成"
 	}
 	return "已完成"
 }
@@ -80,7 +83,7 @@ func subAgentCounts(agents []SubAgent) string {
 	for _, a := range agents {
 		counts[a.Status]++
 	}
-	for _, s := range []string{subAgentRunning, subAgentPending, subAgentFailed, subAgentInterrupted, subAgentCompleted} {
+	for _, s := range []string{subAgentRunning, subAgentPending, subAgentFailed, subAgentInterrupted, subAgentUnconfirmed, subAgentCompleted} {
 		if n := counts[s]; n > 0 {
 			parts = append(parts, fmt.Sprintf("%d %s", n, subAgentStatusLabel(s)))
 		}

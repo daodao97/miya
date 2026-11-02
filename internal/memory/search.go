@@ -10,6 +10,28 @@ import (
 )
 
 func normalized(s string) string { return strings.ToLower(norm.NFKC.String(s)) }
+
+type indexedTerms struct {
+	content    string
+	words      map[string]bool
+	normalized string
+}
+
+func (s *Store) index(e Entry) indexedTerms {
+	key := e.Scope.Kind + ":" + e.Scope.ProjectKey + ":" + e.ID
+	if cached, ok := s.searchIndex[key]; ok && cached.content == e.Content {
+		return cached
+	}
+	indexed := indexedTerms{content: e.Content, normalized: normalized(e.Content), words: map[string]bool{}}
+	for _, word := range terms(e.Content) {
+		indexed.words[word] = true
+	}
+	if s.searchIndex == nil {
+		s.searchIndex = map[string]indexedTerms{}
+	}
+	s.searchIndex[key] = indexed
+	return indexed
+}
 func terms(s string) []string {
 	s = normalized(s)
 	var out []string
@@ -54,7 +76,11 @@ func terms(s string) []string {
 func (s *Store) Search(project Scope, query, task string, limit int) ([]Entry, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	d, err := s.load(project)
+	return s.search(project, query, task, limit)
+}
+
+func (s *Store) search(project Scope, query, task string, limit int) ([]Entry, error) {
+	d, err := s.read(project)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +89,7 @@ func (s *Store) Search(project Scope, query, task string, limit int) ([]Entry, e
 	}
 	docs := []document{d}
 	if d.Settings.UseUserPreferences {
-		user, err := s.load(UserScope())
+		user, err := s.read(UserScope())
 		if err != nil {
 			return nil, err
 		}
@@ -87,11 +113,8 @@ func (s *Store) Search(project Scope, query, task string, limit int) ([]Entry, e
 			if e.Kind == "progress" && (task == "" || e.TaskKey != task) {
 				continue
 			}
-			content := normalized(e.Content)
-			words := map[string]bool{}
-			for _, w := range terms(e.Content) {
-				words[w] = true
-			}
+			indexed := s.index(e)
+			content, words := indexed.normalized, indexed.words
 			score := 0
 			for _, w := range tokens {
 				if words[w] {
@@ -124,6 +147,7 @@ func (s *Store) Search(project Scope, query, task string, limit int) ([]Entry, e
 	out := []Entry{}
 	budget := 4000
 	for _, h := range hits {
+		h.e.Sources = append([]Source(nil), h.e.Sources...)
 		// Retrieval sends compact source locators; full evidence excerpts remain
 		// available in management. Repeated corrections must not consume the
 		// entire recall budget with their historical quotes.
