@@ -4,10 +4,13 @@ package main
 
 import (
 	"context"
+	"errors"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -29,7 +32,7 @@ printf '%s\n' '{"type":"result","subtype":"success","is_error":false,"result":"p
 
 // serverController is a controller with every signal the service reads.
 func serverController(dir, claudeBin string) *chatController {
-	c := &chatController{cwd: dir, ctx: context.Background(), claudeBinary: claudeBin, projectCache: map[string][]Thread{}}
+	c := &chatController{referenceSource: testReferenceSource, cwd: dir, ctx: context.Background(), claudeBinary: claudeBin, projectCache: map[string][]Thread{}}
 	c.agent, c.setAgent = createSignal(agentCodex)
 	c.draftPermission, c.setDraftPermission = createSignal("")
 	c.projects, c.setProjects = createSignal([]Project{{Name: "demo", Path: dir}})
@@ -48,6 +51,40 @@ func serverController(dir, claudeBin string) *chatController {
 	c.historyStatus, c.setHistoryStatus = createSignal("")
 	c.revision, c.setRevision = createSignal(0)
 	return c
+}
+
+func TestCompletionNoticeSurvivesServiceSnapshots(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	c := serverController(t.TempDir(), "")
+	h := testUnreadHub(t)
+	c.push = h
+	c.installNotifications()
+	c.setThreads([]Thread{{ID: 1, ServerID: "thread", Busy: true, TurnID: "turn", Messages: []Message{
+		{Role: "user", Content: "修复按钮"},
+		{Role: "assistant", TurnID: "turn", Content: "按钮已修复。测试通过。", Item: &codex.Item{Phase: "final_answer"}},
+	}}})
+	c.update(1, func(t *Thread) {
+		t.Busy, t.CompletedAtMs, t.TurnID = false, 10, ""
+	})
+	delivery := <-h.queue
+	push, ok := h.notificationFor(delivery)
+	if !ok || push.Payload.Body != "按钮已修复。" {
+		t.Fatal("phone did not receive the result excerpt", push)
+	}
+	state := c.snapshotState()
+	if len(state.Threads[0].Messages) != 0 {
+		t.Fatal("snapshot included transcript")
+	}
+	// A desktop that never subscribed to this thread sees metadata only.
+	n, ok := completionNotice(Thread{Busy: true}, state.Threads[0])
+	if !ok || n.Body != push.Payload.Body {
+		t.Fatal("desktop and phone notification bodies differ", n)
+	}
+	c.projectCache["/background"] = c.threads()
+	state = c.snapshotState()
+	if state.ProjectThreads["/background"][0].CompletionNoticeBody != n.Body {
+		t.Fatal("background project's snapshot lost the result")
+	}
 }
 
 type serviceFixture struct {
@@ -121,6 +158,47 @@ func (f *serviceFixture) window() *chatController {
 		c.attachService(cl, st)
 	})
 	return c
+}
+
+func TestServiceWindowWaitsInsteadOfStartingLocalAgents(t *testing.T) {
+	var attempts atomic.Int32
+	retrying, allow := make(chan struct{}), make(chan struct{})
+	conn, peer := net.Pipe()
+	cl := newServiceClient(conn)
+	go io.Copy(io.Discard, peer)
+	c := newServiceWindow("/workspace", func() (*serviceClient, svcState, error) {
+		if attempts.Add(1) == 1 {
+			return nil, svcState{}, errors.New("后台服务版本不兼容，且有对话正在运行")
+		}
+		close(retrying)
+		<-allow
+		return cl, svcState{Cwd: "/workspace", Ready: true, ProjectThreads: map[string][]Thread{}}, nil
+	})
+	t.Cleanup(func() { c.cancel(); cl.Close(); peer.Close() })
+	if c.remote == nil || c.client != nil || len(c.claudeRuns) != 0 || c.ready() {
+		t.Fatal("disconnected window started local agents")
+	}
+	if got := c.submit(sendRequest{Text: "不要启动本地会话"}); got != 0 || len(c.threads()) != 0 || c.lastSubmitError == "" {
+		t.Fatal("offline window accepted a local send")
+	}
+	select {
+	case <-retrying:
+	case <-time.After(2 * time.Second):
+		t.Fatal("window did not retry connection")
+	}
+	d := &testDispatch{}
+	c.run = d.push
+	close(allow)
+	for deadline := time.Now().Add(2 * time.Second); time.Now().Before(deadline); time.Sleep(5 * time.Millisecond) {
+		d.drain()
+		if c.ready() {
+			if c.remote != cl || c.client != nil || attempts.Load() != 2 {
+				t.Fatal("window did not attach to the shared service")
+			}
+			return
+		}
+	}
+	t.Fatal("window did not connect after the service became available")
 }
 
 // waitWindow polls a window's state on its main thread.

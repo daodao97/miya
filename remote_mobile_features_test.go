@@ -3,10 +3,14 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"miya/internal/memory"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"miya/internal/codex"
 	"miya/internal/remote"
@@ -122,6 +126,80 @@ func TestPhoneApprovalAcknowledgementReportsValidationFailure(t *testing.T) {
 		case <-conn.ctx.Done():
 			t.Fatal("no approval acknowledgement")
 			return
+		}
+	}
+}
+
+type binaryPreviewConnection struct {
+	*testPhoneConnection
+	source string
+	image  []byte
+}
+
+func (c *binaryPreviewConnection) SendImage(source string, data []byte) error {
+	c.source, c.image = source, data
+	return nil
+}
+
+func TestPhonePreviewBinaryPathKeepsAuthorization(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "photo.png")
+	if err := os.WriteFile(path, testPNG(t), 0600); err != nil {
+		t.Fatal(err)
+	}
+	source := localImageDataURI(path)
+	c := serverController(t.TempDir(), "")
+	c.run = func(f func()) { f() }
+	c.setThreads([]Thread{{ID: 1, ServerID: "s1", HistoryLoaded: true, Messages: []Message{{ID: 1, Images: []string{source}}}}})
+	conn := &binaryPreviewConnection{}
+	var frames []remote.Frame
+	send := func(f remote.Frame) bool { frames = append(frames, f); return true }
+	if !c.sendPhonePreview(context.Background(), conn, remote.Request{Thread: 1, ServerID: "s1", ImageSource: source}, false, send) {
+		t.Fatal("preview failed")
+	}
+	if conn.source != source || len(conn.image) == 0 || len(frames) != 0 {
+		t.Fatal("binary preview was encoded into a control payload")
+	}
+	conn.source, conn.image = "", nil
+	if !c.sendPhonePreview(context.Background(), conn, remote.Request{Thread: 1, ServerID: "s1", ImageSource: "file:///private/unmentioned.png"}, false, send) {
+		t.Fatal("error reply failed")
+	}
+	if conn.source != "" || len(conn.image) != 0 || len(frames) != 1 || frames[0].Error == "" {
+		t.Fatal("binary path bypassed source authorization")
+	}
+}
+
+func TestPhoneMemoryIsExplicitReadOnlyAndAdvertised(t *testing.T) {
+	c := serverController(t.TempDir(), "")
+	attachMemory(t, c)
+	scope, _ := memory.ProjectScope(c.cwd)
+	now := time.Now()
+	e, err := c.memory.Save(scope, memory.Mutation{Kind: "fact", Content: "暂缓手机协议升级", ObservedAt: now, Sources: []memory.Source{{EvidenceKind: "manual", ObservedAt: now}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !c.phoneSnapshot().Memory {
+		t.Fatal("memory capability missing")
+	}
+	// Normal state carries capability/revision, never the library.
+	b, _ := json.Marshal(c.phoneSnapshot())
+	if strings.Contains(string(b), e.Content) {
+		t.Fatal("library leaked into state")
+	}
+	conn, _ := serveTestPhone(t, c)
+	conn.requests <- remote.Request{Op: "memory", Project: c.cwd, MemoryScope: "project"}
+	for {
+		select {
+		case f := <-conn.frames:
+			if f.Type != "memory" {
+				continue
+			}
+			var result phoneMemoryResult
+			if f.Error != "" || json.Unmarshal(f.Data, &result) != nil || len(result.List.Entries) != 1 || result.List.Entries[0].ID != e.ID {
+				t.Fatalf("memory response: %s %s", f.Error, f.Data)
+			}
+			return
+		case <-conn.ctx.Done():
+			t.Fatal("no memory response")
 		}
 	}
 }

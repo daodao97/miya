@@ -67,7 +67,9 @@ func (c *chatController) drainQueue(id int) {
 		}
 		req.Attachments = append(req.Attachments, q.Attachments...)
 	}
-	req.Text = strings.Join(texts, "\n\n")
+	req.Text = joinReferenceMessages(texts)
+	own, _ := splitReferenceContext(req.Text)
+	req.Parts = messageParts(own)
 	c.update(id, func(t *Thread) { t.Queue = nil })
 	if c.submit(req) == 0 {
 		c.update(id, func(t *Thread) { t.Queue = append(queue, t.Queue...) })

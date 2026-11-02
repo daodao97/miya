@@ -128,7 +128,7 @@ func (claudeBackend) Steer(c *chatController, t Thread, req sendRequest) bool {
 	now := time.Now().UnixMilli()
 	c.update(t.ID, func(t *Thread) {
 		t.LastOutputAtMs, t.LastActivityAt = now, now
-		t.Messages = append(t.Messages, Message{ID: c.nextID(), Role: "user", Content: shown, Images: images, SentAtMs: now})
+		t.Messages = append(t.Messages, Message{ID: c.nextID(), Role: "user", Content: shown, Images: images, Parts: req.Parts, SentAtMs: now})
 	})
 	return true
 }

@@ -75,9 +75,14 @@ func (cl *serviceClient) read() {
 
 // Close ends the connection; waiting calls fail.
 func (cl *serviceClient) Close() {
+	if cl == nil {
+		return
+	}
 	cl.once.Do(func() {
 		close(cl.closed)
-		cl.conn.Close()
+		if cl.conn != nil {
+			cl.conn.Close()
+		}
 		cl.mu.Lock()
 		for id, ch := range cl.pending {
 			ch <- svcMessage{ID: id, Error: errServiceClosed.Error()}
@@ -88,6 +93,9 @@ func (cl *serviceClient) Close() {
 }
 
 func (cl *serviceClient) send(req svcRequest) error {
+	if cl == nil || cl.conn == nil {
+		return errServiceClosed
+	}
 	data, err := json.Marshal(req)
 	if err != nil {
 		return err
@@ -197,6 +205,9 @@ func connectService(workspace string) (*serviceClient, svcState, error) {
 			// A turn runs in the older service: use it, and let it end once idle.
 			cl.notify("quitWhenIdle", nil)
 		default:
+			// Keep the old writer until its work ends, then let a waiting
+			// window start the new service. Never create a second writer.
+			cl.notify("quitWhenIdle", nil)
 			cl.Close()
 			return nil, svcState{}, errors.New("后台服务版本不兼容，且有对话正在运行")
 		}

@@ -47,7 +47,7 @@ func assertUsageControls(t *testing.T, tt *ui.Tester, height int) {
 func TestUsagePanelProviderPreviewAndThemes(t *testing.T) {
 	app := usageFixture()
 	tt := ui.NewTester(app.usagePanelView, usagePanelWidth, app.usage.height())
-	for _, text := range []string{"剩余 83%", "剩余 8%", "11-01 19:00 重置", "pro"} {
+	for _, text := range []string{"已用 17%", "已用 92%", "11-01 19:00 重置", "pro"} {
 		if !tt.HasText(text) {
 			t.Fatalf("missing %q in %q", text, tt.Texts())
 		}
@@ -60,7 +60,7 @@ func TestUsagePanelProviderPreviewAndThemes(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.SetSize(usagePanelWidth, app.usage.height())
-	if app.usage.panelAgent != "claude" || app.usage.prefs.agent != "codex" || !tt.HasText("请先登录 Claude CLI") || tt.HasText("剩余 83%") {
+	if app.usage.panelAgent != "claude" || app.usage.prefs.agent != "codex" || !tt.HasText("请先登录 Claude CLI") || tt.HasText("已用 17%") {
 		t.Fatalf("provider preview changed the tray source or showed wrong data: %q", tt.Texts())
 	}
 	assertUsageControls(t, tt, app.usage.height())

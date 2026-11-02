@@ -15,6 +15,7 @@ import (
 
 	"miya/internal/claude"
 	"miya/internal/codex"
+	"miya/internal/memory"
 )
 
 var appLocale atomic.Value
@@ -37,13 +38,22 @@ func tr(english string) string {
 }
 
 type chatController struct {
+	memory         *memory.Store // non-nil only in the background service
+	memoryCalls    int           // executor-owned; pending IO prevents idle service exit
+	memoryRevision uint64
+
 	// auto is the automations, in the controller that runs them.
 	auto *automationState
 	// miyaPending are the answers Miya's own cards wait for.
 	miyaPending map[string]chan bool
 	miyaSerial  int
 	// threadHistory holds referenced conversations' prefetched messages.
-	threadHistory map[int][]Message
+	threadHistory    map[string][]Message
+	referenceSource  string
+	referenceLoading map[ThreadRef]bool
+	lastSubmitError  string
+	referenceDir     string
+	forkedReferences map[ThreadRef]referenceSession
 	// handoffs link referenced conversations to where they were sent.
 	handoffs []handoff
 	// delegationParent is the conversation that handed each its work.
@@ -146,6 +156,9 @@ const (
 
 func newChatController() *chatController {
 	c := &chatController{projectCache: make(map[string][]Thread), fastMode: loadSetting("codexServiceTier") == "fast"}
+	c.referenceSource, c.lastSubmitError = referenceSourceForService()
+	c.referenceDir = serviceDir()
+	c.loadForkedReferences()
 	var setProjects func([]Project)
 	c.projects, setProjects = createSignal([]Project{})
 	c.setProjects = func(projects []Project) { setProjects(projects); persistProjectOrder(projects) }
@@ -183,7 +196,7 @@ func newChatController() *chatController {
 	c.onDraftReturned = c.restoreDraft
 	c.historyStatus, c.setHistoryStatus = createSignal("Loading conversations…")
 	c.revision, c.setRevision = createSignal(0)
-	c.status, c.setStatus = createSignal("Connecting to Codex…")
+	c.status, c.setStatus = createSignal(firstNonEmpty(c.lastSubmitError, "Connecting to Codex…"))
 	c.quotaStatus = "正在读取额度…"
 	c.ready, c.setReady = createSignal(false)
 	c.approvals, c.setApprovals = createSignal([]codex.Approval{})
@@ -701,9 +714,14 @@ func (c *chatController) update(id int, fn func(*Thread)) {
 		if items[i].ID == id {
 			items[i].Messages = append([]Message(nil), items[i].Messages...)
 			items[i].Tasks = append([]ThreadTask(nil), items[i].Tasks...)
+			old := items[i]
 			before := threadMetaOf(items[i])
 			wasBusy := items[i].Busy
 			fn(&items[i])
+			updateCompletionNoticeBody(old, &items[i])
+			if old.ServerID != items[i].ServerID && old.ServerID != "" {
+				c.rememberForkedReference(old, c.cwd)
+			}
 			c.setThreads(items)
 			if c.projectCache != nil && c.cwd != "" {
 				c.projectCache[c.cwd] = append([]Thread(nil), items...)
@@ -742,6 +760,10 @@ func (c *chatController) update(id int, fn func(*Thread)) {
 			items[i].Messages = append([]Message(nil), old.Messages...)
 			items[i].Tasks = append([]ThreadTask(nil), old.Tasks...)
 			fn(&items[i])
+			updateCompletionNoticeBody(old, &items[i])
+			if old.ServerID != items[i].ServerID && old.ServerID != "" {
+				c.rememberForkedReference(old, path)
+			}
 			c.projectCache[path] = items
 			if threadMetaOf(items[i]) != threadMetaOf(old) {
 				c.refreshProjectOrder()
@@ -1350,6 +1372,10 @@ func prepareHistoryMessages(remote codex.Thread) []Message {
 					m.Status = turn.Status
 				}
 				m.ItemID = item.ID
+				if m.Role == "user" {
+					own, _ := splitReferenceContext(m.Content)
+					m.Parts = messageParts(own)
+				}
 				m.TurnID = turn.ID
 				out = append(out, m)
 			}
@@ -1388,7 +1414,7 @@ func (c *chatController) sendCodex(req sendRequest) int {
 	if t.ID == 0 {
 		// Use the first request until the agent supplies a named title.
 		project := firstNonEmpty(req.Project, c.cwd)
-		t = Thread{PermissionPolicy: req.Policy, ID: c.nextID(), Title: conversationTitle("", text, ""), Project: filepath.Base(project), Age: "now", Loaded: true}
+		t = Thread{PermissionPolicy: req.Policy, ID: c.nextID(), Title: conversationTitle("", text, ""), Project: filepath.Base(project), Age: "now", Loaded: true, HistoryLoaded: true}
 		c.addThread(project, t)
 	}
 	id := t.ID
@@ -1411,7 +1437,7 @@ func (c *chatController) sendCodex(req sendRequest) int {
 		t.Draft = ""
 		t.StopRequested = false
 		content, images := attachmentDisplay(text, attachments)
-		t.Messages = append(t.Messages, Message{ID: c.nextID(), Role: "user", Content: content, Images: images, ItemID: "pending-user", SentAtMs: sentAt})
+		t.Messages = append(t.Messages, Message{ID: c.nextID(), Role: "user", Content: content, Images: images, Parts: req.Parts, ItemID: "pending-user", SentAtMs: sentAt})
 	})
 	go func() {
 		ctx, cancel := context.WithTimeout(c.ctx, 45*time.Second)

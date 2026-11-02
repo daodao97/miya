@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"miya/internal/remote"
 )
 
 func TestPhonePreviewIsBoundedAndKeepsOriginal(t *testing.T) {
@@ -129,5 +130,60 @@ func TestPhoneDeltaDetectsChangedImageSource(t *testing.T) {
 	delta, changed := sync.update(th)
 	if !changed || len(delta.Changed) != 1 || !sync.images[th.Messages[0].Images[0]] || sync.images["file:///desktop/first.png"] {
 		t.Fatal("image replacement did not update the phone")
+	}
+}
+
+func TestPhonePreviewRetryReleasesPendingButKeepsCompletedCache(t *testing.T) {
+	calls := make(chan func(), 4)
+	old := runOnMain
+	runOnMain = func(f func()) { calls <- f }
+	t.Cleanup(func() { runOnMain = old })
+	m := testMobileApp()
+	conn := new(remote.Conn)
+	m.conn, m.connected = conn, true
+	m.previewPaths = map[string]string{"pending": "", "completed": ""}
+	m.retryImage("pending", conn)
+	m.retryImage("completed", conn)
+	m.previewPaths["completed"] = "cached.jpg"
+	for range 2 {
+		select {
+		case f := <-calls:
+			f()
+		case <-time.After(3 * time.Second):
+			t.Fatal("retry never ran")
+		}
+	}
+	if _, ok := m.previewPaths["pending"]; ok {
+		t.Fatal("failed preview still suppresses a fresh request")
+	}
+	if m.previewPaths["completed"] != "cached.jpg" {
+		t.Fatal("retry discarded a completed preview")
+	}
+}
+
+func TestPhonePreviewRetryDoesNotTouchReconnectedSession(t *testing.T) {
+	calls := make(chan func(), 2)
+	old := runOnMain
+	runOnMain = func(f func()) { calls <- f }
+	t.Cleanup(func() { runOnMain = old })
+	m := testMobileApp()
+	conn := new(remote.Conn)
+	m.conn, m.connected = conn, true
+	m.previewPaths = map[string]string{"photo": ""}
+	m.retryImage("photo", conn)
+	m.conn = new(remote.Conn)
+	select {
+	case f := <-calls:
+		f()
+	case <-time.After(3 * time.Second):
+		t.Fatal("retry never ran")
+	}
+	if _, ok := m.previewPaths["photo"]; !ok {
+		t.Fatal("old transfer invalidated the new session")
+	}
+	m.previewRetries = map[string]int{"photo": 3}
+	m.retryImage("photo", m.conn)
+	if m.previewRetries["photo"] != 3 {
+		t.Fatal("retry budget was not enforced")
 	}
 }

@@ -206,6 +206,10 @@ func (m *completion) editAt(app *chatApp, value string, end int) {
 	app.closeMenus()
 	m.close()
 	m.token = composerTokenAt(value, end)
+	if m.token.Kind == '/' && m.input.doc != nil && m.input.doc.Text().Len() > 0 && m.input.doc.Text().AttributesAt(0).Tag == composerCommandTag {
+		// Undo or a caret at the chip's edge edits an already selected command.
+		m.token = composerToken{}
+	}
 	m.source = value
 	m.selected = 0
 	m.choices = nil
@@ -259,9 +263,9 @@ func (m *completion) choose(app *chatApp, index int) {
 	choice, token, value := m.choices[index], m.token, m.source
 	m.close()
 	if token.Kind == '@' {
-		if id, ok := threadChoiceID(choice.Name); ok {
-			c.rememberDraft(insertThreadReference(value, token, id))
-			c.prefetchThread(id)
+		if choice.Ref != nil {
+			c.rememberDraft(insertThreadReference(value, token, *choice.Ref, choice.Name))
+			c.prefetchReference(*choice.Ref)
 			return
 		}
 		c.rememberDraft(insertFileReference(value, token, choice.Name))
@@ -271,8 +275,8 @@ func (m *completion) choose(app *chatApp, index int) {
 		m.edit(app, "@")
 		return
 	}
-	if !appCommandNames[choice.Name] {
-		// Claude Code's commands take arguments: leave the caret after them.
+	if !appUICommands[choice.Name] {
+		// Stage executable commands; selecting a menu item is not submission.
 		c.rememberDraft("/" + choice.Name + " ")
 		return
 	}
@@ -284,6 +288,7 @@ func (app *chatApp) composerInput(c *ui.Context) {
 	cc := app.c
 	cur := cc.current()
 	m := &app.complete
+	m.input.commands = app.knownCommandChoices("")
 	placeholder := "输入消息… / 命令 · @ 文件"
 	if cur.Busy {
 		placeholder = "Enter 加入队列，⌘Enter 立即引导"
@@ -291,7 +296,7 @@ func (app *chatApp) composerInput(c *ui.Context) {
 	label := "Message " + cc.currentBackend().Name()
 	ui.Column(c).FillWidth().MinWidth(0).Gap(4).Children(func() {
 		width := min(float32(744), max(200, c.Root().Bounds().W-340))
-		in := app.threadInput(c.Key("composer"), &m.input, cc.draft(), fmt.Sprintf("%s:%d", cc.cwd, cur.ID), label, placeholder, 13, width, 2, 10, func(text string) {
+		in := app.threadInput(c.Key("composer"), &m.input, cc.draft(), fmt.Sprintf("%s:%d:%s", cc.cwd, cur.ID, cc.currentAgent()), label, placeholder, 13, width, 2, 10, func(text string) {
 			_, caret := m.input.doc.Selection()
 			end := len(inlineThreadRaw(m.input.doc.Text().Slice(0, caret)))
 			m.editAt(app, text, end)
@@ -339,6 +344,9 @@ func (app *chatApp) composerInput(c *ui.Context) {
 		if app.notice != "" {
 			ui.Text(c, app.notice).FontSize(11).TextColor(muted)
 		}
+		if hint := m.input.commandHint(); hint != "" {
+			ui.Text(c, hint).FontSize(11).TextColor(muted).Wrap().FillWidth()
+		}
 		open := m.visible(app)
 		ui.PopoverBase(c, in, &open, func(panel ui.Element) {
 			panel.AttachTo(in, ui.AnchorTopLeft, ui.AnchorBottomLeft).Margin(0, 0, 20, 0).
@@ -347,7 +355,7 @@ func (app *chatApp) composerInput(c *ui.Context) {
 			if m.token.Kind == '@' {
 				title = tr("Project files")
 				for _, choice := range m.choices {
-					if _, ok := threadChoiceID(choice.Name); ok {
+					if choice.Ref != nil {
 						title = "对话与项目文件"
 						break
 					}
@@ -364,11 +372,15 @@ func (app *chatApp) composerInput(c *ui.Context) {
 					text, detail := "/"+item.Name, item.Detail
 					if m.token.Kind == '@' {
 						text, detail = item.Name, ""
-						if _, ok := threadChoiceID(item.Name); ok {
+						if item.Ref != nil {
 							detail = item.Detail
 						}
 					}
-					row := quiet(c.Key("choice:" + item.Name)).FillWidth().Column().AlignItems(ui.Start).Height(0).MinHeight(40).Padding(8).Gap(2).Label(text)
+					key := item.Name
+					if item.Ref != nil {
+						key = item.Ref.URL()
+					}
+					row := quiet(c.Key("choice:" + key)).FillWidth().Column().AlignItems(ui.Start).Height(0).MinHeight(40).Padding(8).Gap(2).Label(text)
 					if i == m.selected {
 						row.Background(selectedBg)
 					}

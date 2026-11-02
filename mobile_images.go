@@ -5,8 +5,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo/ui"
+	"miya/internal/remote"
 )
 
 func (m *mobileApp) previewPath(source string) string {
@@ -17,9 +19,35 @@ func (m *mobileApp) previewPath(source string) string {
 	return filepath.Join(dir, "images", cacheName(source)+".jpg")
 }
 
+// A full preview queue or an expired download must not leave an empty cache
+// reservation forever. Retry with backoff, only on the connection that failed.
+func (m *mobileApp) retryImage(source string, conn *remote.Conn) {
+	path, requested := m.previewPaths[source]
+	if source == "" || !requested || m.conn != conn || !m.connected || path != "" {
+		return
+	}
+	if m.previewRetries == nil {
+		m.previewRetries = map[string]int{}
+	}
+	attempt := m.previewRetries[source]
+	if attempt >= 3 {
+		return
+	}
+	m.previewRetries[source] = attempt + 1
+	gen := m.generation
+	time.AfterFunc(time.Second<<attempt, func() {
+		m.onMain(gen, func() {
+			if m.conn == conn && m.connected && m.previewPaths[source] == "" {
+				delete(m.previewPaths, source)
+				invalidate()
+			}
+		})
+	})
+}
+
 // messageImage never tries to open a desktop path on the phone. Resolve its
-// cached thumbnail off the UI thread, asking the paired desktop only once
-// per connection when missing. Image sources in messages stay unchanged.
+// cached thumbnail off the UI thread, with bounded retries when a transfer
+// fails. Image sources in messages stay unchanged.
 func (m *mobileApp) messageImage(source string) ui.ImageSource {
 	if !strings.HasPrefix(source, "file://") && !filepath.IsAbs(source) {
 		return cachedImage(source)
@@ -77,8 +105,10 @@ func storePhonePreview(path string, data []byte) error {
 
 func (m *mobileApp) receiveImage(preview phoneImagePreview) {
 	path, gen := m.previewPath(preview.Source), m.generation
+	conn := m.conn
 	go func() {
 		if storePhonePreview(path, preview.Data) != nil {
+			m.onMain(gen, func() { m.retryImage(preview.Source, conn) })
 			return
 		}
 		m.onMain(gen, func() {

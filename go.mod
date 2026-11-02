@@ -5,10 +5,11 @@ go 1.27.3
 replace github.com/egoist/mygo => ../mygo
 
 require (
-	github.com/egoist/mygo v0.7.3
+	github.com/egoist/mygo v0.7.4
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	github.com/tailscale/tailcat v0.7.0
 	golang.org/x/sys v0.48.0
+	golang.org/x/text v0.43.0
 	tailscale.com v1.105.0-pre.0.20261013225543-3c0508fa283f
 )
 
@@ -56,7 +57,6 @@ require (
 	golang.org/x/net v0.60.0 // indirect
 	golang.org/x/sync v0.24.0 // indirect
 	golang.org/x/term v0.46.0 // indirect
-	golang.org/x/text v0.43.0 // indirect
 	golang.org/x/time v0.16.0 // indirect
 	golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2 // indirect
 	golang.zx2c4.com/wireguard/windows v1.0.1 // indirect

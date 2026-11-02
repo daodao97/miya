@@ -167,7 +167,7 @@ func codexWindows(limits codexLimits) []Window {
 		if w.Reset > 0 {
 			reset = time.Unix(w.Reset, 0).Local().Format("01-02 15:04")
 		}
-		windows = append(windows, Window{Name: name, Used: Percent(*w.Used), Reset: reset})
+		windows = append(windows, Window{Name: name, Used: Percent(*w.Used), Reset: reset, DurationMins: w.Mins, ResetsAt: w.Reset})
 	}
 	return windows
 }

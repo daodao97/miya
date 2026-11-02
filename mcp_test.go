@@ -65,7 +65,7 @@ func TestMCPServerHandshakeAndTools(t *testing.T) {
 	for _, tool := range res["2"]["result"].(map[string]any)["tools"].([]any) {
 		names = append(names, tool.(map[string]any)["name"].(string))
 	}
-	if strings.Join(names, ",") != "list_threads,read_thread,thread_status,delegate,list_automations,create_automation,update_automation,report_result" {
+	if strings.Join(names, ",") != "list_threads,read_thread,thread_status,delegate,list_automations,create_automation,update_automation,report_result,search_memory,remember,forget_memory" {
 		t.Fatalf("bad tools: %v", names)
 	}
 	if res[`"p"`]["result"] == nil || res["3"]["error"].(map[string]any)["code"] != float64(-32601) || res["null"]["error"] == nil {
@@ -101,7 +101,7 @@ func TestMCPDelegateRetriesThenWaitsForTheReply(t *testing.T) {
 	}
 	res := mcpExchange(t, call, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"delegate","arguments":{"task":"写测试","agent":"codex","include_context":false}}}`)
 	text, isErr := mcpText(t, res["1"])
-	if isErr || !strings.Contains(text, "已交付到对话 #7（Codex）") || !strings.Contains(text, "已完成") || !strings.Contains(text, "测试都加好了") {
+	if isErr || !strings.Contains(text, "已交付到会话 创建中（Codex）") || !strings.Contains(text, "已完成") || !strings.Contains(text, "测试都加好了") {
 		t.Fatalf("bad delegate result: %q", text)
 	}
 	if strings.Join(ops, ",") != "mcpDelegate,mcpDelegate,mcpStatus,mcpStatus,mcpStatus" {
@@ -141,7 +141,7 @@ func TestMCPDelegateHandsWorkWithTheCallersContext(t *testing.T) {
 		t.Fatalf("delegation failed: %v %v", res, err)
 	}
 	target := c.threadWithID(2)
-	if len(target.Queue) != 1 || !strings.HasPrefix(target.Queue[0].Text, "给登录补测试") || !strings.Contains(target.Queue[0].Text, `<miya-thread-context id="1"`) {
+	if len(target.Queue) != 1 || !strings.HasPrefix(target.Queue[0].Text, "给登录补测试") || !strings.Contains(target.Queue[0].Text, contextEnvelopeOpen) {
 		t.Fatalf("task not sent with the caller's context: %+v", target.Queue)
 	}
 	source := c.threadWithID(1)
@@ -193,6 +193,28 @@ func TestMCPListReadAndStatus(t *testing.T) {
 	// Codex's shared app-server may pass any workspace, such as /.
 	if _, err := c.mcpHandle("mcpThreads", mcpRequest{Workspace: "/"}); err != nil {
 		t.Fatalf("a call with the service's workspace was refused: %v", err)
+	}
+}
+
+func TestMCPPublicThreadIdentifiersAreSessionLinks(t *testing.T) {
+	c := mcpHost(t)
+	s := &mcpServer{workspace: "/ws", sleep: func(time.Duration) {}, call: func(op string, args, out any) error {
+		res, err := c.mcpHandle(op, args.(mcpRequest))
+		if err == nil {
+			assign(out, res)
+		}
+		return err
+	}}
+	listing, err := s.callTool("list_threads", json.RawMessage(`{}`))
+	if err != nil || !strings.Contains(listing, testRef(agentCodex, "x").URL()) || strings.Contains(listing, "#2") {
+		t.Fatalf("local number exposed: %q %v", listing, err)
+	}
+	args, _ := json.Marshal(map[string]any{"id": testReference(c.threadWithID(1)).URL()})
+	if packet, err := s.callTool("read_thread", args); err != nil || !strings.Contains(packet, "修复登录过期的问题") {
+		t.Fatalf("session link unreadable: %s %v", packet, err)
+	}
+	if _, err := s.callTool("read_thread", json.RawMessage(`{"id":1}`)); err == nil {
+		t.Fatal("accepted a legacy numeric tool argument")
 	}
 }
 

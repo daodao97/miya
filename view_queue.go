@@ -28,7 +28,7 @@ func (app *chatApp) queueView(c *ui.Context, t Thread) {
 		for i, q := range t.Queue {
 			ui.Row(c.Key(q.ID)).AlignItems(ui.Center).Gap(6).Children(func() {
 				ui.Text(c, fmt.Sprintf("%d.", i+1)).FontSize(12).TextColor(muted)
-				text := strings.Join(strings.Fields(q.Text), " ")
+				text := strings.Join(strings.Fields(threadContextDisplay(q.Text)), " ")
 				if n := len(q.Attachments); n > 0 {
 					text += fmt.Sprintf(" · 📎 %d", n)
 				}
@@ -54,7 +54,7 @@ func (app *chatApp) queueView(c *ui.Context, t Thread) {
 func (app *chatApp) editQueued(threadID int, q queuedMessage) {
 	cc := app.c
 	cc.removeQueued(threadID, q.ID)
-	text := q.Text
+	text, _ := splitReferenceContext(q.Text)
 	if draft := strings.TrimSpace(cc.draft()); draft != "" {
 		text += "\n" + draft
 	}

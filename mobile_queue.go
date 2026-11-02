@@ -46,7 +46,7 @@ func (m *mobileApp) queueView(c *ui.Context) {
 			ui.Column(c).FillWidth().Gap(4).Children(func() {
 				for _, q := range t.Queue {
 					ui.Row(c.Key(q.ID)).FillWidth().Gap(6).AlignItems(ui.Center).Children(func() {
-						text := strings.Join(strings.Fields(q.Text), " ")
+						text := strings.Join(strings.Fields(threadContextDisplay(q.Text)), " ")
 						if len(q.Attachments) > 0 {
 							text += fmt.Sprintf(" · %d 个附件", len(q.Attachments))
 						}

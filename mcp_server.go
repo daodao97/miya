@@ -34,23 +34,23 @@ type mcpTool struct {
 var mcpReadOnly = map[string]any{"readOnlyHint": true, "openWorldHint": false}
 
 var mcpTools = []mcpTool{
-	{Name: "list_threads", Description: "List the other conversations of this workspace in Miya: id, title, agent and whether each is running.",
+	{Name: "list_threads", Description: "List the other conversations of this workspace in Miya: session link, title, agent and whether each is running.",
 		InputSchema: map[string]any{"type": "object", "properties": map[string]any{}}, Annotations: mcpReadOnly},
 	{Name: "read_thread", Description: "Read a conversation's context: its first and latest requests, latest conclusions, changed files and sub-agents.",
 		InputSchema: map[string]any{"type": "object", "properties": map[string]any{
-			"id": map[string]any{"type": "integer", "description": "Conversation id from list_threads"},
+			"id": map[string]any{"type": "string", "description": "Full miya:// session link from list_threads"},
 		}, "required": []string{"id"}}, Annotations: mcpReadOnly},
 	{Name: "thread_status", Description: "Tell whether a conversation is running, and its latest reply; optionally wait for it to finish.",
 		InputSchema: map[string]any{"type": "object", "properties": map[string]any{
-			"id":           map[string]any{"type": "integer", "description": "Conversation id"},
+			"id":           map[string]any{"type": "string", "description": "Full miya:// session link"},
 			"wait_seconds": map[string]any{"type": "integer", "minimum": 0, "maximum": 1200, "description": "Wait up to this long for it to finish (default 0)"},
 		}, "required": []string{"id"}}, Annotations: mcpReadOnly},
-	{Name: "delegate", Description: "Hand a self-contained task to another agent: a new conversation, or an existing one by thread_id. " +
+	{Name: "delegate", Description: "Hand a self-contained task to another agent: a new conversation, or an existing one by its session link. " +
 		"Waits up to wait_seconds (default 300) for its reply, then returns its status; use thread_status to follow it later.",
 		InputSchema: map[string]any{"type": "object", "properties": map[string]any{
 			"task":            map[string]any{"type": "string", "description": "What to do, with everything the other agent needs"},
 			"agent":           map[string]any{"type": "string", "enum": []string{agentCodex, agentClaude}, "description": "Agent for a new conversation (default: this conversation's)"},
-			"thread_id":       map[string]any{"type": "integer", "description": "Send to this existing conversation instead of a new one"},
+			"thread_id":       map[string]any{"type": "string", "description": "Full miya:// session link of an existing conversation"},
 			"include_context": map[string]any{"type": "boolean", "description": "Attach this conversation's context (default true)"},
 			"wait_seconds":    map[string]any{"type": "integer", "minimum": 0, "maximum": 1200, "description": "Wait up to this long for the reply (default 300)"},
 		}, "required": []string{"task"}}, Annotations: map[string]any{"readOnlyHint": false, "destructiveHint": true, "openWorldHint": false}},
@@ -67,9 +67,12 @@ type mcpRequest struct {
 	// conversation calling it.
 	Tool      string `json:"tool,omitempty"`
 	Thread    int    `json:"thread,omitempty"`
+	Reference string `json:"reference,omitempty"`
 	Agent     string `json:"agent,omitempty"`
 	Task      string `json:"task,omitempty"`
 	NoContext bool   `json:"noContext,omitempty"`
+	// Arguments preserves a memory tool's original parameters for caller matching.
+	Arguments json.RawMessage `json:"arguments,omitempty"`
 	// Auto is an automation tool's arguments.
 	Auto *mcpAutomationArgs `json:"auto,omitempty"`
 	// Report is report_result\'s result.
@@ -77,10 +80,11 @@ type mcpRequest struct {
 }
 
 type mcpThreadInfo struct {
-	ID     int    `json:"id"`
-	Title  string `json:"title"`
-	Agent  string `json:"agent"`
-	Status string `json:"status"`
+	Reference string `json:"reference"`
+	ID        int    `json:"id"`
+	Title     string `json:"title"`
+	Agent     string `json:"agent"`
+	Status    string `json:"status"`
 }
 
 type mcpThreadsResult struct {
@@ -93,16 +97,18 @@ type mcpReadResult struct {
 }
 
 type mcpStatusResult struct {
-	ID     int    `json:"id"`
-	Title  string `json:"title"`
-	Agent  string `json:"agent"`
-	Status string `json:"status"`
-	Reply  string `json:"reply"`
+	Reference string `json:"reference"`
+	ID        int    `json:"id"`
+	Title     string `json:"title"`
+	Agent     string `json:"agent"`
+	Status    string `json:"status"`
+	Reply     string `json:"reply"`
 }
 
 type mcpDelegateResult struct {
-	Thread int    `json:"thread"`
-	Agent  string `json:"agent"`
+	Reference string `json:"reference"`
+	Thread    int    `json:"thread"`
+	Agent     string `json:"agent"`
 }
 
 type mcpError struct {
@@ -240,15 +246,18 @@ func mcpToolResult(text string, isError bool) map[string]any {
 
 func (s *mcpServer) callTool(name string, raw json.RawMessage) (string, error) {
 	var a struct {
-		ID             int    `json:"id"`
+		ID             string `json:"id"`
 		Task           string `json:"task"`
 		Agent          string `json:"agent"`
-		Thread         int    `json:"thread_id"`
+		Thread         string `json:"thread_id"`
 		IncludeContext *bool  `json:"include_context"`
 		WaitSeconds    *int   `json:"wait_seconds"`
 	}
 	if len(raw) > 0 && string(raw) != "null" && json.Unmarshal(raw, &a) != nil {
 		return "", errors.New("参数格式不对")
+	}
+	if name == "search_memory" || name == "remember" || name == "forget_memory" {
+		return s.memoryTool(name, raw)
 	}
 	if strings.Contains(name, "automation") {
 		return s.automationTool(name, raw)
@@ -271,30 +280,44 @@ func (s *mcpServer) callTool(name string, raw json.RawMessage) (string, error) {
 		}
 		return formatMCPThreads(res), nil
 	case "read_thread":
-		req.Thread = a.ID
+		req.Reference = a.ID
+		if _, ok := parseThreadURL(req.Reference); !ok {
+			return "", errors.New("id 必须是完整的会话链接")
+		}
 		for i := 0; ; i++ {
 			var res mcpReadResult
 			if err := s.callService("mcpRead", req, &res); err != nil {
 				return "", err
 			}
 			// An unloaded conversation loads in the service meanwhile.
-			if res.Loaded || i >= 20 {
+			if res.Loaded {
 				return res.Packet, nil
+			}
+			if i >= 20 {
+				return "", errors.New("会话上下文加载失败，请稍后重试")
 			}
 			s.sleep(500 * time.Millisecond)
 		}
 	case "thread_status":
-		req.Thread = a.ID
+		req.Reference = a.ID
+		if _, ok := parseThreadURL(req.Reference); !ok {
+			return "", errors.New("id 必须是完整的会话链接")
+		}
 		return s.status(req, mcpWait(a.WaitSeconds, 0))
 	case "delegate":
-		req.Task, req.Agent, req.Thread = a.Task, a.Agent, a.Thread
+		req.Task, req.Agent, req.Reference = a.Task, a.Agent, a.Thread
+		if a.Thread != "" {
+			if _, ok := parseThreadURL(a.Thread); !ok {
+				return "", errors.New("thread_id 必须是完整的会话链接")
+			}
+		}
 		req.NoContext = a.IncludeContext != nil && !*a.IncludeContext
 		var res mcpDelegateResult
 		if err := s.callService("mcpDelegate", req, &res); err != nil {
 			return "", err
 		}
-		out, err := s.status(mcpRequest{Workspace: s.workspace, Tool: name, Thread: res.Thread}, mcpWait(a.WaitSeconds, 300))
-		return fmt.Sprintf("已交付到对话 #%d（%s）。\n", res.Thread, backendFor(res.Agent).Name()) + out, err
+		out, err := s.status(mcpRequest{Workspace: s.workspace, Tool: name, Thread: res.Thread, Reference: res.Reference}, mcpWait(a.WaitSeconds, 300))
+		return fmt.Sprintf("已交付到会话 %s（%s）。\n", firstNonEmpty(res.Reference, "创建中"), backendFor(res.Agent).Name()) + out, err
 	}
 	return "", fmt.Errorf("没有工具 %s", name)
 }
@@ -320,12 +343,15 @@ func (s *mcpServer) status(req mcpRequest, wait time.Duration) (string, error) {
 		if err := s.callService("mcpStatus", req, &res); err != nil {
 			return "", err
 		}
+		if res.Reference != "" {
+			req.Reference = res.Reference
+		}
 		if !subAgentActive(res.Status) || waited >= wait {
 			break
 		}
 		s.sleep(step)
 	}
-	out := fmt.Sprintf("对话 #%d「%s」（%s）：%s", res.ID, res.Title, backendFor(res.Agent).Name(), subAgentStatusLabel(res.Status))
+	out := fmt.Sprintf("对话「%s」（%s）：%s\n%s", res.Title, backendFor(res.Agent).Name(), subAgentStatusLabel(res.Status), res.Reference)
 	if subAgentActive(res.Status) && wait > 0 {
 		out += fmt.Sprintf("。等待 %d 秒后仍未结束，可以稍后用 thread_status 查询。", int(wait/time.Second))
 	}
@@ -353,7 +379,7 @@ func formatMCPThreads(res mcpThreadsResult) string {
 		if t.Status == subAgentRunning {
 			status = "运行中"
 		}
-		fmt.Fprintf(&b, "#%d「%s」· %s · %s\n", t.ID, t.Title, backendFor(t.Agent).Name(), status)
+		fmt.Fprintf(&b, "「%s」· %s · %s\n%s\n", t.Title, backendFor(t.Agent).Name(), status, t.Reference)
 	}
 	return strings.TrimRight(b.String(), "\n")
 }

@@ -42,7 +42,7 @@ func TestComposerPastesAttachmentsBeforeClipboardText(t *testing.T) {
 				app, tt := testApp(t)
 				app.c.setThreads([]Thread{{ID: 1, Title: "当前", HistoryLoaded: true}, handoffSource()})
 				app.c.setActive(1)
-				app.c.rememberDraft("@#2 保留这段正文")
+				app.c.rememberDraft(referenceText(testReference(handoffSource()), "登录修复") + " 保留这段正文")
 				tt.Frame()
 				doc := app.complete.input.doc
 				doc.SetSelection(2, 4)
@@ -87,7 +87,7 @@ func TestComposerPastesAttachmentsBeforeClipboardText(t *testing.T) {
 						t.Fatalf("pasted image data changed: %v", err)
 					}
 				}
-				if app.c.draft() != "@#2 保留这段正文" || doc.Version() != version {
+				if app.c.draft() != referenceText(testReference(handoffSource()), "登录修复")+" 保留这段正文" || doc.Version() != version {
 					t.Fatalf("attachment paste changed the prompt or its undo history: %q", app.c.draft())
 				}
 			})

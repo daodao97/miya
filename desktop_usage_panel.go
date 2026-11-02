@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"runtime"
 	"time"
 
@@ -34,8 +35,8 @@ func (d *desktopUsage) height() int {
 		if i > 0 {
 			height += 22
 		}
-		height += 40
-		if w.Reset != "" {
+		height += 42
+		if w.Reset != "" || w.DurationMins > 0 && w.ResetsAt > 0 {
 			height += 22
 		}
 	}
@@ -220,19 +221,56 @@ func usagePanelWindow(c *ui.Context, w agentusage.Window, p desktopPalette) {
 	if remainingUsage(w.Used) == 0 {
 		color = p.danger
 	}
+	elapsed, timed := usageTimeProgress(w, c.Now())
+	used := agentusage.Percent(w.Used)
 	ui.Column(c).FillWidth().Gap(6).Children(func() {
 		ui.Row(c).FillWidth().Height(30).Gap(6).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, w.Name).FontSize(12).TextColor(p.muted).Grow(1).MinWidth(0).SingleLine().Ellipsis("…").Tooltip(w.Name)
-			ui.Text(c, fmt.Sprintf("%d%%", remainingUsage(w.Used))).Label(fmt.Sprintf("剩余 %d%%", remainingUsage(w.Used))).FontSize(26).FontWeight(600).TextColor(color).Shrink(0)
-			ui.Text(c, "剩余").FontSize(11).TextColor(p.muted).Shrink(0)
+			ui.Text(c, fmt.Sprintf("%.0f%%", used)).Label(fmt.Sprintf("已用 %.0f%%", used)).FontSize(26).FontWeight(600).TextColor(color).Shrink(0)
+			ui.Text(c, "已用").FontSize(11).TextColor(p.muted).Shrink(0)
 		})
-		ui.Box(c).FillWidth().Height(4).Radius(2).Clip().Background(p.line).Children(func() {
-			ui.Box(c).WidthPercent(float32(100 - agentusage.Percent(w.Used))).FillHeight().Background(color).Radius(2)
+		ui.Box(c).FillWidth().Height(6).Radius(3).Clip().Background(p.line).Label("额度进度 " + w.Name).Children(func() {
+			ui.Box(c).WidthPercent(float32(used)).FillHeight().Background(color).Radius(3)
+			if timed {
+				ui.Box(c).Absolute().Left(1).Right(1).Top(0).Height(6).Children(func() {
+					ui.Box(c).Absolute().LeftPercent(float32(elapsed)).Top(0).Size(2, 6).Translate(-1, 0).Background(p.ink).Shadow(0, 0, 0, 1, p.canvas).
+						Label("时间进度 " + w.Name).Tooltip(fmt.Sprintf("周期已过 %.0f%%", elapsed))
+				})
+			}
 		})
-		if w.Reset != "" {
-			ui.Text(c, w.Reset+" 重置").FontSize(11).TextColor(p.muted).Height(16).SingleLine().Ellipsis("…").Tooltip(w.Reset + " 重置")
+		if timed || w.Reset != "" {
+			ui.Row(c).FillWidth().Height(16).Gap(6).AlignItems(ui.Center).Children(func() {
+				if timed {
+					ui.Text(c, usagePaceText(used, elapsed)).FontSize(10).TextColor(p.muted).Grow(1).MinWidth(0).SingleLine().Ellipsis("…").
+						Tooltip("按周期时间均匀消耗额度的参考值，不代表实际请求速率。")
+				}
+				if w.Reset != "" {
+					ui.Text(c, w.Reset+" 重置").FontSize(10).TextColor(p.muted).Shrink(0).SingleLine().Tooltip(w.Reset + " 重置")
+				}
+			})
 		}
 	})
+}
+
+func usageTimeProgress(w agentusage.Window, now time.Time) (float64, bool) {
+	if w.DurationMins <= 0 || w.ResetsAt <= 0 {
+		return 0, false
+	}
+	remainingSeconds := float64(w.ResetsAt) - float64(now.Unix())
+	elapsed := 100 * (1 - remainingSeconds/(float64(w.DurationMins)*60))
+	return math.Max(0, math.Min(100, elapsed)), true
+}
+
+func usagePaceText(used, elapsed float64) string {
+	pace := int(math.Round(elapsed))
+	delta := int(math.Round(elapsed - used))
+	if delta > 0 {
+		return fmt.Sprintf("均速 %d%% · 少用 %d 个百分点", pace, delta)
+	}
+	if delta < 0 {
+		return fmt.Sprintf("均速 %d%% · 多用 %d 个百分点", pace, -delta)
+	}
+	return fmt.Sprintf("均速 %d%% · 与时间持平", pace)
 }
 
 func usagePanelEmpty(c *ui.Context, r agentusage.Reading, busy bool) {

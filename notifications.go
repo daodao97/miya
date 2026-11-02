@@ -18,9 +18,9 @@ func completionNotice(old, next Thread) (taskNotice, bool) {
 	}
 	title := "Miya · 已完成"
 	if next.Status != "" {
-		title = "Miya · 任务结束"
+		title = "Miya · 执行失败"
 	}
-	return taskNotice{ID: fmt.Sprintf("miya-%d-%d", next.ID, next.CompletedAtMs), Thread: strconv.Itoa(next.ID), Title: title, Body: next.Title}, true
+	return taskNotice{ID: fmt.Sprintf("miya-%d-%d", next.ID, next.CompletedAtMs), Thread: strconv.Itoa(next.ID), Title: title, Body: completionNoticeBody(old, next)}, true
 }
 func (c *chatController) installNotifications() {
 	set := c.setThreads
@@ -55,7 +55,9 @@ func (c *chatController) installApprovalNotifications() {
 			// Claude Code's approvals and background projects' too.
 			if t, ok := c.approvalThread(a); ok {
 				sum := sha256.Sum256(append([]byte(a.ThreadID), a.ID...))
-				c.deliverNotice(taskNotice{ID: fmt.Sprintf("miya-wait-%x", sum[:16]), Thread: strconv.Itoa(t.ID), Title: "Miya · 需要你的确认", Body: t.Title}, "waiting")
+				n := approvalNotice(t, a)
+				n.ID = fmt.Sprintf("miya-wait-%x", sum[:16])
+				c.deliverNotice(n, "waiting")
 			}
 		}
 	}

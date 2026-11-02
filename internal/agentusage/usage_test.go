@@ -106,6 +106,9 @@ func TestCodexReadsOnlyAccountAndGeneralLimits(t *testing.T) {
 	if windows[0].Name != "5 小时" || windows[0].Used != 17 || windows[0].Reset == "" || windows[1].Name != "7 天" {
 		t.Fatalf("wrong windows: %+v", windows)
 	}
+	if windows[0].DurationMins != 300 || windows[0].ResetsAt != 1900000000 || windows[1].DurationMins != 10080 || windows[1].ResetsAt != 0 {
+		t.Fatalf("lost structured window times: %+v", windows)
+	}
 }
 
 func TestCodexAPIKeyIsNotZeroQuota(t *testing.T) {

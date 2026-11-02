@@ -388,3 +388,37 @@ func TestCodexPhoneSendUsesStableIdentityAfterRenumbering(t *testing.T) {
 		t.Fatal("sending touched the conversation that reused the old number")
 	}
 }
+
+func TestCodexPhoneSendRechecksReleasedWriter(t *testing.T) {
+	c, d, logPath := codexResumeFixture(t)
+	c.update(1, func(t *Thread) { t.ReadOnly = true; t.Resumed = false; t.HistoryLoaded = true })
+	p := &phoneSendReq{req: remote.Request{Thread: 1, ServerID: "resume-thread", Agent: agentCodex, Text: "after writer released"}}
+	if result := p.send(c); result.thread != 0 || result.err != "" || !p.ownershipChecked || !c.threadWithID(1).Loading {
+		t.Fatalf("ownership was not rechecked: %+v", result)
+	}
+	waitCodexResume(t, c, d, func() bool { return !c.threadWithID(1).Loading })
+	if result := p.send(c); result.thread != 1 || result.err != "" {
+		t.Fatalf("released session stayed read-only: %+v", result)
+	}
+	waitCodexResume(t, c, d, func() bool { return !c.threadWithID(1).Busy })
+	if got := strings.Join(codexTurnRequests(t, logPath), ","); got != "thread/resume,turn/start" {
+		t.Fatalf("unexpected ownership/send requests: %s", got)
+	}
+}
+
+func TestCodexPhoneSendKeepsActiveExternalWriterReadOnly(t *testing.T) {
+	t.Setenv("QUICKGUI_FIXTURE_RESUME_ERROR", `{"code":-32600,"message":"thread resume-thread already has an active writer"}`)
+	c, d, logPath := codexResumeFixture(t)
+	c.update(1, func(t *Thread) { t.ReadOnly = true; t.Resumed = false; t.HistoryLoaded = true })
+	p := &phoneSendReq{req: remote.Request{Thread: 1, ServerID: "resume-thread", Text: "do not duplicate"}}
+	p.send(c)
+	waitCodexResume(t, c, d, func() bool { return !c.threadWithID(1).Loading })
+	for i := 0; i < 2; i++ {
+		if result := p.send(c); result.thread != 0 || !strings.Contains(result.err, "只能查看") {
+			t.Fatalf("active writer protection bypassed: %+v", result)
+		}
+	}
+	if got := strings.Join(codexTurnRequests(t, logPath), ","); got != "thread/resume" {
+		t.Fatalf("retried ownership or sent despite conflict: %s", got)
+	}
+}

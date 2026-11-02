@@ -4,7 +4,7 @@ import "encoding/json"
 
 // ProtocolVersion is bumped whenever a frame's meaning changes. The phone
 // refuses a desktop whose version it does not know.
-const ProtocolVersion = 4
+const ProtocolVersion = 5
 
 // Frame is one line from the desktop to the phone.
 //
@@ -20,12 +20,17 @@ const ProtocolVersion = 4
 //	sent    answers a send: Thread took the message, or Error says why not
 //	ping    keeps an idle connection checked
 type Frame struct {
-	Type    string          `json:"type"`
-	Version int             `json:"version,omitempty"`
-	Host    string          `json:"host,omitempty"`
-	Thread  int             `json:"thread,omitempty"`
-	Error   string          `json:"error,omitempty"`
-	Data    json.RawMessage `json:"data,omitempty"`
+	// AttachmentToken advertises binary attachments in hello. Older peers
+	// ignore it and keep sending inline images; the control version is unchanged.
+	AttachmentToken string `json:"attachmentToken,omitempty"`
+	// Attachment identifies a single-use thumbnail on the private HTTP stream.
+	Attachment string          `json:"attachment,omitempty"`
+	Type       string          `json:"type"`
+	Version    int             `json:"version,omitempty"`
+	Host       string          `json:"host,omitempty"`
+	Thread     int             `json:"thread,omitempty"`
+	Error      string          `json:"error,omitempty"`
+	Data       json.RawMessage `json:"data,omitempty"`
 }
 
 // Request is one line from the phone to the desktop.
@@ -49,18 +54,21 @@ type SendOptions struct {
 }
 
 type Request struct {
-	ImageSource     string          `json:"imageSource,omitempty"`
-	ApprovalVersion string          `json:"approvalVersion,omitempty"`
-	Options         *SendOptions    `json:"options,omitempty"`
-	Steer           bool            `json:"steer,omitempty"`
-	QueuedID        int             `json:"queuedId,omitempty"`
-	MessageID       int             `json:"messageId,omitempty"`
-	Result          json.RawMessage `json:"result,omitempty"`
-	Remember        bool            `json:"remember,omitempty"`
-	ReadVersion     uint64          `json:"readVersion,omitempty"`
-	Push            json.RawMessage `json:"push,omitempty"`
-	Op              string          `json:"op"`
-	Thread          int             `json:"thread"`
+	MemoryScope       string          `json:"memoryScope,omitempty"`
+	BinaryAttachments bool            `json:"binaryAttachments,omitempty"`
+	Reference         string          `json:"reference,omitempty"`
+	ImageSource       string          `json:"imageSource,omitempty"`
+	ApprovalVersion   string          `json:"approvalVersion,omitempty"`
+	Options           *SendOptions    `json:"options,omitempty"`
+	Steer             bool            `json:"steer,omitempty"`
+	QueuedID          int             `json:"queuedId,omitempty"`
+	MessageID         int             `json:"messageId,omitempty"`
+	Result            json.RawMessage `json:"result,omitempty"`
+	Remember          bool            `json:"remember,omitempty"`
+	ReadVersion       uint64          `json:"readVersion,omitempty"`
+	Push              json.RawMessage `json:"push,omitempty"`
+	Op                string          `json:"op"`
+	Thread            int             `json:"thread"`
 	// ServerID is the durable identity; Thread is a desktop-local number.
 	// Optional for compatibility with phones that only send Thread.
 	ServerID string          `json:"serverId,omitempty"`
@@ -84,5 +92,6 @@ type Seen struct {
 // Image is a picture a phone attaches to a message.
 type Image struct {
 	Name string `json:"name"`
-	Data []byte `json:"data"`
+	Data []byte `json:"data,omitempty"`
+	ID   string `json:"id,omitempty"`
 }

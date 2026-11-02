@@ -9,7 +9,9 @@ import (
 )
 
 func testController() *chatController {
-	c := &chatController{}
+	c := &chatController{referenceSource: testReferenceSource}
+	c.projects, c.setProjects = createSignal([]Project{})
+	c.status, c.setStatus = createSignal("")
 	c.threads, c.setThreads = createSignal([]Thread{{ID: 1, ServerID: "t1", Busy: true}, {ID: 2, ServerID: "t2"}})
 	c.approvals, c.setApprovals = createSignal([]codex.Approval{})
 	return c

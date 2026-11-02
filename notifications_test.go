@@ -9,7 +9,7 @@ func TestCompletionNoticeTransitions(t *testing.T) {
 	old := Thread{ID: 7, Busy: true}
 	next := Thread{ID: 7, CompletedAtMs: 42, Title: "完成工作"}
 	n, ok := completionNotice(old, next)
-	if !ok || n.Thread != "7" || n.Body != next.Title {
+	if !ok || n.Thread != "7" || n.Body != "任务："+next.Title {
 		t.Fatalf("missing completion: %+v", n)
 	}
 	next.Busy = true

@@ -17,6 +17,10 @@ type Window struct {
 	Name  string
 	Used  float64
 	Reset string
+	// Structured times are retained for pacing; display strings may omit
+	// the year or use a locale and must not be parsed back into timestamps.
+	DurationMins int64
+	ResetsAt     int64
 }
 
 type Reading struct {

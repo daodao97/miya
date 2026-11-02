@@ -4,11 +4,12 @@ import (
 	"strconv"
 
 	"github.com/egoist/mygo/ui"
+	"miya/internal/remote"
 )
 
 // threadMenu lists all projects' other conversations above the composer
 // while the caret follows an @ and the beginning of a conversation's title
-// or #id. Choosing one references it as @#<id>, which the desktop expands
+// or session ID. Choosing one inserts a stable reference, which the desktop expands
 // into its context as the message is sent.
 func (m *mobileApp) threadMenu(c *ui.Context, project string) {
 	end := len(m.draft)
@@ -18,6 +19,9 @@ func (m *mobileApp) threadMenu(c *ui.Context, project string) {
 	}
 	token := composerTokenAt(m.draft, end)
 	if token.Kind != '@' || project == "" {
+		return
+	}
+	if m.state.ReferenceSource == "" {
 		return
 	}
 	shown := matchingThreadRefs(m.state.Projects, m.open, token.Query)
@@ -40,12 +44,16 @@ func (m *mobileApp) threadMenu(c *ui.Context, project string) {
 					item := m.phoneButton(c.Key("ref:"+strconv.Itoa(t.ID))).FillWidth().MinHeight(52).Padding(0, 10).Radius(12).Label(title)
 					item.Children(func() {
 						ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
-							ui.Text(c, "#"+strconv.Itoa(t.ID)+" "+title).FontSize(m.font(15)).FontWeight(500).SingleLine().Ellipsis("…")
+							ui.Text(c, title).FontSize(m.font(15)).FontWeight(500).SingleLine().Ellipsis("…")
 							ui.Text(c, detail).FontSize(m.font(12)).TextColor(p.muted).SingleLine().Ellipsis("…")
 						})
 					})
 					if item.Clicked() {
-						m.draft = insertThreadReference(m.draft, token, t.ID)
+						ref := ThreadRef{Source: m.state.ReferenceSource, Backend: threadAgent(t), SessionID: t.ServerID}
+						m.draft = insertThreadReference(m.draft, token, ref, title)
+						if m.conn != nil {
+							m.sendPhoneAction(remote.Request{Op: "prefetch", Reference: ref.URL()})
+						}
 					}
 				}
 			})

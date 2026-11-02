@@ -30,6 +30,82 @@ func TestClaudeEmptyResultExplained(t *testing.T) {
 	}
 }
 
+func TestClaudeResultSurvivesProcessExit(t *testing.T) {
+	for _, tc := range []struct {
+		name, frame, wantRole, wantText string
+		messages                        []Message
+		stopped                         bool
+	}{
+		{name: "API failure", frame: `{"type":"result","is_error":true,"errors":["upstream unavailable"]}`, wantRole: "error", wantText: "upstream unavailable"},
+		{name: "empty success", frame: `{"type":"result","subtype":"success","is_error":false,"result":""}`, wantRole: "error", wantText: "没有返回回复"},
+		{name: "final text only", frame: `{"type":"result","result":"Hello"}`, wantRole: "assistant", wantText: "Hello"},
+		{name: "streamed text", frame: `{"type":"result","result":"Hello"}`, messages: []Message{{Role: "assistant", Content: "Hello"}}, wantRole: "assistant", wantText: "Hello"},
+		{name: "tool output", frame: `{"type":"result"}`, messages: []Message{{Role: "tool", Content: "done"}}, wantRole: "tool", wantText: "done"},
+		{name: "scheduled idle", frame: `{"type":"result"}`, wantRole: "user", wantText: "继续"},
+		{name: "stopped", frame: `{"type":"result"}`, stopped: true, wantRole: "user", wantText: "继续"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("HOME", t.TempDir())
+			c := testController()
+			c.cwd = t.TempDir()
+			c.claudeCommand = "claude --settings ~/proxy.json"
+			messages := []Message{{Role: "error", Content: "old failure"}, {Role: "user", Content: "继续"}}
+			messages = append(messages, tc.messages...)
+			c.setThreads([]Thread{{ID: 1, Agent: agentClaude, Busy: true, StopRequested: tc.stopped, Messages: messages}})
+			var f claude.Frame
+			if err := json.Unmarshal([]byte(tc.frame), &f); err != nil {
+				t.Fatal(err)
+			}
+			f.KeepingAlive = tc.name == "scheduled idle"
+			c.handleClaude(1, f)
+			if !f.KeepingAlive {
+				c.finishClaude(1, c.cwd, nil)
+			}
+			got := c.threads()[0]
+			last := got.Messages[len(got.Messages)-1]
+			if last.Role != tc.wantRole || !strings.Contains(last.Content, tc.wantText) {
+				t.Fatalf("last message = %+v", last)
+			}
+			if tc.wantRole == "error" {
+				if got.Status != last.Content {
+					t.Fatalf("process exit cleared API error: status = %q, message = %q", got.Status, last.Content)
+				}
+			} else if got.Status != "" && !tc.stopped {
+				t.Fatalf("previous turn's error leaked into status: %q", got.Status)
+			}
+			wantLen := len(messages)
+			if tc.wantRole == "error" || tc.name == "final text only" {
+				wantLen++
+			}
+			if len(got.Messages) != wantLen || got.Busy {
+				t.Fatalf("completion state: messages = %d, want %d; busy = %v", len(got.Messages), wantLen, got.Busy)
+			}
+		})
+	}
+}
+
+func TestClaudeErrorVisibleAfterProcessExit(t *testing.T) {
+	app, tt := testApp(t)
+	c := app.c
+	c.setThreads([]Thread{{ID: 1, Agent: agentClaude, Busy: true, HistoryLoaded: true,
+		Messages: []Message{{ID: c.nextID(), Role: "user", Content: "继续"}}}})
+	c.setActive(1)
+	old := c.current()
+	c.handleClaude(1, claude.Frame{Type: "result", IsError: true, Errors: []string{"upstream unavailable"}})
+	c.finishClaude(1, c.cwd, nil)
+	tt.Frame()
+	texts := strings.Join(tt.Texts(), "\n")
+	if !strings.Contains(texts, "upstream unavailable") {
+		t.Fatalf("error missing from conversation: %q", texts)
+	}
+	if _, ok := tt.Find("重试回复"); !ok {
+		t.Fatalf("error has no retry action: %q", texts)
+	}
+	if notice, ok := completionNotice(old, c.current()); !ok || notice.Title != "Miya · 执行失败" {
+		t.Fatalf("error reported as success: %+v, %v", notice, ok)
+	}
+}
+
 func TestStalledHint(t *testing.T) {
 	now := time.Now()
 	base := Thread{Agent: "claude-code", Busy: true, LastOutputAtMs: now.Add(-90 * time.Second).UnixMilli()}

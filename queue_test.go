@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"os/exec"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -75,6 +76,35 @@ func TestQueuedMessagesSendTogetherAfterTheTurn(t *testing.T) {
 	th = c.threadWithID(1)
 	if got := userTexts(th); len(got) != 1 || got[0] != "first\n\nthird\n📎 a.txt\n📎 b.txt" || !th.Busy || len(th.Queue) != 0 {
 		t.Fatalf("after the turn: %q busy %v queue %+v", got, th.Busy, th.Queue)
+	}
+}
+
+func TestQueuedReferencesKeepEachSendTimeSnapshot(t *testing.T) {
+	c, d := queueController(t)
+	src := handoffSource()
+	c.setThreads(append(c.threads(), src))
+	raw := referenceText(testReference(src), src.Title)
+	if c.submit(sendRequest{ThreadID: 1, Text: "第一次 " + raw}) != 1 {
+		t.Fatal(c.lastSubmitError)
+	}
+	c.update(src.ID, func(t *Thread) {
+		t.Messages = append(t.Messages, Message{Role: "user", Content: "第二次请求"}, Message{Role: "assistant", Content: "新的结论"})
+	})
+	if c.submit(sendRequest{ThreadID: 1, Text: "第二次 " + raw}) != 1 {
+		t.Fatal(c.lastSubmitError)
+	}
+	c.update(1, func(t *Thread) { t.Busy = false })
+	d.drain()
+	texts := userTexts(c.threadWithID(1))
+	if len(texts) != 1 {
+		t.Fatal(texts)
+	}
+	body, snapshots := splitReferenceContext(texts[0])
+	if body != "第一次 "+raw+"\n\n第二次 "+raw || len(snapshots) != 2 {
+		t.Fatalf("queue lost references: %q %+v", body, snapshots)
+	}
+	if strings.Contains(snapshots[0].Context, "新的结论") || !strings.Contains(snapshots[1].Context, "新的结论") {
+		t.Fatal("queued references were refreshed instead of preserving snapshots")
 	}
 }
 

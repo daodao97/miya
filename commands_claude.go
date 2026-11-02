@@ -25,15 +25,6 @@ type claudeCommandList struct {
 // Code conversation; every other slash command goes to Claude Code.
 var appUICommands = map[string]bool{"new": true, "model": true, "permissions": true, "mention": true, "diff": true, "status": true}
 
-// appCommandNames are the commands of Miya's own list.
-var appCommandNames = func() map[string]bool {
-	m := map[string]bool{}
-	for _, c := range composerCommands {
-		m[c.Name] = true
-	}
-	return m
-}()
-
 // claudeTakesCommand reports whether a slash command, without its slash,
 // goes to Claude Code as a message.
 func claudeTakesCommand(agent, command string) bool {
@@ -81,7 +72,7 @@ func (c *chatController) loadClaudeCommands(cwd string) {
 			if cmd.ArgumentHint != "" {
 				detail = cmd.ArgumentHint + "  " + detail
 			}
-			choices = append(choices, composerChoice{Name: cmd.Name, Detail: detail})
+			choices = append(choices, composerChoice{Name: cmd.Name, Detail: detail, ArgumentHint: cmd.ArgumentHint})
 		}
 		c.dispatch(func() {
 			delete(c.claudeCmdLoading, cwd)
@@ -111,6 +102,14 @@ func (c *chatController) setClaudeCommands(cwd string, choices []composerChoice,
 // commandChoices lists the commands matching query for the open
 // conversation's agent: Claude Code's own after Miya's in its conversations.
 func (app *chatApp) commandChoices(query string) []composerChoice {
+	if app.c.currentAgent() == agentClaude {
+		app.c.claudeCommandsFor(app.c.cwd)
+	}
+	return app.knownCommandChoices(query)
+}
+
+// Styling an existing draft uses cached metadata; it must not launch a CLI.
+func (app *chatApp) knownCommandChoices(query string) []composerChoice {
 	c := app.c
 	if c.currentAgent() != agentClaude {
 		return commandChoices(query)
@@ -123,7 +122,7 @@ func (app *chatApp) commandChoices(query string) []composerChoice {
 			out, seen[cmd.Name] = append(out, cmd), true
 		}
 	}
-	list, _ := c.claudeCommandsFor(c.cwd)
+	list := c.claudeCmdCache[c.cwd].choice
 	for _, cmd := range list {
 		if !seen[cmd.Name] && strings.Contains(strings.ToLower(cmd.Name), q) {
 			out, seen[cmd.Name] = append(out, cmd), true

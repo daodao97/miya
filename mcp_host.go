@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 )
 
@@ -22,7 +21,7 @@ var miyaMCPEnabled bool
 const maxDelegationDepth = 2
 
 // miyaReadOnlyTools are the miya tools an agent may call without asking.
-var miyaReadOnlyTools = []string{"list_threads", "read_thread", "thread_status", "list_automations", "report_result"}
+var miyaReadOnlyTools = []string{"list_threads", "read_thread", "thread_status", "list_automations", "report_result", "search_memory"}
 
 func miyaMCPCommand() (string, bool) {
 	if !miyaMCPEnabled {
@@ -76,10 +75,38 @@ func tomlString(s string) string {
 
 // mcpHandle answers a miya tool call the service received.
 func (c *chatController) mcpHandle(op string, r mcpRequest) (any, error) {
+	if r.Reference != "" {
+		ref, ok := parseThreadURL(r.Reference)
+		if !ok || ref.Source != c.referenceSource {
+			return nil, errors.New("会话链接无效或属于另一台桌面")
+		}
+		r.Thread = 0
+		for _, t := range c.allThreads() {
+			if c.threadRef(t) == ref {
+				r.Thread = t.ID
+				break
+			}
+		}
+		if r.Thread == 0 {
+			if _, known := c.forkedReferences[ref]; known && op == "mcpRead" {
+				t, messages, err := c.resolveReference(ref)
+				if err != nil {
+					if c.referenceLoading[ref] {
+						return mcpReadResult{}, nil
+					}
+					return nil, err
+				}
+				return mcpReadResult{Loaded: true, Packet: threadPacket(t, messages)}, nil
+			}
+			return nil, errors.New("会话不存在或已不可用")
+		}
+	}
 	// The MCP server's workspace argument is not trusted: Codex runs one
 	// app-server for every project, started wherever the service was. The
 	// calling conversation's own project is used instead.
 	switch op {
+	case "mcpMemory":
+		return c.mcpMemory(r)
 	case "mcpThreads":
 		return c.mcpThreads(r), nil
 	case "mcpRead":
@@ -155,14 +182,14 @@ func (c *chatController) mcpThreads(r mcpRequest) mcpThreadsResult {
 	}
 	res := mcpThreadsResult{Threads: []mcpThreadInfo{}}
 	for _, t := range c.projectThreads(project) {
-		if t.ID == 0 || t.ID == caller.ID {
+		if t.ID == 0 || t.ID == caller.ID || !c.threadRef(t).valid() {
 			continue
 		}
 		status := "idle"
 		if t.Busy || t.Loading {
 			status = subAgentRunning
 		}
-		res.Threads = append(res.Threads, mcpThreadInfo{ID: t.ID, Title: threadRefTitle(t), Agent: threadAgent(t), Status: status})
+		res.Threads = append(res.Threads, mcpThreadInfo{Reference: c.threadRef(t).URL(), ID: t.ID, Title: threadRefTitle(t), Agent: threadAgent(t), Status: status})
 	}
 	return res
 }
@@ -170,18 +197,19 @@ func (c *chatController) mcpThreads(r mcpRequest) mcpThreadsResult {
 func (c *chatController) mcpRead(r mcpRequest) (mcpReadResult, error) {
 	t, messages, ok := c.resolveThreadRef(r.Thread)
 	if !ok {
-		return mcpReadResult{}, fmt.Errorf("没有对话 #%d：用 list_threads 查看可用的对话", r.Thread)
+		return mcpReadResult{}, errors.New("会话不存在：用 list_threads 查看可用会话链接")
 	}
-	if len(messages) == 0 {
+	loaded := t.HistoryLoaded
+	if !loaded {
 		c.prefetchThread(t.ID)
 	}
-	return mcpReadResult{Loaded: len(messages) > 0, Packet: threadPacket(t, messages)}, nil
+	return mcpReadResult{Loaded: loaded, Packet: threadPacket(t, messages)}, nil
 }
 
 func (c *chatController) mcpStatus(r mcpRequest) (mcpStatusResult, error) {
 	t, _, ok := c.resolveThreadRef(r.Thread)
 	if !ok {
-		return mcpStatusResult{}, fmt.Errorf("没有对话 #%d", r.Thread)
+		return mcpStatusResult{}, errors.New("会话不存在或已不可用")
 	}
 	status, _ := c.handoffState(t.ID)
 	last := -1
@@ -190,7 +218,7 @@ func (c *chatController) mcpStatus(r mcpRequest) (mcpStatusResult, error) {
 			last = i
 		}
 	}
-	return mcpStatusResult{ID: t.ID, Title: threadRefTitle(t), Agent: threadAgent(t), Status: status, Reply: clipRunes(lastReply(t.Messages[last+1:]), 4000)}, nil
+	return mcpStatusResult{Reference: c.threadRef(t).URL(), ID: t.ID, Title: threadRefTitle(t), Agent: threadAgent(t), Status: status, Reply: clipRunes(lastReply(t.Messages[last+1:]), 4000)}, nil
 }
 
 // mcpDelegate sends a task to another conversation, new or existing, with
@@ -212,10 +240,10 @@ func (c *chatController) mcpDelegate(r mcpRequest) (mcpDelegateResult, error) {
 			return mcpDelegateResult{}, errors.New("不能把任务交付给自己")
 		}
 		if c.delegatedFrom(caller.ID, r.Thread) {
-			return mcpDelegateResult{}, fmt.Errorf("对话 #%d 是把任务交给你的上游，不能再派回去", r.Thread)
+			return mcpDelegateResult{}, errors.New("目标会话是把任务交给你的上游，不能再派回去")
 		}
 		if _, _, ok := c.resolveThreadRef(r.Thread); !ok {
-			return mcpDelegateResult{}, fmt.Errorf("没有对话 #%d", r.Thread)
+			return mcpDelegateResult{}, errors.New("会话不存在或已不可用")
 		}
 	}
 	agent := threadAgent(caller)
@@ -226,11 +254,15 @@ func (c *chatController) mcpDelegate(r mcpRequest) (mcpDelegateResult, error) {
 	}
 	text := task
 	if !r.NoContext {
-		text += "\n\n@#" + strconv.Itoa(caller.ID)
+		ref := c.threadRef(caller)
+		if !ref.valid() {
+			return mcpDelegateResult{}, errors.New("会话创建后才能交付上下文")
+		}
+		text += "\n\n" + referenceText(ref, threadRefTitle(caller))
 	}
 	id := c.submit(sendRequest{ThreadID: r.Thread, Agent: agent, Project: c.threadWorkspace(caller.ID), Text: text})
 	if id == 0 {
-		return mcpDelegateResult{}, errors.New("交付失败：目标 agent 还没有就绪，或对话是只读的")
+		return mcpDelegateResult{}, errors.New(firstNonEmpty(c.lastSubmitError, "交付失败：目标 agent 还没有就绪，或对话是只读的"))
 	}
 	if c.delegationParent == nil {
 		c.delegationParent = map[int]int{}
@@ -238,7 +270,7 @@ func (c *chatController) mcpDelegate(r mcpRequest) (mcpDelegateResult, error) {
 	if _, ok := c.delegationParent[id]; !ok && id != caller.ID {
 		c.delegationParent[id] = caller.ID
 	}
-	return mcpDelegateResult{Thread: id, Agent: threadAgent(c.threadWithID(id))}, nil
+	return mcpDelegateResult{Reference: c.threadRef(c.threadWithID(id)).URL(), Thread: id, Agent: threadAgent(c.threadWithID(id))}, nil
 }
 
 func normalizeAgentID(id string) string {

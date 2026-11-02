@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"miya/internal/codex"
 
@@ -26,9 +27,11 @@ type chatApp struct {
 	// imagePreview resolves message attachments on the phone's filesystem.
 	imagePreview func(string) ui.ImageSource
 	// referenceThread resolves titles in the phone's global conversation list.
-	referenceThread func(int) (Thread, bool)
+	referenceThread func(ThreadRef) (Thread, bool)
 	// onRetry routes the shared error-card action through the phone bridge.
 	onRetry func(retryRequest)
+	// onHandoff creates the phone's draft rather than a desktop-controller draft.
+	onHandoff func()
 
 	sidebar   bool
 	section   string // "", "Settings", "Automations" or "Skills"
@@ -66,13 +69,16 @@ type chatApp struct {
 	editText  string
 	editInput inlineThreadInput
 
-	complete   completion
-	autos      automationsUI
-	account    accountView
-	quota      quotaView
-	usage      *desktopUsage
-	openWindow func()
-	quitting   bool
+	complete           completion
+	memories           memoryUI
+	memoryNotes        map[string]*memoryNoticeUI
+	memoryRevisionSeen uint64
+	autos              automationsUI
+	account            accountView
+	quota              quotaView
+	usage              *desktopUsage
+	openWindow         func()
+	quitting           bool
 
 	panels       map[int]*panelState
 	panelVisible bool
@@ -102,11 +108,7 @@ func newChatApp() *chatApp {
 		appearance:         normalizeAppearance(loadSetting("appearance")),
 	}
 	app.md = markdown.Options{
-		OnLink: func(link string) {
-			if ui.SafeToOpen(link) {
-				go mygo.Shell.OpenExternal(link)
-			}
-		},
+		OnLink:    app.openMessageLink,
 		LoadImage: func(src string) (ui.ImageSource, error) { return loadImage(imageSourcePath(src)) },
 	}
 	app.account.init(app)
@@ -266,6 +268,9 @@ func (app *chatApp) sendDraft(steer bool) {
 	app.notice = ""
 	before := c.active()
 	c.sendDraft(steer)
+	if c.lastSubmitError != "" {
+		app.notice = c.lastSubmitError
+	}
 	if before == 0 && c.active() != 0 {
 		app.adoptDraftPanel(c.active())
 	}
@@ -421,6 +426,12 @@ func (app *chatApp) newThreadIn(p Project) {
 
 // view is the window: the sidebar beside the conversation.
 func (app *chatApp) view(ctx *ui.Context) {
+	if app.memoryRevisionSeen != app.c.memoryRevision {
+		app.memoryRevisionSeen = app.c.memoryRevision
+		app.memoryNotes = nil
+		app.memories.list.Entries = nil
+		app.memories.loadedAt = time.Time{}
+	}
 	app.applyAppearance()
 	ctx.SetTheme(app.theme)
 	ui.Row(ctx).Fill().AlignItems(ui.Stretch).Background(canvas).TextColor(ink).FontSize(13).Children(func() {

@@ -219,7 +219,7 @@ func summarizeClaudeSession(path string) (claudeSession, bool) {
 		// Sessions without a prompt hold nothing to show.
 		return claudeSession{}, false
 	}
-	s.Title = clippedTitle(firstNonEmpty(custom, aiTitle, summary, prompt, "Claude Code 对话"))
+	s.Title = clippedTitle(firstNonEmpty(custom, claudeReferenceTitle(aiTitle), claudeReferenceTitle(summary), prompt, "Claude Code 对话"))
 	return s, true
 }
 
@@ -350,7 +350,8 @@ func parseClaudeSession(path string) ([]Message, error) {
 			}
 			if text, images := claudeVisibleText(blocks), claudeImages(blocks); text != "" || len(images) > 0 {
 				turnStart = at
-				out = append(out, Message{Role: "user", Content: text, Images: images, ItemID: e.UUID, SentAtMs: at})
+				own, _ := splitReferenceContext(text)
+				out = append(out, Message{Role: "user", Content: text, Parts: messageParts(own), Images: images, ItemID: e.UUID, SentAtMs: at})
 			}
 		case "assistant":
 			for i, b := range blocks {

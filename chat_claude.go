@@ -149,7 +149,7 @@ func (c *chatController) sendClaude(req sendRequest) int {
 		t.LastActivityAt = now
 		t.Status = "Claude Code 正在运行…"
 		shown, images := attachmentDisplay(text, paths)
-		t.Messages = append(t.Messages, Message{ID: pendingUserID, Role: "user", Content: shown, Images: images, SentAtMs: now})
+		t.Messages = append(t.Messages, Message{ID: pendingUserID, Role: "user", Content: shown, Images: images, Parts: req.Parts, SentAtMs: now})
 		name, _, _ := strings.Cut(text, " ")
 		if name == "/loop" || name == "/proactive" {
 			setThreadTask(t, ThreadTask{ID: "loop:pending", Kind: "loop", Title: strings.TrimSpace(strings.TrimPrefix(text, name)), Status: "starting"})
@@ -259,10 +259,22 @@ func (c *chatController) finishClaude(id int, cwd string, err error) {
 		t.Busy = false
 		t.TaskStopping = false
 		t.CompletedAtMs = time.Now().UnixMilli()
+		// A result frame can report an API error even when the CLI exits
+		// successfully. Keep that turn's error after the process is reaped.
+		resultError := ""
+		for i := len(t.Messages) - 1; i >= 0; i-- {
+			if t.Messages[i].Role == "user" {
+				break
+			}
+			if t.Messages[i].Role == "error" {
+				resultError = t.Messages[i].Content
+				break
+			}
+		}
 		state := "interrupted"
 		if t.StopRequested {
 			state = "stopped"
-		} else if err != nil {
+		} else if err != nil || resultError != "" {
 			state = "failed"
 		}
 		stopClaudeTasks(t, state)
@@ -271,14 +283,16 @@ func (c *chatController) finishClaude(id int, cwd string, err error) {
 			t.Status = "Stopped"
 		} else if err != nil {
 			t.Status = err.Error()
-			t.Messages = append(t.Messages, Message{ID: c.nextID(), Role: "error", Content: err.Error()})
+			t.Messages = append(t.Messages, Message{ID: c.nextID(), Role: "error", Content: err.Error(), StartedAtMs: t.CompletedAtMs})
+		} else {
+			t.Status = resultError
 		}
 		for i := range t.Messages {
 			if t.Messages[i].Status == "inProgress" {
 				t.Messages[i].Status = "completed"
 				if t.StopRequested {
 					t.Messages[i].Status = "interrupted"
-				} else if err != nil {
+				} else if err != nil || resultError != "" {
 					t.Messages[i].Status = "failed"
 				}
 			}
@@ -337,7 +351,8 @@ func (c *chatController) handleClaude(id int, f claude.Frame) {
 		return
 	}
 	c.update(id, func(t *Thread) {
-		t.LastOutputAtMs = time.Now().UnixMilli()
+		now := time.Now().UnixMilli()
+		t.LastOutputAtMs = now
 		if f.SchedulesKnown {
 			applyClaudeSchedules(t, f.Schedules)
 		}
@@ -384,13 +399,13 @@ func (c *chatController) handleClaude(id int, f claude.Frame) {
 						return
 					}
 				}
-				t.Messages = append(t.Messages, Message{ID: c.nextID(), Role: "assistant", Kind: "agentMessage", ItemID: key, Content: e.Delta.Text})
+				t.Messages = append(t.Messages, Message{ID: c.nextID(), Role: "assistant", Kind: "agentMessage", ItemID: key, Content: e.Delta.Text, SentAtMs: now, StartedAtMs: now})
 			}
 		case "assistant":
 			for i, b := range f.Message.Content {
 				if b.Type == "text" {
 					key := claudeTextKey(t, f.Message.ID, i, b.Text)
-					c.upsert(t, Message{Role: "assistant", Kind: "agentMessage", ItemID: key, Content: b.Text})
+					c.upsert(t, Message{Role: "assistant", Kind: "agentMessage", ItemID: key, Content: b.Text, SentAtMs: now, StartedAtMs: now})
 				}
 				if b.Type == "tool_use" {
 					m := Message{Role: "tool", Kind: "claudeTool", ItemID: b.ID, Content: b.Name + "\n" + string(b.Input), Status: "inProgress", Agents: claudeSubAgent(b.ID, b.Name, b.Input, "inProgress")}
@@ -418,7 +433,9 @@ func (c *chatController) handleClaude(id int, f claude.Frame) {
 			}
 		case "result":
 			t.TaskStopping = false
-			if f.IsError {
+			hadOutput := turnHasOutput(t.Messages)
+			emptyResult := !f.IsError && !f.KeepingAlive && !t.StopRequested && !hadOutput && strings.TrimSpace(f.Result) == ""
+			if f.IsError || emptyResult {
 				stopClaudeTasks(t, "failed")
 			}
 			if f.KeepingAlive {
@@ -427,7 +444,7 @@ func (c *chatController) handleClaude(id int, f claude.Frame) {
 				t.Status = ""
 				saveClaudeHistory(*t)
 			}
-			if f.IsError {
+			if f.IsError || emptyResult {
 				message := strings.Join(f.Errors, "\n")
 				if message == "" {
 					message = f.Result
@@ -435,8 +452,15 @@ func (c *chatController) handleClaude(id int, f claude.Frame) {
 				if message == "" {
 					message = "Claude Code 执行失败"
 				}
-				message = claudeErrorMessage(message, turnHasOutput(t.Messages), c.claudeCommand != "")
-				t.Messages = append(t.Messages, Message{ID: c.nextID(), Role: "error", Content: message})
+				if emptyResult {
+					message = "Claude Code 已结束本轮，但没有返回回复。"
+				}
+				message = claudeErrorMessage(message, hadOutput, c.claudeCommand != "")
+				t.Status = message
+				t.Messages = append(t.Messages, Message{ID: c.nextID(), Role: "error", Content: message, StartedAtMs: now})
+			} else if !hadOutput && strings.TrimSpace(f.Result) != "" {
+				// Some CLI transports only provide the final result text.
+				t.Messages = append(t.Messages, Message{ID: c.nextID(), Role: "assistant", Kind: "agentMessage", Content: f.Result, SentAtMs: now, StartedAtMs: now})
 			}
 		}
 	})

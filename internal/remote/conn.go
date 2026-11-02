@@ -2,6 +2,7 @@ package remote
 
 import (
 	"bufio"
+	"bytes"
 	"compress/flate"
 	"context"
 	"encoding/json"
@@ -24,18 +25,23 @@ var ErrLineTooLong = errors.New("remote: message too long")
 // one; the peer reads them after DecompressReceives. Send is safe for
 // concurrent use; Receive is not.
 type Conn struct {
-	dialPort func(context.Context, uint16) (net.Conn, error)
-	c        net.Conn
-	r        *bufio.Reader
-	wmu      sync.Mutex
-	fw       *flate.Writer
-	written  atomic.Int64
-	once     sync.Once
-	onClose  func()
+	ctx              context.Context
+	cancel           context.CancelFunc
+	localAttachments *attachmentSession
+	attachmentClient *attachmentClient
+	dialPort         func(context.Context, uint16) (net.Conn, error)
+	c                net.Conn
+	r                *bufio.Reader
+	wmu              sync.Mutex
+	fw               *flate.Writer
+	written          atomic.Int64
+	once             sync.Once
+	onClose          func()
 }
 
 func newConn(c net.Conn, onClose func()) *Conn {
-	return &Conn{c: c, r: bufio.NewReaderSize(c, 64<<10), onClose: onClose}
+	ctx, cancel := context.WithCancel(context.Background())
+	return &Conn{ctx: ctx, cancel: cancel, c: c, r: bufio.NewReaderSize(c, 64<<10), onClose: onClose}
 }
 
 // countWriter counts the bytes that reach the tunnel.
@@ -51,6 +57,16 @@ func (cw countWriter) Write(p []byte) (int, error) {
 }
 
 func (c *Conn) Send(v any) error {
+	if req, ok := v.(Request); ok {
+		return c.sendRequest(req)
+	}
+	if req, ok := v.(*Request); ok && req != nil {
+		return c.sendRequest(*req)
+	}
+	return c.sendJSON(v)
+}
+
+func (c *Conn) sendJSON(v any) error {
 	data, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -68,7 +84,7 @@ func (c *Conn) Send(v any) error {
 		}
 		return c.fw.Flush()
 	}
-	_, err = countWriter{c.c, &c.written}.Write(data)
+	_, err = io.Copy(countWriter{c.c, &c.written}, bytes.NewReader(data))
 	return err
 }
 
@@ -111,15 +127,31 @@ func (c *Conn) Receive(v any) error {
 			return err
 		}
 	}
-	return json.Unmarshal(line, v)
+	if err := json.Unmarshal(line, v); err != nil {
+		return err
+	}
+	if req, ok := v.(*Request); ok {
+		return c.receiveImages(req)
+	}
+	return nil
 }
 
 // SetReadDeadline bounds the next Receive, as a heartbeat check.
 func (c *Conn) SetReadDeadline(t time.Time) error { return c.c.SetReadDeadline(t) }
 
+// Context ends when the control connection closes, including a reconnect.
+func (c *Conn) Context() context.Context { return c.ctx }
+
 func (c *Conn) Close() error {
 	var err error
 	c.once.Do(func() {
+		c.cancel()
+		if c.attachmentClient != nil {
+			c.attachmentClient.http.CloseIdleConnections()
+		}
+		if c.localAttachments != nil {
+			c.localAttachments.close()
+		}
 		err = c.c.Close()
 		if c.onClose != nil {
 			c.onClose()

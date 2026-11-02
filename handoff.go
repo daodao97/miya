@@ -1,85 +1,79 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
-	"html"
-	"regexp"
 	"strconv"
 	"strings"
 )
 
-// A message can reference another conversation of the workspace as @#<id>,
-// whichever agents run the two. As the message is sent, the service expands
-// each reference into that conversation's context packet, which Miya builds
-// from its normalized messages, and the referenced conversation then follows
-// the work handed off to the other as a sub-agent.
-
-const (
-	threadContextOpen  = "<miya-thread-context"
-	threadContextClose = "</miya-thread-context>"
-)
-
-var (
-	threadRefPattern     = regexp.MustCompile(`(^|[^0-9A-Za-z_@#])@#(\d+)\b`)
-	threadContextPattern = regexp.MustCompile(`(?s)<miya-thread-context[^>]*?title="([^"]*)"[^>]*>.*?</miya-thread-context>`)
-)
-
-// threadRefs are the conversations a message references, in order, once
-// each. Only the message's own words count, not context already expanded.
-func threadRefs(text string) []int {
-	own, _, _ := strings.Cut(text, threadContextOpen)
-	var ids []int
-	seen := map[int]bool{}
-	for _, m := range threadRefPattern.FindAllStringSubmatch(own, -1) {
-		if id, err := strconv.Atoi(m[2]); err == nil && !seen[id] {
-			seen[id] = true
-			ids = append(ids, id)
+// threadRefs are stable backend identities in the message's own words.
+func threadRefs(text string) []ThreadRef {
+	own, _ := splitReferenceContext(text)
+	var refs []ThreadRef
+	seen := map[ThreadRef]bool{}
+	for _, mention := range threadMentions(own) {
+		if !seen[mention.Ref] {
+			seen[mention.Ref] = true
+			refs = append(refs, mention.Ref)
 		}
 	}
-	return ids
+	return refs
 }
 
-// threadRefTask is what a message asks, without its references: the name
-// of the work it hands off.
 func threadRefTask(text string) string {
-	own, _, _ := strings.Cut(text, threadContextOpen)
-	own = threadRefPattern.ReplaceAllString(own, "$1")
-	return clipRunes(strings.Join(strings.Fields(firstLine(strings.TrimSpace(own))), " "), 80)
+	own, _ := splitReferenceContext(text)
+	var b strings.Builder
+	end := 0
+	for _, m := range threadMentions(own) {
+		b.WriteString(own[end:m.Start])
+		end = m.End
+	}
+	b.WriteString(own[end:])
+	return clipRunes(strings.Join(strings.Fields(firstLine(strings.TrimSpace(b.String()))), " "), 80)
 }
 
 func threadRefTitle(t Thread) string {
-	return firstNonEmpty(strings.TrimSpace(t.Title), "#"+strconv.Itoa(t.ID))
+	return firstNonEmpty(strings.TrimSpace(t.Title), t.ServerID, "新对话")
 }
 
-// expandThreadRefs turns the references of a message sent to conversation
-// self into names in its words and context packets after them; resolve
-// gives a conversation and its messages. It returns the conversations it
-// expanded; references to unknown ones and to self stay as they are.
-func expandThreadRefs(text string, self int, resolve func(int) (Thread, []Message, bool)) (string, []Thread) {
-	own, rest, expanded := strings.Cut(text, threadContextOpen)
-	var packets []string
+// Keep the exact reference tokens. Titles never need to be reversed into IDs.
+// An envelope is a send-time snapshot; replaying a queued request preserves it.
+func expandThreadRefs(text string, self ThreadRef, resolve func(ThreadRef) (Thread, []Message, error)) (string, []Thread, error) {
+	own, snapshots := splitReferenceContext(text)
+	if len(snapshots) > 0 {
+		return text, nil, nil
+	}
 	var sources []Thread
-	for _, id := range threadRefs(text) {
-		if id == self {
-			continue
+	titles := map[ThreadRef]string{}
+	for _, m := range threadMentions(own) {
+		if _, ok := titles[m.Ref]; !ok {
+			titles[m.Ref] = m.Title
 		}
-		t, messages, ok := resolve(id)
-		if !ok {
-			continue
+	}
+	for _, ref := range threadRefs(own) {
+		if ref == self {
+			return text, nil, fmt.Errorf("不能引用当前会话：%s", titles[ref])
 		}
-		name := strings.ReplaceAll("「对话："+threadRefTitle(t)+"」", "$", "$$")
-		own = regexp.MustCompile(`(^|[^0-9A-Za-z_@#])@#`+strconv.Itoa(id)+`\b`).ReplaceAllString(own, "${1}"+name)
-		packets = append(packets, threadPacket(t, messages))
+		t, messages, err := resolve(ref)
+		if err != nil {
+			return text, nil, fmt.Errorf("引用「%s」失败：%w", titles[ref], err)
+		}
+		if !t.HistoryLoaded {
+			return text, nil, fmt.Errorf("引用「%s」的上下文尚未加载，请重试或移除引用", titles[ref])
+		}
+		snapshots = append(snapshots, referenceSnapshot{Ref: ref, Title: titles[ref], Context: threadPacket(t, messages)})
 		sources = append(sources, t)
 	}
-	if len(packets) == 0 {
-		return text, nil
+	if len(snapshots) == 0 {
+		return text, nil, nil
 	}
-	out := strings.TrimRight(own, " \t\r\n") + "\n\n" + strings.Join(packets, "\n\n")
-	if expanded {
-		out += "\n\n" + threadContextOpen + rest
+	data, err := json.MarshalIndent(snapshots, "", "  ")
+	if err != nil {
+		return text, nil, err
 	}
-	return out, sources
+	return own + contextEnvelopeOpen + string(data) + contextEnvelopeClose, sources, nil
 }
 
 // threadPacket is a conversation's context as another agent reads it: its
@@ -88,7 +82,7 @@ func expandThreadRefs(text string, self int, resolve func(int) (Thread, []Messag
 func threadPacket(t Thread, messages []Message) string {
 	title := threadRefTitle(t)
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s id=\"%d\" agent=\"%s\" title=\"%s\">\n", threadContextOpen, t.ID, html.EscapeString(threadAgent(t)), html.EscapeString(title))
+	fmt.Fprintf(&b, "会话 ID：%s\n后端：%s\n", t.ServerID, threadAgent(t))
 	fmt.Fprintf(&b, "以下是对话「%s」（%s）的上下文，由 Miya 从它的记录整理，供参考。\n", title, backendOf(t).Name())
 	var requests []string
 	var turns [][]Message
@@ -101,7 +95,11 @@ func threadPacket(t Thread, messages []Message) string {
 		}
 	}
 	if len(messages) == 0 {
-		b.WriteString("\n（这个对话的记录还没有加载，只有标题可供参考。）\n")
+		if t.HistoryLoaded {
+			b.WriteString("\n（这个对话尚无消息。）\n")
+		} else {
+			b.WriteString("\n（这个对话的记录还没有加载。）\n")
+		}
 	}
 	if len(requests) > 0 {
 		packetSection(&b, "最初的请求", clipRunes(requests[0], 800))
@@ -138,7 +136,6 @@ func threadPacket(t Thread, messages []Message) string {
 		}
 		packetSection(&b, "子任务", "- "+strings.Join(lines, "\n- "))
 	}
-	b.WriteString(threadContextClose)
 	return b.String()
 }
 
@@ -194,10 +191,16 @@ func clipRunes(s string, n int) string {
 // threadContextDisplay shows the context packets of a message as the
 // conversations they name, not the text the agent read.
 func threadContextDisplay(s string) string {
-	return threadContextPattern.ReplaceAllStringFunc(s, func(block string) string {
-		m := threadContextPattern.FindStringSubmatch(block)
-		return "〔引用对话：" + html.UnescapeString(m[1]) + "〕"
-	})
+	own, _ := splitReferenceContext(s)
+	var b strings.Builder
+	end := 0
+	for _, m := range threadMentions(own) {
+		b.WriteString(own[end:m.Start])
+		b.WriteString("〔引用对话：" + m.Title + "〕")
+		end = m.End
+	}
+	b.WriteString(own[end:])
+	return b.String()
 }
 
 // handoff links a referenced conversation to the one its context was sent
@@ -207,28 +210,60 @@ type handoff struct {
 	Item     string
 }
 
-// resolveThreadRef is a conversation of the workspace and its messages, as
-// loaded or as prefetched.
+// threadRef returns no public identity until the backend session exists.
+func (c *chatController) threadRef(t Thread) ThreadRef {
+	return ThreadRef{Source: c.referenceSource, Backend: threadAgent(t), SessionID: t.ServerID}
+}
+
+// Local numeric lookup is retained only for internal controls and MCP routing.
 func (c *chatController) resolveThreadRef(id int) (Thread, []Message, bool) {
-	t, path, ok := c.findThread(id)
+	t, _, ok := c.findThread(id)
 	if !ok {
 		return Thread{}, nil, false
 	}
 	messages := t.Messages
-	if len(messages) == 0 {
-		messages = c.threadHistory[id]
-	}
-	// A Claude Code session is a local file, quick to read now; a phone,
-	// which cannot prefetch, references such conversations too.
-	if len(messages) == 0 && threadAgent(t) == agentClaude && t.ServerID != "" {
-		if messages, _ = readOnlyHistory(c.ctx, phoneThread{thread: t, found: true, cwd: path}); len(messages) > 0 {
-			if c.threadHistory == nil {
-				c.threadHistory = map[int][]Message{}
-			}
-			c.threadHistory[id] = messages
+	if !t.HistoryLoaded {
+		if cached, ok := c.threadHistory[c.threadRef(t).URL()]; ok {
+			messages = cached
+			t.HistoryLoaded = true
 		}
 	}
 	return t, messages, true
+}
+
+func (c *chatController) resolveReference(ref ThreadRef) (Thread, []Message, error) {
+	if !ref.valid() {
+		return Thread{}, nil, fmt.Errorf("会话身份无效")
+	}
+	if ref.Source != c.referenceSource {
+		return Thread{}, nil, fmt.Errorf("引用属于另一台桌面，请连接对应来源后重试")
+	}
+	for _, project := range c.threadRefProjects() {
+		for _, t := range project.Threads {
+			if threadAgent(t) != ref.Backend || t.ServerID != ref.SessionID {
+				continue
+			}
+			if t.HistoryLoaded {
+				return t, t.Messages, nil
+			}
+			if messages, ok := c.threadHistory[ref.URL()]; ok {
+				t.HistoryLoaded = true
+				return t, messages, nil
+			}
+			c.prefetchReference(ref)
+			return Thread{}, nil, fmt.Errorf("上下文正在加载，请重试；加载失败时可重新选择或移除引用")
+		}
+	}
+	if session, ok := c.forkedReferences[ref]; ok {
+		t := Thread{ServerID: ref.SessionID, Agent: ref.Backend, Title: session.Title}
+		if messages, loaded := c.threadHistory[ref.URL()]; loaded {
+			t.HistoryLoaded = true
+			return t, messages, nil
+		}
+		c.prefetchReference(ref)
+		return Thread{}, nil, fmt.Errorf("原会话上下文正在加载，请重试")
+	}
+	return Thread{}, nil, fmt.Errorf("会话不存在或已不可用")
 }
 
 // findThread is a conversation of the open project or of one in the
@@ -252,27 +287,70 @@ func (c *chatController) findThread(id int) (Thread, string, bool) {
 	return Thread{}, "", false
 }
 
-// prefetchThread reads a referenced conversation's history in the
-// background, so its context is at hand when the message is sent.
 func (c *chatController) prefetchThread(id int) {
+	if t, _, ok := c.findThread(id); ok {
+		c.prefetchReference(c.threadRef(t))
+	}
+}
+
+// Cache by backend identity. A fork or reused UI number cannot inherit history.
+func (c *chatController) prefetchReference(ref ThreadRef) {
+	if !ref.valid() {
+		return
+	}
 	if c.remote != nil {
-		c.forward("prefetch", id)
+		c.forward("prefetch", ref)
 		return
 	}
-	if _, messages, ok := c.resolveThreadRef(id); !ok || len(messages) > 0 {
+	if ref.Source != c.referenceSource {
 		return
 	}
-	pt := c.phoneThread(id)
-	go func() {
-		messages, _ := readOnlyHistory(c.ctx, pt)
-		if len(messages) == 0 {
-			return
-		}
-		c.dispatch(func() {
-			if c.threadHistory == nil {
-				c.threadHistory = map[int][]Message{}
+	if _, ok := c.threadHistory[ref.URL()]; ok {
+		return
+	}
+	if c.referenceLoading == nil {
+		c.referenceLoading = map[ThreadRef]bool{}
+	}
+	if c.referenceLoading[ref] {
+		return
+	}
+	var pt phoneThread
+	for _, project := range c.threadRefProjects() {
+		for _, t := range project.Threads {
+			if threadAgent(t) == ref.Backend && t.ServerID == ref.SessionID {
+				if t.HistoryLoaded {
+					return
+				}
+				pt = phoneThread{thread: t, found: true, cwd: project.Path, client: c.client}
 			}
-			c.threadHistory[id] = messages
+		}
+	}
+	if !pt.found {
+		if session, ok := c.forkedReferences[ref]; ok {
+			pt = phoneThread{thread: Thread{ServerID: ref.SessionID, Agent: ref.Backend, Title: session.Title}, found: true, cwd: session.Project, client: c.client}
+		}
+	}
+	if !pt.found {
+		return
+	}
+	c.referenceLoading[ref] = true
+	ctx := c.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	go func() {
+		messages, status := readOnlyHistory(ctx, pt)
+		c.dispatch(func() {
+			delete(c.referenceLoading, ref)
+			if status != "" {
+				c.setStatus("引用上下文加载失败：" + status + "；请重试或移除引用")
+				return
+			}
+			if c.threadHistory == nil {
+				c.threadHistory = map[string][]Message{}
+			}
+			c.threadHistory[ref.URL()] = messages
+			c.setStatus("引用上下文已加载，请重新发送")
 		})
 	}()
 }
@@ -281,16 +359,17 @@ func (c *chatController) prefetchThread(id int) {
 // follows the work sent to target as a sub-agent.
 func (c *chatController) noteHandoffs(sources []Thread, target int, task string) {
 	for _, src := range sources {
-		if src.ID == target {
+		if src.ID == 0 || src.ID == target {
 			continue
 		}
 		item := fmt.Sprintf("handoff:%d:%d", target, len(c.handoffs))
 		c.handoffs = append(c.handoffs, handoff{From: src.ID, To: target, Item: item})
 		status, detail := c.handoffState(target)
-		agent := SubAgent{ID: "thread:" + strconv.Itoa(target), Name: firstNonEmpty(task, "对话 #"+strconv.Itoa(target)), Status: firstNonEmpty(status, subAgentPending), Detail: detail}
+		agent := SubAgent{ID: "thread:" + strconv.Itoa(target), Name: firstNonEmpty(task, "交付任务"), Status: firstNonEmpty(status, subAgentPending), Detail: detail}
+		title := threadRefTitle(c.threadWithID(target))
 		c.update(src.ID, func(t *Thread) {
 			// The agents list says it all; the title names the target.
-			t.Messages = append(t.Messages, Message{ID: c.nextID(), Role: "activity", Kind: "handoff", Status: "completed", ItemID: item, Agents: []SubAgent{agent}})
+			t.Messages = append(t.Messages, Message{ID: c.nextID(), Role: "activity", Kind: "handoff", HandoffTitle: title, Status: "completed", ItemID: item, Agents: []SubAgent{agent}})
 		})
 	}
 }
@@ -364,43 +443,41 @@ func (c *chatController) handoffAgent(h handoff) (SubAgent, bool) {
 	return SubAgent{}, false
 }
 
-// threadChoices are the conversations an @ in the composer offers, before
-// the project files.
+// Conversation choices carry their identity separately from their label.
 func (app *chatApp) threadChoices(query string) []composerChoice {
 	var out []composerChoice
-	for _, ref := range matchingThreadRefs(app.c.threadRefProjects(), app.c.active(), query) {
-		t := ref.Thread
-		out = append(out, composerChoice{Name: fmt.Sprintf("#%d %s", t.ID, threadRefTitle(t)), Detail: "对话 · " + backendOf(t).Name() + " · " + ref.ProjectName})
+	for _, match := range matchingThreadRefs(app.c.threadRefProjects(), app.c.active(), query) {
+		t := match.Thread
+		ref := app.c.threadRef(t)
+		if !ref.valid() {
+			continue
+		}
+		out = append(out, composerChoice{Name: threadRefTitle(t), Detail: "对话 · " + backendOf(t).Name() + " · " + match.ProjectName, Ref: &ref})
 	}
 	return out
 }
 
-// threadChoiceID is the conversation a composer choice names, if it names one.
-func threadChoiceID(name string) (int, bool) {
-	if !strings.HasPrefix(name, "#") {
-		return 0, false
-	}
-	n, _, _ := strings.Cut(name[1:], " ")
-	id, err := strconv.Atoi(n)
-	return id, err == nil
-}
-
-func insertThreadReference(value string, token composerToken, id int) string {
-	if token.Kind != '@' || token.Start < 0 || token.End > len(value) {
+func insertThreadReference(value string, token composerToken, ref ThreadRef, title string) string {
+	if token.Kind != '@' || token.Start < 0 || token.End < token.Start || token.End > len(value) || !ref.valid() {
 		return value
 	}
-	return value[:token.Start] + "@#" + strconv.Itoa(id) + " " + value[token.End:]
+	return value[:token.Start] + referenceText(ref, title) + " " + value[token.End:]
 }
 
-// handoffToNewThread starts a conversation that begins with the open one's
-// context; the composer's agent picker chooses who takes the work.
 func (app *chatApp) handoffToNewThread() {
+	if app.onHandoff != nil {
+		app.onHandoff()
+		return
+	}
 	c := app.c
-	source := c.active()
-	if source == 0 {
+	t := c.current()
+	ref := c.threadRef(t)
+	if !ref.valid() {
+		app.notice = "会话创建后可引用"
 		return
 	}
 	c.newThread()
-	c.rememberDraft(fmt.Sprintf("@#%d ", source))
-	app.notice = fmt.Sprintf("已引用对话 #%d：选择 agent，写下要交付的任务后发送", source)
+	c.rememberDraft(referenceText(ref, threadRefTitle(t)) + " ")
+	c.prefetchReference(ref)
+	app.notice = "已引用对话「" + threadRefTitle(t) + "」：选择 agent，写下要交付的任务后发送"
 }

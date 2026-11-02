@@ -2,11 +2,43 @@ package main
 
 import (
 	"testing"
+	"time"
 
 	"miya/internal/remote"
 
 	"github.com/egoist/mygo/ui"
 )
+
+func TestMobileReconnectCountdownUpdatesOnTheFrameClock(t *testing.T) {
+	m := testMobileApp()
+	m.connected = false
+	m.router().Push("/settings")
+	tt := ui.NewTester(m.viewRoot, 390, 750)
+	m.retryAt = tt.Now().Add(15 * time.Second)
+	m.retryError = "网络暂时不可用"
+	tt.Frame()
+	for _, tc := range []struct {
+		advance time.Duration
+		label   string
+	}{
+		{0, "连接已断开，15 秒后重试：网络暂时不可用"},
+		{time.Second, "连接已断开，14 秒后重试：网络暂时不可用"},
+		{12 * time.Second, "连接已断开，2 秒后重试：网络暂时不可用"},
+		{2 * time.Second, "正在重新连接桌面端…"},
+	} {
+		if tc.advance > 0 {
+			tt.Advance(tc.advance)
+		}
+		if !tt.HasText(tc.label) {
+			t.Fatalf("countdown did not advance: want %q, got %q", tc.label, tt.Texts())
+		}
+	}
+	m.disconnect()
+	tt.Frame()
+	if !m.retryAt.IsZero() || m.retryError != "" || m.connectionLine() != "未连接" {
+		t.Fatal("disconnect retained a stale countdown")
+	}
+}
 
 func TestMobileSendKeepsMessagesDuringHistoryReload(t *testing.T) {
 	for _, loaded := range []bool{false, true} {

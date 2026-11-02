@@ -22,7 +22,7 @@ import (
 // and pushes events: the state without messages, the messages of the
 // conversation a window subscribed to, and drafts that could not be sent.
 
-const serviceVersion = 1
+const serviceVersion = 2
 
 type svcRequest struct {
 	ID   int64           `json:"id,omitempty"`
@@ -42,6 +42,8 @@ type svcMessage struct {
 
 // svcState is everything a window shows but the messages.
 type svcState struct {
+	MemoryRevision     uint64             `json:"memoryRevision,omitempty"`
+	ReferenceSource    string             `json:"referenceSource"`
 	FastMode           bool               `json:"fastMode"`
 	Cwd                string             `json:"cwd"`
 	Projects           []Project          `json:"projects"`
@@ -181,9 +183,18 @@ func messageFingerprint(m Message) uint64 {
 	}
 	h.Write([]byte(head))
 	h.Write([]byte(tail))
+	h.Write([]byte(m.HandoffTitle))
+	if m.Memory != nil {
+		b, _ := json.Marshal(m.Memory)
+		h.Write(b)
+	}
 	for _, image := range m.Images {
 		fmt.Fprintf(h, "|%d:", len(image))
 		h.Write([]byte(image))
+	}
+	if len(m.Parts) > 0 {
+		data, _ := json.Marshal(m.Parts)
+		h.Write(data)
 	}
 	for _, p := range m.Plan {
 		h.Write([]byte(p.Status + "|" + p.Step))

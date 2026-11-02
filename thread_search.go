@@ -3,7 +3,6 @@ package main
 import (
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 )
 
@@ -14,16 +13,17 @@ type threadReference struct {
 
 // Match every project's conversation metadata without loading its messages.
 func matchingThreadRefs(projects []phoneProject, self int, query string) []threadReference {
-	q := strings.ToLower(strings.TrimPrefix(query, "#"))
-	seen := map[int]bool{}
+	q := strings.ToLower(query)
+	seen := map[string]bool{}
 	var out []threadReference
 	for _, p := range projects {
 		for _, t := range p.Threads {
-			if t.ID == 0 || t.ID == self || seen[t.ID] {
+			key := threadAgent(t) + ":" + t.ServerID
+			if t.ID == 0 || t.ID == self || t.ServerID == "" || seen[key] {
 				continue
 			}
-			seen[t.ID] = true
-			if q != "" && !strings.Contains(strings.ToLower(threadRefTitle(t)), q) && !strings.HasPrefix(strconv.Itoa(t.ID), q) {
+			seen[key] = true
+			if q != "" && !strings.Contains(strings.ToLower(threadRefTitle(t)), q) && !strings.Contains(strings.ToLower(t.ServerID), q) {
 				continue
 			}
 			out = append(out, threadReference{Thread: t, ProjectName: firstNonEmpty(p.Name, filepath.Base(p.Path))})

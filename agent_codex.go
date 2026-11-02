@@ -158,7 +158,7 @@ func (codexBackend) Steer(c *chatController, t Thread, req sendRequest) bool {
 	pending := c.nextID()
 	c.update(t.ID, func(t *Thread) {
 		t.LastActivityAt = sentAt
-		t.Messages = append(t.Messages, Message{ID: pending, Role: "user", Content: content, Images: images, ItemID: "pending-user", SentAtMs: sentAt})
+		t.Messages = append(t.Messages, Message{ID: pending, Role: "user", Content: content, Images: images, Parts: req.Parts, ItemID: "pending-user", SentAtMs: sentAt})
 	})
 	input := []map[string]any{{"type": "text", "text": req.Text, "text_elements": []any{}}}
 	input = append(input, fileMentionInputs(req.Text, cwd)...)

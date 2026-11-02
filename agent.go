@@ -216,6 +216,7 @@ type sendRequest struct {
 	ThreadID int
 	Agent    string
 	Text     string
+	Parts    []MessagePart `json:"parts,omitempty"`
 	// Project is a new conversation's project, "" the open one.
 	Project     string
 	Attachments []string
@@ -285,10 +286,24 @@ func (c *chatController) addThread(project string, t Thread) {
 // submit sends a message without reading any window's state. It returns
 // the conversation that took it, or 0 when it cannot be sent now.
 func (c *chatController) submit(req sendRequest) int {
+	c.lastSubmitError = ""
 	if c.remote != nil {
 		var id int
-		_ = c.remote.call("submit", req, &id)
+		if err := c.remote.call("submit", req, &id); err != nil {
+			c.lastSubmitError = err.Error()
+			c.setStatus(err.Error())
+		}
 		return id
+	}
+	_, existingSnapshots := splitReferenceContext(req.Text)
+	if len(req.Parts) > 0 && len(existingSnapshots) == 0 {
+		var err error
+		req.Text, err = partsText(req.Parts)
+		if err != nil {
+			c.lastSubmitError = err.Error()
+			c.setStatus(err.Error())
+			return 0
+		}
 	}
 	if _, ok, _ := parseGoalCommand(req.Text); ok && (req.ThreadID == 0 && req.Agent != agentClaude || req.ThreadID != 0 && threadAgent(c.threadWithID(req.ThreadID)) == agentCodex) {
 		id, message := c.codexGoalCommand(req)
@@ -301,7 +316,15 @@ func (c *chatController) submit(req sendRequest) int {
 	// every conversation's messages are; the referenced ones then follow.
 	task := threadRefTask(req.Text)
 	var sources []Thread
-	req.Text, sources = expandThreadRefs(req.Text, req.ThreadID, c.resolveThreadRef)
+	own, _ := splitReferenceContext(req.Text)
+	req.Parts = messageParts(own)
+	var err error
+	req.Text, sources, err = expandThreadRefs(req.Text, c.threadRef(c.threadWithID(req.ThreadID)), c.resolveReference)
+	if err != nil {
+		c.lastSubmitError = err.Error()
+		c.setStatus(err.Error())
+		return 0
+	}
 	id := c.submitExpanded(req)
 	if id != 0 && len(sources) > 0 {
 		c.noteHandoffs(sources, id, task)

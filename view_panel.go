@@ -309,7 +309,7 @@ func (app *chatApp) workspaceChanged(p *panelState) {
 
 func (app *chatApp) panelHeader(c *ui.Context, p *panelState) {
 	ui.Row(c).Height(56).Shrink(0).AlignItems(ui.Center).Gap(6).Padding(0, 14, 0, 10).DragWindow().Children(func() {
-		ui.ScrollHorizontal(c.Key("tabs")).Grow(1).MinWidth(0).HideScrollbars().Label("右侧面板标签页").Children(func() {
+		ui.ScrollHorizontal(c.Key("tabs")).Grow(1).MinWidth(0).Scrollbars(false).Label("右侧面板标签页").Children(func() {
 			ui.Row(c).Gap(4).AlignItems(ui.Center).Children(func() {
 				for i, s := range p.surfaces {
 					app.panelTab(c.Key(s.id), p, i, s)

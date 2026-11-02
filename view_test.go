@@ -19,7 +19,7 @@ func testApp(t *testing.T) (*chatApp, *ui.Tester) {
 	inlineDispatch.Store(true)
 	t.Cleanup(func() { inlineDispatch.Store(false) })
 	cwd := t.TempDir()
-	c := &chatController{cwd: cwd}
+	c := &chatController{cwd: cwd, referenceSource: testReferenceSource}
 	c.ctx, c.cancel = context.WithCancel(context.Background())
 	t.Cleanup(c.cancel)
 	c.agent, c.setAgent = createSignal("codex")

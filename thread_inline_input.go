@@ -1,7 +1,6 @@
 package main
 
 import (
-	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -9,8 +8,6 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/richtext"
 )
-
-const threadAttachmentURL = "miya-thread:"
 
 type threadMentionStyle struct {
 	font            ui.Font
@@ -25,7 +22,7 @@ func mentionStyle(c *ui.Context, size float32) threadMentionStyle {
 	return s
 }
 
-func (s threadMentionStyle) attachment(id int, title string) *richtext.Attachment {
+func (s threadMentionStyle) attachment(ref ThreadRef, title string) *richtext.Attachment {
 	label := "@ " + clipRunes(strings.Join(strings.Fields(title), " "), 22)
 	font := s.font
 	font.Size *= 0.94
@@ -35,7 +32,7 @@ func (s threadMentionStyle) attachment(id int, title string) *richtext.Attachmen
 	w, h := layout.Size()
 	height := s.font.Size * 1.65
 	return &richtext.Attachment{
-		Name: title, URL: threadAttachmentURL + strconv.Itoa(id), Width: w + 12, Height: height,
+		Name: title, URL: ref.URL(), Width: w + 12, Height: height,
 		Draw: func(p *ui.Painter, r ui.Rect) {
 			p.Fill(r, s.background, 5)
 			p.Clip(r, 5, func() { p.TextLayout(layout, r.X+6, r.Y+(r.H-h)/2, s.ink) })
@@ -43,24 +40,20 @@ func (s threadMentionStyle) attachment(id int, title string) *richtext.Attachmen
 	}
 }
 
-func inlineThreadText(raw string, completedOnly bool, style threadMentionStyle, title func(int) string) richtext.Text {
+func inlineThreadText(raw string, _ bool, style threadMentionStyle, title func(ThreadRef) string) richtext.Text {
 	var runs []richtext.Run
 	end := 0
-	for _, match := range threadRefPattern.FindAllStringSubmatchIndex(raw, -1) {
-		if completedOnly && match[1] == len(raw) {
-			continue
+	for _, m := range threadMentions(raw) {
+		name := m.Title
+		if name == "" && title != nil {
+			name = title(m.Ref)
 		}
-		id, err := strconv.Atoi(raw[match[4]:match[5]])
-		if err != nil {
-			continue
-		}
-		start := match[4] - 2
-		runs = append(runs, richtext.Run{Text: raw[end:start]}, richtext.Run{
+		runs = append(runs, richtext.Run{Text: raw[end:m.Start]}, richtext.Run{
 			Text: string(richtext.ObjectReplacement), Attributes: richtext.Attributes{
-				Tag: threadAttachmentURL + strconv.Itoa(id), Attachment: style.attachment(id, title(id)),
+				Tag: m.Ref.URL(), Attachment: style.attachment(m.Ref, name),
 			},
 		})
-		end = match[1]
+		end = m.End
 	}
 	runs = append(runs, richtext.Run{Text: raw[end:]})
 	return richtext.TextOf(richtext.Paragraph{Runs: runs})
@@ -69,10 +62,13 @@ func inlineThreadText(raw string, completedOnly bool, style threadMentionStyle, 
 func inlineThreadRaw(text richtext.Text) string {
 	var out strings.Builder
 	for _, run := range text.Runs(0, text.Len()) {
-		if a := run.Attributes.Attachment; a != nil && strings.HasPrefix(a.URL, threadAttachmentURL) {
-			id := strings.TrimPrefix(a.URL, threadAttachmentURL)
-			if _, err := strconv.Atoi(id); err == nil {
-				out.WriteString("@#" + id)
+		if a := run.Attributes.Attachment; a != nil {
+			if run.Attributes.Tag == composerCommandTag {
+				out.WriteString(a.Name)
+				continue
+			}
+			if ref, ok := parseThreadURL(a.URL); ok {
+				out.WriteString(referenceText(ref, a.Name))
 				continue
 			}
 		}
@@ -98,12 +94,13 @@ func inlineThreadSpans(text richtext.Text, size float32) []ui.Span {
 }
 
 // A document stores each reference as one editable object. The wire prompt
-// remains @#id, including references inserted in the middle of a sentence.
+// preserves the stable identity and title snapshot at its original position.
 type inlineThreadInput struct {
+	commands      []composerChoice
 	doc           *richtext.Document
 	raw, owner    string
 	style         threadMentionStyle
-	title         func(int) string
+	title         func(ThreadRef) string
 	anchor, caret int
 	moved         bool
 }
@@ -112,7 +109,7 @@ func (s *inlineThreadInput) setRaw(raw string) {
 	if s.doc != nil && raw == s.raw && inlineThreadRaw(s.doc.Text()) == raw {
 		return
 	}
-	text := inlineThreadText(raw, true, s.style, s.title)
+	text := s.text(raw)
 	if s.doc == nil {
 		s.doc = richtext.NewDocument(text)
 	} else {
@@ -156,6 +153,9 @@ func (s *inlineThreadInput) insert(text string) {
 	a, z := s.doc.Selection()
 	start, end := min(a, z), max(a, z)
 	part := inlineThreadText(text, true, s.style, s.title)
+	if start == 0 {
+		part = s.text(text)
+	}
 	s.doc.Edit(func(e *richtext.Edit) { e.Replace(start, end, part); e.Select(start+part.Len(), start+part.Len()) })
 }
 
@@ -174,9 +174,14 @@ func (app *chatApp) threadInput(c *ui.Context, state *inlineThreadInput, raw, ow
 	// Drawing colors follow the appearance without changing the undo history.
 	for _, run := range state.doc.Text().Runs(0, state.doc.Text().Len()) {
 		if a := run.Attributes.Attachment; a != nil {
-			id, err := strconv.Atoi(strings.TrimPrefix(a.URL, threadAttachmentURL))
-			if err == nil {
-				fresh := state.style.attachment(id, a.Name)
+			if run.Attributes.Tag == composerCommandTag {
+				fresh := state.style.commandAttachment(a.Name)
+				a.Draw, a.Width, a.Height = fresh.Draw, fresh.Width, fresh.Height
+				continue
+			}
+			ref, ok := parseThreadURL(a.URL)
+			if ok {
+				fresh := state.style.attachment(ref, a.Name)
 				a.Draw, a.Width, a.Height = fresh.Draw, fresh.Width, fresh.Height
 			}
 		}
@@ -207,6 +212,11 @@ func (app *chatApp) threadInput(c *ui.Context, state *inlineThreadInput, raw, ow
 	}
 	contextMenu := func(menu *ui.Menu) {
 		a, z := state.doc.Selection()
+		selection := state.doc.Text().Slice(min(a, z), max(a, z))
+		mentions := threadMentions(inlineThreadRaw(selection))
+		if menu.Item("复制会话链接").Disabled(len(mentions) != 1).Chosen() && len(mentions) == 1 {
+			services.WriteClipboard(mentions[0].Ref.URL())
+		}
 		if menu.Item("复制").Disabled(a == z).Chosen() {
 			copySelection(false)
 		}
@@ -215,6 +225,15 @@ func (app *chatApp) threadInput(c *ui.Context, state *inlineThreadInput, raw, ow
 		}
 		if menu.Item("粘贴").Chosen() {
 			paste()
+		}
+		if menu.Item("粘贴为会话引用").Chosen() {
+			if data, err := services.ReadClipboardData(transfer.Text).Read(transfer.Text); err == nil {
+				if ref, ok := parseThreadURL(strings.TrimSpace(string(data))); ok {
+					state.insert(referenceText(ref, app.referenceTitle(ref)))
+				} else {
+					app.notice = "剪贴板中没有有效的会话链接"
+				}
+			}
 		}
 		if menu.Item("全选").Chosen() {
 			state.doc.SetSelection(0, state.doc.Text().Len())

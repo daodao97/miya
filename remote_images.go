@@ -14,11 +14,11 @@ import (
 	"miya/internal/remote"
 )
 
-// Photos a phone attaches must fit in one message of the tunnel.
+// The same limits apply to binary uploads and legacy inline photos.
 const (
-	maxPhoneImages     = 6
-	maxPhoneImageBytes = 10 << 20
-	maxPhoneImageTotal = 20 << 20
+	maxPhoneImages     = remote.MaxImages
+	maxPhoneImageBytes = remote.MaxImageBytes
+	maxPhoneImageTotal = remote.MaxImageTotal
 	phoneUploadsKept   = 7 * 24 * time.Hour
 )
 

@@ -13,19 +13,23 @@ import (
 	"unicode/utf8"
 )
 
-type composerChoice struct{ Name, Detail string }
+type composerChoice struct {
+	Name, Detail string
+	ArgumentHint string     `json:"argumentHint,omitempty"`
+	Ref          *ThreadRef `json:"ref,omitempty"`
+}
 
 var composerCommands = []composerChoice{
-	{"goal", "Set a goal · /goal pause · /goal resume · /goal clear"},
-	{"new", "Start a new conversation"},
-	{"model", "Choose the model"},
-	{"fast", "Toggle Codex fast mode"},
-	{"permissions", "Change approval permissions"},
-	{"mention", "Reference a project file"},
-	{"review", "Review uncommitted changes"},
-	{"compact", "Compact this conversation"},
-	{"diff", "Show changes"},
-	{"status", "Show model, permissions and token usage"},
+	{Name: "goal", Detail: "Set a goal · /goal pause · /goal resume · /goal clear", ArgumentHint: "描述目标，或输入 pause / resume / clear"},
+	{Name: "new", Detail: "Start a new conversation"},
+	{Name: "model", Detail: "Choose the model"},
+	{Name: "fast", Detail: "Toggle Codex fast mode"},
+	{Name: "permissions", Detail: "Change approval permissions"},
+	{Name: "mention", Detail: "Reference a project file"},
+	{Name: "review", Detail: "Review uncommitted changes"},
+	{Name: "compact", Detail: "Compact this conversation"},
+	{Name: "diff", Detail: "Show changes"},
+	{Name: "status", Detail: "Show model, permissions and token usage"},
 }
 
 type composerToken struct {
@@ -61,6 +65,14 @@ func composerTokenAt(value string, end int) composerToken {
 	}
 	start := strings.LastIndex(prefix, "@")
 	if start < 0 {
+		return composerToken{}
+	}
+	for _, m := range threadMentions(value) {
+		if start >= m.Start && start < m.End {
+			return composerToken{}
+		}
+	}
+	if referenceCodeMask(value)[start] {
 		return composerToken{}
 	}
 	if start > 0 {
@@ -245,7 +257,7 @@ func fileChoices(files []string, query string) []composerChoice {
 	}
 	result := make([]composerChoice, 0, len(matches))
 	for _, m := range matches {
-		result = append(result, composerChoice{m.path, filepath.Dir(m.path)})
+		result = append(result, composerChoice{Name: m.path, Detail: filepath.Dir(m.path)})
 	}
 	return result
 }

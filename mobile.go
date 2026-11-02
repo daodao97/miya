@@ -65,6 +65,7 @@ type mobileApp struct {
 	loaded     bool
 	link, host string
 	state      phoneState
+	memories   mobileMemory
 	autos      mobileAutomations
 	// selected is the phone's workspace for new conversations.
 	selected           string
@@ -106,7 +107,8 @@ type mobileApp struct {
 	images []string
 	// previewPaths maps desktop image sources to phone-local thumbnails.
 	// An empty value reserves an in-flight lookup or download.
-	previewPaths map[string]string
+	previewPaths   map[string]string
+	previewRetries map[string]int
 	// commands are Claude Code\'s slash commands, by project; asked
 	// marks those requested on this connection.
 	commands map[string][]composerChoice
@@ -129,6 +131,8 @@ type mobileApp struct {
 	generation int
 	connected  bool
 	status     string
+	retryAt    time.Time
+	retryError string
 	err        string
 	scanning   bool
 	paste      string
@@ -228,15 +232,26 @@ func newMobileApp() *mobileApp {
 		LoadImage: func(src string) (ui.ImageSource, error) { return loadImage(imageSourcePath(src)) },
 	}
 	m.view.imagePreview = m.messageImage
+	m.view.onHandoff = m.handoffToNewThread
 	m.view.onRetry = func(req retryRequest) {
 		r := m.threadRequest("retry", req.ThreadID)
 		r.MessageID = req.MessageID
 		m.sendPhoneAction(r)
 	}
-	m.view.referenceThread = func(id int) (Thread, bool) {
-		t, _ := m.find(id)
-		return t, t.ID == id && id != 0
+	m.view.referenceThread = func(ref ThreadRef) (Thread, bool) {
+		if ref.Source != m.state.ReferenceSource {
+			return Thread{}, false
+		}
+		for _, p := range m.state.Projects {
+			for _, t := range p.Threads {
+				if t.ServerID == ref.SessionID && threadAgent(t) == ref.Backend {
+					return t, true
+				}
+			}
+		}
+		return Thread{}, false
 	}
+
 	return m
 }
 
@@ -363,6 +378,7 @@ func (m *mobileApp) connect(link string) {
 	m.approvalPending = nil
 	m.disconnect()
 	m.previewPaths = nil
+	m.previewRetries = nil
 	if changed {
 		m.resetDesktopState()
 	}
@@ -393,6 +409,10 @@ func (m *mobileApp) disconnect() {
 }
 
 func (m *mobileApp) disconnectDesktop(unregister bool) {
+	if !m.retryAt.IsZero() {
+		m.status = ""
+	}
+	m.retryAt, m.retryError = time.Time{}, ""
 	if m.filesCancel != nil {
 		m.filesCancel()
 		m.filesCancel = nil
@@ -438,6 +458,9 @@ func (m *mobileApp) forget() {
 
 func (m *mobileApp) run(ctx context.Context, gen int, link string) {
 	for attempt := 0; ; attempt++ {
+		if attempt > 0 {
+			m.onMain(gen, func() { m.retryAt, m.retryError = time.Time{}, ""; m.status = "正在重新连接桌面端…" })
+		}
 		dial := m.dialDesktop
 		if dial == nil {
 			dial = remote.Connect
@@ -466,8 +489,14 @@ func (m *mobileApp) run(ctx context.Context, gen int, link string) {
 		if err != nil {
 			message += "：" + err.Error()
 		}
+		retryAt := time.Now().Add(delay)
+		retryError := ""
+		if err != nil {
+			retryError = err.Error()
+		}
 		m.onMain(gen, func() {
 			m.conn, m.connected, m.status = nil, false, message
+			m.retryAt, m.retryError = retryAt, retryError
 			if m.filesProxy != nil {
 				m.filesProxy.setConn(nil)
 			}
@@ -499,18 +528,24 @@ func (m *mobileApp) read(gen int, conn *remote.Conn) (greeted bool, err error) {
 				return greeted, errIncompatible
 			}
 			greeted = true
+			if err := conn.EnableAttachments(f.AttachmentToken); err != nil {
+				return greeted, err
+			}
 			// The desktop compresses everything after hello.
 			conn.DecompressReceives()
 			host := f.Host
 			m.onMain(gen, func() {
 				m.host, m.connected, m.status, m.err = host, true, "", ""
+				m.retryAt, m.retryError = time.Time{}, ""
 				_, _ = m.desktops.remember(m.link, host)
 				m.conn = conn
 				m.autos.loading, m.autos.requestedAt = false, time.Time{}
+				m.memories.loading, m.memories.requestedAt = false, time.Time{}
 				if m.filesProxy != nil {
 					m.filesProxy.setConn(conn)
 				}
 				m.previewPaths = nil // Retry previews requested while offline.
+				m.previewRetries = nil
 				if open := m.open; open != 0 {
 					r := m.subscribeRequest(open)
 					go conn.Send(r)
@@ -519,6 +554,9 @@ func (m *mobileApp) read(gen int, conn *remote.Conn) (greeted bool, err error) {
 				m.syncPush()
 				m.saveDesktops()
 			})
+		case "memory":
+			data, message := f.Data, f.Error
+			m.onMain(gen, func() { m.receiveMemory(data, message) })
 		case "automations":
 			data, message := f.Data, f.Error
 			m.onMain(gen, func() { m.receiveAutomations(data, message) })
@@ -560,8 +598,29 @@ func (m *mobileApp) read(gen int, conn *remote.Conn) (greeted bool, err error) {
 			}
 		case "image":
 			var preview phoneImagePreview
-			if json.Unmarshal(f.Data, &preview) == nil && f.Error == "" {
-				m.onMain(gen, func() { m.receiveImage(preview) })
+			if json.Unmarshal(f.Data, &preview) == nil {
+				if f.Error != "" {
+					m.onMain(gen, func() { m.retryImage(preview.Source, conn) })
+					continue
+				}
+				if f.Attachment != "" {
+					id := f.Attachment
+					go func() {
+						data, err := conn.ReadAttachment(conn.Context(), id)
+						if err != nil {
+							m.onMain(gen, func() { m.retryImage(preview.Source, conn) })
+							return
+						}
+						preview.Data = data
+						m.onMain(gen, func() {
+							if m.conn == conn {
+								m.receiveImage(preview)
+							}
+						})
+					}()
+				} else {
+					m.onMain(gen, func() { m.receiveImage(preview) })
+				}
 			}
 		case "commands":
 			var pc phoneCommands
@@ -586,6 +645,10 @@ func (m *mobileApp) read(gen int, conn *remote.Conn) (greeted bool, err error) {
 // The desktop may renumber threads after a restart or while repairing an old
 // cache. Rebind the open page by durable identity before handling its deltas.
 func (m *mobileApp) applyPhoneState(s phoneState) {
+	if m.state.MemoryRevision != s.MemoryRevision {
+		m.memories.list = memoryList{}
+		m.memories.requestedAt = time.Time{}
+	}
 	for _, old := range m.state.Approvals {
 		same := false
 		for _, next := range s.Approvals {
@@ -925,6 +988,7 @@ func (m *mobileApp) connectionLine() string {
 }
 
 func (m *mobileApp) viewRoot(c *ui.Context) {
+	m.updateReconnectCountdown(c)
 	m.textScale = c.Preferences().TextScale
 	// Before SetTheme, the theme is the system's appearance.
 	if dark := c.Theme().Dark; !m.themed || dark != m.dark {
@@ -994,6 +1058,25 @@ func (m *mobileApp) viewRoot(c *ui.Context) {
 		m.leave()
 		c.Invalidate()
 	}
+}
+
+// Derive the label from the retry deadline so a delayed frame or a return
+// from the background catches up immediately, instead of counting ticks.
+func (m *mobileApp) updateReconnectCountdown(c *ui.Context) {
+	if m.retryAt.IsZero() {
+		return
+	}
+	remaining := m.retryAt.Sub(c.Now())
+	if remaining <= 0 {
+		m.status = "正在重新连接桌面端…"
+		return
+	}
+	seconds := int((remaining + time.Second - 1) / time.Second)
+	m.status = fmt.Sprintf("连接已断开，%d 秒后重试", seconds)
+	if m.retryError != "" {
+		m.status += "：" + m.retryError
+	}
+	c.After(remaining - time.Duration(seconds-1)*time.Second)
 }
 
 // circle is a round floating button, as the header's.
@@ -1181,6 +1264,8 @@ func (m *mobileApp) listPage(c *ui.Context, path string) {
 				switch path {
 				case "/thread":
 					m.threadView(c)
+				case "/memory":
+					m.memoryPage(c)
 				case "/automations":
 					m.automationsPage(c, false)
 				case "/settings":
@@ -1269,6 +1354,10 @@ func (m *mobileApp) drawerContent(c *ui.Context) {
 					m.drawerThread(c.Key(match.ID), match.Thread)
 				}
 				return
+			}
+			if m.phoneButton(c.Key("memory")).FillWidth().MinHeight(48).Padding(0).Gap(12).Label("共享记忆").Children(func() { icon(c, "stack-2", 21, p.ink); ui.Text(c, "共享记忆").FontSize(m.font(17)) }).Clicked() {
+				m.memories.requestedAt = time.Time{}
+				m.openDrawerPage("/memory")
 			}
 			automations := m.phoneButton(c.Key("automations")).FillWidth().MinHeight(48).Padding(0).Gap(12).Radius(12).Label("自动化")
 			automations.Children(func() {
@@ -1434,7 +1523,8 @@ func (m *mobileApp) composerAgent() string {
 // effort, and a button that sends, or stops a running turn.
 func (m *mobileApp) composer(c *ui.Context, agent string, busy bool) {
 	p := m.pal
-	owner := fmt.Sprintf("%s:%d", m.composerProject(), m.open)
+	m.inlineInput.commands, _ = m.composerCommands(agent, m.composerProject())
+	owner := fmt.Sprintf("%s:%d:%s", m.composerProject(), m.open, agent)
 	if m.inlineInput.doc != nil && m.inlineInput.owner == owner {
 		m.inlineInput.sync(m.draft, func(text string) { m.draft = text })
 	}
@@ -1447,6 +1537,9 @@ func (m *mobileApp) composer(c *ui.Context, agent string, busy bool) {
 		m.queueView(c)
 		m.taskStatus(c)
 		m.thumbnails(c)
+		if hint := m.inlineInput.commandHint(); hint != "" {
+			ui.Text(c, hint).FontSize(m.font(12)).TextColor(p.muted).FillWidth().Wrap().Padding(0, 10)
+		}
 		ui.Column(c.Key("composer-box")).FillWidth().Padding(6, 6, 6, 10).Background(p.surface).Radius(26).Children(func() {
 			opts := m.sendOptions(agent)
 			effort := strings.ToUpper(firstNonEmpty(opts.Effort, "默认"))
@@ -1464,10 +1557,16 @@ func (m *mobileApp) composer(c *ui.Context, agent string, busy bool) {
 			safe := c.SafeArea()
 			width := c.Root().Bounds().W - safe.Left - safe.Right - 24 - 16 - 90 - right
 			style := mentionStyle(c, m.font(16))
-			text := inlineThreadText(m.draft, true, style, m.view.referenceTitle)
+			m.inlineInput.style, m.inlineInput.title = style, m.view.referenceTitle
+			text := m.inlineInput.text(m.draft)
 			_, h := ui.ShapeRichText(inlineThreadSpans(text, m.font(16)), style.font, max(1, width)).Size()
 			_, line := c.MeasureText(0, ui.Span{Text: "M", Size: m.font(16)})
 			expanded := strings.Contains(m.draft, "\n") || h > line*1.5 || steerAvailable
+			if text.Len() > 0 {
+				if a := text.AttributesAt(0).Attachment; a != nil && a.Width > width {
+					expanded = true
+				}
+			}
 			area := ui.Column(c.Key("input-area")).FillWidth().MinHeight(44).Justify(ui.Center).Padding(0, right, 0, 90)
 			if expanded {
 				area.MinHeight(0).Justify(ui.Start).Padding(4, 8, 54, 4)
@@ -1484,7 +1583,7 @@ func (m *mobileApp) composer(c *ui.Context, agent string, busy bool) {
 				// Clip in a parent: EditorBase's custom drawing can extend beyond
 				// its own bounds when it scrolls a long paragraph to the caret.
 				ui.Column(c.Key("editor-clip")).FillWidth().Clip().Children(func() {
-					input := m.view.threadInput(c.Key("composer"), &m.inlineInput, m.draft, fmt.Sprintf("%s:%d", m.composerProject(), m.open), "消息", placeholder, m.font(16), inputWidth, 1, 6, func(text string) { m.draft = text })
+					input := m.view.threadInput(c.Key("composer"), &m.inlineInput, m.draft, owner, "消息", placeholder, m.font(16), inputWidth, 1, 6, func(text string) { m.draft = text })
 					// EditorBase padding does not inset its text. Center it
 					// using the enclosing column instead.
 					input.MinHeight(0).Padding(0)
@@ -1646,8 +1745,17 @@ func (m *mobileApp) requestCommands(project string) {
 	go conn.Send(remote.Request{Op: "commands", Project: project})
 }
 
-// commandMenu lists Claude Code's commands above the composer while the
-// draft is a slash and a command's beginning.
+func (m *mobileApp) composerCommands(agent, project string) ([]composerChoice, bool) {
+	if agent == agentClaude {
+		cmds, known := m.commands[project]
+		return cmds, known
+	}
+	goal := composerCommands[0]
+	goal.Detail = "设置目标 · /goal pause · /goal resume · /goal clear"
+	return []composerChoice{goal}, true
+}
+
+// commandMenu lists commands while the draft is a slash and a command's beginning.
 func (m *mobileApp) commandMenu(c *ui.Context, agent, project string) {
 	d := m.draft
 	if !strings.HasPrefix(d, "/") || strings.ContainsAny(d, " \n") {
@@ -1655,12 +1763,10 @@ func (m *mobileApp) commandMenu(c *ui.Context, agent, project string) {
 	}
 	p := m.pal
 	q := strings.ToLower(d[1:])
-	cmds, known := m.commands[project]
 	if agent == agentClaude {
 		m.requestCommands(project)
-	} else {
-		cmds, known = []composerChoice{{Name: "goal", Detail: "设置目标 · /goal pause · /goal resume · /goal clear"}}, true
 	}
+	cmds, known := m.composerCommands(agent, project)
 	var shown []composerChoice
 	for _, cmd := range cmds {
 		if strings.Contains(strings.ToLower(cmd.Name), q) {

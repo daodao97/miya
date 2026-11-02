@@ -16,6 +16,7 @@ type Item struct {
 	ID                string          `json:"id"`
 	Type              string          `json:"type"`
 	Text              string          `json:"text"`
+	Phase             string          `json:"phase,omitempty"`
 	Content           json.RawMessage `json:"content"`
 	Summary           []string        `json:"summary"`
 	Server            string          `json:"server"`

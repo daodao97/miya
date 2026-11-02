@@ -16,7 +16,7 @@ import (
 func (app *chatApp) settingsView(c *ui.Context) {
 	cc := app.c
 	ui.Column(c).Gap(12).Children(func() {
-		ui.Tabs(c.Key("settings-tabs"), &app.settingsTab, "General", "Account", "Phone", "用量").AlignSelf(ui.Start)
+		ui.Tabs(c.Key("settings-tabs"), &app.settingsTab, "General", "Account", "Phone", "用量", "记忆").AlignSelf(ui.Start)
 		if app.settingsTab == 0 {
 			card(c).Padding(24).Gap(24).Children(func() {
 				app.languageSettings(c)
@@ -35,6 +35,8 @@ func (app *chatApp) settingsView(c *ui.Context) {
 			})
 		} else if app.settingsTab == 1 {
 			app.account.view(c)
+		} else if app.settingsTab == 4 {
+			app.memoryView(c)
 		} else if app.settingsTab == 3 {
 			app.usageSettings(c)
 		} else {

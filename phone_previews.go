@@ -12,11 +12,13 @@ import (
 	"os"
 	"path/filepath"
 
+	"miya/internal/remote"
+
 	xdraw "golang.org/x/image/draw"
 )
 
 const phonePreviewEdge = 640
-const maxPhonePreviewBytes = 2 << 20
+const maxPhonePreviewBytes = remote.MaxPreviewBytes
 
 type phoneImagePreview struct {
 	Source string `json:"source"`

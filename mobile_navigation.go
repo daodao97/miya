@@ -6,7 +6,7 @@ import "github.com/egoist/mygo/ui"
 // the navigation stack. Rendering, buttons and edge gestures share this rule.
 func mobilePageHasDrawer(path string) bool {
 	switch path {
-	case "/", "/thread", "/automations", "/settings", "/desktops":
+	case "/", "/thread", "/automations", "/memory", "/settings", "/desktops":
 		return true
 	}
 	return false

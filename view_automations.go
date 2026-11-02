@@ -667,7 +667,7 @@ func (app *chatApp) automationComposer(c *ui.Context) {
 				}
 			}
 			ui.Spacer(c)
-			ui.Text(c, "可用 @#对话 引用其他对话").FontSize(12).TextColor(muted).SingleLine()
+			ui.Text(c, "输入 @ 选择并引用其他对话").FontSize(12).TextColor(muted).SingleLine()
 		})
 	})
 }

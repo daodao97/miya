@@ -3,6 +3,10 @@ package main
 import "miya/internal/codex"
 
 type Message struct {
+	MemoryTurnID   string        `json:"memoryTurnId,omitempty"`
+	Memory         *memoryNotice `json:"memory,omitempty"`
+	HandoffTitle   string        `json:"handoffTitle,omitempty"`
+	Parts          []MessagePart `json:"parts,omitempty"`
 	Images         []string
 	Kind           string
 	Status         string
@@ -20,11 +24,12 @@ type Message struct {
 }
 
 type Thread struct {
-	Agent        string
-	Tasks        []ThreadTask `json:",omitempty"`
-	TaskPending  bool         `json:",omitempty"`
-	TaskStopping bool         `json:",omitempty"`
-	goalRevision uint64
+	CompletionNoticeBody string `json:"completionNoticeBody,omitempty"`
+	Agent                string
+	Tasks                []ThreadTask `json:",omitempty"`
+	TaskPending          bool         `json:",omitempty"`
+	TaskStopping         bool         `json:",omitempty"`
+	goalRevision         uint64
 	// Automation is the automation that started the conversation.
 	Automation                  string `json:",omitempty"`
 	ClaudeMessageID             string

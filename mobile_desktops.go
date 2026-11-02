@@ -256,6 +256,7 @@ func (m *mobileApp) resetDesktopState() {
 	m.home()
 	m.state, m.host, m.selected = phoneState{}, "", ""
 	m.autos = mobileAutomations{}
+	m.memories = mobileMemory{}
 	m.options, m.optionsAgent, m.newAgent = nil, "", ""
 	m.desktopNotice = ""
 	m.commands, m.asked, m.previewPaths = nil, nil, nil

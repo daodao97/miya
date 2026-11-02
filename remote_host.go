@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/egoist/mygo/push/apns"
@@ -34,14 +35,17 @@ type phoneProject struct {
 }
 
 type phoneState struct {
-	Files         bool                   `json:"files,omitempty"`
-	Automations   bool                   `json:"automations,omitempty"`
-	Projects      []phoneProject         `json:"projects"`
-	Status        string                 `json:"status"`
-	Approvals     []codex.Approval       `json:"approvals"`
-	Agents        []phoneAgentOptions    `json:"agents,omitempty"`
-	Quotas        []phoneAgentQuota      `json:"quotas,omitempty"`
-	Notifications phoneNotificationState `json:"notifications"`
+	MemoryRevision  uint64                 `json:"memoryRevision,omitempty"`
+	Memory          bool                   `json:"memory,omitempty"`
+	ReferenceSource string                 `json:"referenceSource"`
+	Files           bool                   `json:"files,omitempty"`
+	Automations     bool                   `json:"automations,omitempty"`
+	Projects        []phoneProject         `json:"projects"`
+	Status          string                 `json:"status"`
+	Approvals       []codex.Approval       `json:"approvals"`
+	Agents          []phoneAgentOptions    `json:"agents,omitempty"`
+	Quotas          []phoneAgentQuota      `json:"quotas,omitempty"`
+	Notifications   phoneNotificationState `json:"notifications"`
 	// Agent, Model and Effort are the desktop's defaults for new messages.
 	Agent  string `json:"agent"`
 	Model  string `json:"model"`
@@ -57,7 +61,7 @@ func listThread(t Thread) Thread {
 }
 
 func (c *chatController) phoneSnapshot() phoneState {
-	s := phoneState{Files: true, Automations: c.auto != nil, Status: c.status(), Approvals: c.approvals(), Agents: c.phoneAgentOptions(), Quotas: c.phoneQuotas()}
+	s := phoneState{ReferenceSource: c.referenceSource, MemoryRevision: c.memoryRevision, Memory: c.memory != nil, Files: true, Automations: c.auto != nil, Status: c.status(), Approvals: c.approvals(), Agents: c.phoneAgentOptions(), Quotas: c.phoneQuotas()}
 	if c.agent != nil {
 		s.Agent = c.agent()
 	}
@@ -159,6 +163,53 @@ func (c *chatController) servePhone(ctx context.Context, conn *remote.Conn) {
 	c.servePhoneConnection(ctx, conn)
 }
 
+// sendPhonePreview runs only in a bounded worker. Its caller snapshots the
+// subscription authorization; requests before subscribe still check history.
+func (c *chatController) sendPhonePreview(ctx context.Context, conn phoneConnection, r remote.Request, allowed bool, send func(remote.Frame) bool) bool {
+	preview := phoneImagePreview{Source: r.ImageSource}
+	var imageErr error
+	if !allowed {
+		// A cached message can request its image before subscribe
+		// finishes. Validate against that conversation's history too.
+		target, ok := onMain(ctx, c.dispatch, func() phoneThread { return c.phoneThreadFor(r) })
+		if !ok {
+			return false
+		}
+		if target.found {
+			messages := target.thread.Messages
+			if !hasHistory(target.thread) {
+				messages, _ = readOnlyHistory(ctx, target)
+			}
+			for _, message := range messages {
+				for _, source := range message.Images {
+					allowed = allowed || source == r.ImageSource
+				}
+			}
+		}
+	}
+	if !allowed {
+		imageErr = fmt.Errorf("图片不在当前对话中")
+	} else {
+		preview.Data, imageErr = phonePreview(r.ImageSource)
+	}
+	if imageErr == nil {
+		if transport, ok := conn.(interface{ SendImage(string, []byte) error }); ok {
+			if err := transport.SendImage(preview.Source, preview.Data); err == nil {
+				return true
+			} else {
+				imageErr = err
+				preview.Data = nil
+			}
+		}
+	}
+	data, _ := json.Marshal(preview)
+	frame := remote.Frame{Type: "image", Data: data}
+	if imageErr != nil {
+		frame.Error = imageErr.Error()
+	}
+	return send(frame)
+}
+
 type phoneConnection interface {
 	Send(any) error
 	Receive(any) error
@@ -166,16 +217,23 @@ type phoneConnection interface {
 }
 
 func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneConnection) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	host, _ := os.Hostname()
-	lastSent := time.Now()
+	var lastSent atomic.Int64
+	lastSent.Store(time.Now().UnixNano())
 	send := func(f remote.Frame) bool {
 		if conn.Send(f) != nil {
 			return false
 		}
-		lastSent = time.Now()
+		lastSent.Store(time.Now().UnixNano())
 		return true
 	}
-	if !send(remote.Frame{Type: "hello", Version: remote.ProtocolVersion, Host: host}) {
+	hello := remote.Frame{Type: "hello", Version: remote.ProtocolVersion, Host: host}
+	if transport, ok := conn.(interface{ AttachmentToken() string }); ok {
+		hello.AttachmentToken = transport.AttachmentToken()
+	}
+	if !send(hello) {
 		return
 	}
 	// Conversations are markdown and tool output, which compress well.
@@ -195,6 +253,34 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 			case <-ctx.Done():
 				return
 			}
+		}
+	}()
+	type previewRequest struct {
+		request remote.Request
+		allowed bool
+	}
+	previews := make(chan previewRequest, 8)
+	workersDone := make(chan struct{}, 2)
+	for range 2 {
+		go func() {
+			defer func() { workersDone <- struct{}{} }()
+			for {
+				select {
+				case task := <-previews:
+					if !c.sendPhonePreview(ctx, conn, task.request, task.allowed, send) {
+						cancel()
+						return
+					}
+				case <-ctx.Done():
+					return
+				}
+			}
+		}()
+	}
+	defer func() {
+		cancel()
+		for range 2 {
+			<-workersDone
 		}
 	}()
 	ticker := time.NewTicker(phonePollInterval)
@@ -287,8 +373,7 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 			}
 		}
 		if pending != nil {
-			req, paths := pending.req, pending.paths
-			res, ok := onMain(ctx, c.dispatch, func() phoneSendResult { return c.phoneSend(req, paths) })
+			res, ok := onMain(ctx, c.dispatch, func() phoneSendResult { return pending.send(c) })
 			if !ok {
 				return
 			}
@@ -321,7 +406,7 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 				}
 			}
 		}
-		if time.Since(lastSent) > phonePingInterval {
+		if time.Since(time.Unix(0, lastSent.Load())) > phonePingInterval {
 			if !send(remote.Frame{Type: "ping"}) {
 				return
 			}
@@ -335,38 +420,41 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 			}
 			switch r.Op {
 			case "image":
-				preview := phoneImagePreview{Source: r.ImageSource}
-				var imageErr error
 				allowed := sync != nil && r.Thread == sub && (r.ServerID == "" || r.ServerID == subscription.ServerID) && sync.images[r.ImageSource]
-				if !allowed {
-					// A cached message can request its image before subscribe
-					// finishes. Validate against that conversation's history too.
-					target, ok := onMain(ctx, c.dispatch, func() phoneThread { return c.phoneThreadFor(r) })
-					if !ok {
+				select {
+				case previews <- previewRequest{r, allowed}:
+				default:
+					data, _ := json.Marshal(phoneImagePreview{Source: r.ImageSource})
+					if !send(remote.Frame{Type: "image", Data: data, Error: "图片预览繁忙，请稍后重试"}) {
 						return
 					}
-					if target.found {
-						messages := target.thread.Messages
-						if !hasHistory(target.thread) {
-							messages, _ = readOnlyHistory(ctx, target)
-						}
-						for _, message := range messages {
-							for _, source := range message.Images {
-								allowed = allowed || source == r.ImageSource
-							}
-						}
-					}
 				}
-				if !allowed {
-					imageErr = fmt.Errorf("图片不在当前对话中")
-				} else {
-					preview.Data, imageErr = phonePreview(r.ImageSource)
+			case "memory":
+				// An advertised, read-only capability. No mobile mutation route.
+				type pendingMemory struct {
+					revision uint64
+					result   any
+					err      error
 				}
-				data, _ := json.Marshal(preview)
-				frame := remote.Frame{Type: "image", Data: data}
-				if imageErr != nil {
-					frame.Error = imageErr.Error()
+				pending, ok := onMain(ctx, c.dispatch, func() pendingMemory {
+					v, err := c.memoryOp("memoryList", memoryRequest{Project: r.Project, Scope: r.MemoryScope})
+					return pendingMemory{revision: c.memoryRevision, result: v, err: err}
+				})
+				if !ok {
+					return
 				}
+				result, err := pending.result, pending.err
+				if d, ok := result.(deferred); ok && err == nil {
+					result, err = d()
+				}
+				reply := phoneMemoryResult{Revision: pending.revision, Project: r.Project, Scope: r.MemoryScope}
+				frame := remote.Frame{Type: "memory"}
+				if err != nil {
+					frame.Error = err.Error()
+				} else if list, ok := result.(memoryList); ok {
+					reply.List = list
+				}
+				frame.Data, _ = json.Marshal(reply)
 				if !send(frame) {
 					return
 				}
@@ -458,6 +546,13 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 						pending = &phoneSendReq{req: r, paths: paths, until: time.Now().Add(30 * time.Second)}
 					}
 				}
+			case "prefetch":
+				onMain(ctx, c.dispatch, func() bool {
+					if ref, ok := parseThreadURL(r.Reference); ok {
+						c.prefetchReference(ref)
+					}
+					return true
+				})
 			case "stop":
 				onMain(ctx, c.dispatch, func() bool {
 					if t := c.phoneThreadFor(r); t.found {
@@ -559,6 +654,10 @@ func readOnlyHistory(ctx context.Context, t phoneThread) ([]Message, string) {
 	}
 	for i := range messages {
 		messages[i].ID = i + 1
+		if messages[i].Role == "user" {
+			own, _ := splitReferenceContext(messages[i].Content)
+			messages[i].Parts = messageParts(own)
+		}
 	}
 	return messages, ""
 }
@@ -764,9 +863,24 @@ func (p *phoneHost) do(action string) {
 }
 
 type phoneSendReq struct {
-	req   remote.Request
-	paths []string
-	until time.Time
+	req              remote.Request
+	paths            []string
+	until            time.Time
+	ownershipChecked bool
+}
+
+// A read-only marker describes a previous resume attempt. Recheck it once per
+// user send, without sending the message until the backend grants ownership.
+func (p *phoneSendReq) send(c *chatController) phoneSendResult {
+	if !p.ownershipChecked && c.client != nil && c.ready() {
+		target := c.phoneThreadFor(p.req)
+		if target.found && target.thread.ReadOnly && !target.thread.Loading && !target.thread.Busy && threadAgent(target.thread) == agentCodex {
+			p.ownershipChecked = true
+			c.resume(target.thread, nil)
+			return phoneSendResult{}
+		}
+	}
+	return c.phoneSend(p.req, p.paths)
 }
 
 // phoneSendResult is the conversation that took a message, or why it was
@@ -797,10 +911,10 @@ func (c *chatController) phoneSend(r remote.Request, paths []string) phoneSendRe
 		if project == c.cwd {
 			t := resolved.thread
 			switch {
-			case t.ReadOnly:
-				return phoneSendResult{err: "另一个 Codex 进程正在使用此对话，只能查看"}
 			case t.Loading:
 				return phoneSendResult{}
+			case t.ReadOnly:
+				return phoneSendResult{err: "另一个 Codex 进程正在使用此对话，只能查看"}
 			}
 			req, err := c.phoneSendRequest(r, paths, threadAgent(t))
 			if err != nil {
@@ -810,7 +924,8 @@ func (c *chatController) phoneSend(r remote.Request, paths []string) phoneSendRe
 			if req.ExplicitSettings && req.Policy != "" {
 				c.update(t.ID, func(th *Thread) { th.PermissionPolicy = req.Policy })
 			}
-			return phoneSendResult{thread: c.submit(req)}
+			id := c.submit(req)
+			return phoneSendResult{thread: id, err: c.lastSubmitError}
 		}
 	}
 	if project != "" && project != c.cwd {
@@ -831,7 +946,8 @@ func (c *chatController) phoneSend(r remote.Request, paths []string) phoneSendRe
 	if err != nil {
 		return phoneSendResult{err: err.Error()}
 	}
-	return phoneSendResult{thread: c.submit(req)}
+	id := c.submit(req)
+	return phoneSendResult{thread: id, err: c.lastSubmitError}
 }
 
 // sameJSON compares two JSON values regardless of their spacing.

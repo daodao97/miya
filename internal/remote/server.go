@@ -28,13 +28,14 @@ type Options struct {
 
 // Bridge serves the desktop to phones over its Tailcat overlay.
 type Bridge struct {
-	server   *tailcat.Server
-	listener net.Listener
-	files    *http.Server
-	lock     *os.File
-	ctx      context.Context
-	cancel   context.CancelFunc
-	options  Options
+	attachments attachmentHub
+	server      *tailcat.Server
+	listener    net.Listener
+	files       *http.Server
+	lock        *os.File
+	ctx         context.Context
+	cancel      context.CancelFunc
+	options     Options
 
 	mu     sync.Mutex
 	conns  map[*Conn]bool
@@ -65,15 +66,16 @@ func Start(ctx context.Context, options Options) (*Bridge, error) {
 			return nil, err
 		}
 	}
-	if options.Files != nil {
+	{
 		files, err := b.server.Listen(ctx, "tcp", fmt.Sprintf(":%d", FilesPort))
 		if err != nil {
 			b.Close()
 			return nil, err
 		}
-		b.files = &http.Server{Handler: options.Files, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: time.Minute, MaxHeaderBytes: 32 << 10}
+		b.files = &http.Server{Handler: b.attachments.handler(options.Files), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: time.Minute, MaxHeaderBytes: 32 << 10}
 		go b.files.Serve(files)
 	}
+	go b.attachments.reap(b.ctx)
 	go b.accept()
 	return b, nil
 }
@@ -88,6 +90,12 @@ func (b *Bridge) accept() {
 			return
 		}
 		conn := newConn(nc, nil)
+		session, err := b.attachments.newSession()
+		if err != nil {
+			conn.Close()
+			continue
+		}
+		conn.localAttachments = session
 		b.mu.Lock()
 		if b.closed {
 			b.mu.Unlock()

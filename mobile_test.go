@@ -10,9 +10,9 @@ import (
 func testMobileApp() *mobileApp {
 	m := newMobileApp()
 	m.loaded, m.link, m.connected, m.host = true, "miya://connect", true, "mac"
-	m.state = phoneState{Projects: []phoneProject{
+	m.state = phoneState{ReferenceSource: testReferenceSource, Projects: []phoneProject{
 		{Name: "proj-a", Path: "/a", Current: true, Threads: []Thread{{ID: 1, Title: "thread-one", ServerID: "s1"}}},
-		{Name: "proj-b", Path: "/b", Threads: []Thread{{ID: 2, Title: "thread-two"}}},
+		{Name: "proj-b", Path: "/b", Threads: []Thread{{ID: 2, Title: "thread-two", ServerID: "s2"}}},
 	}}
 	// Ordinary interaction tests disable motion; navigation motion has its
 	// own coverage with the production router defaults.
