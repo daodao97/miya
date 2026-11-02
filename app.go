@@ -164,7 +164,7 @@ func main() {
 			Height:               820,
 			MinWidth:             780,
 			MinHeight:            580,
-			TitleBarStyle:        mygo.TitleBarHiddenInset,
+			TitleBarStyle:        mygo.TitleBarHidden,
 			TrafficLightPosition: &mygo.Point{X: 18, Y: 20},
 			BackgroundColor:      windowBackground(app),
 			StateKey:             "main",

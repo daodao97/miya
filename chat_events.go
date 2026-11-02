@@ -176,7 +176,8 @@ func (c *chatController) handle(f codex.Frame) {
 			}
 			c.upsert(t, Message{Role: "activity", Kind: "plan", Plan: e.Plan, Content: strings.TrimSpace(content), ItemID: "turn-plan", TurnID: e.TurnID})
 		case "turn/diff/updated":
-			c.upsert(t, Message{Role: "tool", Kind: "diff", Content: bounded(e.Diff), ItemID: "turn-diff", TurnID: e.TurnID})
+			stats := countDiffLines(e.Diff)
+			c.upsert(t, Message{Role: "tool", Kind: "diff", Content: bounded(e.Diff), DiffStats: &stats, ItemID: "turn-diff", TurnID: e.TurnID})
 		case "thread/tokenUsage/updated":
 			if e.TokenUsage != nil {
 				t.Usage = e.TokenUsage

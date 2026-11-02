@@ -12,6 +12,7 @@ type Message struct {
 	Kind           string
 	Status         string
 	Item           *codex.Item
+	DiffStats      *diffLineStats `json:",omitempty"`
 	Plan           []codex.PlanStep
 	SentAtMs       int64
 	StartedAtMs    int64

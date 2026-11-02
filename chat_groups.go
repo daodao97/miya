@@ -16,6 +16,7 @@ type messageGroup struct {
 	Streaming     bool
 	Timestamp     int64
 	ShowTimestamp bool
+	DiffStats     diffLineStats
 }
 
 const collapsedThreadCount = 5
@@ -101,6 +102,9 @@ func groupMessages(messages []Message) []messageGroup {
 		g.Messages = append(g.Messages, m)
 	}
 	for i := range groups {
+		if !groups[i].User {
+			groups[i].DiffStats = turnDiffStats(groups[i].Messages)
+		}
 		for _, m := range groups[i].Messages {
 			if m.SentAtMs > 0 {
 				groups[i].Timestamp = m.SentAtMs

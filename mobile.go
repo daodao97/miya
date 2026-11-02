@@ -134,9 +134,13 @@ type mobileApp struct {
 	status     string
 	retryAt    time.Time
 	retryError string
-	err        string
-	scanning   bool
-	paste      string
+	// wake cuts the current connection's reconnect wait short; nil when
+	// no connection is running.
+	wake     chan struct{}
+	net      mobileNetworkPath
+	err      string
+	scanning bool
+	paste    string
 }
 
 var errIncompatible = errors.New("桌面端版本不兼容，请把手机端和桌面端都更新到最新版")
@@ -270,6 +274,7 @@ func mobileMain() {
 	mygo.App.WhenReady(func() {
 		m.win = mygo.NewWindow(mygo.WindowOptions{Title: "Miya", Width: 390, Height: 844, ExtendIntoSafeArea: true, Content: ui.View(m.viewRoot)})
 		setAppWindow(m.win)
+		m.watchNetwork()
 		m.setupPush()
 		go m.loadSaved()
 
@@ -401,7 +406,8 @@ func (m *mobileApp) connect(link string) {
 	m.asked = nil
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancel = cancel
-	go m.run(ctx, m.generation, link)
+	m.wake = make(chan struct{}, 1)
+	go m.run(ctx, m.generation, link, m.wake)
 }
 
 // disconnect ends the connection but keeps the paired desktop.
@@ -425,7 +431,7 @@ func (m *mobileApp) disconnectDesktop(unregister bool) {
 	}
 	m.generation++
 	conn, cancel := m.conn, m.cancel
-	m.cancel = nil
+	m.cancel, m.wake = nil, nil
 	if unregister && conn != nil {
 		registration, _ := json.Marshal(pushRegistration{ID: m.pushID, Token: m.pushToken, Disabled: true})
 		hasPushID := m.pushID != ""
@@ -458,7 +464,7 @@ func (m *mobileApp) forget() {
 	m.removeDesktop(m.currentDesktopID())
 }
 
-func (m *mobileApp) run(ctx context.Context, gen int, link string) {
+func (m *mobileApp) run(ctx context.Context, gen int, link string, wake <-chan struct{}) {
 	for attempt := 0; ; attempt++ {
 		if attempt > 0 {
 			m.onMain(gen, func() { m.retryAt, m.retryError = time.Time{}, ""; m.status = "正在重新连接桌面端…" })
@@ -506,10 +512,15 @@ func (m *mobileApp) run(ctx context.Context, gen int, link string) {
 				m.sending, m.sendErr = false, "连接已断开，消息可能没有发出"
 			}
 		})
+		timer := time.NewTimer(delay)
 		select {
 		case <-ctx.Done():
+			timer.Stop()
 			return
-		case <-time.After(delay):
+		case <-timer.C:
+		case <-wake:
+			// Someone needs the desktop now: a send, or a network that came back.
+			timer.Stop()
 		}
 	}
 }
@@ -862,7 +873,7 @@ func (m *mobileApp) sendDraft(steer bool) {
 	}
 	conn := m.conn
 	if conn == nil {
-		m.sendErr = "未连接桌面端"
+		m.sendErr = m.disconnectedSendError()
 		return
 	}
 	if m.open == 0 && m.newProject == "" {

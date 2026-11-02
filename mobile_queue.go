@@ -10,7 +10,7 @@ import (
 
 func (m *mobileApp) queueAction(op string, id int) {
 	if m.conn == nil {
-		m.sendErr = "未连接桌面端"
+		m.sendErr = m.disconnectedSendError()
 		return
 	}
 	r := m.threadRequest(op, m.open)
@@ -20,7 +20,7 @@ func (m *mobileApp) queueAction(op string, id int) {
 func (m *mobileApp) sendPhoneAction(r remote.Request) {
 	conn, gen := m.conn, m.generation
 	if conn == nil {
-		m.sendErr = "未连接桌面端"
+		m.sendErr = m.disconnectedSendError()
 		return
 	}
 	go func() {

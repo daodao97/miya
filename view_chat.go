@@ -165,6 +165,13 @@ func (app *chatApp) groupView(c *ui.Context, g messageGroup) {
 			if elapsed := turnElapsedLabel(g.Messages, false); elapsed != "" {
 				ui.Text(c, elapsed).TextColor(muted).FontSize(11).Tooltip(formatMessageTimestamp(g.Timestamp))
 			}
+			if stats := g.DiffStats; stats.Added > 0 || stats.Deleted > 0 {
+				ui.Row(c.Key("diff-stats")).Gap(4).AlignItems(ui.Center).Children(func() {
+					ui.Text(c, "·").TextColor(muted).FontSize(11)
+					ui.Text(c, fmt.Sprintf("+%d", stats.Added)).TextColor(success).FontSize(11)
+					ui.Text(c, fmt.Sprintf("−%d", stats.Deleted)).TextColor(danger).FontSize(11)
+				})
+			}
 			copied := app.copied[g.ID]
 			if !app.mobile && !hovered && !copied {
 				return
