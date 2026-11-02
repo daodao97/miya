@@ -3,12 +3,10 @@ package main
 import (
 	"embed"
 	"encoding/base64"
-	"math"
 	"net/url"
 	"os"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -187,48 +185,15 @@ func cachedImage(src string) ui.ImageSource {
 	return nil
 }
 
-// waveStops is the gradient that flows through a running label: lively hues
-// at one lightness and a low chroma, readable on white without glaring.
-var waveStops = []ui.Color{
-	ui.Oklch(0.64, 0.13, 25),  // coral
-	ui.Oklch(0.68, 0.12, 75),  // amber
-	ui.Oklch(0.64, 0.12, 145), // green
-	ui.Oklch(0.62, 0.11, 230), // sky
-	ui.Oklch(0.60, 0.12, 300), // violet
-	ui.Oklch(0.64, 0.13, 25),
-}
-
-// waveColor is the gradient's color at x, from 0 to 1, wrapping around.
-func waveColor(x float64) ui.Color {
-	x -= math.Floor(x)
-	n := float64(len(waveStops) - 1)
-	i := int(x * n)
-	if i >= len(waveStops)-1 {
-		i = len(waveStops) - 2
-	}
-	return waveStops[i].Mix(waveStops[i+1], float32(x*n-float64(i)))
-}
-
-// waveText shows a running label with its icon: a color gradient flows
-// through the text and a bright crest sweeps across it, the icon taking
-// the gradient's color. The text is one rich text, so spaces keep their width.
-func waveText(c *ui.Context, symbol, s string) ui.Element {
-	runes := []rune(s)
+// workingLabel shows a running label with its icon, still. A wave once
+// flowed through it, and an animated label keeps the whole window building
+// frames while a conversation runs: a third of a core at the display's
+// rate, a fifth at 24 frames a second. The label changes once a second.
+func workingLabel(c *ui.Context, symbol, s string) ui.Element {
 	row := ui.Row(c).AlignItems(ui.Center).Gap(8).Label(s)
-	span := float64(len(runes) + 10)
-	phase := float64(row.Loop("wave", time.Duration(span*70)*time.Millisecond, ui.Linear))
-	flow := float64(row.Loop("flow", 3*time.Second, ui.Linear))
-	crest := phase*span - 5
-	spans := make([]ui.Span, len(runes))
-	for i, r := range runes {
-		d := float64(i) - crest
-		glow := math.Exp(-d * d / 10)
-		color := muted.Mix(waveColor(float64(i)/float64(len(runes)+1)-flow), float32(0.8+0.2*glow))
-		spans[i] = ui.Span{Text: string(r), Color: color}
-	}
 	row.Children(func() {
-		icon(c, symbol, 15, waveColor(-flow))
-		ui.RichText(c, spans...).FontSize(12)
+		icon(c, symbol, 15, muted)
+		ui.Text(c, s).FontSize(12).TextColor(muted)
 	})
 	return row
 }

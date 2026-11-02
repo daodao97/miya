@@ -6,15 +6,39 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 )
 
 // claudeToolCall reads a Claude tool activity, whose content is the tool's
 // name, its input as JSON, then its output.
+//
+// Views call it for every tool row in every frame, so the decoded input is
+// kept by its text: the returned map is shared and must not be changed.
 func claudeToolCall(m Message) (string, map[string]any) {
 	name, rest, _ := strings.Cut(m.Content, "\n")
-	var input map[string]any
+	return strings.TrimSpace(name), decodeToolInput(rest)
+}
+
+var toolInputs struct {
+	sync.Mutex
+	m map[string]map[string]any
+}
+
+func decodeToolInput(rest string) map[string]any {
+	toolInputs.Lock()
+	input, ok := toolInputs.m[rest]
+	toolInputs.Unlock()
+	if ok {
+		return input
+	}
 	_ = json.NewDecoder(strings.NewReader(rest)).Decode(&input)
-	return strings.TrimSpace(name), input
+	toolInputs.Lock()
+	if toolInputs.m == nil || len(toolInputs.m) >= 512 {
+		toolInputs.m = map[string]map[string]any{}
+	}
+	toolInputs.m[rest] = input
+	toolInputs.Unlock()
+	return input
 }
 
 func inputString(input map[string]any, keys ...string) string {

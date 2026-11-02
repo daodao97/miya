@@ -11,26 +11,32 @@ import (
 	"time"
 )
 
-func TestWorkingLabelWaves(t *testing.T) {
+// The working label is still: an animated one kept the whole window
+// building frames while a conversation ran. Its elapsed time still counts.
+func TestWorkingLabelCounts(t *testing.T) {
 	app, tt := testApp(t)
 	c := app.c
 	c.setThreads([]Thread{{ID: 1, Agent: agentClaude, ServerID: "s1", Title: "Run", Busy: true, HistoryLoaded: true,
 		StartedAtMs: time.Now().Add(-3 * time.Second).UnixMilli(), LastOutputAtMs: time.Now().UnixMilli()}})
 	c.setActive(1)
-	tt.Frame()
-	found := false
-	for _, s := range tt.Texts() {
-		found = found || strings.Contains(s, "Working for ")
+	label := func() string {
+		for _, s := range tt.Texts() {
+			if strings.Contains(s, "Working for ") {
+				return s
+			}
+		}
+		return ""
 	}
-	if !found {
+	tt.Frame()
+	before := label()
+	if before == "" {
 		t.Fatalf("no working label with its spaces in %q", tt.Texts())
 	}
-	before := tt.Image()
-	tt.Advance(400 * time.Millisecond)
+	time.Sleep(1100 * time.Millisecond) // the label reads the wall clock
+	tt.Advance(1100 * time.Millisecond)
 	tt.Frame()
-	after := tt.Image()
-	if !tt.FramePending() && string(before.Pix) == string(after.Pix) {
-		t.Fatal("the label does not animate")
+	if after := label(); after == before {
+		t.Fatalf("the elapsed time did not count: %q then %q", before, after)
 	}
 }
 

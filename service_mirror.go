@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"miya/internal/codex"
@@ -31,29 +32,55 @@ type mirrorState struct {
 	phone phoneStatus
 }
 
-// newWindowController connects to the service, starting it if needed, and
-// runs everything in the window's process when that fails.
+// Service-backed windows never run agents themselves when a connection fails.
+// Standalone operation is explicit, or used on platforms without the service.
 func newWindowController() *chatController {
-	if os.Getenv("MIYA_SERVICE") != "0" {
+	if os.Getenv("MIYA_SERVICE") != "0" && runtime.GOOS != "windows" {
 		explicit := os.Getenv("QUICKGUI_WORKSPACE")
 		workspace := explicit
 		if workspace == "" {
 			workspace, _ = os.Getwd()
 		}
 		workspace, _ = filepath.Abs(workspace)
-		cl, st, err := connectService(workspace)
-		if err == nil {
-			c := newMirrorController()
-			c.mirror.reconnect = func() (*serviceClient, svcState, error) { return connectService(workspace) }
-			c.attachService(cl, st)
-			if explicit != "" && st.Cwd != workspace {
-				_ = c.changeWorkspace(workspace)
+		c := newServiceWindow(workspace, func() (*serviceClient, svcState, error) {
+			cl, st, err := connectService(workspace)
+			if err == nil && explicit != "" && st.Cwd != workspace {
+				var result svcWorkspace
+				if err = cl.call("workspace", workspace, &result); err == nil && result.Error != "" {
+					err = errors.New(result.Error)
+				}
+				if err == nil {
+					err = cl.call("state", nil, &st)
+				}
+				if err != nil {
+					cl.Close()
+				}
 			}
-			return c
-		}
-		log.Printf("miya: background service unavailable, running in this process: %v", err)
+			return cl, st, err
+		})
+		onCleanup(func() { c.cancel(); c.remote.Close() })
+		return c
 	}
 	return newChatController()
+}
+
+func newServiceWindow(workspace string, connect func() (*serviceClient, svcState, error)) *chatController {
+	c := newMirrorController()
+	c.cwd = workspace
+	c.mirror.reconnect = connect
+	cl, st, err := connect()
+	if err == nil {
+		c.attachService(cl, st)
+		return c
+	}
+	log.Printf("miya: waiting for background service: %v", err)
+	// A closed transport keeps every action on the remote path. A nil remote
+	// would make a mirror fall through to the local agent implementations.
+	c.remote = &serviceClient{closed: make(chan struct{}), pending: map[int64]chan svcMessage{}}
+	c.remote.Close()
+	c.setStatus("正在等待后台服务：" + err.Error())
+	c.watchService(c.remote)
+	return c
 }
 
 func newMirrorController() *chatController {
@@ -104,7 +131,19 @@ func (c *chatController) attachService(cl *serviceClient, st svcState) {
 	c.remote = cl
 	c.mirror.messages = map[int][]Message{}
 	c.applyState(st)
-	cl.setEvents(func(m svcMessage) { c.dispatch(func() { c.serviceEvent(cl, m) }) })
+	// While a conversation streams the service pushes every few tens of
+	// milliseconds; events that arrive before the main thread runs are
+	// applied together, in one dispatch.
+	inbox := &serviceInbox{}
+	cl.setEvents(func(m svcMessage) {
+		if inbox.push(m) {
+			c.dispatch(func() {
+				for _, m := range inbox.take() {
+					c.serviceEvent(cl, m)
+				}
+			})
+		}
+	})
 	c.forward("subscribe", c.active())
 	c.watchService(cl)
 	c.startNotificationPresence(cl)
@@ -132,26 +171,44 @@ func (c *chatController) watchService(cl *serviceClient) {
 		return
 	}
 	go func() {
-		<-cl.closed
+		select {
+		case <-cl.closed:
+		case <-c.ctx.Done():
+			return
+		}
 		c.dispatch(func() {
-			if c.remote == cl {
+			if c.remote == cl && cl.conn != nil {
 				c.setReady(false)
 				c.setStatus("后台服务已断开，正在重新连接…")
 			}
 		})
 		for wait := 200 * time.Millisecond; ; wait = min(wait*2, 5*time.Second) {
-			time.Sleep(wait)
+			timer := time.NewTimer(wait)
+			select {
+			case <-timer.C:
+			case <-c.ctx.Done():
+				timer.Stop()
+				return
+			}
 			next, st, err := reconnect()
 			if err != nil {
 				continue
 			}
-			c.dispatch(func() { c.attachService(next, st) })
+			c.dispatch(func() {
+				if c.ctx.Err() != nil {
+					next.Close()
+					return
+				}
+				c.attachService(next, st)
+			})
 			return
 		}
 	}()
 }
 
 func (c *chatController) applyState(s svcState) {
+	c.referenceSource = s.ReferenceSource
+	c.memoryRevision = s.MemoryRevision
 	c.fastMode = s.FastMode
 	c.cwd = s.Cwd
 	c.projectCache = s.ProjectThreads
@@ -184,7 +241,9 @@ func (c *chatController) applyState(s svcState) {
 	c.claudeDefaultModel = s.ClaudeDefaultModel
 	c.accountState, c.accountReset, c.quotaLimits, c.quotaStatus = s.Account, s.AccountReset, s.QuotaLimits, s.QuotaStatus
 	c.mirror.phone = s.Phone
-	c.setRevision(c.revision() + 1)
+	// No revision bump: a state carries no messages (applyMessages bumps it),
+	// and the view's group cache keys on the thread, its busy flag and turn
+	// itself. Bumping here regrouped the open conversation at every push.
 }
 
 func (c *chatController) applyMessages(m svcMessages) {

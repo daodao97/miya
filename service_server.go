@@ -5,8 +5,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"miya/internal/memory"
 	"net"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 )
@@ -60,6 +62,7 @@ func (p *svcPeer) write(data []byte) error {
 }
 
 func newService(c *chatController, ex *executor) *service {
+	c.memory = memory.New(filepath.Join(serviceDir(), "memory"))
 	s := &service{c: c, exec: ex, peers: map[*svcPeer]bool{}, dirty: make(chan struct{}, 1), quit: make(chan struct{}), idleTimeout: serviceIdleTimeout}
 	c.push = newPushHub()
 	c.run = ex.push
@@ -179,12 +182,18 @@ func (s *service) handle(p *svcPeer, req svcRequest) (any, error) {
 		_ = arg(&id)
 		p.sub, p.sent, p.order = id, nil, nil
 		s.markDirty()
-	case "mcpThreads", "mcpRead", "mcpStatus", "mcpDelegate", "mcpAutomationList", "mcpAutomationCreate", "mcpAutomationUpdate", "mcpReportResult":
+	case "mcpMemory", "mcpThreads", "mcpRead", "mcpStatus", "mcpDelegate", "mcpAutomationList", "mcpAutomationCreate", "mcpAutomationUpdate", "mcpReportResult":
 		var r mcpRequest
 		if err := arg(&r); err != nil {
 			return nil, err
 		}
 		return c.mcpHandle(req.Op, r)
+	case "memoryList", "memoryGet", "memorySave", "memoryForget", "memoryConfigure", "memoryPromoteUser", "memoryPromotionPreview", "memoryPromoteFile":
+		var r memoryRequest
+		if err := arg(&r); err != nil {
+			return nil, err
+		}
+		return c.memoryOp(req.Op, r)
 	case "automationList", "automationDraft", "automationSave", "automationToggle", "automationDelete", "automationRunNow":
 		var r automationRequest
 		if err := arg(&r); err != nil {
@@ -192,14 +201,21 @@ func (s *service) handle(p *svcPeer, req svcRequest) (any, error) {
 		}
 		return c.automationOp(req.Op, r)
 	case "prefetch":
-		_ = arg(&id)
-		c.prefetchThread(id)
+		var ref ThreadRef
+		if err := arg(&ref); err != nil {
+			return nil, err
+		}
+		c.prefetchReference(ref)
 	case "submit":
 		var r sendRequest
 		if err := arg(&r); err != nil {
 			return nil, err
 		}
-		return c.submit(r), nil
+		id := c.submit(r)
+		if id == 0 && c.lastSubmitError != "" {
+			return nil, fmt.Errorf("%s", c.lastSubmitError)
+		}
+		return id, nil
 	case "retry":
 		var r retryRequest
 		if err := arg(&r); err != nil {
@@ -347,7 +363,7 @@ func (s *service) handle(p *svcPeer, req svcRequest) (any, error) {
 
 // busy reports a turn running or starting, which quitting would end.
 func (s *service) busy() bool {
-	if len(s.c.claudeRuns) > 0 {
+	if s.c.memoryCalls > 0 || len(s.c.claudeRuns) > 0 {
 		return true
 	}
 	for _, t := range s.c.threads() {
@@ -378,15 +394,36 @@ func (s *service) peerList() []*svcPeer {
 	return out
 }
 
-// publishLoop sends what changed, at most every 30 milliseconds.
+// A change publishes publishDelay after it, gathering the changes that
+// follow; changes that keep coming, as a streaming reply's, publish at most
+// once every publishGap, which still reads as smooth text but costs every
+// window (a JSON snapshot, a rebuilt view) far fewer frames.
+const (
+	publishDelay = 30 * time.Millisecond
+	publishGap   = 80 * time.Millisecond
+)
+
+// publishLoop sends what changed, as publishDelay and publishGap pace it.
 func (s *service) publishLoop() {
+	var last time.Time
 	for {
 		select {
 		case <-s.quit:
 			return
 		case <-s.dirty:
 		}
-		time.Sleep(30 * time.Millisecond)
+		wait := publishDelay
+		if gap := publishGap - time.Since(last); gap > wait {
+			wait = gap
+		}
+		t := time.NewTimer(wait)
+		select {
+		case <-s.quit:
+			t.Stop()
+			return
+		case <-t.C:
+		}
+		last = time.Now()
 		s.exec.push(s.publish)
 	}
 }
@@ -517,10 +554,12 @@ func (c *chatController) snapshotState() svcState {
 		projectThreads[path] = items
 	}
 	return svcState{
-		FastMode:       c.fastMode,
-		ProjectBusy:    busy,
-		ProjectThreads: projectThreads,
-		Cwd:            c.cwd, Projects: c.projects(), Threads: threads, Approvals: c.approvals(),
+		ReferenceSource: c.referenceSource,
+		MemoryRevision:  c.memoryRevision,
+		FastMode:        c.fastMode,
+		ProjectBusy:     busy,
+		ProjectThreads:  projectThreads,
+		Cwd:             c.cwd, Projects: c.projects(), Threads: threads, Approvals: c.approvals(),
 		Status: c.status(), HistoryStatus: c.historyStatus(), Ready: c.ready(),
 		Models: c.models(), Model: c.model(), Effort: c.effort(), PermissionPolicy: c.permissionPolicy(), Locale: c.locale(),
 		ClaudeCommand: c.claudeCommand, ClaudeError: c.claudeError, ClaudeBinary: c.claudeBinary, ClaudeArgs: c.claudeArgs, ClaudeEnv: c.claudeEnv, ClaudeModel: c.claudeModel, ClaudeEffort: c.claudeEffort, ClaudeDefaultModel: c.claudeDefaultModel,

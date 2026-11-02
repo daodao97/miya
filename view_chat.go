@@ -77,7 +77,7 @@ func (app *chatApp) messageList(c *ui.Context, t Thread) {
 		// The elapsed time of the running turn counts up.
 		c.After(time.Second)
 	}
-	ui.List(c, state, len(groups), func(i int) {
+	list := ui.List(c, state, len(groups), func(i int) {
 		ui.Column(c).FillWidth().AlignItems(ui.Center).Children(func() {
 			ui.Column(c).FillWidth().MaxWidth(744).Children(func() {
 				app.groupView(c, groups[i])
@@ -101,6 +101,12 @@ func (app *chatApp) messageList(c *ui.Context, t Thread) {
 			mutedText(c, tr("No visible messages (reasoning-only or unsupported items)")).Margin(ui.Auto)
 		}
 	})
+	if app.mobile {
+		// Claim whitespace before the drawer's Draggable ancestor, but keep
+		// child buttons as the innermost click targets. A blanket HandleInput
+		// would intercept their presses before ButtonBase could handle them.
+		_ = list.Clicked()
+	}
 	if !state.AtEnd() && len(groups) > 0 {
 		ui.Row(c).Justify(ui.Center).Margin(-44, 0, 8, 0).Children(func() {
 			jump := quiet(c.Key("latest")).Background(canvas).Border(1, line).Radius(16).Shadow(0, 2, 8, 0, shadow)
@@ -119,7 +125,7 @@ func (app *chatApp) messageList(c *ui.Context, t Thread) {
 						ui.Text(c, label).FontSize(12).TextColor(warnInk).Tooltip(t.Status)
 					})
 				} else {
-					waveText(c.Key("working"), "clock", threadWorkingLabel(t))
+					workingLabel(c.Key("working"), "clock", threadWorkingLabel(t))
 					if hint := stalledHint(t, len(app.c.approvals()) > 0, time.Now()); hint != "" {
 						if app.mobile {
 							ui.Box(c).Grow(1).MinWidth(0)
@@ -151,25 +157,29 @@ func (app *chatApp) groupView(c *ui.Context, g messageGroup) {
 		if g.Streaming {
 			return
 		}
-		ui.Row(c).AlignItems(ui.Center).Gap(8).Height(28).Children(func() {
+		size := float32(28)
+		if app.mobile {
+			size = 44
+		}
+		ui.Row(c).AlignItems(ui.Center).Gap(8).Height(size).Children(func() {
 			if elapsed := turnElapsedLabel(g.Messages, false); elapsed != "" {
 				ui.Text(c, elapsed).TextColor(muted).FontSize(11).Tooltip(formatMessageTimestamp(g.Timestamp))
 			}
 			copied := app.copied[g.ID]
-			if !hovered && !copied {
+			if !app.mobile && !hovered && !copied {
 				return
 			}
 			name := "copy"
 			if copied {
 				name = "check"
 			}
-			b := quiet(c.Key("copy")).Size(28, 28).PaddingX(6).Justify(ui.Center).Label("Copy response").Tooltip("Copy response")
+			b := quiet(c.Key("copy")).Size(size, size).PaddingX(6).Justify(ui.Center).Label("Copy response").Tooltip("Copy response")
 			b.Children(func() { icon(c, name, 15, muted) })
 			if b.Clicked() {
 				c.WriteClipboard(messageGroupText(g))
 				app.copied[g.ID] = true
 			}
-			h := quiet(c.Key("handoff")).Size(28, 28).PaddingX(6).Justify(ui.Center).Label("交付到新对话").Tooltip("交付到新对话")
+			h := quiet(c.Key("handoff")).Size(size, size).PaddingX(6).Justify(ui.Center).Label("交付到新对话").Tooltip("交付到新对话")
 			h.Children(func() { icon(c, "arrow-right", 15, muted) })
 			if h.Clicked() {
 				app.handoffToNewThread()
@@ -224,6 +234,9 @@ func (app *chatApp) chevron(c *ui.Context, open bool) {
 // messageView shows one protocol item; activity is not assistant prose.
 func (app *chatApp) messageView(c *ui.Context, m Message, streaming bool) {
 	switch m.Role {
+	case "memory":
+		app.memoryNoticeView(c, m.Memory)
+		return
 	case "error":
 		ui.Row(c).FillWidth().AlignItems(ui.Center).Padding(16).Gap(10).Border(1, line).Radius(16).Children(func() {
 			icon(c, "alert-circle", 16, warnInk)
@@ -325,10 +338,10 @@ func activityTitle(m Message) string {
 	case "claudetool":
 		return claudeToolTitle(m)
 	case "handoff":
-		if len(m.Agents) > 0 {
-			return "已交付到对话 #" + strings.TrimPrefix(m.Agents[0].ID, "thread:")
+		if m.HandoffTitle != "" {
+			return "已交付到对话「" + m.HandoffTitle + "」"
 		}
-		return messageLabel(m.Kind)
+		return "已交付到其他对话"
 	case "reasoning":
 		if active {
 			return tr("Thinking…")
