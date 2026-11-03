@@ -4,6 +4,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -75,6 +76,8 @@ func TestRetryRejectsUnavailableOrStaleResponse(t *testing.T) {
 				th.Agent = agentClaude
 				app.c.claudeBinary = "/bin/true"
 				th.Messages[0].Content = ""
+				// Without earlier output, retry must resend the original message.
+				th.Messages = append(th.Messages[:1], th.Messages[2])
 			}
 			app.c.setThreads([]Thread{th})
 			if err := app.c.retryResponse(retryRequest{ThreadID: 1, MessageID: 12}); err == nil {
@@ -108,5 +111,41 @@ func TestRetryMessageKeepsAttachmentsAndReferenceSnapshot(t *testing.T) {
 	m = Message{Images: m.Images}
 	if got := messageAttachments(m); !reflect.DeepEqual(got, paths[:1]) || messagePrompt(m) != "" {
 		t.Fatalf("retry lost an older image-only prompt: %q", got)
+	}
+}
+
+func TestRetryAfterStreamedOutputContinuesInsteadOfRewinding(t *testing.T) {
+	app, _ := testApp(t)
+	th := failedResponse()
+	th.Agent = agentClaude
+	app.c.claudeBinary = "/bin/true"
+	th.Messages = append(th.Messages[:2], Message{ID: 14, Role: "assistant", Content: "已经写好的长回复"}, th.Messages[2])
+	app.c.setThreads([]Thread{th})
+	if err := app.c.retryResponse(retryRequest{ThreadID: 1, MessageID: 12}); err != nil {
+		t.Fatal(err)
+	}
+	got := app.c.threadWithID(1).Messages
+	if len(got) < 4 || got[1].ID != 11 || got[2].ID != 14 || got[3].ID != 12 {
+		t.Fatalf("retry discarded output streamed before the error: %+v", got)
+	}
+	var continued bool
+	for _, m := range got[4:] {
+		if m.Role == "user" && strings.Contains(m.Content, retryContinuePrompt) {
+			continued = true
+		}
+	}
+	if !continued {
+		t.Fatalf("retry did not ask the agent to continue: %+v", got)
+	}
+}
+
+func TestFailedAfterOutput(t *testing.T) {
+	th := failedResponse()
+	if !failedAfterOutput(th, 0) {
+		t.Fatal("tool output before the error was not detected")
+	}
+	th.Messages = append(th.Messages[:1], th.Messages[2])
+	if failedAfterOutput(th, 0) {
+		t.Fatal("an error alone counted as output")
 	}
 }

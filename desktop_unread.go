@@ -84,8 +84,8 @@ func (c *chatController) markDesktopRead(read desktopRead) {
 	}
 }
 
-// Only a user action after completion can acknowledge that result. Merely
-// repainting the conversation that was already open must preserve unread.
+// Selecting a completed conversation explicitly acknowledges it once its
+// history arrives. Results already open also become read when displayed below.
 func (app *chatApp) requestDesktopRead(t Thread) {
 	app.desktopReadIntent = desktopRead{}
 	if !app.c.desktopThreadUnread(t) || t.Busy && !t.Loading {
@@ -101,6 +101,37 @@ func (app *chatApp) markVisibleThreadRead() {
 		return
 	}
 	app.markRequestedThreadRead()
+	app.markDisplayedThreadRead()
+}
+
+// Called before building the next frame, so the group cache and list position
+// describe what the previous frame actually displayed, not an incoming result
+// whose final layout (or scroll-to-end animation) has not happened yet.
+func (app *chatApp) markDisplayedThreadRead() {
+	if app.mobile || app.section != "" || app.projectDialog || app.switcher.open || app.shortcutsOpen {
+		return
+	}
+	t := app.c.current()
+	if t.Busy || t.Loading || !t.HistoryLoaded || !app.c.desktopThreadUnread(t) {
+		return
+	}
+	g := &app.groups
+	if g.thread != t.ID || g.busy || g.revision != app.c.revision() || g.count != len(t.Messages) || len(g.groups) == 0 {
+		return
+	}
+	if g.completedAt != app.c.desktopUnread[desktopUnreadKey(t)] {
+		return // a newer completion has not been displayed yet
+	}
+	list := app.lists[t.ID]
+	if list == nil || !list.AtEnd() {
+		return
+	}
+	if app.c.mirror != nil {
+		if _, received := app.c.mirror.messages[t.ID]; !received {
+			return
+		}
+	}
+	app.c.readDesktopThread(t)
 }
 
 func (app *chatApp) markRequestedThreadRead() {

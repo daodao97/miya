@@ -15,16 +15,17 @@ type groupCache struct {
 	thread, revision, count int
 	busy                    bool
 	turn                    string
+	completedAt             int64
 	groups                  []messageGroup
 }
 
 func (g *groupCache) of(c *chatController) []messageGroup {
 	t := c.current()
 	revision := c.revision()
-	if g.groups != nil && g.thread == t.ID && g.revision == revision && g.count == len(t.Messages) && g.busy == t.Busy && g.turn == t.TurnID {
+	if g.groups != nil && g.thread == t.ID && g.revision == revision && g.count == len(t.Messages) && g.busy == t.Busy && g.turn == t.TurnID && g.completedAt == t.CompletedAtMs {
 		return g.groups
 	}
-	*g = groupCache{thread: t.ID, revision: revision, count: len(t.Messages), busy: t.Busy, turn: t.TurnID}
+	*g = groupCache{thread: t.ID, revision: revision, count: len(t.Messages), busy: t.Busy, turn: t.TurnID, completedAt: t.CompletedAtMs}
 	g.groups = threadMessageGroups(t, groupMessages(t.Messages))
 	if g.groups == nil {
 		g.groups = []messageGroup{}
@@ -106,6 +107,13 @@ func (app *chatApp) messageList(c *ui.Context, t Thread) {
 		// child buttons as the innermost click targets. A blanket HandleInput
 		// would intercept their presses before ButtonBase could handle them.
 		_ = list.Clicked()
+	}
+	// A completed result needs one frame on screen before it is acknowledged.
+	// Request that frame even if finishing the turn left the window idle.
+	if !app.mobile && !app.projectDialog && !app.switcher.open && !app.shortcutsOpen && !t.Busy && !t.Loading && t.HistoryLoaded && len(groups) > 0 && app.c.desktopThreadUnread(t) && state.AtEnd() {
+		if w := currentWindow(); w != nil && w.IsFocused() && !w.IsMinimized() {
+			c.After(0)
+		}
 	}
 	if !state.AtEnd() && len(groups) > 0 {
 		ui.Row(c).Justify(ui.Center).Margin(-44, 0, 8, 0).Children(func() {

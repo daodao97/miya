@@ -53,6 +53,43 @@ func serverController(dir, claudeBin string) *chatController {
 	return c
 }
 
+func TestServiceRestartWhenIdleChecksAllWork(t *testing.T) {
+	for _, work := range []string{"idle", "current-project", "background-project", "memory"} {
+		t.Run(work, func(t *testing.T) {
+			c := serverController(t.TempDir(), "")
+			s := &service{c: c, quit: make(chan struct{})}
+			switch work {
+			case "current-project":
+				c.setThreads([]Thread{{ID: 1, Busy: true}})
+			case "background-project":
+				c.projectCache["/other"] = []Thread{{ID: 2, Busy: true}}
+			case "memory":
+				c.memoryCalls = 1
+			}
+			if _, err := s.handle(nil, svcRequest{Op: "quitWhenIdle"}); err != nil {
+				t.Fatal(err)
+			}
+			stopped := func() bool {
+				select {
+				case <-s.quit:
+					return true
+				default:
+					return false
+				}
+			}
+			if !s.quitWhenIdle || stopped() != (work == "idle") {
+				t.Fatal("safe restart did not check all running work before stopping")
+			}
+			c.setThreads(nil)
+			c.projectCache = nil
+			c.memoryCalls = 0
+			if _, err := s.handle(nil, svcRequest{Op: "quitWhenIdle"}); err != nil || !stopped() {
+				t.Fatal("idle service did not stop promptly")
+			}
+		})
+	}
+}
+
 func TestCompletionNoticeSurvivesServiceSnapshots(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	c := serverController(t.TempDir(), "")
@@ -267,7 +304,7 @@ func TestServiceKeepsTurnsRunningAfterTheWindowQuits(t *testing.T) {
 	})
 }
 
-func TestServiceRetriesFailedResponseFromLastUserMessage(t *testing.T) {
+func TestServiceRetryContinuesFailedResponseAfterOutput(t *testing.T) {
 	f := newServiceFixture(t)
 	// This headless fixture has no native event loop for notification APIs.
 	persistSetting("notifications-completion", "off")
@@ -293,8 +330,8 @@ func TestServiceRetriesFailedResponseFromLastUserMessage(t *testing.T) {
 	})
 	f.win.do(func() {
 		th := a.threadWithID(1)
-		if th.ServerID == "s1" || len(th.Messages) != 2 || th.Messages[0].Role != "user" || th.Messages[0].Content != "安装应用" || a.draft() != "keep this draft" {
-			t.Fatalf("retry did not replace the failed turn or preserve the draft: %+v", th)
+		if th.ServerID != "s1" || len(th.Messages) != 5 || th.Messages[0].ID != 10 || th.Messages[1].ID != 11 || th.Messages[2].ID != 12 || th.Messages[3].Role != "user" || !strings.Contains(th.Messages[3].Content, retryContinuePrompt) || a.draft() != "keep this draft" {
+			t.Errorf("retry did not continue the failed turn or preserve its output and draft: %+v", th)
 		}
 		count := len(th.Messages)
 		if err := a.retryResponse(retryRequest{ThreadID: 1, MessageID: 12}); err == nil {
@@ -331,14 +368,14 @@ func TestServiceRetryRewindsOnlyTheLastUserMessage(t *testing.T) {
 			{ID: 10, Role: "user", Content: "first"},
 			{ID: 11, Role: "assistant", Content: "reply one"},
 			{ID: 12, Role: "user", Content: shown, Images: images, Attachments: paths},
-			{ID: 13, Role: "tool", Content: "failed turn's tool output"},
+			// The failed turn produced nothing, so retry replays the request.
 			{ID: 14, Role: "error", Content: "Connection dropped"},
 		}}})
 	})
 	a := f.window()
 	f.waitWindow("the failed conversation", func() bool { return a.threadWithID(1).ID == 1 })
 	f.win.do(func() { a.selectThread(a.threadWithID(1)) })
-	f.waitWindow("the failed turn", func() bool { return len(a.threadWithID(1).Messages) == 5 })
+	f.waitWindow("the failed turn", func() bool { return len(a.threadWithID(1).Messages) == 4 })
 	f.win.do(func() {
 		a.rememberDraft("keep my draft")
 		a.setAttachments([]string{"/tmp/unsent.txt"})

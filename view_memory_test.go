@@ -103,12 +103,12 @@ func TestMemoryExtractionFailureReasonVisible(t *testing.T) {
 		t.Fatalf("missing extraction diagnostic: %q", tt.Texts())
 	}
 }
-func TestMemoryNoticeAlwaysVisibleAndContainsScopeAndUndo(t *testing.T) {
+func TestMemoryExplicitNoticeContainsScopeAndUndo(t *testing.T) {
 	app, tt := testApp(t)
 	c := app.c
 	attachMemory(t, c)
 	e := completeMemory(t, c, "memorySave", memoryRequest{Scope: "user", Kind: "preference", Content: "偏好中文解释"}).(memory.Entry)
-	notice := &memoryNotice{Scope: "user", ID: e.ID, Version: e.Version}
+	notice := &memoryNotice{Explicit: true, Scope: "user", ID: e.ID, Version: e.Version}
 	c.setThreads([]Thread{{ID: 1, ServerID: "session", HistoryLoaded: true, Messages: []Message{{ID: 10, Role: "user", Content: "记住"}, {ID: 11, Role: "tool", Kind: "commandExecution"}, {ID: 12, Role: "tool", Kind: "commandExecution"}, {ID: 13, Role: "memory", Memory: notice}}}})
 	c.setActive(1)
 	key := fmt.Sprintf("/%s/%s/%d", notice.Scope, notice.ID, notice.Version)
@@ -127,6 +127,27 @@ func TestMemoryNoticeAlwaysVisibleAndContainsScopeAndUndo(t *testing.T) {
 	tt.Frame()
 	if tt.HasText("偏好中文解释") || tt.HasText("撤销记忆") || !tt.HasText("已忘记") {
 		t.Fatal("forgotten notice retained plaintext")
+	}
+}
+
+func TestMemoryLegacyAutomaticCardsStayOutOfConversation(t *testing.T) {
+	app, tt := testApp(t)
+	c := app.c
+	legacy := Message{ID: 12, Role: "memory", Kind: "memory", Memory: &memoryNotice{Scope: "project", ID: "old", Version: 1}}
+	c.setThreads([]Thread{{ID: 1, ServerID: "session", HistoryLoaded: true, Messages: []Message{
+		{ID: 10, Role: "user", Content: "项目背景"}, {ID: 11, Role: "assistant", Content: "正常回答"}, legacy,
+	}}})
+	c.setActive(1)
+	tt.Frame()
+	if !tt.HasText("正常回答") || tt.HasText("Miya 记忆 · 当前项目") || tt.HasText("正在读取记忆…") {
+		t.Fatalf("legacy automatic card still occupies the timeline: %q", tt.Texts())
+	}
+	groups := groupMessages([]Message{legacy})
+	if len(groups) != 0 {
+		t.Fatal("hidden memory created an empty response or activity count")
+	}
+	if len(c.threadWithID(1).Messages) != 3 {
+		t.Fatal("presentation filter mutated history")
 	}
 }
 func TestMobileMemoryReadOnlyPageAndDesktopIsolation(t *testing.T) {

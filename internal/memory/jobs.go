@@ -58,6 +58,7 @@ type Candidate struct {
 	ID         string `json:"id"`
 	Version    uint64 `json:"version"`
 	Kind       string `json:"kind"`
+	Retention  string `json:"retention"`
 	Content    string `json:"content"`
 	TaskKey    string `json:"task_key"`
 	EvidenceID string `json:"evidence_id"`
@@ -362,8 +363,16 @@ func validateCandidate(d document, job ExtractionJob, c Candidate) (Mutation, st
 	if ev.Kind != "user_statement" && ev.Kind != "tool_result" && ev.Kind != "assistant_report" {
 		return Mutation{}, "", errors.New("无效证据类别")
 	}
-	if ev.Kind == "assistant_report" && c.Kind != "progress" {
-		return Mutation{}, "", errors.New("助手报告不能成为已验证事实")
+	if c.Action != "forget" {
+		if ev.Kind == "assistant_report" || c.Kind == "progress" {
+			return Mutation{}, "", errors.New("自动记忆不保存助手报告和任务流水；需要时请显式记住")
+		}
+		if c.Kind == "preference" && c.Retention != "preference" || c.Kind == "fact" && c.Retention != "decision" && c.Retention != "lesson" {
+			return Mutation{}, "", errors.New("自动记忆缺少明确的长期保留类别")
+		}
+		if c.Retention == "decision" && ev.Kind != "user_statement" {
+			return Mutation{}, "", errors.New("项目决定必须有用户明确确认")
+		}
 	}
 	if c.Kind == "preference" && ev.Kind != "user_statement" {
 		return Mutation{}, "", errors.New("偏好必须来自用户声明")
@@ -464,12 +473,17 @@ func (s *Store) CompleteExtraction(scope Scope, key string, candidates []Candida
 		return nil, s.commit(d)
 	}
 	var accepted []Entry
+	added := false
 	if len(candidates) > 3 {
 		finishJob(&j, "failed", "提炼结果超过三项", s.now())
 		d.Jobs[index] = j
 		return nil, s.commit(d)
 	}
 	for _, candidate := range candidates {
+		if candidate.Action == "add" && added {
+			j.Rejected++
+			continue
+		}
 		m, _, err := validateCandidate(d, j, candidate)
 		if err != nil {
 			j.Rejected++
@@ -550,6 +564,9 @@ func (s *Store) CompleteExtraction(scope Scope, key string, candidates []Candida
 		}
 		d.Entries = append(d.Entries, e)
 		accepted = append(accepted, e)
+		if candidate.Action == "add" {
+			added = true
+		}
 	}
 	j.Accepted = len(accepted)
 	finishJob(&j, "completed", "", s.now())

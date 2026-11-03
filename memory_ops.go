@@ -48,10 +48,11 @@ type memoryPromotion struct {
 	After  string `json:"after"`
 }
 type memoryNotice struct {
-	Scope   string `json:"scope"`
-	Project string `json:"project,omitempty"`
-	ID      string `json:"id"`
-	Version uint64 `json:"version"`
+	Explicit bool   `json:"explicit,omitempty"`
+	Scope    string `json:"scope"`
+	Project  string `json:"project,omitempty"`
+	ID       string `json:"id"`
+	Version  uint64 `json:"version"`
 }
 
 func (c *chatController) noteMemory(thread int, e memory.Entry) {
@@ -62,7 +63,7 @@ func (c *chatController) noteMemory(thread int, e memory.Entry) {
 	c.update(thread, func(t *Thread) {
 		// The notice contains only identity; its body is read on demand, so
 		// forgetting leaves no extra plaintext in histories or state broadcasts.
-		t.Messages = append(t.Messages, Message{ID: c.nextID(), Role: "memory", Kind: "memory", SentAtMs: time.Now().UnixMilli(), Memory: &memoryNotice{Scope: e.Scope.Kind, Project: e.Scope.ProjectPath, ID: e.ID, Version: e.Version}})
+		t.Messages = append(t.Messages, Message{ID: c.nextID(), Role: "memory", Kind: "memory", SentAtMs: time.Now().UnixMilli(), Memory: &memoryNotice{Explicit: true, Scope: e.Scope.Kind, Project: e.Scope.ProjectPath, ID: e.ID, Version: e.Version}})
 	})
 }
 func (c *chatController) memoryScope(r memoryRequest) (memory.Scope, error) {
@@ -122,8 +123,7 @@ func (c *chatController) memoryOp(op string, r memoryRequest) (any, error) {
 	}
 	claudeAvailable := c.claudeBinary != ""
 	// Resolve the target conversation before leaving the scheduler.
-	thread := r.Thread
-	if thread != 0 && c.threadWithID(thread).ID == 0 {
+	if r.Thread != 0 && c.threadWithID(r.Thread).ID == 0 {
 		return nil, errors.New("会话不存在")
 	}
 	return c.memoryDeferred(func() (any, error) {
@@ -226,12 +226,12 @@ func (c *chatController) memoryOp(op string, r memoryRequest) (any, error) {
 		}
 		if err != nil {
 			if e.ID != "" {
-				c.dispatch(func() { c.noteMemory(thread, e) })
+				c.dispatch(c.memoryChanged)
 			}
 			return nil, err
 		}
 		if e.ID != "" {
-			c.dispatch(func() { c.noteMemory(thread, e) })
+			c.dispatch(c.memoryChanged)
 		}
 		return e, nil
 	}), nil

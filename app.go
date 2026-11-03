@@ -57,11 +57,12 @@ type chatApp struct {
 	copied map[int]bool
 	open   map[int]bool // expanded activity runs and tool details, by ID
 
-	answers       map[string]map[string]string // question answers, by approval ID
-	forms         map[string]string            // MCP form JSON, by approval ID
-	formErrors    map[string]string
-	settingsTab   int
-	settingDrafts map[string]string
+	answers        map[string]map[string]string // question answers, by approval ID
+	forms          map[string]string            // MCP form JSON, by approval ID
+	formErrors     map[string]string
+	settingsTab    int
+	settingDrafts  map[string]string
+	serviceRestart serviceRestartUI
 
 	// appearance is "", "light" or "dark"; dark and themed the palette applied.
 	appearance   string

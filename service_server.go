@@ -392,6 +392,9 @@ func (s *service) handle(p *svcPeer, req svcRequest) (any, error) {
 		if c.memoryEngine != nil {
 			c.memoryEngine.pause()
 		}
+		if !s.busy() {
+			s.stop()
+		}
 	default:
 		return nil, fmt.Errorf("unknown operation %q", req.Op)
 	}

@@ -40,7 +40,7 @@ func TestMemoryEngineSerializesAndPausesForUpgrade(t *testing.T) {
 			return nil, ctx.Err()
 		case <-release:
 		}
-		return []memory.Candidate{{Action: "add", Kind: "fact", Content: "手机构建使用 build-ios.sh", EvidenceID: "user", Quote: j.Evidence[0].Text}}, nil
+		return []memory.Candidate{{Action: "add", Kind: "fact", Retention: "decision", Content: "手机构建使用 build-ios.sh", EvidenceID: "user", Quote: j.Evidence[0].Text}}, nil
 	}
 	e.onSaved = func(memory.Scope, memory.ExtractionJob, []memory.Entry) { saved <- struct{}{} }
 	go e.loop()
@@ -68,5 +68,32 @@ func TestMemoryEngineSerializesAndPausesForUpgrade(t *testing.T) {
 	status, err := store.ExtractionStatus(scope)
 	if err != nil || calls.Load() != 1 || status.Completed != 1 || status.Pending != 1 || e.busy.Load() {
 		t.Fatalf("upgrade pause discarded or started jobs: calls=%d status=%+v busy=%v err=%v", calls.Load(), status, e.busy.Load(), err)
+	}
+}
+
+func TestMemoryAutomaticSaveOnlyInvalidatesLibrary(t *testing.T) {
+	c, d := queueController(t)
+	attachMemory(t, c)
+	c.setThreads([]Thread{{ID: 1, ServerID: "session", Messages: []Message{{ID: 10, Role: "user", Content: "项目背景"}, {ID: 11, Role: "assistant", Content: "已处理"}}}})
+	scope, _ := memory.ProjectScope(c.cwd)
+	now := time.Now()
+	e, err := c.memory.Save(scope, memory.Mutation{Kind: "fact", Content: "稳定项目约束", Sources: []memory.Source{{EvidenceKind: "manual", ObservedAt: now}}, ObservedAt: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	engine := newMemoryEngine(c)
+	defer engine.cancel()
+	before := c.memoryRevision
+	engine.onSaved(scope, memory.ExtractionJob{Session: c.threadRef(c.threadWithID(1)).URL()}, []memory.Entry{e})
+	d.drain()
+	if c.memoryRevision <= before {
+		t.Fatal("automatic save did not refresh the library")
+	}
+	if len(c.threadWithID(1).Messages) != 2 {
+		t.Fatal("background extraction inserted a conversation item")
+	}
+	entries, _, _, err := c.memory.List(scope)
+	if err != nil || len(entries) != 1 {
+		t.Fatal("background memory is not available in management", err)
 	}
 }

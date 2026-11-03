@@ -23,9 +23,28 @@ func retryableError(t Thread, m Message) bool {
 	return false
 }
 
-// retryResponse restarts at the last user message, just like editing it without
-// changing its text. Revalidate at the service to reject stale clicks from
-// another window or phone, and leave the composer's unsent draft alone.
+// retryContinuePrompt resumes a turn that failed after it had already produced
+// output, so the agent picks up where it stopped instead of starting over.
+const retryContinuePrompt = "上一轮回复因错误中断。请基于以上已完成的内容和工具结果从中断处继续，不要重复已经完成的步骤。"
+
+// failedAfterOutput reports whether anything besides errors followed the user
+// message at index user, i.e. the failed turn had already streamed output.
+func failedAfterOutput(t Thread, user int) bool {
+	for _, m := range t.Messages[user+1:] {
+		if m.Role != "error" && m.Role != "user" {
+			return true
+		}
+	}
+	return false
+}
+
+// retryResponse retries the latest failed response. A turn that failed before
+// producing anything restarts at the last user message, just like editing it
+// without changing its text. A turn that failed after it had already streamed
+// replies or run tools keeps that output and asks the agent to continue, since
+// rewinding would throw away work the user has already seen. Revalidate at the
+// service to reject stale clicks from another window or phone, and leave the
+// composer's unsent draft alone.
 func (c *chatController) retryResponse(req retryRequest) error {
 	if c.remote != nil {
 		return c.remote.call("retry", req, nil)
@@ -41,6 +60,15 @@ func (c *chatController) retryResponse(req retryRequest) error {
 		m := t.Messages[i]
 		if m.Role != "user" {
 			continue
+		}
+		if failedAfterOutput(t, i) {
+			if !backendOf(t).Ready(c) {
+				return fmt.Errorf("暂时无法重试，请检查连接或 Agent 设置")
+			}
+			if c.submit(sendRequest{ThreadID: t.ID, Text: retryContinuePrompt, KeepSessionSettings: true, MemoryControl: true}) == 0 {
+				return fmt.Errorf("暂时无法重试，请检查连接或 Agent 设置")
+			}
+			return nil
 		}
 		if !c.canRewind(t, m) || !backendOf(t).Ready(c) {
 			return fmt.Errorf("暂时无法重试，请检查连接或 Agent 设置")

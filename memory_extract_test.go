@@ -245,3 +245,53 @@ func TestMemoryLiveClaudeExtraction(t *testing.T) {
 		})
 	}
 }
+
+// Opt-in quality check sends only synthetic statements to the configured
+// extractor. It never reads production memories or saves into the real library.
+func TestMemoryLiveConservativeSelection(t *testing.T) {
+	if os.Getenv("MIYA_MEMORY_QUALITY_LIVE") != "1" {
+		t.Skip("set MIYA_MEMORY_QUALITY_LIVE=1 for synthetic selection verification")
+	}
+	for _, tc := range []struct {
+		name, user, answer string
+		want               int
+	}{
+		{"ui-details", "去掉输入框里的用量圆环，把 Settings 旁的快捷键文字换成 ⌘，再加上 Cmd+Shift+T 打开终端。", "已移除圆环，新增快捷键，尚未安装到应用。", 0},
+		{"runtime-status", "现在记忆正常了吗？", "当前后台还是旧版，4 个任务等待，0 个完成。待空闲升级后继续确认。", 0},
+		{"framework-state", "当前项目用的是什么界面框架？", "当前使用 MyGo。", 0},
+		{"durable-preference", "我经常用手机查看结果。以后说明请先给结论，控制在三段内；只有我要求时再展开实现细节。这是我的长期阅读习惯。", "以后按这个习惯组织说明。", 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store := memory.New(t.TempDir())
+			scope, _ := memory.ProjectScope(t.TempDir())
+			if err := store.Configure(scope, memory.Settings{AutoExtract: true, ExtractorAgent: agentCodex}); err != nil {
+				t.Fatal(err)
+			}
+			session := testRef(agentCodex, "synthetic-selection").URL()
+			now := time.Now()
+			job := memory.ExtractionJob{Session: session, TurnID: tc.name, TaskKey: "session:" + session, Evidence: []memory.Evidence{
+				{ID: "user", Kind: "user_statement", Text: tc.user, Source: memory.Source{Thread: session, MessageID: "user", ObservedAt: now}},
+				{ID: "answer", Kind: "assistant_report", Text: tc.answer, Source: memory.Source{Thread: session, MessageID: "answer", ObservedAt: now}},
+			}}
+			if _, err := store.EnqueueExtraction(scope, job); err != nil {
+				t.Fatal(err)
+			}
+			_, job, ok, err := store.ClaimExtraction()
+			if err != nil || !ok {
+				t.Fatal("cannot claim synthetic job", err)
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+			defer cancel()
+			start := time.Now()
+			candidates, err := extractMemoryWithCodex(ctx, job)
+			if err != nil {
+				t.Fatal(err)
+			}
+			entries, err := store.CompleteExtraction(scope, job.Key, candidates, time.Since(start), nil, false)
+			t.Logf("candidates=%d saved=%d duration=%s", len(candidates), len(entries), time.Since(start))
+			if err != nil || len(entries) != tc.want || len(candidates) != tc.want {
+				t.Fatalf("want=%d candidates=%d saved=%d error=%v", tc.want, len(candidates), len(entries), err)
+			}
+		})
+	}
+}

@@ -174,7 +174,7 @@ func TestSidebarActivityOpensOtherProject(t *testing.T) {
 	}
 }
 
-func TestDesktopCompletionStaysUnreadUntilSelected(t *testing.T) {
+func TestDesktopCompletionStaysUnreadWithoutDisplayingMessages(t *testing.T) {
 	app, _ := testApp(t)
 	c := app.c
 	c.loadDesktopUnread()
@@ -182,8 +182,7 @@ func TestDesktopCompletionStaysUnreadUntilSelected(t *testing.T) {
 	c.setThreads([]Thread{{ID: 1, ServerID: "session", Title: "完成后保留待读", Busy: true, HistoryLoaded: true}})
 	app.selectThread(c.threadWithID(1))
 	c.update(1, func(t *Thread) { t.Busy, t.CompletedAtMs = false, 100 })
-	// A focused window can repaint many times while this thread remains open.
-	// None of those frames is a user acknowledgement of the new result.
+	// Sidebar-only frames do not prove that the result has been displayed.
 	for i := 0; i < 3; i++ {
 		app.markRequestedThreadRead()
 	}
@@ -202,6 +201,98 @@ func TestDesktopCompletionStaysUnreadUntilSelected(t *testing.T) {
 	tt.Frame()
 	if c.desktopThreadUnread(c.current()) || tt.HasText("已完成") {
 		t.Fatal("explicitly viewing the completed result should clear unread")
+	}
+}
+
+func TestDesktopOpenCompletionBecomesReadAfterDisplayingLatest(t *testing.T) {
+	app, tt := testApp(t)
+	c := app.c
+	c.loadDesktopUnread()
+	c.installNotifications()
+	c.setThreads([]Thread{{ID: 1, ServerID: "session", Title: "当前对话", Busy: true, HistoryLoaded: true,
+		Messages: []Message{{ID: 10, Role: "user", Content: "请求"}, {ID: 11, Role: "assistant", Content: "回复"}}}})
+	app.selectThread(c.threadWithID(1))
+	tt.Frame()
+	c.update(1, func(t *Thread) { t.Busy, t.CompletedAtMs = false, 100 })
+	// The previous frame still showed a running turn.
+	app.markDisplayedThreadRead()
+	if !c.desktopThreadUnread(c.current()) {
+		t.Fatal("completion was acknowledged before its finished frame")
+	}
+	tt.Frame()
+	if !app.listFor(1).AtEnd() {
+		t.Fatal("the completed result is not on screen")
+	}
+	// An unfocused/headless window cannot acknowledge it merely by repainting.
+	app.markVisibleThreadRead()
+	if !c.desktopThreadUnread(c.current()) {
+		t.Fatal("a background window acknowledged the completion")
+	}
+	// Exercise the displayed-content check after the window focus guard.
+	app.markDisplayedThreadRead()
+	tt.Frame()
+	if c.desktopThreadUnread(c.current()) || tt.HasText("已完成") {
+		t.Fatal("the result already displayed at the end stayed unread")
+	}
+	if _, ok := tt.Find("待读：当前对话"); ok {
+		t.Fatal("the viewed conversation still has a green unread dot")
+	}
+}
+
+func TestDesktopDisplayedReadWaitsForLatestAndVisibleConversation(t *testing.T) {
+	app, tt := testApp(t)
+	c := app.c
+	c.loadDesktopUnread()
+	c.setThreads([]Thread{{ID: 1, ServerID: "session", HistoryLoaded: true, CompletedAtMs: 100, Messages: scrollTestMessages()}})
+	c.setActive(1)
+	key := desktopUnreadKey(c.current())
+	c.desktopUnread[key] = 100
+	tt.Frame()
+	list := app.listFor(1)
+	list.ScrollTo(10, ui.Center)
+	tt.Frame()
+	app.markDisplayedThreadRead()
+	if list.AtEnd() || !c.desktopThreadUnread(c.current()) {
+		t.Fatal("reading older messages acknowledged an unseen latest result")
+	}
+	list.ScrollToEnd()
+	tt.Frame()
+	for _, hidden := range []string{"settings", "switcher", "shortcuts", "project-dialog", "mobile"} {
+		app.section = ""
+		app.switcher.open, app.shortcutsOpen, app.projectDialog, app.mobile = false, false, false, false
+		switch hidden {
+		case "settings":
+			app.section = "Settings"
+		case "switcher":
+			app.switcher.open = true
+		case "shortcuts":
+			app.shortcutsOpen = true
+		case "project-dialog":
+			app.projectDialog = true
+		case "mobile":
+			app.mobile = true
+		}
+		app.markDisplayedThreadRead()
+		if !c.desktopThreadUnread(c.current()) {
+			t.Fatalf("hidden conversation acknowledged by %s", hidden)
+		}
+	}
+	app.mobile = false
+	// Metadata can publish before the new message contents arrive.
+	c.desktopUnread[key] = 200
+	app.markDisplayedThreadRead()
+	if !c.desktopThreadUnread(c.current()) {
+		t.Fatal("an older displayed result acknowledged a newer completion")
+	}
+	c.update(1, func(t *Thread) { t.CompletedAtMs = 200 })
+	app.markDisplayedThreadRead()
+	if !c.desktopThreadUnread(c.current()) {
+		t.Fatal("new completion metadata was acknowledged before rendering")
+	}
+	tt.Frame()
+	app.markDisplayedThreadRead()
+	if c.desktopThreadUnread(c.current()) {
+		t.Fatal("reading the latest completed result did not clear unread")
 	}
 }
 

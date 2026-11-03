@@ -73,6 +73,11 @@ func threadMessageGroups(t Thread, groups []messageGroup) []messageGroup {
 func groupMessages(messages []Message) []messageGroup {
 	var groups []messageGroup
 	for _, m := range messages {
+		// Old services appended automatic memory cards without an explicit flag.
+		// Keep those historical records out of both desktop and phone timelines.
+		if m.Role == "memory" && (m.Memory == nil || !m.Memory.Explicit) {
+			continue
+		}
 		// Reasoning stays in the thread model, but is not a visible timeline item.
 		// Filter before grouping so it creates neither empty responses nor counts.
 		if strings.EqualFold(m.Kind, "reasoning") {

@@ -34,6 +34,7 @@ func (app *chatApp) settingsView(c *ui.Context) {
 					permissionOptions(c.Key("default-permissions"), cc.selectedPermissionPolicy(), cc.setPermissionPolicy)
 				})
 				app.agentSettings(c)
+				app.serviceSettings(c)
 			})
 		} else if app.settingsTab == 1 {
 			app.account.view(c)

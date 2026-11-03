@@ -35,7 +35,7 @@ func claim(t *testing.T, s *Store, scope Scope, j ExtractionJob) ExtractionJob {
 }
 
 func candidateFor(j ExtractionJob) Candidate {
-	return Candidate{Action: "add", Kind: "fact", Content: "手机构建使用 scripts/build-ios.sh", EvidenceID: j.Evidence[0].ID, Quote: j.Evidence[0].Text}
+	return Candidate{Action: "add", Kind: "fact", Retention: "decision", Content: "手机构建使用 scripts/build-ios.sh", EvidenceID: j.Evidence[0].ID, Quote: j.Evidence[0].Text}
 }
 
 func TestExtractionPersistsDeduplicatesAndRecallsAcrossAgents(t *testing.T) {
@@ -105,6 +105,54 @@ func TestExtractionRejectsStaleResultsAndForgedEvidence(t *testing.T) {
 				t.Fatalf("invalid candidate accepted: %+v %v", entries, err)
 			}
 		})
+	}
+}
+
+func TestExtractionKeepsOnlyGroundedDurableCategories(t *testing.T) {
+	for _, tc := range []struct {
+		name, evidence, kind, retention string
+		want                            int
+	}{
+		{"assistant-progress", "assistant_report", "progress", "", 0},
+		{"assistant-fact", "assistant_report", "fact", "lesson", 0},
+		{"user-progress", "user_statement", "progress", "decision", 0},
+		{"missing-retention", "user_statement", "fact", "", 0},
+		{"tool-decision", "tool_result", "fact", "decision", 0},
+		{"tool-lesson", "tool_result", "fact", "lesson", 1},
+		{"user-decision", "user_statement", "fact", "decision", 1},
+		{"user-preference", "user_statement", "preference", "preference", 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, scope, j := extractionFixture(t)
+			j.Evidence[0].Kind = tc.evidence
+			j = claim(t, s, scope, j)
+			candidate := candidateFor(j)
+			candidate.Kind, candidate.Retention = tc.kind, tc.retention
+			if tc.kind == "progress" {
+				candidate.TaskKey = j.TaskKey
+			}
+			entries, err := s.CompleteExtraction(scope, j.Key, []Candidate{candidate}, time.Second, nil, false)
+			if err != nil || len(entries) != tc.want {
+				t.Fatalf("accepted=%d want=%d error=%v", len(entries), tc.want, err)
+			}
+		})
+	}
+}
+
+func TestExtractionAddsAtMostOneMemoryPerRound(t *testing.T) {
+	s, scope, j := extractionFixture(t)
+	j.Evidence[0].Text = "本项目手机构建使用 scripts/build-ios.sh。命令必须在项目根目录执行。"
+	j = claim(t, s, scope, j)
+	first := candidateFor(j)
+	second := first
+	second.Content, second.Quote = "构建命令在项目根目录执行", "命令必须在项目根目录执行。"
+	entries, err := s.CompleteExtraction(scope, j.Key, []Candidate{first, second}, time.Second, nil, false)
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("round produced fragmented memories: %d %v", len(entries), err)
+	}
+	status, _ := s.ExtractionStatus(scope)
+	if status.Accepted != 1 || status.Rejected != 1 {
+		t.Fatalf("unexpected quality-gate status: %+v", status)
 	}
 }
 

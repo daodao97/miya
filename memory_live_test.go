@@ -169,7 +169,7 @@ func TestMemoryLiveClaudeLatencyAndCorrections(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", mode, err)
 		}
-		if (mode == "one-off" || mode == "tool-instruction") && len(candidates) != 0 {
+		if (mode == "one-off" || mode == "tool-instruction" || mode == "assistant-report") && len(candidates) != 0 {
 			t.Fatalf("%s produced unwanted memories", mode)
 		}
 		if mode == "correction" || mode == "forget" {
@@ -185,13 +185,6 @@ func TestMemoryLiveClaudeLatencyAndCorrections(t *testing.T) {
 			}
 			if !found {
 				t.Fatalf("%s did not target the provided memory", mode)
-			}
-		}
-		if mode == "assistant-report" {
-			for _, v := range candidates {
-				if v.Kind == "fact" {
-					t.Fatal("assistant report became verified fact")
-				}
 			}
 		}
 		durations = append(durations, elapsed.Milliseconds())

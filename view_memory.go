@@ -225,7 +225,7 @@ func (app *chatApp) memorySettings(c *ui.Context) {
 			})
 		},
 		func() {
-			toggle("auto-extract", "回合完成后自动提炼记忆", "成功回合结束后，使用选定的 Agent 提炼并保存值得保留的信息，每轮最多三项，可撤销。会使用所选 Agent 的额度。", m.list.Settings.AutoExtract, busy || !enabled || !m.list.ExtractorAvailable && !m.list.Settings.AutoExtract, func(v bool) {
+			toggle("auto-extract", "回合完成后自动提炼记忆", "后台保存稳定偏好、明确决策和可复用经验，每轮最多新增一条；不保存施工进度，不在会话插入提示。可在此编辑或忘记，会使用所选 Agent 的额度。", m.list.Settings.AutoExtract, busy || !enabled || !m.list.ExtractorAvailable && !m.list.Settings.AutoExtract, func(v bool) {
 				settings := m.list.Settings
 				settings.AutoExtract = v
 				app.memoryAction("memoryConfigure", memoryRequest{Project: app.c.cwd, Settings: &settings}, nil)
@@ -507,7 +507,7 @@ func (app *chatApp) memoryPromotionView(c *ui.Context, e memory.Entry) {
 	})
 }
 func (app *chatApp) memoryNoticeView(c *ui.Context, n *memoryNotice) {
-	if n == nil {
+	if n == nil || !n.Explicit {
 		return
 	}
 	if app.mobile {
