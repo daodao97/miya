@@ -129,6 +129,7 @@ func (c *chatController) forward(op string, args any) { c.remote.notify(op, args
 // attachService starts mirroring a connected service.
 func (c *chatController) attachService(cl *serviceClient, st svcState) {
 	c.remote = cl
+	c.desktopReadPending = nil
 	c.mirror.messages = map[int][]Message{}
 	c.applyState(st)
 	// While a conversation streams the service pushes every few tens of
@@ -212,6 +213,12 @@ func (c *chatController) applyState(s svcState) {
 	c.fastMode = s.FastMode
 	c.cwd = s.Cwd
 	c.projectCache = s.ProjectThreads
+	c.desktopUnread = s.DesktopUnread
+	for key, version := range c.desktopReadPending {
+		if s.DesktopUnread[key] != version {
+			delete(c.desktopReadPending, key)
+		}
+	}
 	c.mirror.projectBusy = s.ProjectBusy
 	threads := append([]Thread(nil), s.Threads...)
 	for i := range threads {

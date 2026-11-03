@@ -16,6 +16,16 @@ import (
 
 const MaxExtractionInput = 16000
 
+// ExtractionEvidenceBudget is what a turn adapter may spend when choosing
+// evidence. The remainder covers queue identity, related stamps, claim
+// metadata and retry status, so adapter choices survive the later checks.
+const ExtractionEvidenceBudget = MaxExtractionInput - 2048
+
+func (j ExtractionJob) FitsEvidenceBudget() bool {
+	b, err := json.Marshal(j)
+	return err == nil && utf8.RuneCount(b) <= ExtractionEvidenceBudget
+}
+
 type Evidence struct {
 	ID     string `json:"id"`
 	Kind   string `json:"kind"`
@@ -129,6 +139,7 @@ func (s *Store) EnqueueExtraction(scope Scope, job ExtractionJob) (bool, error) 
 			return false, nil
 		}
 	}
+	job.State, job.CreatedAt = "pending", s.now()
 	count := 0
 	for _, sc := range s.scopesOnDisk() {
 		doc, err := s.load(sc)
@@ -142,18 +153,46 @@ func (s *Store) EnqueueExtraction(scope Scope, job ExtractionJob) (bool, error) 
 		}
 	}
 	if count >= 100 {
-		return false, errors.New("记忆提炼队列已满，已跳过此回合")
+		return s.skipExtraction(d, job, "记忆提炼队列已满，已跳过此回合")
 	}
-	job.State, job.CreatedAt = "pending", s.now()
 	job.Candidates = jobRelated(s, scope, job)
 	for _, e := range job.Candidates {
 		job.Related = append(job.Related, stampOf(e))
 	}
 	job.Candidates = nil
-	b, _ := json.Marshal(job)
-	if utf8.RuneCount(b) > MaxExtractionInput-512 {
-		return false, errors.New("提炼输入超过上限，已跳过此回合")
+	// The adapter budgets the evidence before the queue adds its identity and
+	// timestamps. Keep user evidence and the final answer; optional tool results
+	// must not make an otherwise valid completed round disappear at this boundary.
+	for {
+		b, _ := json.Marshal(job)
+		if utf8.RuneCount(b) <= MaxExtractionInput-512 {
+			break
+		}
+		tool := -1
+		for i := len(job.Evidence) - 1; i >= 0; i-- {
+			if job.Evidence[i].Kind == "tool_result" {
+				tool = i
+				break
+			}
+		}
+		if tool < 0 {
+			return s.skipExtraction(d, job, "提炼输入超过上限，已跳过此回合")
+		}
+		job.Evidence = append(append([]Evidence(nil), job.Evidence[:tool]...), job.Evidence[tool+1:]...)
 	}
+	return true, s.appendExtraction(d, job)
+}
+
+// Skipped rounds retain only bounded diagnostic metadata, never their input.
+func (s *Store) skipExtraction(d document, job ExtractionJob, reason string) (bool, error) {
+	finishJob(&job, "failed", reason, s.now())
+	if err := s.appendExtraction(d, job); err != nil {
+		return false, err
+	}
+	return false, errors.New(reason)
+}
+
+func (s *Store) appendExtraction(d document, job ExtractionJob) error {
 	d.Jobs = append(d.Jobs, job)
 	// Keep at most 100 terminal records per scope, without retaining evidence.
 	terminal := 0
@@ -172,7 +211,7 @@ func (s *Store) EnqueueExtraction(scope Scope, job ExtractionJob) (bool, error) 
 		kept[i], kept[j] = kept[j], kept[i]
 	}
 	d.Jobs = kept
-	return true, s.commit(d)
+	return s.commit(d)
 }
 
 func finishJob(j *ExtractionJob, state, message string, now time.Time) {
@@ -231,17 +270,27 @@ func (s *Store) ClaimExtraction() (Scope, ExtractionJob, bool, error) {
 			}
 			j.ExtractorAgent = d.Settings.ExtractionAgent()
 			j.Candidates = jobRelated(s, scope, *j)
+			j.Fingerprint = knowledgeFingerprint(d)
+			j.State = "running"
+			j.Attempts++
 			// Candidate context is optional; never trim user evidence to fit it.
+			fits := false
 			for {
 				b, _ := json.Marshal(j)
-				if utf8.RuneCount(b) <= MaxExtractionInput || len(j.Candidates) == 0 {
+				if fits = utf8.RuneCount(b) <= MaxExtractionInput; fits || len(j.Candidates) == 0 {
 					break
 				}
 				j.Candidates = j.Candidates[:len(j.Candidates)-1]
 			}
-			j.Fingerprint = knowledgeFingerprint(d)
-			j.State = "running"
-			j.Attempts++
+			// Retrying cannot shrink the input; report the real reason instead of
+			// spending attempts on a call that is rejected before it starts.
+			if !fits {
+				finishJob(j, "failed", "提炼输入超过上限，已跳过此回合", s.now())
+				if err = s.commit(d); err != nil {
+					return Scope{}, ExtractionJob{}, false, err
+				}
+				continue
+			}
 			if err = s.commit(d); err != nil {
 				return Scope{}, ExtractionJob{}, false, err
 			}
@@ -261,7 +310,7 @@ func sameSource(a, b Source) bool {
 	return a.MessageID != "" && a.MessageID == b.MessageID || a.TurnID != "" && a.TurnID == b.TurnID
 }
 
-func scrubForgottenJobs(d *document, id string, sources []Source) {
+func scrubForgottenJobs(d *document, id string, sources []Source, now time.Time) {
 	for i := range d.Jobs {
 		j := &d.Jobs[i]
 		hit := false
@@ -283,7 +332,7 @@ func scrubForgottenJobs(d *document, id string, sources []Source) {
 			}
 		}
 		if hit {
-			finishJob(j, "canceled", "引用的记忆已忘记", time.Now())
+			finishJob(j, "canceled", "引用的记忆已忘记", now)
 		}
 	}
 }
@@ -447,7 +496,7 @@ func (s *Store) CompleteExtraction(scope Scope, key string, candidates []Candida
 			e := Entry{ID: old.ID, Version: old.Version + 1, Scope: scope, State: "forgotten", CreatedAt: old.CreatedAt, UpdatedAt: s.now()}
 			d.Entries = append(kept, e)
 			d.Tombstones = append(d.Tombstones, mark)
-			scrubForgottenJobs(&d, old.ID, mark.Sources)
+			scrubForgottenJobs(&d, old.ID, mark.Sources, s.now())
 			accepted = append(accepted, e)
 			continue
 		}
@@ -512,12 +561,13 @@ func (s *Store) CompleteExtraction(scope Scope, key string, candidates []Candida
 }
 
 type ExtractionStatus struct {
-	Pending        int   `json:"pending"`
-	Completed      int   `json:"completed"`
-	Failed         int   `json:"failed"`
-	Rejected       int   `json:"rejected"`
-	Accepted       int   `json:"accepted"`
-	LastDurationMs int64 `json:"lastDurationMs"`
+	Pending        int    `json:"pending"`
+	Completed      int    `json:"completed"`
+	Failed         int    `json:"failed"`
+	Rejected       int    `json:"rejected"`
+	Accepted       int    `json:"accepted"`
+	LastDurationMs int64  `json:"lastDurationMs"`
+	LastError      string `json:"lastError,omitempty"`
 }
 
 func (s *Store) ExtractionStatus(scope Scope) (ExtractionStatus, error) {
@@ -528,20 +578,37 @@ func (s *Store) ExtractionStatus(scope Scope) (ExtractionStatus, error) {
 		return ExtractionStatus{}, err
 	}
 	var out ExtractionStatus
-	for _, j := range d.Jobs {
+	// Only a current problem is reported: a job waiting to retry, or a most
+	// recent terminal job that failed. Later successes clear older failures, and
+	// user cancellation or stale results are normal outcomes, not problems.
+	var retryError string
+	var last *ExtractionJob
+	for i := range d.Jobs {
+		j := &d.Jobs[i]
 		switch j.State {
 		case "pending", "running":
 			out.Pending++
+			if j.Error != "" {
+				retryError = j.Error
+			}
 		case "completed":
 			out.Completed++
 		default:
 			out.Failed++
+		}
+		if j.State != "pending" && j.State != "running" && (last == nil || !j.CompletedAt.Before(last.CompletedAt)) {
+			last = j
 		}
 		out.Accepted += j.Accepted
 		out.Rejected += j.Rejected
 		if j.DurationMs > 0 {
 			out.LastDurationMs = j.DurationMs
 		}
+	}
+	if retryError != "" {
+		out.LastError = retryError
+	} else if last != nil && last.State == "failed" {
+		out.LastError = last.Error
 	}
 	return out, nil
 }

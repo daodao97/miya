@@ -9,6 +9,7 @@ type Message struct {
 	HandoffTitle   string        `json:"handoffTitle,omitempty"`
 	Parts          []MessagePart `json:"parts,omitempty"`
 	Images         []string
+	Attachments    []string `json:"attachments,omitempty"`
 	Kind           string
 	Status         string
 	Item           *codex.Item
@@ -38,6 +39,9 @@ type Thread struct {
 	Automation                  string `json:",omitempty"`
 	ClaudeMessageID             string
 	Usage                       *codex.TokenUsage
+	TurnOutputTokens            *int `json:",omitempty"`
+	turnOutputBaseline          *int
+	claudeOutputTokens          map[string]int
 	PermissionPolicy            string
 	HistoryLoaded               bool
 	Loading                     bool

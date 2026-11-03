@@ -72,6 +72,46 @@ func attachmentDisplay(text string, paths []string) (string, []string) {
 	return text, images
 }
 
+// Keep the actual attachment paths for a resend; older transcripts may only
+// retain image URLs, which need to become local paths again.
+func messageAttachments(m Message) []string {
+	paths := append([]string(nil), m.Attachments...)
+	for _, src := range m.Images {
+		if strings.HasPrefix(src, "data:") {
+			src = imageSource(src)
+		}
+		if strings.HasPrefix(src, "file://") {
+			u, err := url.Parse(src)
+			if err != nil {
+				continue
+			}
+			src = u.Path
+		}
+		if !filepath.IsAbs(src) {
+			continue
+		}
+		found := false
+		for _, path := range paths {
+			found = found || path == src
+		}
+		if !found {
+			paths = append(paths, src)
+		}
+	}
+	return paths
+}
+
+// Remove only attachment display suffixes we can resend as real attachments.
+// Keep the original reference tokens and their send-time context snapshots.
+func messagePrompt(m Message) string {
+	text := strings.TrimSpace(attachmentImagePlaceholder.ReplaceAllString(claudeCommandText(m.Content), ""))
+	paths := messageAttachments(m)
+	for i := len(paths) - 1; i >= 0; i-- {
+		text = strings.TrimSuffix(text, "\n📎 "+filepath.Base(paths[i]))
+	}
+	return strings.TrimSpace(text)
+}
+
 func imageSource(src string) string {
 	if !strings.HasPrefix(src, "data:image/") {
 		return nativeText(src)

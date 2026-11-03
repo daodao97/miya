@@ -52,6 +52,9 @@ func (c *chatController) handle(f codex.Frame) {
 	if target.ID == 0 {
 		return
 	}
+	if e.Item.Type == "commandExecution" || e.Item.Type == "dynamicToolCall" || e.Item.Type == "mcpToolCall" || f.Method == "turn/started" || f.Method == "item/commandExecution/outputDelta" || f.Method == "item/commandExecution/terminalInteraction" || f.Method == "turn/completed" {
+		c.noteRuntime(target)
+	}
 	completedMemory := false
 	c.update(target.ID, func(t *Thread) {
 		// Only fresh model output proves an upstream reconnection succeeded.
@@ -82,6 +85,9 @@ func (c *chatController) handle(f codex.Frame) {
 				t.Title = strings.TrimSpace(e.Name)
 			}
 		case "turn/started":
+			if t.TurnID != e.Turn.ID {
+				resetTurnOutput(t)
+			}
 			now := time.Now().UnixMilli()
 			t.LastActivityAt = now
 			t.TurnID = e.Turn.ID
@@ -180,6 +186,9 @@ func (c *chatController) handle(f codex.Frame) {
 			c.upsert(t, Message{Role: "tool", Kind: "diff", Content: bounded(e.Diff), DiffStats: &stats, ItemID: "turn-diff", TurnID: e.TurnID})
 		case "thread/tokenUsage/updated":
 			if e.TokenUsage != nil {
+				if e.TurnID == "" || e.TurnID == t.TurnID {
+					recordCodexOutput(t, e.TokenUsage)
+				}
 				t.Usage = e.TokenUsage
 				t.Tokens = e.TokenUsage.Last.TotalTokens
 			}

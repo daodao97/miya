@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -17,10 +18,13 @@ import (
 )
 
 type phoneFileProxy struct {
-	server    *http.Server
-	transport *http.Transport
-	conn      atomic.Pointer[remote.Conn]
-	URL       string
+	server      *http.Server
+	transport   *http.Transport
+	conn        atomic.Pointer[remote.Conn]
+	connections sync.Map // Includes hijacked WebSocket connections until Close.
+	URL         string
+	webHost     string
+	webToken    string
 }
 
 // The browser sees ordinary same-origin HTTP, including absolute /assets URLs.
@@ -39,6 +43,10 @@ func newPhoneFileProxy(conn *remote.Conn, project string) (*phoneFileProxy, erro
 }
 
 func (p *phoneFileProxy) start(project string, dial func(context.Context) (net.Conn, error)) error {
+	return p.startProxy("/"+projectFileID(project), "", dial)
+}
+
+func (p *phoneFileProxy) startProxy(prefix, webOrigin string, dial func(context.Context) (net.Conn, error)) error {
 	var secret [32]byte
 	if _, err := rand.Read(secret[:]); err != nil {
 		return err
@@ -50,7 +58,11 @@ func (p *phoneFileProxy) start(project string, dial func(context.Context) (net.C
 		return err
 	}
 	origin := "http://" + ln.Addr().String()
-	p.URL = origin + "/.miya-open/" + token
+	bootstrapPath := "/.miya-open/" + token
+	if webOrigin != "" {
+		bootstrapPath = "/.miya-web-open/" + token
+	}
+	p.URL = origin + bootstrapPath
 	p.transport = &http.Transport{MaxIdleConns: 8, MaxIdleConnsPerHost: 6, IdleConnTimeout: 30 * time.Second, ResponseHeaderTimeout: 20 * time.Second,
 		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
 			ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
@@ -58,36 +70,63 @@ func (p *phoneFileProxy) start(project string, dial func(context.Context) (net.C
 			return dial(ctx)
 		},
 	}
-	projectID := projectFileID(project)
 	proxy := &httputil.ReverseProxy{Transport: p.transport, ModifyResponse: func(response *http.Response) error {
 		location := response.Header.Get("Location")
-		if strings.HasPrefix(location, "/"+projectID+"/") {
-			response.Header.Set("Location", strings.TrimPrefix(location, "/"+projectID))
+		if strings.HasPrefix(location, prefix+"/") {
+			response.Header.Set("Location", strings.TrimPrefix(location, prefix))
+		}
+		if webOrigin != "" && response.Header.Get("Access-Control-Allow-Origin") == webOrigin {
+			response.Header.Set("Access-Control-Allow-Origin", origin)
 		}
 		return nil
 	}, Director: func(r *http.Request) {
 		r.URL.Scheme = "http"
 		r.URL.Host = "desktop"
 		r.Host = "desktop"
-		r.URL.Path = "/" + projectFileID(project) + r.URL.Path
-		r.URL.RawPath = ""
-		r.Header.Del("Cookie")
-		r.Header.Del("Authorization")
+		r.URL.RawPath = prefix + r.URL.EscapedPath()
+		r.URL.Path = prefix + r.URL.Path
+		if webOrigin == "" {
+			r.Header.Del("Cookie")
+			r.Header.Del("Authorization")
+		} else {
+			r.Header.Set("X-Miya-Web-Host", p.webHost)
+			r.Header.Set("X-Miya-Runtime", p.webToken)
+			cookies := r.Cookies()
+			r.Header.Del("Cookie")
+			for _, cookie := range cookies {
+				if cookie.Name != cookieName {
+					r.AddCookie(cookie)
+				}
+			}
+			if r.Header.Get("Origin") == origin {
+				r.Header.Set("Origin", webOrigin)
+			}
+			if ref := r.Header.Get("Referer"); strings.HasPrefix(ref, origin+"/") {
+				r.Header.Set("Referer", webOrigin+strings.TrimPrefix(ref, origin))
+			}
+		}
 	}, ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
-		http.Error(w, "无法连接桌面端文件服务。请确认桌面端已更新并在线后重试。", http.StatusBadGateway)
+		http.Error(w, "无法连接桌面端服务。请确认桌面端在线且服务已启动后重试。", http.StatusBadGateway)
 	}}
-	p.server = &http.Server{ReadHeaderTimeout: 10 * time.Second, IdleTimeout: time.Minute, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	p.server = &http.Server{ReadHeaderTimeout: 10 * time.Second, IdleTimeout: time.Minute, ConnState: func(conn net.Conn, state http.ConnState) {
+		if state == http.StateNew {
+			p.connections.Store(conn, true)
+		}
+		if state == http.StateClosed {
+			p.connections.Delete(conn)
+		}
+	}, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		if r.Host != ln.Addr().String() {
 			http.Error(w, "Forbidden", 403)
 			return
 		}
-		if r.Method != "GET" && r.Method != "HEAD" {
+		if webOrigin == "" && r.Method != "GET" && r.Method != "HEAD" {
 			http.Error(w, "Method not allowed", 405)
 			return
 		}
-		if r.URL.Path == "/.miya-open/"+token {
+		if r.URL.Path == bootstrapPath {
 			http.SetCookie(w, &http.Cookie{Name: cookieName, Value: token, Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode})
 			http.Redirect(w, r, "/", http.StatusSeeOther)
 			return
@@ -113,5 +152,6 @@ func (p *phoneFileProxy) setConn(conn *remote.Conn) {
 func (p *phoneFileProxy) Close() {
 	p.conn.Store(nil)
 	p.server.Close()
+	p.connections.Range(func(key, _ any) bool { key.(net.Conn).Close(); p.connections.Delete(key); return true })
 	p.transport.CloseIdleConnections()
 }

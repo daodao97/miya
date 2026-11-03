@@ -26,11 +26,13 @@ func projectFileID(root string) string {
 
 type fileProject struct{ ID, Name, Path string }
 type desktopFileServer struct {
-	projects func(context.Context) ([]fileProject, error)
+	projects    func(context.Context) ([]fileProject, error)
+	webServices func(context.Context, string) ([]phoneWebService, error)
+	runtime     func(context.Context, ThreadRef, string) (conversationRuntime, error)
 }
 
 func (c *chatController) fileServer() http.Handler {
-	return desktopFileServer{projects: func(ctx context.Context) ([]fileProject, error) {
+	files := desktopFileServer{runtime: c.readRuntime, webServices: c.projectRuntimeServices, projects: func(ctx context.Context) ([]fileProject, error) {
 		reply := make(chan []fileProject, 1)
 		c.dispatch(func() {
 			projects := append([]Project(nil), c.projects()...)
@@ -60,6 +62,20 @@ func (c *chatController) fileServer() http.Handler {
 			return nil, c.ctx.Err()
 		}
 	}}
+	web := desktopWebServer(func(ctx context.Context, token, host string, port int) error {
+		manager, ok := onMain(ctx, c.dispatch, func() *runtimeManager { return c.runtimes() })
+		if !ok {
+			return ctx.Err()
+		}
+		return manager.validateToken(ctx, token, host, port)
+	})
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, desktopWebPrefix) {
+			web.ServeHTTP(w, r)
+			return
+		}
+		files.ServeHTTP(w, r)
+	})
 }
 
 func (s desktopFileServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -83,7 +99,11 @@ func (s desktopFileServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	timeout := 5 * time.Second
+	if parts[1] == projectWebServicesPath || parts[1] == ".miya-runtime" {
+		timeout = 10 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), timeout)
 	defer cancel()
 	projects, err := s.projects(ctx)
 	if err != nil {
@@ -99,6 +119,43 @@ func (s desktopFileServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if project.Path == "" {
 		http.NotFound(w, r)
+		return
+	}
+	if parts[1] == ".miya-runtime" {
+		if s.runtime == nil {
+			http.NotFound(w, r)
+			return
+		}
+		ref, ok := parseThreadURL(r.URL.Query().Get("ref"))
+		if !ok {
+			http.Error(w, "无效的对话标识", 400)
+			return
+		}
+		result, err := s.runtime(ctx, ref, project.Path)
+		if err != nil {
+			http.Error(w, err.Error(), 404)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		if r.Method != "HEAD" {
+			_ = json.NewEncoder(w).Encode(result)
+		}
+		return
+	}
+	if parts[1] == projectWebServicesPath {
+		discover := s.webServices
+		if discover == nil {
+			discover = discoverProjectWebServices
+		}
+		services, err := discover(ctx, project.Path)
+		if err != nil {
+			http.Error(w, "无法查找项目 Web 服务，请刷新或手动输入端口", http.StatusServiceUnavailable)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		if r.Method != "HEAD" {
+			_ = json.NewEncoder(w).Encode(services)
+		}
 		return
 	}
 	root, err := os.OpenRoot(project.Path)

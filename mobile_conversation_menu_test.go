@@ -29,10 +29,11 @@ func TestMobileConversationActionsSheet(t *testing.T) {
 				}
 				open()
 				files, filesOK := tt.Find("项目文件")
+				web, webOK := tt.Find("Web 服务")
 				newThread, newOK := tt.Find("新对话")
 				cancel, cancelOK := tt.Find("取消")
-				if !filesOK || !newOK || !cancelOK || files.Y < 422 || files.H < 58 || newThread.Y < files.Y+files.H || cancel.Y < newThread.Y+newThread.H || cancel.Y+cancel.H > 810 || cancel.X < 12 || cancel.X+cancel.W > float32(width)-12 {
-					t.Fatalf("sheet actions overlap or leave the bottom safe area: files=%v new=%v cancel=%v", files, newThread, cancel)
+				if !filesOK || !webOK || !newOK || !cancelOK || files.Y < 71 || files.H < 58 || web.H < 58 || web.Y+0.1 < files.Y+files.H || newThread.Y+0.1 < web.Y+web.H || cancel.Y+0.1 < newThread.Y+newThread.H || cancel.Y+cancel.H > 810 || cancel.X < 12 || cancel.X+cancel.W > float32(width)-12 {
+					t.Fatalf("sheet actions overlap or leave the bottom safe area: files=%v web=%v new=%v cancel=%v", files, web, newThread, cancel)
 				}
 				saveMobileNativeSnapshot(t, tt, fmt.Sprintf("conversation-actions-%d-dark-%v", width, dark))
 				tt.SetPreferences(ui.Preferences{TextScale: 1})

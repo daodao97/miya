@@ -47,7 +47,6 @@ func testApp(t *testing.T) (*chatApp, *ui.Tester) {
 		answers: map[string]map[string]string{}, forms: map[string]string{}, formErrors: map[string]string{},
 	}
 	app.account.init(app)
-	app.quota.init(app)
 	return app, ui.NewTester(app.view, 1180, 820)
 }
 
@@ -202,8 +201,13 @@ func TestSidebarSelectsAndArchivesThreads(t *testing.T) {
 	}
 	first, _ := tt.Find("First thread")
 	tt.Move(first.X+first.W/2, first.Y+first.H/2)
-	if !tt.HasText("对话操作") || tt.HasText(tr("Working…")) {
+	if !tt.HasText("对话操作") {
 		t.Fatal("hovering should replace run status with the more button")
+	}
+	// The same conversation also appears under Projects. Its other row
+	// keeps running status while the activity row shows its actions.
+	if status, ok := tt.Find(tr("Working…")); ok && status.Y < first.Y+first.H && status.Y+status.H > first.Y {
+		t.Fatal("the hovered row still shows run status")
 	}
 	if title, _ := tt.Find("First thread"); title != first {
 		t.Fatal("hovering changed the title's layout")
@@ -249,7 +253,7 @@ func TestSettingsGeneralAndAccount(t *testing.T) {
 	if !tt.HasText("界面语言") {
 		t.Fatalf("language not switched: %q", tt.Texts())
 	}
-	if err := tt.Click("Account"); err != nil {
+	if err := tt.Click("账号"); err != nil {
 		t.Fatal(err)
 	}
 	if !tt.HasText("尚未连接 Codex，请连接后重试。") {

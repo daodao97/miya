@@ -44,6 +44,7 @@ type agentSetting struct {
 
 type agentBackend interface {
 	ID() string
+	Runtime(c *chatController, t Thread) runtimeSource
 	Name() string
 	Icon() agentIconSpec
 	Caps() agentCaps
@@ -168,11 +169,11 @@ func (c *chatController) rewind(threadID, messageID int, text string) {
 	}
 	text = strings.TrimSpace(text)
 	t := c.threadWithID(threadID)
-	if text == "" {
-		return
-	}
 	for _, m := range t.Messages {
 		if m.ID == messageID {
+			if text == "" && len(messageAttachments(m)) == 0 {
+				return
+			}
 			if c.canRewind(t, m) {
 				c.update(t.ID, func(t *Thread) { t.Busy = true; t.Status = "正在回退对话…" })
 				backendOf(t).Rewind(c, t, m, text)
@@ -185,6 +186,7 @@ func (c *chatController) rewind(threadID, messageID int, text string) {
 // finishRewind ends an adapter's rewind: on success it drops the message and
 // what followed, lets the adapter record its new history, and sends the text.
 func (c *chatController) finishRewind(id, messageID int, text string, err error, apply func(*Thread)) {
+	req := sendRequest{ThreadID: id, Text: text}
 	c.update(id, func(t *Thread) {
 		t.Busy = false
 		if err != nil {
@@ -194,6 +196,8 @@ func (c *chatController) finishRewind(id, messageID int, text string, err error,
 		t.Status = ""
 		for i, m := range t.Messages {
 			if m.ID == messageID {
+				req.Attachments = messageAttachments(m)
+				req.MemoryControl = m.MemoryControl
 				t.Messages = t.Messages[:i]
 				break
 			}
@@ -205,8 +209,8 @@ func (c *chatController) finishRewind(id, messageID int, text string, err error,
 	if err != nil {
 		return
 	}
-	if c.submit(sendRequest{ThreadID: id, Text: text}) == 0 {
-		c.returnDraft(id, text, nil)
+	if c.submit(req) == 0 {
+		c.returnDraft(id, text, req.Attachments)
 	}
 }
 
@@ -386,4 +390,13 @@ func (c *chatController) restoreDraft(id int, text string, attachments []string)
 		c.rememberDraft(text)
 		c.setAttachments(attachments)
 	}
+}
+
+func registeredBackend(id string) bool {
+	for _, backend := range agentBackends {
+		if backend.ID() == id {
+			return true
+		}
+	}
+	return false
 }

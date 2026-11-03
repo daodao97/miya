@@ -112,7 +112,7 @@ func codexTurnRequests(t *testing.T, path string) []string {
 	return methods
 }
 
-func TestCodexRetriesFailedTurnWithoutReplacingHistory(t *testing.T) {
+func TestCodexRetriesFailedTurnFromOriginalMessage(t *testing.T) {
 	c, d, logPath := codexResumeFixture(t)
 	c.submit(sendRequest{ThreadID: 1, Text: "error"})
 	waitCodexResume(t, c, d, func() bool {
@@ -120,6 +120,12 @@ func TestCodexRetriesFailedTurnWithoutReplacingHistory(t *testing.T) {
 		return !th.Busy && len(th.Messages) > 0 && th.Messages[len(th.Messages)-1].Role == "error"
 	})
 	before := c.threadWithID(1)
+	var failedTurn string
+	for _, m := range before.Messages {
+		if m.Role == "user" {
+			failedTurn = m.TurnID
+		}
+	}
 	req := retryRequest{ThreadID: 1, MessageID: before.Messages[len(before.Messages)-1].ID}
 	if err := c.retryResponse(req); err != nil {
 		t.Fatal(err)
@@ -129,15 +135,71 @@ func TestCodexRetriesFailedTurnWithoutReplacingHistory(t *testing.T) {
 	}
 	waitCodexResume(t, c, d, func() bool {
 		th := c.threadWithID(1)
-		return !th.Busy && th.Messages[len(th.Messages)-1].Role == "assistant"
+		return !th.Busy && th.Messages[len(th.Messages)-1].Role == "error" && th.Messages[len(th.Messages)-1].ID != req.MessageID
 	})
 	after := c.threadWithID(1)
 	if after.ServerID != before.ServerID || after.Messages[0].Content != before.Messages[0].Content {
 		t.Fatal("retry replaced the original session or history")
 	}
+	if len(after.Messages) != len(before.Messages) || strings.Join(userTexts(after), ",") != "Earlier prompt,error" {
+		t.Fatalf("retry appended a continuation or kept the failed turn: %+v", after.Messages)
+	}
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var replay []string
+	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+		var r struct {
+			Method string
+			Params struct {
+				BeforeTurnID string                  `json:"beforeTurnId"`
+				Input        []struct{ Text string } `json:"input"`
+			}
+		}
+		if err := json.Unmarshal([]byte(line), &r); err != nil {
+			t.Fatal(err)
+		}
+		switch r.Method {
+		case "thread/revert":
+			if r.Params.BeforeTurnID != failedTurn {
+				t.Fatal("retry reverted the wrong turn")
+			}
+			replay = append(replay, "revert")
+		case "turn/start":
+			replay = append(replay, r.Params.Input[0].Text)
+		}
+	}
+	if strings.Join(replay, ",") != "error,revert,error" {
+		t.Fatalf("retry did not revert before replaying the original request: %v", replay)
+	}
 	methods := strings.Join(codexTurnRequests(t, logPath), ",")
 	if strings.Count(methods, "turn/start") != 2 || strings.Contains(methods, "thread/start") {
 		t.Fatalf("retry sent unexpected requests: %s", methods)
+	}
+}
+
+func TestCodexRetryKeepsHistoryWhenRevertFails(t *testing.T) {
+	t.Setenv("QUICKGUI_FIXTURE_REVERT_ERROR", `{"code":-32600,"message":"cannot revert"}`)
+	c, d, logPath := codexResumeFixture(t)
+	c.submit(sendRequest{ThreadID: 1, Text: "error"})
+	waitCodexResume(t, c, d, func() bool {
+		th := c.threadWithID(1)
+		return !th.Busy && len(th.Messages) > 0 && th.Messages[len(th.Messages)-1].Role == "error"
+	})
+	before := c.threadWithID(1)
+	if err := c.retryResponse(retryRequest{ThreadID: 1, MessageID: before.Messages[len(before.Messages)-1].ID}); err != nil {
+		t.Fatal(err)
+	}
+	waitCodexResume(t, c, d, func() bool {
+		th := c.threadWithID(1)
+		return !th.Busy && strings.Contains(th.Status, "cannot revert")
+	})
+	if after := c.threadWithID(1); !reflect.DeepEqual(after.Messages, before.Messages) || after.ServerID != before.ServerID {
+		t.Fatal("a failed rewind discarded the original messages")
+	}
+	if methods := strings.Join(codexTurnRequests(t, logPath), ","); strings.Count(methods, "turn/start") != 1 {
+		t.Fatal("retry sent a new message after the rewind failed")
 	}
 }
 

@@ -100,3 +100,31 @@ func TestMemoryQueueRecallsAtExecutionAndFailuresDoNotBlockSend(t *testing.T) {
 		t.Fatal("memory failure blocked normal send")
 	}
 }
+
+func TestMemoryAbsolutePathMessagesAreNotSlashCommands(t *testing.T) {
+	c, _ := queueController(t)
+	attachMemory(t, c)
+	scope, _ := memory.ProjectScope(c.cwd)
+	if err := c.memory.Configure(scope, memory.Settings{AutoInject: true}); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	_, err := c.memory.Save(scope, memory.Mutation{Kind: "fact", Content: "项目构建使用 build-ios.sh", ObservedAt: now, Sources: []memory.Source{{EvidenceKind: "manual", ObservedAt: now}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	th := c.threadWithID(1)
+	text := "/Users/daodao/project 项目构建入口是什么"
+	if c.beginMemoryTurn(th, sendRequest{Text: text}, 10) == "" {
+		t.Fatal("absolute path incorrectly disabled extraction")
+	}
+	input := c.prepareMemoryInput(th, sendRequest{Text: text}, c.cwd, c.threadRef(th).URL())
+	if !strings.Contains(input.text(text), "build-ios.sh") {
+		t.Fatal("absolute path incorrectly disabled recall")
+	}
+	for _, command := range []string{"/compact", "/review changes", "/goal run", "/loop 5m check", "/custom-skill"} {
+		if c.beginMemoryTurn(th, sendRequest{Text: command}, 20) != "" {
+			t.Fatalf("command unexpectedly enabled extraction: %s", command)
+		}
+	}
+}

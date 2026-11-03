@@ -37,6 +37,7 @@ type Injection struct {
 type Prepared struct {
 	RequestID string
 	Session   string
+	TaskKey   string
 	Block     string
 	Entries   []Stamp
 }
@@ -56,6 +57,14 @@ func StripContext(raw string) string {
 func stampKey(v Stamp) string { return v.Scope.Kind + ":" + v.ID }
 func stampOf(e Entry) Stamp   { return Stamp{e.Scope, e.ID, e.Version, e.State} }
 
+func recallEntry(e Entry, now time.Time, task string) Entry {
+	e = effective(e, now)
+	if e.State == "active" && e.Kind == "progress" && (task == "" || e.TaskKey != task) {
+		e.State = "unavailable"
+	}
+	return e
+}
+
 // Prepare runs off the scheduler immediately before the backend takes input.
 // Pending reservations suppress duplicate concurrent steer injections. Failed
 // sends reset the session, so the next accepted request can recall them again.
@@ -72,7 +81,7 @@ func (s *Store) Prepare(project Scope, session, epoch, query, task string) (Prep
 	}
 	current := map[string]Entry{}
 	for _, e := range latest(d) {
-		current[stampKey(stampOf(e))] = effective(e, s.now())
+		current[stampKey(stampOf(e))] = recallEntry(e, s.now(), task)
 	}
 	if d.Settings.UseUserPreferences {
 		user, err := s.load(UserScope())
@@ -80,7 +89,7 @@ func (s *Store) Prepare(project Scope, session, epoch, query, task string) (Prep
 			return Prepared{}, err
 		}
 		for _, e := range latest(user) {
-			current[stampKey(stampOf(e))] = effective(e, s.now())
+			current[stampKey(stampOf(e))] = recallEntry(e, s.now(), task)
 		}
 	}
 	if d.Sessions == nil {
@@ -165,7 +174,7 @@ func (s *Store) Prepare(project Scope, session, epoch, query, task string) (Prep
 	if err != nil {
 		return Prepared{}, err
 	}
-	p := Prepared{RequestID: id, Session: session}
+	p := Prepared{RequestID: id, Session: session, TaskKey: task}
 	for _, v := range chosen {
 		p.Entries = append(p.Entries, v.Stamp)
 	}
@@ -226,7 +235,7 @@ func (s *Store) ValidatePrepared(project Scope, p Prepared) bool {
 		for _, e := range latest(doc) {
 			if e.ID == v.ID {
 				found = true
-				if stampOf(effective(e, s.now())) != v {
+				if stampOf(recallEntry(e, s.now(), p.TaskKey)) != v {
 					return false
 				}
 				break

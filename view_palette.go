@@ -5,6 +5,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/markdown"
 )
 
 // Colors the desktop views share beyond those in view_style.go, set with
@@ -19,13 +20,16 @@ var (
 	warnInk    = ui.Hex("#b7791f")
 	success    = ui.Hex("#3f9a63")
 	sendHover  = ui.Hex("#dcdcdc")
+	// linkInk colors links in messages: the accent stays ink, so links
+	// need a color of their own to stand out from the text.
+	linkInk = ui.Hex("#2563eb")
 )
 
 // desktopPalette holds the desktop's colors for one appearance.
 type desktopPalette struct {
 	canvas, side, panel, ink, muted, line, hover, chosen, bubble ui.Color
 	border, subtle, selected, faint, warnBg, warnLine, warnInk   ui.Color
-	success, sendHover, danger, failed, shadow                   ui.Color
+	success, sendHover, danger, failed, shadow, link             ui.Color
 }
 
 var (
@@ -35,6 +39,7 @@ var (
 		border: ui.Hex("#dddddd"), subtle: ui.Hex("#f7f7f7"), selected: ui.Hex("#f1f2f4"), faint: ui.Hex("#a3a7b3"),
 		warnBg: ui.Hex("#fbf6ea"), warnLine: ui.Hex("#eadfc4"), warnInk: ui.Hex("#b7791f"),
 		success: ui.Hex("#3f9a63"), sendHover: ui.Hex("#dcdcdc"), danger: ui.Hex("#b42318"), failed: ui.Hex("#e58b84"), shadow: ui.RGBA(0, 0, 0, 0.16),
+		link: ui.Hex("#2563eb"),
 	}
 	desktopDark = desktopPalette{
 		canvas: ui.Hex("#1a1a1c"), side: ui.Hex("#141416"), panel: ui.Hex("#1f1f22"), ink: ui.Hex("#ececee"), muted: ui.Hex("#8e8e93"),
@@ -42,6 +47,7 @@ var (
 		border: ui.Hex("#38383c"), subtle: ui.Hex("#222226"), selected: ui.Hex("#2c2c30"), faint: ui.Hex("#6b6e78"),
 		warnBg: ui.Hex("#2b2618"), warnLine: ui.Hex("#4a3f22"), warnInk: ui.Hex("#e0a54a"),
 		success: ui.Hex("#4cc38a"), sendHover: ui.Hex("#3a3a3e"), danger: ui.Hex("#f87171"), failed: ui.Hex("#f19a93"), shadow: ui.RGBA(0, 0, 0, 0.5),
+		link: ui.Hex("#6ba4ff"),
 	}
 )
 
@@ -56,6 +62,7 @@ func applyDesktopPalette(dark bool) *ui.Theme {
 	hover, chosen, bubble, danger, failed, shadow = p.hover, p.chosen, p.bubble, p.danger, p.failed, p.shadow
 	border, subtle, selectedBg, faint = p.border, p.subtle, p.selected, p.faint
 	warnBg, warnLine, warnInk, success, sendHover = p.warnBg, p.warnLine, p.warnInk, p.success, p.sendHover
+	linkInk = p.link
 	t.Background, t.Surface, t.SurfaceHover, t.Border = p.canvas, p.bubble, p.hover, p.line
 	t.Text, t.TextMuted, t.Danger = p.ink, p.muted, p.danger
 	t.Accent, t.AccentHover, t.AccentText = p.ink, p.ink.Mix(p.canvas, 0.15), p.canvas
@@ -108,6 +115,7 @@ func (app *chatApp) wantsDark() bool {
 func (app *chatApp) applyAppearance() {
 	if dark := app.wantsDark(); !app.themed || dark != app.dark {
 		app.theme = applyDesktopPalette(dark)
+		app.md.Theme = &markdown.Theme{Link: linkInk}
 		app.dark, app.themed = dark, true
 	}
 }
@@ -134,23 +142,20 @@ func windowBackground(app *chatApp) string {
 // appearanceSettings chooses light, dark or the system's appearance.
 func (app *chatApp) appearanceSettings(c *ui.Context) {
 	zh := app.c.locale() == "zh"
-	ui.Column(c).Gap(8).Children(func() {
-		ui.Text(c, map[bool]string{true: "外观", false: "Appearance"}[zh]).FontWeight(600)
-		ui.Row(c).Gap(8).Children(func() {
-			for _, o := range []struct{ id, zh, en string }{{"", "跟随系统", "System"}, {"light", "浅色", "Light"}, {"dark", "深色", "Dark"}} {
-				b := quiet(c.Key("appearance:"+o.id)).Padding(0, 12)
-				if app.appearance == o.id {
-					b.Background(selectedBg)
-				}
-				label := o.en
-				if zh {
-					label = o.zh
-				}
-				b.Children(func() { ui.Text(c, label) })
-				if b.Clicked() {
-					app.setAppearance(o.id)
-				}
+	title := zhOr(zh, "外观", "Appearance")
+	settingRow(c, title, "", func() {
+		ids := []string{"", "light", "dark"}
+		i := 0
+		for j, id := range ids {
+			if app.appearance == id {
+				i = j
 			}
-		})
+		}
+		before := i
+		ui.Segmented(c.Key("appearance"), &i,
+			zhOr(zh, "跟随系统", "System"), zhOr(zh, "浅色", "Light"), zhOr(zh, "深色", "Dark")).Label(title)
+		if i != before {
+			app.setAppearance(ids[i])
+		}
 	})
 }

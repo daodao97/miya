@@ -48,12 +48,13 @@ for line in sys.stdin:
  path=os.environ.get('QUICKGUI_FIXTURE_LOG')
  if path:
   with open(path,'a') as log:log.write(json.dumps({'method':method,'params':p},ensure_ascii=False)+'\n')
- failure=os.environ.get({'thread/resume':'QUICKGUI_FIXTURE_RESUME_ERROR','turn/start':'QUICKGUI_FIXTURE_TURN_ERROR'}.get(method,''))
+ failure=os.environ.get({'thread/resume':'QUICKGUI_FIXTURE_RESUME_ERROR','turn/start':'QUICKGUI_FIXTURE_TURN_ERROR','thread/revert':'QUICKGUI_FIXTURE_REVERT_ERROR'}.get(method,''))
  if failure:
   emit({'id':r['id'],'error':json.loads(failure)});continue
  if method=='initialize':reply(r,{'userAgent':'quickgui-fixture/1'})
  elif method=='initialized':pass
  elif method=='model/list':reply(r,{'data':[{'id':'fixture','model':'fixture','displayName':'Fixture','isDefault':True,'defaultReasoningEffort':'low','supportedReasoningEfforts':[{'reasoningEffort':'low'},{'reasoningEffort':'high'}]}]})
+ elif method=='thread/backgroundTerminals/list':reply(r,{'data':json.loads(os.environ.get('QUICKGUI_FIXTURE_BACKGROUND','{}')).get(p.get('threadId'),[]),'nextCursor':None})
  elif method=='config/read':reply(r,{'config':{'model':'fixture'}})
  elif method=='thread/list':
   reply(r,{'data':[{k:v for k,v in thread.items() if k!='turns'} for thread in threads.values() if thread['cwd']==p.get('cwd',os.getcwd())]})
@@ -65,6 +66,10 @@ for line in sys.stdin:
    emit({'id':r['id'],'error':{'code':-32600,'message':'no rollout found for thread id '+tid}});continue
   if method=='thread/resume':loaded.add(tid)
   reply(r,{'thread':threads[tid]})
+ elif method=='thread/revert':
+  tid=p['threadId'];turns=threads[tid]['turns'];cut=next((i for i,turn in enumerate(turns) if turn['id']==p['beforeTurnId']),None)
+  if cut is None:emit({'id':r['id'],'error':{'code':-32600,'message':'turn not found'}})
+  else:threads[tid]['turns']=turns[:cut];reply(r,{'thread':threads[tid]})
  elif method=='thread/goal/get':reply(r,{'goal':goals.get(p['threadId'])})
  elif method=='thread/goal/set':
   tid=p['threadId'];goal=goals.setdefault(tid,{'threadId':tid,'objective':'','status':'active','tokensUsed':0,'timeUsedSeconds':0,'tokenBudget':None})

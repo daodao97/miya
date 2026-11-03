@@ -21,7 +21,7 @@ var miyaMCPEnabled bool
 const maxDelegationDepth = 2
 
 // miyaReadOnlyTools are the miya tools an agent may call without asking.
-var miyaReadOnlyTools = []string{"list_threads", "read_thread", "thread_status", "list_automations", "report_result", "search_memory"}
+var miyaReadOnlyTools = []string{"list_threads", "read_thread", "thread_status", "list_automations", "report_result", "search_memory", "runtime_info"}
 
 func miyaMCPCommand() (string, bool) {
 	if !miyaMCPEnabled {
@@ -75,6 +75,9 @@ func tomlString(s string) string {
 
 // mcpHandle answers a miya tool call the service received.
 func (c *chatController) mcpHandle(op string, r mcpRequest) (any, error) {
+	if op == "mcpRuntime" {
+		return c.mcpRuntime(r)
+	}
 	if r.Reference != "" {
 		ref, ok := parseThreadURL(r.Reference)
 		if !ok || ref.Source != c.referenceSource {
@@ -322,4 +325,35 @@ func samePath(a, b string) bool {
 		return filepath.Clean(p)
 	}
 	return resolve(a) == resolve(b)
+}
+
+func (c *chatController) mcpRuntime(r mcpRequest) (any, error) {
+	var caller Thread
+	count := 0
+	for _, t := range c.allThreads() {
+		for _, message := range t.Messages {
+			if (message.Status == "inProgress" || message.Status == "in_progress") && isMiyaToolCall(message, "runtime_info") {
+				caller = t
+				count++
+				break
+			}
+		}
+	}
+	if count == 0 {
+		return nil, errors.New(mcpCallerUnknown)
+	}
+	if count != 1 {
+		return nil, errors.New("多个对话正在查询运行信息，无法唯一核验调用来源，请稍后重试")
+	}
+	work, err := c.prepareRuntime(c.threadRef(caller), c.threadWorkspace(caller.ID))
+	if err != nil {
+		return nil, err
+	}
+	return deferred(func() (any, error) {
+		data, err := work()
+		if err != nil {
+			return nil, err
+		}
+		return data.(conversationRuntime).View, nil
+	}), nil
 }

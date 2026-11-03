@@ -13,6 +13,8 @@ type Model struct {
 	} `json:"supportedReasoningEfforts"`
 }
 type Item struct {
+	Cwd               string          `json:"cwd"`
+	ProcessID         string          `json:"processId"`
 	ID                string          `json:"id"`
 	Type              string          `json:"type"`
 	Text              string          `json:"text"`

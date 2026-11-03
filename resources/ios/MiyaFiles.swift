@@ -5,7 +5,7 @@ import QuickLook
 
 @_silgen_name("goIOSSystemResult") private func filesResult(_ token: UInt64, _ value: UnsafePointer<CChar>, _ code: Int32, _ message: UnsafePointer<CChar>)
 
-// Miya's HTTP file viewer implements MyGo's optional in-app browser hook.
+// Miya's file and Web service viewer implements MyGo's optional in-app browser hook.
 // It has an isolated web data store and no JavaScript-to-native app bridge.
 @MainActor private final class MiyaFiles: UIViewController, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, QLPreviewControllerDataSource, UIAdaptivePresentationControllerDelegate {
     static var sessions: [UInt64: MiyaFiles] = [:]
@@ -13,6 +13,8 @@ import QuickLook
     let token: UInt64
     let initial: URL
     let cache: URL
+    var isWebService: Bool { initial.path.hasPrefix("/.miya-web-open/") }
+    var viewerTitle: String { isWebService ? "Web 服务" : "项目文件" }
     var web: WKWebView!
     var downloads: [ObjectIdentifier: (WKDownload, URL?)] = [:]
     var preview: URL?
@@ -38,9 +40,9 @@ import QuickLook
         web.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(web)
         NSLayoutConstraint.activate([web.leadingAnchor.constraint(equalTo: view.leadingAnchor), web.trailingAnchor.constraint(equalTo: view.trailingAnchor), web.topAnchor.constraint(equalTo: view.topAnchor), web.bottomAnchor.constraint(equalTo: view.bottomAnchor)])
-        navigationItem.title = "项目文件"
+        navigationItem.title = viewerTitle
         navigationItem.leftBarButtonItem = UIBarButtonItem(barButtonSystemItem: .done, target: self, action: #selector(close))
-        navigationItem.rightBarButtonItem = UIBarButtonItem(title: "目录", style: .plain, target: self, action: #selector(home))
+        navigationItem.rightBarButtonItem = UIBarButtonItem(title: isWebService ? "首页" : "目录", style: .plain, target: self, action: #selector(home))
         back = UIBarButtonItem(image: UIImage(systemName: "chevron.left"), style: .plain, target: self, action: #selector(goBack))
         back.accessibilityLabel = "后退"
         forward = UIBarButtonItem(image: UIImage(systemName: "chevron.right"), style: .plain, target: self, action: #selector(goForward))
@@ -48,6 +50,7 @@ import QuickLook
         save = UIBarButtonItem(barButtonSystemItem: .action, target: self, action: #selector(downloadCurrent))
         save.accessibilityLabel = "下载或分享当前文件"
         toolbarItems = [back, .flexibleSpace(), forward, .flexibleSpace(), UIBarButtonItem(barButtonSystemItem: .refresh, target: self, action: #selector(reload)), .flexibleSpace(), save]
+        if isWebService { toolbarItems = Array(toolbarItems!.dropLast(2)) }
         navigationController?.setToolbarHidden(false, animated: false)
         web.load(URLRequest(url: initial))
     }
@@ -63,7 +66,7 @@ import QuickLook
     func controls() {
         back.isEnabled = web.canGoBack; forward.isEnabled = web.canGoForward
         save.isEnabled = web.url?.path.hasSuffix("/") == false
-        navigationItem.title = web.title?.isEmpty == false ? web.title : "项目文件"
+        navigationItem.title = web.title?.isEmpty == false ? web.title : viewerTitle
     }
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { controls() }
     func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) { controls() }
@@ -113,7 +116,7 @@ import QuickLook
     func previewController(_ controller: QLPreviewController, previewItemAt index: Int) -> QLPreviewItem { preview! as NSURL }
     func showError(_ message: String) {
         guard presentedViewController == nil else { return }
-        let alert = UIAlertController(title: "项目文件", message: message, preferredStyle: .alert)
+        let alert = UIAlertController(title: viewerTitle, message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "好", style: .default)); present(alert, animated: true)
     }
     @objc func close() { finish(dismiss: true) }

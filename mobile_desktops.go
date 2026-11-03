@@ -253,6 +253,10 @@ func (m *mobileApp) removeDesktop(id string) {
 
 func (m *mobileApp) resetDesktopState() {
 	m.clearFileReferences()
+	m.clearWebServices()
+	m.webProject, m.webPort, m.webManual = "", "", false
+	m.webRef = ThreadRef{}
+	m.webDetails = false
 	m.conversationMenu = false
 	m.home()
 	m.state, m.host, m.selected = phoneState{}, "", ""

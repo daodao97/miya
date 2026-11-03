@@ -1,12 +1,14 @@
 package memory
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 func extractionFixture(t *testing.T) (*Store, Scope, ExtractionJob) {
@@ -174,10 +176,19 @@ func TestExtractionRecoveryRetryLimitAndSessionDisable(t *testing.T) {
 func TestExtractionBudgetCapacityAndSafeDuplicate(t *testing.T) {
 	s, scope, j := extractionFixture(t)
 	oversized := j
+	oversized.TurnID = "oversized"
 	oversized.Evidence = append([]Evidence(nil), j.Evidence...)
 	oversized.Evidence[0].Text = strings.Repeat("x", MaxExtractionInput)
 	if _, err := s.EnqueueExtraction(scope, oversized); err == nil {
 		t.Fatal("unbounded evidence accepted")
+	}
+	status, err := New(s.root).ExtractionStatus(scope)
+	if err != nil || status.Failed != 1 || !strings.Contains(status.LastError, "输入超过上限") {
+		t.Fatalf("oversized round was silently dropped: %+v %v", status, err)
+	}
+	b, _ := os.ReadFile(s.path(scope))
+	if strings.Contains(string(b), oversized.Evidence[0].Text) {
+		t.Fatal("skipped diagnostic retained oversized evidence")
 	}
 	for i := 0; i < 100; i++ {
 		copy := j
@@ -189,6 +200,66 @@ func TestExtractionBudgetCapacityAndSafeDuplicate(t *testing.T) {
 	j.TurnID = "over-capacity"
 	if _, err := s.EnqueueExtraction(scope, j); err == nil {
 		t.Fatal("queue exceeded 100 jobs")
+	}
+	status, err = New(s.root).ExtractionStatus(scope)
+	if err != nil || status.Pending != 100 || status.Failed != 2 || !strings.Contains(status.LastError, "队列已满") {
+		t.Fatalf("queue capacity skip lost its diagnostic: %+v %v", status, err)
+	}
+}
+
+func TestExtractionQueueBudgetsMetadataBeforeKeepingToolEvidence(t *testing.T) {
+	s, scope, j := extractionFixture(t)
+	user := j.Evidence[0]
+	final := Evidence{ID: "answer", Kind: "assistant_report", Text: "已完成构建。", Source: user.Source}
+	smallTool := Evidence{ID: "small-tool", Kind: "tool_result", Text: "build succeeded", Source: user.Source}
+	largeTool := Evidence{ID: "large-tool", Kind: "tool_result", Source: user.Source}
+	j.Evidence = []Evidence{user, final, smallTool, largeTool}
+	b, err := j.InputJSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+	j.Evidence[3].Text = strings.Repeat("证", MaxExtractionInput-utf8.RuneCount(b))
+	if _, err := j.InputJSON(); err != nil {
+		t.Fatal("adapter input should fit before queue metadata", err)
+	}
+	if ok, err := s.EnqueueExtraction(scope, j); err != nil || !ok {
+		t.Fatalf("valid completed round dropped at queue boundary: %v %v", ok, err)
+	}
+	// Verify the persisted job, not just the caller's borrowed evidence slice.
+	restarted := New(s.root)
+	_, got, ok, err := restarted.ClaimExtraction()
+	if err != nil || !ok {
+		t.Fatalf("trimmed job did not survive restart: %v %v", ok, err)
+	}
+	if len(got.Evidence) != 3 || got.Evidence[0].Text != user.Text || got.Evidence[1].Text != final.Text || got.Evidence[2].Text != smallTool.Text {
+		t.Fatal("must preserve user, final answer and fitting whole tool evidence")
+	}
+	if j.Evidence[3].Text == "" || len(j.Evidence) != 4 {
+		t.Fatal("queue trimming mutated the caller's evidence")
+	}
+	if _, err := got.InputJSON(); err != nil {
+		t.Fatal("claimed job exceeds model input budget", err)
+	}
+	entries, err := restarted.CompleteExtraction(scope, got.Key, []Candidate{candidateFor(got)}, time.Second, nil, false)
+	if err != nil || len(entries) != 1 {
+		encoded, _ := json.Marshal(got)
+		t.Fatalf("trimmed job could not save a grounded memory: entries=%d input=%d error=%v", len(entries), utf8.RuneCount(encoded), err)
+	}
+}
+
+func TestExtractionClaimBudgetsFinalMetadata(t *testing.T) {
+	s, scope, j := extractionFixture(t)
+	old := save(t, s, scope, mutation(s, "手机构建约定："+strings.Repeat("证", 1200)))
+	preview := j
+	preview.Key, preview.State, preview.CreatedAt = strings.Repeat("a", 64), "pending", s.now()
+	preview.ExtractorAgent = "claude-code"
+	preview.Related = []Stamp{stampOf(old)}
+	preview.Candidates = []Entry{old}
+	b, _ := json.Marshal(preview)
+	j.Evidence[0].Text += strings.Repeat("证", MaxExtractionInput-utf8.RuneCount(b))
+	got := claim(t, s, scope, j)
+	if _, err := got.InputJSON(); err != nil {
+		t.Fatalf("claim added metadata after applying the model input budget: %v", err)
 	}
 }
 
@@ -267,5 +338,53 @@ func TestExtractionAgentSettingsPersistAndApplyWhenClaimed(t *testing.T) {
 	}
 	if err := restarted.Configure(scope, Settings{ExtractorAgent: "unknown"}); err == nil {
 		t.Fatal("unknown extractor accepted")
+	}
+}
+
+func TestExtractionStatusReportsOnlyCurrentProblems(t *testing.T) {
+	s, scope, j := extractionFixture(t)
+	base := time.Date(2026, 11, 3, 9, 0, 0, 0, time.UTC)
+	s.now = func() time.Time { return base }
+	oversized := j
+	oversized.TurnID = "oversized"
+	oversized.Evidence = append([]Evidence(nil), j.Evidence...)
+	oversized.Evidence[0].Text = strings.Repeat("x", MaxExtractionInput)
+	if _, err := s.EnqueueExtraction(scope, oversized); err == nil {
+		t.Fatal("oversized round accepted")
+	}
+	if status, _ := s.ExtractionStatus(scope); !strings.Contains(status.LastError, "输入超过上限") {
+		t.Fatalf("current failure hidden: %+v", status)
+	}
+
+	s.now = func() time.Time { return base.Add(time.Minute) }
+	got := claim(t, s, scope, j)
+	if _, err := s.CompleteExtraction(scope, got.Key, nil, time.Second, errors.New("boom"), false); err != nil {
+		t.Fatal(err)
+	}
+	if status, _ := s.ExtractionStatus(scope); !strings.Contains(status.LastError, "等待重试") {
+		t.Fatalf("pending retry problem hidden: %+v", status)
+	}
+	_, got, ok, err := s.ClaimExtraction()
+	if err != nil || !ok {
+		t.Fatalf("retry claim: %v %v", ok, err)
+	}
+	if _, err := s.CompleteExtraction(scope, got.Key, nil, time.Second, nil, false); err != nil {
+		t.Fatal(err)
+	}
+	if status, _ := s.ExtractionStatus(scope); status.LastError != "" || status.Failed != 1 || status.Completed != 1 {
+		t.Fatalf("later success must clear the old problem: %+v", status)
+	}
+
+	s.now = func() time.Time { return base.Add(2 * time.Minute) }
+	canceled := j
+	canceled.TurnID = "canceled"
+	if ok, err := s.EnqueueExtraction(scope, canceled); err != nil || !ok {
+		t.Fatalf("enqueue: %v %v", ok, err)
+	}
+	if err := s.ConfigureSession(scope, j.Session, true); err != nil {
+		t.Fatal(err)
+	}
+	if status, _ := s.ExtractionStatus(scope); status.LastError != "" {
+		t.Fatalf("user cancellation reported as a problem: %+v", status)
 	}
 }

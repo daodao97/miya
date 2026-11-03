@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"strings"
+	"unicode"
 
 	"miya/internal/memory"
 )
@@ -15,8 +16,23 @@ type memoryInput struct {
 	prepared memory.Prepared
 }
 
+// Only command-shaped first tokens bypass memory. A leading absolute path is
+// ordinary user input and must still participate in recall and extraction.
+func memoryCommand(text string) bool {
+	fields := strings.Fields(text)
+	if len(fields) == 0 || !strings.HasPrefix(fields[0], "/") || len(fields[0]) == 1 {
+		return false
+	}
+	for _, r := range fields[0][1:] {
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '_' && r != '-' && r != ':' {
+			return false
+		}
+	}
+	return true
+}
+
 func (c *chatController) prepareMemoryInput(t Thread, req sendRequest, project, session string) memoryInput {
-	if c.memory == nil || t.MemoryDisabled || t.Automation != "" || req.MemoryControl || req.KeepSessionSettings || strings.HasPrefix(strings.TrimSpace(req.Text), "/") {
+	if c.memory == nil || t.MemoryDisabled || t.Automation != "" || req.MemoryControl || req.KeepSessionSettings || memoryCommand(req.Text) {
 		return memoryInput{}
 	}
 	scope, err := memory.ProjectScope(project)

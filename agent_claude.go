@@ -85,7 +85,7 @@ func (claudeBackend) Rewind(c *chatController, t Thread, m Message, text string)
 			prompt++
 		}
 	}
-	cwd, old := c.cwd, t.ServerID
+	cwd, old := c.threadWorkspace(t.ID), t.ServerID
 	goAsync(func() {
 		var forked string
 		var err error
@@ -126,7 +126,7 @@ func (claudeBackend) Steer(c *chatController, t Thread, req sendRequest) bool {
 	localTurn := c.beginMemoryTurn(t, req, pending)
 	c.update(t.ID, func(t *Thread) {
 		t.LastOutputAtMs, t.LastActivityAt = now, now
-		t.Messages = append(t.Messages, Message{ID: pending, Role: "user", Content: shown, Images: images, Parts: req.Parts, SentAtMs: now, MemoryTurnID: localTurn, MemoryControl: req.MemoryControl || req.KeepSessionSettings})
+		t.Messages = append(t.Messages, Message{ID: pending, Role: "user", Content: shown, Images: images, Attachments: append([]string(nil), req.Attachments...), Parts: req.Parts, SentAtMs: now, MemoryTurnID: localTurn, MemoryControl: req.MemoryControl || req.KeepSessionSettings})
 	})
 	project, session := c.threadWorkspace(t.ID), c.threadRef(t).URL()
 	go func() {

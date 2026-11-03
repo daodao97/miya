@@ -1,0 +1,122 @@
+package main
+
+import (
+	"context"
+	"errors"
+	"net"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/ui"
+	"miya/internal/remote"
+)
+
+func newPhoneWebProxy(conn *remote.Conn, port int, host string, tokens ...string) (*phoneFileProxy, error) {
+	value := strconv.Itoa(port)
+	if _, err := parseWebPort(value); err != nil {
+		return nil, err
+	}
+	token := ""
+	if len(tokens) > 0 {
+		token = tokens[0]
+	}
+	if !validWebServiceHost(host, token) {
+		return nil, errors.New("无效的本机服务地址")
+	}
+	p := new(phoneFileProxy)
+	p.webHost = host
+	if len(tokens) > 0 {
+		p.webToken = tokens[0]
+	}
+	p.conn.Store(conn)
+	err := p.startProxy(desktopWebPrefix+value, "http://localhost:"+value, func(ctx context.Context) (net.Conn, error) {
+		current := p.conn.Load()
+		if current == nil {
+			return nil, errors.New("桌面端连接已断开")
+		}
+		return current.DialFiles(ctx)
+	})
+	return p, err
+}
+
+// The phone cannot enumerate the desktop's interfaces. Non-loopback literals
+// require an owned runtime token; the desktop checks its own interfaces again.
+func validWebServiceHost(host, token string) bool {
+	if host == "" || host == "127.0.0.1" || host == "::1" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return token != "" && ip != nil && !ip.IsUnspecified() && !ip.IsMulticast()
+}
+
+func (m *mobileApp) openWebPort(port int) {
+	m.openWebService(phoneWebService{Port: port})
+}
+
+func (m *mobileApp) openWebService(service phoneWebService) {
+	if !m.connected || m.conn == nil || m.filesCancel != nil || !m.state.WebPorts {
+		return
+	}
+	proxy, err := newPhoneWebProxy(m.conn, service.Port, service.Host, service.RuntimeToken)
+	if err != nil {
+		go mygo.Dialog.Message(mygo.MessageOptions{Parent: m.win, Title: "无法打开 Web 服务", Message: err.Error()})
+		return
+	}
+	m.openFileBrowser(proxy, "无法打开 Web 服务")
+}
+
+func (m *mobileApp) webPage(c *ui.Context) {
+	p := m.pal
+	state := m.projectWebServices()
+	if state.ref.SessionID != "" {
+		c.After(time.Second)
+	}
+	ui.Row(c).FillWidth().MinHeight(64).Padding(0, 12).Gap(8).AlignItems(ui.Center).Children(func() {
+		m.navigationBack(c, "/web")
+		ui.Text(c, map[bool]string{true: "后台运行", false: "Web 服务"}[m.webDetails]).Grow(1).TextAlign(ui.Center).FontSize(m.font(16)).FontWeight(600)
+		if m.homeAction(c, "refresh-web", "刷新 Web 服务", "refresh").Disabled(!m.connected || !state.supported || state.loading).Clicked() {
+			m.clearWebServices()
+		}
+	})
+	ui.Scroll(c).FillWidth().Grow(1).MinHeight(0).Children(func() {
+		ui.Column(c).FillWidth().Padding(20).Gap(16).Children(func() {
+			project := m.project(state.project)
+			ui.Text(c, firstNonEmpty(project.Name, "当前项目")+map[bool]string{true: " · 本对话", false: " · 项目总览"}[state.ref.SessionID != ""]).FontSize(m.font(22)).FontWeight(600)
+			if m.webDetails && state.runtime != nil {
+				m.runtimeDetails(c, state.runtime.View)
+			}
+			m.webServicesList(c, state)
+			if state.ref.SessionID != "" && state.runtimeSupported && !m.webDetails {
+				if m.pill(c, "runtime-details", "后台运行", false).Clicked() {
+					m.webDetails = true
+				}
+			}
+			if m.webDetails {
+				return
+			}
+			if !m.webManual && state.supported {
+				if m.pill(c, "manual-port", "手动输入端口", false).Clicked() {
+					m.webManual = true
+				}
+				return
+			}
+			ui.Text(c, "输入电脑上已启动的 HTTP 服务端口，例如 3000、5173 或 8080。").FontSize(m.font(15)).TextColor(p.muted).LineHeight(1.5)
+			ui.TextInput(c.Key("port"), &m.webPort).Label("Web 端口").Placeholder("例如 3000").FillWidth().MinHeight(52).Padding(14).Background(p.surface).Radius(14).
+				InputOptions(ui.InputOptions{Keyboard: ui.KeyboardNumber, Correction: ui.CorrectionOff, Return: ui.ReturnGo})
+			port, err := parseWebPort(strings.TrimSpace(m.webPort))
+			if m.webPort != "" && err != nil {
+				ui.Text(c, err.Error()).FontSize(m.font(14)).TextColor(danger)
+			}
+			if !m.connected {
+				ui.Text(c, "连接桌面端后可打开 Web 服务。").FontSize(m.font(14)).TextColor(p.muted)
+			} else if !m.state.WebPorts {
+				ui.Text(c, "请先更新桌面端 Miya。后台有任务时，会在空闲后自动更新。").FontSize(m.font(14)).TextColor(p.muted).LineHeight(1.5)
+			}
+			if m.pill(c, "open-web", "打开 Web 服务", true).FillWidth().Disabled(err != nil || !m.connected || !m.state.WebPorts || m.filesCancel != nil).Clicked() {
+				m.openWebPort(port)
+			}
+		})
+	})
+}

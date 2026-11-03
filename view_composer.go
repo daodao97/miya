@@ -85,7 +85,6 @@ func (app *chatApp) composerBox(c *ui.Context) {
 		}
 		app.composerInput(c)
 		ui.Row(c).AlignItems(ui.Center).Gap(2).Children(func() {
-			app.quota.view(c)
 			if toolButton(c.Key("attach"), "plus", "Add context").Clicked() {
 				app.attachFiles()
 			}
@@ -302,6 +301,10 @@ func (app *chatApp) composerInput(c *ui.Context) {
 			m.editAt(app, text, end)
 		}).
 			Disabled(cur.ReadOnly || cur.Loading).AutoFocus()
+		if app.focusComposer && !cur.ReadOnly && !cur.Loading {
+			in.Focus()
+			app.focusComposer = false
+		}
 		if m.input.moved {
 			m.close()
 		}
@@ -315,8 +318,8 @@ func (app *chatApp) composerInput(c *ui.Context) {
 			m.input.setRaw(cc.draft())
 		}
 		if in.Shortcut(ui.Cmd, ui.KeyEnter) {
-			if cur.Busy && !visible {
-				app.sendDraft(true)
+			if !visible && (!cur.Loading || cur.Busy) {
+				app.sendDraft(cur.Busy)
 				m.input.setRaw(cc.draft())
 			}
 		}

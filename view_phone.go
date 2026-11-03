@@ -22,47 +22,58 @@ func (app *chatApp) phoneSettings(c *ui.Context) {
 	default:
 		return
 	}
-	card(c).Padding(24).Gap(16).Children(func() {
-		ui.Text(c, "手机连接").FontWeight(600)
-		ui.Text(c, "用 Miya 手机端扫码连接。手机可以继续对话和处理审批，不能修改设置。连接经 Tailcat 端到端加密。").TextColor(muted).FontSize(12).LineHeight(1.5)
-		switch {
-		case st.Busy:
-			ui.Row(c).Gap(8).Children(func() {
-				ui.Spinner(c)
-				mutedText(c, "正在开启手机连接…")
-			})
-		case st.Link == "":
-			if quiet(c.Key("phone-start")).AlignSelf(ui.Start).Border(1, line).Padding(0, 14).Children(func() { ui.Text(c, "开启手机连接") }).Clicked() {
-				act("start")
+	ui.Column(c).FillWidth().Gap(16).Children(func() {
+		settingsHeader(c, "手机连接", "用 Miya 手机端扫码连接。手机可以继续对话和处理审批，不能修改设置。连接经 Tailcat 端到端加密。", nil)
+		settingsCard(c).Padding(20).Gap(14).Children(func() {
+			switch {
+			case st.Busy:
+				ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
+					ui.Spinner(c)
+					mutedText(c, "正在开启手机连接…")
+				})
+			case st.Link == "":
+				ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(16).Children(func() {
+					settingLabel(c, "未开启", "开启后生成二维码，用手机扫码即可连接。").Grow(1)
+					if ui.PrimaryButton(c.Key("phone-start"), "开启手机连接").Clicked() {
+						act("start")
+					}
+				})
+			default:
+				ui.Row(c).FillWidth().Wrap().AlignItems(ui.Center).Gap(24).Children(func() {
+					if qr := phoneQR(st.Link); len(qr) > 0 {
+						// A QR code reads on white in either theme.
+						ui.Box(c.Key("phone-qr-frame")).Shrink(0).Padding(10).Background(ui.Hex("#ffffff")).Border(1, line).Radius(12).Children(func() {
+							ui.Box(c.Key("phone-qr")).Label("手机连接二维码").Size(200, 200).Background(ui.Hex("#ffffff")).Draw(func(painter *ui.Painter, r ui.Rect) { paintQR(painter, r, qr) })
+						})
+					}
+					ui.Column(c).Grow(1).Basis(240).MinWidth(0).Gap(14).Children(func() {
+						ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
+							dot, status := muted, "等待手机扫码…"
+							if st.Peers > 0 {
+								dot, status = added, fmt.Sprintf("已连接 %d 台手机", st.Peers)
+							}
+							ui.Box(c).Size(8, 8).Radius(4).Background(dot).Shrink(0)
+							ui.Text(c, status).FontSize(14).FontWeight(500)
+						})
+						ui.Text(c, "连接码等同于查看权限，请勿分享。重置后，手机需要重新扫码。").TextColor(muted).FontSize(12).LineHeight(1.5)
+						ui.Row(c).Wrap().Gap(8).Children(func() {
+							if smallButton(c.Key("phone-copy"), "复制连接码", false).Clicked() {
+								c.WriteClipboard(st.Link)
+							}
+							if smallButton(c.Key("phone-reset"), "重置二维码", false).Clicked() {
+								act("reset")
+							}
+							if smallButton(c.Key("phone-stop"), "关闭", false).TextColor(danger).Clicked() {
+								act("stop")
+							}
+						})
+					})
+				})
 			}
-		default:
-			ui.Column(c).AlignSelf(ui.Start).AlignItems(ui.Center).Gap(12).Children(func() {
-				if qr := phoneQR(st.Link); len(qr) > 0 {
-					// A QR code reads on white in either theme.
-					ui.Box(c.Key("phone-qr")).Label("手机连接二维码").Size(240, 240).Background(ui.Hex("#ffffff")).Draw(func(painter *ui.Painter, r ui.Rect) { paintQR(painter, r, qr) })
-				}
-				if st.Peers > 0 {
-					mutedText(c, fmt.Sprintf("已连接 %d 台手机", st.Peers))
-				} else {
-					mutedText(c, "等待手机扫码…")
-				}
-			})
-			ui.Row(c).Gap(8).Children(func() {
-				if quiet(c.Key("phone-copy")).Border(1, line).Padding(0, 12).Children(func() { ui.Text(c, "复制连接码") }).Clicked() {
-					c.WriteClipboard(st.Link)
-				}
-				if quiet(c.Key("phone-reset")).Border(1, line).Padding(0, 12).Children(func() { ui.Text(c, "重置二维码") }).Clicked() {
-					act("reset")
-				}
-				if quiet(c.Key("phone-stop")).Border(1, line).Padding(0, 12).Children(func() { ui.Text(c, "关闭") }).Clicked() {
-					act("stop")
-				}
-			})
-			ui.Text(c, "连接码等同于查看权限，请勿分享。重置后，手机需要重新扫码。").TextColor(muted).FontSize(12)
-		}
-		if st.Message != "" {
-			ui.Text(c, st.Message).TextColor(danger).FontSize(12)
-		}
+			if st.Message != "" {
+				ui.Text(c, st.Message).TextColor(danger).FontSize(12)
+			}
+		})
 	})
 }
 

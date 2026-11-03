@@ -34,6 +34,7 @@ type mcpTool struct {
 var mcpReadOnly = map[string]any{"readOnlyHint": true, "openWorldHint": false}
 
 var mcpTools = []mcpTool{
+	{Name: "runtime_info", Description: "Read this conversation's verified background tasks, OS processes and listening services. Native task identifiers are not OS PIDs; unknown observations are explicit.", InputSchema: map[string]any{"type": "object", "properties": map[string]any{}}, Annotations: mcpReadOnly},
 	{Name: "list_threads", Description: "List the other conversations of this workspace in Miya: session link, title, agent and whether each is running.",
 		InputSchema: map[string]any{"type": "object", "properties": map[string]any{}}, Annotations: mcpReadOnly},
 	{Name: "read_thread", Description: "Read a conversation's context: its first and latest requests, latest conclusions, changed files and sub-agents.",
@@ -264,6 +265,10 @@ func (s *mcpServer) callTool(name string, raw json.RawMessage) (string, error) {
 	}
 	req := mcpRequest{Workspace: s.workspace, Tool: name}
 	switch name {
+	case "runtime_info":
+		var result json.RawMessage
+		err := s.callService("mcpRuntime", req, &result)
+		return string(result), err
 	case "report_result":
 		var rep RunReport
 		if len(raw) > 0 && string(raw) != "null" && json.Unmarshal(raw, &rep) != nil {

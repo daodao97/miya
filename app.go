@@ -39,15 +39,18 @@ type chatApp struct {
 	modelOpen bool
 	effortOpen,
 	agentOpen,
-	permissionsOpen,
-	commitOpen bool
-	notice string
+	permissionsOpen bool
+	notice        string
+	focusComposer bool
+	shortcutsOpen bool
+	switcher      conversationSwitcher
 
 	workspace, projectName, projectPath string
 	expandedProject                     string
 	projectDialog                       bool
 	projectError                        string
 	threadListExpanded                  map[string]bool
+	desktopReadIntent                   desktopRead // a completed result the user chose to view
 
 	lists  map[int]*ui.ListState
 	groups groupCache
@@ -75,7 +78,6 @@ type chatApp struct {
 	memoryRevisionSeen uint64
 	autos              automationsUI
 	account            accountView
-	quota              quotaView
 	usage              *desktopUsage
 	openWindow         func()
 	quitting           bool
@@ -112,7 +114,6 @@ func newChatApp() *chatApp {
 		LoadImage: func(src string) (ui.ImageSource, error) { return loadImage(imageSourcePath(src)) },
 	}
 	app.account.init(app)
-	app.quota.init(app)
 	app.panelWidth = 460
 	c.commandsChanged = app.refreshCommandChoices
 	onCleanup(app.closePanels)
@@ -129,7 +130,7 @@ func imageSourcePath(src string) string {
 
 func main() {
 	if runtime.GOOS == "ios" {
-		mobileMain()
+		mobileEntry()
 		return
 	}
 	// Agents Miya runs start it as their MCP server for the conversations.
@@ -171,6 +172,14 @@ func main() {
 			Content:              ui.View(app.view),
 		})
 		setAppWindow(w)
+		w.OnFocus(func() {
+			w.Update(func() {
+				if app.section == "" {
+					app.requestDesktopRead(app.c.current())
+					app.markVisibleThreadRead()
+				}
+			})
+		})
 		w.OnClose(func(e *mygo.CloseEvent) {
 			if !app.quitting && runtime.GOOS == "darwin" && app.usage != nil && app.usage.tray != nil {
 				e.PreventDefault()
@@ -205,19 +214,35 @@ func (app *chatApp) project() string { return app.projectName }
 
 func (app *chatApp) closeMenus() {
 	app.menu = ""
-	app.modelOpen, app.effortOpen, app.agentOpen, app.permissionsOpen, app.commitOpen = false, false, false, false, false
+	app.modelOpen, app.effortOpen, app.agentOpen, app.permissionsOpen = false, false, false, false
 }
 
 func (app *chatApp) newThread() {
 	app.c.newThread()
 	app.section = ""
 	app.closeMenus()
+	app.focusComposer = true
 }
 
 func (app *chatApp) selectThread(t Thread) {
+	if path := app.c.threadWorkspace(t.ID); path != app.c.cwd {
+		if err := app.c.changeWorkspace(path); err != nil {
+			app.c.setStatus("Project selection failed: " + err.Error())
+			return
+		}
+		app.workspace, app.projectPath, app.expandedProject = path, path, path
+		for _, p := range app.c.projects() {
+			if p.Path == path {
+				app.projectName = p.Name
+				break
+			}
+		}
+	}
 	app.c.selectThread(t)
+	app.requestDesktopRead(t)
 	app.section = ""
 	app.closeMenus()
+	app.focusComposer = true
 }
 
 // send runs a slash command or sends the draft.
@@ -251,7 +276,7 @@ func (app *chatApp) sendDraft(steer bool) {
 			app.complete.edit(app, "@")
 		case "diff":
 			clear()
-			app.commitOpen = true
+			app.openSurface(app.panel(), surfaceDiff)
 		case "status":
 			clear()
 			app.notice = fmt.Sprintf("Model: %s · Thinking: %s · Permissions: %s · Tokens: %d", c.model(), c.effort(), permissionChoiceTitle(c.currentPermissionPolicy()), c.current().Tokens)
@@ -267,7 +292,9 @@ func (app *chatApp) sendDraft(steer bool) {
 	}
 	app.notice = ""
 	before := c.active()
-	c.sendDraft(steer)
+	if id := c.sendDraft(steer); id != 0 {
+		app.listFor(id).ScrollToEnd()
+	}
 	if c.lastSubmitError != "" {
 		app.notice = c.lastSubmitError
 	}
@@ -426,6 +453,7 @@ func (app *chatApp) newThreadIn(p Project) {
 
 // view is the window: the sidebar beside the conversation.
 func (app *chatApp) view(ctx *ui.Context) {
+	app.markVisibleThreadRead()
 	if app.memoryRevisionSeen != app.c.memoryRevision {
 		app.memoryRevisionSeen = app.c.memoryRevision
 		app.memoryNotes = nil
@@ -451,6 +479,9 @@ func (app *chatApp) view(ctx *ui.Context) {
 		}
 	})
 	app.projectDialogView(ctx)
+	app.conversationSwitcherView(ctx)
+	app.shortcutHelpView(ctx)
+	app.registerDesktopShortcuts(ctx)
 }
 
 // The account view and composer quota read through the controller's client.

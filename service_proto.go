@@ -73,6 +73,7 @@ type svcState struct {
 	Phone              phoneStatus        `json:"phone"`
 
 	ProjectThreads map[string][]Thread `json:"projectThreads,omitempty"`
+	DesktopUnread  map[string]int64    `json:"desktopUnread,omitempty"`
 }
 
 // svcMessages updates a conversation's messages: Order lists them all by

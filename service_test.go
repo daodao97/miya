@@ -267,7 +267,7 @@ func TestServiceKeepsTurnsRunningAfterTheWindowQuits(t *testing.T) {
 	})
 }
 
-func TestServiceRetriesFailedResponseInSameSession(t *testing.T) {
+func TestServiceRetriesFailedResponseFromLastUserMessage(t *testing.T) {
 	f := newServiceFixture(t)
 	// This headless fixture has no native event loop for notification APIs.
 	persistSetting("notifications-completion", "off")
@@ -287,14 +287,14 @@ func TestServiceRetriesFailedResponseInSameSession(t *testing.T) {
 			t.Error(err)
 		}
 	})
-	f.waitWindow("the continued response", func() bool {
+	f.waitWindow("the retried response", func() bool {
 		th := a.threadWithID(1)
 		return !th.Busy && assistantText(th) == "partial done"
 	})
 	f.win.do(func() {
 		th := a.threadWithID(1)
-		if th.ServerID != "s1" || th.Messages[1].Content != "构建完成" || a.draft() != "keep this draft" {
-			t.Fatalf("retry lost the session, completed work or draft: %+v", th)
+		if th.ServerID == "s1" || len(th.Messages) != 2 || th.Messages[0].Role != "user" || th.Messages[0].Content != "安装应用" || a.draft() != "keep this draft" {
+			t.Fatalf("retry did not replace the failed turn or preserve the draft: %+v", th)
 		}
 		count := len(th.Messages)
 		if err := a.retryResponse(retryRequest{ThreadID: 1, MessageID: 12}); err == nil {
@@ -302,6 +302,65 @@ func TestServiceRetriesFailedResponseInSameSession(t *testing.T) {
 		}
 		if len(a.threadWithID(1).Messages) != count {
 			t.Error("a stale retry submitted another message")
+		}
+	})
+}
+
+func TestServiceRetryRewindsOnlyTheLastUserMessage(t *testing.T) {
+	f := newServiceFixture(t)
+	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
+	persistSetting("notifications-completion", "off")
+	source := handoffSource()
+	prompt, _, err := expandThreadRefs(referenceText(testReference(source), source.Title)+" 再审核一下", ThreadRef{}, func(ThreadRef) (Thread, []Message, error) {
+		return source, source.Messages, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	image := filepath.Join(t.TempDir(), "shot.png")
+	if err := os.WriteFile(image, []byte("test-image"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	paths := []string{image, filepath.Join(t.TempDir(), "notes.txt")}
+	shown, images := attachmentDisplay(prompt, paths)
+	f.serv.do(func() {
+		c := f.srv.c
+		writeClaudeSession(t, c.cwd, "s1", sessionLines(c.cwd)...)
+		c.serial = 100
+		c.setThreads([]Thread{{ID: 1, Agent: agentClaude, ServerID: "s1", Resumed: true, Loaded: true, HistoryLoaded: true, Messages: []Message{
+			{ID: 10, Role: "user", Content: "first"},
+			{ID: 11, Role: "assistant", Content: "reply one"},
+			{ID: 12, Role: "user", Content: shown, Images: images, Attachments: paths},
+			{ID: 13, Role: "tool", Content: "failed turn's tool output"},
+			{ID: 14, Role: "error", Content: "Connection dropped"},
+		}}})
+	})
+	a := f.window()
+	f.waitWindow("the failed conversation", func() bool { return a.threadWithID(1).ID == 1 })
+	f.win.do(func() { a.selectThread(a.threadWithID(1)) })
+	f.waitWindow("the failed turn", func() bool { return len(a.threadWithID(1).Messages) == 5 })
+	f.win.do(func() {
+		a.rememberDraft("keep my draft")
+		a.setAttachments([]string{"/tmp/unsent.txt"})
+		if err := a.retryResponse(retryRequest{ThreadID: 1, MessageID: 14}); err != nil {
+			t.Error(err)
+		}
+	})
+	f.waitWindow("the replacement response", func() bool {
+		th := a.threadWithID(1)
+		return !th.Busy && len(th.Messages) == 4 && th.Messages[3].Content == "partial done"
+	})
+	f.win.do(func() {
+		th := a.threadWithID(1)
+		if th.ServerID == "s1" || th.Messages[0].Content != "first" || th.Messages[1].Content != "reply one" || th.Messages[2].Content != shown {
+			t.Fatal("retry did not preserve earlier turns and replay the last original request")
+		}
+		m := th.Messages[2]
+		if len(m.Images) != 1 || len(m.Attachments) != 2 || m.Attachments[0] != paths[0] || m.Attachments[1] != paths[1] {
+			t.Fatal("retry lost the original attachments")
+		}
+		if a.draft() != "keep my draft" || len(a.attachments()) != 1 || a.attachments()[0] != "/tmp/unsent.txt" {
+			t.Fatal("retry changed the unsent draft or attachments")
 		}
 	})
 }

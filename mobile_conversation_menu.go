@@ -25,6 +25,17 @@ func (m *mobileApp) conversationActionsSheet(c *ui.Context) {
 				m.conversationMenu = false
 				m.openProjectFiles(m.conversationMenuProject)
 			}
+			if m.conversationAction(c.Key("web"), "Web 服务", "globe").Disabled(!m.connected).Clicked() {
+				m.conversationMenu = false
+				m.openWebServices(m.conversationMenuProject)
+			}
+			if m.open != 0 {
+				if m.conversationAction(c.Key("runtime"), "后台运行", "terminal-2").Disabled(!m.connected).Clicked() {
+					m.conversationMenu = false
+					m.openWebServices(m.conversationMenuProject)
+					m.webDetails = true
+				}
+			}
 			ui.Column(c).FillWidth().Padding(0, 16).Children(func() {
 				ui.Box(c).FillWidth().Height(1).Background(p.line)
 			})

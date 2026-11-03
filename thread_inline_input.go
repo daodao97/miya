@@ -242,6 +242,7 @@ func (app *chatApp) threadInput(c *ui.Context, state *inlineThreadInput, raw, ow
 	in := richtext.EditorBase(c, state.doc, richtext.EditorOptions{
 		Label: label, Placeholder: placeholder, NoMarkdown: true, Font: state.style.font,
 		OnPaste: func() bool { paste(); return true }, ContextMenu: contextMenu,
+		OnCopy:   func(cut bool) bool { copySelection(cut); return true },
 		TagStyle: func(_ string, span *ui.Span) { span.ObjectDescent = size * 0.25 },
 	}).FillWidth().MinWidth(0).FocusRing(false).InputOptions(ui.InputOptions{Dismiss: ui.KeyboardDismissInteractive})
 	if measured := in.Bounds().W; measured > 0 {

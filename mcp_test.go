@@ -65,7 +65,7 @@ func TestMCPServerHandshakeAndTools(t *testing.T) {
 	for _, tool := range res["2"]["result"].(map[string]any)["tools"].([]any) {
 		names = append(names, tool.(map[string]any)["name"].(string))
 	}
-	if strings.Join(names, ",") != "list_threads,read_thread,thread_status,delegate,list_automations,create_automation,update_automation,report_result,search_memory,remember,forget_memory" {
+	if strings.Join(names, ",") != "runtime_info,list_threads,read_thread,thread_status,delegate,list_automations,create_automation,update_automation,report_result,search_memory,remember,forget_memory" {
 		t.Fatalf("bad tools: %v", names)
 	}
 	if res[`"p"`]["result"] == nil || res["3"]["error"].(map[string]any)["code"] != float64(-32601) || res["null"]["error"] == nil {

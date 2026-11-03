@@ -134,6 +134,35 @@ func TestAutomaticRecallPreferenceRemovalAndExpiration(t *testing.T) {
 	}
 }
 
+func TestAutomaticRecallDoesNotCorrectWithAnotherTasksProgress(t *testing.T) {
+	s, scope := fixture(t)
+	m := mutation(s, "手机构建任务 A 已完成")
+	m.Kind, m.TaskKey = "progress", "task-a"
+	e := save(t, s, scope, m)
+	if err := s.Configure(scope, Settings{AutoInject: true}); err != nil {
+		t.Fatal(err)
+	}
+	p, err := s.Prepare(scope, "session", "", "手机构建", "task-a")
+	if err != nil || !strings.Contains(p.Block, m.Content) {
+		t.Fatal("initial progress missing", err)
+	}
+	if err := s.FinishPrepared(scope, p, true); err != nil {
+		t.Fatal(err)
+	}
+	m.ID, m.Version, m.TaskKey, m.Content = e.ID, e.Version, "task-b", "手机构建任务 B 的私人进度"
+	save(t, s, scope, m)
+	p, err = s.Prepare(scope, "session", "", "手机构建", "task-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(p.Block, m.Content) || !strings.Contains(p.Block, "unavailable") {
+		t.Fatal("correction crossed task boundary instead of invalidating old progress")
+	}
+	if !s.ValidatePrepared(scope, p) {
+		t.Fatal("task invalidation cannot be sent")
+	}
+}
+
 func TestAutomaticRecallThousandEntryPreparationLatency(t *testing.T) {
 	s, scope := fixture(t)
 	d, _ := s.load(scope)

@@ -24,6 +24,9 @@ func (app *chatApp) sidebarView(c *ui.Context) {
 				if app.nav(c.Key("nav-new"), "edit", "New thread").Clicked() {
 					app.newThread()
 				}
+				if app.nav(c.Key("nav-search"), "search", "搜索对话").Tooltip(shortcutKeys(ui.Cmd, "K")).Clicked() {
+					app.openConversationSwitcher()
+				}
 				if app.nav(c.Key("nav-automations"), "clock", "Automations").Clicked() {
 					app.showAutomations()
 				}
@@ -31,6 +34,7 @@ func (app *chatApp) sidebarView(c *ui.Context) {
 					app.section = "Skills"
 				}
 			})
+			app.sidebarActivity(c.Key("activity"))
 			ui.Row(c).AlignItems(ui.Center).Margin(28, 0, 4, 0).Padding(0, 12, 0, 20).Children(func() {
 				ui.Text(c, tr("Projects")).FontSize(11).TextColor(faint).Grow(1)
 				if toolButton(c.Key("add-project"), "folder-plus", "Select project").Clicked() {
@@ -44,11 +48,60 @@ func (app *chatApp) sidebarView(c *ui.Context) {
 			})
 		})
 		ui.Column(c).Padding(12).Shrink(0).Background(side).BorderWidth(1, 0, 0, 0).BorderColor(line).Children(func() {
-			if app.nav(c.Key("nav-settings"), "settings", "Settings").Clicked() {
-				app.section = "Settings"
-			}
+			ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(4).Children(func() {
+				if app.nav(c.Key("nav-settings"), "settings", "Settings").Grow(1).Tooltip(shortcutKeys(ui.Cmd, ",")).Clicked() {
+					app.section = "Settings"
+				}
+				if quiet(c.Key("shortcuts")).Label("快捷键").Tooltip("快捷键 · F1").Children(func() { mutedText(c, "⌘").FontSize(16) }).Clicked() {
+					app.shortcutsOpen = true
+				}
+			})
 		})
 	})
+}
+
+// Activity spans projects, including conversations hidden by the compact list.
+func (app *chatApp) sidebarActivity(c *ui.Context) {
+	running, completed := app.sidebarActivityThreads()
+	for _, group := range []struct {
+		label   string
+		threads []Thread
+	}{{"进行中", running}, {"已完成", completed}} {
+		if len(group.threads) == 0 {
+			continue
+		}
+		ui.Column(c.Key(group.label)).Margin(20, 0, 0, 0).PaddingX(12).Gap(2).Children(func() {
+			ui.Text(c, group.label).FontSize(11).TextColor(faint).Padding(0, 8, 4, 8)
+			for _, t := range group.threads {
+				app.threadRow(c.Key(t.ID), t)
+			}
+		})
+	}
+}
+
+func (app *chatApp) sidebarActivityThreads() (running, completed []Thread) {
+	c := app.c
+	seen := map[int]bool{}
+	add := func(threads []Thread) {
+		for _, t := range threads {
+			if seen[t.ID] {
+				continue
+			}
+			seen[t.ID] = true
+			if t.Busy && !t.Loading {
+				running = append(running, t)
+			} else if !t.Busy && !t.Loading && c.desktopThreadUnread(t) {
+				completed = append(completed, t)
+			}
+		}
+	}
+	add(c.threads())
+	for _, p := range c.projects() {
+		if p.Path != c.cwd {
+			add(c.projectCache[p.Path])
+		}
+	}
+	return displayedThreads(running, true), displayedThreads(completed, true)
 }
 
 func (app *chatApp) nav(c *ui.Context, symbol, label string) ui.Element {
@@ -186,6 +239,14 @@ func (app *chatApp) threadRow(c *ui.Context, t Thread) {
 						ui.Row(c.Key("running")).Absolute().Top(0).Right(0).Bottom(0).Left(0).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
 							ui.Spinner(c).FontSize(13).Label(tr("Working…"))
 						})
+					} else if !t.Busy && app.c.desktopThreadUnread(t) {
+						color := ui.Hex("#30a46c")
+						if app.dark {
+							color = ui.Hex("#3dd68c")
+						}
+						ui.Row(c.Key("unread")).Absolute().Top(0).Right(0).Bottom(0).Left(0).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
+							ui.Box(c).Size(8, 8).Radius(4).Background(color).Label("待读：" + t.Title)
+						})
 					}
 				}
 			})
@@ -222,23 +283,8 @@ func (app *chatApp) header(c *ui.Context) {
 			app.section = ""
 			app.openWorkspace()
 		}
-		commit := quiet(c.Key("commit"))
-		commit.Children(func() {
-			icon(c, "git-commit", 15, ink)
-			ui.Text(c, tr("Commit"))
-			icon(c, "chevron-down", 12, muted)
-		})
-		if commit.Clicked() {
-			app.section = ""
-			app.commitOpen = !app.commitOpen
-		}
-		ui.PopoverBase(c, commit, &app.commitOpen, func(panel ui.Element) {
-			popupPanel(panel, 300)
-			ui.Text(c, tr("Changes")).FontWeight(600)
-			ui.Text(c, menuDescription("commit", app.c.cwd)).TextColor(muted).FontSize(12).LineHeight(1.5)
-		})
 		if p := app.panel(); !p.visible {
-			if toolButton(c.Key("show-panel"), "layout-sidebar-right", "显示右侧面板").Clicked() {
+			if toolButton(c.Key("show-panel"), "layout-sidebar-right", "显示右侧面板").Tooltip("显示右侧面板 · " + shortcutKeys(ui.Cmd|ui.Alt, "B")).Clicked() {
 				app.openPanel(p)
 			}
 		}
@@ -271,13 +317,11 @@ func (app *chatApp) sectionView(c *ui.Context) {
 }
 
 func menuTitle(key string) string {
-	return tr(map[string]string{"model": "Select model", "effort": "Reasoning effort", "project": "Select project", "open": "Open project", "commit": "Changes", "details": "Project details", "context": "Add context", "permissions": "Permissions", "branch": "Current branch"}[key])
+	return tr(map[string]string{"model": "Select model", "effort": "Reasoning effort", "project": "Select project", "open": "Open project", "details": "Project details", "context": "Add context", "permissions": "Permissions", "branch": "Current branch"}[key])
 }
 
 func menuDescription(key, project string) string {
 	switch key {
-	case "commit":
-		return "The Commit shortcut is not connected. Ask Codex to inspect or commit changes in chat."
 	case "details":
 		return "Project: " + project + "\nEnvironment: local Codex app-server"
 	case "context":

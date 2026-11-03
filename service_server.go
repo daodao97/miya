@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"miya/internal/memory"
@@ -62,6 +63,7 @@ func (p *svcPeer) write(data []byte) error {
 }
 
 func newService(c *chatController, ex *executor) *service {
+	c.runtimePath = filepath.Join(serviceDir(), "runtime.json")
 	c.memory = memory.New(filepath.Join(serviceDir(), "memory"))
 	s := &service{c: c, exec: ex, peers: map[*svcPeer]bool{}, dirty: make(chan struct{}, 1), quit: make(chan struct{}), idleTimeout: serviceIdleTimeout}
 	c.push = newPushHub()
@@ -184,13 +186,37 @@ func (s *service) handle(p *svcPeer, req svcRequest) (any, error) {
 		}
 	case "hello":
 		return svcHello{Version: serviceVersion, Exe: s.exe, ExeTime: s.exeTime, PID: os.Getpid(), Busy: s.busy()}, nil
+	case "runtimeValidate":
+		var r phoneWebService
+		if err := arg(&r); err != nil {
+			return nil, err
+		}
+		manager := c.runtimes()
+		return deferred(func() (any, error) {
+			ctx, cancel := context.WithTimeout(manager.ctx, 5*time.Second)
+			defer cancel()
+			return nil, manager.validateToken(ctx, r.RuntimeToken, r.Host, r.Port)
+		}), nil
+	case "runtime":
+		var r runtimeRequest
+		if err := arg(&r); err != nil {
+			return nil, err
+		}
+		return c.prepareRuntime(r.Ref, r.Project)
 	case "state":
 		return c.snapshotState(), nil
+	case "desktop-read":
+		var read desktopRead
+		if err := arg(&read); err != nil {
+			return nil, err
+		}
+		c.markDesktopRead(read)
+		s.markDirty()
 	case "subscribe":
 		_ = arg(&id)
 		p.sub, p.sent, p.order = id, nil, nil
 		s.markDirty()
-	case "mcpMemory", "mcpThreads", "mcpRead", "mcpStatus", "mcpDelegate", "mcpAutomationList", "mcpAutomationCreate", "mcpAutomationUpdate", "mcpReportResult":
+	case "mcpMemory", "mcpThreads", "mcpRead", "mcpStatus", "mcpDelegate", "mcpAutomationList", "mcpAutomationCreate", "mcpAutomationUpdate", "mcpReportResult", "mcpRuntime":
 		var r mcpRequest
 		if err := arg(&r); err != nil {
 			return nil, err
@@ -374,6 +400,9 @@ func (s *service) handle(p *svcPeer, req svcRequest) (any, error) {
 
 // busy reports a turn running or starting, which quitting would end.
 func (s *service) busy() bool {
+	if s.c.runtimeBusy() {
+		return true
+	}
 	if s.c.memoryCalls > 0 || s.c.memoryEngine != nil && s.c.memoryEngine.busy.Load() || len(s.c.claudeRuns) > 0 {
 		return true
 	}
@@ -570,6 +599,7 @@ func (c *chatController) snapshotState() svcState {
 		FastMode:        c.fastMode,
 		ProjectBusy:     busy,
 		ProjectThreads:  projectThreads,
+		DesktopUnread:   c.desktopUnread,
 		Cwd:             c.cwd, Projects: c.projects(), Threads: threads, Approvals: c.approvals(),
 		Status: c.status(), HistoryStatus: c.historyStatus(), Ready: c.ready(),
 		Models: c.models(), Model: c.model(), Effort: c.effort(), PermissionPolicy: c.permissionPolicy(), Locale: c.locale(),

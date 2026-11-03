@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -38,6 +39,9 @@ func tr(english string) string {
 }
 
 type chatController struct {
+	runtimeMu      sync.Mutex
+	runtimePath    string
+	runtime        *runtimeManager
 	memory         *memory.Store // non-nil only in the background service
 	memoryCalls    int           // executor-owned; pending IO prevents idle service exit
 	memoryRevision uint64
@@ -137,6 +141,8 @@ type chatController struct {
 	connecting          bool
 	connectionCancel    context.CancelFunc
 	projectCache        map[string][]Thread
+	desktopUnread       map[string]int64
+	desktopReadPending  map[string]int64 // window acknowledgements awaiting a service snapshot
 	historyStatus       func() string
 	setHistoryStatus    func(string)
 	revision            func() int
@@ -210,6 +216,7 @@ func newChatController() *chatController {
 	}
 	c.cwd, _ = filepath.Abs(c.cwd)
 	c.projectCache = loadThreadListCache()
+	c.loadDesktopUnread()
 	c.assignCachedThreadIDs()
 	projects := loadProjects(c.cwd)
 	cachedPaths := make([]string, 0, len(c.projectCache))
@@ -770,6 +777,7 @@ func (c *chatController) update(id int, fn func(*Thread)) {
 				c.rememberForkedReference(old, path)
 			}
 			c.projectCache[path] = items
+			c.recordDesktopCompletion(old, items[i])
 			if threadMetaOf(items[i]) != threadMetaOf(old) {
 				c.refreshProjectOrder()
 				persistThreadListCache(c.projectCache)
@@ -1400,13 +1408,15 @@ func (c *chatController) send() { c.sendDraft(false) }
 
 // sendDraft submits the window's draft; in a running turn it steers the
 // turn, or waits in the queue when steer is false.
-func (c *chatController) sendDraft(steer bool) {
+func (c *chatController) sendDraft(steer bool) int {
 	req := sendRequest{Steer: steer, ThreadID: c.current().ID, Text: c.draft(), Attachments: append([]string(nil), c.attachments()...), Agent: c.currentAgent(), Model: c.currentBackend().Model(c), Effort: c.currentBackend().Effort(c), Policy: c.currentPermissionPolicy()}
-	if id := c.submit(req); id != 0 {
+	id := c.submit(req)
+	if id != 0 {
 		c.setActive(id)
 		c.rememberDraft("")
 		c.setAttachments(nil)
 	}
+	return id
 }
 
 func (c *chatController) sendCodex(req sendRequest) int {
@@ -1441,13 +1451,14 @@ func (c *chatController) sendCodex(req sendRequest) int {
 	pendingUserID := c.nextID()
 	localTurn := c.beginMemoryTurn(t, req, pendingUserID)
 	c.update(id, func(t *Thread) {
+		resetTurnOutput(t)
 		t.Busy = true
 		t.LastActivityAt = sentAt
 		t.Status = "Starting…"
 		t.Draft = ""
 		t.StopRequested = false
 		content, images := attachmentDisplay(text, attachments)
-		t.Messages = append(t.Messages, Message{ID: pendingUserID, Role: "user", Content: content, Images: images, Parts: req.Parts, ItemID: "pending-user", SentAtMs: sentAt, MemoryTurnID: localTurn, MemoryControl: req.MemoryControl || req.KeepSessionSettings})
+		t.Messages = append(t.Messages, Message{ID: pendingUserID, Role: "user", Content: content, Images: images, Attachments: append([]string(nil), req.Attachments...), Parts: req.Parts, ItemID: "pending-user", SentAtMs: sentAt, MemoryTurnID: localTurn, MemoryControl: req.MemoryControl || req.KeepSessionSettings})
 	})
 	go func() {
 		ctx, cancel := context.WithTimeout(c.ctx, 45*time.Second)

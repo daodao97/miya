@@ -160,7 +160,7 @@ func (codexBackend) Steer(c *chatController, t Thread, req sendRequest) bool {
 	localTurn := c.beginMemoryTurn(t, req, pending)
 	c.update(t.ID, func(t *Thread) {
 		t.LastActivityAt = sentAt
-		t.Messages = append(t.Messages, Message{ID: pending, Role: "user", Content: content, Images: images, Parts: req.Parts, ItemID: "pending-user", SentAtMs: sentAt, MemoryTurnID: localTurn, MemoryControl: req.MemoryControl || req.KeepSessionSettings})
+		t.Messages = append(t.Messages, Message{ID: pending, Role: "user", Content: content, Images: images, Attachments: append([]string(nil), req.Attachments...), Parts: req.Parts, ItemID: "pending-user", SentAtMs: sentAt, MemoryTurnID: localTurn, MemoryControl: req.MemoryControl || req.KeepSessionSettings})
 	})
 	go func() {
 		mem := c.prepareMemoryInput(t, req, cwd, c.threadRef(t).URL())

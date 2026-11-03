@@ -90,6 +90,19 @@ func TestMemoryExtractorPickerSavesAgentWithoutEnablingAutomation(t *testing.T) 
 	tt.Frame()
 	d.drain()
 }
+
+func TestMemoryExtractionFailureReasonVisible(t *testing.T) {
+	app, tt := testApp(t)
+	attachMemory(t, app.c)
+	app.section, app.settingsTab = "Settings", 4
+	app.memories = memoryUI{scope: "project", project: app.c.cwd, loadedAt: time.Now(), list: memoryList{
+		Extraction: memory.ExtractionStatus{Failed: 1, LastError: "提炼输入超过上限，已跳过此回合"},
+	}}
+	tt.Frame()
+	if !tt.HasText("最近提炼问题：提炼输入超过上限，已跳过此回合") {
+		t.Fatalf("missing extraction diagnostic: %q", tt.Texts())
+	}
+}
 func TestMemoryNoticeAlwaysVisibleAndContainsScopeAndUndo(t *testing.T) {
 	app, tt := testApp(t)
 	c := app.c

@@ -31,6 +31,9 @@ func (c *chatController) installNotifications() {
 		}
 		set(next)
 		for _, t := range next {
+			if old, ok := previous[t.ID]; ok {
+				c.recordDesktopCompletion(old, t)
+			}
 			// An automation tells how its whole run ended instead.
 			if old, ok := previous[t.ID]; ok && t.Automation == "" {
 				if n, yes := completionNotice(old, t); yes {

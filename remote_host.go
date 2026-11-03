@@ -39,6 +39,9 @@ type phoneState struct {
 	Memory          bool                   `json:"memory,omitempty"`
 	ReferenceSource string                 `json:"referenceSource"`
 	Files           bool                   `json:"files,omitempty"`
+	WebPorts        bool                   `json:"webPorts,omitempty"`
+	Runtime         bool                   `json:"runtime,omitempty"`
+	WebServices     bool                   `json:"webServices,omitempty"`
 	FileReferences  bool                   `json:"fileReferences,omitempty"`
 	Automations     bool                   `json:"automations,omitempty"`
 	Projects        []phoneProject         `json:"projects"`
@@ -62,7 +65,7 @@ func listThread(t Thread) Thread {
 }
 
 func (c *chatController) phoneSnapshot() phoneState {
-	s := phoneState{ReferenceSource: c.referenceSource, MemoryRevision: c.memoryRevision, Memory: c.memory != nil, Files: true, FileReferences: true, Automations: c.auto != nil, Status: c.status(), Approvals: c.approvals(), Agents: c.phoneAgentOptions(), Quotas: c.phoneQuotas()}
+	s := phoneState{ReferenceSource: c.referenceSource, MemoryRevision: c.memoryRevision, Memory: c.memory != nil, Files: true, WebPorts: true, WebServices: true, Runtime: true, FileReferences: true, Automations: c.auto != nil, Status: c.status(), Approvals: c.approvals(), Agents: c.phoneAgentOptions(), Quotas: c.phoneQuotas()}
 	if c.agent != nil {
 		s.Agent = c.agent()
 	}

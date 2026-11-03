@@ -341,7 +341,7 @@ func (s *Store) Forget(scope Scope, id string, version uint64) (Entry, error) {
 	e := Entry{ID: id, Version: version + 1, Scope: scope, State: "forgotten", CreatedAt: old.CreatedAt, UpdatedAt: s.now()}
 	d.Entries = append(keep, e)
 	d.Tombstones = append(d.Tombstones, mark)
-	scrubForgottenJobs(&d, id, mark.Sources)
+	scrubForgottenJobs(&d, id, mark.Sources, s.now())
 	// The tombstone and removal commit atomically. Future derived records must
 	// pass this barrier before reading a forgotten version.
 	if err = s.commit(d); err != nil {

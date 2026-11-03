@@ -63,7 +63,7 @@ func (c *chatController) loadClaudeHistory(t Thread) {
 	if t.HistoryLoaded || t.Loading {
 		return
 	}
-	cwd := c.cwd
+	cwd := c.threadWorkspace(t.ID)
 	c.update(t.ID, func(t *Thread) { t.Loading = true })
 	done := make(chan struct{})
 	c.claudeHistoryDone = done
@@ -85,7 +85,7 @@ func (c *chatController) loadClaudeHistory(t Thread) {
 			}
 		}
 		c.dispatch(func() {
-			if c.cwd != cwd {
+			if c.threadWorkspace(t.ID) != cwd || c.threadWithID(t.ID).ServerID != t.ServerID {
 				return
 			}
 			c.update(t.ID, func(t *Thread) {
@@ -102,6 +102,7 @@ func (c *chatController) loadClaudeHistory(t Thread) {
 				t.Resumed = stored.Resumed
 				t.Loaded = true
 			})
+			c.drainQueue(t.ID)
 		})
 	}()
 }
@@ -128,6 +129,13 @@ func claudeInput(text string, paths []string) ([]map[string]any, error) {
 func (c *chatController) sendClaude(req sendRequest) int {
 	text, paths, policy := req.Text, req.Attachments, req.Policy
 	t := c.threadWithID(req.ThreadID)
+	if t.ID != 0 && !t.HistoryLoaded {
+		// A phone may have read history without opening it in the controller.
+		// Hydrate that copy before publishing any new messages as live history.
+		id := c.enqueue(t.ID, req)
+		c.loadClaudeHistory(t)
+		return id
+	}
 	cwd := c.cwd
 	if t.ID != 0 {
 		cwd = c.threadWorkspace(t.ID)
@@ -148,6 +156,7 @@ func (c *chatController) sendClaude(req sendRequest) int {
 	localTurn := c.beginMemoryTurn(t, req, pendingUserID)
 	now := time.Now().UnixMilli()
 	c.update(id, func(t *Thread) {
+		resetTurnOutput(t)
 		t.Busy = true
 		t.StopRequested = false
 		t.StartedAtMs = now
@@ -156,7 +165,7 @@ func (c *chatController) sendClaude(req sendRequest) int {
 		t.LastActivityAt = now
 		t.Status = "Claude Code 正在运行…"
 		shown, images := attachmentDisplay(text, paths)
-		t.Messages = append(t.Messages, Message{ID: pendingUserID, Role: "user", Content: shown, Images: images, Parts: req.Parts, SentAtMs: now, MemoryTurnID: localTurn, MemoryControl: req.MemoryControl || req.KeepSessionSettings})
+		t.Messages = append(t.Messages, Message{ID: pendingUserID, Role: "user", Content: shown, Images: images, Attachments: append([]string(nil), req.Attachments...), Parts: req.Parts, SentAtMs: now, MemoryTurnID: localTurn, MemoryControl: req.MemoryControl || req.KeepSessionSettings})
 		name, _, _ := strings.Cut(text, " ")
 		if name == "/loop" || name == "/proactive" {
 			setThreadTask(t, ThreadTask{ID: "loop:pending", Kind: "loop", Title: strings.TrimSpace(strings.TrimPrefix(text, name)), Status: "starting"})
@@ -226,6 +235,7 @@ func (c *chatController) sendClaude(req sendRequest) int {
 				return
 			}
 			c.claudeRuns[id] = run
+			c.noteRuntime(c.threadWithID(id))
 			for _, t := range c.threads() {
 				if t.ID == id && t.StopRequested {
 					go run.Stop()
@@ -326,6 +336,9 @@ func (c *chatController) finishClaude(id int, cwd string, err error) {
 	c.setApprovals(pending)
 }
 func (c *chatController) handleClaude(id int, f claude.Frame) {
+	if f.Type == "assistant" || f.Type == "user" || f.Type == "system" || f.Type == "result" {
+		c.noteRuntime(c.threadWithID(id))
+	}
 	if f.Type == "system" && f.Subtype == "init" {
 		c.noteClaudeModel(f.Model)
 	}
@@ -376,6 +389,7 @@ func (c *chatController) handleClaude(id int, f claude.Frame) {
 		}
 		if f.Type == "command_lifecycle" && f.CommandState == "started" {
 			if !t.Busy {
+				resetTurnOutput(t)
 				t.StartedAtMs = now
 			}
 			t.Busy, t.StopRequested = true, false
@@ -403,14 +417,19 @@ func (c *chatController) handleClaude(id int, f claude.Frame) {
 			var e struct {
 				Type    string
 				Index   int
-				Message struct{ ID string }
+				Message claude.Message
 				Delta   struct{ Type, Text string }
+				Usage   json.RawMessage
 			}
 			if json.Unmarshal(f.Event, &e) != nil {
 				return
 			}
 			if e.Type == "message_start" {
 				t.ClaudeMessageID = e.Message.ID
+				recordClaudeOutput(t, e.Message.ID, e.Message.Usage)
+			}
+			if e.Type == "message_delta" {
+				recordClaudeOutput(t, t.ClaudeMessageID, e.Usage)
 			}
 			if e.Type == "content_block_delta" && e.Delta.Type == "text_delta" {
 				key := fmt.Sprintf("%s:%d", t.ClaudeMessageID, e.Index)
@@ -423,6 +442,7 @@ func (c *chatController) handleClaude(id int, f claude.Frame) {
 				t.Messages = append(t.Messages, Message{ID: c.nextID(), Role: "assistant", Kind: "agentMessage", ItemID: key, Content: e.Delta.Text, SentAtMs: now, StartedAtMs: now})
 			}
 		case "assistant":
+			recordClaudeOutput(t, f.Message.ID, f.Message.Usage)
 			for i, b := range f.Message.Content {
 				if b.Type == "text" {
 					key := claudeTextKey(t, f.Message.ID, i, b.Text)

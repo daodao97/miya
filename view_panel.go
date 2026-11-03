@@ -27,30 +27,38 @@ const (
 	surfaceTerminal
 	surfaceFiles
 	surfaceDiff
+	surfaceRuntime
 )
 
-var surfaceKinds = []surfaceKind{surfaceBrowser, surfaceTerminal, surfaceFiles, surfaceDiff}
+var surfaceKinds = []surfaceKind{surfaceBrowser, surfaceTerminal, surfaceFiles, surfaceDiff, surfaceRuntime}
 
 func (k surfaceKind) label() string {
-	return [...]string{"浏览器", "终端", "文件", "审阅"}[k]
+	return [...]string{"浏览器", "终端", "文件", "审阅", "后台运行"}[k]
 }
 
 func (k surfaceKind) icon() string {
-	return [...]string{"globe", "terminal-2", "folder", "file-diff"}[k]
+	return [...]string{"globe", "terminal-2", "folder", "file-diff", "stack-2"}[k]
 }
 
 func (k surfaceKind) description() string {
-	return [...]string{"打开本地应用或网址", "在此工作区中打开终端", "浏览并阅读工作区文件", "审阅文件更改"}[k]
+	return [...]string{"打开本地应用或网址", "在此工作区中打开终端", "浏览并阅读工作区文件", "审阅文件更改", "查看本对话的任务、进程和服务"}[k]
 }
 
 // Browsers and terminals open as many tabs as asked; the files and the
 // review are one tab each.
-func (k surfaceKind) single() bool { return k == surfaceFiles || k == surfaceDiff }
+func (k surfaceKind) single() bool {
+	return k == surfaceFiles || k == surfaceDiff || k == surfaceRuntime
+}
 
 type panelSurface struct {
-	id     int
-	kind   surfaceKind
-	closed bool
+	runtimeData    *conversationRuntime
+	runtimeLoading bool
+	runtimeErr     string
+	runtimeRef     ThreadRef
+	runtimeAt      time.Time
+	id             int
+	kind           surfaceKind
+	closed         bool
 
 	web     *mygo.WebView
 	address string
@@ -266,7 +274,7 @@ func (app *chatApp) rightPanel(c *ui.Context, p *panelState) {
 	}
 	p.lastBusy = app.c.current().Busy
 
-	divider := ui.Box(c.Key("panel-divider")).Width(5).FillHeight().Shrink(0).Label("调整右侧面板宽度")
+	divider := ui.Box(c.Key("panel-divider")).Width(5).FillHeight().Shrink(0).Cursor(ui.CursorResizeEW).Label("调整右侧面板宽度")
 	if dx, _, ok := divider.Dragged(); ok {
 		app.panelWidth = min(max(app.panelWidth-dx, 320), 960)
 	}
@@ -294,6 +302,8 @@ func (app *chatApp) rightPanel(c *ui.Context, p *panelState) {
 			app.filesView(c, p)
 		case surfaceDiff:
 			app.diffSurface(c, p)
+		case surfaceRuntime:
+			app.runtimeSurface(c, p, s)
 		}
 	})
 }
@@ -330,7 +340,7 @@ func (app *chatApp) panelHeader(c *ui.Context, p *panelState) {
 				}
 			})
 		}
-		if toolButton(c.Key("hide-panel"), "layout-sidebar-right", "隐藏右侧面板").Clicked() {
+		if toolButton(c.Key("hide-panel"), "layout-sidebar-right", "隐藏右侧面板").Tooltip("隐藏右侧面板 · " + shortcutKeys(ui.Cmd|ui.Alt, "B")).Clicked() {
 			app.hidePanel(p)
 		}
 	})
@@ -372,7 +382,7 @@ func (app *chatApp) panelChooser(c *ui.Context, p *panelState) {
 		ui.Column(c).FillWidth().MaxWidth(420).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, "打开一个面板").FontSize(13).FontWeight(500)
 			ui.Text(c, "选择要在右侧面板中显示的内容").FontSize(12).TextColor(muted).Margin(5, 0, 0, 0)
-			for row, kinds := range [][]surfaceKind{{surfaceBrowser, surfaceTerminal}, {surfaceFiles, surfaceDiff}} {
+			for row, kinds := range [][]surfaceKind{{surfaceBrowser, surfaceTerminal}, {surfaceFiles, surfaceDiff}, {surfaceRuntime}} {
 				ui.Row(c.Key(row)).FillWidth().Gap(8).Margin(map[bool]float32{true: 18, false: 8}[row == 0], 0, 0, 0).Children(func() {
 					for _, k := range kinds {
 						app.surfaceCard(c.Key(k), p, k)
@@ -477,6 +487,7 @@ func (app *chatApp) startTerminal(s *panelSurface, dir string) {
 	goAsync(func() {
 		t, err := terminal.New(terminal.Options{
 			Dir:                     dir,
+			ShellIntegration:        true,
 			CopyOnSelect:            terminal.CopyOnSelectClipboard,
 			SelectOnDrag:            true,
 			SelectOnDragInAltScreen: true,

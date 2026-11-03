@@ -35,16 +35,28 @@ type Options struct {
 	Content                                               []map[string]any
 	Args, Env                                             []string
 }
+type NativeBackgroundTask struct {
+	TaskID       string `json:"task_id"`
+	RunID        string `json:"run_id"`
+	TaskType     string `json:"task_type"`
+	Description  string `json:"description"`
+	ParentTaskID string `json:"parent_task_id"`
+}
+
 type Frame struct {
-	Type             string          `json:"type"`
-	ToolUseResult    json.RawMessage `json:"tool_use_result"`
-	CommandState     string          `json:"state"`
-	WakeupSource     string          `json:"wakeup_source"`
-	SchedulesKnown   bool            `json:"-"`
-	Schedules        []ScheduledTask `json:"-"`
-	KeepingAlive     bool            `json:"-"`
-	WaitingForAgents bool            `json:"-"`
-	AgentTasks       []AgentTask     `json:"-"`
+	TaskType         string                 `json:"task_type"`
+	RunID            string                 `json:"run_id"`
+	Tasks            []NativeBackgroundTask `json:"tasks"`
+	BackgroundWork   bool                   `json:"-"`
+	Type             string                 `json:"type"`
+	ToolUseResult    json.RawMessage        `json:"tool_use_result"`
+	CommandState     string                 `json:"state"`
+	WakeupSource     string                 `json:"wakeup_source"`
+	SchedulesKnown   bool                   `json:"-"`
+	Schedules        []ScheduledTask        `json:"-"`
+	KeepingAlive     bool                   `json:"-"`
+	WaitingForAgents bool                   `json:"-"`
+	AgentTasks       []AgentTask            `json:"-"`
 	// Model is the model a system init frame reports.
 	Model     string `json:"model"`
 	Subtype   string `json:"subtype"`
@@ -84,8 +96,9 @@ type Frame struct {
 // content is a block list, but some frames carry a plain string message, and
 // user messages may carry a plain string content; both decode to text blocks.
 type Message struct {
-	ID      string  `json:"id"`
-	Content []Block `json:"content"`
+	ID      string          `json:"id"`
+	Content []Block         `json:"content"`
+	Usage   json.RawMessage `json:"usage"`
 }
 
 func (m *Message) UnmarshalJSON(b []byte) error {
@@ -100,11 +113,13 @@ func (m *Message) UnmarshalJSON(b []byte) error {
 	var raw struct {
 		ID      string          `json:"id"`
 		Content json.RawMessage `json:"content"`
+		Usage   json.RawMessage `json:"usage"`
 	}
 	if err := json.Unmarshal(b, &raw); err != nil {
 		return err
 	}
 	m.ID = raw.ID
+	m.Usage = raw.Usage
 	if len(raw.Content) == 0 || string(raw.Content) == "null" {
 		return nil
 	}
@@ -125,7 +140,11 @@ type Block struct {
 	IsError              bool            `json:"is_error"`
 }
 type Client struct {
-	mu sync.Mutex
+	pid             int
+	epoch           string
+	background      []BackgroundTask
+	backgroundKnown bool
+	mu              sync.Mutex
 	// open is true while the turn takes more user messages: after the
 	// first is written, until the result or the process ends.
 	open                          bool
@@ -307,7 +326,7 @@ func Start(parent context.Context, o Options, onFrame func(Frame), onDone func(e
 		cancel()
 		return nil, err
 	}
-	c := &Client{in: in, cancel: cancel, done: make(chan struct{}), model: o.Model, effort: o.Effort, permissionMode: o.PermissionMode}
+	c := &Client{pid: cmd.Process.Pid, epoch: fmt.Sprintf("%d:%d", cmd.Process.Pid, time.Now().UnixNano()), in: in, cancel: cancel, done: make(chan struct{}), model: o.Model, effort: o.Effort, permissionMode: o.PermissionMode}
 	if err = c.Write(map[string]any{"type": "control_request", "request_id": "initialize", "request": map[string]any{"subtype": "initialize", "hooks": map[string]any{}}}); err != nil {
 		cancel()
 	}
@@ -320,9 +339,13 @@ func Start(parent context.Context, o Options, onFrame func(Frame), onDone func(e
 		initialized, finished := false, false
 		var schedules scheduleTracker
 		var agents agentTracker
+		var background backgroundTracker
 		var runErr error
 		timer := time.AfterFunc(30*time.Second, func() { c.cancel() })
 		defer timer.Stop()
+		idleTimer := time.AfterFunc(time.Hour, func() { c.closeIdleInput() })
+		idleTimer.Stop()
+		defer idleTimer.Stop()
 		for scanner.Scan() {
 			var f Frame
 			if e := json.Unmarshal(scanner.Bytes(), &f); e != nil {
@@ -365,9 +388,22 @@ func Start(parent context.Context, o Options, onFrame func(Frame), onDone func(e
 				continue
 			}
 			schedules.apply(&f)
+			wasBackgroundActive := background.active()
+			background.apply(&f)
+			c.mu.Lock()
+			c.background, c.backgroundKnown = background.snapshot(), background.known
+			c.mu.Unlock()
 			agents.apply(&f)
+			c.mu.Lock()
+			for _, agent := range agents.tasks {
+				if agent.Status == "running" {
+					c.background = append(c.background, BackgroundTask{ID: agent.ID, ToolUseID: agent.ToolUseID, Kind: "local_agent", Description: agent.Name, Status: agent.Status})
+				}
+			}
+			c.mu.Unlock()
 			if f.ParentToolUseID == "" && (f.Type == "command_lifecycle" && f.CommandState == "started" || f.Type == "assistant" || f.Type == "stream_event") {
 				finished = false
+				idleTimer.Stop()
 				c.mu.Lock()
 				c.open, c.idle = !c.stopping, false
 				c.mu.Unlock()
@@ -375,7 +411,7 @@ func Start(parent context.Context, o Options, onFrame func(Frame), onDone func(e
 			if f.Type == "result" && f.ParentToolUseID == "" {
 				finished = true
 				c.mu.Lock()
-				keep := (schedules.active() || agents.active()) && !c.stopping && !f.IsError
+				keep := (schedules.active() || agents.active() || background.active()) && !c.stopping && (!f.IsError || background.active())
 				f.KeepingAlive = keep
 				c.open, c.idle = false, keep
 				c.mu.Unlock()
@@ -386,13 +422,18 @@ func Start(parent context.Context, o Options, onFrame func(Frame), onDone func(e
 				}
 			}
 			onFrame(f)
+			if finished && wasBackgroundActive && !schedules.active() && !agents.active() && !background.active() {
+				// Let native task notifications initiate their follow-up turn before
+				// releasing an otherwise idle CLI. New output cancels this grace period.
+				idleTimer.Reset(5 * time.Second)
+			}
 		}
 		if e := scanner.Err(); e != nil && runErr == nil {
 			runErr = e
 		}
 
 		e := cmd.Wait()
-		if runErr == nil && (!finished || agents.active()) {
+		if runErr == nil && (!finished || agents.active() || background.active()) {
 			if !initialized {
 				runErr = errors.New("Claude Code 初始化失败或超时，请检查 CLI 登录状态")
 			} else if e != nil {

@@ -69,6 +69,9 @@ func interruptClaudeAgents(t *Thread, status string) {
 // claudeTaskFrame applies a system task frame, Claude Code's own report of a
 // sub-agent's state, to the Task call that started the sub-agent.
 func claudeTaskFrame(t *Thread, f claude.Frame) {
+	if f.BackgroundWork || f.TaskType != "" && f.TaskType != "local_agent" && f.TaskType != "remote_agent" {
+		return
+	}
 	a := claudeTaskAgent(t, f.ToolUseID, f.TaskID)
 	if a == nil {
 		return

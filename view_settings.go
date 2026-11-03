@@ -15,20 +15,22 @@ import (
 
 func (app *chatApp) settingsView(c *ui.Context) {
 	cc := app.c
-	ui.Column(c).Gap(12).Children(func() {
-		ui.Tabs(c.Key("settings-tabs"), &app.settingsTab, "General", "Account", "Phone", "用量", "记忆").AlignSelf(ui.Start)
+	zh := cc.locale() == "zh"
+	tabs := []string{"General", "Account", "Phone", "Usage", "Memory"}
+	if zh {
+		tabs = []string{"通用", "账号", "手机", "用量", "记忆"}
+	}
+	ui.Column(c).FillWidth().MaxWidth(760).Gap(20).Children(func() {
+		ui.Tabs(c.Key("settings-tabs"), &app.settingsTab, tabs...).AlignSelf(ui.Start)
 		if app.settingsTab == 0 {
-			card(c).Padding(24).Gap(24).Children(func() {
-				app.languageSettings(c)
-				app.appearanceSettings(c)
-				notificationSettings(c)
-				zh := cc.locale() == "zh"
-				ui.Column(c).Gap(10).Children(func() {
-					ui.Text(c, map[bool]string{true: "新对话的默认权限", false: "Default permissions for new conversations"}[zh]).FontWeight(600)
-					ui.Text(c, map[bool]string{
-						true:  "可以在输入框中为当前对话单独修改。",
-						false: "Change them for the current conversation from the composer.",
-					}[zh]).TextColor(muted).FontSize(12).LineHeight(1.5)
+			ui.Column(c).FillWidth().Gap(28).Children(func() {
+				settingsGroup(c, zhOr(zh, "通用", "General"), "",
+					func() { app.languageSettings(c) },
+					func() { app.appearanceSettings(c) })
+				notificationSettings(c, zh)
+				settingsGroup(c, zhOr(zh, "权限", "Permissions"), "", func() {
+					settingLabel(c, zhOr(zh, "新对话的默认权限", "Default permissions for new conversations"),
+						zhOr(zh, "可以在输入框中为当前对话单独修改。", "Change them for the current conversation from the composer."))
 					permissionOptions(c.Key("default-permissions"), cc.selectedPermissionPolicy(), cc.setPermissionPolicy)
 				})
 				app.agentSettings(c)
@@ -50,21 +52,18 @@ func (app *chatApp) settingsView(c *ui.Context) {
 func (app *chatApp) languageSettings(c *ui.Context) {
 	cc := app.c
 	zh := cc.locale() == "zh"
-	ui.Column(c).Gap(8).Children(func() {
-		ui.Text(c, map[bool]string{true: "界面语言", false: "Interface language"}[zh]).FontWeight(600)
-		ui.Text(c, map[bool]string{true: "选择界面显示语言。", false: "Choose the language of the interface."}[zh]).TextColor(muted).FontSize(12)
-		ui.Row(c).Gap(8).Children(func() {
-			for _, l := range []struct{ id, name string }{{"zh", "中文"}, {"en", "English"}} {
-				b := quiet(c.Key(l.id)).Padding(0, 12)
-				if cc.locale() == l.id {
-					b.Background(selectedBg)
-				}
-				b.Children(func() { ui.Text(c, l.name) })
-				if b.Clicked() {
-					cc.setLocale(l.id)
-				}
-			}
-		})
+	title := zhOr(zh, "界面语言", "Interface language")
+	settingRow(c, title, "", func() {
+		ids := []string{"zh", "en"}
+		i := 1
+		if zh {
+			i = 0
+		}
+		before := i
+		ui.Segmented(c.Key("locale"), &i, "中文", "English").Label(title)
+		if i != before {
+			cc.setLocale(ids[i])
+		}
 	})
 }
 
@@ -86,16 +85,12 @@ func (s *accountView) view(c *ui.Context) {
 		cc.refreshAccount()
 	}
 	data, action := cc.accountState, cc.accountReset
-	ui.Column(c).Gap(12).Children(func() {
-		ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
-			ui.Row(c).Wrap().AlignItems(ui.Center).Grow(1).Gap(8).Children(func() {
-				ui.Text(c, "当前账号").FontSize(16).FontWeight(600)
-				ui.Text(c, "与 Codex 登录状态同步").FontSize(11).TextColor(muted)
-			})
+	ui.Column(c).FillWidth().Gap(16).Children(func() {
+		settingsHeader(c, "当前账号", "与 Codex 登录状态同步", func() {
 			if data.Refreshing {
 				mutedText(c, "更新中…")
 			}
-			if quiet(c.Key("refresh")).Height(28).Disabled(data.Loading || data.Refreshing || action.Busy).Children(func() { ui.Text(c, "刷新") }).Clicked() {
+			if smallButton(c.Key("refresh"), "刷新", data.Loading || data.Refreshing || action.Busy).Clicked() {
 				cc.refreshAccount()
 			}
 		})
@@ -111,7 +106,7 @@ func badge(c *ui.Context, value string) {
 }
 
 func accountDetails(c *ui.Context, data accountDisplay) {
-	card(c).Radius(10).Children(func() {
+	settingsCard(c).Children(func() {
 		if data.Notice != "" {
 			mutedText(c, data.Notice)
 		}
@@ -148,8 +143,8 @@ func accountDetails(c *ui.Context, data accountDisplay) {
 				ui.Text(c, "更新于 "+data.Updated.Local().Format("15:04:05")).FontSize(11).TextColor(muted)
 			}
 		})
-		ui.Box(c).Height(1).Background(chosen)
-		ui.Text(c, "用量").FontSize(12).FontWeight(600)
+		ui.Box(c).FillWidth().Height(1).Background(line)
+		ui.Text(c, "用量").FontSize(12).FontWeight(600).TextColor(muted)
 		if a.Type != "chatgpt" {
 			ui.Text(c, "此登录方式不提供 ChatGPT 套餐额度。").TextColor(muted)
 			return
@@ -186,7 +181,7 @@ func accountDetails(c *ui.Context, data accountDisplay) {
 					continue
 				}
 				count += len(windows)
-				ui.Column(c.Key(i)).Grow(1).Basis(260).MinWidth(0).Padding(12).Gap(8).Background(side).Radius(8).Children(func() {
+				ui.Column(c.Key(i)).Grow(1).Basis(260).MinWidth(0).Padding(14).Gap(10).Background(side).Radius(10).Children(func() {
 					if q.LimitName != "" {
 						ui.Text(c, q.LimitName).FontSize(12).FontWeight(600)
 					}
@@ -247,9 +242,9 @@ func resetCreditCard(c *ui.Context, data accountDisplay, action accountResetActi
 	summary := data.Limits.ResetCredits
 	credit := summary.next()
 	retry := action.Attempt != nil && action.Attempt.Submitted && action.Attempt.matches(data)
-	card(c).Radius(10).Gap(8).Children(func() {
+	settingsCard(c).Gap(10).Children(func() {
 		ui.Row(c).Wrap().AlignItems(ui.Center).Gap(8).Children(func() {
-			ui.Text(c, "重置卡").FontWeight(600)
+			ui.Text(c, "重置卡").FontSize(14).FontWeight(600)
 			if summary != nil {
 				badge(c, fmt.Sprintf("可用 %d 张", summary.AvailableCount))
 			}
@@ -260,7 +255,7 @@ func resetCreditCard(c *ui.Context, data accountDisplay, action accountResetActi
 					label = "查看上次使用结果"
 				}
 				disabled := !connected || action.Busy || data.Refreshing || data.UsageError != "" || data.Notice != ""
-				if quiet(c.Key("ask")).Height(28).Disabled(disabled).Children(func() { ui.Text(c, label) }).Clicked() {
+				if smallButton(c.Key("ask"), label, disabled).Clicked() {
 					ask()
 				}
 			}
@@ -297,10 +292,10 @@ func resetCreditCard(c *ui.Context, data accountDisplay, action accountResetActi
 			ui.Column(c).Padding(12).Gap(8).Background(subtle).Radius(8).Children(func() {
 				ui.Row(c).Wrap().AlignItems(ui.Center).Gap(8).Children(func() {
 					ui.Text(c, "确认使用一张重置卡？").FontWeight(600).Grow(1)
-					if quiet(c.Key("cancel")).Height(28).Disabled(action.Busy).Children(func() { ui.Text(c, "取消") }).Clicked() {
+					if smallButton(c.Key("cancel"), "取消", action.Busy).Clicked() {
 						cancel()
 					}
-					if quiet(c.Key("use")).Height(28).Disabled(!connected || action.Busy || data.Refreshing).Children(func() { ui.Text(c, label) }).Clicked() {
+					if smallButton(c.Key("use"), label, !connected || action.Busy || data.Refreshing).TextColor(danger).Clicked() {
 						use()
 					}
 				})
@@ -315,61 +310,6 @@ func resetCreditCard(c *ui.Context, data accountDisplay, action accountResetActi
 			}
 			ui.Text(c, action.Notice).FontSize(12).TextColor(color)
 		}
-	})
-}
-
-// quotaView is the composer's ring of the account's short-window usage,
-// with the windows in a card while the pointer rests on it.
-type quotaView struct{ app *chatApp }
-
-func (s *quotaView) init(app *chatApp) { s.app = app }
-
-func (s *quotaView) view(c *ui.Context) {
-	cc := s.app.c
-	if !cc.currentBackend().Caps().Quota || !cc.ready() {
-		return
-	}
-	windows := composerQuotaWindows(cc.quotaLimits)
-	used := 0.0
-	if len(windows) > 0 {
-		used = windows[0].UsedPercent
-	}
-	c = c.Key("quota")
-	trigger := ui.Box(c).Size(30, 30).Justify(ui.Center).AlignItems(ui.Center).Radius(7).Label("用量")
-	if trigger.Hovered() {
-		trigger.Background(hover)
-	}
-	trigger.Children(func() {
-		ui.Box(c).Size(22, 22).Children(func() {
-			ui.Image(c.Key("track"), ringSVG(100, "#d7d7d7")).Size(22, 22).Absolute().Left(0).Top(0)
-			ui.Image(c.Key("used"), ringSVG(used, "#454545")).Size(22, 22).Absolute().Left(0).Top(0)
-		})
-	})
-	ui.TooltipBase(c, trigger, func(tip ui.Element) {
-		tip.Width(200).Padding(14).Gap(12).Background(canvas).Border(1, line).Radius(10).Shadow(0, 6, 20, 0, shadow).TextColor(ink)
-		tip.Children(func() {
-			if len(windows) == 0 {
-				mutedText(c, cc.quotaStatus)
-				return
-			}
-			for i, w := range windows {
-				label := "5h"
-				switch *w.WindowDurationMins {
-				case 7200:
-					label = "5d"
-				case 10080:
-					label = "7d"
-				}
-				pct := math.Max(0, math.Min(100, w.UsedPercent))
-				ui.Column(c.Key(i)).FillWidth().Gap(6).Children(func() {
-					ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(12).Children(func() {
-						ui.Text(c, label).Grow(1).FontSize(12)
-						ui.Text(c, fmt.Sprintf("剩余 %.0f%%", 100-pct)).FontSize(11).TextColor(muted)
-					})
-					progressBar(c, pct, ink)
-				})
-			}
-		})
 	})
 }
 
@@ -493,39 +433,47 @@ func (app *chatApp) agentSettings(c *ui.Context) {
 	if app.settingDrafts == nil {
 		app.settingDrafts = map[string]string{}
 	}
+	var rows []func()
 	for _, b := range agentBackends {
 		for _, s := range b.Settings() {
-			ui.Column(c.Key("setting:" + s.ID)).Gap(8).Children(func() {
-				ui.Text(c, s.Title).FontWeight(600)
-				if s.Help != "" {
-					ui.Text(c, s.Help).TextColor(muted).FontSize(12).LineHeight(1.5)
-				}
-				current := s.Value(cc)
-				draft, ok := app.settingDrafts[s.ID]
-				if !ok {
-					draft = current
-				}
-				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-					in := ui.TextInput(c.Key("input"), &draft).Placeholder(s.Placeholder).Label(s.Title).Grow(1).Font(monoFont).FontSize(12)
-					if in.Changed() {
-						app.settingDrafts[s.ID] = draft
-					}
-					changed := strings.TrimSpace(draft) != current
-					save := ui.Button(c.Key("save"), "保存").Disabled(!changed).Clicked()
-					if (save || in.Submitted()) && changed {
-						s.Save(cc, draft)
-						delete(app.settingDrafts, s.ID)
-					}
-				})
-				if s.Status == nil {
-					return
-				}
-				if msg, bad := s.Status(cc); bad {
-					ui.Text(c, msg).TextColor(danger).FontSize(11)
-				} else if msg != "" {
-					ui.Text(c, msg).TextColor(muted).FontSize(11).Font(monoFont).Selectable()
-				}
-			})
+			s := s
+			rows = append(rows, func() { app.agentSetting(c, s) })
 		}
 	}
+	if len(rows) > 0 {
+		settingsGroup(c, zhOr(cc.locale() == "zh", "智能体", "Agents"), "", rows...)
+	}
+}
+
+// agentSetting is one agent-declared setting: an input saved on demand.
+func (app *chatApp) agentSetting(c *ui.Context, s agentSetting) {
+	cc := app.c
+	ui.Column(c.Key("setting:" + s.ID)).FillWidth().Gap(10).Children(func() {
+		settingLabel(c, s.Title, s.Help)
+		current := s.Value(cc)
+		draft, ok := app.settingDrafts[s.ID]
+		if !ok {
+			draft = current
+		}
+		ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
+			in := ui.TextInput(c.Key("input"), &draft).Placeholder(s.Placeholder).Label(s.Title).Grow(1).Font(monoFont).FontSize(12)
+			if in.Changed() {
+				app.settingDrafts[s.ID] = draft
+			}
+			changed := strings.TrimSpace(draft) != current
+			save := ui.Button(c.Key("save"), zhOr(cc.locale() == "zh", "保存", "Save")).Disabled(!changed).Clicked()
+			if (save || in.Submitted()) && changed {
+				s.Save(cc, draft)
+				delete(app.settingDrafts, s.ID)
+			}
+		})
+		if s.Status == nil {
+			return
+		}
+		if msg, bad := s.Status(cc); bad {
+			ui.Text(c, msg).TextColor(danger).FontSize(11)
+		} else if msg != "" {
+			ui.Text(c, msg).TextColor(muted).FontSize(11).Font(monoFont).Selectable()
+		}
+	})
 }

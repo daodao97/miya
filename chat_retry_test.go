@@ -1,6 +1,11 @@
 package main
 
-import "testing"
+import (
+	"net/url"
+	"path/filepath"
+	"reflect"
+	"testing"
+)
 
 func failedResponse() Thread {
 	return Thread{ID: 1, ServerID: "s1", Resumed: true, Loaded: true, HistoryLoaded: true, Messages: []Message{
@@ -47,7 +52,7 @@ func TestErrorCardOffersRetryWithoutEditingDraft(t *testing.T) {
 }
 
 func TestRetryRejectsUnavailableOrStaleResponse(t *testing.T) {
-	for _, state := range []string{"busy", "loading", "readonly", "stale", "resume-error", "offline"} {
+	for _, state := range []string{"busy", "loading", "pending", "readonly", "stale", "resume-error", "offline", "no-user", "empty-user"} {
 		t.Run(state, func(t *testing.T) {
 			app, _ := testApp(t)
 			th := failedResponse()
@@ -56,12 +61,20 @@ func TestRetryRejectsUnavailableOrStaleResponse(t *testing.T) {
 				th.Busy = true
 			case "loading":
 				th.Loading = true
+			case "pending":
+				th.TaskPending = true
 			case "readonly":
 				th.ReadOnly = true
 			case "stale":
 				th.Messages = append(th.Messages, Message{ID: 13, Role: "assistant", Content: "已恢复"})
 			case "resume-error":
 				th.Messages[2].ItemID = "resume-error"
+			case "no-user":
+				th.Messages = th.Messages[1:]
+			case "empty-user":
+				th.Agent = agentClaude
+				app.c.claudeBinary = "/bin/true"
+				th.Messages[0].Content = ""
 			}
 			app.c.setThreads([]Thread{th})
 			if err := app.c.retryResponse(retryRequest{ThreadID: 1, MessageID: 12}); err == nil {
@@ -71,5 +84,29 @@ func TestRetryRejectsUnavailableOrStaleResponse(t *testing.T) {
 				t.Fatal("rejected retry changed the conversation")
 			}
 		})
+	}
+}
+
+func TestRetryMessageKeepsAttachmentsAndReferenceSnapshot(t *testing.T) {
+	src := handoffSource()
+	raw := referenceText(testReference(src), src.Title) + " 再审核一下"
+	prompt, _, err := expandThreadRefs(raw, ThreadRef{}, func(ThreadRef) (Thread, []Message, error) {
+		return src, src.Messages, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	paths := []string{filepath.Join(t.TempDir(), "screen shot.png"), filepath.Join(t.TempDir(), "notes.txt")}
+	m := Message{Content: prompt + "\n📎 notes.txt", Attachments: paths, Images: []string{(&url.URL{Scheme: "file", Path: paths[0]}).String()}}
+	if got := messagePrompt(m); got != prompt {
+		t.Fatal("retry changed the original reference or its context snapshot")
+	}
+	if got := messageAttachments(m); !reflect.DeepEqual(got, paths) {
+		t.Fatalf("retry lost or duplicated attachment paths: %q", got)
+	}
+	// Older messages only recorded the image URL, including escaped spaces.
+	m = Message{Images: m.Images}
+	if got := messageAttachments(m); !reflect.DeepEqual(got, paths[:1]) || messagePrompt(m) != "" {
+		t.Fatalf("retry lost an older image-only prompt: %q", got)
 	}
 }

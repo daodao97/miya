@@ -36,6 +36,7 @@ type response struct {
 	err  error
 }
 type Client struct {
+	epoch   string
 	cmd     *exec.Cmd
 	input   io.WriteCloser
 	writeMu sync.Mutex
@@ -146,6 +147,7 @@ func Start(ctx context.Context, binary, cwd string, args ...string) (*Client, er
 	}
 	c := newClient(input)
 	c.cmd = cmd
+	c.epoch = fmt.Sprintf("%d:%d", cmd.Process.Pid, time.Now().UnixNano())
 	c.exited = make(chan struct{})
 	go func() {
 		c.read(output)
@@ -305,3 +307,6 @@ func (c *Client) Close() {
 		}()
 	}
 }
+
+// RuntimeEpoch identifies this app-server connection, shared by all its threads.
+func (c *Client) RuntimeEpoch() string { return c.epoch }

@@ -196,7 +196,12 @@ func threadWorkingLabel(t Thread) string {
 		return label
 	}
 	if t.StartedAtMs > 0 {
-		return tr("Working for ") + formatElapsed(time.Now().UnixMilli()-t.StartedAtMs)
+		elapsed := time.Now().UnixMilli() - t.StartedAtMs
+		label := tr("Working for ") + formatElapsed(elapsed)
+		if rate := threadTokenRateLabel(t, elapsed); rate != "" {
+			label += " · " + rate
+		}
+		return label
 	}
 	if t.Status != "" {
 		return tr(t.Status)

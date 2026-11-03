@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"strings"
@@ -36,7 +37,12 @@ func memoryTaskKey(t Thread, session string) string {
 }
 
 func (c *chatController) beginMemoryTurn(t Thread, req sendRequest, firstMessage int) string {
-	if c.memory == nil || t.MemoryDisabled || t.Automation != "" || req.MemoryControl || req.KeepSessionSettings || strings.HasPrefix(strings.TrimSpace(req.Text), "/") {
+	if c.memory == nil || t.MemoryDisabled || t.Automation != "" || req.MemoryControl || req.KeepSessionSettings || memoryCommand(req.Text) {
+		// A failed turn never completes, so its record would otherwise attach the
+		// next skipped turn's output to the failed turn's messages.
+		if !req.Steer {
+			delete(c.memoryTurns, t.ID)
+		}
 		return ""
 	}
 	if c.memoryTurns == nil {
@@ -134,21 +140,36 @@ func (c *chatController) completedMemoryTurn(id int, backendTurn string) {
 		return
 	}
 	job.Evidence = append(job.Evidence, *final)
-	if _, err = job.InputJSON(); err != nil {
-		return
+	// A long final answer is shortened instead of discarding the user's
+	// statements; quotes only need to be substrings of the retained text. If the
+	// user statements alone exceed the budget, the queue records the skip.
+	for !job.FitsEvidenceBudget() {
+		last := &job.Evidence[len(job.Evidence)-1]
+		b, _ := json.Marshal(job)
+		runes := []rune(last.Text)
+		keep := len(runes) - (utf8.RuneCount(b) - memory.ExtractionEvidenceBudget) - 16
+		if keep <= 0 {
+			break
+		}
+		last.Text = string(runes[:keep])
 	}
 	for _, ev := range tools {
 		candidate := job
 		candidate.Evidence = append(append([]memory.Evidence(nil), job.Evidence...), ev)
-		if _, err = candidate.InputJSON(); err == nil {
+		if candidate.FitsEvidenceBudget() {
 			job = candidate
 		}
 	}
 	c.memoryCalls++
 	engine := c.memoryEngine
 	go func() {
-		_, _ = c.memory.EnqueueExtraction(scope, job)
-		c.dispatch(func() { c.memoryCalls-- })
+		if _, err := c.memory.EnqueueExtraction(scope, job); err != nil {
+			log.Printf("memory extraction enqueue failed: %v", err)
+		}
+		c.dispatch(func() {
+			c.memoryCalls--
+			c.memoryChanged()
+		})
 		engine.wakeup()
 	}()
 }

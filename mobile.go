@@ -29,6 +29,12 @@ type mobileApp struct {
 	conversationMenuAgent        string
 	filesProxy                   *phoneFileProxy
 	filesCancel                  context.CancelFunc
+	webPort                      string
+	webRef                       ThreadRef
+	webDetails                   bool
+	webProject                   string
+	webManual                    bool
+	webServices                  *mobileWebServices
 	fileRefs                     *mobileFileReferences
 	approvalID                   json.RawMessage
 	options                      map[string]remote.SendOptions
@@ -148,6 +154,8 @@ var errIncompatible = errors.New("桌面端版本不兼容，请把手机端和�
 // mobilePalette holds the phone's colors for one appearance.
 type mobilePalette struct {
 	bg, surface, ink, muted, line, bubble, ok, warn ui.Color
+	// link colors links in messages, as the accent is ink.
+	link ui.Color
 	// drawer stands out from the page behind its scrim.
 	drawer ui.Color
 }
@@ -156,10 +164,12 @@ var (
 	lightPalette = mobilePalette{
 		bg: ui.Hex("#ffffff"), surface: ui.Hex("#f2f2f4"), ink: ui.Hex("#141414"), muted: ui.Hex("#8a8a8f"),
 		line: ui.Hex("#e3e3e6"), bubble: ui.Hex("#f2f2f4"), ok: ui.Hex("#30a46c"), warn: ui.Hex("#c27c0e"), drawer: ui.Hex("#ffffff"),
+		link: ui.Hex("#2563eb"),
 	}
 	darkPalette = mobilePalette{
 		bg: ui.Hex("#000000"), surface: ui.Hex("#1c1c1e"), ink: ui.Hex("#f2f2f2"), muted: ui.Hex("#8e8e93"),
 		line: ui.Hex("#2c2c2e"), bubble: ui.Hex("#1c1c1e"), ok: ui.Hex("#3dd68c"), warn: ui.Hex("#f5a524"), drawer: ui.Hex("#000000"),
+		link: ui.Hex("#6ba4ff"),
 	}
 )
 
@@ -177,6 +187,7 @@ func (m *mobileApp) applyPalette(dark bool) {
 	t.Text, t.TextMuted, t.Accent, t.AccentText = p.ink, p.muted, p.ink, p.bg
 	t.FontSize = m.font(17)
 	m.view.theme = t
+	m.view.md.Theme = &markdown.Theme{Link: p.link}
 }
 
 func agentName(agent string) string {
@@ -417,6 +428,7 @@ func (m *mobileApp) disconnect() {
 
 func (m *mobileApp) disconnectDesktop(unregister bool) {
 	m.clearFileReferences()
+	m.clearWebServices()
 	if !m.retryAt.IsZero() {
 		m.status = ""
 	}
@@ -937,6 +949,9 @@ func (m *mobileApp) sent(id int, msg string) {
 		m.showThread(Thread{ID: id, Agent: m.newAgent, Loading: true})
 		m.subscribe(id)
 	}
+	if id != 0 {
+		m.view.listFor(id).ScrollToEnd()
+	}
 }
 
 func (m *mobileApp) stop() {
@@ -1053,6 +1068,8 @@ func (m *mobileApp) viewRoot(c *ui.Context) {
 					m.automationsPage(c, true)
 				case "/options":
 					m.optionsView(c)
+				case "/web":
+					m.webPage(c)
 				case "/approval":
 					m.approvalPage(c)
 				case "/desktop/add":
@@ -1181,6 +1198,8 @@ func (m *mobileApp) listView(c *ui.Context) {
 		if m.homeAction(c, "new-conversation", "新建对话", "edit").Clicked() {
 			m.startConversation(m.selectedProject().Path, m.composerAgent())
 		}
+		more := m.homeAction(c, "more", "更多", "dots")
+		m.conversationActions(c, more, m.selectedProject().Path, m.composerAgent())
 	})
 	if len(m.state.Projects) == 0 {
 		ui.Column(c).Grow(1).Justify(ui.Center).AlignItems(ui.Center).Children(func() {

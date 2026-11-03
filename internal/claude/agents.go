@@ -123,6 +123,32 @@ func (s *agentTracker) active() bool {
 }
 
 func (s *agentTracker) apply(f *Frame) {
+	if f.BackgroundWork || f.TaskType == "local_bash" || f.TaskType == "shell" || f.TaskType == "monitor" {
+		return
+	}
+	if f.Type == "system" && f.Subtype == "background_tasks_changed" {
+		if !validBackgroundSnapshot(f) {
+			return
+		}
+		live := map[string]bool{}
+		for _, native := range f.Tasks {
+			if native.TaskType == "local_agent" || native.TaskType == "remote_agent" {
+				live[native.TaskID] = true
+				a := s.task("", native.TaskID)
+				a.background = true
+				a.Name = native.Description
+				a.Status = "running"
+			}
+		}
+		for i := range s.tasks {
+			if s.tasks[i].background && !live[s.tasks[i].ID] && s.tasks[i].Status == "running" {
+				s.tasks[i].Status = "completed"
+			}
+		}
+		f.AgentTasks = append([]AgentTask(nil), s.tasks...)
+		f.WaitingForAgents = s.active()
+		return
+	}
 	if f.ParentToolUseID != "" {
 		return
 	}

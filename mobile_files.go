@@ -23,6 +23,10 @@ func (m *mobileApp) openProjectFiles(project string) {
 		go mygo.Dialog.Message(mygo.MessageOptions{Parent: m.win, Title: "无法打开项目文件", Message: err.Error()})
 		return
 	}
+	m.openFileBrowser(proxy, "无法打开项目文件")
+}
+
+func (m *mobileApp) openFileBrowser(proxy *phoneFileProxy, errorTitle string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	m.filesProxy, m.filesCancel = proxy, cancel
 	gen := m.generation
@@ -33,7 +37,7 @@ func (m *mobileApp) openProjectFiles(project string) {
 			m.filesProxy, m.filesCancel = nil, nil
 			cancel()
 			if err != nil && !errors.Is(err, context.Canceled) {
-				go mygo.Dialog.Message(mygo.MessageOptions{Parent: m.win, Title: "无法打开项目文件", Message: err.Error()})
+				go mygo.Dialog.Message(mygo.MessageOptions{Parent: m.win, Title: errorTitle, Message: err.Error()})
 			}
 		})
 	}()

@@ -23,7 +23,7 @@ type ThreadRef struct {
 }
 
 func (r ThreadRef) valid() bool {
-	return sourceIDPattern.MatchString(r.Source) && (r.Backend == agentCodex || r.Backend == agentClaude) && r.SessionID != "" && !strings.ContainsAny(r.SessionID, "\x00\r\n")
+	return sourceIDPattern.MatchString(r.Source) && registeredBackend(r.Backend) && r.SessionID != "" && !strings.ContainsAny(r.SessionID, "\x00\r\n")
 }
 
 func (r ThreadRef) URL() string {

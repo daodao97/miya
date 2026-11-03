@@ -125,7 +125,8 @@ func (app *chatApp) messageList(c *ui.Context, t Thread) {
 						ui.Text(c, label).FontSize(12).TextColor(warnInk).Tooltip(t.Status)
 					})
 				} else {
-					workingLabel(c.Key("working"), "clock", threadWorkingLabel(t))
+					workingLabel(c.Key("working"), "clock", threadWorkingLabel(t)).
+						Tooltip("本轮平均输出速度，包含等待时间。")
 					if hint := stalledHint(t, len(app.c.approvals()) > 0, time.Now()); hint != "" {
 						if app.mobile {
 							ui.Box(c).Grow(1).MinWidth(0)
