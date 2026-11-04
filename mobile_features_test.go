@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 	"miya/internal/codex"
@@ -158,5 +159,45 @@ func TestPhoneApprovalRejectsReusedRequestID(t *testing.T) {
 	m.applyPhoneState(phoneState{Approvals: []codex.Approval{next}})
 	if len(m.fieldsFor(next)) != 0 {
 		t.Fatal("a new request inherited the previous request's private input")
+	}
+}
+
+func TestMobileAgentTasksToggleSharesWorkingRow(t *testing.T) {
+	m := testMobileApp()
+	m.state.Collaboration = &collaborationStatus{Version: 1}
+	th := Thread{ID: 1, ServerID: "s1", Busy: true, HistoryLoaded: true, StartedAtMs: time.Now().Add(-10 * time.Second).UnixMilli()}
+	m.openThread(th)
+	m.showThread(th)
+	tt := ui.NewTester(m.viewRoot, 390, 750)
+	tt.Frame()
+	if tt.HasText("Agent tasks") {
+		t.Fatal("toggle shown without any Agent tasks")
+	}
+	pane, _, _ := m.collaborationPane()
+	pane.loaded, pane.rows = true, []collaborationTaskView{{ID: "t1", Title: "Review", Agent: agentCodex}}
+	tt.Frame()
+	working, ok := tt.Find(threadWorkingLabel(m.view.c.current()))
+	if !ok {
+		t.Fatal("missing working status")
+	}
+	toggle, ok := tt.Find("Agent tasks (1)")
+	if !ok {
+		t.Fatal("missing Agent tasks toggle")
+	}
+	if mid := working.Y + working.H/2; mid < toggle.Y || mid > toggle.Y+toggle.H {
+		t.Fatalf("toggle %v not on the working row %v", toggle, working)
+	}
+	if toggle.X+toggle.W < 390-24 {
+		t.Fatalf("toggle %v not at the right edge", toggle)
+	}
+	count := 0
+	for _, s := range tt.Texts() {
+		if s == "Agent tasks (1)" {
+			count++
+		}
+	}
+	// One button contributes its accessibility label and its text.
+	if count != 2 {
+		t.Fatalf("toggle drawn %d times", count/2)
 	}
 }

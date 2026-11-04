@@ -105,6 +105,27 @@ type desktopSession struct {
 	WindowOnly bool            `json:"windowOnly"`
 	Window     *desktop.Window `json:"window"`
 	Pick       bool            `json:"pick"`
+	Apps       bool            `json:"apps"`
+}
+
+func (c *desktopClient) applications(ctx context.Context) ([]desktop.Application, error) {
+	var apps []desktop.Application
+	data, err := c.do(ctx, http.MethodGet, "/apps", nil)
+	if err == nil {
+		err = json.Unmarshal(data, &apps)
+	}
+	return apps, err
+}
+
+func (c *desktopClient) launchApplication(ctx context.Context, id string) (desktop.Application, error) {
+	var app desktop.Application
+	data, err := c.do(ctx, http.MethodPost, "/launch", struct {
+		ID string `json:"id"`
+	}{id})
+	if err == nil {
+		err = json.Unmarshal(data, &app)
+	}
+	return app, err
 }
 
 type desktopActions struct {

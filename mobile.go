@@ -262,6 +262,7 @@ func newMobileApp() *mobileApp {
 	}
 	m.view.imagePreview = m.messageImage
 	m.view.onHandoff = m.handoffToNewThread
+	m.view.workingAccessory = m.collaborationToggle
 	m.view.onRetry = func(req retryRequest) {
 		r := m.threadRequest("retry", req.ThreadID)
 		r.MessageID = req.MessageID

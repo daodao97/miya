@@ -34,6 +34,7 @@ type desktopLease struct {
 	// full desktop. Authorization leases stay bound to their window.
 	pick      bool
 	unlocking bool
+	launching bool
 }
 
 // One operator at a time. A lease belongs to one live phone control
@@ -46,6 +47,8 @@ type desktopControl struct {
 	capture       func() ([]byte, error)
 	input         func(desktop.Input) error
 	windows       func() ([]desktop.Window, error)
+	apps          func() ([]desktop.Application, error)
+	openApp       func(context.Context, string) error
 	captureWindow func(desktop.Window) ([]byte, error)
 	inputWindow   func(desktop.Window, desktop.Input) error
 	dialog        func(desktop.Window) (desktop.Dialog, error)
@@ -59,7 +62,7 @@ func (c *chatController) desktopControls() *desktopControl {
 	c.desktopMu.Lock()
 	defer c.desktopMu.Unlock()
 	if c.desktop == nil {
-		c.desktop = &desktopControl{authorize: desktop.Authorize, capture: desktop.Capture, input: desktop.SendInput, windows: desktop.Windows, captureWindow: desktop.CaptureWindow, inputWindow: desktop.SendWindowInput, dialog: desktop.WindowDialog, pressAction: desktop.PressWindowAction, wake: desktop.WakeDisplay, locked: desktop.ScreenLocked}
+		c.desktop = &desktopControl{authorize: desktop.Authorize, capture: desktop.Capture, input: desktop.SendInput, windows: desktop.Windows, apps: desktop.Applications, openApp: desktop.OpenApplication, captureWindow: desktop.CaptureWindow, inputWindow: desktop.SendWindowInput, dialog: desktop.WindowDialog, pressAction: desktop.PressWindowAction, wake: desktop.WakeDisplay, locked: desktop.ScreenLocked}
 	}
 	return c.desktop
 }
@@ -185,11 +188,16 @@ func (d *desktopControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			WindowOnly bool            `json:"windowOnly"`
 			Window     *desktop.Window `json:"window"`
 			Pick       bool            `json:"pick"`
-		}{l.window != nil, l.window, l.pick})
+			Apps       bool            `json:"apps"`
+		}{l.window != nil, l.window, l.pick, l.pick && d.apps != nil && d.openApp != nil})
 		return
 	}
 	if path == "/actions" || path == "/action" {
 		d.serveWindowActions(w, r, token, l, path == "/action")
+		return
+	}
+	if path == "/apps" || path == "/launch" {
+		d.serveApplications(w, r, token, l, path == "/launch")
 		return
 	}
 	if path != "/frame" && path != "/start" && path != "/input" && path != "/windows" && path != "/select" && path != "/thumbnail" && path != "/unlock" {
@@ -420,8 +428,8 @@ func (d *desktopControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Checking the authorization result. Please wait.", 409)
 		return
 	}
-	if l.unlocking {
-		http.Error(w, "Unlocking Mac. Please wait.", http.StatusConflict)
+	if l.unlocking || l.launching {
+		http.Error(w, "The desktop is busy. Try again later.", http.StatusConflict)
 		return
 	}
 	l.lastInput = time.Now()

@@ -183,3 +183,56 @@ func TestAgentTagsDoNotFallBackToOrdinaryMessagesOnOlderService(t *testing.T) {
 		t.Fatal("phone sent an unsupported tag or lost its draft", m.sendErr)
 	}
 }
+
+func TestComposerAtMenuOffersAgentsForDelegation(t *testing.T) {
+	app, tt := testApp(t)
+	tt.Frame()
+	tt.Type("@claude")
+	tt.Frame()
+	for _, choice := range app.complete.choices {
+		if choice.Agent != "" {
+			t.Fatal("offered Agents to a service without collaboration")
+		}
+	}
+	tt.Key(0, ui.KeyEscape)
+	app.c.rememberDraft("")
+	app.complete.close()
+	app.c.collaborationRemote = &collaborationStatus{Version: 1}
+	tt.Frame()
+	tt.Type("@claude")
+	tt.Frame()
+	if len(app.complete.choices) == 0 || app.complete.choices[0].Agent != agentClaude {
+		t.Fatalf("@ menu did not list the Agent first: %+v", app.complete.choices)
+	}
+	if !tt.HasText("@Claude Code") || !tt.HasText("Agents, conversations and project files") {
+		t.Fatal("Agent row or menu title missing", tt.Texts())
+	}
+	tt.Key(0, ui.KeyEnter)
+	tt.Frame()
+	if app.c.draft() != agentReferenceText(agentClaude, "Claude Code")+" " || app.complete.open {
+		t.Fatalf("@ Agent selection: %q", app.c.draft())
+	}
+	if app.c.current().Busy || len(app.c.current().Messages) != 0 {
+		t.Fatal("selecting an Agent executed a task")
+	}
+}
+
+func TestMobileAtMenuOffersDesktopAgents(t *testing.T) {
+	m := testMobileApp()
+	m.state.Collaboration = &collaborationStatus{Version: 1}
+	m.state.Agents = []phoneAgentOptions{{Agent: agentClaude}}
+	m.startConversation("/a", agentCodex)
+	m.draft = "@"
+	tt := ui.NewTester(m.viewRoot, 390, 750)
+	tt.Frame()
+	if tt.HasText("@Codex") {
+		t.Fatal("listed an Agent the desktop does not offer")
+	}
+	if err := tt.Click("@Claude Code"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if m.draft != agentReferenceText(agentClaude, "Claude Code")+" " {
+		t.Fatal("phone @ Agent selection lost canonical identity", m.draft)
+	}
+}

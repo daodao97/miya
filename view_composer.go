@@ -237,8 +237,13 @@ func (m *completion) editAt(app *chatApp, value string, end int) {
 		return
 	}
 	m.state = tr("Searching project files…")
-	// Conversations of the workspace come first; files follow as found.
-	refs := app.threadChoices(m.token.Query)
+	// Agents to delegate to come first, then conversations of the workspace;
+	// files follow as found.
+	var refs []composerChoice
+	if capability := c.collaborationCapabilities(); capability != nil && capability.Version >= 1 {
+		refs = agentChoices(m.token.Query, nil)
+	}
+	refs = append(refs, app.threadChoices(m.token.Query)...)
 	m.choices = refs
 	ctx, stop := context.WithTimeout(c.ctx, 4*time.Second)
 	m.cancel = stop
@@ -291,6 +296,10 @@ func (m *completion) choose(app *chatApp, index int) {
 		return
 	}
 	if token.Kind == '@' {
+		if choice.Agent != "" {
+			c.rememberDraft(insertAgentReference(value, token, choice.Agent, choice.Name))
+			return
+		}
 		if choice.Ref != nil {
 			c.rememberDraft(insertThreadReference(value, token, *choice.Ref, choice.Name))
 			c.prefetchReference(*choice.Ref)
@@ -390,9 +399,12 @@ func (app *chatApp) composerInput(c *ui.Context) {
 			if m.token.Kind == '@' {
 				title = tr("Project files")
 				for _, choice := range m.choices {
+					if choice.Agent != "" {
+						title = tr("Agents, conversations and project files")
+						break
+					}
 					if choice.Ref != nil {
 						title = tr("Conversations and project files")
-						break
 					}
 				}
 			}
@@ -410,7 +422,10 @@ func (app *chatApp) composerInput(c *ui.Context) {
 					}
 					if m.token.Kind == '@' {
 						text, detail = item.Name, ""
-						if item.Ref != nil {
+						if item.Agent != "" {
+							text = "@" + item.Name
+						}
+						if item.Ref != nil || item.Agent != "" {
 							detail = item.Detail
 						}
 					}

@@ -147,6 +147,10 @@ func (app *chatApp) messageList(c *ui.Context, t Thread) {
 						}
 					}
 				}
+				if app.workingAccessory != nil {
+					ui.Box(c.Key("accessory-gap")).Grow(1).MinWidth(0)
+					app.workingAccessory(c.Key("accessory"))
+				}
 			})
 		})
 	}

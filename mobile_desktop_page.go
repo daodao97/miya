@@ -72,7 +72,12 @@ type mobileDesktopPage struct {
 	// secret hides typed text; authorization windows start with it on.
 	secret bool
 	// pickable leases came from the menu and may choose any window.
-	pickable bool
+	pickable             bool
+	appsAvailable        bool
+	pickerTab            int // 0 windows, 1 applications
+	apps                 []desktop.Application
+	appIcons             map[string]ui.ImageSource
+	appSearch, appStatus string
 	// thumbs holds picker previews by window; nil marks one that failed.
 	thumbs    map[string]ui.ImageSource
 	thumbBusy bool
@@ -199,15 +204,16 @@ func (m *mobileApp) desktopInitialize(p *mobileDesktopPage) {
 			return func() { m.desktopFail(p, tr("Connection incomplete"), err) }
 		}
 		if s.Pick && s.WindowOnly && s.Window != nil && s.Window.ID == 0 {
-			return func() { p.pickable, p.windowOnly = true, true; m.desktopChoose(p) }
+			return func() { p.pickable, p.windowOnly, p.appsAvailable = true, true, s.Apps; m.desktopChoose(p) }
 		}
 		if !s.WindowOnly || s.Window == nil {
-			return func() { p.windowOnly, p.pickable = false, s.Pick; m.desktopStart(p) }
+			return func() { p.windowOnly, p.pickable, p.appsAvailable = false, s.Pick, s.Apps; m.desktopStart(p) }
 		}
 		want := *s.Window
 		windows, err := p.client.windows(ctx)
 		return func() {
 			p.windowOnly, p.secret, p.pickable = true, true, s.Pick
+			p.appsAvailable = s.Apps
 			p.keyboard = true // authorization windows usually need a password
 			if err != nil {
 				m.desktopFail(p, tr("Connection incomplete"), err)
@@ -228,6 +234,7 @@ func (m *mobileApp) desktopInitialize(p *mobileDesktopPage) {
 func (m *mobileApp) desktopChoose(p *mobileDesktopPage) {
 	// Switching revokes input: the next window needs its own frame first.
 	p.active, p.image, p.queue, p.actionsFresh = false, nil, nil, false
+	p.pickerTab, p.appStatus = 0, ""
 	m.desktopStage(p, "picker", tr("Select a window to control"), "", true)
 	m.desktopDo(p, func(ctx context.Context) func() {
 		windows, err := p.client.windows(ctx)
@@ -682,6 +689,9 @@ func (m *mobileApp) desktopPageView(c *ui.Context) {
 			}
 			if p.phase == "picker" {
 				title = tr("Select window")
+				if p.pickerTab == 1 {
+					title = tr("Apps")
+				}
 			}
 			ui.Column(c).Grow(1).MinWidth(0).AlignItems(ui.Center).Gap(2).Children(func() {
 				ui.Text(c, title).TextAlign(ui.Center).FontSize(m.font(16)).FontWeight(600).MaxLines(1)
@@ -691,7 +701,11 @@ func (m *mobileApp) desktopPageView(c *ui.Context) {
 			})
 			if p.phase == "picker" && !p.busy {
 				if m.circle(c, "desktop-refresh-windows", tr("Refresh list"), func() { icon(c, "refresh", 20, pal.ink) }).Clicked() {
-					m.desktopChoose(p)
+					if p.pickerTab == 1 {
+						m.desktopChooseApps(p)
+					} else {
+						m.desktopChoose(p)
+					}
 				}
 			} else if (p.windowOnly || p.pickable) && (p.phase == "live" || p.phase == "error") {
 				if m.circle(c, "desktop-choose", tr("Switch window"), func() { icon(c, "stack-2", 20, pal.ink) }).Clicked() {
@@ -740,6 +754,23 @@ func (m *mobileApp) desktopPickerView(c *ui.Context, p *mobileDesktopPage) {
 	pal := m.pal
 	ui.Scroll(c).FillWidth().Grow(1).MinHeight(0).Children(func() {
 		ui.Column(c).FillWidth().Padding(16).Gap(10).Children(func() {
+			if p.pickable && p.appsAvailable {
+				ui.Row(c).FillWidth().Gap(8).Children(func() {
+					if m.pill(c, "desktop-tab-windows", tr("Windows"), p.pickerTab == 0).Grow(1).Disabled(p.busy).Clicked() {
+						m.desktopChoose(p)
+					}
+					if m.pill(c, "desktop-tab-apps", tr("Apps"), p.pickerTab == 1).Grow(1).Disabled(p.busy).Clicked() {
+						m.desktopChooseApps(p)
+					}
+				})
+			}
+			if p.pickerTab == 1 {
+				m.desktopApplicationList(c, p)
+				return
+			}
+			if p.appStatus != "" {
+				ui.Text(c, p.appStatus).FontSize(m.font(14)).TextColor(pal.muted).LineHeight(1.5)
+			}
 			ui.Text(c, tr("Only the selected window is shared. Complete Touch ID or local confirmation on your Mac when required.")).FontSize(m.font(14)).TextColor(pal.muted).LineHeight(1.5)
 			if p.busy {
 				ui.Spinner(c).Margin(12)
@@ -862,6 +893,9 @@ func (m *mobileApp) desktopControls(c *ui.Context, p *mobileDesktopPage) {
 	if hasMore {
 		n = 3
 	}
+	if p.pickable && p.appsAvailable {
+		n++
+	}
 	const size, gap, pad = 44, 4, 4
 	w, h := n*size+(n-1)*gap+2*pad, float32(size+2*pad)
 	x, y := (p.view.W-w)/2, p.view.H-h-16
@@ -872,6 +906,10 @@ func (m *mobileApp) desktopControls(c *ui.Context, p *mobileDesktopPage) {
 	}
 	ui.Row(c.Key("desktop-controls")).Absolute().Left(x).Top(y).Width(w).Height(h).Padding(pad).Gap(gap).AlignItems(ui.Center).
 		Radius(h/2).Background(pal.surface).Border(1, pal.line).Shadow(0, 6, 20, 0, ui.RGBA(0, 0, 0, 0.22)).Children(func() {
+		if p.pickable && p.appsAvailable && m.desktopControl(c, "desktop-apps", "apps", tr("Open app"), false).Clicked() {
+			c.Blur()
+			m.desktopChooseApps(p)
+		}
 		if m.desktopControl(c, "desktop-keyboard", "keyboard", tr("Keyboard"), p.keyboard).Clicked() {
 			p.keyboard, p.more, p.moreKeys = !p.keyboard, false, false
 			p.focusText = p.keyboard
@@ -1080,7 +1118,7 @@ func desktopWindowKey(w desktop.Window) string { return fmt.Sprintf("%d-%d", w.I
 
 // desktopLoadThumbs fetches picker previews one at a time.
 func (m *mobileApp) desktopLoadThumbs(p *mobileDesktopPage) {
-	if !p.pickable || p.thumbBusy || p.phase != "picker" {
+	if !p.pickable || p.thumbBusy || p.phase != "picker" || p.pickerTab != 0 || p.busy {
 		return
 	}
 	for _, w := range p.windows {

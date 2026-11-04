@@ -2,7 +2,13 @@
 
 package desktop
 
-import "errors"
+import (
+	"context"
+	"errors"
+)
+
+func Applications() ([]Application, error)          { return nil, Authorize() }
+func OpenApplication(context.Context, string) error { return Authorize() }
 
 func Available() bool                        { return false }
 func WakeDisplay() error                     { return Authorize() }

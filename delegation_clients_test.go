@@ -70,7 +70,7 @@ func TestCollaborationPhoneDispatchAndDesktopCardsShareFixedTaskData(t *testing.
 			p.open = true
 			var capability *collaborationStatus
 			f.serv.do(func() { capability = f.srv.c.collaborationCapabilities() })
-			view := collaborationPanelView{palette: taskPalette{panel, line, ink, muted}, capability: capability, agent: agentClaude, connected: true, call: call, openThread: func(string) {}}
+			view := collaborationPanelView{palette: taskPalette{panel, line, ink, muted}, capability: capability, connected: true, call: call, openThread: func(string) {}}
 			tt := ui.NewTester(func(c *ui.Context) { ui.Column(c).FillWidth().Padding(12).Children(func() { p.draw(c, view) }) }, width, 750)
 			tt.Frame()
 			if !tt.HasText(task.Title) || !tt.HasText("Claude Code · Completed") || !tt.HasText(task.Result.Text) {
@@ -84,32 +84,6 @@ func TestCollaborationPhoneDispatchAndDesktopCardsShareFixedTaskData(t *testing.
 				t.Fatal("task detail lost the fixed result/target", tt.Texts())
 			}
 			saveCommandSnapshot(t, tt, fmt.Sprintf("service-task-result-%d.png", width))
-			if width == 320 {
-				if err := tt.Click("Continue task"); err != nil {
-					t.Fatal(err)
-				}
-				tt.Frame()
-				if err := tt.Click("Task instructions"); err != nil {
-					t.Fatal(err)
-				}
-				tt.Type("Verify fixes through the real service")
-				tt.Frame()
-				if err := tt.Click("Dispatch"); err != nil {
-					t.Fatal(err)
-				}
-				tt.Frame()
-				if p.pending != nil || p.err != "" || p.selected == task.ID {
-					t.Fatal("real service rejected follow-up", p.err)
-				}
-				follow := waitCollaborationTask(t, f, p.selected)
-				if follow.PreviousTaskID != task.ID || follow.Target != task.Target {
-					t.Fatal("follow-up lost original target", follow)
-				}
-				old, _ := f.srv.c.collaboration.manager.Read(task.ID)
-				if old.Result.Text != task.Result.Text {
-					t.Fatal("follow-up changed frozen result")
-				}
-			}
 		})
 	}
 }

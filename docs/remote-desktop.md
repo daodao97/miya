@@ -14,6 +14,12 @@ Agent 调用 `request_desktop_control({"reason":"填写授权密码","window_app
 
 ## 支持范围
 
+普通远程桌面的悬浮工具栏提供「打开应用」，窗口选择页也可切到「应用」。应用列表参考 [Reminal 的应用启动器](https://github.com/harshalgajjar/Reminal/blob/main/internal/client/windows_backends.go)，独立实现常用目录扫描：`/Applications`、`/System/Applications`、`~/Applications` 及其中一层子目录，另列出 Finder。以原生图标组成三列网格，可按应用名称、bundle ID 或路径搜索；不扫描应用包内部的辅助程序，同名应用保留各自的路径身份。
+
+点击后在 Mac 启动应用，已经运行的应用切到前台。手机最多等待九秒，按 bundle ID 和窗口 ID/PID 识别目标，优先进入唯一新窗口，其次进入该应用唯一已有窗口；没有窗口或存在多个候选时保留窗口选择，也可查看完整桌面。启动失败可在列表重试；Mac 锁屏时先进入完整桌面解锁，之后重新打开应用。审批接管页不提供应用列表或启动接口。旧 Mac 后台未提供应用能力时隐藏入口。
+
+应用列表与启动使用现有控制令牌，路径为 `GET /apps`、`POST /launch`，仅普通菜单控制租约可调用。启动时重新核对已安装列表、系统权限、锁屏与租约状态，仅将已列出的应用路径作为参数交给 `/usr/bin/open -a`，不执行手机提交的命令、URL 或任意文件。关闭页面或断线取消在途启动请求；启动不会隐式开始采集，切入窗口仍须等待新画面才能输入。图标以 48×48 PNG 传输，总图标预算 600 KiB，列表与图标仅驻留手机内存。
+
 macOS 打包使用 `scripts/build-macos.sh`，它启用 cgo 原生桥接；直接运行 MyGo 的默认无 cgo 构建不会包含远程桌面。
 
 单窗口及主屏幕采集均需要 macOS 14 及以上，手机和桌面后台均需更新。Mac 必须已登录。显示器熄灭时，开始控制及采集前会声明一次本机用户活动（效果同 `caffeinate -u`）点亮显示器；锁屏时随即显示锁屏界面，可在画面中输入登录密码解锁。控制期间至多每 5 秒刷新一次，结束后恢复系统原有的空闲熄屏；不修改电源或共享设置，不持有常亮断言。单窗口画面使用 ScreenCaptureKit 的独立窗口过滤器，输入坐标按目标窗口当前边界映射；输入前验证窗口身份及焦点，键盘事件发送给目标进程。主屏幕模式的键盘输入仍进入系统当前焦点窗口。缩放仅用于手机本地查看。Touch ID、安全桌面或系统禁止远程操作的授权仍须在 Mac 上完成。
@@ -40,7 +46,7 @@ Agent 发起的授权窗口接管不提供解锁、保存或使用登录密码�
 - v5 协议增加可选 `state.desktopControl` 和 `state.desktopWindows` 能力标志，旧端忽略。新手机连接旧桌面显示更新说明，不改变原协议消息含义。
 - `desktop-open` 必须带有效的稳定会话 ID，返回与当前连接绑定的随机 256 位令牌；每次仅允许一个操作界面，十分钟绝对到期，关闭或断线即撤销。正在使用远程桌面时，后台服务视为忙碌，等待结束后才执行空闲升级。
 - `desktop-preview` 仅在精确匹配的待处理审批及会话内允许；预览缩略图只驻留手机内存，不写附件缓存、聊天记录或磁盘。断线、审批处理及内容版本改变时移除。`desktop-action` 重新读取原生按钮状态，拒绝已禁用、重复名称、过期审批或其他会话的操作。预览不创建独占控制租约、不请求新的系统权限；缺权限时给出本机授权提示。
-- Mac 私有 HTTP 路径为 `/.miya-desktop/v1/{session,windows,select,start,frame,input,unlock,actions,action,stop}`，请求经 Authorization 携带令牌。`actions` 只返回当前授权窗口的按钮元数据，`action` 再读取原生按钮状态并核验请求中的窗口 ID/PID；主屏幕会话不提供这两项操作。手机原生页面经已配对 Tailcat 通道的独立文件流直接请求这些路径，令牌只保存在手机进程内存中，作为本次控制租约的凭证；手机不再开放本机回环端口，不经过 WebView、Cookie 或网页。
+- Mac 私有 HTTP 路径为 `/.miya-desktop/v1/{session,windows,select,apps,launch,start,frame,input,unlock,actions,action,stop}`，请求经 Authorization 携带令牌。`actions` 只返回当前授权窗口的按钮元数据，`action` 再读取原生按钮状态并核验请求中的窗口 ID/PID；主屏幕会话不提供这两项操作。手机原生页面经已配对 Tailcat 通道的独立文件流直接请求这些路径，令牌只保存在手机进程内存中，作为本次控制租约的凭证；手机不再开放本机回环端口，不经过 WebView、Cookie 或网页。
 - 控制租约的 `/start` 之前拒绝实时采集及输入；授权卡另有受待处理审批约束的只读单窗口缩略图通道。切换窗口撤销输入状态，须收到该窗口的新画面才能输入。原生采集使用 ScreenCaptureKit，最长边 1600 像素、JPEG 质量 0.65、单帧最多 2 MiB，最多四次采集/秒。前端串行轮询，正常间隔 300 ms；实际帧率取决于采集和网络耗时。慢帧不会阻塞输入、聊天或审批。
 - 输入校验归一化坐标、操作枚举、修饰键和正文大小；文字每次最多 4096 UTF-8 字节，Unicode 事件分块且不拆开代理对，不借用系统剪贴板。输入之前须有十秒以内的成功画面。服务串行发送输入，拒绝过快的操作。
 - 截图仅驻留内存，使用 `no-store`，不进入聊天记录或图片缓存。App 进入后台时断开连接并结束控制，结束或关闭时清空输入及画面。旧连接、过期会话和撤销后的在途画面不能继续操作或交付。
@@ -49,6 +55,7 @@ Agent 发起的授权窗口接管不提供解锁、保存或使用登录密码�
 
 ```sh
 go test ./...
+MIYA_DESKTOP_APPS_PROBE=1 go test ./internal/desktop -run TestApplicationsNative -count=1 -v
 go test -race . ./internal/remote ./internal/desktop -run 'TestDesktop|TestInputValidation|TestPhoneSubscription|TestBinary|TestPhoneWebProxy|TestServiceRestartWhenIdle'
 mkdir -p /tmp/miya-desktop-snapshots
 MIYA_SNAPSHOT=/tmp/miya-desktop-snapshots go test . -run 'TestDesktopMobileTakeoverEntry|TestMobileConversationActionsSheet'
@@ -57,6 +64,8 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer ./scripts/build-ios.sh 
 ```
 
 自动测试覆盖未确认拒绝采集、权限失败、连接隔离、稳定会话校验、EOF 立即撤销、绝对过期、慢采集时输入及停止仍可用、撤销后丢弃在途画面、无 Cookie / 跨 Origin 拒绝、Agent 等待明确完成，以及 320 / 390 点手机菜单和接管卡片布局。
+
+应用启动新增检查覆盖目录扫描范围、Finder、同名及已删除应用、应用 ID 校验、审批租约隔离、锁屏与解锁冲突、关闭取消、按 bundle ID 和窗口身份选择目标、等待在途截图、客户端到手机页面的启动链路，以及 320 / 390 点三列网格与搜索。原生应用列表探针在本机读到 118 个应用及 118 个有效的 48×48 PNG 图标；启动链路测试使用替身，尚未从真实 iPhone 验证本次入口。
 
 原生交互测试 `TestDesktopNativeQA` 默认跳过。将测试二进制封装为独立 `.app`，注册 LaunchServices 并在 Info.plist 的 `LSEnvironment.MIYA_DESKTOP_QA_DIR` 指定临时目录，再通过 CUA 打开。它只启动专用 QA 窗口和本机测试代理，不连接运行中的 Miya 后台。目录中的 `url` 提供本机入口，`status` 记录成功帧数和输入数，创建 `done` 文件结束测试。改动签名后应重新授权测试应用，不能借用旧签名的权限记录。
 

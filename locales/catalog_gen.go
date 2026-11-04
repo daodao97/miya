@@ -3774,6 +3774,18 @@ func (msgs Messages) Conversations07c59b() string {
 	return Catalog.Format(msgs.locale, "conversations_07c59b", nil)
 }
 
+// AgentsConversationsAndProjectFiles says "Agents, conversations and project files"
+// in the language the app shows.
+func AgentsConversationsAndProjectFiles() string {
+	return In(i18n.Locale()).AgentsConversationsAndProjectFiles()
+}
+
+// AgentsConversationsAndProjectFiles says "Agents, conversations and project files"
+// in the language of msgs.
+func (msgs Messages) AgentsConversationsAndProjectFiles() string {
+	return Catalog.Format(msgs.locale, "agentsConversationsAndProjectFiles", nil)
+}
+
 // ConversationsAndProjectFilesAd8945 says "Conversations and project files"
 // in the language the app shows.
 func ConversationsAndProjectFilesAd8945() string {
@@ -17898,4 +17910,118 @@ func CollaborationD90bb9f0d0() string { return In(i18n.Locale()).CollaborationD9
 // in the language of msgs.
 func (msgs Messages) CollaborationD90bb9f0d0() string {
 	return Catalog.Format(msgs.locale, "collaboration_d90bb9f0d0", nil)
+}
+
+// AppsD9a368 says "Apps"
+// in the language the app shows.
+func AppsD9a368() string { return In(i18n.Locale()).AppsD9a368() }
+
+// AppsD9a368 says "Apps"
+// in the language of msgs.
+func (msgs Messages) AppsD9a368() string {
+	return Catalog.Format(msgs.locale, "apps_d9a368", nil)
+}
+
+// Windows26d9c2 says "Windows"
+// in the language the app shows.
+func Windows26d9c2() string { return In(i18n.Locale()).Windows26d9c2() }
+
+// Windows26d9c2 says "Windows"
+// in the language of msgs.
+func (msgs Messages) Windows26d9c2() string {
+	return Catalog.Format(msgs.locale, "windows_26d9c2", nil)
+}
+
+// OpenAppB329e0 says "Open app"
+// in the language the app shows.
+func OpenAppB329e0() string { return In(i18n.Locale()).OpenAppB329e0() }
+
+// OpenAppB329e0 says "Open app"
+// in the language of msgs.
+func (msgs Messages) OpenAppB329e0() string {
+	return Catalog.Format(msgs.locale, "openApp_b329e0", nil)
+}
+
+// SearchAppsCa3ce8 says "Search apps"
+// in the language the app shows.
+func SearchAppsCa3ce8() string { return In(i18n.Locale()).SearchAppsCa3ce8() }
+
+// SearchAppsCa3ce8 says "Search apps"
+// in the language of msgs.
+func (msgs Messages) SearchAppsCa3ce8() string {
+	return Catalog.Format(msgs.locale, "searchApps_ca3ce8", nil)
+}
+
+// NoAppsFound4aeabd says "No apps found."
+// in the language the app shows.
+func NoAppsFound4aeabd() string { return In(i18n.Locale()).NoAppsFound4aeabd() }
+
+// NoAppsFound4aeabd says "No apps found."
+// in the language of msgs.
+func (msgs Messages) NoAppsFound4aeabd() string {
+	return Catalog.Format(msgs.locale, "noAppsFound_4aeabd", nil)
+}
+
+// UnableToLoadAppsBae01c says "Unable to load apps"
+// in the language the app shows.
+func UnableToLoadAppsBae01c() string { return In(i18n.Locale()).UnableToLoadAppsBae01c() }
+
+// UnableToLoadAppsBae01c says "Unable to load apps"
+// in the language of msgs.
+func (msgs Messages) UnableToLoadAppsBae01c() string {
+	return Catalog.Format(msgs.locale, "unableToLoadApps_bae01c", nil)
+}
+
+// OpeningSB256d0 says "Opening %s…"
+// in the language the app shows.
+func OpeningSB256d0() string { return In(i18n.Locale()).OpeningSB256d0() }
+
+// OpeningSB256d0 says "Opening %s…"
+// in the language of msgs.
+func (msgs Messages) OpeningSB256d0() string {
+	return Catalog.Format(msgs.locale, "openingS_b256d0", nil)
+}
+
+// WaitingForTheAppWindowOnYourMac3387c4 says "Waiting for the app window on your Mac."
+// in the language the app shows.
+func WaitingForTheAppWindowOnYourMac3387c4() string {
+	return In(i18n.Locale()).WaitingForTheAppWindowOnYourMac3387c4()
+}
+
+// WaitingForTheAppWindowOnYourMac3387c4 says "Waiting for the app window on your Mac."
+// in the language of msgs.
+func (msgs Messages) WaitingForTheAppWindowOnYourMac3387c4() string {
+	return Catalog.Format(msgs.locale, "waitingForTheAppWindowOnYourMac_3387c4", nil)
+}
+
+// UnableToOpenAppC9d174 says "Unable to open app"
+// in the language the app shows.
+func UnableToOpenAppC9d174() string { return In(i18n.Locale()).UnableToOpenAppC9d174() }
+
+// UnableToOpenAppC9d174 says "Unable to open app"
+// in the language of msgs.
+func (msgs Messages) UnableToOpenAppC9d174() string {
+	return Catalog.Format(msgs.locale, "unableToOpenApp_c9d174", nil)
+}
+
+// AppOpenedSelectItsWindowBelowOrViewTheFullDesktop531509 says "App opened. Select its window below, or view the full desktop."
+// in the language the app shows.
+func AppOpenedSelectItsWindowBelowOrViewTheFullDesktop531509() string {
+	return In(i18n.Locale()).AppOpenedSelectItsWindowBelowOrViewTheFullDesktop531509()
+}
+
+// AppOpenedSelectItsWindowBelowOrViewTheFullDesktop531509 says "App opened. Select its window below, or view the full desktop."
+// in the language of msgs.
+func (msgs Messages) AppOpenedSelectItsWindowBelowOrViewTheFullDesktop531509() string {
+	return Catalog.Format(msgs.locale, "appOpenedSelectItsWindowBelowOrViewTheFullDesktop_531509", nil)
+}
+
+// OpenS200e35 says "Open %s"
+// in the language the app shows.
+func OpenS200e35() string { return In(i18n.Locale()).OpenS200e35() }
+
+// OpenS200e35 says "Open %s"
+// in the language of msgs.
+func (msgs Messages) OpenS200e35() string {
+	return Catalog.Format(msgs.locale, "openS_200e35", nil)
 }

@@ -346,6 +346,7 @@
   "conversationUnavailable_121a7d": "Conversation unavailable",
   "conversation_271763": "Conversation · ",
   "conversations_07c59b": "Conversations",
+  "agentsConversationsAndProjectFiles": "Agents, conversations and project files",
   "conversationsAndProjectFiles_ad8945": "Conversations and project files",
   "copied_8e3df4": "Copied",
   "copy_af74f7": "Copy",
@@ -1653,5 +1654,16 @@
   "collaboration_68ef141995": "Notification tracking stopped",
   "collaboration_1663a69df2": "Stop tracking this notification",
   "collaboration_e121fc22f4": "The original notification may already have started. Stop tracking it to allow later results; it will not be sent again.",
-  "collaboration_d90bb9f0d0": "Allow later results"
+  "collaboration_d90bb9f0d0": "Allow later results",
+  "apps_d9a368": "Apps",
+  "windows_26d9c2": "Windows",
+  "openApp_b329e0": "Open app",
+  "searchApps_ca3ce8": "Search apps",
+  "noAppsFound_4aeabd": "No apps found.",
+  "unableToLoadApps_bae01c": "Unable to load apps",
+  "openingS_b256d0": "Opening %s…",
+  "waitingForTheAppWindowOnYourMac_3387c4": "Waiting for the app window on your Mac.",
+  "unableToOpenApp_c9d174": "Unable to open app",
+  "appOpenedSelectItsWindowBelowOrViewTheFullDesktop_531509": "App opened. Select its window below, or view the full desktop.",
+  "openS_200e35": "Open %s"
 }

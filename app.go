@@ -32,6 +32,9 @@ type chatApp struct {
 	onRetry func(retryRequest)
 	// onHandoff creates the phone's draft rather than a desktop-controller draft.
 	onHandoff func()
+	// workingAccessory draws controls at the trailing edge of the working
+	// status row, as the phone's Agent tasks toggle.
+	workingAccessory func(*ui.Context)
 
 	sidebar   bool
 	section   string // "", "Settings", "Automations" or "Skills"

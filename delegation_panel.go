@@ -59,10 +59,6 @@ type collaborationPanel struct {
 	loadGeneration                 uint64
 	detailGeneration               uint64
 	err, storageError              string
-	form                           bool
-	prompt, agent, context         string
-	notify                         bool
-	follow                         *collaborationTaskView
 	abandon, reason                string
 	pending                        *collaborationRequest
 	busy                           bool
@@ -74,7 +70,7 @@ func (u *collaborationUI) pane(from string) *collaborationPanel {
 		u.panes = map[string]*collaborationPanel{}
 	}
 	if u.panes[from] == nil {
-		u.panes[from] = &collaborationPanel{from: from, notify: true, details: map[string]collaborationTaskView{}}
+		u.panes[from] = &collaborationPanel{from: from, details: map[string]collaborationTaskView{}}
 	}
 	return u.panes[from]
 }
@@ -250,21 +246,12 @@ func (p *collaborationPanel) retry(call collaborationCall) {
 			p.err = tr("Task response is incomplete; retry the original request")
 			return
 		}
-		showCreated := creating && p.form
 		p.pending = nil
 		p.loadedAt = time.Time{}
 		p.loaded = false
 		p.err = ""
 		p.abandon = ""
 		p.reason = ""
-		if creating {
-			p.form = false
-			p.prompt = ""
-			p.follow = nil
-			if showCreated {
-				p.selected = accepted.ID
-			}
-		}
 		if request.Operation == "resume" {
 			p.paused = *accepted.Paused
 		}
@@ -272,24 +259,6 @@ func (p *collaborationPanel) retry(call collaborationCall) {
 			p.read(accepted.ID, call)
 		}
 	})
-}
-func (p *collaborationPanel) start(call collaborationCall) {
-	args := map[string]any{"task": p.prompt, "context": "none", "notify": "none"}
-	if p.context == "caller_summary" {
-		args["context"] = p.context
-	}
-	if p.notify {
-		args["notify"] = "on_finish"
-	}
-	op := "start_task"
-	if p.follow != nil {
-		op = "send_thread"
-		args["thread_id"] = p.follow.Thread
-		args["previous_task_id"] = p.follow.ID
-	} else {
-		args["agent"] = p.agent
-	}
-	p.submit(op, args, call)
 }
 func collaborationStateLabel(state dg.State) string {
 	switch state {

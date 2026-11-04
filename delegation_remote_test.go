@@ -45,9 +45,7 @@ func TestCollaborationWorkspaceSwitchKeepsPendingRequestAtOriginalService(t *tes
 	<-entered
 	first.win.do(func() {
 		p := app.collaborations.pane(from)
-		p.agent, p.prompt = agentClaude, "original service only"
-		p.notify = false
-		p.start(app.collaborationCall)
+		p.submit("start_task", map[string]any{"agent": agentClaude, "task": "original service only", "context": "none", "notify": "none"}, app.collaborationCall)
 	})
 	deadline := time.Now().Add(5 * time.Second)
 	for s.busy.Load() < 2 && time.Now().Before(deadline) {

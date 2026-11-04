@@ -346,6 +346,7 @@
   "conversationUnavailable_121a7d": "对话不可用",
   "conversation_271763": "对话 · ",
   "conversations_07c59b": "对话",
+  "agentsConversationsAndProjectFiles": "Agent、会话和项目文件",
   "conversationsAndProjectFiles_ad8945": "对话与项目文件",
   "copied_8e3df4": "已复制",
   "copy_af74f7": "复制",
@@ -1653,5 +1654,16 @@
   "collaboration_68ef141995": "已停止跟踪通知",
   "collaboration_1663a69df2": "停止跟踪此通知",
   "collaboration_e121fc22f4": "原通知可能已经开始执行。停止跟踪后可继续接收后续结果，原通知不会重发。",
-  "collaboration_d90bb9f0d0": "继续接收后续结果"
+  "collaboration_d90bb9f0d0": "继续接收后续结果",
+  "apps_d9a368": "应用",
+  "windows_26d9c2": "窗口",
+  "openApp_b329e0": "打开应用",
+  "searchApps_ca3ce8": "搜索应用",
+  "noAppsFound_4aeabd": "未找到应用。",
+  "unableToLoadApps_bae01c": "无法加载应用列表",
+  "openingS_b256d0": "正在打开 %s…",
+  "waitingForTheAppWindowOnYourMac_3387c4": "正在等待 Mac 上的应用窗口。",
+  "unableToOpenApp_c9d174": "无法打开应用",
+  "appOpenedSelectItsWindowBelowOrViewTheFullDesktop_531509": "应用已打开，请选择下方的窗口，或查看完整桌面。",
+  "openS_200e35": "打开 %s"
 }

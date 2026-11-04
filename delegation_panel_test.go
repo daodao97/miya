@@ -15,9 +15,6 @@ import (
 
 func TestCollaborationPanelRetriesExactRequestAfterAmbiguousResponse(t *testing.T) {
 	p := (&collaborationUI{}).pane("source")
-	p.form = true
-	p.agent = agentClaude
-	p.prompt = "review"
 	var requests []collaborationRequest
 	var complete func(json.RawMessage, error)
 	call := func(r collaborationRequest, done func(json.RawMessage, error)) {
@@ -28,7 +25,7 @@ func TestCollaborationPanelRetriesExactRequestAfterAmbiguousResponse(t *testing.
 		requests = append(requests, r)
 		complete = done
 	}
-	p.start(call)
+	p.submit("cancel_task", map[string]any{"task_id": "accepted"}, call)
 	original := append([]byte(nil), p.pending.Arguments...)
 	complete(nil, errors.New("connection closed before acknowledgement"))
 	if p.pending == nil || p.busy {
@@ -43,9 +40,9 @@ func TestCollaborationPanelRetriesExactRequestAfterAmbiguousResponse(t *testing.
 		t.Fatal("malformed response acknowledged work")
 	}
 	p.retry(call)
-	complete(json.RawMessage(`{"task_id":"accepted","state":"starting"}`), nil)
-	if p.pending != nil || p.form || p.selected != "accepted" || p.prompt != "" {
-		t.Fatal("accepted request did not leave the form")
+	complete(json.RawMessage(`{"accepted":true}`), nil)
+	if p.pending != nil || p.err != "" {
+		t.Fatal("accepted request stayed pending")
 	}
 }
 
@@ -102,7 +99,7 @@ func TestCollaborationPanelRefreshesSelectedNotificationWithoutTaskRevisionChang
 	}
 }
 
-func TestCollaborationTaskCardsAndFollowupUseSameLayoutOnBothClients(t *testing.T) {
+func TestCollaborationTaskCardsUseSameLayoutOnBothClients(t *testing.T) {
 	for _, width := range []int{1120, 320, 390} {
 		t.Run(fmt.Sprint(width), func(t *testing.T) {
 			old := collaborationTaskView{ID: "task-old", From: "source", Thread: "target", Title: "Review compatibility", Agent: agentClaude, Workspace: "/workspace/project", State: dg.Completed, Revision: 7, ResultSummary: "Two compatibility issues", Result: dg.Result{Availability: "available", Text: "Fixed review result: two compatibility issues."}, Notification: "delivered"}
@@ -112,7 +109,6 @@ func TestCollaborationTaskCardsAndFollowupUseSameLayoutOnBothClients(t *testing.
 			pane.revision = 7
 			pane.loadedAt = time.Now()
 			pane.rows = []collaborationTaskView{old}
-			var follow collaborationRequest
 			call := func(r collaborationRequest, done func(json.RawMessage, error)) {
 				switch r.Operation {
 				case "read_task":
@@ -125,19 +121,13 @@ func TestCollaborationTaskCardsAndFollowupUseSameLayoutOnBothClients(t *testing.
 					} else {
 						done(collaborationArgsJSON(collaborationTaskView{ID: args.ID, State: dg.Running}), nil)
 					}
-				case "send_thread":
-					if _, err := decodeCollaboration(r.Operation, r.Arguments); err != nil {
-						t.Fatal(err)
-					}
-					follow = r
-					done(json.RawMessage(`{"task_id":"task-follow","state":"starting"}`), nil)
 				case "list_tasks":
 					done(collaborationArgsJSON(collaborationListView{Tasks: []collaborationTaskView{old}, Revision: 7}), nil)
 				default:
 					t.Errorf("unexpected action %s", r.Operation)
 				}
 			}
-			view := collaborationPanelView{palette: taskPalette{panel, line, ink, muted}, capability: &collaborationStatus{Version: 1, Revision: 7}, workspace: old.Workspace, agent: agentCodex, connected: true, call: call, openThread: func(string) {}}
+			view := collaborationPanelView{palette: taskPalette{panel, line, ink, muted}, capability: &collaborationStatus{Version: 1, Revision: 7}, connected: true, call: call, openThread: func(string) {}}
 			tt := ui.NewTester(func(c *ui.Context) { ui.Column(c).FillWidth().Padding(12).Children(func() { pane.draw(c, view) }) }, width, 750)
 			tt.Frame()
 			if !tt.HasText("Two compatibility issues") || !tt.HasText("Results returned") {
@@ -151,32 +141,6 @@ func TestCollaborationTaskCardsAndFollowupUseSameLayoutOnBothClients(t *testing.
 				t.Fatal("fixed result missing", tt.Texts())
 			}
 			saveCommandSnapshot(t, tt, fmt.Sprintf("task-result-%d.png", width))
-			if err := tt.Click("Continue task"); err != nil {
-				t.Fatal(err)
-			}
-			tt.Frame()
-			if err := tt.Click("Task instructions"); err != nil {
-				t.Fatal(err)
-			}
-			tt.Type("Verify the fixes")
-			tt.Frame()
-			saveCommandSnapshot(t, tt, fmt.Sprintf("task-followup-%d.png", width))
-			if err := tt.Click("Dispatch"); err != nil {
-				t.Fatal(err)
-			}
-			tt.Frame()
-			var args struct {
-				ID       string `json:"request_id"`
-				Target   string `json:"thread_id"`
-				Previous string `json:"previous_task_id"`
-				Task     string `json:"task"`
-			}
-			if json.Unmarshal(follow.Arguments, &args) != nil || args.ID == "" || args.Target != old.Thread || args.Previous != old.ID || args.Task != "Verify the fixes" {
-				t.Fatalf("followup lost its execution boundary: %+v", args)
-			}
-			if pane.details[old.ID].Result.Text != old.Result.Text {
-				t.Fatal("follow-up changed old card's result")
-			}
 		})
 	}
 }

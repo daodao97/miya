@@ -46,7 +46,7 @@ func (app *chatApp) collaborationTasks(c *ui.Context, t Thread) {
 	}
 	from := app.c.threadRef(t).URL()
 	pane := app.collaborations.pane(from)
-	pane.draw(c, collaborationPanelView{palette: taskPalette{panel, line, ink, muted}, capability: capability, from: from, workspace: app.c.threadWorkspace(t.ID), agent: threadAgent(t), readOnly: t.ReadOnly, connected: true, call: app.collaborationCall, openThread: app.openCollaborationThread})
+	pane.draw(c, collaborationPanelView{palette: taskPalette{panel, line, ink, muted}, capability: capability, from: from, readOnly: t.ReadOnly, connected: true, call: app.collaborationCall, openThread: app.openCollaborationThread})
 }
 
 func (app *chatApp) openCollaborationThread(raw string) {

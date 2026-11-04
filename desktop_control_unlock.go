@@ -68,9 +68,9 @@ func (d *desktopControl) serveUnlock(w http.ResponseWriter, r *http.Request, tok
 		http.Error(w, "Remote control ended", http.StatusGone)
 		return
 	}
-	if l.unlocking {
+	if l.unlocking || l.launching {
 		d.mu.Unlock()
-		http.Error(w, "Unlocking Mac. Please wait.", http.StatusTooManyRequests)
+		http.Error(w, "The desktop is busy. Try again later.", http.StatusTooManyRequests)
 		return
 	}
 	l.unlocking = true

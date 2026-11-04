@@ -127,7 +127,7 @@ func agentChoices(query string, allowed []string) []composerChoice {
 }
 
 func insertAgentReference(value string, token composerToken, agent, title string) string {
-	if token.Kind != '#' || token.Start < 0 || token.End > len(value) || token.End < token.Start {
+	if token.Kind != '#' && token.Kind != '@' || token.Start < 0 || token.End > len(value) || token.End < token.Start {
 		return value
 	}
 	if tag := agentReferenceText(agent, title); tag != "" {

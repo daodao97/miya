@@ -82,20 +82,30 @@ func (m *mobileApp) interruptCollaborationRequests() {
 	}
 }
 
-func (m *mobileApp) collaborationTasks(c *ui.Context) {
+func (m *mobileApp) collaborationPane() (*collaborationPanel, collaborationPanelView, bool) {
 	capability := m.state.Collaboration
 	if capability == nil || capability.Version < 1 {
-		return
+		return nil, collaborationPanelView{}, false
 	}
 	t := m.view.c.current()
 	from := ThreadRef{Source: m.state.ReferenceSource, Backend: threadAgent(t), SessionID: t.ServerID}.URL()
-	pane := m.collaborations.pane(from)
-	agents := []string{}
-	for _, agent := range m.state.Agents {
-		agents = append(agents, agent.Agent)
-	}
 	p := m.pal
-	pane.draw(c, collaborationPanelView{palette: taskPalette{p.surface, p.line, p.ink, p.muted}, capability: capability, from: from, workspace: m.composerProject(), agent: m.composerAgent(), agents: agents, readOnly: t.ReadOnly, connected: m.connected, call: m.collaborationCall, openThread: m.openCollaborationThread})
+	// While a turn runs, the toggle sits at the end of the working status row.
+	v := collaborationPanelView{palette: taskPalette{p.surface, p.line, p.ink, p.muted}, capability: capability, from: from, readOnly: t.ReadOnly, connected: m.connected, call: m.collaborationCall, openThread: m.openCollaborationThread, trailing: true, toggleElsewhere: t.Busy}
+	return m.collaborations.pane(from), v, true
+}
+
+func (m *mobileApp) collaborationTasks(c *ui.Context) {
+	if pane, v, ok := m.collaborationPane(); ok {
+		pane.draw(c, v)
+	}
+}
+
+// collaborationToggle is the working row's accessory on the phone.
+func (m *mobileApp) collaborationToggle(c *ui.Context) {
+	if pane, v, ok := m.collaborationPane(); ok && v.toggleElsewhere && !pane.hidden() {
+		ui.Row(c).Shrink(0).Margin(0, -8, 0, 0).Children(func() { pane.drawToggle(c, v) })
+	}
 }
 
 func (m *mobileApp) openCollaborationThread(raw string) {

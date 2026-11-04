@@ -20,10 +20,7 @@ func (m *mobileApp) threadMenu(c *ui.Context, project string) {
 		if m.state.Collaboration == nil || m.state.Collaboration.Version < 1 {
 			return
 		}
-		allowed := []string{}
-		for _, agent := range m.state.Agents {
-			allowed = append(allowed, agent.Agent)
-		}
+		allowed := m.delegationAgents()
 		p := m.pal
 		ui.Column(c.Key("agent-refs")).FillWidth().Background(p.surface).Radius(18).Padding(6).Children(func() {
 			ui.Text(c, tr("Agents")).FontSize(m.font(12)).TextColor(p.muted).Padding(8)
@@ -41,6 +38,10 @@ func (m *mobileApp) threadMenu(c *ui.Context, project string) {
 		m.clearFileReferences()
 		return
 	}
+	var agents []composerChoice
+	if m.state.Collaboration != nil && m.state.Collaboration.Version >= 1 {
+		agents = agentChoices(token.Query, m.delegationAgents())
+	}
 	var shown []threadReference
 	if m.state.ReferenceSource != "" {
 		shown = matchingThreadRefs(m.state.Projects, m.open, token.Query)
@@ -50,6 +51,22 @@ func (m *mobileApp) threadMenu(c *ui.Context, project string) {
 	ui.Column(c.Key("thread-refs")).FillWidth().Background(p.surface).Radius(18).Padding(6).Children(func() {
 		ui.Scroll(c.Key("thread-ref-list")).FillWidth().MaxHeight(260).Children(func() {
 			ui.Column(c).FillWidth().Children(func() {
+				if len(agents) > 0 {
+					ui.Text(c, tr("Agents")).FontSize(m.font(12)).TextColor(p.muted).Padding(8)
+				}
+				for _, choice := range agents {
+					item := m.phoneButton(c.Key("agent:"+choice.Agent)).FillWidth().MinHeight(52).Padding(0, 10).Radius(12).Label("@" + choice.Name)
+					item.Children(func() {
+						agentIcon(c, choice.Agent, 20)
+						ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
+							ui.Text(c, "@"+choice.Name).FontSize(m.font(15)).FontWeight(500).SingleLine().Ellipsis("…")
+							ui.Text(c, choice.Detail).FontSize(m.font(12)).TextColor(p.muted).SingleLine().Ellipsis("…")
+						})
+					})
+					if item.Clicked() {
+						m.draft = insertAgentReference(m.draft, token, choice.Agent, choice.Name)
+					}
+				}
 				if len(shown) > 0 {
 					ui.Text(c, tr("Referenced conversation")).FontSize(m.font(12)).TextColor(p.muted).Padding(8)
 				}
@@ -102,4 +119,13 @@ func (m *mobileApp) threadMenu(c *ui.Context, project string) {
 			})
 		})
 	})
+}
+
+// delegationAgents lists the agents the desktop offers for delegation.
+func (m *mobileApp) delegationAgents() []string {
+	allowed := []string{}
+	for _, agent := range m.state.Agents {
+		allowed = append(allowed, agent.Agent)
+	}
+	return allowed
 }

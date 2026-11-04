@@ -10,13 +10,17 @@ import (
 )
 
 type collaborationPanelView struct {
-	palette                taskPalette
-	capability             *collaborationStatus
-	from, workspace, agent string
-	agents                 []string
-	readOnly, connected    bool
-	call                   collaborationCall
-	openThread             func(string)
+	palette             taskPalette
+	capability          *collaborationStatus
+	from                string
+	readOnly, connected bool
+	// trailing aligns the toggle to the right edge instead of filling the row.
+	trailing bool
+	// toggleElsewhere omits the toggle because the caller draws it with
+	// drawToggle, as the phone does in the working status row.
+	toggleElsewhere bool
+	call            collaborationCall
+	openThread      func(string)
 }
 
 // The desktop and phone render this same task card and action state machine.
@@ -26,6 +30,12 @@ func (p *collaborationPanel) draw(c *ui.Context, v collaborationPanelView) {
 	}
 	if v.connected && p.from != "" {
 		p.refresh(v.capability, v.call, false)
+	}
+	if p.hidden() {
+		if v.connected {
+			c.After(time.Second)
+		}
+		return
 	}
 	pals := v.palette
 	locked := !v.connected || v.readOnly || v.capability.Stale || p.storageError != "" || p.pending != nil
@@ -37,33 +47,18 @@ func (p *collaborationPanel) draw(c *ui.Context, v collaborationPanelView) {
 		}
 	}
 	ui.Column(c.Key("collaboration")).FillWidth().MinWidth(0).Gap(6).Children(func() {
-		ui.Row(c).FillWidth().MinWidth(0).Gap(6).AlignItems(ui.Center).Children(func() {
-			b := ui.ButtonBase(c.Key("toggle")).MinHeight(36).Padding(4, 8).Radius(8).Label(p.title()).Grow(1).MinWidth(0)
-			b.Children(func() {
-				ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-					icon(c, "git-branch", 14, pals.muted)
-					ui.Text(c, p.title()).FontSize(12).TextColor(pals.ink).SingleLine().Ellipsis("…")
-					if p.loading {
-						ui.Spinner(c).FontSize(12)
-					}
-				})
+		if !v.toggleElsewhere {
+			ui.Row(c).FillWidth().MinWidth(0).Gap(6).AlignItems(ui.Center).Children(func() {
+				if v.trailing {
+					ui.Box(c).Grow(1).MinWidth(0)
+				}
+				p.drawToggle(c, v)
 			})
-			if b.Clicked() {
-				p.open = !p.open
-				p.explicitlyClosed = !p.open
-			}
-			if p.open {
-				button(c, "new-task", tr("Dispatch task"), locked || p.from == "", func() { p.form = true; p.follow = nil; p.agent = v.agent; p.selected = "" })
-			}
-		})
+		}
 		if !p.open {
 			return
 		}
 		ui.Column(c).FillWidth().MinWidth(0).Padding(10).Gap(8).Background(pals.surface).Border(1, pals.border).Radius(12).Children(func() {
-			if p.from == "" {
-				ui.Text(c, tr("Send a message before dispatching tasks from this conversation")).FontSize(12).TextColor(pals.muted).FillWidth().Wrap()
-				return
-			}
 			if !v.connected {
 				ui.Text(c, tr("Offline · Showing saved task data")).FontSize(12).TextColor(pals.muted)
 			}
@@ -85,10 +80,6 @@ func (p *collaborationPanel) draw(c *ui.Context, v collaborationPanelView) {
 				} else {
 					button(c, "retry-request", tr("Retry the same request"), !v.connected, func() { p.retry(v.call) })
 				}
-			}
-			if p.form {
-				p.drawForm(c, v, locked, button)
-				return
 			}
 			if p.selected != "" {
 				p.drawDetail(c, v, locked, button)
@@ -145,56 +136,36 @@ func (p *collaborationPanel) draw(c *ui.Context, v collaborationPanelView) {
 	})
 }
 
-type collaborationButton func(*ui.Context, string, string, bool, func())
-
-func (p *collaborationPanel) drawForm(c *ui.Context, v collaborationPanelView, locked bool, button collaborationButton) {
-	pals := v.palette
-	label := tr("Dispatch task")
-	if p.follow != nil {
-		label = tr("Continue task")
-	}
-	ui.Row(c).FillWidth().AlignItems(ui.Center).Children(func() {
-		ui.Text(c, label).FontSize(13).FontWeight(600).TextColor(pals.ink).Grow(1)
-		button(c, "close-form", tr("Back"), false, func() { p.form = false })
-	})
-	if p.follow == nil {
-		ui.Row(c).FillWidth().Wrap().Gap(4).Children(func() {
-			for _, choice := range agentChoices("", v.agents) {
-				b := ui.ButtonBase(c.Key(choice.Agent)).MinHeight(36).Padding(6, 9).Radius(8).Label(choice.Name).Disabled(locked)
-				if p.agent == choice.Agent {
-					b.Border(1, pals.ink)
-				}
-				b.Children(func() { ui.Text(c, choice.Name).FontSize(12).TextColor(pals.ink) })
-				if b.Clicked() {
-					p.agent = choice.Agent
-				}
-			}
-		})
-	} else {
-		ui.Text(c, backendFor(p.follow.Agent).Name()+" · "+p.follow.Title).FontSize(12).TextColor(pals.muted).SingleLine().Ellipsis("…").FillWidth()
-	}
-	ui.Text(c, tr("Shared workspace: ")+v.workspace).FontSize(11).TextColor(pals.muted).FillWidth().SingleLine().Ellipsis("…").Tooltip(v.workspace)
-	ui.TextAreaBase(c.Key("task-body"), &p.prompt).Label(tr("Task instructions")).Placeholder(tr("Describe the work and the result you need")).Lines(2, 4).FillWidth().MinWidth(0).Padding(8).FontSize(14).Background(pals.surface).Border(1, pals.border).Radius(8).Disabled(locked)
-	ui.Row(c).FillWidth().Wrap().Gap(4).Children(func() {
-		context := tr("Context: task only")
-		if p.context == "caller_summary" {
-			context = tr("Context: conversation summary")
-		}
-		button(c, "context", context, locked, func() {
-			if p.context == "caller_summary" {
-				p.context = "none"
-			} else {
-				p.context = "caller_summary"
-			}
-		})
-		notify := tr("Result: record only")
-		if p.notify {
-			notify = tr("Result: return automatically")
-		}
-		button(c, "notify", notify, locked, func() { p.notify = !p.notify })
-		button(c, "dispatch", tr("Dispatch"), locked || strings.TrimSpace(p.prompt) == "" || p.follow == nil && p.agent == "", func() { p.start(v.call) })
-	})
+// hidden reports whether the panel has nothing to show. Agents delegate
+// tasks, so the panel appears once the conversation has one; a request in
+// flight keeps it visible.
+func (p *collaborationPanel) hidden() bool {
+	return len(p.rows) == 0 && p.pending == nil
 }
+
+// drawToggle is the Agent tasks button that opens and closes the panel.
+func (p *collaborationPanel) drawToggle(c *ui.Context, v collaborationPanelView) {
+	pals := v.palette
+	b := ui.ButtonBase(c.Key("toggle")).MinHeight(36).Padding(4, 8).Radius(8).Label(p.title()).MinWidth(0)
+	if !v.trailing {
+		b.Grow(1)
+	}
+	b.Children(func() {
+		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+			icon(c, "git-branch", 14, pals.muted)
+			ui.Text(c, p.title()).FontSize(12).TextColor(pals.ink).SingleLine().Ellipsis("…")
+			if p.loading {
+				ui.Spinner(c).FontSize(12)
+			}
+		})
+	})
+	if b.Clicked() {
+		p.open = !p.open
+		p.explicitlyClosed = !p.open
+	}
+}
+
+type collaborationButton func(*ui.Context, string, string, bool, func())
 
 func (p *collaborationPanel) drawDetail(c *ui.Context, v collaborationPanelView, locked bool, button collaborationButton) {
 	pals := v.palette
@@ -250,9 +221,6 @@ func (p *collaborationPanel) drawDetail(c *ui.Context, v collaborationPanelView,
 		}
 		if task.From != "" && task.From != p.from {
 			button(c, "open-source", tr("Open source conversation"), false, func() { v.openThread(task.From) })
-		}
-		if dg.Terminal(task.State) && task.Thread != "" {
-			button(c, "follow", tr("Continue task"), locked, func() { copy := task; p.follow = &copy; p.form = true; p.prompt = "" })
 		}
 		if !dg.Terminal(task.State) {
 			button(c, "cancel", tr("Cancel task"), locked || task.CancelRequested, func() { p.submit("cancel_task", map[string]any{"task_id": task.ID}, v.call) })
