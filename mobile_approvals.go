@@ -57,6 +57,7 @@ func (m *mobileApp) approvalAnswered(id json.RawMessage, message string) {
 		return
 	}
 	delete(m.approvalFields, key)
+	delete(m.desktopPreviews, key)
 	delete(m.view.formErrors, key)
 	out := make([]codex.Approval, 0, len(m.state.Approvals))
 	for _, a := range m.state.Approvals {
@@ -66,6 +67,7 @@ func (m *mobileApp) approvalAnswered(id json.RawMessage, message string) {
 	}
 	m.state.Approvals = out
 	m.view.c.setApprovals(out)
+	m.closeResolvedDesktopControl(out)
 	if m.router().Path() == "/approval" && sameJSON(m.approvalID, id) {
 		m.router().Back()
 	}
@@ -76,13 +78,47 @@ func (m *mobileApp) approvalCard(c *ui.Context, a codex.Approval) {
 	ui.Column(c).Margin(0, 12, 8, 12).Padding(14).Gap(10).Background(p.surface).Border(1, p.warn).Radius(18).Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			icon(c, "shield-exclamation", 16, p.warn)
-			ui.Text(c, requestAgent(a)+" 请求确认").FontSize(m.font(14)).FontWeight(600)
+			label := requestAgent(a) + " 请求确认"
+			if a.Method == "miya/desktopControl" && m.state.DesktopWindows {
+				label = "等你处理"
+			}
+			ui.Text(c, label).FontSize(m.font(14)).FontWeight(600)
 		})
+		m.desktopControlAction(c, a)
 		switch a.Method {
-		case "item/tool/requestUserInput", "mcpServer/elicitation/request":
+		case "miya/desktopControl":
+			if m.state.DesktopWindows {
+				break
+			}
+			ui.Text(c, m.view.c.approvalDetail(a)).FontSize(m.font(13)).LineHeight(1.45)
+			ui.Row(c).Gap(8).Children(func() {
+				if m.pill(c, "done", "已完成，继续", true).Disabled(m.approvalPending[id]).Clicked() {
+					m.submitApproval(a, nil, true, false)
+				}
+				if m.pill(c, "cancel", "取消接管", false).Disabled(m.approvalPending[id]).Clicked() {
+					m.submitApproval(a, nil, false, false)
+				}
+			})
+		case "mcpServer/elicitation/request":
+			if inlineMCPConfirmation(a) {
+				ui.Scroll(c).FillWidth().MaxHeight(120).Children(func() {
+					ui.Text(c, a.Message).FontSize(m.font(15)).LineHeight(1.4).Selectable()
+				})
+				m.elicitationActions(c, a)
+				break
+			}
+			fallthrough
+		case "item/tool/requestUserInput":
 			label := "填写回答"
+			summary := a.Message
+			if len(a.Questions) > 0 {
+				summary = a.Questions[0].Question
+			}
+			if summary != "" {
+				ui.Text(c, summary).FontSize(m.font(15)).LineHeight(1.4).MaxLines(3)
+			}
 			if a.Method == "mcpServer/elicitation/request" {
-				label = "处理表单"
+				label = "查看并确认"
 			}
 			if m.pill(c, "open", label, true).Clicked() {
 				m.approvalID = a.ID
@@ -91,10 +127,10 @@ func (m *mobileApp) approvalCard(c *ui.Context, a codex.Approval) {
 		default:
 			ui.Scroll(c).MaxHeight(140).Children(func() { ui.Text(c, m.view.c.approvalDetail(a)).FontSize(m.font(13)).LineHeight(1.45).Selectable() })
 			ui.Row(c).Gap(8).Children(func() {
-				if m.pill(c, "allow", "允许一次", true).Disabled(m.approvalPending[id]).Clicked() {
+				if m.approvalButton(c, "allow", "允许一次", true, m.approvalPending[id]).Clicked() {
 					m.submitApproval(a, nil, true, false)
 				}
-				if m.pill(c, "deny", "拒绝", false).Disabled(m.approvalPending[id]).Clicked() {
+				if m.approvalButton(c, "deny", "拒绝", false, m.approvalPending[id]).Clicked() {
 					m.submitApproval(a, nil, false, false)
 				}
 			})
@@ -103,6 +139,20 @@ func (m *mobileApp) approvalCard(c *ui.Context, a codex.Approval) {
 			ui.Text(c, message).FontSize(m.font(13)).TextColor(danger)
 		}
 	})
+}
+
+// Confirmations with no input fields can be answered on the conversation card.
+// URL requests and forms retain their full page and existing validation.
+func inlineMCPConfirmation(a codex.Approval) bool {
+	if a.Method != "mcpServer/elicitation/request" || a.Mode != "" && a.Mode != "form" {
+		return false
+	}
+	var schema phoneFormSchema
+	if json.Unmarshal(a.RequestedSchema, &schema) != nil || schema.Type != "object" || len(schema.Properties) != 0 {
+		return false
+	}
+	_, err := validateMobileForm(a, nil)
+	return err == nil
 }
 func (m *mobileApp) approvalPage(c *ui.Context) {
 	p := m.pal
@@ -127,24 +177,31 @@ func (m *mobileApp) approvalPage(c *ui.Context) {
 	ui.Scroll(c).FillWidth().Grow(1).MinHeight(0).Children(func() {
 		ui.Column(c).FillWidth().Padding(20, 16).Gap(16).Children(func() {
 			ui.Text(c, requestAgent(a)).FontSize(m.font(20)).FontWeight(600)
+			m.desktopControlAction(c, a)
 			if a.Method == "item/tool/requestUserInput" {
 				m.questionFields(c, a)
 			} else {
 				m.elicitationFields(c, a)
 			}
-			if message := m.view.formErrors[string(a.ID)]; message != "" {
-				ui.Text(c, message).TextColor(danger).FontSize(m.font(13))
-			}
-			if m.approvalPending[string(a.ID)] {
-				ui.Text(c, "正在提交…").TextColor(p.muted).FontSize(m.font(13))
-			}
 		})
+	})
+	ui.Column(c).FillWidth().Padding(12, 16).Gap(8).Background(p.bg).Children(func() {
+		if message := m.view.formErrors[string(a.ID)]; message != "" {
+			ui.Text(c, message).TextColor(danger).FontSize(m.font(13)).MaxLines(2)
+		}
+		if m.approvalPending[string(a.ID)] {
+			ui.Text(c, "正在提交…").TextColor(p.muted).FontSize(m.font(13))
+		}
+		if a.Method == "item/tool/requestUserInput" {
+			m.questionActions(c, a)
+		} else {
+			m.elicitationActions(c, a)
+		}
 	})
 }
 func (m *mobileApp) questionFields(c *ui.Context, a codex.Approval) {
 	p := m.pal
 	fields := m.fieldsFor(a)
-	complete := true
 	for _, q := range a.Questions {
 		ui.Column(c.Key(q.ID)).FillWidth().Gap(8).Children(func() {
 			if q.Header != "" {
@@ -177,6 +234,12 @@ func (m *mobileApp) questionFields(c *ui.Context, a codex.Approval) {
 				fields[q.ID] = value
 			}
 		})
+	}
+}
+func (m *mobileApp) questionActions(c *ui.Context, a codex.Approval) {
+	fields := m.fieldsFor(a)
+	complete := true
+	for _, q := range a.Questions {
 		if strings.TrimSpace(fields[q.ID]) == "" {
 			complete = false
 		}
@@ -197,7 +260,6 @@ func (m *mobileApp) questionFields(c *ui.Context, a codex.Approval) {
 }
 func (m *mobileApp) elicitationFields(c *ui.Context, a codex.Approval) {
 	p := m.pal
-	id := string(a.ID)
 	fields := m.fieldsFor(a)
 	ui.Text(c, a.Message).FontSize(m.font(15)).LineHeight(1.45).Selectable()
 	if a.Mode == "url" {
@@ -248,12 +310,17 @@ func (m *mobileApp) elicitationFields(c *ui.Context, a codex.Approval) {
 			})
 		}
 	}
+}
+func (m *mobileApp) elicitationActions(c *ui.Context, a codex.Approval) {
+	id := string(a.ID)
+	fields := m.fieldsFor(a)
 	pending := m.approvalPending[id]
-	ui.Row(c).FillWidth().Wrap().Gap(10).Children(func() {
-		if rememberableMCPAccess(a) && m.pill(c, "remember", "此对话始终允许", false).Disabled(pending).Clicked() {
-			m.submitApproval(a, nil, false, true)
-		}
-		if m.pill(c, "confirm", "确认", true).Disabled(pending).Clicked() {
+	label := "确认"
+	if rememberableMCPAccess(a) {
+		label = "允许一次"
+	}
+	ui.Row(c).FillWidth().Gap(10).Children(func() {
+		if m.approvalButton(c, "confirm", label, true, pending).Grow(1).Clicked() {
 			result := map[string]any{"action": "accept"}
 			if a.Mode != "url" {
 				content, err := validateMobileForm(a, fields)
@@ -265,10 +332,15 @@ func (m *mobileApp) elicitationFields(c *ui.Context, a codex.Approval) {
 			}
 			m.submitApproval(a, result, false, false)
 		}
-		if m.pill(c, "decline", "拒绝", false).Disabled(pending).Clicked() {
+		if m.approvalButton(c, "decline", "拒绝", false, pending).Grow(1).Clicked() {
 			m.submitApproval(a, map[string]any{"action": "decline"}, false, false)
 		}
-		if m.pill(c, "cancel", "取消请求", false).Disabled(pending).Clicked() {
+	})
+	ui.Row(c).FillWidth().Wrap().Gap(10).Children(func() {
+		if rememberableMCPAccess(a) && m.approvalButton(c, "remember", "此对话始终允许", false, pending).Clicked() {
+			m.submitApproval(a, nil, false, true)
+		}
+		if m.approvalButton(c, "cancel", "取消请求", false, pending).Clicked() {
 			m.submitApproval(a, map[string]any{"action": "cancel"}, false, false)
 		}
 	})

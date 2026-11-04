@@ -69,6 +69,41 @@ func (m *mobileApp) markOpenRead() {
 		}
 	}()
 }
+
+func (m *mobileApp) markCompletionRead() {
+	if m.open == 0 || m.conn == nil || m.win != nil && mygo.App.Lifecycle() != mygo.LifecycleActive {
+		return
+	}
+	r, read, ok := m.completionReadRequest()
+	if !ok {
+		return
+	}
+	m.completionRead = read
+	conn, gen := m.conn, m.generation
+	go func() {
+		if err := conn.Send(r); err != nil {
+			m.onMain(gen, func() {
+				if m.conn == conn && m.completionRead == read {
+					m.completionRead = desktopRead{}
+				}
+			})
+		}
+	}()
+}
+
+func (m *mobileApp) completionReadRequest() (remote.Request, desktopRead, bool) {
+	t := m.view.c.current()
+	if m.open == 0 || t.ID != m.open || t.Busy || t.Loading || !t.HistoryLoaded || len(t.Messages) == 0 || t.CompletedAtMs <= 0 {
+		return remote.Request{}, desktopRead{}, false
+	}
+	read := desktopRead{Key: desktopUnreadKey(t), Version: t.CompletedAtMs}
+	if m.completionReceived != read || m.completionRead == read {
+		return remote.Request{}, desktopRead{}, false
+	}
+	r := m.threadRequest("read", m.open)
+	r.ReadCompletedAtMs = read.Version
+	return r, read, true
+}
 func (m *mobileApp) desiredBadge() int {
 	if m.pushDisabled {
 		return 0

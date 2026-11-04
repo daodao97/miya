@@ -42,6 +42,10 @@ func phonePreview(source string) ([]byte, error) {
 	if err != nil || len(data) > maxPhoneImageBytes {
 		return nil, errors.New("无法读取图片预览")
 	}
+	return phonePreviewData(data)
+}
+
+func phonePreviewData(data []byte) ([]byte, error) {
 	config, _, err := image.DecodeConfig(bytes.NewReader(data))
 	if err != nil || config.Width <= 0 || config.Height <= 0 || int64(config.Width)*int64(config.Height) > 64_000_000 {
 		return nil, errors.New("无法解码图片预览")
@@ -60,6 +64,9 @@ func phonePreview(source string) ([]byte, error) {
 	var out bytes.Buffer
 	if err := jpeg.Encode(&out, thumb, &jpeg.Options{Quality: 85}); err != nil {
 		return nil, err
+	}
+	if out.Len() > maxPhonePreviewBytes {
+		return nil, errors.New("预览图片过大")
 	}
 	return out.Bytes(), nil
 }

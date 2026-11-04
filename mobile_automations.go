@@ -20,6 +20,59 @@ type mobileAutomations struct {
 	err              string
 	instructionsOpen bool
 	openRuns         map[string]bool
+	runRequest       string
+	runID            string
+	runRequestedAt   time.Time
+	runErr           string
+}
+
+type phoneAutomationRunResult struct {
+	RequestID string           `json:"requestId"`
+	List      []automationView `json:"list"`
+}
+
+func (m *mobileApp) runPhoneAutomation(id string) {
+	a := &m.autos
+	if a.runRequest != "" || !m.connected || m.conn == nil || !m.state.AutomationRun {
+		return
+	}
+	for _, v := range a.list {
+		if v.ID == id && v.Running {
+			return
+		}
+	}
+	a.runRequestedAt = time.Now()
+	a.runRequest, a.runID, a.runErr = fmt.Sprint(a.runRequestedAt.UnixNano()), id, ""
+	request := remote.Request{Op: "automation-run", AutomationID: id, RequestID: a.runRequest}
+	conn, gen := m.conn, m.generation
+	go func() {
+		if err := conn.Send(request); err != nil {
+			m.onMain(gen, func() {
+				if m.conn == conn && a.runRequest == request.RequestID {
+					a.runRequest, a.runErr = "", "发送失败，请先刷新确认运行状态："+err.Error()
+				}
+			})
+		}
+	}()
+}
+
+func (m *mobileApp) receiveAutomationRun(data json.RawMessage, message string) {
+	var result phoneAutomationRunResult
+	if json.Unmarshal(data, &result) != nil || result.RequestID == "" || result.RequestID != m.autos.runRequest {
+		return
+	}
+	a := &m.autos
+	a.runRequest, a.runErr = "", message
+	if result.List != nil {
+		a.list, a.loaded, a.err = result.List, true, ""
+	}
+	a.requestedAt = time.Time{}
+}
+
+func (m *mobileApp) interruptAutomationRequest() {
+	if m.autos.runRequest != "" {
+		m.autos.runRequest, m.autos.runErr = "", "连接已断开，请刷新确认运行状态"
+	}
 }
 
 func (m *mobileApp) loadPhoneAutomations() {
@@ -55,6 +108,10 @@ func (m *mobileApp) receiveAutomations(data json.RawMessage, message string) {
 
 func (m *mobileApp) automationsPage(c *ui.Context, detail bool) {
 	p, a := m.pal, &m.autos
+	if a.runRequest != "" && time.Since(a.runRequestedAt) > 30*time.Second {
+		a.runRequest, a.runErr = "", "请求超时，请先刷新确认运行状态"
+		a.requestedAt = time.Time{}
+	}
 	if m.router().Path() != "/thread" && !m.router().Transitioning() && m.open != 0 {
 		m.leave()
 	}
@@ -232,6 +289,21 @@ func (m *mobileApp) automationPhoneDetail(c *ui.Context, v automationView) {
 			icon(c, "clock", 14, p.muted)
 			ui.Text(c, v.ScheduleText).FontSize(m.font(14)).TextColor(p.muted)
 		})
+		label := "立即运行"
+		if v.Running {
+			label = "运行中"
+		} else if m.autos.runRequest != "" && m.autos.runID == v.ID {
+			label = "正在启动…"
+		}
+		if m.pill(c, "run", label, true).Disabled(!m.connected || !m.state.AutomationRun || v.Running || m.autos.runRequest != "").Clicked() {
+			m.runPhoneAutomation(v.ID)
+		}
+		if m.connected && !m.state.AutomationRun {
+			ui.Text(c, "更新桌面端后即可立即运行").FontSize(m.font(13)).TextColor(p.muted)
+		}
+		if m.autos.runID == v.ID && m.autos.runErr != "" {
+			ui.Text(c, m.autos.runErr).FontSize(m.font(13)).TextColor(danger)
+		}
 	})
 	ui.Box(c).FillWidth().Height(0.5).Background(p.line)
 	ui.Column(c).FillWidth().Gap(10).Children(func() {

@@ -356,7 +356,9 @@ func (c *chatController) handleClaude(id int, f claude.Frame) {
 			}
 			return
 		}
-		a := codex.Approval{ID: rid, Method: "claude/permission", Command: f.Request.ToolName, Reason: string(f.Request.Input), Payload: f.Request.Input}
+		// Phones route request cards by the session ID, including requests
+		// from conversations in background projects.
+		a := codex.Approval{ID: rid, ThreadID: c.threadWithID(id).ServerID, ItemID: f.Request.ToolUseID, Method: "claude/permission", Command: f.Request.ToolName, Reason: string(f.Request.Input), Payload: f.Request.Input}
 		if f.Request.ToolName == "AskUserQuestion" {
 			var input struct {
 				Questions []struct {
@@ -474,8 +476,14 @@ func (c *chatController) handleClaude(id int, f claude.Frame) {
 			}
 		case "result":
 			t.TaskStopping = false
+			// Interrupting Claude Code can itself produce an error result (for
+			// example an ede_diagnostic with stop_reason=tool_use).
+			// finishClaude will finalize it as a requested stop.
+			if t.StopRequested {
+				return
+			}
 			hadOutput := turnHasOutput(t.Messages)
-			emptyResult := !f.IsError && !f.KeepingAlive && !t.StopRequested && !hadOutput && strings.TrimSpace(f.Result) == ""
+			emptyResult := !f.IsError && !f.KeepingAlive && !hadOutput && strings.TrimSpace(f.Result) == ""
 			if f.IsError || emptyResult {
 				stopClaudeTasks(t, "failed")
 			}

@@ -216,7 +216,7 @@ func (s *service) handle(p *svcPeer, req svcRequest) (any, error) {
 		_ = arg(&id)
 		p.sub, p.sent, p.order = id, nil, nil
 		s.markDirty()
-	case "mcpMemory", "mcpThreads", "mcpRead", "mcpStatus", "mcpDelegate", "mcpAutomationList", "mcpAutomationCreate", "mcpAutomationUpdate", "mcpReportResult", "mcpRuntime":
+	case "mcpDesktopControl", "mcpMemory", "mcpThreads", "mcpRead", "mcpStatus", "mcpDelegate", "mcpAutomationList", "mcpAutomationCreate", "mcpAutomationUpdate", "mcpReportResult", "mcpRuntime":
 		var r mcpRequest
 		if err := arg(&r); err != nil {
 			return nil, err
@@ -403,6 +403,9 @@ func (s *service) handle(p *svcPeer, req svcRequest) (any, error) {
 
 // busy reports a turn running or starting, which quitting would end.
 func (s *service) busy() bool {
+	if s.c.desktopBusy() {
+		return true
+	}
 	if s.c.runtimeBusy() {
 		return true
 	}

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -65,7 +66,7 @@ func TestMCPServerHandshakeAndTools(t *testing.T) {
 	for _, tool := range res["2"]["result"].(map[string]any)["tools"].([]any) {
 		names = append(names, tool.(map[string]any)["name"].(string))
 	}
-	if strings.Join(names, ",") != "runtime_info,list_threads,read_thread,thread_status,delegate,list_automations,create_automation,update_automation,report_result,search_memory,remember,forget_memory" {
+	if strings.Join(names, ",") != "request_desktop_control,runtime_info,list_threads,read_thread,thread_status,delegate,list_automations,create_automation,update_automation,report_result,search_memory,remember,forget_memory" {
 		t.Fatalf("bad tools: %v", names)
 	}
 	if res[`"p"`]["result"] == nil || res["3"]["error"].(map[string]any)["code"] != float64(-32601) || res["null"]["error"] == nil {
@@ -159,6 +160,50 @@ func TestMCPDelegateHandsWorkWithTheCallersContext(t *testing.T) {
 	c.delegationParent[3], c.delegationParent[1] = 2, 3
 	if _, err := c.mcpHandle("mcpDelegate", mcpRequest{Tool: "delegate", Task: "再往下"}); err == nil || !strings.Contains(err.Error(), "最多") {
 		t.Fatalf("delegation went too deep: %v", err)
+	}
+}
+
+func TestMCPDelegateTracksOnlyTheCallerWithOrWithoutContext(t *testing.T) {
+	for _, noContext := range []bool{false, true} {
+		t.Run(fmt.Sprintf("noContext=%v", noContext), func(t *testing.T) {
+			c := mcpHost(t)
+			other := handoffSource()
+			other.ID, other.ServerID = 3, "reference-only"
+			c.setThreads(append(c.threads(), other))
+			task := "给登录补测试 " + referenceText(testReference(other), other.Title)
+			_, err := c.mcpDelegate(mcpRequest{Tool: "delegate", Thread: 2, Task: task, NoContext: noContext})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(c.handoffs) != 1 || c.handoffs[0].From != 1 || c.handoffs[0].To != 2 {
+				t.Fatalf("delegation must track only its caller: %+v", c.handoffs)
+			}
+			if got := c.threadWithID(other.ID); len(got.Messages) != len(other.Messages) {
+				t.Fatalf("a context reference became a delegating conversation: %+v", got)
+			}
+			source := c.threadWithID(1)
+			last := source.Messages[len(source.Messages)-1]
+			if last.Kind != "handoff" || len(last.Agents) != 1 || last.Agents[0].Status != subAgentRunning || last.Agents[0].Name != "给登录补测试" || activityTitle(last) != "已交付到对话「测试」" {
+				t.Fatalf("explicit delegation not tracked: %+v", last)
+			}
+			_, snapshots := splitReferenceContext(c.threadWithID(2).Queue[0].Text)
+			wantSnapshots := 2
+			if noContext {
+				wantSnapshots = 1
+			}
+			if len(snapshots) != wantSnapshots {
+				t.Fatalf("wrong context snapshots: %+v", snapshots)
+			}
+			c.update(2, func(th *Thread) {
+				th.Busy, th.Queue = false, nil
+				th.Messages = append(th.Messages, Message{Role: "user", Content: task}, Message{Role: "assistant", Content: "测试已补齐\n全部通过"})
+			})
+			source = c.threadWithID(1)
+			agent := source.Messages[len(source.Messages)-1].Agents[0]
+			if agent.Status != subAgentCompleted || agent.Detail != "测试已补齐" {
+				t.Fatalf("delegated result not followed: %+v", agent)
+			}
+		})
 	}
 }
 

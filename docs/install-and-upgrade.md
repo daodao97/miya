@@ -37,10 +37,14 @@ Miya 使用同一个可执行文件运行不同进程：
 在仓库根目录执行；以下为 Apple Silicon macOS 的本地安装：
 
 ```sh
-go tool mygo build -platform darwin/arm64 -skip-dmg
+./scripts/build-macos.sh -platform darwin/arm64
 /usr/bin/codesign --verify --deep --strict build/darwin-arm64/Miya.app
 /usr/bin/shasum -a 256 build/darwin-arm64/Miya.app/Contents/MacOS/Miya
 ```
+
+macOS 构建使用项目脚本：远程桌面的 ScreenCaptureKit 原生桥接需要 cgo，而 MyGo 直接构建默认关闭 cgo。脚本还将原生编译的最低系统版本保持为 macOS 13，macOS 14 及以上才启用远程桌面。不要以未启用 cgo 的包验收此功能。
+
+有本机开发签名证书时，用 `MIYA_SIGNING_IDENTITY` 或未跟踪的 `.mygo/macos-signing-identity`（单行证书名称或 SHA-1）固定签名身份。同一团队、同一应用标识的稳定签名可避免每次本地重编译都使 TCC 授权失效；从 ad-hoc 迁移时仍需重新授权一次。不要把其他人的证书身份写入共享配置，也不要为了维持权限放宽 designated requirement。没有配置时保持 ad-hoc 构建。
 
 构建需要访问 Go 缓存，安装需要写入 `/Applications`。遇到沙箱拒绝时，为具体构建或安装命令申请权限提升。没有完成构建、验签之前，不替换现有应用。功能变更应已完成对应验证；仅安装同一份已验证源码时无需重复全量测试。
 

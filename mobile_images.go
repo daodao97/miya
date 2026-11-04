@@ -49,6 +49,13 @@ func (m *mobileApp) retryImage(source string, conn *remote.Conn) {
 // cached thumbnail off the UI thread, with bounded retries when a transfer
 // fails. Image sources in messages stay unchanged.
 func (m *mobileApp) messageImage(source string) ui.ImageSource {
+	if m.newSend != nil {
+		for _, path := range m.newSend.message.Images {
+			if source == path {
+				return cachedImage(path)
+			}
+		}
+	}
 	if !strings.HasPrefix(source, "file://") && !filepath.IsAbs(source) {
 		return cachedImage(source)
 	}

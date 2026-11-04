@@ -1,0 +1,108 @@
+package main
+
+import (
+	"encoding/json"
+	"net/http"
+	"time"
+
+	"miya/internal/desktop"
+)
+
+// These controls belong to the selected approval window, not the foreground
+// desktop. No editable values are included in the returned dialog metadata.
+func (d *desktopControl) serveWindowActions(w http.ResponseWriter, r *http.Request, token string, lease *desktopLease, press bool) {
+	method := http.MethodGet
+	if press {
+		method = http.MethodPost
+	}
+	if r.Method != method {
+		http.Error(w, "Method not allowed", 405)
+		return
+	}
+	var request struct {
+		ID        string `json:"id"`
+		WindowID  uint32 `json:"windowId"`
+		WindowPID int    `json:"windowPid"`
+	}
+	if press {
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096))
+		decoder.DisallowUnknownFields()
+		if decoder.Decode(&request) != nil || request.ID == "" {
+			http.Error(w, "无效的授权操作", 400)
+			return
+		}
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.valid(token) != lease || r.Context().Err() != nil {
+		http.Error(w, "远程控制已结束", 410)
+		return
+	}
+	if !lease.active || lease.window == nil || lease.onAction == nil || d.dialog == nil {
+		http.Error(w, "当前界面没有可用的授权窗口操作", 403)
+		return
+	}
+	if press && (request.WindowID != lease.window.ID || request.WindowPID != lease.window.PID || d.pressAction == nil) {
+		http.Error(w, "授权窗口已切换，请刷新操作按钮", 409)
+		return
+	}
+	if !press {
+		dialog, err := d.dialog(*lease.window)
+		if err != nil {
+			http.Error(w, err.Error(), 409)
+			return
+		}
+		if d.valid(token) != lease || r.Context().Err() != nil {
+			http.Error(w, "远程控制已结束", 410)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(struct {
+			Window  desktop.Window   `json:"window"`
+			Actions []desktop.Action `json:"actions"`
+			Pending bool             `json:"pending"`
+		}{*lease.window, dialog.Actions, lease.actionPending})
+		return
+	}
+	if lease.actionPending {
+		http.Error(w, "正在确认授权结果，请稍候", 409)
+		return
+	}
+	if time.Since(lease.capturedAt) > 10*time.Second {
+		http.Error(w, "请等待新的窗口画面后再操作", 409)
+		return
+	}
+	if time.Since(lease.lastInput) < 20*time.Millisecond {
+		http.Error(w, "操作过快", 429)
+		return
+	}
+	before, err := d.actionWindows(*lease.window)
+	if err != nil {
+		http.Error(w, err.Error(), 409)
+		return
+	}
+	action, err := d.pressNativeWindowAction(*lease.window, request.ID)
+	if err != nil {
+		http.Error(w, err.Error(), 409)
+		return
+	}
+	lease.lastInput = time.Now()
+	d.trackWindowActionLocked(lease, action, before)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (d *desktopControl) trackWindowActionLocked(lease *desktopLease, action desktop.Action, before []desktop.Window) {
+	if lease.onAction == nil {
+		return
+	}
+	lease.actionPending = true
+	window := *lease.window
+	go func() {
+		lease.onAction(window, action, before)
+		d.mu.Lock()
+		defer d.mu.Unlock()
+		if d.valid(lease.token) == lease {
+			lease.actionPending = false
+		}
+	}()
+}

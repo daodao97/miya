@@ -5,6 +5,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -71,45 +72,41 @@ func TestUnloadedThreadReferenceFailsWithoutSending(t *testing.T) {
 	}
 }
 
-func TestHandoffFollowsTheTargetConversation(t *testing.T) {
-	c := testController()
-	c.active, c.setActive = createSignal(1)
-	c.agent, c.setAgent = createSignal("claude-code")
-	src := handoffSource()
-	c.setThreads([]Thread{{ID: 1, Agent: agentClaude, ServerID: "target", Title: "登录页", Busy: true, HistoryLoaded: true}, src})
-	if id := c.submit(sendRequest{ThreadID: 1, Text: "参考 " + referenceText(testReference(src), src.Title) + " 给登录页加上提示"}); id != 1 {
-		t.Fatalf("submit returned %d", id)
-	}
-	var target, source Thread
-	for _, th := range c.threads() {
-		switch th.ID {
-		case 1:
-			target = th
-		case 2:
-			source = th
-		}
-	}
-	if len(target.Queue) != 1 || !strings.Contains(target.Queue[0].Text, contextEnvelopeOpen) {
-		t.Fatalf("queued message not expanded: %+v", target.Queue)
-	}
-	last := source.Messages[len(source.Messages)-1]
-	if last.Kind != "handoff" || len(last.Agents) != 1 || last.Agents[0].Status != subAgentRunning || last.Agents[0].Name != "参考 给登录页加上提示" || last.Content != "" {
-		t.Fatalf("handoff not followed: %+v", last)
-	}
-	if activityTitle(last) != "已交付到对话「登录页」" {
-		t.Fatalf("bad title: %q", activityTitle(last))
-	}
-	c.update(1, func(th *Thread) {
-		th.Busy, th.Queue = false, nil
-		th.Messages = append(th.Messages, Message{ID: c.nextID(), Role: "user", Content: "参考"}, Message{ID: c.nextID(), Role: "assistant", Content: "提示已加上\n细节"})
-	})
-	for _, th := range c.threads() {
-		if th.ID == 2 {
-			a := th.Messages[len(th.Messages)-1].Agents[0]
-			if a.Status != subAgentCompleted || a.Detail != "提示已加上" {
-				t.Fatalf("handoff state not followed: %+v", a)
+func TestThreadReferenceDoesNotChangeSourceConversation(t *testing.T) {
+	for _, background := range []bool{false, true} {
+		t.Run(fmt.Sprintf("background=%v", background), func(t *testing.T) {
+			c := testController()
+			c.active, c.setActive = createSignal(1)
+			c.agent, c.setAgent = createSignal(agentClaude)
+			c.cwd = "/open"
+			src := handoffSource()
+			target := Thread{ID: 1, Agent: agentClaude, ServerID: "target", Title: "登录页", Busy: true, HistoryLoaded: true}
+			if background {
+				c.setThreads([]Thread{target})
+				c.projectCache = map[string][]Thread{"/other": {src}}
+			} else {
+				c.setThreads([]Thread{target, src})
 			}
-		}
+			if id := c.submit(sendRequest{ThreadID: 1, Text: "参考 " + referenceText(testReference(src), src.Title) + " 给登录页加上提示"}); id != 1 {
+				t.Fatalf("submit returned %d", id)
+			}
+			target = c.threadWithID(1)
+			if len(target.Queue) != 1 || !strings.Contains(target.Queue[0].Text, contextEnvelopeOpen) {
+				t.Fatalf("queued message not expanded: %+v", target.Queue)
+			}
+			assertUnchanged := func() {
+				t.Helper()
+				if got := c.threadWithID(src.ID); !reflect.DeepEqual(got, src) || len(c.handoffs) != 0 {
+					t.Fatalf("reference changed its source or created a handoff: %+v, %+v", got, c.handoffs)
+				}
+			}
+			assertUnchanged()
+			c.update(1, func(th *Thread) {
+				th.Busy, th.Queue = false, nil
+				th.Messages = append(th.Messages, Message{ID: c.nextID(), Role: "user", Content: "参考"}, Message{ID: c.nextID(), Role: "assistant", Content: "提示已加上"})
+			})
+			assertUnchanged()
+		})
 	}
 }
 

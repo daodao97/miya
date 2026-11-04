@@ -22,7 +22,10 @@ const mcpProtocolVersion = "2025-06-18"
 
 const mcpInstructions = "Miya runs several coding-agent conversations in this workspace (Codex, Claude Code). " +
 	"Use list_threads and read_thread to learn what another conversation did, and delegate to hand a self-contained task to another agent; " +
-	"the receiving conversation gets this conversation's context unless include_context is false."
+	"the receiving conversation gets this conversation's context unless include_context is false. " +
+	"When a login, OAuth authorization, CAPTCHA, or other desktop UI needs the person, use request_desktop_control with a short reason. " +
+	"Miya shows a takeover card in this conversation on the phone. It waits for the person to finish; never request passwords in chat. " +
+	"Authorization previews and takeover control target one Mac window. Supply window_app/window_title when known; never request a password in chat. Full desktop control remains a separate phone menu action. This does not control a separate cloud VM. Open that VM in a visible Mac app first if needed."
 
 type mcpTool struct {
 	Name        string         `json:"name"`
@@ -34,6 +37,7 @@ type mcpTool struct {
 var mcpReadOnly = map[string]any{"readOnlyHint": true, "openWorldHint": false}
 
 var mcpTools = []mcpTool{
+	{Name: "request_desktop_control", Description: "Ask the person to take over the target authorization window on the paired Mac from this conversation, for login or other manual UI steps. Shows a phone takeover card and waits up to 10 minutes for explicit completion. The phone previews only the target window; tap it to enter control. Supply window_app and window_title when known to identify a password or authorization dialog. Never put passwords in reason or arguments. This tool never grants OS permissions.", InputSchema: map[string]any{"type": "object", "properties": map[string]any{"window_app": map[string]any{"type": "string", "maxLength": 256, "description": "Visible application name or bundle ID owning the authorization dialog"}, "window_title": map[string]any{"type": "string", "maxLength": 1000, "description": "Distinctive part of the authorization window title; ambiguous matches require user selection"}, "reason": map[string]any{"type": "string", "minLength": 1, "maxLength": 2000, "description": "The visible app/page and what the person should do; do not include credentials"}}, "required": []string{"reason"}}, Annotations: map[string]any{"readOnlyHint": false, "destructiveHint": false, "openWorldHint": false}},
 	{Name: "runtime_info", Description: "Read this conversation's verified background tasks, OS processes and listening services. Native task identifiers are not OS PIDs; unknown observations are explicit.", InputSchema: map[string]any{"type": "object", "properties": map[string]any{}}, Annotations: mcpReadOnly},
 	{Name: "list_threads", Description: "List the other conversations of this workspace in Miya: session link, title, agent and whether each is running.",
 		InputSchema: map[string]any{"type": "object", "properties": map[string]any{}}, Annotations: mcpReadOnly},
@@ -66,12 +70,14 @@ type mcpRequest struct {
 	Workspace string `json:"workspace,omitempty"`
 	// Tool is the miya tool being called, by which the service finds the
 	// conversation calling it.
-	Tool      string `json:"tool,omitempty"`
-	Thread    int    `json:"thread,omitempty"`
-	Reference string `json:"reference,omitempty"`
-	Agent     string `json:"agent,omitempty"`
-	Task      string `json:"task,omitempty"`
-	NoContext bool   `json:"noContext,omitempty"`
+	Tool        string `json:"tool,omitempty"`
+	WindowApp   string `json:"windowApp,omitempty"`
+	WindowTitle string `json:"windowTitle,omitempty"`
+	Thread      int    `json:"thread,omitempty"`
+	Reference   string `json:"reference,omitempty"`
+	Agent       string `json:"agent,omitempty"`
+	Task        string `json:"task,omitempty"`
+	NoContext   bool   `json:"noContext,omitempty"`
 	// Arguments preserves a memory tool's original parameters for caller matching.
 	Arguments json.RawMessage `json:"arguments,omitempty"`
 	// Auto is an automation tool's arguments.
@@ -247,7 +253,10 @@ func mcpToolResult(text string, isError bool) map[string]any {
 
 func (s *mcpServer) callTool(name string, raw json.RawMessage) (string, error) {
 	var a struct {
+		WindowApp      string `json:"window_app"`
+		WindowTitle    string `json:"window_title"`
 		ID             string `json:"id"`
+		Reason         string `json:"reason"`
 		Task           string `json:"task"`
 		Agent          string `json:"agent"`
 		Thread         string `json:"thread_id"`
@@ -265,6 +274,12 @@ func (s *mcpServer) callTool(name string, raw json.RawMessage) (string, error) {
 	}
 	req := mcpRequest{Workspace: s.workspace, Tool: name}
 	switch name {
+	case "request_desktop_control":
+		req.Task = a.Reason
+		req.WindowApp, req.WindowTitle = a.WindowApp, a.WindowTitle
+		var result string
+		err := s.callService("mcpDesktopControl", req, &result)
+		return result, err
 	case "runtime_info":
 		var result json.RawMessage
 		err := s.callService("mcpRuntime", req, &result)

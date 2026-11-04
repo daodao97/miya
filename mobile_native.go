@@ -25,6 +25,26 @@ func (m *mobileApp) phoneButton(c *ui.Context) ui.Element {
 	return b
 }
 
+// Authorization choices use color to distinguish an available action from
+// disabled native buttons, including in dark appearance.
+func (m *mobileApp) approvalButton(c *ui.Context, key, label string, primary, disabled bool) ui.Element {
+	p := m.pal
+	bg, fg := p.bg, p.ink
+	if primary {
+		bg, fg = p.link, p.bg
+	}
+	if disabled {
+		bg, fg = p.line, p.muted
+	}
+	b := m.phoneButton(c.Key(key)).Disabled(disabled).MinHeight(44).Padding(10, 16).Radius(22).
+		Background(bg).Border(1, p.line).Justify(ui.Center).Label(label)
+	if primary && !disabled {
+		b.Border(1, bg)
+	}
+	b.Children(func() { ui.Text(c, label).FontSize(m.font(14)).FontWeight(600).TextColor(fg) })
+	return b
+}
+
 func mobileFeedback(kind mygo.HapticFeedback) {
 	if runtime.GOOS == "ios" {
 		_ = mygo.Haptics.Play(kind)

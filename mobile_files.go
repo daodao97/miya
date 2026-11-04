@@ -35,6 +35,7 @@ func (m *mobileApp) openFileBrowser(proxy *phoneFileProxy, errorTitle string) {
 		proxy.Close()
 		m.onMain(gen, func() {
 			m.filesProxy, m.filesCancel = nil, nil
+			m.desktopApproval = mobileDesktopApproval{}
 			cancel()
 			if err != nil && !errors.Is(err, context.Canceled) {
 				go mygo.Dialog.Message(mygo.MessageOptions{Parent: m.win, Title: errorTitle, Message: err.Error()})

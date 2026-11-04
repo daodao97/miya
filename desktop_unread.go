@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+
+	"miya/internal/remote"
 )
 
 type desktopRead struct {
@@ -53,6 +55,17 @@ func (c *chatController) recordDesktopCompletion(old, next Thread) {
 	}
 }
 
+func (c *chatController) markPhoneCompletionRead(r remote.Request) {
+	if r.ReadCompletedAtMs <= 0 {
+		return
+	}
+	target := c.phoneThreadFor(r)
+	if !target.found || target.thread.CompletedAtMs != r.ReadCompletedAtMs {
+		return
+	}
+	c.markDesktopRead(desktopRead{Key: desktopUnreadKey(target.thread), Version: r.ReadCompletedAtMs})
+}
+
 func (c *chatController) desktopThreadUnread(t Thread) bool {
 	key := desktopUnreadKey(t)
 	version := c.desktopUnread[key]
@@ -81,6 +94,7 @@ func (c *chatController) markDesktopRead(read desktopRead) {
 	if version := c.desktopUnread[read.Key]; version > 0 && read.Version >= version {
 		delete(c.desktopUnread, read.Key)
 		c.persistDesktopUnread()
+		invalidate()
 	}
 }
 

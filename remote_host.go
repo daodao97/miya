@@ -13,6 +13,7 @@ import (
 
 	"github.com/egoist/mygo/push/apns"
 	"miya/internal/codex"
+	"miya/internal/desktop"
 	"miya/internal/remote"
 
 	qrcode "github.com/skip2/go-qrcode"
@@ -35,6 +36,8 @@ type phoneProject struct {
 }
 
 type phoneState struct {
+	DesktopWindows  bool                   `json:"desktopWindows,omitempty"`
+	DesktopControl  bool                   `json:"desktopControl,omitempty"`
 	MemoryRevision  uint64                 `json:"memoryRevision,omitempty"`
 	Memory          bool                   `json:"memory,omitempty"`
 	ReferenceSource string                 `json:"referenceSource"`
@@ -44,6 +47,7 @@ type phoneState struct {
 	WebServices     bool                   `json:"webServices,omitempty"`
 	FileReferences  bool                   `json:"fileReferences,omitempty"`
 	Automations     bool                   `json:"automations,omitempty"`
+	AutomationRun   bool                   `json:"automationRun,omitempty"`
 	Projects        []phoneProject         `json:"projects"`
 	Status          string                 `json:"status"`
 	Approvals       []codex.Approval       `json:"approvals"`
@@ -65,7 +69,9 @@ func listThread(t Thread) Thread {
 }
 
 func (c *chatController) phoneSnapshot() phoneState {
-	s := phoneState{ReferenceSource: c.referenceSource, MemoryRevision: c.memoryRevision, Memory: c.memory != nil, Files: true, WebPorts: true, WebServices: true, Runtime: true, FileReferences: true, Automations: c.auto != nil, Status: c.status(), Approvals: c.approvals(), Agents: c.phoneAgentOptions(), Quotas: c.phoneQuotas()}
+	s := phoneState{DesktopControl: desktop.Available(), ReferenceSource: c.referenceSource, MemoryRevision: c.memoryRevision, Memory: c.memory != nil, Files: true, WebPorts: true, WebServices: true, Runtime: true, FileReferences: true, Automations: c.auto != nil, Status: c.status(), Approvals: c.approvals(), Agents: c.phoneAgentOptions(), Quotas: c.phoneQuotas()}
+	s.DesktopWindows = s.DesktopControl
+	s.AutomationRun = c.auto != nil
 	if c.agent != nil {
 		s.Agent = c.agent()
 	}
@@ -247,6 +253,7 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 	requests := make(chan remote.Request)
 	go func() {
 		defer close(requests)
+		defer cancel() // Revoke desktop control immediately when Receive sees EOF.
 		for {
 			var r remote.Request
 			if conn.Receive(&r) != nil {
@@ -262,6 +269,7 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 	type previewRequest struct {
 		request remote.Request
 		allowed bool
+		hint    desktopWindowHint
 	}
 	previews := make(chan previewRequest, 8)
 	workersDone := make(chan struct{}, 2)
@@ -271,6 +279,14 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 			for {
 				select {
 				case task := <-previews:
+					if task.request.Op == "desktop-action" {
+						c.sendPhoneDesktopAction(ctx, task.request, task.allowed, send)
+						continue
+					}
+					if task.request.Op == "desktop-preview" {
+						c.sendPhoneDesktopPreview(ctx, task.request, task.allowed, task.hint, send)
+						continue
+					}
 					if !c.sendPhonePreview(ctx, conn, task.request, task.allowed, send) {
 						cancel()
 						return
@@ -423,10 +439,83 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 				return
 			}
 			switch r.Op {
+			case "desktop-preview", "desktop-action":
+				allowed, ok := onMain(ctx, c.dispatch, func() bool { return c.phoneDesktopApproval(r) })
+				if !ok {
+					return
+				}
+				hint, ok := onMain(ctx, c.dispatch, func() desktopWindowHint { return c.phoneDesktopHint(r) })
+				if !ok {
+					return
+				}
+				select {
+				case previews <- previewRequest{request: r, allowed: allowed, hint: hint}:
+				default:
+					data, _ := json.Marshal(phoneDesktopPreview{RequestID: r.RequestID, Approval: r.Approval})
+					if !send(remote.Frame{Type: r.Op, Data: data, Error: "授权窗口正忙，请稍后重试"}) {
+						return
+					}
+				}
+			case "desktop-open":
+				target, ok := onMain(ctx, c.dispatch, func() phoneThread { return c.phoneThreadFor(r) })
+				if !ok {
+					return
+				}
+				reply := phoneDesktopReply{RequestID: r.RequestID}
+				var err error
+				if !desktop.Available() {
+					err = fmt.Errorf("远程桌面需要 macOS 14 或更新版本")
+				} else if !target.found || r.ServerID == "" {
+					err = fmt.Errorf("对话已不在桌面端，请重新打开对话")
+				} else {
+					var window *desktop.Window
+					if r.WindowOnly {
+						window = &desktop.Window{ID: r.WindowID, PID: r.WindowPID}
+						allowed, alive := onMain(ctx, c.dispatch, func() bool { return c.phoneDesktopApproval(r) })
+						if !alive {
+							return
+						}
+						if !allowed {
+							err = fmt.Errorf("授权请求已处理，请返回会话")
+						}
+					} else if r.WindowPick {
+						// Choosing a window shares no more than the full desktop the
+						// person opened from the menu, so it needs no approval.
+						window = &desktop.Window{}
+					}
+					if err == nil {
+						reply.Token, err = c.desktopControls().openWindow(ctx, window)
+						if err == nil && r.WindowPick && !r.WindowOnly {
+							c.desktopControls().allowPick(reply.Token)
+						}
+						if err == nil && r.WindowOnly {
+							d := c.desktopControls()
+							d.mu.Lock()
+							if l := d.valid(reply.Token); l != nil {
+								l.onAction = func(window desktop.Window, action desktop.Action, before []desktop.Window) {
+									actionRequest := r
+									actionRequest.WindowID, actionRequest.WindowPID = window.ID, window.PID
+									c.confirmDesktopAction(ctx, actionRequest, action, before)
+								}
+							}
+							d.mu.Unlock()
+						}
+					}
+				}
+				data, _ := json.Marshal(reply)
+				frame := remote.Frame{Type: "desktop-open", Data: data}
+				if err != nil {
+					frame.Error = err.Error()
+				}
+				if !send(frame) {
+					return
+				}
+			case "desktop-close":
+				c.desktopControls().revoke(r.DesktopToken)
 			case "image":
 				allowed := sync != nil && r.Thread == sub && (r.ServerID == "" || r.ServerID == subscription.ServerID) && sync.images[r.ImageSource]
 				select {
-				case previews <- previewRequest{r, allowed}:
+				case previews <- previewRequest{request: r, allowed: allowed}:
 				default:
 					data, _ := json.Marshal(phoneImagePreview{Source: r.ImageSource})
 					if !send(remote.Frame{Type: "image", Data: data, Error: "图片预览繁忙，请稍后重试"}) {
@@ -460,6 +549,22 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 				}
 				frame.Data, _ = json.Marshal(reply)
 				if !send(frame) {
+					return
+				}
+			case "automation-run":
+				frame, ok := onMain(ctx, c.dispatch, func() remote.Frame {
+					_, err := c.automationOp("automationRunNow", automationRequest{ID: r.AutomationID})
+					result := phoneAutomationRunResult{RequestID: r.RequestID}
+					list, _ := c.automationOp("automationList", automationRequest{})
+					result.List, _ = list.([]automationView)
+					data, _ := json.Marshal(result)
+					frame := remote.Frame{Type: "automation-run", Data: data}
+					if err != nil {
+						frame.Error = err.Error()
+					}
+					return frame
+				})
+				if !ok || !send(frame) {
 					return
 				}
 			case "automations":
@@ -511,6 +616,9 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 				}
 			case "read", "read-all":
 				n, _ := onMain(ctx, c.dispatch, func() phoneNotificationState {
+					if r.Op == "read" {
+						c.markPhoneCompletionRead(r)
+					}
 					if c.push == nil || deviceID == "" {
 						return phoneNotificationState{}
 					}

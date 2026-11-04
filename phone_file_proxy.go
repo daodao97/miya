@@ -18,6 +18,7 @@ import (
 )
 
 type phoneFileProxy struct {
+	closeOnce   sync.Once
 	server      *http.Server
 	transport   *http.Transport
 	conn        atomic.Pointer[remote.Conn]
@@ -150,8 +151,10 @@ func (p *phoneFileProxy) setConn(conn *remote.Conn) {
 	p.transport.CloseIdleConnections()
 }
 func (p *phoneFileProxy) Close() {
-	p.conn.Store(nil)
-	p.server.Close()
-	p.connections.Range(func(key, _ any) bool { key.(net.Conn).Close(); p.connections.Delete(key); return true })
-	p.transport.CloseIdleConnections()
+	p.closeOnce.Do(func() {
+		p.conn.Store(nil)
+		p.server.Close()
+		p.connections.Range(func(key, _ any) bool { key.(net.Conn).Close(); p.connections.Delete(key); return true })
+		p.transport.CloseIdleConnections()
+	})
 }

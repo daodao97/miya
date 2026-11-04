@@ -69,7 +69,12 @@ func (c *chatController) fileServer() http.Handler {
 		}
 		return manager.validateToken(ctx, token, host, port)
 	})
+	controls := c.desktopControls()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, desktopControlPrefix+"/") {
+			controls.ServeHTTP(w, r)
+			return
+		}
 		if strings.HasPrefix(r.URL.Path, desktopWebPrefix) {
 			web.ServeHTTP(w, r)
 			return

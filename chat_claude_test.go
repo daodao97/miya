@@ -47,7 +47,7 @@ func TestClaudeApprovalAndQuestions(t *testing.T) {
 	_ = json.Unmarshal([]byte(`{"type":"control_request","request_id":"a1","request":{"subtype":"can_use_tool","tool_name":"Bash","input":{"command":"pwd"}}}`), &f)
 	c.handleClaude(1, f)
 	a := c.approvals()[0]
-	if a.Method != "claude/permission" || !strings.Contains(string(a.ID), "claude:1:a1") {
+	if a.Method != "claude/permission" || !strings.Contains(string(a.ID), "claude:1:a1") || a.ThreadID != "t1" {
 		t.Fatal("approval lost routing identity")
 	}
 	if !c.respondClaude(a, approvalResult(a, false)) || len(c.approvals()) != 0 {
@@ -56,7 +56,7 @@ func TestClaudeApprovalAndQuestions(t *testing.T) {
 	_ = json.Unmarshal([]byte(`{"type":"control_request","request_id":"q1","request":{"subtype":"can_use_tool","tool_name":"AskUserQuestion","input":{"questions":[{"question":"Pick?","header":"Choice","options":[{"label":"A","description":"a"}]}]}}}`), &f)
 	c.handleClaude(1, f)
 	a = c.approvals()[0]
-	if a.Method != "item/tool/requestUserInput" || len(a.Questions) != 1 || a.Questions[0].ID != "Pick?" || len(a.Questions[0].Options) != 1 {
+	if a.Method != "item/tool/requestUserInput" || a.ThreadID != "t1" || len(a.Questions) != 1 || a.Questions[0].ID != "Pick?" || len(a.Questions[0].Options) != 1 {
 		t.Fatal("question parsing failed")
 	}
 }

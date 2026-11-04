@@ -152,6 +152,62 @@ func TestMobileAutomationRunDoesNotOpenReusedThreadID(t *testing.T) {
 	}
 }
 
+func TestMobileAutomationRunFeedbackAndCompatibility(t *testing.T) {
+	m := testMobileApp()
+	m.state.Automations = true
+	v := mobileAutomationFixture()
+	m.autos.list, m.autos.loaded, m.autos.detail = []automationView{v}, true, v.ID
+	m.router().Push("/automation")
+	tt := ui.NewTester(m.viewRoot, 390, 844)
+	tt.Frame()
+	if !tt.HasText("立即运行") || !tt.HasText("更新桌面端后即可立即运行") {
+		t.Fatal("old desktop did not explain manual run support")
+	}
+	if err := tt.Click("立即运行"); err != nil {
+		t.Fatal(err)
+	}
+	if m.autos.runRequest != "" {
+		t.Fatal("unsupported desktop received a run request")
+	}
+	m.state.AutomationRun = true
+	m.autos.runID, m.autos.runRequest, m.autos.runRequestedAt = v.ID, "request", time.Now()
+	tt.Frame()
+	if !tt.HasText("正在启动…") || tt.HasText("更新桌面端后即可立即运行") {
+		t.Fatal("pending run feedback missing")
+	}
+	v.Running = true
+	data, _ := json.Marshal(phoneAutomationRunResult{RequestID: "stale", List: []automationView{v}})
+	m.receiveAutomationRun(data, "")
+	if m.autos.runRequest != "request" || m.autos.list[0].Running {
+		t.Fatal("stale acknowledgement changed a pending request")
+	}
+	data, _ = json.Marshal(phoneAutomationRunResult{RequestID: "request", List: []automationView{v}})
+	m.receiveAutomationRun(data, "")
+	tt.Frame()
+	if m.autos.runRequest != "" || !m.autos.list[0].Running || !tt.HasText("运行中") {
+		t.Fatal("acknowledgement did not update the run status")
+	}
+	v.Running = false
+	m.autos.runRequest = "failed"
+	data, _ = json.Marshal(phoneAutomationRunResult{RequestID: "failed", List: []automationView{v}})
+	m.receiveAutomationRun(data, "项目目录不存在")
+	tt.Frame()
+	if !tt.HasText("项目目录不存在") || m.autos.runRequest != "" {
+		t.Fatal("run failure was not shown")
+	}
+	m.autos.runRequest, m.autos.runRequestedAt = "timeout", time.Now().Add(-31*time.Second)
+	tt.Frame()
+	if m.autos.runRequest != "" || !tt.HasText("请求超时，请先刷新确认运行状态") {
+		t.Fatal("run timeout did not release the pending request")
+	}
+	m.autos.runRequest = "disconnect"
+	m.disconnect()
+	tt.Frame()
+	if m.autos.runRequest != "" || !tt.HasText("连接已断开，请刷新确认运行状态") {
+		t.Fatal("disconnect left the run request pending")
+	}
+}
+
 func TestMobileAutomationsDrawerLayout(t *testing.T) {
 	m := mobileHomeFixture()
 	tt := ui.NewTester(m.viewRoot, 844, 390)

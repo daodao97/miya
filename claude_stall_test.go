@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -27,6 +28,56 @@ func TestClaudeEmptyResultExplained(t *testing.T) {
 	}
 	if got := claudeErrorMessage("x", false, false); strings.Contains(got, "自定义启动命令") {
 		t.Fatalf("custom hint without a custom command: %q", got)
+	}
+}
+
+func TestClaudeStoppedResultDoesNotReportFailure(t *testing.T) {
+	for _, tc := range []struct {
+		name, frame string
+		tool        bool
+	}{
+		{name: "diagnostic before output", frame: `{"type":"result","is_error":true,"errors":["[ede_diagnostic] result_type=user last_content_type=n/a stop_reason=tool_use"]}`},
+		{name: "diagnostic during tool", tool: true, frame: `{"type":"result","is_error":true,"errors":["[ede_diagnostic] result_type=user last_content_type=n/a stop_reason=tool_use"]}`},
+		{name: "error result text", frame: `{"type":"result","is_error":true,"result":"Interrupted"}`},
+		{name: "empty success", frame: `{"type":"result","result":""}`},
+		{name: "final text after stop", frame: `{"type":"result","result":"Partial reply"}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("HOME", t.TempDir())
+			c := testController()
+			c.cwd = t.TempDir()
+			c.claudeCommand = "claude --settings ~/proxy.json"
+			messages := []Message{{Role: "user", Content: "继续"}}
+			if tc.tool {
+				messages = append(messages, Message{Role: "tool", Kind: "claudeTool", Content: "Bash", Status: "inProgress"})
+			}
+			c.setThreads([]Thread{{ID: 1, Agent: agentClaude, Busy: true, Messages: messages}})
+			old := c.threadWithID(1)
+			c.stopThread(1)
+			var f claude.Frame
+			if err := json.Unmarshal([]byte(tc.frame), &f); err != nil {
+				t.Fatal(err)
+			}
+			c.handleClaude(1, f)
+			got := c.threadWithID(1)
+			if got.Status != "Stopping…" || len(got.Messages) != len(messages) {
+				t.Fatalf("stop result reported as output or failure: %+v", got)
+			}
+			if tc.tool && got.Messages[1].Status != "inProgress" {
+				t.Fatalf("stop result changed tool to %q", got.Messages[1].Status)
+			}
+			c.finishClaude(1, c.cwd, errors.New("signal: killed"))
+			got = c.threadWithID(1)
+			if got.Busy || got.Status != "Stopped" || got.CompletedAtMs == 0 || len(got.Messages) != len(messages) {
+				t.Fatalf("stop did not finish cleanly: %+v", got)
+			}
+			if tc.tool && got.Messages[1].Status != "interrupted" {
+				t.Fatalf("stopped tool status = %q", got.Messages[1].Status)
+			}
+			if notice, ok := completionNotice(old, got); ok {
+				t.Fatalf("requested stop produced a completion notification: %+v", notice)
+			}
+		})
 	}
 }
 

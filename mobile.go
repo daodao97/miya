@@ -24,11 +24,18 @@ import (
 // into them and answers their approvals. The desktop's background service
 // runs the agents; the phone holds only what the desktop sent it.
 type mobileApp struct {
-	conversationMenu             bool
-	conversationMenuProject      string
-	conversationMenuAgent        string
-	filesProxy                   *phoneFileProxy
-	filesCancel                  context.CancelFunc
+	desktopPreviews         map[string]*mobileWindowPreview
+	desktopRequest          string
+	desktopApproval         mobileDesktopApproval
+	conversationMenu        bool
+	conversationMenuProject string
+	conversationMenuAgent   string
+	filesProxy              *phoneFileProxy
+	filesCancel             context.CancelFunc
+	desktopPage             *mobileDesktopPage
+	// desktopClosing are leases closed on this connection whose desktop-close
+	// a reopen sends first, so the Mac revokes them before the new open.
+	desktopClosing               []string
 	webPort                      string
 	webRef                       ThreadRef
 	webDetails                   bool
@@ -42,6 +49,8 @@ type mobileApp struct {
 	approvalPending              map[string]bool
 	approvalFields               map[string]map[string]string
 	readPending                  map[string]uint64
+	completionRead               desktopRead
+	completionReceived           desktopRead
 	badgeRevision                uint64
 	badgeApplied                 int
 	badgeUpdating                bool
@@ -131,6 +140,7 @@ type mobileApp struct {
 	flushTimer        *time.Timer
 	asked             map[string]bool
 	sending           bool
+	newSend           *mobileNewSend
 	sendErr           string
 
 	conn       *remote.Conn
@@ -298,7 +308,12 @@ func mobileMain() {
 			m.disconnect()
 		})
 	})
-	mygo.App.OnDidBecomeActive(func() { runOnMain(m.requestPush) })
+	mygo.App.OnDidBecomeActive(func() {
+		runOnMain(func() {
+			m.requestPush()
+			m.markCompletionRead()
+		})
+	})
 	mygo.App.OnWillEnterForeground(func() {
 		runOnMain(func() {
 			if m.link != "" && m.cancel == nil {
@@ -427,6 +442,8 @@ func (m *mobileApp) disconnect() {
 }
 
 func (m *mobileApp) disconnectDesktop(unregister bool) {
+	m.desktopApproval = mobileDesktopApproval{}
+	m.interruptAutomationRequest()
 	m.clearFileReferences()
 	m.clearWebServices()
 	if !m.retryAt.IsZero() {
@@ -436,6 +453,9 @@ func (m *mobileApp) disconnectDesktop(unregister bool) {
 	if m.filesCancel != nil {
 		m.filesCancel()
 		m.filesCancel = nil
+	}
+	if m.desktopPage != nil {
+		m.desktopFinish(m.desktopPage, "与 Mac 的连接已断开。返回会话后可重新打开。")
 	}
 	if m.filesProxy != nil {
 		m.filesProxy.Close()
@@ -464,10 +484,14 @@ func (m *mobileApp) disconnectDesktop(unregister bool) {
 			go conn.Close()
 		}
 	}
+	m.desktopRequest = ""
 	m.conn, m.connected = nil, false
+	m.desktopClosing = nil // leases end with their connection
+	m.desktopPreviews = nil
 	m.autos.loading = false
 	if m.sending {
 		m.sending, m.sendErr = false, "连接已断开，消息可能没有发出"
+		m.failNewSend()
 	}
 }
 
@@ -515,13 +539,17 @@ func (m *mobileApp) run(ctx context.Context, gen int, link string, wake <-chan s
 			retryError = err.Error()
 		}
 		m.onMain(gen, func() {
+			m.desktopRequest = ""
 			m.conn, m.connected, m.status = nil, false, message
+			m.desktopPreviews = nil
+			m.interruptAutomationRequest()
 			m.retryAt, m.retryError = retryAt, retryError
 			if m.filesProxy != nil {
 				m.filesProxy.setConn(nil)
 			}
 			if m.sending {
 				m.sending, m.sendErr = false, "连接已断开，消息可能没有发出"
+				m.failNewSend()
 			}
 		})
 		timer := time.NewTimer(delay)
@@ -564,6 +592,8 @@ func (m *mobileApp) read(gen int, conn *remote.Conn) (greeted bool, err error) {
 				m.retryAt, m.retryError = time.Time{}, ""
 				_, _ = m.desktops.remember(m.link, host)
 				m.conn = conn
+				m.completionRead = desktopRead{}
+				m.completionReceived = desktopRead{}
 				m.autos.loading, m.autos.requestedAt = false, time.Time{}
 				m.memories.loading, m.memories.requestedAt = false, time.Time{}
 				if m.filesProxy != nil {
@@ -579,12 +609,37 @@ func (m *mobileApp) read(gen int, conn *remote.Conn) (greeted bool, err error) {
 				m.syncPush()
 				m.saveDesktops()
 			})
+		case "desktop-open":
+			data, message := f.Data, f.Error
+			m.onMain(gen, func() { m.receiveDesktopControl(conn, data, message) })
+		case "desktop-preview":
+			var p phoneDesktopPreview
+			if json.Unmarshal(f.Data, &p) == nil {
+				var image ui.ImageSource
+				message := f.Error
+				if len(p.Data) > 0 && len(p.Data) <= maxPhonePreviewBytes {
+					image, _ = ui.DecodeImage(p.Data)
+					if image == nil {
+						message = "无法解码窗口预览"
+					}
+				}
+				m.onMain(gen, func() { m.receiveWindowPreview(conn, p, image, message) })
+			}
+		case "desktop-action":
+			var p phoneDesktopPreview
+			if json.Unmarshal(f.Data, &p) == nil {
+				message := f.Error
+				m.onMain(gen, func() { m.receiveWindowAction(conn, p, message) })
+			}
 		case "memory":
 			data, message := f.Data, f.Error
 			m.onMain(gen, func() { m.receiveMemory(data, message) })
 		case "automations":
 			data, message := f.Data, f.Error
 			m.onMain(gen, func() { m.receiveAutomations(data, message) })
+		case "automation-run":
+			data, message := f.Data, f.Error
+			m.onMain(gen, func() { m.receiveAutomationRun(data, message) })
 		case "action":
 			message := f.Error
 			m.onMain(gen, func() {
@@ -670,6 +725,7 @@ func (m *mobileApp) read(gen int, conn *remote.Conn) (greeted bool, err error) {
 // The desktop may renumber threads after a restart or while repairing an old
 // cache. Rebind the open page by durable identity before handling its deltas.
 func (m *mobileApp) applyPhoneState(s phoneState) {
+	m.closeResolvedDesktopControl(s.Approvals)
 	if m.state.MemoryRevision != s.MemoryRevision {
 		m.memories.list = memoryList{}
 		m.memories.requestedAt = time.Time{}
@@ -686,6 +742,7 @@ func (m *mobileApp) applyPhoneState(s phoneState) {
 			id := string(old.ID)
 			delete(m.approvalFields, id)
 			delete(m.approvalPending, id)
+			delete(m.desktopPreviews, id)
 			delete(m.view.formErrors, id)
 		}
 	}
@@ -748,6 +805,13 @@ func (m *mobileApp) receiveThread(id int, d phoneThreadDelta) {
 	}
 	d.Thread.ID = id
 	m.applyThread(d)
+	m.receiveNewSend(m.view.c.current())
+	// Only a live delta confirms that the phone has the completed contents;
+	// sidebar metadata combined with cached messages does not.
+	if sameMessageOrder(m.view.c.current().Messages, d.Order) {
+		m.completionReceived = desktopRead{Key: desktopUnreadKey(d.Thread), Version: d.Thread.CompletedAtMs}
+		m.markCompletionRead()
+	}
 }
 
 func (m *mobileApp) showThread(t Thread) {
@@ -767,6 +831,8 @@ func (m *mobileApp) updateThreadView(t Thread, messagesChanged bool) {
 }
 
 func (m *mobileApp) subscribe(id int) {
+	m.completionRead = desktopRead{}
+	m.completionReceived = desktopRead{}
 	if conn := m.conn; conn != nil {
 		r := m.subscribeRequest(id)
 		go conn.Send(r)
@@ -822,6 +888,7 @@ func (m *mobileApp) approvalsFor(serverID string) []codex.Approval {
 }
 
 func (m *mobileApp) resetComposer() {
+	m.clearNewSend()
 	m.clearImages()
 	m.draft, m.sendErr, m.sending = "", "", false
 }
@@ -835,6 +902,7 @@ func (m *mobileApp) openThread(t Thread) {
 		m.menu = false
 		return
 	}
+	m.desktopRequest = ""
 	m.open, m.title, m.newProject, m.menu = t.ID, t.Title, "", false
 	m.resetComposer()
 	// Show what the phone holds at once; the desktop sends what changed.
@@ -851,6 +919,7 @@ func (m *mobileApp) openThread(t Thread) {
 
 // leave closes the conversation page's state, after the router went back.
 func (m *mobileApp) leave() {
+	m.desktopRequest = ""
 	m.open, m.newProject = 0, ""
 	m.view.c.setActive(0)
 	m.subscribe(0)
@@ -914,6 +983,9 @@ func (m *mobileApp) sendDraft(steer bool) {
 	m.sending, m.sendErr = true, ""
 	gen := m.generation
 	paths := append([]string(nil), m.images...)
+	if m.open == 0 {
+		m.beginNewSend(r.Text, paths)
+	}
 	go func() {
 		images, err := readPhoneImages(paths)
 		if err == nil {
@@ -924,6 +996,7 @@ func (m *mobileApp) sendDraft(steer bool) {
 			m.onMain(gen, func() {
 				if m.sending {
 					m.sending, m.sendErr = false, "发送失败："+err.Error()
+					m.failNewSend()
 				}
 			})
 		}
@@ -938,11 +1011,17 @@ func (m *mobileApp) sent(id int, msg string) {
 	m.sending = false
 	if msg != "" {
 		m.sendErr = msg
+		m.failNewSend()
 		mobileFeedback(mygo.HapticError)
 		return
 	}
 	mobileFeedback(mygo.HapticLight)
 	m.draft, m.sendErr = "", ""
+	if m.newSend != nil && m.newSend.thread == 0 && id != 0 {
+		m.newSend.thread = id
+		// The preview owns these files until the desktop's messages arrive.
+		m.images = nil
+	}
 	m.clearImages()
 	if m.open == 0 && m.newProject != "" && id != 0 {
 		m.open, m.newProject = id, ""
@@ -1049,7 +1128,8 @@ func (m *mobileApp) viewRoot(c *ui.Context) {
 			m.pairView(c)
 		default:
 			// Drawer destinations share the edge gesture; child pages pop.
-			m.router().InteractiveBack = !mobilePageHasDrawer(m.router().Path())
+			// Remote gestures own the desktop page edges; leave with its back button.
+			m.router().InteractiveBack = !mobilePageHasDrawer(m.router().Path()) && m.router().Path() != "/desktop"
 			transition := m.router().Transition
 			instant := m.instantNavigation
 			m.instantNavigation = false
@@ -1072,6 +1152,8 @@ func (m *mobileApp) viewRoot(c *ui.Context) {
 					m.webPage(c)
 				case "/approval":
 					m.approvalPage(c)
+				case "/desktop":
+					m.desktopPageView(c)
 				case "/desktop/add":
 					m.addDesktopView(c)
 				default:
@@ -1080,6 +1162,11 @@ func (m *mobileApp) viewRoot(c *ui.Context) {
 				}
 			})
 			m.router().Transition = transition
+			// Leaving the remote desktop page ends its lease.
+			// Push and Back update the path at once, so this runs as the page is left.
+			if m.desktopPage != nil && m.router().Path() != "/desktop" {
+				m.closeDesktopPage(false)
+			}
 		}
 	})
 	m.conversationActionsSheet(c)
@@ -1495,7 +1582,10 @@ func (m *mobileApp) threadView(c *ui.Context) {
 		m.conversationActions(c, more, proj.Path, agent)
 	})
 	ui.Column(c).Grow(1).MinHeight(0).FillWidth().Children(func() {
-		if m.open == 0 {
+		if pending, ok := m.newSendThread(cur); ok {
+			m.view.messageList(c, pending)
+			m.newSendStatus(c)
+		} else if m.open == 0 {
 			m.newConversationView(c, proj)
 		} else {
 			m.view.messageList(c, cur)

@@ -318,24 +318,18 @@ func (c *chatController) submit(req sendRequest) int {
 		}
 		return id
 	}
-	// References to other conversations become their context here, where
-	// every conversation's messages are; the referenced ones then follow.
-	task := threadRefTask(req.Text)
-	var sources []Thread
+	// References supply a send-time context snapshot without changing the
+	// conversations they refer to. Delegation records its own handoff.
 	own, _ := splitReferenceContext(req.Text)
 	req.Parts = messageParts(own)
 	var err error
-	req.Text, sources, err = expandThreadRefs(req.Text, c.threadRef(c.threadWithID(req.ThreadID)), c.resolveReference)
+	req.Text, _, err = expandThreadRefs(req.Text, c.threadRef(c.threadWithID(req.ThreadID)), c.resolveReference)
 	if err != nil {
 		c.lastSubmitError = err.Error()
 		c.setStatus(err.Error())
 		return 0
 	}
-	id := c.submitExpanded(req)
-	if id != 0 && len(sources) > 0 {
-		c.noteHandoffs(sources, id, task)
-	}
-	return id
+	return c.submitExpanded(req)
 }
 
 // submitExpanded starts or queues req, its references already expanded.

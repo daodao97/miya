@@ -25,6 +25,7 @@ func TestMobileResponseActionsWorkWithoutHover(t *testing.T) {
 				tt := ui.NewTester(m.viewRoot, width, 750)
 				tt.Move(-1, -1)
 				tt.Frame()
+				saveMobileNativeSnapshot(t, tt, fmt.Sprintf("response-actions-%d-%s", width, agent))
 				for _, label := range []string{"Copy response", "交付到新对话"} {
 					r, ok := tt.Find(label)
 					if !ok || r.W < 44 || r.H < 44 || r.X < 0 || r.X+r.W > float32(width) {

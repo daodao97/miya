@@ -20,8 +20,10 @@ type groupCache struct {
 }
 
 func (g *groupCache) of(c *chatController) []messageGroup {
-	t := c.current()
-	revision := c.revision()
+	return g.ofThread(c.current(), c.revision())
+}
+
+func (g *groupCache) ofThread(t Thread, revision int) []messageGroup {
 	if g.groups != nil && g.thread == t.ID && g.revision == revision && g.count == len(t.Messages) && g.busy == t.Busy && g.turn == t.TurnID && g.completedAt == t.CompletedAtMs {
 		return g.groups
 	}
@@ -71,7 +73,7 @@ func (app *chatApp) home(c *ui.Context) {
 // list state, so its place and following of the end survive switching.
 func (app *chatApp) messageList(c *ui.Context, t Thread) {
 	c = c.Key(t.ID)
-	groups := app.groups.of(app.c)
+	groups := app.groups.ofThread(t, app.c.revision())
 	state := app.listFor(t.ID)
 	state.Key = func(i int) any { return messageViewKey(groups[i].Messages[0]) }
 	if t.Busy {
@@ -185,21 +187,29 @@ func (app *chatApp) groupView(c *ui.Context, g messageGroup) {
 			if !app.mobile && !hovered && !copied {
 				return
 			}
-			name := "copy"
-			if copied {
-				name = "check"
+			gap := float32(8)
+			copyAlign, handoffAlign := ui.Center, ui.Center
+			if app.mobile {
+				gap = 0
+				copyAlign, handoffAlign = ui.End, ui.Start
 			}
-			b := quiet(c.Key("copy")).Size(size, size).PaddingX(6).Justify(ui.Center).Label("Copy response").Tooltip("Copy response")
-			b.Children(func() { icon(c, name, 15, muted) })
-			if b.Clicked() {
-				c.WriteClipboard(messageGroupText(g))
-				app.copied[g.ID] = true
-			}
-			h := quiet(c.Key("handoff")).Size(size, size).PaddingX(6).Justify(ui.Center).Label("交付到新对话").Tooltip("交付到新对话")
-			h.Children(func() { icon(c, "arrow-right", 15, muted) })
-			if h.Clicked() {
-				app.handoffToNewThread()
-			}
+			ui.Row(c.Key("actions")).AlignItems(ui.Center).Gap(gap).Children(func() {
+				name := "copy"
+				if copied {
+					name = "check"
+				}
+				b := quiet(c.Key("copy")).Size(size, size).PaddingX(6).Justify(copyAlign).Label("Copy response").Tooltip("Copy response")
+				b.Children(func() { icon(c, name, 15, muted) })
+				if b.Clicked() {
+					c.WriteClipboard(messageGroupText(g))
+					app.copied[g.ID] = true
+				}
+				h := quiet(c.Key("handoff")).Size(size, size).PaddingX(6).Justify(handoffAlign).Label("交付到新对话").Tooltip("交付到新对话")
+				h.Children(func() { icon(c, "arrow-right", 15, muted) })
+				if h.Clicked() {
+					app.handoffToNewThread()
+				}
+			})
 		})
 	})
 }

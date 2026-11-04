@@ -1,0 +1,233 @@
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"strings"
+	"testing"
+
+	"github.com/egoist/mygo/ui"
+	"miya/internal/codex"
+	"miya/internal/desktop"
+)
+
+func TestMobileToolPermissionKeepsActionsVisibleWithoutUnrelatedPreview(t *testing.T) {
+	for _, width := range []int{320, 390} {
+		m := testMobileApp()
+		m.state.DesktopControl = true
+		m.state.DesktopWindows = true
+		th := m.state.Projects[0].Threads[0]
+		m.openThread(th)
+		m.showThread(th)
+		a := codex.Approval{ID: json.RawMessage(`"tool-consent"`), ThreadID: th.ServerID, Method: "mcpServer/elicitation/request", Mode: "form", Message: "Allow Computer Use to use Miya Window QA? " + strings.Repeat("这是一段需要滚动查看的工具权限说明。", 100), RequestedSchema: json.RawMessage(`{"type":"object","properties":{}}`)}
+		m.state.Approvals = []codex.Approval{a}
+		m.desktopPreviews = map[string]*mobileWindowPreview{string(a.ID): {version: approvalFingerprint(a), dialog: desktop.Dialog{Title: "无关的 Apple 账户", Message: "Wi-Fi\n蓝牙\n网络\n侧栏内容"}}}
+		tt := ui.NewTester(m.viewRoot, width, 700)
+		tt.SetDark(true)
+		tt.Frame()
+		for _, label := range []string{"无关的 Apple 账户", "侧栏内容", "操作授权窗口"} {
+			if tt.HasText(label) {
+				t.Fatalf("tool consent showed unrelated window: %s", label)
+			}
+		}
+		if tt.HasText("查看并确认") || m.router().Path() != "/thread" {
+			t.Fatal("simple MCP consent should show its actions directly in the conversation")
+		}
+		for _, label := range []string{"确认", "拒绝", "取消请求"} {
+			r, ok := tt.Find(label)
+			if !ok || r.H < 44 || r.Y < 64 || r.Y+r.H > 700 || r.X < 0 || r.X+r.W > float32(width) {
+				t.Fatalf("permission action off-screen at %d: %s %v", width, label, r)
+			}
+		}
+		for _, label := range []string{"无关的 Apple 账户", "侧栏内容", "操作授权窗口"} {
+			if tt.HasText(label) {
+				t.Fatalf("permission page showed unrelated window: %s", label)
+			}
+		}
+		saveMobileNativeSnapshot(t, tt, "tool-permission-phone")
+	}
+}
+
+func TestMobileMCPAccessActionsStayInConversation(t *testing.T) {
+	for _, dark := range []bool{false, true} {
+		for _, width := range []int{320, 390} {
+			t.Run(fmt.Sprintf("dark=%v/width=%d", dark, width), func(t *testing.T) {
+				m := testMobileApp()
+				a := appAccessRequest()
+				a.ThreadID = "s1"
+				m.state.Approvals = []codex.Approval{a}
+				m.openThread(m.state.Projects[0].Threads[0])
+				tt := ui.NewTester(m.viewRoot, width, 750)
+				tt.SetDark(dark)
+				tt.Frame()
+				for _, label := range []string{"允许一次", "拒绝", "此对话始终允许"} {
+					r, ok := tt.Find(label)
+					if !ok || r.H < 44 || r.X < 0 || r.X+r.W > float32(width) || r.Y+r.H > 750 {
+						t.Fatalf("inline permission action missing or clipped: %s %v", label, r)
+					}
+				}
+				if tt.HasText("查看并确认") || m.router().Path() != "/thread" || len(m.state.Approvals) != 1 {
+					t.Fatal("MCP consent navigated away or was accepted before a click")
+				}
+				saveMobileNativeSnapshot(t, tt, fmt.Sprintf("mcp-inline-%v-%d", dark, width))
+				if err := tt.Click("允许一次"); err != nil {
+					t.Fatal(err)
+				}
+				if m.router().Path() != "/thread" || len(m.state.Approvals) != 1 || m.view.formErrors[string(a.ID)] != "未连接桌面端" {
+					t.Fatal("failed inline submission navigated away or consumed the approval")
+				}
+			})
+		}
+	}
+}
+
+func TestMobileMCPFormsAndURLsKeepTheirInputPage(t *testing.T) {
+	for _, mode := range []string{"form", "url"} {
+		m := testMobileApp()
+		a := appAccessRequest()
+		a.ThreadID, a.Mode = "s1", mode
+		if mode == "form" {
+			a.RequestedSchema = json.RawMessage(`{"type":"object","properties":{"name":{"type":"string","title":"姓名"}},"required":["name"]}`)
+		} else {
+			a.URL = "https://example.com/authorize"
+		}
+		m.state.Approvals = []codex.Approval{a}
+		m.openThread(m.state.Projects[0].Threads[0])
+		tt := ui.NewTester(m.viewRoot, 390, 750)
+		tt.Frame()
+		if tt.HasText("允许一次") || tt.HasText("此对话始终允许") {
+			t.Fatal("a form or browser authorization was flattened into simple consent")
+		}
+		if err := tt.Click("查看并确认"); err != nil {
+			t.Fatal(err)
+		}
+		if m.router().Path() != "/approval" {
+			t.Fatal("form and URL requests lost their input page")
+		}
+	}
+}
+
+func TestMobileAuthorizationAllowClearlyDiffersFromDisabled(t *testing.T) {
+	for _, dark := range []bool{false, true} {
+		m := testMobileApp()
+		m.applyPalette(dark)
+		pressed, enabled := 0, false
+		tt := ui.NewTester(func(c *ui.Context) {
+			ui.Column(c).Fill().Padding(20).Background(m.pal.bg).Children(func() {
+				if m.approvalButton(c, "allow", "允许访问", true, !enabled).Clicked() {
+					pressed++
+				}
+			})
+		}, 320, 160)
+		tt.Frame()
+		r, _ := tt.Find("允许访问")
+		disabledColor := tt.Image().RGBAAt(int(r.X+10), int(r.Y+r.H/2))
+		if err := tt.Click("允许访问"); err != nil {
+			t.Fatal(err)
+		}
+		if pressed != 0 {
+			t.Fatal("disabled authorization action accepted a click")
+		}
+		enabled = true
+		tt.Frame()
+		r, _ = tt.Find("允许访问")
+		activeColor := tt.Image().RGBAAt(int(r.X+10), int(r.Y+r.H/2))
+		if int(activeColor.B)-int(activeColor.R) < 30 || activeColor == disabledColor {
+			t.Fatalf("available approval still looks disabled: active %v disabled %v", activeColor, disabledColor)
+		}
+		if err := tt.Click("允许访问"); err != nil {
+			t.Fatal(err)
+		}
+		if pressed != 1 {
+			t.Fatal("available authorization action did not accept a click")
+		}
+	}
+}
+
+func TestMobileAuthorizationOffersInputBeforeAllow(t *testing.T) {
+	for _, dark := range []bool{false, true} {
+		for _, width := range []int{320, 390} {
+			t.Run(fmt.Sprintf("dark=%v/width=%d", dark, width), func(t *testing.T) {
+				m := testMobileApp()
+				m.state.DesktopControl, m.state.DesktopWindows = true, true
+				thread := m.state.Projects[0].Threads[0]
+				m.openThread(thread)
+				m.showThread(thread)
+				a := codex.Approval{ID: json.RawMessage(`"input-first"`), ThreadID: thread.ServerID, Method: "miya/desktopControl"}
+				p := &mobileWindowPreview{version: approvalFingerprint(a), window: desktop.Window{ID: 21, PID: 80},
+					dialog: desktop.Dialog{Title: "测试授权", Actions: []desktop.Action{
+						{ID: "allow", Default: true, Label: "允许访问", Enabled: false},
+						{ID: "deny", Cancel: true, Label: "不允许", Enabled: true},
+					}}}
+				m.state.Approvals = []codex.Approval{a}
+				m.desktopPreviews = map[string]*mobileWindowPreview{string(a.ID): p}
+				tt := ui.NewTester(m.viewRoot, width, 750)
+				tt.SetDark(dark)
+				tt.Frame()
+				r, ok := tt.Find("填写授权信息")
+				if !ok || r.H < 44 || r.X < 0 || r.X+r.W > float32(width) || r.Y+r.H > 750 {
+					t.Fatalf("no visible input action before native allow is enabled: %v", r)
+				}
+				color := tt.Image().RGBAAt(int(r.X+10), int(r.Y+r.H/2))
+				if int(color.B)-int(color.R) < 30 {
+					t.Fatalf("input entry looks disabled: %v", color)
+				}
+				if _, ok := tt.Find("允许访问"); ok {
+					t.Fatal("disabled native allow still presented as the next action")
+				}
+				if !tt.HasText("不允许") {
+					t.Fatal("the input entry removed the native deny action")
+				}
+				saveMobileNativeSnapshot(t, tt, fmt.Sprintf("auth-input-entry-%v-%d", dark, width))
+				if err := tt.Click("填写授权信息"); err != nil {
+					t.Fatal(err)
+				}
+				if p.actionPending || m.approvalPending[string(a.ID)] || len(m.state.Approvals) != 1 {
+					t.Fatal("opening the input entry submitted the disabled native approval")
+				}
+				// A fresh native state, rather than local typing, enables consent.
+				p.dialog.Actions[0].Enabled = true
+				tt.Frame()
+				if tt.HasText("填写授权信息") {
+					t.Fatal("input entry remained after the native allow became enabled")
+				}
+				r, ok = tt.Find("允许访问")
+				if !ok {
+					t.Fatal("enabled native allow is missing")
+				}
+				color = tt.Image().RGBAAt(int(r.X+10), int(r.Y+r.H/2))
+				if int(color.B)-int(color.R) < 30 {
+					t.Fatal("enabled native allow is not blue")
+				}
+			})
+		}
+	}
+}
+
+func TestMobileAuthorizationLongCopyDoesNotBuryNativeButtons(t *testing.T) {
+	img, err := ui.DecodeImage(windowJPEG(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, width := range []int{320, 390} {
+		m := testMobileApp()
+		m.state.DesktopControl = true
+		m.state.DesktopWindows = true
+		th := m.state.Projects[0].Threads[0]
+		m.openThread(th)
+		m.showThread(th)
+		a := codex.Approval{ID: json.RawMessage(`"auth"`), ThreadID: th.ServerID, Method: "miya/desktopControl"}
+		m.state.Approvals = []codex.Approval{a}
+		m.desktopPreviews = map[string]*mobileWindowPreview{string(a.ID): {version: approvalFingerprint(a), image: img, dialog: desktop.Dialog{Title: strings.Repeat("这是很长的授权窗口标题", 10), Message: strings.Repeat("权限的完整说明。\n", 40), Actions: []desktop.Action{{ID: "allow", Default: true, Label: "允许访问", Enabled: true}, {ID: "deny", Cancel: true, Label: "不允许", Enabled: true}}}}}
+		tt := ui.NewTester(m.viewRoot, width, 750)
+		tt.SetDark(true)
+		tt.Frame()
+		for _, label := range []string{"操作授权窗口", "允许访问", "不允许", "完整说明"} {
+			r, ok := tt.Find(label)
+			if !ok || r.H < 44 || r.Y < 0 || r.Y+r.H > 750 {
+				t.Fatalf("long copy hid %s at %d: %v", label, width, r)
+			}
+		}
+		saveMobileNativeSnapshot(t, tt, "auth-window-phone")
+	}
+}

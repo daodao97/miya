@@ -39,6 +39,8 @@ func tr(english string) string {
 }
 
 type chatController struct {
+	desktopMu      sync.Mutex
+	desktop        *desktopControl
 	runtimeMu      sync.Mutex
 	runtimePath    string
 	runtime        *runtimeManager
@@ -61,7 +63,7 @@ type chatController struct {
 	lastSubmitError  string
 	referenceDir     string
 	forkedReferences map[ThreadRef]referenceSession
-	// handoffs link referenced conversations to where they were sent.
+	// handoffs track work explicitly delegated to another conversation.
 	handoffs []handoff
 	// delegationParent is the conversation that handed each its work.
 	delegationParent      map[int]int

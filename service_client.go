@@ -158,7 +158,7 @@ func serviceCallTimeout(op string) time.Duration {
 	switch op {
 	case "automationDraft":
 		return 3 * time.Minute
-	case "mcpAutomationCreate", "mcpAutomationUpdate":
+	case "mcpDesktopControl", "mcpAutomationCreate", "mcpAutomationUpdate":
 		return miyaRequestTimeout + time.Minute
 	}
 	return 15 * time.Second

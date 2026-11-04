@@ -21,7 +21,7 @@ var miyaMCPEnabled bool
 const maxDelegationDepth = 2
 
 // miyaReadOnlyTools are the miya tools an agent may call without asking.
-var miyaReadOnlyTools = []string{"list_threads", "read_thread", "thread_status", "list_automations", "report_result", "search_memory", "runtime_info"}
+var miyaReadOnlyTools = []string{"list_threads", "read_thread", "thread_status", "list_automations", "report_result", "search_memory", "runtime_info", "request_desktop_control"}
 
 func miyaMCPCommand() (string, bool) {
 	if !miyaMCPEnabled {
@@ -108,6 +108,8 @@ func (c *chatController) mcpHandle(op string, r mcpRequest) (any, error) {
 	// app-server for every project, started wherever the service was. The
 	// calling conversation's own project is used instead.
 	switch op {
+	case "mcpDesktopControl":
+		return c.mcpDesktopControl(r)
 	case "mcpMemory":
 		return c.mcpMemory(r)
 	case "mcpThreads":
@@ -267,6 +269,7 @@ func (c *chatController) mcpDelegate(r mcpRequest) (mcpDelegateResult, error) {
 	if id == 0 {
 		return mcpDelegateResult{}, errors.New(firstNonEmpty(c.lastSubmitError, "交付失败：目标 agent 还没有就绪，或对话是只读的"))
 	}
+	c.noteHandoffs([]Thread{caller}, id, threadRefTask(task))
 	if c.delegationParent == nil {
 		c.delegationParent = map[int]int{}
 	}

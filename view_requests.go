@@ -31,10 +31,14 @@ func (app *chatApp) approvalView(c *ui.Context, a codex.Approval) {
 			ui.Text(c, app.c.approvalDetail(a)).FontSize(12).LineHeight(1.5).Selectable()
 		})
 		ui.Row(c).Gap(8).Children(func() {
-			if ui.PrimaryButton(c.Key("allow"), "Allow once").Clicked() {
+			allowLabel, declineLabel := "Allow once", "Decline"
+			if a.Method == "miya/desktopControl" {
+				allowLabel, declineLabel = "已完成，继续", "取消接管"
+			}
+			if ui.PrimaryButton(c.Key("allow"), allowLabel).Clicked() {
 				app.c.respond(a, approvalResult(a, true))
 			}
-			if ui.Button(c.Key("decline"), "Decline").Clicked() {
+			if ui.Button(c.Key("decline"), declineLabel).Clicked() {
 				app.c.respond(a, approvalResult(a, false))
 			}
 		})

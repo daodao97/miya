@@ -16,6 +16,7 @@ const ProtocolVersion = 5
 //	        Every frame after hello is compressed (Conn.CompressSends).
 //	commands Data is a project's Claude Code slash commands
 //	automations Data is the requested automation list and run history
+//	automation-run Data acknowledges RequestID with the updated list; Error says why it failed
 //	image   Data is a requested attachment thumbnail
 //	sent    answers a send: Thread took the message, or Error says why not
 //	ping    keeps an idle connection checked
@@ -41,7 +42,8 @@ type Frame struct {
 //	           Project when Thread is 0
 //	stop       stop Thread's running turn
 //	commands   send the Claude Code commands of Project
-//	automations send the automation list and run history (read-only)
+//	automations send the automation list and run history
+//	automation-run run AutomationID now; RequestID correlates the reply
 //	respond    answer the approval whose ID is Approval, allowing it or not
 //
 // SendOptions are explicit per-message settings chosen on the phone.
@@ -54,6 +56,16 @@ type SendOptions struct {
 }
 
 type Request struct {
+	DesktopAction string `json:"desktopAction,omitempty"`
+	WindowOnly        bool            `json:"windowOnly,omitempty"`
+	// WindowPick asks for a lease that may choose any window or the full
+	// desktop. Older desktops ignore it and open the full desktop.
+	WindowPick        bool            `json:"windowPick,omitempty"`
+	WindowID          uint32          `json:"windowId,omitempty"`
+	WindowPID         int             `json:"windowPid,omitempty"`
+	DesktopToken      string          `json:"desktopToken,omitempty"`
+	AutomationID      string          `json:"automationId,omitempty"`
+	RequestID         string          `json:"requestId,omitempty"`
 	MemoryScope       string          `json:"memoryScope,omitempty"`
 	BinaryAttachments bool            `json:"binaryAttachments,omitempty"`
 	Reference         string          `json:"reference,omitempty"`
@@ -66,6 +78,9 @@ type Request struct {
 	Result            json.RawMessage `json:"result,omitempty"`
 	Remember          bool            `json:"remember,omitempty"`
 	ReadVersion       uint64          `json:"readVersion,omitempty"`
+	// ReadCompletedAtMs acknowledges the completed result received by the phone,
+	// independently of APNs registration and its per-device notification version.
+	ReadCompletedAtMs int64           `json:"readCompletedAtMs,omitempty"`
 	Push              json.RawMessage `json:"push,omitempty"`
 	Op                string          `json:"op"`
 	Thread            int             `json:"thread"`

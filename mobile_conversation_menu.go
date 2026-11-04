@@ -30,6 +30,10 @@ func (m *mobileApp) conversationActionsSheet(c *ui.Context) {
 				m.openWebServices(m.conversationMenuProject)
 			}
 			if m.open != 0 {
+				if m.conversationAction(c.Key("desktop-control"), "远程桌面", "device-desktop").Disabled(!m.connected || m.desktopRequest != "").Clicked() {
+					m.conversationMenu = false
+					m.openRemoteDesktop()
+				}
 				if m.conversationAction(c.Key("runtime"), "后台运行", "terminal-2").Disabled(!m.connected).Clicked() {
 					m.conversationMenu = false
 					m.openWebServices(m.conversationMenuProject)

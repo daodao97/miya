@@ -203,8 +203,8 @@ func threadContextDisplay(s string) string {
 	return b.String()
 }
 
-// handoff links a referenced conversation to the one its context was sent
-// to; Item is the activity that follows the work in the referenced one.
+// handoff links a delegating conversation to the one receiving its task;
+// Item is the activity that follows the work in the delegating one.
 type handoff struct {
 	From, To int
 	Item     string
@@ -355,8 +355,7 @@ func (c *chatController) prefetchReference(ref ThreadRef) {
 	}()
 }
 
-// noteHandoffs adds to each referenced conversation an activity that
-// follows the work sent to target as a sub-agent.
+// noteHandoffs records explicit delegation, independently of context references.
 func (c *chatController) noteHandoffs(sources []Thread, target int, task string) {
 	for _, src := range sources {
 		if src.ID == 0 || src.ID == target {
