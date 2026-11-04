@@ -35,7 +35,7 @@ func TestMobileDrawerBackgroundCoversSafeArea(t *testing.T) {
 					}
 				}
 				checkClosed()
-				if header, ok := tt.Find("桌面端连接"); !ok || header.Y < safe.Top || header.X < safe.Left {
+				if header, ok := tt.Find("Desktop connections"); !ok || header.Y < safe.Top || header.X < safe.Left {
 					t.Fatalf("home controls entered unsafe area: %v", header)
 				}
 				m.menu = true
@@ -58,7 +58,7 @@ func TestMobileDrawerBackgroundCoversSafeArea(t *testing.T) {
 							t.Fatalf("%s drawer background stops at safe area y=%d: %v want %v", phase, y, got, wantDrawer)
 						}
 					}
-					scrim, ok := tt.Find("关闭侧边栏")
+					scrim, ok := tt.Find("Close sidebar")
 					if !ok || scrim.Y != 0 || scrim.Y+scrim.H != float32(height) {
 						t.Fatalf("%s scrim does not cover system chrome: %v", phase, scrim)
 					}
@@ -68,7 +68,7 @@ func TestMobileDrawerBackgroundCoversSafeArea(t *testing.T) {
 					}
 					saveMobileNativeSnapshot(t, tt, fmt.Sprintf("drawer-%s-dark-%v-landscape-%v", phase, dark, landscape))
 				}
-				if button, ok := tt.Find("设置"); !ok || button.Y < safe.Top || button.Y+button.H > float32(height)-safe.Bottom || button.X < safe.Left {
+				if button, ok := tt.Find("Settings"); !ok || button.Y < safe.Top || button.Y+button.H > float32(height)-safe.Bottom || button.X < safe.Left {
 					t.Fatalf("drawer controls entered unsafe area: %v", button)
 				}
 				m.menu = false
@@ -119,7 +119,7 @@ func TestMobileDrawerClosingFramesMatchRestingPage(t *testing.T) {
 					nearClosed := false
 					for frame := 0; frame < 90; frame++ {
 						tt.Advance(16 * time.Millisecond)
-						scrim, visible := tt.Find("关闭侧边栏")
+						scrim, visible := tt.Find("Close sidebar")
 						if visible && scrim.X <= 2 {
 							nearClosed = true
 							for i, point := range points {

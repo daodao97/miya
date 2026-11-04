@@ -15,6 +15,28 @@ func (m *mobileApp) threadMenu(c *ui.Context, project string) {
 		end = len(inlineThreadRaw(m.inlineInput.doc.Text().Slice(0, caret)))
 	}
 	token := composerTokenAt(m.draft, end)
+	if token.Kind == '#' {
+		m.clearFileReferences()
+		if m.state.Collaboration == nil || m.state.Collaboration.Version < 1 {
+			return
+		}
+		allowed := []string{}
+		for _, agent := range m.state.Agents {
+			allowed = append(allowed, agent.Agent)
+		}
+		p := m.pal
+		ui.Column(c.Key("agent-refs")).FillWidth().Background(p.surface).Radius(18).Padding(6).Children(func() {
+			ui.Text(c, tr("Agents")).FontSize(m.font(12)).TextColor(p.muted).Padding(8)
+			for _, choice := range agentChoices(token.Query, allowed) {
+				row := m.phoneButton(c.Key(choice.Agent)).FillWidth().MinHeight(44).Padding(0, 10).Label("#" + choice.Name)
+				row.Children(func() { ui.Text(c, "#"+choice.Name).FontSize(m.font(14)).TextColor(p.ink) })
+				if row.Clicked() {
+					m.draft = insertAgentReference(m.draft, token, choice.Agent, choice.Name)
+				}
+			}
+		})
+		return
+	}
 	if token.Kind != '@' || project == "" {
 		m.clearFileReferences()
 		return
@@ -29,14 +51,14 @@ func (m *mobileApp) threadMenu(c *ui.Context, project string) {
 		ui.Scroll(c.Key("thread-ref-list")).FillWidth().MaxHeight(260).Children(func() {
 			ui.Column(c).FillWidth().Children(func() {
 				if len(shown) > 0 {
-					ui.Text(c, "引用对话").FontSize(m.font(12)).TextColor(p.muted).Padding(8)
+					ui.Text(c, tr("Referenced conversation")).FontSize(m.font(12)).TextColor(p.muted).Padding(8)
 				}
 				for _, ref := range shown {
 					t := ref.Thread
 					title := threadRefTitle(t)
 					detail := backendOf(t).Name() + " · " + ref.ProjectName
 					if t.Busy {
-						detail += " · 运行中"
+						detail += tr(" · Running")
 					}
 					item := m.phoneButton(c.Key("ref:"+strconv.Itoa(t.ID))).FillWidth().MinHeight(52).Padding(0, 10).Radius(12).Label(title)
 					item.Children(func() {
@@ -53,19 +75,19 @@ func (m *mobileApp) threadMenu(c *ui.Context, project string) {
 						}
 					}
 				}
-				ui.Text(c, "引用文件").FontSize(m.font(12)).TextColor(p.muted).Padding(8)
+				ui.Text(c, tr("Reference file")).FontSize(m.font(12)).TextColor(p.muted).Padding(8)
 				switch {
 				case files.loading:
-					ui.Text(c, "正在搜索项目文件…").FontSize(m.font(13)).TextColor(p.muted).Padding(10)
+					ui.Text(c, tr("Searching project files…")).FontSize(m.font(13)).TextColor(p.muted).Padding(10)
 				case files.err != "":
 					ui.Text(c, files.err).FontSize(m.font(13)).TextColor(p.muted).Padding(10)
-					if m.state.FileReferences && m.connected && m.phoneButton(c.Key("retry-files")).Label("重试搜索文件").Children(func() {
-						ui.Text(c, "重试").FontSize(m.font(13))
+					if m.state.FileReferences && m.connected && m.phoneButton(c.Key("retry-files")).Label(tr("Retry file search")).Children(func() {
+						ui.Text(c, tr("Retry")).FontSize(m.font(13))
 					}).Clicked() {
 						m.clearFileReferences()
 					}
 				case len(files.choices) == 0:
-					ui.Text(c, "没有匹配的文件").FontSize(m.font(13)).TextColor(p.muted).Padding(10)
+					ui.Text(c, tr("No matching files")).FontSize(m.font(13)).TextColor(p.muted).Padding(10)
 				}
 				for _, choice := range files.choices {
 					item := m.phoneButton(c.Key("file:"+choice.Name)).FillWidth().MinHeight(44).Padding(0, 10).Gap(8).Radius(12).Label(choice.Name)

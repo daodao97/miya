@@ -5,6 +5,7 @@ go 1.27.3
 replace github.com/egoist/mygo => ../mygo
 
 require (
+	github.com/creack/pty v1.1.24
 	github.com/egoist/mygo v0.7.4
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	github.com/tailscale/tailcat v0.7.0
@@ -20,7 +21,6 @@ require (
 	github.com/anmitsu/go-shlex v0.0.0-20200514113438-38f4b401e2be // indirect
 	github.com/coder/websocket v1.8.15 // indirect
 	github.com/creachadair/msync v0.10.1 // indirect
-	github.com/creack/pty v1.1.24 // indirect
 	github.com/dblohm7/wingoes v0.0.0-20260526185140-fb298caac7ca // indirect
 	github.com/ebitengine/purego v0.11.1 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.3 // indirect

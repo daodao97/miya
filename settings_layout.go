@@ -6,14 +6,6 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-// zhOr picks the Chinese or English text for the interface language.
-func zhOr(zh bool, zhText, en string) string {
-	if zh {
-		return zhText
-	}
-	return en
-}
-
 // settingsGroup is a titled card of settings rows split by hairlines, with
 // an optional note under it.
 func settingsGroup(c *ui.Context, title, footnote string, rows ...func()) {

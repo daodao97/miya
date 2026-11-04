@@ -19,7 +19,9 @@ func TestClaudeRunUsesTheChosenModelAndEffort(t *testing.T) {
 	dir := t.TempDir()
 	out := filepath.Join(dir, "argv")
 	bin := filepath.Join(dir, "claude")
-	if err := os.WriteFile(bin, []byte("#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$MIYA_OUT\"\n"), 0o755); err != nil {
+	// Publish complete argv atomically; the observer must not accept a partially
+	// written file as the final invocation under a loaded full-suite run.
+	if err := os.WriteFile(bin, []byte("#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$MIYA_OUT.tmp\"\nmv \"$MIYA_OUT.tmp\" \"$MIYA_OUT\"\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	c := &chatController{cwd: dir, ctx: context.Background(), claudeBinary: bin, claudeEnv: []string{"MIYA_OUT=" + out}, run: d.push}
@@ -56,7 +58,7 @@ func TestComposerPicksClaudeModel(t *testing.T) {
 	c.claudeBinary = "/bin/true"
 	c.setAgent(agentClaude)
 	tt.Frame()
-	if err := tt.Click("默认模型"); err != nil {
+	if err := tt.Click("Default model"); err != nil {
 		t.Fatalf("no model picker for Claude Code in %q: %v", tt.Texts(), err)
 	}
 	if err := tt.Click("Claude Sonnet 5.5"); err != nil {
@@ -65,7 +67,7 @@ func TestComposerPicksClaudeModel(t *testing.T) {
 	if c.claudeModel != "claude-sonnet-5-5" || !tt.HasText("Claude Sonnet 5.5") {
 		t.Fatalf("model %q", c.claudeModel)
 	}
-	if err := tt.Click("默认强度"); err != nil {
+	if err := tt.Click("Default effort"); err != nil {
 		t.Fatal(err)
 	}
 	if err := tt.Click("xhigh"); err != nil {
@@ -80,14 +82,14 @@ func TestClaudeDefaultModelFromInit(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	c := testController()
 	b := backendFor(agentClaude)
-	if b.ModelLabel(c, "") != "默认模型" {
+	if b.ModelLabel(c, "") != "Default model" {
 		t.Fatal("label before any run")
 	}
 	c.noteClaudeModel("claude-opus-5-5")
-	if got := b.ModelLabel(c, ""); got != "默认 · Claude Opus 5.5" || loadSetting("claudeDefaultModel") != "claude-opus-5-5" {
+	if got := b.ModelLabel(c, ""); got != "Default · Claude Opus 5.5" || loadSetting("claudeDefaultModel") != "claude-opus-5-5" {
 		t.Fatalf("label %q", got)
 	}
-	if b.ModelLabel(c, "opus") != "Opus（最新）" || b.ModelLabel(c, "my-model") != "my-model" {
+	if b.ModelLabel(c, "opus") != "Opus (latest)" || b.ModelLabel(c, "my-model") != "my-model" {
 		t.Fatal("alias labels")
 	}
 }

@@ -175,7 +175,7 @@ func (c *chatController) rewind(threadID, messageID int, text string) {
 				return
 			}
 			if c.canRewind(t, m) {
-				c.update(t.ID, func(t *Thread) { t.Busy = true; t.Status = "正在回退对话…" })
+				c.update(t.ID, func(t *Thread) { t.Busy = true; t.Status = tr("Rewinding conversation…") })
 				backendOf(t).Rewind(c, t, m, text)
 			}
 			return
@@ -190,7 +190,7 @@ func (c *chatController) finishRewind(id, messageID int, text string, err error,
 	c.update(id, func(t *Thread) {
 		t.Busy = false
 		if err != nil {
-			t.Status = "无法重新发送：" + err.Error()
+			t.Status = tr("Unable to resend: ") + err.Error()
 			return
 		}
 		t.Status = ""
@@ -216,6 +216,8 @@ func (c *chatController) finishRewind(id, messageID int, text string, err error,
 
 // sendRequest is one message to send, with what the window chose for it.
 type sendRequest struct {
+	ExecutionID string `json:"executionId,omitempty"`
+	Origin      string `json:"origin,omitempty"`
 	// Internal/MCP/automation messages do not become automatic memories.
 	MemoryControl bool `json:"memoryControl,omitempty"`
 	// ThreadID is the conversation, 0 to start one of Agent.
@@ -293,8 +295,26 @@ func (c *chatController) addThread(project string, t Thread) {
 // the conversation that took it, or 0 when it cannot be sent now.
 func (c *chatController) submit(req sendRequest) int {
 	c.lastSubmitError = ""
+	if hasAgentReferences(req.Text, req.Parts) {
+		capability := c.collaborationCapabilities()
+		if capability == nil || capability.Version < 1 {
+			c.lastSubmitError = tr("Update the Miya background service to use Agent tags")
+			if c.setStatus != nil {
+				c.setStatus(c.lastSubmitError)
+			}
+			return 0
+		}
+	}
 	if c.remote != nil {
 		var id int
+		if c.remoteHost() && len(req.Attachments) > 0 {
+			paths, err := c.uploadRemoteAttachments(req.Attachments)
+			if err != nil {
+				c.lastSubmitError = err.Error()
+				return 0
+			}
+			req.Attachments = paths
+		}
 		if err := c.remote.call("submit", req, &id); err != nil {
 			c.lastSubmitError = err.Error()
 			c.setStatus(err.Error())
@@ -345,6 +365,14 @@ func (c *chatController) submitExpanded(req sendRequest) int {
 	if req.ThreadID != 0 && t.ID == 0 || t.ReadOnly || t.TaskPending {
 		return 0
 	}
+	// A managed input is one independent execution, never an ordinary queued
+	// message. In particular resume may reveal a still-running native turn.
+	if req.ExecutionID != "" && (t.Busy || t.Loading || c.managedTargetUnavailable(t) || c.managedReservations[t.ID] != "" && c.managedReservations[t.ID] != req.ExecutionID) {
+		return 0
+	}
+	if reservation := c.managedReservations[t.ID]; reservation != "" && reservation != req.ExecutionID {
+		return c.enqueue(t.ID, req)
+	}
 	if t.Busy || t.Loading {
 		if req.Steer && t.Busy && !t.Loading && backendOf(t).Steer(c, t, req) {
 			return t.ID
@@ -381,6 +409,12 @@ func (c *chatController) returnDraft(id int, text string, attachments []string) 
 // it shows that conversation and holds nothing newer.
 func (c *chatController) restoreDraft(id int, text string, attachments []string) {
 	if c.active() == id && strings.TrimSpace(c.draft()) == "" {
+		if c.remoteHost() {
+			attachments = append([]string(nil), attachments...)
+			for i, path := range attachments {
+				attachments[i] = "miya-server:" + path
+			}
+		}
 		c.rememberDraft(text)
 		c.setAttachments(attachments)
 	}

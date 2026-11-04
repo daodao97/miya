@@ -27,7 +27,7 @@ func TestGlobalThreadChoicesIncludeAllProjectsAndMatches(t *testing.T) {
 	if len(got) != 11 || got[0].Name != "登录远程" || got[1].Name != "登录当前" {
 		t.Fatalf("global results missing, truncated or out of order: %+v", got)
 	}
-	if got[0].Detail != "对话 · Claude Code · 其他项目" {
+	if got[0].Detail != "Conversation · Claude Code · 其他项目" {
 		t.Fatalf("project not identified: %+v", got[0])
 	}
 	if got := app.threadChoices("session-4"); len(got) != 1 || !strings.Contains(got[0].Detail, "cached-only") {
@@ -44,7 +44,7 @@ func TestGlobalThreadChoicesIncludeAllProjectsAndMatches(t *testing.T) {
 func TestComposerCanChooseGlobalConversationBeyondFirstPage(t *testing.T) {
 	app, tt := testApp(t)
 	c := app.c
-	c.setThreads([]Thread{{ID: 1, ServerID: "session-1", Title: "当前", HistoryLoaded: true}})
+	c.setThreads([]Thread{{ID: 1, ServerID: "session-1", Title: "Current: ", HistoryLoaded: true}})
 	c.setActive(1)
 	c.projectCache = map[string][]Thread{"/other": {}}
 	for i := 2; i <= 9; i++ {
@@ -73,7 +73,7 @@ func TestComposerCanChooseGlobalConversationBeyondFirstPage(t *testing.T) {
 
 func TestServiceMirrorsGlobalThreadSearchMetadata(t *testing.T) {
 	c := serverController(t.TempDir(), "")
-	c.setThreads([]Thread{{ID: 1, ServerID: "session-1", Title: "当前"}})
+	c.setThreads([]Thread{{ID: 1, ServerID: "session-1", Title: "Current: "}})
 	c.projectCache["/other"] = []Thread{{ID: 8, ServerID: "session-8", Title: "后台对话", Draft: "未发送", Queue: []queuedMessage{{Text: "排队"}}, Messages: []Message{{Role: "user", Content: "完整正文"}}}}
 	c.projectCache[c.cwd] = []Thread{{ID: 99, ServerID: "session-99", Title: "旧缓存"}}
 	data, err := json.Marshal(c.snapshotState())

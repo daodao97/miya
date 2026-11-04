@@ -64,7 +64,7 @@ func clone(d document) document {
 }
 func (s *Store) load(scope Scope) (document, error) {
 	if !scope.valid() {
-		return document{}, errors.New("无效记忆作用域")
+		return document{}, errors.New("Invalid memory scope")
 	}
 	if v, ok := s.scopes[scope]; ok {
 		return clone(v.doc), v.err
@@ -76,14 +76,14 @@ func (s *Store) load(scope Scope) (document, error) {
 	} else if err == nil {
 		err = json.Unmarshal(b, &d)
 		if err == nil && (d.Format != FormatVersion || d.Scope != scope) {
-			err = errors.New("记忆格式版本或作用域不匹配")
+			err = errors.New("Memory format version or scope mismatch")
 		}
 		if err == nil {
 			err = validateDocument(d)
 		}
 	}
 	if err != nil {
-		err = fmt.Errorf("记忆作用域不可用（原文件保留）：%w", err)
+		err = fmt.Errorf("Memory scope unavailable (original file preserved): %w", err)
 	}
 	s.scopes[scope] = cached{doc: d, err: err}
 	return clone(d), err
@@ -100,18 +100,18 @@ func (s *Store) read(scope Scope) (document, error) {
 }
 func validateDocument(d document) error {
 	if agent := d.Settings.ExtractionAgent(); agent != "codex" && agent != "claude-code" {
-		return errors.New("未知记忆提炼 Agent")
+		return errors.New("Unknown memory extraction agent")
 	}
 	seen := map[string]uint64{}
 	for _, e := range d.Entries {
 		if e.Scope != d.Scope || e.ID == "" || e.Version == 0 || seen[e.ID] >= e.Version {
-			return errors.New("记忆条目身份或版本无效")
+			return errors.New("Invalid memory identity or version")
 		}
 		seen[e.ID] = e.Version
 		switch e.State {
 		case "active", "superseded", "forgotten", "promoted", "conflicted":
 		default:
-			return errors.New("未知记忆状态")
+			return errors.New("Unknown memory status")
 		}
 		if e.State != "forgotten" {
 			if err := validate(Mutation{ID: e.ID, Version: e.Version, Kind: e.Kind, Content: e.Content, TaskKey: e.TaskKey, Sources: e.Sources, ObservedAt: e.ObservedAt, ValidUntil: e.ValidUntil}, d.Scope); err != nil {
@@ -119,29 +119,29 @@ func validateDocument(d document) error {
 			}
 		}
 		if e.State == "forgotten" && (e.Content != "" || len(e.Sources) != 0) {
-			return errors.New("遗忘条目仍含正文")
+			return errors.New("Forgotten entry still contains content")
 		}
 	}
 	for _, j := range d.Jobs {
 		if len(j.Key) != 64 || j.Session == "" || j.TurnID == "" || j.Attempts < 0 || j.Attempts > 2 {
-			return errors.New("提炼任务身份或重试次数无效")
+			return errors.New("Invalid extraction task identity or retry count")
 		}
 		switch j.State {
 		case "pending", "running":
 			if len(j.Evidence) == 0 {
-				return errors.New("提炼任务缺少来源证据")
+				return errors.New("Extraction task is missing source evidence")
 			}
 			for _, e := range j.Evidence {
 				if e.ID == "" || e.Text == "" || e.Source.Thread != j.Session || e.Source.ObservedAt.IsZero() {
-					return errors.New("提炼来源无效")
+					return errors.New("Invalid extraction source")
 				}
 			}
 		case "completed", "failed", "canceled", "stale":
 			if len(j.Evidence) > 0 || len(j.Candidates) > 0 {
-				return errors.New("结束的提炼任务仍保留证据正文")
+				return errors.New("Completed extraction task still contains evidence content")
 			}
 		default:
-			return errors.New("未知提炼任务状态")
+			return errors.New("Unknown extraction task status")
 		}
 	}
 	return nil
@@ -153,7 +153,7 @@ func (s *Store) commit(d document) error {
 		return err
 	}
 	if err = s.replace(s.path(d.Scope), b); err != nil {
-		return fmt.Errorf("记忆未保存：%w", err)
+		return fmt.Errorf("Memory was not saved: %w", err)
 	}
 	s.scopes[d.Scope] = cached{doc: clone(d)}
 	return nil
@@ -220,14 +220,14 @@ func target(d document, id string, version uint64) (int, error) {
 		return 0, err
 	}
 	if d.Entries[i].State != "active" && d.Entries[i].State != "conflicted" {
-		return 0, fmt.Errorf("记忆已%s，不能修改", d.Entries[i].State)
+		return 0, fmt.Errorf("Memory is %s and cannot be modified", d.Entries[i].State)
 	}
 	return i, nil
 }
 func targetVersion(d document, id string, version uint64) (int, error) {
 	i, ok := find(d, id)
 	if !ok {
-		return 0, errors.New("记忆不存在于此作用域")
+		return 0, errors.New("Memory does not exist in this scope")
 	}
 	e := d.Entries[i]
 	if version == 0 || e.Version != version {
@@ -253,7 +253,7 @@ func (s *Store) Configure(scope Scope, settings Settings) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if agent := settings.ExtractionAgent(); agent != "claude-code" && agent != "codex" {
-		return errors.New("不支持的记忆提炼 Agent")
+		return errors.New("Unsupported memory extraction agent")
 	}
 	d, err := s.load(scope)
 	if err != nil {
@@ -263,7 +263,7 @@ func (s *Store) Configure(scope Scope, settings Settings) error {
 	if settings.Disabled || !settings.AutoExtract {
 		for i := range d.Jobs {
 			if d.Jobs[i].State == "pending" || d.Jobs[i].State == "running" {
-				finishJob(&d.Jobs[i], "canceled", "项目已停用自动提炼", s.now())
+				finishJob(&d.Jobs[i], "canceled", "Automatic extraction is disabled for this project", s.now())
 			}
 		}
 	}
@@ -322,7 +322,7 @@ func (s *Store) Forget(scope Scope, id string, version uint64) (Entry, error) {
 	}
 	old := d.Entries[i]
 	if old.State == "forgotten" {
-		return Entry{}, errors.New("记忆已忘记")
+		return Entry{}, errors.New("Memory forgotten")
 	}
 	mark := tombstone{ID: id, Version: version, Revision: d.Revision + 1}
 	keep := d.Entries[:0]
@@ -369,7 +369,7 @@ func (s *Store) promote(scope Scope, id string, version uint64, before func() er
 		return Entry{}, err
 	}
 	if d.Entries[i].State != "active" {
-		return Entry{}, errors.New("只有有效记忆可以提升")
+		return Entry{}, errors.New("Only active memories can be promoted")
 	}
 	if before != nil {
 		if err := before(); err != nil {
@@ -385,7 +385,7 @@ func (s *Store) promote(scope Scope, id string, version uint64, before func() er
 	d.Entries = append(d.Entries, e)
 	if err = s.commit(d); err != nil {
 		if before != nil {
-			return Entry{}, fmt.Errorf("项目文件已写入，但记忆状态未保存，请刷新检查：%w", err)
+			return Entry{}, fmt.Errorf("Project file was written, but memory status was not saved. Refresh to check: %w", err)
 		}
 		return Entry{}, err
 	}
@@ -398,7 +398,7 @@ func (s *Store) PromotePreference(scope Scope, id string, version uint64) (Entry
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if scope.Kind != "project" {
-		return Entry{}, errors.New("只能提升项目偏好")
+		return Entry{}, errors.New("Only project preferences can be promoted")
 	}
 	d, err := s.load(scope)
 	if err != nil {
@@ -410,14 +410,14 @@ func (s *Store) PromotePreference(scope Scope, id string, version uint64) (Entry
 	}
 	old := effective(d.Entries[i], s.now())
 	if old.Kind != "preference" || old.State != "active" {
-		return Entry{}, errors.New("只有有效的项目偏好可以提升到用户级")
+		return Entry{}, errors.New("Only active project preferences can be promoted to user scope")
 	}
 	e, err := s.save(UserScope(), Mutation{Kind: old.Kind, Content: old.Content, TaskKey: old.TaskKey, Sources: old.Sources, ObservedAt: old.ObservedAt, ValidUntil: old.ValidUntil})
 	if err != nil {
 		return Entry{}, err
 	}
 	if _, err = s.promote(scope, id, version, nil); err != nil {
-		return e, fmt.Errorf("用户偏好已保存为 %s，但原记忆标记失败，请刷新检查：%w", e.ID, err)
+		return e, fmt.Errorf("User preference saved as %s, but the original memory could not be marked. Refresh to check: %w", e.ID, err)
 	}
 	return e, nil
 }

@@ -14,30 +14,24 @@ func (app *chatApp) sidebarView(c *ui.Context) {
 				ui.Box(c).Width(bar.Left)
 				ui.Spacer(c)
 			}
-			if toolButton(c.Key("hide-sidebar"), "layout-sidebar", "Hide sidebar").Clicked() {
+			if toolButton(c.Key("hide-sidebar"), "layout-sidebar", tr("Hide sidebar")).Clicked() {
 				app.sidebar = false
 			}
 		})
 		// Only the navigation and project list scroll; the footer is a sibling.
 		ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
 			ui.Column(c).PaddingX(12).Gap(3).Children(func() {
-				if app.nav(c.Key("nav-new"), "edit", "New thread").Clicked() {
+				if app.nav(c.Key("nav-new"), "edit", tr("New thread")).Clicked() {
 					app.newThread()
 				}
-				if app.nav(c.Key("nav-search"), "search", "搜索对话").Tooltip(shortcutKeys(ui.Cmd, "K")).Clicked() {
-					app.openConversationSwitcher()
-				}
-				if app.nav(c.Key("nav-automations"), "clock", "Automations").Clicked() {
+				if app.nav(c.Key("nav-automations"), "clock", tr("Automations")).Clicked() {
 					app.showAutomations()
-				}
-				if app.nav(c.Key("nav-skills"), "stack-2", "Skills").Clicked() {
-					app.section = "Skills"
 				}
 			})
 			app.sidebarActivity(c.Key("activity"))
 			ui.Row(c).AlignItems(ui.Center).Margin(28, 0, 4, 0).Padding(0, 12, 0, 20).Children(func() {
 				ui.Text(c, tr("Projects")).FontSize(11).TextColor(faint).Grow(1)
-				if toolButton(c.Key("add-project"), "folder-plus", "Select project").Clicked() {
+				if toolButton(c.Key("add-project"), "folder-plus", tr("Select project")).Clicked() {
 					app.openProjectDialog()
 				}
 			})
@@ -49,13 +43,13 @@ func (app *chatApp) sidebarView(c *ui.Context) {
 		})
 		ui.Column(c).Padding(12).Shrink(0).Background(side).BorderWidth(1, 0, 0, 0).BorderColor(line).Children(func() {
 			ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(4).Children(func() {
-				if app.nav(c.Key("nav-settings"), "settings", "Settings").Grow(1).Tooltip(shortcutKeys(ui.Cmd, ",")).Clicked() {
+				if toolButton(c.Key("nav-settings"), "settings", tr("Settings")).Height(34).Tooltip(tr("Settings") + " · " + shortcutKeys(ui.Cmd, ",")).Clicked() {
 					app.section = "Settings"
 				}
-				if quiet(c.Key("shortcuts")).Label("快捷键").Tooltip("快捷键 · F1").Children(func() { mutedText(c, "⌘").FontSize(16) }).Clicked() {
-					app.shortcutsOpen = true
-				}
+				ui.Spacer(c)
+				app.workspaceSelector(c.Key("workspace"))
 			})
+			app.workspaceConnectionStatus(c.Key("workspace-status"))
 		})
 	})
 }
@@ -66,7 +60,7 @@ func (app *chatApp) sidebarActivity(c *ui.Context) {
 	for _, group := range []struct {
 		label   string
 		threads []Thread
-	}{{"进行中", running}, {"已完成", completed}} {
+	}{{tr("In progress"), running}, {tr("Completed"), completed}} {
 		if len(group.threads) == 0 {
 			continue
 		}
@@ -121,7 +115,7 @@ func (app *chatApp) projectSection(c *ui.Context, p Project) {
 		}
 		threads := app.c.threads()
 		ui.Column(c).Padding(0, 0, 0, 20).Gap(2).Children(func() {
-			if len(threads) == 0 && app.c.historyStatus() == "Loading conversations…" {
+			if len(threads) == 0 && app.c.historyStatus() == tr("Loading conversations…") {
 				ui.Text(c, tr("Loading conversations…")).TextColor(muted).FontSize(11).Padding(4, 9)
 			}
 			if len(threads) == 0 && strings.HasPrefix(app.c.historyStatus(), "Unable to load") || strings.HasPrefix(app.c.historyStatus(), "History") {
@@ -135,9 +129,9 @@ func (app *chatApp) projectSection(c *ui.Context, p Project) {
 				app.threadRow(c.Key(t.ID), t)
 			}
 			if len(threads) > collapsedThreadCount {
-				label := "展开显示"
+				label := tr("Expand")
 				if expanded {
-					label = "收起"
+					label = tr("Collapse")
 				}
 				if quiet(c.Key("more-threads")).Children(func() { ui.Text(c, label).TextColor(muted).FontSize(12) }).Clicked() {
 					app.threadListExpanded[p.Path] = !expanded
@@ -160,7 +154,7 @@ func (app *chatApp) projectRow(c *ui.Context, p Project) {
 			ui.Text(c, p.Name).Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
 			if !showActions {
 				if p.Path != app.expandedProject && app.c.projectBusy(p.Path) {
-					ui.Spinner(c).FontSize(13).Label("项目进行中：" + p.Name)
+					ui.Spinner(c).FontSize(13).Label(tr("Project activity: ") + p.Name)
 				} else {
 					symbol := "chevron-right"
 					if p.Path == app.expandedProject {
@@ -177,10 +171,10 @@ func (app *chatApp) projectRow(c *ui.Context, p Project) {
 			return
 		}
 		ui.Row(c).Absolute().Right(4).Top(4).Gap(2).Padding(1).Background(chosen).Radius(6).Children(func() {
-			more := quiet(c.Key("more")).Size(28, 26).PaddingX(4).Justify(ui.Center).Label("项目操作").Tooltip("项目操作")
+			more := quiet(c.Key("more")).Size(28, 26).PaddingX(4).Justify(ui.Center).Label(tr("Project actions")).Tooltip(tr("Project actions"))
 			more.Children(func() { icon(c, "dots", 16, muted) })
 			more.PopoverMenuButton(func(m *ui.Menu) { app.projectMenu(m, p) })
-			newChat := quiet(c.Key("new")).Size(28, 26).PaddingX(4).Justify(ui.Center).Label("新建对话").Tooltip("新建对话")
+			newChat := quiet(c.Key("new")).Size(28, 26).PaddingX(4).Justify(ui.Center).Label(tr("New thread")).Tooltip(tr("New thread"))
 			newChat.Children(func() { icon(c, "edit", 16, ink) })
 			if newChat.Clicked() {
 				app.newThreadIn(p)
@@ -192,20 +186,20 @@ func (app *chatApp) projectRow(c *ui.Context, p Project) {
 func (app *chatApp) projectMenu(m *ui.Menu, p Project) {
 	// Archiving hides the project and archives its conversations while keeping
 	// the Codex project trust configuration intact.
-	if m.Item("归档项目").Chosen() {
+	if m.Item(tr("Archive project")).Chosen() {
 		app.c.archiveProject(p.Path)
 	}
 	m.Separator()
-	if m.Item("删除项目").Chosen() {
+	if m.Item(tr("Delete project")).Chosen() {
 		app.c.deleteProject(p.Path)
 	}
 }
 
 func (app *chatApp) threadMenu(m *ui.Menu, t Thread) {
-	if m.Item("归档对话").Chosen() {
+	if m.Item(tr("Archive conversation")).Chosen() {
 		app.c.archiveThread(t)
 	}
-	if m.Item("删除对话").Chosen() {
+	if m.Item(tr("Delete conversation")).Chosen() {
 		app.c.deleteThread(t)
 	}
 }
@@ -230,7 +224,7 @@ func (app *chatApp) threadRow(c *ui.Context, t Thread) {
 			ui.Box(c.Key("status-actions")).Size(24, 24).Shrink(0).Children(func() {
 				// Keep the menu anchor built when the pointer leaves the row
 				// for its dropdown, while sharing one slot with run status.
-				more := quiet(c.Key("more")).Size(24, 24).PaddingX(4).Justify(ui.Center).Label("对话操作").Tooltip("更多")
+				more := quiet(c.Key("more")).Size(24, 24).PaddingX(4).Justify(ui.Center).Label(tr("Conversation actions")).Tooltip(tr("More"))
 				more.Children(func() { icon(c, "dots", 16, muted) })
 				more.PopoverMenuButton(func(m *ui.Menu) { app.threadMenu(m, t) })
 				if !hovered {
@@ -245,7 +239,7 @@ func (app *chatApp) threadRow(c *ui.Context, t Thread) {
 							color = ui.Hex("#3dd68c")
 						}
 						ui.Row(c.Key("unread")).Absolute().Top(0).Right(0).Bottom(0).Left(0).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
-							ui.Box(c).Size(8, 8).Radius(4).Background(color).Label("待读：" + t.Title)
+							ui.Box(c).Size(8, 8).Radius(4).Background(color).Label(tr("Unread: ") + t.Title)
 						})
 					}
 				}
@@ -264,7 +258,7 @@ func (app *chatApp) header(c *ui.Context) {
 	ui.Row(c).Height(56).Shrink(0).AlignItems(ui.Center).Padding(0, 30, 0, 18).Gap(8).DragWindow().Children(func() {
 		if !app.sidebar {
 			ui.Box(c).Width(max(bar.Left, 52))
-			if toolButton(c.Key("show-sidebar"), "layout-sidebar", "Show sidebar").Clicked() {
+			if toolButton(c.Key("show-sidebar"), "layout-sidebar", tr("Show sidebar")).Clicked() {
 				app.sidebar = true
 			}
 		}
@@ -284,7 +278,7 @@ func (app *chatApp) header(c *ui.Context) {
 			app.openWorkspace()
 		}
 		if p := app.panel(); !p.visible {
-			if toolButton(c.Key("show-panel"), "layout-sidebar-right", "显示右侧面板").Tooltip("显示右侧面板 · " + shortcutKeys(ui.Cmd|ui.Alt, "B")).Clicked() {
+			if toolButton(c.Key("show-panel"), "layout-sidebar-right", tr("Show right panel")).Tooltip(tr("Show right panel · ") + shortcutKeys(ui.Cmd|ui.Alt, "B")).Clicked() {
 				app.openPanel(p)
 			}
 		}
@@ -305,7 +299,7 @@ func (app *chatApp) sectionView(c *ui.Context) {
 			case "Automations":
 				app.automationsView(c)
 			case "Skills":
-				ui.Text(c, "Reusable instructions for the way you work.").TextColor(muted)
+				ui.Text(c, tr("Reusable instructions for the way you work.")).TextColor(muted)
 			case "Settings":
 				app.settingsView(c)
 			}
@@ -323,14 +317,14 @@ func menuTitle(key string) string {
 func menuDescription(key, project string) string {
 	switch key {
 	case "details":
-		return "Project: " + project + "\nEnvironment: local Codex app-server"
+		return tr("Project: ") + project + tr("\nEnvironment: local Codex app-server")
 	case "context":
-		return "Attach files with + or paste an image/file into the composer."
+		return tr("Attach files with + or paste an image/file into the composer.")
 	case "permissions":
-		return "Workspace write · On-request approvals\nCodex may read and edit files in the workspace. Requests for additional access appear for approval."
+		return tr("Workspace write · On-request approvals\nCodex may read and edit files in the workspace. Requests for additional access appear for approval.")
 	case "branch":
-		return "Ask Codex to inspect the current branch. The branch picker is not connected yet."
+		return tr("Ask Codex to inspect the current branch. The branch picker is not connected yet.")
 	default:
-		return "Project: " + project + "\nThe editor shortcut is not connected yet."
+		return tr("Project: ") + project + tr("\nThe editor shortcut is not connected yet.")
 	}
 }

@@ -16,7 +16,7 @@ func (m *mobileApp) setupPush() {
 	})
 	mygo.App.OnPushRegistrationError(func(err error) {
 		log.Printf("miya: APNs registration failed: %v", err)
-		m.pushError = "无法注册通知，请检查系统通知设置"
+		m.pushError = tr("Unable to register for notifications. Check system notification settings.")
 		invalidate()
 	})
 	mygo.App.SetNotificationPresentationHandler(func(e mygo.NotificationEvent) mygo.NotificationPresentation {
@@ -55,12 +55,12 @@ func (m *mobileApp) requestPush() {
 		runOnMain(func() {
 			m.pushRequesting = false
 			if e != nil || status == mygo.PermissionDenied {
-				m.pushError = "请在系统设置中允许 Miya 通知"
+				m.pushError = tr("Allow Miya notifications in Settings")
 				invalidate()
 				return
 			}
 			if e := mygo.App.RegisterPushNotifications(); e != nil {
-				m.pushError = "无法注册通知：" + e.Error()
+				m.pushError = tr("Unable to register notifications: ") + e.Error()
 			}
 			m.syncPush()
 		})

@@ -60,14 +60,14 @@ type ResetAttempt struct {
 
 func NewResetAttempt(r Reading) (ResetAttempt, error) {
 	if r.Agent != "codex" || r.Resets == nil || r.Resets.Count <= 0 {
-		return ResetAttempt{}, errors.New("当前账号没有可用重置卡，请先刷新")
+		return ResetAttempt{}, errors.New("No reset cards available. Refresh first.")
 	}
 	if r.AccountKey == "" || r.Home == "" {
-		return ResetAttempt{}, errors.New("CLI 未提供账号标识，请更新 Codex 后刷新")
+		return ResetAttempt{}, errors.New("The CLI returned no account ID. Update Codex and refresh.")
 	}
 	var b [16]byte
 	if _, err := rand.Read(b[:]); err != nil {
-		return ResetAttempt{}, errors.New("无法创建用卡操作，请重试")
+		return ResetAttempt{}, errors.New("Unable to create a reset operation. Try again.")
 	}
 	b[6], b[8] = b[6]&0x0f|0x40, b[8]&0x3f|0x80
 	a := ResetAttempt{Key: fmt.Sprintf("%x-%x-%x-%x-%x", b[:4], b[4:6], b[6:8], b[8:10], b[10:]), AccountKey: r.AccountKey, Home: r.Home}
@@ -91,18 +91,18 @@ type ResetResult struct {
 func UseCodexReset(ctx context.Context, attempt ResetAttempt) (ResetResult, error) {
 	binary, err := findBinary("codex")
 	if err != nil {
-		return ResetResult{}, errors.New("未找到 codex 命令")
+		return ResetResult{}, errors.New("codex command not found")
 	}
 	home, err := configDir("codex")
 	if err != nil || home != attempt.Home {
-		return ResetResult{}, errors.New("Codex 配置目录已变化，请刷新后重新确认")
+		return ResetResult{}, errors.New("The Codex configuration directory changed. Refresh and confirm again.")
 	}
 	return useCodexReset(ctx, binary, home, attempt)
 }
 
 func useCodexReset(ctx context.Context, binary, home string, attempt ResetAttempt) (ResetResult, error) {
 	if attempt.Key == "" || attempt.AccountKey == "" || attempt.Home != home {
-		return ResetResult{}, errors.New("用卡操作缺少账号确认，请刷新后重试")
+		return ResetResult{}, errors.New("Account confirmation missing. Refresh and retry.")
 	}
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
@@ -113,7 +113,7 @@ func useCodexReset(ctx context.Context, binary, home string, attempt ResetAttemp
 			return err
 		}
 		if current.AccountKey != attempt.AccountKey {
-			return errors.New("Codex 登录账号已变化，未使用重置卡；请刷新后重新确认")
+			return errors.New("The Codex account changed. No reset card used. Refresh and confirm again.")
 		}
 		params := map[string]string{"idempotencyKey": attempt.Key}
 		if attempt.CreditID != "" {
@@ -122,21 +122,21 @@ func useCodexReset(ctx context.Context, binary, home string, attempt ResetAttemp
 		// Send exactly once. Even a zero count may mean an earlier, timed-out
 		// use succeeded: its same idempotency key resolves that outcome safely.
 		if err := rpc.call("account/rateLimitResetCredit/consume", params, &out); err != nil {
-			return errors.New("用卡结果尚未确认，请刷新查看或重试同次操作；旧版 CLI 可能不支持用卡")
+			return errors.New("Reset result unconfirmed. Refresh or retry the same operation. Older CLI versions may not support reset cards.")
 		}
 		switch out.Outcome {
 		case "reset", "alreadyRedeemed", "nothingToReset", "noCredit":
 		default:
-			return errors.New("无法确认用卡结果，请刷新查看或重试同次操作")
+			return errors.New("Unable to confirm reset result. Refresh or retry the same operation.")
 		}
 		out.Reading, err = rpc.read()
 		if err != nil {
-			out.Reading = Reading{Agent: "codex", At: time.Now(), Error: "用卡结果已确认，额度读取失败，请刷新"}
+			out.Reading = Reading{Agent: "codex", At: time.Now(), Error: "Reset confirmed, but quota could not be read. Refresh to check."}
 		}
 		return nil
 	})
 	if err != nil && ctx.Err() != nil {
-		err = errors.New("用卡请求超时，结果尚未确认，请刷新查看或重试同次操作")
+		err = errors.New("Reset request timed out; result unconfirmed. Refresh or retry the same operation.")
 	}
 	return out, err
 }

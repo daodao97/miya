@@ -5,16 +5,18 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"miya/internal/remote"
 	"net"
 	"sync"
 	"time"
 )
 
-var errServiceClosed = errors.New("后台服务连接已断开")
+var errServiceClosed = errors.New("Background service disconnected")
 
 // serviceClient is a window's connection to the service.
 type serviceClient struct {
 	conn    net.Conn
+	wire    *remote.Conn
 	wmu     sync.Mutex
 	mu      sync.Mutex
 	next    int64
@@ -47,9 +49,19 @@ func (cl *serviceClient) setEvents(f func(svcMessage)) {
 
 func (cl *serviceClient) read() {
 	defer cl.Close()
-	r := bufio.NewReaderSize(cl.conn, 64<<10)
+	var r *bufio.Reader
+	if cl.wire == nil {
+		r = bufio.NewReaderSize(cl.conn, 64<<10)
+	}
 	for {
-		line, err := r.ReadBytes('\n')
+		var line []byte
+		var err error
+		if cl.wire != nil {
+			_ = cl.wire.SetReadDeadline(time.Now().Add(time.Minute))
+			err = cl.wire.Receive((*json.RawMessage)(&line))
+		} else {
+			line, err = r.ReadBytes('\n')
+		}
 		if len(bytes.TrimSpace(line)) > 0 {
 			var m svcMessage
 			if json.Unmarshal(line, &m) == nil {
@@ -83,6 +95,9 @@ func (cl *serviceClient) Close() {
 		if cl.conn != nil {
 			cl.conn.Close()
 		}
+		if cl.wire != nil {
+			cl.wire.Close()
+		}
 		cl.mu.Lock()
 		for id, ch := range cl.pending {
 			ch <- svcMessage{ID: id, Error: errServiceClosed.Error()}
@@ -93,8 +108,11 @@ func (cl *serviceClient) Close() {
 }
 
 func (cl *serviceClient) send(req svcRequest) error {
-	if cl == nil || cl.conn == nil {
+	if cl == nil || cl.conn == nil && cl.wire == nil {
 		return errServiceClosed
+	}
+	if cl.wire != nil {
+		return cl.wire.Send(req)
 	}
 	data, err := json.Marshal(req)
 	if err != nil {
@@ -148,7 +166,7 @@ func (cl *serviceClient) call(op string, args, out any) error {
 		return nil
 	case <-time.After(serviceCallTimeout(op)):
 		forget()
-		return errors.New("后台服务没有响应")
+		return errors.New("Background service is not responding")
 	}
 }
 
@@ -192,7 +210,11 @@ func connectService(workspace string) (*serviceClient, svcState, error) {
 		cl.Close()
 		return nil, svcState{}, err
 	}
-	if h.Version != serviceVersion || h.Exe != exe || !h.ExeTime.Equal(exeTime) {
+	if h.Remote && h.Version != serviceVersion {
+		cl.Close()
+		return nil, svcState{}, errors.New("Incompatible server version. Update using the server installation process.")
+	}
+	if !h.Remote && (h.Version != serviceVersion || h.Exe != exe || !h.ExeTime.Equal(exeTime)) {
 		switch {
 		case !h.Busy:
 			_ = cl.call("quit", nil, nil)
@@ -209,7 +231,7 @@ func connectService(workspace string) (*serviceClient, svcState, error) {
 			// window start the new service. Never create a second writer.
 			cl.notify("quitWhenIdle", nil)
 			cl.Close()
-			return nil, svcState{}, errors.New("后台服务版本不兼容，且有对话正在运行")
+			return nil, svcState{}, errors.New("Incompatible background service version; conversations are running")
 		}
 	}
 	var st svcState

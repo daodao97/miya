@@ -263,6 +263,7 @@ func (c *chatController) handle(f codex.Frame) {
 	if completedMemory {
 		c.completedMemoryTurn(target.ID, e.Turn.ID)
 	}
+	c.managedCodexOutput(target, f.Method, e)
 }
 func (c *chatController) clearApprovals(thread, turn string) {
 	out := []codex.Approval{}
@@ -274,6 +275,9 @@ func (c *chatController) clearApprovals(thread, turn string) {
 	c.setApprovals(out)
 }
 func (c *chatController) upsert(t *Thread, m Message) {
+	if m.ExecutionID == "" {
+		m.ExecutionID = t.ExecutionID
+	}
 	for i := range t.Messages {
 		if t.Messages[i].ItemID == m.ItemID && t.Messages[i].TurnID == m.TurnID {
 			m.ID = t.Messages[i].ID

@@ -38,7 +38,7 @@ func TestUsageTimeProgress(t *testing.T) {
 			}
 		})
 	}
-	if usagePaceText(2, 31) != "均速 31% · 少用 29 个百分点" || usagePaceText(60, 40) != "均速 40% · 多用 20 个百分点" || usagePaceText(31, 31) != "均速 31% · 与时间持平" {
+	if usagePaceText(2, 31) != "Steady pace 31% · 29 points under" || usagePaceText(60, 40) != "Steady pace 40% · 20 points over" || usagePaceText(31, 31) != "Steady pace 31% · On pace" {
 		t.Fatal("pacing comparison has the wrong direction")
 	}
 }
@@ -47,15 +47,15 @@ func TestUsagePanelTimeMarkerAndRefresh(t *testing.T) {
 	app := usageFixture()
 	now := time.Now()
 	app.usage.readings[0].Windows = []agentusage.Window{
-		{Name: "5 小时", Used: 2, DurationMins: 300, ResetsAt: now.Add(207 * time.Minute).Unix(), Reset: now.Add(207 * time.Minute).Format("01-02 15:04")},
-		{Name: "7 天", Used: 60, DurationMins: 10080, ResetsAt: now.Add(100 * time.Hour).Unix(), Reset: now.Add(100 * time.Hour).Format("01-02 15:04")},
+		{Name: "5 hours", Used: 2, DurationMins: 300, ResetsAt: now.Add(207 * time.Minute).Unix(), Reset: now.Add(207 * time.Minute).Format("01-02 15:04")},
+		{Name: "7 days", Used: 60, DurationMins: 10080, ResetsAt: now.Add(100 * time.Hour).Unix(), Reset: now.Add(100 * time.Hour).Format("01-02 15:04")},
 	}
 	tt := ui.NewTester(app.usagePanelView, usagePanelWidth, app.usage.height())
-	if !tt.HasText("已用 2%") || !tt.HasText("均速 31% · 少用 29 个百分点") {
+	if !tt.HasText("2% used") || !tt.HasText("Steady pace 31% · 29 points under") {
 		t.Fatalf("missing pacing: %q", tt.Texts())
 	}
-	track, trackOK := tt.Find("额度进度 5 小时")
-	marker, markerOK := tt.Find("时间进度 5 小时")
+	track, trackOK := tt.Find("Quota progress 5 hours")
+	marker, markerOK := tt.Find("Time progress 5 hours")
 	if !trackOK || !markerOK || math.Abs(float64((marker.X+marker.W/2-track.X)/track.W)-0.31) > 0.01 || marker.Y < track.Y || marker.Y+marker.H > track.Y+track.H {
 		t.Fatalf("time marker is misplaced: track=%v marker=%v", track, marker)
 	}
@@ -68,19 +68,19 @@ func TestUsagePanelTimeMarkerAndRefresh(t *testing.T) {
 	tt.SetDark(true)
 	saveUsageImage(t, tt, "usage-time-dark")
 	tt.Advance(30 * time.Minute)
-	after, _ := tt.Find("时间进度 5 小时")
-	if after.X <= marker.X+20 || !tt.HasText("均速 41% · 少用 39 个百分点") {
+	after, _ := tt.Find("Time progress 5 hours")
+	if after.X <= marker.X+20 || !tt.HasText("Steady pace 41% · 39 points under") {
 		t.Fatal("time progress did not advance while the panel stayed open")
 	}
 	app.usage.readings[0].Windows[0].ResetsAt = 0
 	tt.Frame()
-	if _, ok := tt.Find("时间进度 5 小时"); ok {
+	if _, ok := tt.Find("Time progress 5 hours"); ok {
 		t.Fatal("a display-only reset string produced a fictitious time marker")
 	}
 	for _, reset := range []time.Time{now.Add(7 * time.Hour), now.Add(-time.Hour)} {
 		app.usage.readings[0].Windows[0].ResetsAt = reset.Unix()
 		tt.Frame()
-		marker, ok := tt.Find("时间进度 5 小时")
+		marker, ok := tt.Find("Time progress 5 hours")
 		if !ok || marker.X < track.X || marker.X+marker.W > track.X+track.W {
 			t.Fatalf("time marker clips at a period boundary: track=%v marker=%v", track, marker)
 		}

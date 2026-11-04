@@ -35,7 +35,7 @@ func threadRefTask(text string) string {
 }
 
 func threadRefTitle(t Thread) string {
-	return firstNonEmpty(strings.TrimSpace(t.Title), t.ServerID, "新对话")
+	return firstNonEmpty(strings.TrimSpace(t.Title), t.ServerID, tr("New conversation"))
 }
 
 // Keep the exact reference tokens. Titles never need to be reversed into IDs.
@@ -54,14 +54,14 @@ func expandThreadRefs(text string, self ThreadRef, resolve func(ThreadRef) (Thre
 	}
 	for _, ref := range threadRefs(own) {
 		if ref == self {
-			return text, nil, fmt.Errorf("不能引用当前会话：%s", titles[ref])
+			return text, nil, fmt.Errorf(tr("Cannot reference the current session: %s"), titles[ref])
 		}
 		t, messages, err := resolve(ref)
 		if err != nil {
-			return text, nil, fmt.Errorf("引用「%s」失败：%w", titles[ref], err)
+			return text, nil, fmt.Errorf(tr("Failed to reference \"%s\": %w"), titles[ref], err)
 		}
 		if !t.HistoryLoaded {
-			return text, nil, fmt.Errorf("引用「%s」的上下文尚未加载，请重试或移除引用", titles[ref])
+			return text, nil, fmt.Errorf(tr("Context for \"%s\" has not loaded. Retry or remove the reference."), titles[ref])
 		}
 		snapshots = append(snapshots, referenceSnapshot{Ref: ref, Title: titles[ref], Context: threadPacket(t, messages)})
 		sources = append(sources, t)
@@ -82,8 +82,8 @@ func expandThreadRefs(text string, self ThreadRef, resolve func(ThreadRef) (Thre
 func threadPacket(t Thread, messages []Message) string {
 	title := threadRefTitle(t)
 	var b strings.Builder
-	fmt.Fprintf(&b, "会话 ID：%s\n后端：%s\n", t.ServerID, threadAgent(t))
-	fmt.Fprintf(&b, "以下是对话「%s」（%s）的上下文，由 Miya 从它的记录整理，供参考。\n", title, backendOf(t).Name())
+	fmt.Fprintf(&b, tr("Session ID: %s\nBackend: %s\n"), t.ServerID, threadAgent(t))
+	fmt.Fprintf(&b, tr("The following context from conversation \"%s\" (%s) was compiled by Miya from its history for reference.\n"), title, backendOf(t).Name())
 	var requests []string
 	var turns [][]Message
 	for _, m := range messages {
@@ -96,15 +96,15 @@ func threadPacket(t Thread, messages []Message) string {
 	}
 	if len(messages) == 0 {
 		if t.HistoryLoaded {
-			b.WriteString("\n（这个对话尚无消息。）\n")
+			b.WriteString(tr("\n(This conversation has no messages yet.)\n"))
 		} else {
-			b.WriteString("\n（这个对话的记录还没有加载。）\n")
+			b.WriteString(tr("\n(History for this conversation has not loaded yet.)\n"))
 		}
 	}
 	if len(requests) > 0 {
-		packetSection(&b, "最初的请求", clipRunes(requests[0], 800))
+		packetSection(&b, tr("Original request"), clipRunes(requests[0], 800))
 		if len(requests) > 1 {
-			packetSection(&b, "最近的请求", clipRunes(requests[len(requests)-1], 800))
+			packetSection(&b, tr("Latest request"), clipRunes(requests[len(requests)-1], 800))
 		}
 	}
 	var conclusions []string
@@ -114,13 +114,13 @@ func threadPacket(t Thread, messages []Message) string {
 		}
 	}
 	if len(conclusions) > 0 {
-		packetSection(&b, "最近的结论", strings.Join(conclusions, "\n\n---\n\n"))
+		packetSection(&b, tr("Latest conclusions"), strings.Join(conclusions, "\n\n---\n\n"))
 	}
 	if files := changedFiles(messages); len(files) > 0 {
 		if len(files) > 30 {
-			files = append(files[:30], fmt.Sprintf("…另外 %d 个文件", len(files)-30))
+			files = append(files[:30], fmt.Sprintf(tr("…and %d more files"), len(files)-30))
 		}
-		packetSection(&b, "改动的文件", "- "+strings.Join(files, "\n- "))
+		packetSection(&b, tr("Changed files"), "- "+strings.Join(files, "\n- "))
 	}
 	if agents := latestSubAgents(messages); len(agents) > 0 {
 		var lines []string
@@ -134,7 +134,7 @@ func threadPacket(t Thread, messages []Message) string {
 				break
 			}
 		}
-		packetSection(&b, "子任务", "- "+strings.Join(lines, "\n- "))
+		packetSection(&b, tr("Subtasks"), "- "+strings.Join(lines, "\n- "))
 	}
 	return b.String()
 }
@@ -196,7 +196,7 @@ func threadContextDisplay(s string) string {
 	end := 0
 	for _, m := range threadMentions(own) {
 		b.WriteString(own[end:m.Start])
-		b.WriteString("〔引用对话：" + m.Title + "〕")
+		b.WriteString(tr("[Referenced conversation: ") + m.Title + "]")
 		end = m.End
 	}
 	b.WriteString(own[end:])
@@ -233,10 +233,10 @@ func (c *chatController) resolveThreadRef(id int) (Thread, []Message, bool) {
 
 func (c *chatController) resolveReference(ref ThreadRef) (Thread, []Message, error) {
 	if !ref.valid() {
-		return Thread{}, nil, fmt.Errorf("会话身份无效")
+		return Thread{}, nil, fmt.Errorf("%s", tr("Invalid session identity"))
 	}
 	if ref.Source != c.referenceSource {
-		return Thread{}, nil, fmt.Errorf("引用属于另一台桌面，请连接对应来源后重试")
+		return Thread{}, nil, fmt.Errorf("%s", tr("This reference belongs to another desktop. Connect to its source and try again."))
 	}
 	for _, project := range c.threadRefProjects() {
 		for _, t := range project.Threads {
@@ -251,7 +251,7 @@ func (c *chatController) resolveReference(ref ThreadRef) (Thread, []Message, err
 				return t, messages, nil
 			}
 			c.prefetchReference(ref)
-			return Thread{}, nil, fmt.Errorf("上下文正在加载，请重试；加载失败时可重新选择或移除引用")
+			return Thread{}, nil, fmt.Errorf("%s", tr("Context is loading. Try again; if loading fails, select the reference again or remove it."))
 		}
 	}
 	if session, ok := c.forkedReferences[ref]; ok {
@@ -261,9 +261,9 @@ func (c *chatController) resolveReference(ref ThreadRef) (Thread, []Message, err
 			return t, messages, nil
 		}
 		c.prefetchReference(ref)
-		return Thread{}, nil, fmt.Errorf("原会话上下文正在加载，请重试")
+		return Thread{}, nil, fmt.Errorf("%s", tr("The source conversation is loading. Try again."))
 	}
-	return Thread{}, nil, fmt.Errorf("会话不存在或已不可用")
+	return Thread{}, nil, fmt.Errorf("%s", tr("The conversation no longer exists or is unavailable"))
 }
 
 // findThread is a conversation of the open project or of one in the
@@ -343,14 +343,14 @@ func (c *chatController) prefetchReference(ref ThreadRef) {
 		c.dispatch(func() {
 			delete(c.referenceLoading, ref)
 			if status != "" {
-				c.setStatus("引用上下文加载失败：" + status + "；请重试或移除引用")
+				c.setStatus(tr("Failed to load reference context: ") + status + tr("; retry or remove the reference"))
 				return
 			}
 			if c.threadHistory == nil {
 				c.threadHistory = map[string][]Message{}
 			}
 			c.threadHistory[ref.URL()] = messages
-			c.setStatus("引用上下文已加载，请重新发送")
+			c.setStatus(tr("Reference context loaded. Send again."))
 		})
 	}()
 }
@@ -364,7 +364,7 @@ func (c *chatController) noteHandoffs(sources []Thread, target int, task string)
 		item := fmt.Sprintf("handoff:%d:%d", target, len(c.handoffs))
 		c.handoffs = append(c.handoffs, handoff{From: src.ID, To: target, Item: item})
 		status, detail := c.handoffState(target)
-		agent := SubAgent{ID: "thread:" + strconv.Itoa(target), Name: firstNonEmpty(task, "交付任务"), Status: firstNonEmpty(status, subAgentPending), Detail: detail}
+		agent := SubAgent{ID: "thread:" + strconv.Itoa(target), Name: firstNonEmpty(task, tr("Handoff task")), Status: firstNonEmpty(status, subAgentPending), Detail: detail}
 		title := threadRefTitle(c.threadWithID(target))
 		c.update(src.ID, func(t *Thread) {
 			// The agents list says it all; the title names the target.
@@ -451,7 +451,7 @@ func (app *chatApp) threadChoices(query string) []composerChoice {
 		if !ref.valid() {
 			continue
 		}
-		out = append(out, composerChoice{Name: threadRefTitle(t), Detail: "对话 · " + backendOf(t).Name() + " · " + match.ProjectName, Ref: &ref})
+		out = append(out, composerChoice{Name: threadRefTitle(t), Detail: tr("Conversation · ") + backendOf(t).Name() + " · " + match.ProjectName, Ref: &ref})
 	}
 	return out
 }
@@ -472,11 +472,11 @@ func (app *chatApp) handoffToNewThread() {
 	t := c.current()
 	ref := c.threadRef(t)
 	if !ref.valid() {
-		app.notice = "会话创建后可引用"
+		app.notice = tr("Available once the session is created")
 		return
 	}
 	c.newThread()
 	c.rememberDraft(referenceText(ref, threadRefTitle(t)) + " ")
 	c.prefetchReference(ref)
-	app.notice = "已引用对话「" + threadRefTitle(t) + "」：选择 agent，写下要交付的任务后发送"
+	app.notice = tr("Referenced conversation \"") + threadRefTitle(t) + tr("\": choose an agent, describe the task, and send")
 }

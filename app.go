@@ -40,15 +40,19 @@ type chatApp struct {
 	effortOpen,
 	agentOpen,
 	permissionsOpen bool
-	notice        string
-	focusComposer bool
-	shortcutsOpen bool
-	switcher      conversationSwitcher
+	notice         string
+	focusComposer  bool
+	shortcutsOpen  bool
+	switcher       conversationSwitcher
+	commandPalette desktopCommandPalette
 
 	workspace, projectName, projectPath string
 	expandedProject                     string
 	projectDialog                       bool
 	projectError                        string
+	projectBrowse                       bool
+	projectBrowseLoading                bool
+	projectDirectories                  []hostEntry
 	threadListExpanded                  map[string]bool
 	desktopReadIntent                   desktopRead // a completed result the user chose to view
 
@@ -63,6 +67,7 @@ type chatApp struct {
 	settingsTab    int
 	settingDrafts  map[string]string
 	serviceRestart serviceRestartUI
+	workspaceHub   *desktopWorkspaces
 
 	// appearance is "", "light" or "dark"; dark and themed the palette applied.
 	appearance   string
@@ -78,6 +83,7 @@ type chatApp struct {
 	memoryNotes        map[string]*memoryNoticeUI
 	memoryRevisionSeen uint64
 	autos              automationsUI
+	collaborations     collaborationUI
 	account            accountView
 	usage              *desktopUsage
 	openWindow         func()
@@ -92,6 +98,12 @@ type chatApp struct {
 
 func newChatApp() *chatApp {
 	c := newWindowController()
+	app := newChatAppWithController(c)
+	app.ensureDesktopWorkspaces()
+	return app
+}
+
+func newChatAppWithController(c *chatController) *chatApp {
 	app := &chatApp{
 		c:                  c,
 		theme:              appTheme(),
@@ -113,6 +125,10 @@ func newChatApp() *chatApp {
 	app.md = markdown.Options{
 		OnLink:    app.openMessageLink,
 		LoadImage: func(src string) (ui.ImageSource, error) { return loadImage(imageSourcePath(src)) },
+	}
+	if c.remoteHost() {
+		app.imagePreview = app.remoteMessageImage
+		app.md.LoadImage = app.loadRemoteImage
 	}
 	app.account.init(app)
 	app.panelWidth = 460
@@ -147,7 +163,41 @@ func main() {
 		}
 		return
 	}
+	if len(os.Args) > 1 && os.Args[1] == "-serve" {
+		if err := serveCommand(os.Args[2:]); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+	if len(os.Args) == 2 && os.Args[1] == "-connection" {
+		data, err := os.ReadFile(connectionFile())
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Print(string(data))
+		return
+	}
+	if len(os.Args) == 2 && os.Args[1] == "-restart-when-idle" {
+		if err := requestServerRestart(); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+	if len(os.Args) > 1 && os.Args[1] == "-connect" {
+		if len(os.Args) != 3 {
+			log.Fatal("usage: miya -connect <miya://connect link>")
+		}
+		if err := saveRemoteServer(os.Args[2]); err != nil {
+			log.Fatal(err)
+		}
+		os.Args = os.Args[:1]
+	}
 	app := newChatApp()
+	configureInterfaceLanguage()
+	mygo.App.OnLocaleChanged(func(tag string) {
+		appLocale.Store(tag)
+		app.activeWorkspaceApp().syncUsageTray()
+	})
 	mygo.Theme.SetSource(themeSource(app.appearance))
 	// With the background service running, the service serves phones: a
 	// window only mirrors the current project.
@@ -168,21 +218,23 @@ func main() {
 			MinHeight:            580,
 			TitleBarStyle:        mygo.TitleBarHidden,
 			TrafficLightPosition: &mygo.Point{X: 18, Y: 20},
-			BackgroundColor:      windowBackground(app),
+			BackgroundColor:      windowBackground(app.activeWorkspaceApp()),
 			StateKey:             "main",
 			Content:              ui.View(app.view),
 		})
 		setAppWindow(w)
 		w.OnFocus(func() {
 			w.Update(func() {
-				if app.section == "" {
-					app.requestDesktopRead(app.c.current())
-					app.markVisibleThreadRead()
+				active := app.activeWorkspaceApp()
+				if active.section == "" {
+					active.requestDesktopRead(active.c.current())
+					active.markVisibleThreadRead()
 				}
 			})
 		})
 		w.OnClose(func(e *mygo.CloseEvent) {
-			if !app.quitting && runtime.GOOS == "darwin" && app.usage != nil && app.usage.tray != nil {
+			active := app.activeWorkspaceApp()
+			if !app.quitting && runtime.GOOS == "darwin" && active.usage != nil && active.usage.tray != nil {
 				e.PreventDefault()
 				w.Hide()
 			}
@@ -200,11 +252,12 @@ func main() {
 		app.startUsage()
 	})
 	mygo.App.OnActivate(func(hasVisibleWindows bool) {
-		if !app.quitting && !hasVisibleWindows && (app.usage == nil || app.usage.panel == nil) {
+		active := app.activeWorkspaceApp()
+		if !app.quitting && !hasVisibleWindows && (active.usage == nil || active.usage.panel == nil) {
 			open()
 		}
 	})
-	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) { app.quitting = true; app.stopUsage() })
+	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) { app.quitting = true; app.activeWorkspaceApp().stopUsage() })
 	mygo.App.OnQuit(runCleanups)
 	if err := mygo.App.Run(); err != nil {
 		log.Fatal(err)
@@ -308,12 +361,15 @@ func (app *chatApp) sendDraft(steer bool) {
 
 func (app *chatApp) attachFiles() {
 	cwd := app.c.cwd
+	if app.c.remoteHost() {
+		cwd, _ = os.UserHomeDir()
+	}
 	go func() {
 		paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{
 			Parent:      currentWindow(),
-			Title:       "Add files",
+			Title:       tr("Add files"),
 			DefaultPath: cwd,
-			ButtonLabel: "Attach",
+			ButtonLabel: tr("Attach"),
 			Multiple:    true,
 		})
 		if err == nil && len(paths) > 0 {
@@ -352,10 +408,15 @@ func (app *chatApp) openProjectDialog() {
 	app.projectPath = app.workspace
 	app.projectError = ""
 	app.projectDialog = true
+	app.projectBrowse, app.projectDirectories = false, nil
 	app.closeMenus()
 }
 
 func (app *chatApp) openWorkspace() {
+	if app.c.remoteHost() {
+		app.openSurface(app.panel(), surfaceFiles)
+		return
+	}
 	path := app.workspace
 	go func() {
 		for _, name := range []string{"code", "zed"} {
@@ -374,13 +435,17 @@ func (app *chatApp) openWorkspace() {
 }
 
 func (app *chatApp) browseProject() {
+	if app.c.remoteHost() {
+		app.browseServerProject(app.projectPath)
+		return
+	}
 	start := app.workspace
 	go func() {
 		paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{
 			Parent:            currentWindow(),
-			Title:             "Select project directory",
+			Title:             tr("Select project directory"),
 			DefaultPath:       start,
-			ButtonLabel:       "Choose",
+			ButtonLabel:       tr("Choose"),
 			Directory:         true,
 			CreateDirectories: true,
 		})
@@ -454,6 +519,15 @@ func (app *chatApp) newThreadIn(p Project) {
 
 // view is the window: the sidebar beside the conversation.
 func (app *chatApp) view(ctx *ui.Context) {
+	if !app.mobile {
+		hub := app.ensureDesktopWorkspaces()
+		if hub.active != app {
+			hub.active.view(ctx)
+			return
+		}
+		ctx = ctx.Key("workspace:" + hub.store.Active)
+	}
+	useInterfaceLanguage(ctx)
 	app.markVisibleThreadRead()
 	if app.memoryRevisionSeen != app.c.memoryRevision {
 		app.memoryRevisionSeen = app.c.memoryRevision
@@ -480,8 +554,12 @@ func (app *chatApp) view(ctx *ui.Context) {
 		}
 	})
 	app.projectDialogView(ctx)
+	if app.workspaceHub != nil {
+		app.workspaceHub.dialog(ctx)
+	}
 	app.conversationSwitcherView(ctx)
 	app.shortcutHelpView(ctx)
+	app.commandPaletteView(ctx)
 	app.registerDesktopShortcuts(ctx)
 }
 

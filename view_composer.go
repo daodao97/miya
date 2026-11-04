@@ -19,9 +19,9 @@ func (app *chatApp) composerArea(c *ui.Context) {
 			if cur.ID == 0 {
 				ui.Text(c, tr("A few ideas to get started")).AlignSelf(ui.End).FontSize(11).TextColor(muted)
 				ui.Row(c).Gap(10).Children(func() {
-					app.suggestion(c.Key("snake"), "device-gamepad-2", "Create a classic snake game", "Create a classic snake game in this project.")
-					app.suggestion(c.Key("bug"), "bug", "Find and fix a bug in my code", "Find and fix a bug in my code. Explain the root cause and verify the fix.")
-					app.suggestion(c.Key("pdf"), "file-text", "Summarize this app in a PDF", "Summarize this app in a one-page PDF.")
+					app.suggestion(c.Key("snake"), "device-gamepad-2", tr("Create a classic snake game"), tr("Create a classic snake game in this project."))
+					app.suggestion(c.Key("bug"), "bug", tr("Find and fix a bug in my code"), tr("Find and fix a bug in my code. Explain the root cause and verify the fix."))
+					app.suggestion(c.Key("pdf"), "file-text", tr("Summarize this app in a PDF"), tr("Summarize this app in a one-page PDF."))
 				})
 			}
 			ui.Column(c).Gap(8).Children(func() {
@@ -39,14 +39,15 @@ func (app *chatApp) composerArea(c *ui.Context) {
 			})
 			app.queueView(c, cur)
 			app.taskStatus(c, cur)
+			app.collaborationTasks(c, cur)
 			if cur.ReadOnly {
 				ui.Row(c).AlignItems(ui.Center).Padding(18).Gap(12).Border(1, line).Radius(16).Children(func() {
 					icon(c, "lock", 18, muted)
 					ui.Column(c).Grow(1).Gap(4).Children(func() {
-						ui.Text(c, "已在另一个应用中打开").FontWeight(600)
-						mutedText(c, "请先在那边关闭对话，才能在这里继续。")
+						ui.Text(c, tr("Open in another app")).FontWeight(600)
+						mutedText(c, tr("Close the conversation there before continuing here."))
 					})
-					if quiet(c.Key("retry-readonly")).Disabled(cur.Loading).Children(func() { ui.Text(c, "重试") }).Clicked() {
+					if quiet(c.Key("retry-readonly")).Disabled(cur.Loading).Children(func() { ui.Text(c, tr("Retry")) }).Clicked() {
 						cc.resume(cur, nil)
 					}
 				})
@@ -85,7 +86,7 @@ func (app *chatApp) composerBox(c *ui.Context) {
 		}
 		app.composerInput(c)
 		ui.Row(c).AlignItems(ui.Center).Gap(2).Children(func() {
-			if toolButton(c.Key("attach"), "plus", "Add context").Clicked() {
+			if toolButton(c.Key("attach"), "plus", tr("Add context")).Clicked() {
 				app.attachFiles()
 			}
 			app.agentPicker(c)
@@ -100,19 +101,19 @@ func (app *chatApp) composerBox(c *ui.Context) {
 			}
 			hasDraft := strings.TrimSpace(cc.draft()) != "" || len(cc.attachments()) > 0
 			stopping := cur.Busy && !hasDraft
-			label, symbol := "Send message", "arrow-up"
+			label, symbol := tr("Send message"), "arrow-up"
 			switch {
 			case stopping:
-				label, symbol = "Stop response", "x"
+				label, symbol = tr("Stop response"), "x"
 			case cur.Busy:
-				label = "加入队列"
+				label = tr("Add to queue")
 			}
 			disabled := cur.ReadOnly || cur.TaskPending || !cc.backendReady() || (!cur.Busy && (cur.Loading || !hasDraft))
 			if cur.Busy && hasDraft {
-				q := quiet(c.Key("steer-draft")).Label("立即引导").Tooltip("把消息插入当前回合 · ⌘Enter")
+				q := quiet(c.Key("steer-draft")).Label(tr("Steer now")).Tooltip(tr("Insert message into the current turn · ⌘Enter"))
 				q.Children(func() {
 					icon(c, "arrow-up", 14, muted)
-					ui.Text(c, "立即引导")
+					ui.Text(c, tr("Steer now"))
 				})
 				if q.Clicked() {
 					app.sendDraft(true)
@@ -142,13 +143,19 @@ func (app *chatApp) attachmentPreview(c *ui.Context, path string) {
 	name := filepath.Base(path)
 	if strings.HasPrefix(mime.TypeByExtension(filepath.Ext(path)), "image/") {
 		ui.Box(c).Size(160, 120).Shrink(0).Children(func() {
-			if img := cachedImage(path); img != nil {
+			var img ui.ImageSource
+			if strings.HasPrefix(path, "miya-server:") {
+				img = app.remoteMessageImage(serverAttachmentSource(path))
+			} else {
+				img = cachedImage(path)
+			}
+			if img != nil {
 				ui.Image(c, img).Size(160, 120).Fit(ui.Cover).Radius(8)
 			} else {
 				ui.Box(c).Size(160, 120).Radius(8).Background(bubble)
 			}
 			x := ui.ButtonBase(c.Key("remove")).Absolute().Top(-3).Right(-3).Size(20, 20).Radius(10).Justify(ui.Center).AlignItems(ui.Center).
-				Background(ui.Hex("#303030")).Border(2, canvas).Label("删除附件 " + name).Tooltip("删除附件")
+				Background(ui.Hex("#303030")).Border(2, canvas).Label(tr("Remove attachment ") + name).Tooltip(tr("Remove attachment"))
 			if x.Hovered() {
 				x.Background(ui.Hex("#505050"))
 			}
@@ -159,7 +166,7 @@ func (app *chatApp) attachmentPreview(c *ui.Context, path string) {
 	}
 	ui.Row(c).AlignItems(ui.Center).Gap(4).MinWidth(0).Padding(4).Border(1, line).Radius(8).Children(func() {
 		ui.Text(c, name).MaxWidth(200).SingleLine().Ellipsis("…").TextColor(muted).FontSize(11)
-		x := quiet(c.Key("remove")).Size(24, 24).PaddingX(3).Justify(ui.Center).Label("删除附件 " + name).Tooltip("删除附件")
+		x := quiet(c.Key("remove")).Size(24, 24).PaddingX(3).Justify(ui.Center).Label(tr("Remove attachment ") + name).Tooltip(tr("Remove attachment"))
 		x.Children(func() { icon(c, "x", 14, muted) })
 		x.OnClick(remove)
 	})
@@ -221,13 +228,25 @@ func (m *completion) editAt(app *chatApp, value string, end int) {
 		m.state = app.commandMenuState()
 		return
 	}
-	m.state = "Searching project files…"
+	if m.token.Kind == '#' {
+		if capability := c.collaborationCapabilities(); capability == nil || capability.Version < 1 {
+			m.close()
+			return
+		}
+		m.choices = agentChoices(m.token.Query, nil)
+		return
+	}
+	m.state = tr("Searching project files…")
 	// Conversations of the workspace come first; files follow as found.
 	refs := app.threadChoices(m.token.Query)
 	m.choices = refs
 	ctx, stop := context.WithTimeout(c.ctx, 4*time.Second)
 	m.cancel = stop
 	version, root, query := m.generation, c.cwd, m.token.Query
+	var host *serviceClient
+	if c.remoteHost() {
+		host = c.remote
+	}
 	go func() {
 		defer stop()
 		timer := time.NewTimer(120 * time.Millisecond)
@@ -237,18 +256,24 @@ func (m *completion) editAt(app *chatApp, value string, end int) {
 		case <-ctx.Done():
 			return
 		}
-		files, err := indexProjectFiles(ctx, root)
+		var files []string
+		var err error
+		if host == nil {
+			files, err = indexProjectFiles(ctx, root)
+		} else {
+			err = host.call("host", hostRequest{Action: "index", Project: root}, &files)
+		}
 		results := fileChoices(files, query)
 		c.dispatch(func() {
 			if m.generation != version || c.cwd != root {
 				return
 			}
 			if err != nil {
-				m.state = "Unable to search files: " + err.Error()
+				m.state = tr("Unable to search files: ") + err.Error()
 				return
 			}
 			m.choices = append(append([]composerChoice(nil), refs...), results...)
-			m.state = "No matching files"
+			m.state = tr("No matching files")
 		})
 	}()
 }
@@ -261,6 +286,10 @@ func (m *completion) choose(app *chatApp, index int) {
 	}
 	choice, token, value := m.choices[index], m.token, m.source
 	m.close()
+	if token.Kind == '#' {
+		c.rememberDraft(insertAgentReference(value, token, choice.Agent, choice.Name))
+		return
+	}
 	if token.Kind == '@' {
 		if choice.Ref != nil {
 			c.rememberDraft(insertThreadReference(value, token, *choice.Ref, choice.Name))
@@ -288,11 +317,11 @@ func (app *chatApp) composerInput(c *ui.Context) {
 	cur := cc.current()
 	m := &app.complete
 	m.input.commands = app.knownCommandChoices("")
-	placeholder := "输入消息… / 命令 · @ 文件"
+	placeholder := tr("Message… / Commands · @ Files")
 	if cur.Busy {
-		placeholder = "Enter 加入队列，⌘Enter 立即引导"
+		placeholder = tr("Enter to queue, ⌘Enter to steer now")
 	}
-	label := "Message " + cc.currentBackend().Name()
+	label := tr("Message ") + cc.currentBackend().Name()
 	ui.Column(c).FillWidth().MinWidth(0).Gap(4).Children(func() {
 		width := min(float32(744), max(200, c.Root().Bounds().W-340))
 		in := app.threadInput(c.Key("composer"), &m.input, cc.draft(), fmt.Sprintf("%s:%d:%s", cc.cwd, cur.ID, cc.currentAgent()), label, placeholder, 13, width, 2, 10, func(text string) {
@@ -355,11 +384,14 @@ func (app *chatApp) composerInput(c *ui.Context) {
 			panel.AttachTo(in, ui.AnchorTopLeft, ui.AnchorBottomLeft).Margin(0, 0, 20, 0).
 				Width(420).Padding(8).Gap(4).Background(canvas).Border(1, border).Radius(12).Shadow(0, 8, 24, 0, shadow)
 			title := tr("Commands")
+			if m.token.Kind == '#' {
+				title = tr("Agents")
+			}
 			if m.token.Kind == '@' {
 				title = tr("Project files")
 				for _, choice := range m.choices {
 					if choice.Ref != nil {
-						title = "对话与项目文件"
+						title = tr("Conversations and project files")
 						break
 					}
 				}
@@ -373,6 +405,9 @@ func (app *chatApp) composerInput(c *ui.Context) {
 				for i := start; i < end; i++ {
 					item := m.choices[i]
 					text, detail := "/"+item.Name, item.Detail
+					if m.token.Kind == '#' {
+						text = "#" + item.Name
+					}
 					if m.token.Kind == '@' {
 						text, detail = item.Name, ""
 						if item.Ref != nil {
@@ -380,6 +415,9 @@ func (app *chatApp) composerInput(c *ui.Context) {
 						}
 					}
 					key := item.Name
+					if item.Agent != "" {
+						key = item.Agent
+					}
 					if item.Ref != nil {
 						key = item.Ref.URL()
 					}
@@ -398,7 +436,7 @@ func (app *chatApp) composerInput(c *ui.Context) {
 					}
 				}
 			}
-			ui.Text(c, fmt.Sprintf("↑ ↓ select · Enter / Tab confirm · Esc close    %d results", len(m.choices))).FontSize(10).TextColor(muted).Padding(6)
+			ui.Text(c, fmt.Sprintf(tr("↑ ↓ select · Enter / Tab confirm · Esc close    %d results"), len(m.choices))).FontSize(10).TextColor(muted).Padding(6)
 		})
 		if !open && m.open {
 			m.close()
@@ -450,11 +488,11 @@ func (app *chatApp) effortPicker(c *ui.Context) {
 	cc := app.c
 	b := cc.currentBackend()
 	app.picker(c.Key("effort"), &app.effortOpen, 220, func() {
-		ui.Text(c, firstNonEmpty(b.Effort(cc), "默认强度")).TextColor(muted).FontSize(11)
+		ui.Text(c, tr(firstNonEmpty(b.Effort(cc), "Default effort"))).TextColor(muted).FontSize(11)
 		icon(c, "chevron-down", 12, muted)
 	}, func() {
 		ui.Text(c, tr("Thinking")).FontWeight(600)
-		app.choiceList(c, b.EffortChoices(cc), b.Effort(cc), func(v string) string { return firstNonEmpty(v, "默认") }, func(v string) { b.SetEffort(cc, v); app.effortOpen = false })
+		app.choiceList(c, b.EffortChoices(cc), b.Effort(cc), func(v string) string { return tr(firstNonEmpty(v, "Default")) }, func(v string) { b.SetEffort(cc, v); app.effortOpen = false })
 	})
 }
 
@@ -515,7 +553,7 @@ func (app *chatApp) permissionsPicker(c *ui.Context) {
 	ui.PopoverBase(c, b, &app.permissionsOpen, func(p ui.Element) {
 		p.AttachTo(b, ui.AnchorTopRight, ui.AnchorBottomRight).Margin(0, 0, 10, 0).
 			Width(390).Padding(16).Gap(10).Background(canvas).Border(1, border).Radius(12).Shadow(0, 8, 24, 0, shadow)
-		title := cc.currentBackend().Name() + " 的权限"
+		title := cc.currentBackend().Name() + tr(" permissions")
 		ui.Text(c, title).FontWeight(600)
 		permissionOptions(c, selected, func(v string) {
 			cc.setCurrentPermissionPolicy(v)
@@ -531,9 +569,9 @@ type permissionChoice struct {
 
 func permissionChoices() []permissionChoice {
 	return []permissionChoice{
-		{value: "on-request", title: "需要时询问", detail: "编辑外部文件和使用互联网时始终询问", icon: "hand-stop", color: muted},
-		{value: "on-failure", title: "自动审批", detail: "仅对检测到的风险操作请求批准", icon: "shield-check", color: muted},
-		{value: "never", title: "完全访问", detail: "可不受限制地访问互联网和你电脑上的任何文件", icon: "shield-exclamation", color: ui.Hex("#db6b3d")},
+		{value: "on-request", title: tr("Ask when needed"), detail: tr("Always ask before editing external files or accessing the internet"), icon: "hand-stop", color: muted},
+		{value: "on-failure", title: tr("Automatic approval"), detail: tr("Request approval only for detected risky actions"), icon: "shield-check", color: muted},
+		{value: "never", title: tr("Full access"), detail: tr("Unrestricted access to the internet and any file on your computer"), icon: "shield-exclamation", color: ui.Hex("#db6b3d")},
 	}
 }
 

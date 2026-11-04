@@ -64,7 +64,7 @@ func (h *pushHub) persistUnreadLocked() {
 		}
 	}
 	if err != nil {
-		h.lastError = "未读状态保存失败：" + err.Error()
+		h.lastError = "Failed to save unread status: " + err.Error()
 	}
 }
 func (h *pushHub) notificationState(id string) phoneNotificationState {
@@ -93,7 +93,7 @@ func (h *pushHub) markRead(id, key string, version uint64) phoneNotificationStat
 			select {
 			case h.queue <- pushDelivery{Registration: r, BadgeOnly: true}:
 			default:
-				h.lastError = "通知队列已满"
+				h.lastError = "Notification queue is full"
 			}
 		}
 	}
@@ -143,7 +143,7 @@ func (h *pushHub) markAllRead(id string, version uint64) phoneNotificationState 
 			select {
 			case h.queue <- pushDelivery{Registration: r, BadgeOnly: true}:
 			default:
-				h.lastError = "通知队列已满"
+				h.lastError = "Notification queue is full"
 			}
 		}
 	}

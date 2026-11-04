@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"miya/internal/codex"
+	dg "miya/internal/delegation"
 )
 
 //go:embed assets/agents/codex.png
@@ -32,6 +33,11 @@ func resetCodexSession(t *Thread) {
 }
 
 func (c *chatController) resetCodexSessions() {
+	for _, t := range c.allThreads() {
+		if threadAgent(t) == agentCodex && t.ExecutionID != "" {
+			c.managedEvent(t.ExecutionID, dg.Event{State: dg.NeedsAttention, Result: dg.Result{Error: "Codex connection ended before execution could be confirmed"}})
+		}
+	}
 	for path, threads := range c.projectCache {
 		threads = append([]Thread(nil), threads...)
 		for i := range threads {

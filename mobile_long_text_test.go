@@ -53,12 +53,12 @@ func TestMobileLongDraftPaintStaysInsideEditor(t *testing.T) {
 	tt.SetDark(true)
 	tt.SetSafeArea(ui.SafeArea{Top: 59})
 	tt.Frame()
-	if err := tt.Click("消息"); err != nil {
+	if err := tt.Click("Message"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Key(ui.Cmd, ui.KeyEnd)
 	tt.Frame()
-	input, _ := tt.Find("消息")
+	input, _ := tt.Find("Message")
 	header, _ := tt.Find("Codex · proj-a")
 	saveMobileNativeSnapshot(t, tt, "long-draft-keyboard")
 	img := tt.Image()

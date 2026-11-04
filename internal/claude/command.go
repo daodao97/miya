@@ -85,7 +85,7 @@ func splitWords(s string) ([]string, error) {
 		}
 	}
 	if quote != 0 || escaped {
-		return nil, errors.New("启动命令的引号或转义不完整")
+		return nil, errors.New("Incomplete quote or escape in launch command")
 	}
 	if open {
 		words = append(words, b.String())
@@ -130,7 +130,7 @@ func resolve(name string) (string, error) {
 		if executable(name) {
 			return name, nil
 		}
-		return "", fmt.Errorf("找不到可执行文件 %s", name)
+		return "", fmt.Errorf("Executable %s not found", name)
 	}
 	if p, err := exec.LookPath(name); err == nil {
 		return p, nil
@@ -142,9 +142,9 @@ func resolve(name string) (string, error) {
 		}
 	}
 	if name == "claude" {
-		return "", errors.New("未找到 Claude Code，请先安装并登录 Claude Code CLI")
+		return "", errors.New("Claude Code not found. Install and sign in to the Claude Code CLI first.")
 	}
-	return "", fmt.Errorf("找不到命令 %s", name)
+	return "", fmt.Errorf("Command %s not found", name)
 }
 
 func executable(p string) bool {

@@ -72,7 +72,7 @@ func claudeReferenceTitle(text string) string {
 	end := 0
 	for _, mention := range mentions {
 		title.WriteString(text[end:mention.Start])
-		title.WriteString(firstNonEmpty(strings.TrimSpace(mention.Title), "引用对话"))
+		title.WriteString(firstNonEmpty(strings.TrimSpace(mention.Title), "Referenced conversation"))
 		end = mention.End
 	}
 	title.WriteString(text[end:])

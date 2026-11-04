@@ -46,7 +46,7 @@ func (m *mobileApp) receiveMemory(raw json.RawMessage, message string) {
 	var result phoneMemoryResult
 	if err := json.Unmarshal(raw, &result); err != nil {
 		m.memories.loading = false
-		m.memories.err = "记忆数据读取失败"
+		m.memories.err = tr("Failed to load memory")
 		return
 	}
 	state := &m.memories
@@ -76,7 +76,7 @@ func (m *mobileApp) memoryPage(c *ui.Context) {
 	}
 	if state.loading && time.Since(state.requestedAt) > 10*time.Second {
 		state.loading = false
-		state.err = "读取超时，请重试"
+		state.err = tr("Read timed out. Try again.")
 		state.requestedAt = time.Now()
 	}
 	if !state.loading && time.Since(state.requestedAt) > 5*time.Second {
@@ -86,21 +86,21 @@ func (m *mobileApp) memoryPage(c *ui.Context) {
 	p := m.pal
 	ui.Row(c).FillWidth().MinHeight(52).Padding(0, 12).Gap(8).AlignItems(ui.Center).Children(func() {
 		m.navigationBack(c, "/memory")
-		ui.Text(c, "共享记忆").Grow(1).TextAlign(ui.Center).FontSize(m.font(16)).FontWeight(600)
-		if m.homeAction(c, "refresh", "刷新记忆", "refresh").Disabled(!m.connected || !m.state.Memory || state.loading).Clicked() {
+		ui.Text(c, tr("Shared memory")).Grow(1).TextAlign(ui.Center).FontSize(m.font(16)).FontWeight(600)
+		if m.homeAction(c, "refresh", tr("Refresh memory"), "refresh").Disabled(!m.connected || !m.state.Memory || state.loading).Clicked() {
 			m.loadPhoneMemory()
 		}
 	})
 	ui.Scroll(c.Key("memories-content")).FillWidth().Grow(1).MinHeight(0).Children(func() {
 		ui.Column(c).FillWidth().Padding(16, 20, 24, 20).Gap(14).Children(func() {
-			ui.Text(c, "手机端只读；编辑和忘记请使用桌面端。遗忘不会删除 Agent 历史或备份。").FontSize(m.font(13)).TextColor(p.muted).LineHeight(1.5)
-			ui.Row(c).Gap(8).Children(func() {
+			ui.Text(c, tr("Read-only on mobile. Edit or forget memories on your desktop. Forgetting does not delete agent history or backups.")).FontSize(m.font(13)).TextColor(p.muted).LineHeight(1.5)
+			ui.Row(c).FillWidth().Wrap().Gap(8).Role(ui.RoleRadioGroup).Label(tr("Shared memory")).Children(func() {
 				for _, scope := range []string{"project", "user"} {
-					label := "当前项目"
+					label := tr("Current project")
 					if scope == "user" {
-						label = "用户偏好"
+						label = tr("User preferences")
 					}
-					if m.phoneButton(c.Key(scope)).MinHeight(44).Padding(8, 12).Label(label).Children(func() { ui.Text(c, label).FontSize(m.font(14)) }).Clicked() {
+					if m.pill(c, scope, label, state.scope == scope).Role(ui.RoleRadio).Checked(state.scope == scope).Clicked() {
 						state.scope = scope
 						state.list = memoryList{}
 						state.loading = false
@@ -109,11 +109,11 @@ func (m *mobileApp) memoryPage(c *ui.Context) {
 				}
 			})
 			if !m.connected {
-				ui.Text(c, "连接桌面端后查看记忆。").TextColor(p.muted)
+				ui.Text(c, tr("Connect to your desktop to view memory.")).TextColor(p.muted)
 				return
 			}
 			if !m.state.Memory {
-				ui.Text(c, "需要更新桌面端以查看记忆。").TextColor(p.muted)
+				ui.Text(c, tr("Update the desktop app to view memory.")).TextColor(p.muted)
 				return
 			}
 			if state.err != "" {
@@ -121,7 +121,7 @@ func (m *mobileApp) memoryPage(c *ui.Context) {
 				return
 			}
 			if len(state.list.Entries) == 0 {
-				ui.Text(c, "还没有记忆。").TextColor(p.muted)
+				ui.Text(c, tr("No memories yet.")).TextColor(p.muted)
 			}
 			for _, e := range state.list.Entries {
 				ui.Column(c.Key(e.ID)).FillWidth().Padding(16).Gap(8).Radius(14).Background(p.surface).Children(func() {
@@ -129,7 +129,7 @@ func (m *mobileApp) memoryPage(c *ui.Context) {
 					if e.Content != "" {
 						ui.Text(c, e.Content).FontSize(m.font(15)).LineHeight(1.5).Selectable()
 					}
-					ui.Text(c, "信息时间 "+memoryTime(e.ObservedAt)+"\n有效期 "+memoryTime(e.ValidUntil)).FontSize(m.font(12)).TextColor(p.muted)
+					ui.Text(c, tr("As of ")+memoryTime(e.ObservedAt)+tr("\nExpires ")+memoryTime(e.ValidUntil)).FontSize(m.font(12)).TextColor(p.muted)
 					for i, src := range e.Sources {
 						ui.Column(c.Key(i)).Gap(6).Children(func() {
 							if src.Quote != "" {
@@ -144,7 +144,7 @@ func (m *mobileApp) memoryPage(c *ui.Context) {
 									if (ThreadRef{Source: m.state.ReferenceSource, Backend: threadAgent(thread), SessionID: thread.ServerID}) != ref {
 										continue
 									}
-									if m.phoneButton(c.Key("source")).MinHeight(44).Label("来源会话").Children(func() { ui.Text(c, "来源会话").FontSize(m.font(14)) }).Clicked() {
+									if m.phoneButton(c.Key("source")).MinHeight(44).Label(tr("Source conversation")).Children(func() { ui.Text(c, tr("Source conversation")).FontSize(m.font(14)) }).Clicked() {
 										m.openThread(thread)
 									}
 								}

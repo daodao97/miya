@@ -15,7 +15,7 @@ func TestAutomationDraftPromptAndAnswers(t *testing.T) {
 	}
 	_ = os.Mkdir(filepath.Join(dir, "internal"), 0o700)
 	p := automationDraftPrompt("每天 9 点跑测试", dir, atLocal("2026-11-01 10:00"))
-	for _, want := range []string{"go.mod", "internal/", "2026-11-01 10:00 周日", "每天 9 点跑测试", defaultAutomationSchedule} {
+	for _, want := range []string{"go.mod", "internal/", "2026-11-01 10:00 Sun", "每天 9 点跑测试", defaultAutomationSchedule} {
 		if !strings.Contains(p, want) {
 			t.Fatalf("prompt lacks %q:\n%s", want, p)
 		}
@@ -58,7 +58,7 @@ func TestAutomationOps(t *testing.T) {
 	if err := c.automationCall("automationSave", automationRequest{Automation: &draft}, &saved); err != nil {
 		t.Fatal(err)
 	}
-	if saved.ID == "" || saved.ScheduleText != "每天 18:00" || !saved.Next.Equal(atLocal("2026-11-02 18:00")) || len(saved.Upcoming) != 3 || saved.Created.IsZero() {
+	if saved.ID == "" || saved.ScheduleText != "Daily at 18:00" || !saved.Next.Equal(atLocal("2026-11-02 18:00")) || len(saved.Upcoming) != 3 || saved.Created.IsZero() {
 		t.Fatalf("bad saved view: %+v", saved)
 	}
 	if !c.automationsEnabled() {
@@ -88,7 +88,7 @@ func TestAutomationOps(t *testing.T) {
 	}
 	edit := list[0].Automation
 	edit.Schedule = "0 7 * * *"
-	if err := c.automationCall("automationSave", automationRequest{Automation: &edit}, &saved); err != nil || saved.ScheduleText != "每天 7:00" || len(saved.Runs) != 1 {
+	if err := c.automationCall("automationSave", automationRequest{Automation: &edit}, &saved); err != nil || saved.ScheduleText != "Daily at 7:00" || len(saved.Runs) != 1 {
 		t.Fatalf("edit lost runs or schedule: %+v %v", saved, err)
 	}
 	if err := c.automationCall("automationDelete", automationRequest{ID: saved.ID}, nil); err != nil {

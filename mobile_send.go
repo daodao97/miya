@@ -69,9 +69,9 @@ func (m *mobileApp) newSendStatus(c *ui.Context) {
 		ui.Text(c, t.Status).FontSize(m.font(12)).TextColor(m.pal.warn).Padding(6)
 		return
 	}
-	label := "正在同步对话…"
+	label := tr("Syncing conversation…")
 	if m.sending {
-		label = "发送中…"
+		label = tr("Sending…")
 	}
 	ui.Row(c).FillWidth().Justify(ui.Center).AlignItems(ui.Center).Gap(8).Padding(6).Children(func() {
 		ui.Spinner(c).FontSize(m.font(12)).TextColor(m.pal.muted)

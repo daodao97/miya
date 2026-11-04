@@ -21,7 +21,7 @@ var claudeArgs = []string{"-p", "/usage", "--output-format", "json", "--tools", 
 func readClaude(ctx context.Context, binary, home string) ([]Window, error) {
 	dir, err := os.MkdirTemp("", "miya-usage-")
 	if err != nil {
-		return nil, errors.New("无法创建用量读取目录")
+		return nil, errors.New("Unable to create the usage directory")
 	}
 	defer os.RemoveAll(dir)
 	cmd := exec.CommandContext(ctx, binary, claudeArgs...)
@@ -31,7 +31,7 @@ func readClaude(ctx context.Context, binary, home string) ([]Window, error) {
 	var out limitedBuffer
 	cmd.Stdout = &out
 	if err := cmd.Run(); err != nil {
-		return nil, errors.New("Claude 用量读取失败，请检查 CLI 登录")
+		return nil, errors.New("Failed to read Claude usage. Check CLI sign-in.")
 	}
 	return parseClaude(out.Bytes())
 }
@@ -59,7 +59,7 @@ func parseClaude(data []byte) ([]Window, error) {
 	if json.Unmarshal(data, &r) != nil {
 		var all []result
 		if json.Unmarshal(data, &all) != nil {
-			return nil, errors.New("无法识别 Claude 用量数据")
+			return nil, errors.New("Unrecognized Claude usage data")
 		}
 		for _, item := range all {
 			if item.Type == "result" {
@@ -69,7 +69,7 @@ func parseClaude(data []byte) ([]Window, error) {
 	}
 	text := ansiUsage.ReplaceAllString(r.Result, "")
 	if r.IsError || claudeDenied.MatchString(text) {
-		return nil, errors.New("Claude 未返回额度，请检查 CLI 登录")
+		return nil, errors.New("Claude returned no quota. Check CLI sign-in.")
 	}
 	var windows []Window
 	seen := make(map[string]bool)
@@ -78,9 +78,9 @@ func parseClaude(data []byte) ([]Window, error) {
 		if m == nil || m[2] != "" && !strings.EqualFold(m[2], "all models") {
 			continue
 		}
-		name := "5 小时"
+		name := "5 hours"
 		if m[1] != "session" {
-			name = "7 天"
+			name = "7 days"
 		}
 		used, err := strconv.ParseFloat(m[3], 64)
 		if err != nil || seen[name] {
@@ -90,7 +90,7 @@ func parseClaude(data []byte) ([]Window, error) {
 		windows = append(windows, Window{Name: name, Used: Percent(used), Reset: m[4]})
 	}
 	if len(windows) == 0 {
-		return nil, errors.New("当前账号未提供订阅额度")
+		return nil, errors.New("Subscription quota is unavailable for this account")
 	}
 	return windows, nil
 }

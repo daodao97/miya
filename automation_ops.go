@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -86,7 +87,7 @@ func (c *chatController) automationCall(op string, r automationRequest, out any)
 func (c *chatController) automationOp(op string, r automationRequest) (any, error) {
 	s := c.auto
 	if s == nil {
-		return nil, errors.New("自动化需要 Miya 后台服务")
+		return nil, errors.New("Automations require the Miya background service")
 	}
 	now := s.now()
 	switch op {
@@ -98,31 +99,10 @@ func (c *chatController) automationOp(op string, r automationRequest) (any, erro
 		}
 		return views, nil
 	case "automationDraft":
-		request := strings.TrimSpace(r.Request)
-		if request == "" {
-			return nil, errors.New("先写一句要做什么")
-		}
-		project, agent := firstNonEmpty(r.Project, c.cwd), normalizeAgentID(firstNonEmpty(r.Agent, agentCodex))
-		if agent == "" {
-			return nil, errors.New("agent 只能是 codex 或 claude-code")
-		}
-		cfg, ctx := draftConfig{c.claudeBinary, c.claudeArgs, c.claudeEnv}, c.ctx
-		return deferred(func() (any, error) {
-			d, err := draftAutomation(ctx, cfg, agent, project, request, now)
-			if err != nil {
-				return nil, err
-			}
-			a, timeMissing, err := automationFromDraft(d, agent, project, request)
-			if err != nil {
-				return nil, err
-			}
-			v := automationViewOf(a, nil, false, now)
-			v.TimeMissing = timeMissing
-			return v, nil
-		}), nil
+		return c.prepareAutomationDraft(c.ctx, r)
 	case "automationSave":
 		if r.Automation == nil {
-			return nil, errors.New("没有要保存的自动化")
+			return nil, errors.New("No automation to save")
 		}
 		a, err := c.saveAutomation(*r.Automation)
 		if err != nil {
@@ -132,7 +112,7 @@ func (c *chatController) automationOp(op string, r automationRequest) (any, erro
 	case "automationToggle":
 		i, ok := s.store.find(r.ID)
 		if !ok {
-			return nil, errors.New("没有这个自动化")
+			return nil, errors.New("Automation not found")
 		}
 		a := &s.store.Automations[i]
 		if r.Enabled && !a.Enabled {
@@ -156,17 +136,51 @@ func (c *chatController) automationOp(op string, r automationRequest) (any, erro
 	case "automationRunNow":
 		return nil, c.startAutomationRun(r.ID, false)
 	}
-	return nil, errors.New("未知的自动化操作 " + op)
+	return nil, errors.New("Unknown automation operation: " + op)
+}
+
+// Capture configuration on the main thread; run the returned work elsewhere.
+func (c *chatController) prepareAutomationDraft(ctx context.Context, r automationRequest) (deferred, error) {
+	if c.auto == nil {
+		return nil, errors.New("Automations require the Miya background service")
+	}
+	request := strings.TrimSpace(r.Request)
+	if request == "" {
+		return nil, errors.New("Describe what you want to do first")
+	}
+	project, agent := firstNonEmpty(r.Project, c.cwd), normalizeAgentID(firstNonEmpty(r.Agent, agentCodex))
+	if agent == "" {
+		return nil, errors.New("Agent must be codex or claude-code")
+	}
+	cfg, now := draftConfig{c.claudeBinary, c.claudeArgs, c.claudeEnv}, c.auto.now()
+	return deferred(func() (any, error) {
+		d, err := draftAutomation(ctx, cfg, agent, project, request, now)
+		if err != nil {
+			return nil, err
+		}
+		a, timeMissing, err := automationFromDraft(d, agent, project, request)
+		if err != nil {
+			return nil, err
+		}
+		v := automationViewOf(a, nil, false, now)
+		v.TimeMissing = timeMissing
+		return v, nil
+	}), nil
 }
 
 // saveAutomation creates an automation or changes one, keeping what its
 // runs recorded.
 func (c *chatController) saveAutomation(a Automation) (Automation, error) {
+	return c.saveAutomationWithCreateID(a, "")
+}
+
+// createID lets a phone retry an interrupted creation without adding it twice.
+func (c *chatController) saveAutomationWithCreateID(a Automation, createID string) (Automation, error) {
 	s := c.auto
 	now := s.now()
 	i, exists := s.store.find(a.ID)
 	if !exists {
-		a.ID, a.Created, a.Due = "", now, now
+		a.ID, a.Created, a.Due = createID, now, now
 	}
 	if err := a.normalize(); err != nil {
 		return Automation{}, err

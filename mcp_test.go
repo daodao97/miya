@@ -66,7 +66,7 @@ func TestMCPServerHandshakeAndTools(t *testing.T) {
 	for _, tool := range res["2"]["result"].(map[string]any)["tools"].([]any) {
 		names = append(names, tool.(map[string]any)["name"].(string))
 	}
-	if strings.Join(names, ",") != "request_desktop_control,runtime_info,list_threads,read_thread,thread_status,delegate,list_automations,create_automation,update_automation,report_result,search_memory,remember,forget_memory" {
+	if strings.Join(names, ",") != "request_desktop_control,runtime_info,list_threads,read_thread,thread_status,delegate,list_automations,create_automation,update_automation,report_result,list_agents,start_task,read_task,wait_task,send_thread,cancel_task,resolve_task,watch_task,unwatch_task,list_tasks,search_memory,remember,forget_memory" {
 		t.Fatalf("bad tools: %v", names)
 	}
 	if res[`"p"`]["result"] == nil || res["3"]["error"].(map[string]any)["code"] != float64(-32601) || res["null"]["error"] == nil {
@@ -102,7 +102,7 @@ func TestMCPDelegateRetriesThenWaitsForTheReply(t *testing.T) {
 	}
 	res := mcpExchange(t, call, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"delegate","arguments":{"task":"写测试","agent":"codex","include_context":false}}}`)
 	text, isErr := mcpText(t, res["1"])
-	if isErr || !strings.Contains(text, "已交付到会话 创建中（Codex）") || !strings.Contains(text, "已完成") || !strings.Contains(text, "测试都加好了") {
+	if isErr || !strings.Contains(text, "Handed off to session Creating (Codex)") || !strings.Contains(text, "Completed") || !strings.Contains(text, "测试都加好了") {
 		t.Fatalf("bad delegate result: %q", text)
 	}
 	if strings.Join(ops, ",") != "mcpDelegate,mcpDelegate,mcpStatus,mcpStatus,mcpStatus" {
@@ -112,10 +112,10 @@ func TestMCPDelegateRetriesThenWaitsForTheReply(t *testing.T) {
 
 func TestMCPToolErrorsAreToolResults(t *testing.T) {
 	call := func(op string, args, out any) error {
-		return errors.New("Miya 后台服务没有运行：请先打开 Miya")
+		return errors.New("Miya background service is not running. Open Miya first.")
 	}
 	res := mcpExchange(t, call, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_threads","arguments":{}}}`)
-	if text, isErr := mcpText(t, res["1"]); !isErr || !strings.Contains(text, "后台服务没有运行") {
+	if text, isErr := mcpText(t, res["1"]); !isErr || !strings.Contains(text, "background service is not running") {
 		t.Fatalf("error not reported to the agent: %q %v", text, isErr)
 	}
 }
@@ -154,11 +154,11 @@ func TestMCPDelegateHandsWorkWithTheCallersContext(t *testing.T) {
 		th.Messages = append(th.Messages, Message{ID: c.nextID(), Role: "tool", Kind: "mcpToolCall", Status: "inProgress", Item: &codex.Item{Server: "miya", Tool: "delegate"}})
 	})
 	c.update(1, func(th *Thread) { th.Messages[len(th.Messages)-2].Status = "completed" })
-	if _, err := c.mcpHandle("mcpDelegate", mcpRequest{Tool: "delegate", Task: "回去", Thread: 1}); err == nil || !strings.Contains(err.Error(), "上游") {
+	if _, err := c.mcpHandle("mcpDelegate", mcpRequest{Tool: "delegate", Task: "回去", Thread: 1}); err == nil || !strings.Contains(err.Error(), "delegated this task to you") {
 		t.Fatalf("work went back up: %v", err)
 	}
 	c.delegationParent[3], c.delegationParent[1] = 2, 3
-	if _, err := c.mcpHandle("mcpDelegate", mcpRequest{Tool: "delegate", Task: "再往下"}); err == nil || !strings.Contains(err.Error(), "最多") {
+	if _, err := c.mcpHandle("mcpDelegate", mcpRequest{Tool: "delegate", Task: "再往下"}); err == nil || !strings.Contains(err.Error(), "limited to") {
 		t.Fatalf("delegation went too deep: %v", err)
 	}
 }
@@ -183,7 +183,7 @@ func TestMCPDelegateTracksOnlyTheCallerWithOrWithoutContext(t *testing.T) {
 			}
 			source := c.threadWithID(1)
 			last := source.Messages[len(source.Messages)-1]
-			if last.Kind != "handoff" || len(last.Agents) != 1 || last.Agents[0].Status != subAgentRunning || last.Agents[0].Name != "给登录补测试" || activityTitle(last) != "已交付到对话「测试」" {
+			if last.Kind != "handoff" || len(last.Agents) != 1 || last.Agents[0].Status != subAgentRunning || last.Agents[0].Name != "给登录补测试" || activityTitle(last) != "Handed off to conversation \"测试\"" {
 				t.Fatalf("explicit delegation not tracked: %+v", last)
 			}
 			_, snapshots := splitReferenceContext(c.threadWithID(2).Queue[0].Text)
@@ -212,7 +212,7 @@ func TestMCPDelegateNeedsAVisibleCaller(t *testing.T) {
 	if _, err := c.mcpHandle("mcpDelegate", mcpRequest{Tool: "read_thread", Task: "x"}); err == nil || err.Error() != mcpCallerUnknown {
 		t.Fatalf("unknown caller not reported: %v", err)
 	}
-	if _, err := c.mcpHandle("mcpDelegate", mcpRequest{Tool: "delegate", Task: "x", Agent: "gemini"}); err == nil || !strings.Contains(err.Error(), "没有 agent") {
+	if _, err := c.mcpHandle("mcpDelegate", mcpRequest{Tool: "delegate", Task: "x", Agent: "gemini"}); err == nil || !strings.Contains(err.Error(), "not found") {
 		t.Fatalf("unknown agent accepted: %v", err)
 	}
 }

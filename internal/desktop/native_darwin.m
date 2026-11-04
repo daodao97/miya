@@ -178,7 +178,7 @@ int miya_desktop_windows(char **json) { @autoreleasepool {
         NSRunningApplication *app = [NSRunningApplication runningApplicationWithProcessIdentifier:pid];
         if ([app.bundleIdentifier isEqualToString:@"com.daodao.miya"]) continue;
         if ([@[@"com.apple.dock",@"com.apple.systemuiserver",@"com.apple.controlcenter",@"com.apple.notificationcenterui",@"com.apple.WindowManager"] containsObject:app.bundleIdentifier ?: @""]) continue;
-        NSString *name = app.localizedName ?: info[(id)kCGWindowOwnerName] ?: @"应用";
+        NSString *name = app.localizedName ?: info[(id)kCGWindowOwnerName] ?: @"App";
         NSString *title = info[(id)kCGWindowName] ?: name;
         [result addObject:@{@"id": info[(id)kCGWindowNumber], @"pid": @(pid), @"app": name, @"title": title, @"bundleId": app.bundleIdentifier ?: @""}];
         if (result.count >= 100) break;

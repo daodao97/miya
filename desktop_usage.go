@@ -93,14 +93,24 @@ func (app *chatApp) refreshUsage() {
 	app.invalidateUsageViews()
 	ctx, cancel := context.WithCancel(context.Background())
 	d.cancel = cancel
+	var cl *serviceClient
+	if app.c.remoteHost() {
+		cl = app.c.remote
+	}
 	go func() {
 		defer cancel()
 		readings := make([]agentusage.Reading, 2)
-		var wg sync.WaitGroup
-		for i, agent := range []string{"codex", "claude"} {
-			wg.Go(func() { readings[i] = agentusage.Read(ctx, agent) })
+		if cl != nil {
+			if err := cl.call("host", hostRequest{Action: "usage"}, &readings); err != nil {
+				readings = []agentusage.Reading{{Agent: "codex", Error: err.Error()}, {Agent: "claude", Error: err.Error()}}
+			}
+		} else {
+			var wg sync.WaitGroup
+			for i, agent := range []string{"codex", "claude"} {
+				wg.Go(func() { readings[i] = agentusage.Read(ctx, agent) })
+			}
+			wg.Wait()
 		}
-		wg.Wait()
 		// The tray also runs while the main window is hidden or closed.
 		mygo.RunOnMain(func() {
 			if d.closed {
@@ -151,21 +161,21 @@ func usageTrayTitle(r *agentusage.Reading) string {
 
 func usageTrayTip(r *agentusage.Reading) string {
 	if r == nil {
-		return "Miya · 暂无额度数据\n点击查看"
+		return tr("Miya · No usage data\nClick to view")
 	}
 	lines := []string{"Miya · " + usageAgentName(r.Agent)}
 	for _, w := range r.Windows {
-		text := fmt.Sprintf("%s · 剩余 %d%%", w.Name, remainingUsage(w.Used))
+		text := fmt.Sprintf(tr("%s · %d%% remaining"), w.Name, remainingUsage(w.Used))
 		if w.Reset != "" {
-			text += " · " + w.Reset + " 重置"
+			text += " · " + w.Reset + tr(" reset")
 		}
 		lines = append(lines, text)
 	}
 	if r.Resets != nil {
-		lines = append(lines, fmt.Sprintf("%d 张重置卡", r.Resets.Count))
+		lines = append(lines, fmt.Sprintf(tr("%d reset cards"), r.Resets.Count))
 	}
 	if !r.At.IsZero() {
-		lines = append(lines, r.At.Local().Format("15:04")+" 更新")
+		lines = append(lines, r.At.Local().Format("15:04")+tr(" updated"))
 	}
 	return strings.Join(lines, "\n")
 }
@@ -196,7 +206,7 @@ func (app *chatApp) syncUsageTray() {
 		}
 	}
 	tip, title := usageTrayTip(r), usageTrayTitle(r)
-	key := agent + "\x00" + title + "\x00" + tip
+	key := agent + "\x00" + title + "\x00" + tip + "\x00" + tr("Usage")
 	if d.tray != nil && d.trayKey == key {
 		return
 	}
@@ -208,18 +218,13 @@ func (app *chatApp) syncUsageTray() {
 			return
 		}
 		d.tray = tray
-		menu := mygo.NewMenu([]*mygo.MenuItem{
-			{Label: "用量", Click: func(*mygo.MenuItem, *mygo.Window) { app.toggleUsagePanel() }},
-			{Label: "打开 Miya", Click: func(*mygo.MenuItem, *mygo.Window) { app.closeUsagePanel(); app.showMainWindow() }},
-			{Label: "用量设置", Click: func(*mygo.MenuItem, *mygo.Window) { app.openUsageSettingsFromPanel() }},
-			mygo.Separator(),
-			{Label: "退出 Miya", Click: func(*mygo.MenuItem, *mygo.Window) { mygo.App.Quit() }},
-		})
+
 		if runtime.GOOS == "linux" {
-			tray.SetMenu(menu)
+			tray.SetMenu(app.usageTrayMenu())
 		} else {
 			tray.OnClick(app.toggleUsagePanel)
 			tray.OnRightClick(func() {
+				menu := app.usageTrayMenu()
 				app.closeUsagePanel()
 				tray.SetMenu(menu)
 				defer tray.SetMenu(nil)
@@ -230,6 +235,9 @@ func (app *chatApp) syncUsageTray() {
 		_ = d.tray.SetIcon(png, true)
 		d.tray.SetTitle(title)
 		d.tray.SetToolTip(tip)
+		if runtime.GOOS == "linux" {
+			d.tray.SetMenu(app.usageTrayMenu())
+		}
 	}
 	d.trayKey = key
 }
@@ -251,4 +259,14 @@ func (app *chatApp) openUsageSettingsFromPanel() {
 	app.section, app.settingsTab = "Settings", 3
 	app.closeMenus()
 	app.showMainWindow()
+}
+
+func (app *chatApp) usageTrayMenu() *mygo.Menu {
+	return mygo.NewMenu([]*mygo.MenuItem{
+		{Label: tr("Usage"), Click: func(*mygo.MenuItem, *mygo.Window) { app.toggleUsagePanel() }},
+		{Label: tr("Open Miya"), Click: func(*mygo.MenuItem, *mygo.Window) { app.closeUsagePanel(); app.showMainWindow() }},
+		{Label: tr("Usage settings"), Click: func(*mygo.MenuItem, *mygo.Window) { app.openUsageSettingsFromPanel() }},
+		mygo.Separator(),
+		{Label: tr("Quit Miya"), Click: func(*mygo.MenuItem, *mygo.Window) { mygo.App.Quit() }},
+	})
 }

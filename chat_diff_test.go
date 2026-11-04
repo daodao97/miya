@@ -88,7 +88,7 @@ func TestCompletedResponseShowsDiffStats(t *testing.T) {
 	app.mobile = true
 	phone := ui.NewTester(func(c *ui.Context) { app.groupView(c, groupMessages(app.c.current().Messages)[0]) }, 320, 200)
 	phone.Frame()
-	for _, label := range []string{"+2", "−1", "Copy response", "交付到新对话"} {
+	for _, label := range []string{"+2", "−1", "Copy response", "Hand off to a new conversation"} {
 		r, ok := phone.Find(label)
 		if !ok || r.X < 0 || r.X+r.W > 320 {
 			t.Fatalf("phone footer overflow: %s %v", label, r)

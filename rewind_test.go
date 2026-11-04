@@ -221,10 +221,10 @@ func TestEditMessageInPlace(t *testing.T) {
 	}
 	tt.Move(r.X+4, r.Y+4)
 	tt.Frame()
-	if err := tt.Click("编辑消息"); err != nil {
+	if err := tt.Click("Edit message"); err != nil {
 		t.Fatalf("no edit button: %v", err)
 	}
-	if app.editing != 10 || app.editText != "original prompt" || !tt.HasText("从这条消息重新开始。之后的消息会删除，Miya 不会撤销已经改动的文件。") {
+	if app.editing != 10 || app.editText != "original prompt" || !tt.HasText("Restart from this message. Later messages will be deleted. Miya will not undo file changes already made.") {
 		t.Fatalf("editor not open: %d %q", app.editing, app.editText)
 	}
 	tt.Key(0, ui.KeyEscape)
@@ -234,13 +234,13 @@ func TestEditMessageInPlace(t *testing.T) {
 	}
 	app.startEdit(c.current().Messages[0])
 	tt.Frame()
-	if err := tt.Click("取消"); err != nil || app.editing != 0 {
+	if err := tt.Click("Cancel"); err != nil || app.editing != 0 {
 		t.Fatalf("Cancel did not close the editor: %v", err)
 	}
 	c.update(1, func(t *Thread) { t.Busy = true })
 	tt.Move(r.X+4, r.Y+4)
 	tt.Frame()
-	if _, ok := tt.Find("编辑消息"); ok {
+	if _, ok := tt.Find("Edit message"); ok {
 		t.Fatal("edit offered while the conversation runs")
 	}
 }

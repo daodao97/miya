@@ -27,11 +27,11 @@ var phoneImageExts = map[string]bool{".png": true, ".jpg": true, ".jpeg": true, 
 func checkPhoneImages(n, size, total int) error {
 	switch {
 	case n > maxPhoneImages:
-		return fmt.Errorf("一次最多发送 %d 张图片", maxPhoneImages)
+		return fmt.Errorf("Send up to %d images at a time", maxPhoneImages)
 	case size > maxPhoneImageBytes:
-		return fmt.Errorf("单张图片不能超过 %d MB", maxPhoneImageBytes>>20)
+		return fmt.Errorf("Each image must be at most %d MB", maxPhoneImageBytes>>20)
 	case total > maxPhoneImageTotal:
-		return fmt.Errorf("图片合计不能超过 %d MB", maxPhoneImageTotal>>20)
+		return fmt.Errorf("Total image size must be at most %d MB", maxPhoneImageTotal>>20)
 	}
 	return nil
 }
@@ -46,7 +46,7 @@ func readPhoneImages(paths []string) ([]remote.Image, error) {
 	for _, p := range paths {
 		data, err := os.ReadFile(p)
 		if err != nil {
-			return nil, errors.New("无法读取图片，请重新选择")
+			return nil, errors.New("Unable to read image. Select it again.")
 		}
 		total += len(data)
 		if err := checkPhoneImages(len(paths), len(data), total); err != nil {
@@ -72,7 +72,7 @@ func savePhoneImages(images []remote.Image) (paths []string, err error) {
 		dir = filepath.Join(base, "uploads")
 	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return nil, errors.New("无法保存图片")
+		return nil, errors.New("Unable to save image")
 	}
 	pruneOldUploads(dir)
 	defer func() {
@@ -101,12 +101,12 @@ func savePhoneImages(images []remote.Image) (paths []string, err error) {
 			case "image/webp":
 				ext = ".webp"
 			default:
-				return paths, errors.New("不支持的图片格式")
+				return paths, errors.New("Unsupported image format")
 			}
 		}
 		f, ferr := os.CreateTemp(dir, "phone-*"+ext)
 		if ferr != nil {
-			return paths, errors.New("无法保存图片")
+			return paths, errors.New("Unable to save image")
 		}
 		path := f.Name()
 		_, werr := f.Write(img.Data)
@@ -115,7 +115,7 @@ func savePhoneImages(images []remote.Image) (paths []string, err error) {
 		}
 		if werr != nil {
 			os.Remove(path)
-			return paths, errors.New("无法保存图片")
+			return paths, errors.New("Unable to save image")
 		}
 		if (ext == ".heic" || ext == ".heif") && runtime.GOOS == "darwin" {
 			jpg := strings.TrimSuffix(path, ext) + ".jpg"

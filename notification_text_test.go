@@ -41,16 +41,16 @@ func TestCompletionNoticeUsesOnlyCurrentFinalReply(t *testing.T) {
 		{Role: "assistant", TurnID: "current", Content: "我来检查。", Item: &codex.Item{Phase: "commentary"}},
 		{Role: "assistant", TurnID: "foreign", Content: "其他轮结果。"},
 	}}
-	if got := completionNoticeBody(old, next); got != "任务：修复手机按钮" {
+	if got := completionNoticeBody(old, next); got != "Task: 修复手机按钮" {
 		t.Fatal("used progress or an unrelated reply", got)
 	}
 	next.Messages = append(next.Messages, Message{Role: "assistant", TurnID: "current", Content: "# 完成\n按钮已修复。测试通过。", Item: &codex.Item{Phase: "final_answer"}})
-	if n, ok := completionNotice(old, next); !ok || n.Body != "按钮已修复。" || n.Title != "Miya · 已完成" {
+	if n, ok := completionNotice(old, next); !ok || n.Body != "按钮已修复。" || n.Title != "Miya · Completed" {
 		t.Fatal("final answer not used", n)
 	}
-	next.Status = "执行失败"
+	next.Status = "Failed"
 	next.Messages = append(next.Messages, Message{Role: "error", TurnID: "current", Content: "连接已断开。请重试。"})
-	if n, _ := completionNotice(old, next); n.Body != "连接已断开。" || n.Title != "Miya · 执行失败" {
+	if n, _ := completionNotice(old, next); n.Body != "连接已断开。" || n.Title != "Miya · Failed" {
 		t.Fatal("failure showed a successful answer", n)
 	}
 }
@@ -62,7 +62,7 @@ func TestCompletionNoticeClaudeTurnBoundaryAndTaskFallback(t *testing.T) {
 		{Role: "assistant", Content: "旧结果。", StartedAtMs: 50},
 		{Role: "user", Content: "继续吧"},
 	}}
-	if got := completionNoticeBody(old, next); got != "任务：修复连接" {
+	if got := completionNoticeBody(old, next); got != "Task: 修复连接" {
 		t.Fatal("reused an old result or continuation", got)
 	}
 	next.Messages = append(next.Messages, Message{Role: "assistant", Content: "新结果。", StartedAtMs: 100})
@@ -71,11 +71,11 @@ func TestCompletionNoticeClaudeTurnBoundaryAndTaskFallback(t *testing.T) {
 	}
 	// An autonomous turn need not append a new user message.
 	next.StartedAtMs = 200
-	if got := completionNoticeBody(old, next); got != "任务：修复连接" {
+	if got := completionNoticeBody(old, next); got != "Task: 修复连接" {
 		t.Fatal("autonomous turn reused the previous answer", got)
 	}
 	for _, title := range []string{"", "Codex", "/Users/private/project", "~/work/project", `C:\work\project`} {
-		if got := completionNoticeBody(old, Thread{Title: title}); got != "任务已完成，打开会话查看结果。" {
+		if got := completionNoticeBody(old, Thread{Title: title}); got != "Task completed. Open the conversation to view the result." {
 			t.Fatal("invalid task fallback", got)
 		}
 	}
@@ -87,20 +87,20 @@ func TestApprovalNoticeDescribesRequest(t *testing.T) {
 		a          codex.Approval
 	}{
 		{"question", "采用哪种方案？", codex.Approval{Method: "item/tool/requestUserInput", Questions: []codex.Question{{Question: "采用哪种方案？", IsSecret: true}}}},
-		{"command", "是否允许执行 go test ./...？", codex.Approval{Method: "item/commandExecution/requestApproval", Command: "go test ./..."}},
+		{"command", "Allow execution of go test ./...?", codex.Approval{Method: "item/commandExecution/requestApproval", Command: "go test ./..."}},
 		{"reason", "需要访问测试服务器", codex.Approval{Method: "item/permissions/requestApproval", Reason: "需要访问测试服务器"}},
-		{"files", "需要你确认文件修改，授权后继续任务。", codex.Approval{Method: "item/fileChange/requestApproval"}},
+		{"files", "Confirm the file changes to continue the task.", codex.Approval{Method: "item/fileChange/requestApproval"}},
 		{"MCP", "允许操作浏览器吗？", codex.Approval{Method: "mcpServer/elicitation/request", Message: "允许操作浏览器吗？"}},
-		{"Claude Bash", "是否允许执行 go test ./...？", codex.Approval{Method: "claude/permission", Command: "Bash", Reason: `{"command":"go test ./..."}`, Payload: json.RawMessage(`{"command":"go test ./..."}`)}},
-		{"Claude Edit", "需要允许使用 Edit，才能继续任务。", codex.Approval{Method: "claude/permission", Command: "Edit", Reason: `{"file_path":"private"}`}},
-		{"fallback", "任务：通知文案", codex.Approval{}},
+		{"Claude Bash", "Allow execution of go test ./...?", codex.Approval{Method: "claude/permission", Command: "Bash", Reason: `{"command":"go test ./..."}`, Payload: json.RawMessage(`{"command":"go test ./..."}`)}},
+		{"Claude Edit", "Permission is required to use Edit to continue the task.", codex.Approval{Method: "claude/permission", Command: "Edit", Reason: `{"file_path":"private"}`}},
+		{"fallback", "Task: 通知文案", codex.Approval{}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			n := approvalNotice(Thread{ID: 7, Title: "通知文案"}, tc.a)
 			if n.Body != tc.body || n.Thread != "7" {
 				t.Fatal(n)
 			}
-			if tc.name == "question" && n.Title != "Miya · 需要你的回答" {
+			if tc.name == "question" && n.Title != "Miya · Answer needed" {
 				t.Fatal(n)
 			}
 		})

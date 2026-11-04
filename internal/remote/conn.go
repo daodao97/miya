@@ -163,9 +163,29 @@ func (c *Conn) Close() error {
 // FilesPort is an HTTP file server inside the desktop's Tailcat overlay.
 const FilesPort = 4244
 
+const ServicePort = 4245
+const TerminalPort = 4246
+
+func (c *Conn) DialTerminal(ctx context.Context) (*Conn, error) {
+	if err := c.ctx.Err(); err != nil {
+		return nil, err
+	}
+	if c.dialPort == nil {
+		return nil, errors.New("remote: terminal transport unavailable")
+	}
+	nc, err := c.dialPort(ctx, TerminalPort)
+	if err != nil {
+		return nil, err
+	}
+	return newConn(nc, nil), nil
+}
+
 // DialFiles reuses this connection's tunnel and identity. It never binds a
 // public listening socket or consumes another phone key slot.
 func (c *Conn) DialFiles(ctx context.Context) (net.Conn, error) {
+	if err := c.ctx.Err(); err != nil {
+		return nil, err
+	}
 	if c.dialPort == nil {
 		return nil, errors.New("remote: file transport unavailable")
 	}

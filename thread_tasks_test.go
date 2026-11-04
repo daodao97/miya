@@ -20,7 +20,7 @@ func TestGoalEventsAndClaudeSchedulesStayOnTheirThread(t *testing.T) {
 		t.Fatal("goal routed to the foreground thread")
 	}
 	c.handle(event("thread/goal/updated", `{"threadId":"background","goal":{"objective":"fix CI","status":"budgetLimited","tokenBudget":1000,"tokensUsed":1000}}`))
-	if got := taskStatusLabel(c.projectCache["/b"][0], c.projectCache["/b"][0].Tasks[0], false); got != "预算已用尽" {
+	if got := taskStatusLabel(c.projectCache["/b"][0], c.projectCache["/b"][0].Tasks[0], false); got != "Budget exhausted" {
 		t.Fatal(got)
 	}
 	c.handle(event("thread/goal/cleared", `{"threadId":"background"}`))
@@ -49,10 +49,10 @@ func TestTaskBarDesktopAndMobile(t *testing.T) {
 	app.c.setThreads([]Thread{thread})
 	app.c.setActive(1)
 	tt.Frame()
-	if !tt.HasText("Goal · 已暂停") || !tt.HasText("1200 / 50000 tokens") {
+	if !tt.HasText("Goal · Paused") || !tt.HasText("1200 / 50000 tokens") {
 		t.Fatalf("task bar missing: %v", tt.Texts())
 	}
-	bar, ok := tt.Find("Goal · 已暂停")
+	bar, ok := tt.Find("Goal · Paused")
 	if !ok {
 		t.Fatal("missing bar")
 	}
@@ -69,10 +69,10 @@ func TestTaskBarDesktopAndMobile(t *testing.T) {
 	m.router().Push("/thread")
 	mt := ui.NewTester(m.viewRoot, 390, 750)
 	mt.Frame()
-	if !mt.HasText("Loop · 等待执行") {
+	if !mt.HasText("Loop · Waiting to run") {
 		t.Fatalf("mobile task bar missing: %v", mt.Texts())
 	}
-	row, ok := mt.Find("停止循环")
+	row, ok := mt.Find("Stop loop")
 	if !ok || row.X < 0 || row.X+row.W > 390 {
 		t.Fatalf("mobile action clipped: %+v", row)
 	}

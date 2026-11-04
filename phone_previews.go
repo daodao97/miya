@@ -31,16 +31,16 @@ type phoneImagePreview struct {
 func phonePreview(source string) ([]byte, error) {
 	u, err := url.Parse(source)
 	if err != nil || u.Scheme != "file" || u.Host != "" && u.Host != "localhost" || !filepath.IsAbs(u.Path) {
-		return nil, errors.New("无效的图片来源")
+		return nil, errors.New("Invalid image source")
 	}
 	f, err := os.Open(u.Path)
 	if err != nil {
-		return nil, errors.New("原图片已不可用")
+		return nil, errors.New("Original image unavailable")
 	}
 	defer f.Close()
 	data, err := io.ReadAll(io.LimitReader(f, maxPhoneImageBytes+1))
 	if err != nil || len(data) > maxPhoneImageBytes {
-		return nil, errors.New("无法读取图片预览")
+		return nil, errors.New("Unable to read image preview")
 	}
 	return phonePreviewData(data)
 }
@@ -48,11 +48,11 @@ func phonePreview(source string) ([]byte, error) {
 func phonePreviewData(data []byte) ([]byte, error) {
 	config, _, err := image.DecodeConfig(bytes.NewReader(data))
 	if err != nil || config.Width <= 0 || config.Height <= 0 || int64(config.Width)*int64(config.Height) > 64_000_000 {
-		return nil, errors.New("无法解码图片预览")
+		return nil, errors.New("Unable to decode image preview")
 	}
 	img, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
-		return nil, errors.New("无法解码图片预览")
+		return nil, errors.New("Unable to decode image preview")
 	}
 	w, h := config.Width, config.Height
 	if edge := max(w, h); edge > phonePreviewEdge {
@@ -66,7 +66,7 @@ func phonePreviewData(data []byte) ([]byte, error) {
 		return nil, err
 	}
 	if out.Len() > maxPhonePreviewBytes {
-		return nil, errors.New("预览图片过大")
+		return nil, errors.New("Preview image is too large")
 	}
 	return out.Bytes(), nil
 }

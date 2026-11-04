@@ -32,7 +32,7 @@ const (
 	sourceBranch                        // merge base with the default branch → working tree
 )
 
-var diffSourceNames = []string{"未提交的更改", "未暂存的更改", "已暂存的更改", "相对默认分支"}
+var diffSourceNames = []string{tr("Uncommitted changes"), tr("Unstaged changes"), tr("Staged changes"), tr("Against default branch")}
 
 type changedFile struct {
 	Path           string
@@ -109,7 +109,7 @@ func branchBase(ctx context.Context, cwd, head string) string {
 // lines each adds and deletes.
 func collectDiff(ctx context.Context, cwd string, src diffSource) (diffSnapshot, error) {
 	if _, err := git(ctx, cwd, "rev-parse", "--show-toplevel"); err != nil {
-		return diffSnapshot{}, errors.New("此工作区不是 Git 仓库")
+		return diffSnapshot{}, errors.New(tr("This workspace is not a Git repository"))
 	}
 	head := gitHead(ctx, cwd)
 	snap := diffSnapshot{Source: src}
@@ -261,16 +261,43 @@ func readTextFile(path string) (string, error) {
 		return "", err
 	}
 	if info.Size() > maxEditableFile {
-		return "", fmt.Errorf("文件过大（%.1f MB），无法在此打开", float64(info.Size())/(1<<20))
+		return "", fmt.Errorf(tr("File too large (%.1f MB) to open here"), float64(info.Size())/(1<<20))
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return "", err
 	}
 	if isBinary(data) {
-		return "", errors.New("无法显示二进制文件")
+		return "", errors.New(tr("Cannot display binary files"))
 	}
 	return string(data), nil
+}
+
+const maxPreviewImage = 16 << 20
+
+// imageFileKind says how the panel shows a picture: "svg" for an SVG,
+// which is text too and can be edited, "bitmap" for the formats
+// ui.DecodeBitmap reads, and "" for any other file.
+func imageFileKind(rel string) string {
+	switch strings.ToLower(filepath.Ext(rel)) {
+	case ".svg":
+		return "svg"
+	case ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp":
+		return "bitmap"
+	}
+	return ""
+}
+
+// readImageFile reads a bitmap for the panel to preview.
+func readImageFile(path string) ([]byte, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	if info.Size() > maxPreviewImage {
+		return nil, fmt.Errorf(tr("Image too large (%.1f MB) to preview here"), float64(info.Size())/(1<<20))
+	}
+	return os.ReadFile(path)
 }
 
 // writeFileAtomic replaces a file without leaving it half written, keeping

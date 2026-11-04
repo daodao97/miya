@@ -70,21 +70,21 @@ func (m *mobileApp) optionsView(c *ui.Context) {
 	o := m.sendOptions(agent)
 	ui.Row(c).FillWidth().MinHeight(64).Padding(0, 12).Gap(8).AlignItems(ui.Center).Children(func() {
 		m.navigationBack(c, "/options")
-		ui.Text(c, "对话设置").Grow(1).TextAlign(ui.Center).FontSize(m.font(16)).FontWeight(600)
+		ui.Text(c, tr("Conversation settings")).Grow(1).TextAlign(ui.Center).FontSize(m.font(16)).FontWeight(600)
 		ui.Box(c).Size(44, 44)
 	})
 	ui.Scroll(c).FillWidth().Grow(1).MinHeight(0).Children(func() {
 		ui.Column(c).FillWidth().Padding(16).Gap(14).Children(func() {
 			ui.Text(c, agentName(agent)).FontSize(m.font(20)).FontWeight(600)
-			ui.Text(c, "用于从手机发送的新消息，不修改桌面端默认设置。").FontSize(m.font(13)).TextColor(p.muted)
-			if m.pill(c, "defaults", "使用桌面端默认", false).Clicked() {
+			ui.Text(c, tr("Applies to new messages sent from your phone. Desktop defaults are unchanged.")).FontSize(m.font(13)).TextColor(p.muted)
+			if m.pill(c, "defaults", tr("Use desktop defaults"), false).Clicked() {
 				delete(m.options, agent)
 				m.saveOptions()
 			}
-			ui.Text(c, "模型").FontSize(m.font(13)).TextColor(p.muted)
-			ui.Column(c).FillWidth().Background(p.surface).Radius(16).Padding(6).Children(func() {
+			ui.Text(c, tr("Model")).FontSize(m.font(13)).TextColor(p.muted)
+			ui.Column(c).FillWidth().Background(p.surface).Radius(16).Padding(6).Role(ui.RoleRadioGroup).Label(tr("Model")).Children(func() {
 				for _, model := range a.Models {
-					row := m.phoneButton(c.Key("model:" + model.Value)).FillWidth().MinHeight(44).Padding(10).Gap(8).Label("模型 " + model.Label)
+					row := m.phoneButton(c.Key("model:" + model.Value)).FillWidth().MinHeight(44).Padding(10).Gap(8).Role(ui.RoleRadio).Checked(model.Value == o.Model).Label(tr("Model ") + model.Label)
 					row.Children(func() {
 						ui.Text(c, model.Label).Grow(1).MinWidth(0)
 						if model.Value == o.Model {
@@ -97,11 +97,11 @@ func (m *mobileApp) optionsView(c *ui.Context) {
 					}
 				}
 				if len(a.Models) == 0 {
-					ui.Text(c, "连接桌面端后可选择模型").Padding(10).TextColor(p.muted)
+					ui.Text(c, tr("Connect to your desktop to select a model")).Padding(10).TextColor(p.muted)
 				}
 			})
-			ui.Text(c, "推理强度").FontSize(m.font(13)).TextColor(p.muted)
-			ui.Row(c).FillWidth().Wrap().Gap(8).Children(func() {
+			ui.Text(c, tr("Reasoning effort")).FontSize(m.font(13)).TextColor(p.muted)
+			ui.Row(c).FillWidth().Wrap().Gap(8).Role(ui.RoleRadioGroup).Label(tr("Reasoning effort")).Children(func() {
 				choices := []string{""}
 				for _, model := range a.Models {
 					if model.Value == o.Model {
@@ -113,33 +113,35 @@ func (m *mobileApp) optionsView(c *ui.Context) {
 					}
 				}
 				for _, e := range choices {
-					label := strings.ToUpper(e)
+					label := tr(strings.ToUpper(e))
 					if e == "" {
-						label = "模型默认"
+						label = tr("Model default")
 					}
-					if m.pill(c, "effort:"+e, label, e == o.Effort).Label("强度 " + label).Clicked() {
+					if m.pill(c, "effort:"+e, label, e == o.Effort).Role(ui.RoleRadio).Checked(e == o.Effort).Label(tr("Effort ") + label).Clicked() {
 						o.Effort = e
 						m.setOptions(agent, o)
 					}
 				}
 			})
-			ui.Text(c, "权限模式").FontSize(m.font(13)).TextColor(p.muted)
-			for _, policy := range []struct{ value, label, detail string }{{"on-request", "需要时询问", "敏感操作由你确认"}, {"on-failure", "自动审批", "由自动审批处理，需要时再询问你"}, {"never", "完全访问", "允许 agent 不经询问执行操作"}} {
-				b := m.phoneButton(c.Key("policy:" + policy.value)).FillWidth().MinHeight(56).Padding(12).Gap(12).Background(p.surface).Radius(14).Label(policy.label)
-				b.Children(func() {
-					ui.Column(c).Grow(1).MinWidth(0).Gap(4).Children(func() {
-						ui.Text(c, policy.label).FontWeight(500)
-						ui.Text(c, policy.detail).FontSize(m.font(12)).TextColor(p.muted)
+			ui.Text(c, tr("Permission mode")).FontSize(m.font(13)).TextColor(p.muted)
+			ui.Column(c).FillWidth().Gap(14).Role(ui.RoleRadioGroup).Label(tr("Permission mode")).Children(func() {
+				for _, policy := range []struct{ value, label, detail string }{{"on-request", tr("Ask when needed"), tr("Confirm sensitive actions yourself")}, {"on-failure", tr("Automatic approval"), tr("Automatic approval handles requests and asks you when needed")}, {"never", tr("Full access"), tr("Allow the agent to act without asking")}} {
+					b := m.phoneButton(c.Key("policy:" + policy.value)).FillWidth().MinHeight(56).Padding(12).Gap(12).Background(p.surface).Radius(14).Role(ui.RoleRadio).Checked(policy.value == o.Policy).Label(policy.label)
+					b.Children(func() {
+						ui.Column(c).Grow(1).MinWidth(0).Gap(4).Children(func() {
+							ui.Text(c, policy.label).FontWeight(500)
+							ui.Text(c, policy.detail).FontSize(m.font(12)).TextColor(p.muted)
+						})
+						if policy.value == o.Policy {
+							icon(c, "check", 18, p.ink)
+						}
 					})
-					if policy.value == o.Policy {
-						icon(c, "check", 18, p.ink)
+					if b.Clicked() {
+						o.Policy = policy.value
+						m.setOptions(agent, o)
 					}
-				})
-				if b.Clicked() {
-					o.Policy = policy.value
-					m.setOptions(agent, o)
 				}
-			}
+			})
 		})
 	})
 }

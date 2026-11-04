@@ -30,7 +30,7 @@ func TestCommandActionUsesFileLabel(t *testing.T) {
 	if err := json.Unmarshal([]byte(`{"type":"commandExecution","command":"sed -n '1,180p' registration.go","commandActions":[{"type":"read","name":"registration.go"}]}`), &item); err != nil {
 		t.Fatal(err)
 	}
-	if title := activityTitle(Message{Kind: item.Type, Item: &item}); title != "已读取 registration.go" {
+	if title := activityTitle(Message{Kind: item.Type, Item: &item}); title != "Read registration.go" {
 		t.Fatal(title)
 	}
 }

@@ -9,7 +9,7 @@ import (
 func TestNativeCaptureFailuresDoNotClaimUnsupportedOS(t *testing.T) {
 	for _, code := range []int{5, 6, 7, 8, 9, 10, 11, 999} {
 		err := permissionError(code)
-		if err == nil || strings.Contains(err.Error(), "macOS 14") || strings.Contains(err.Error(), "屏幕录制") {
+		if err == nil || strings.Contains(err.Error(), "macOS 14") || strings.Contains(err.Error(), "Screen Recording") {
 			t.Fatalf("%d: misleading error %v", code, err)
 		}
 	}
@@ -20,7 +20,7 @@ func TestNativeCaptureFailuresDoNotClaimUnsupportedOS(t *testing.T) {
 		t.Fatal("lost target identity error")
 	}
 	err := captureError(7, "com.apple.ScreenCaptureKit.SCStreamErrorDomain (-3811)")
-	if err == nil || !strings.Contains(err.Error(), "-3811") || !strings.Contains(err.Error(), "系统未能生成") {
+	if err == nil || !strings.Contains(err.Error(), "-3811") || !strings.Contains(err.Error(), "Unable to capture") {
 		t.Fatal("native diagnostic discarded", err)
 	}
 	if captureError(0, "") != nil {

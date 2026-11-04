@@ -42,7 +42,7 @@ func TestLargeImageUsesShortFileURL(t *testing.T) {
 func TestNativeTextLimitPreservesUTF8(t *testing.T) {
 	text := strings.Repeat("你好", 200000)
 	got := nativeText(text)
-	if len(got) >= 1048576 || !utf8.ValidString(got) || !strings.Contains(got, "显示已截断") {
+	if len(got) >= 1048576 || !utf8.ValidString(got) || !strings.Contains(got, "Content truncated for display") {
 		t.Fatal("invalid bridge text")
 	}
 	if nativeText("short") != "short" {

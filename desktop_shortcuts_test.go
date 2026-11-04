@@ -73,7 +73,7 @@ func TestDesktopTerminalShortcut(t *testing.T) {
 		}
 	}
 	tt.Key(0, ui.KeyF1)
-	if !tt.HasText("打开终端") || !tt.HasText(shortcutKeys(ui.Cmd|ui.Shift, "T")) {
+	if !tt.HasText("Open terminal") || !tt.HasText(shortcutKeys(ui.Cmd|ui.Shift, "T")) {
 		t.Fatal("shortcut help does not list the terminal shortcut")
 	}
 	tt.Key(ui.Cmd|ui.Shift, ui.KeyT)
@@ -93,7 +93,7 @@ func TestDesktopConversationSwitcherKeyboard(t *testing.T) {
 	c.selectThread(threads[0])
 	tt.Frame()
 	tt.Key(ui.Cmd, ui.KeyK)
-	if !app.switcher.open || !tt.Focused("搜索全部对话") {
+	if !app.switcher.open || !tt.Focused("Search all conversations") {
 		t.Fatal("conversation switcher did not open with search focused")
 	}
 	tt.Type("Conversation")
@@ -113,7 +113,7 @@ func TestDesktopConversationSwitcherKeyboard(t *testing.T) {
 	}
 	tt.Key(ui.Cmd, ui.KeyK)
 	tt.Type("no matching conversation")
-	if !tt.HasText("没有匹配的对话") {
+	if !tt.HasText("No matching conversations") {
 		t.Fatal("empty search has no feedback")
 	}
 	tt.Key(0, ui.KeyEnter)
@@ -199,7 +199,7 @@ func TestDesktopShortcutsRespectModal(t *testing.T) {
 	tt.SetSize(780, 580)
 	tt.Frame()
 	tt.Key(0, ui.KeyF1)
-	if !app.shortcutsOpen || !tt.HasText("键盘快捷键") || !tt.HasText(shortcutKeys(ui.Cmd, "N")) {
+	if !app.shortcutsOpen || !tt.HasText("Keyboard shortcuts") || !tt.HasText(shortcutKeys(ui.Cmd, "N")) {
 		t.Fatal("shortcut help did not open or show bindings")
 	}
 	saveReconnectSnapshot(t, tt, "keyboard-shortcuts")

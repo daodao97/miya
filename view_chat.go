@@ -104,6 +104,7 @@ func (app *chatApp) messageList(c *ui.Context, t Thread) {
 			mutedText(c, tr("No visible messages (reasoning-only or unsupported items)")).Margin(ui.Auto)
 		}
 	})
+	messageScrollbars(c, list)
 	if app.mobile {
 		// Claim whitespace before the drawer's Draggable ancestor, but keep
 		// child buttons as the innermost click targets. A blanket HandleInput
@@ -112,7 +113,7 @@ func (app *chatApp) messageList(c *ui.Context, t Thread) {
 	}
 	// A completed result needs one frame on screen before it is acknowledged.
 	// Request that frame even if finishing the turn left the window idle.
-	if !app.mobile && !app.projectDialog && !app.switcher.open && !app.shortcutsOpen && !t.Busy && !t.Loading && t.HistoryLoaded && len(groups) > 0 && app.c.desktopThreadUnread(t) && state.AtEnd() {
+	if !app.mobile && !app.projectDialog && !app.switcher.open && !app.shortcutsOpen && !app.commandPalette.open && !t.Busy && !t.Loading && t.HistoryLoaded && len(groups) > 0 && app.c.desktopThreadUnread(t) && state.AtEnd() {
 		if w := currentWindow(); w != nil && w.IsFocused() && !w.IsMinimized() {
 			c.After(0)
 		}
@@ -120,7 +121,7 @@ func (app *chatApp) messageList(c *ui.Context, t Thread) {
 	if !state.AtEnd() && len(groups) > 0 {
 		ui.Row(c).Justify(ui.Center).Margin(-44, 0, 8, 0).Children(func() {
 			jump := quiet(c.Key("latest")).Background(canvas).Border(1, line).Radius(16).Shadow(0, 2, 8, 0, shadow)
-			jump.Children(func() { mutedText(c, "↓ Latest") })
+			jump.Children(func() { mutedText(c, tr("↓ Latest")) })
 			if jump.Clicked() {
 				state.ScrollToEnd()
 			}
@@ -136,11 +137,11 @@ func (app *chatApp) messageList(c *ui.Context, t Thread) {
 					})
 				} else {
 					workingLabel(c.Key("working"), "clock", threadWorkingLabel(t)).
-						Tooltip("本轮平均输出速度，包含等待时间。")
+						Tooltip(tr("Average output speed for this turn, including wait time."))
 					if hint := stalledHint(t, len(app.c.approvals()) > 0, time.Now()); hint != "" {
 						if app.mobile {
 							ui.Box(c).Grow(1).MinWidth(0)
-							ui.Text(c, "暂未响应").Shrink(0).SingleLine().FontSize(12).TextColor(warnInk).Tooltip(hint)
+							ui.Text(c, tr("No response yet")).Shrink(0).SingleLine().FontSize(12).TextColor(warnInk).Tooltip(hint)
 						} else {
 							ui.Text(c, "· "+hint).Grow(1).MinWidth(0).FontSize(12).TextColor(warnInk)
 						}
@@ -198,13 +199,13 @@ func (app *chatApp) groupView(c *ui.Context, g messageGroup) {
 				if copied {
 					name = "check"
 				}
-				b := quiet(c.Key("copy")).Size(size, size).PaddingX(6).Justify(copyAlign).Label("Copy response").Tooltip("Copy response")
+				b := quiet(c.Key("copy")).Size(size, size).PaddingX(6).Justify(copyAlign).Label(tr("Copy response")).Tooltip(tr("Copy response"))
 				b.Children(func() { icon(c, name, 15, muted) })
 				if b.Clicked() {
 					c.WriteClipboard(messageGroupText(g))
 					app.copied[g.ID] = true
 				}
-				h := quiet(c.Key("handoff")).Size(size, size).PaddingX(6).Justify(handoffAlign).Label("交付到新对话").Tooltip("交付到新对话")
+				h := quiet(c.Key("handoff")).Size(size, size).PaddingX(6).Justify(handoffAlign).Label(tr("Hand off to a new conversation")).Tooltip(tr("Hand off to a new conversation"))
 				h.Children(func() { icon(c, "arrow-right", 15, muted) })
 				if h.Clicked() {
 					app.handoffToNewThread()
@@ -273,7 +274,7 @@ func (app *chatApp) messageView(c *ui.Context, m Message, streaming bool) {
 					size = 44
 				}
 				b := quiet(c.Key("retry-response")).Size(size, size).Shrink(0).PaddingX(6).Justify(ui.Center).
-					Disabled(t.Busy || t.Loading).Label("重试回复").Tooltip("重试回复")
+					Disabled(t.Busy || t.Loading).Label(tr("Retry response")).Tooltip(tr("Retry response"))
 				b.Children(func() { icon(c, "refresh", 16, muted) })
 				if b.Clicked() {
 					app.retryResponse(m)
@@ -291,9 +292,9 @@ func (app *chatApp) messageView(c *ui.Context, m Message, streaming bool) {
 							loader = app.imagePreview
 						}
 						if img := loader(src); img != nil {
-							ui.Image(c.Key(src), img).Size(80, 80).Fit(ui.Cover).Radius(8).Label("图片预览")
+							ui.Image(c.Key(src), img).Size(80, 80).Fit(ui.Cover).Radius(8).Label(tr("Image preview"))
 						} else {
-							ui.Box(c.Key(src)).Size(80, 80).Radius(8).Background(bubble).Label("图片预览").AlignItems(ui.Center).Justify(ui.Center).Children(func() {
+							ui.Box(c.Key(src)).Size(80, 80).Radius(8).Background(bubble).Label(tr("Image preview")).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
 								icon(c, "file", 24, muted)
 							})
 						}
@@ -365,9 +366,9 @@ func activityTitle(m Message) string {
 		return claudeToolTitle(m)
 	case "handoff":
 		if m.HandoffTitle != "" {
-			return "已交付到对话「" + m.HandoffTitle + "」"
+			return tr("Handed off to conversation \"") + m.HandoffTitle + "\""
 		}
-		return "已交付到其他对话"
+		return tr("Handed off to another conversation")
 	case "reasoning":
 		if active {
 			return tr("Thinking…")
@@ -378,11 +379,11 @@ func activityTitle(m Message) string {
 			a := m.Item.CommandActions[0]
 			switch a.Type {
 			case "read":
-				return "已读取 " + firstNonEmpty(a.Name, a.Path, "文件")
+				return tr("Read ") + firstNonEmpty(a.Name, a.Path, tr("Files"))
 			case "search":
-				return "已搜索 " + firstNonEmpty(a.Query, a.Path, "文件")
+				return tr("Searched ") + firstNonEmpty(a.Query, a.Path, tr("Files"))
 			case "listFiles":
-				return "已列出 " + firstNonEmpty(a.Path, "文件")
+				return tr("Listed ") + firstNonEmpty(a.Path, tr("Files"))
 			}
 		}
 		verb := tr("Ran ")
@@ -416,7 +417,7 @@ func activityTitle(m Message) string {
 					done++
 				}
 			}
-			return fmt.Sprintf("Plan · %d / %d completed", done, len(m.Plan))
+			return fmt.Sprintf(tr("Plan · %d / %d completed"), done, len(m.Plan))
 		}
 		return tr("Proposed plan")
 	case "mcptoolcall", "dynamictoolcall":
@@ -424,17 +425,17 @@ func activityTitle(m Message) string {
 			name := strings.Trim(m.Item.Server+" · "+m.Item.Tool, " ·")
 			if name != "" {
 				if active {
-					return "Calling " + name
+					return tr("Calling ") + name
 				}
-				return "Called " + name
+				return tr("Called ") + name
 			}
 		}
 	case "websearch":
 		if m.Item != nil {
 			if active {
-				return "Searching · " + m.Item.Query
+				return tr("Searching · ") + m.Item.Query
 			}
-			return "Searched · " + m.Item.Query
+			return tr("Searched · ") + m.Item.Query
 		}
 	case "diff":
 		return tr("Changes in this turn")

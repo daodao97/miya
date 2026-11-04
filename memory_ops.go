@@ -71,7 +71,7 @@ func (c *chatController) memoryScope(r memoryRequest) (memory.Scope, error) {
 		return memory.UserScope(), nil
 	}
 	if r.Scope != "" && r.Scope != "project" {
-		return memory.Scope{}, errors.New("无效记忆作用域")
+		return memory.Scope{}, errors.New("Invalid memory scope")
 	}
 	project := r.Project
 	if project == "" {
@@ -86,13 +86,13 @@ func (c *chatController) memoryScope(r memoryRequest) (memory.Scope, error) {
 		}
 	}
 	if !known {
-		return memory.Scope{}, errors.New("项目不存在")
+		return memory.Scope{}, errors.New("Project does not exist")
 	}
 	return memory.ProjectScope(project)
 }
 func (c *chatController) memoryOp(op string, r memoryRequest) (any, error) {
 	if c.memory == nil {
-		return nil, errors.New("记忆需要 Miya 后台服务")
+		return nil, errors.New("Memory requires the Miya background service")
 	}
 	scope, err := c.memoryScope(r)
 	if err != nil {
@@ -103,7 +103,7 @@ func (c *chatController) memoryOp(op string, r memoryRequest) (any, error) {
 		t := c.threadWithID(r.Thread)
 		threadScope, _ := memory.ProjectScope(c.threadWorkspace(t.ID))
 		if t.ID == 0 || r.SessionDisabled == nil || scope.Kind != "project" || threadScope != scope {
-			return nil, errors.New("缺少当前项目的会话设置")
+			return nil, errors.New("Session settings missing for the current project")
 		}
 		disabled := *r.SessionDisabled
 		session := c.threadRef(t).URL()
@@ -124,7 +124,7 @@ func (c *chatController) memoryOp(op string, r memoryRequest) (any, error) {
 	claudeAvailable := c.claudeBinary != ""
 	// Resolve the target conversation before leaving the scheduler.
 	if r.Thread != 0 && c.threadWithID(r.Thread).ID == 0 {
-		return nil, errors.New("会话不存在")
+		return nil, errors.New("Session does not exist")
 	}
 	return c.memoryDeferred(func() (any, error) {
 		entries, settings, revision, err := store.List(scope)
@@ -147,11 +147,11 @@ func (c *chatController) memoryOp(op string, r memoryRequest) (any, error) {
 		}
 		if op == "memoryConfigure" {
 			if r.Settings == nil || scope.Kind != "project" {
-				return nil, errors.New("缺少项目记忆设置")
+				return nil, errors.New("Project memory settings missing")
 			}
 			selected := r.Settings.ExtractionAgent()
 			if r.Settings.AutoExtract && !r.Settings.Disabled && !available(selected) && !(settings.AutoExtract && settings.ExtractionAgent() == selected) {
-				return nil, fmt.Errorf("自动提炼需要先配置可用的 %s", backendFor(selected).Name())
+				return nil, fmt.Errorf("Automatic extraction requires a working %s configuration", backendFor(selected).Name())
 			}
 			err := store.Configure(scope, *r.Settings)
 			if err == nil {
@@ -168,7 +168,7 @@ func (c *chatController) memoryOp(op string, r memoryRequest) (any, error) {
 		}
 		if op == "memoryGet" {
 			if old.ID == "" {
-				return nil, errors.New("记忆不存在")
+				return nil, errors.New("Memory does not exist")
 			}
 			if r.Version != old.Version {
 				old.Content = ""
@@ -180,7 +180,7 @@ func (c *chatController) memoryOp(op string, r memoryRequest) (any, error) {
 			return old, nil
 		}
 		if r.ID != "" && (old.ID == "" || old.Version != r.Version) {
-			return nil, fmt.Errorf("记忆已变化，请刷新后重试（当前版本 %d）", old.Version)
+			return nil, fmt.Errorf("Memory changed. Refresh and retry (current version %d).", old.Version)
 		}
 		var e memory.Entry
 		switch op {
@@ -202,10 +202,10 @@ func (c *chatController) memoryOp(op string, r memoryRequest) (any, error) {
 			e, err = store.PromotePreference(scope, r.ID, r.Version)
 		case "memoryPromotionPreview", "memoryPromoteFile":
 			if scope.Kind != "project" || old.State != "active" || old.Kind != "fact" {
-				return nil, errors.New("只有有效的项目事实可以提升到项目文件")
+				return nil, errors.New("Only active project facts can be promoted to project files")
 			}
 			if r.File != "AGENTS.md" && r.File != "CLAUDE.md" {
-				return nil, errors.New("请选择 AGENTS.md 或 CLAUDE.md")
+				return nil, errors.New("Select AGENTS.md or CLAUDE.md")
 			}
 			promotion, err := previewMemoryFile(scope.ProjectPath, r.File, firstNonEmpty(strings.TrimSpace(r.Content), old.Content))
 			if err != nil {
@@ -216,13 +216,13 @@ func (c *chatController) memoryOp(op string, r memoryRequest) (any, error) {
 			}
 			var approved memoryPromotion
 			if json.Unmarshal([]byte(r.Preview), &approved) != nil || approved != promotion {
-				return nil, errors.New("项目文件或记忆已变化，请重新预览并确认")
+				return nil, errors.New("Project file or memory changed. Preview and confirm again.")
 			}
 			// Serialize promotion with all memory mutations, validating the version
 			// again immediately before the file write and memory commit.
 			e, err = store.PromoteWith(scope, r.ID, r.Version, func() error { return writeMemoryProjectFile(scope.ProjectPath, promotion) })
 		default:
-			return nil, errors.New("未知记忆操作")
+			return nil, errors.New("Unknown memory operation")
 		}
 		if err != nil {
 			if e.ID != "" {
@@ -241,7 +241,7 @@ func previewMemoryFile(project, file, content string) (memoryPromotion, error) {
 	// Avoid silently following a link to a different project's instructions.
 	info, err := os.Lstat(path)
 	if err == nil && (!info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0) {
-		return memoryPromotion{}, errors.New("目标必须是项目内的普通文件，不能是符号链接")
+		return memoryPromotion{}, errors.New("The target must be a regular file within the project, not a symbolic link")
 	}
 	if err != nil && !os.IsNotExist(err) {
 		return memoryPromotion{}, err
@@ -263,7 +263,7 @@ func writeMemoryProjectFile(project string, p memoryPromotion) error {
 		return err
 	}
 	if now.Before != p.Before {
-		return errors.New("项目文件已变化，请重新预览")
+		return errors.New("Project file changed. Preview again.")
 	}
 	path := filepath.Join(project, p.File)
 	mode := os.FileMode(0o644)
@@ -294,7 +294,7 @@ func writeMemoryProjectFile(project string, p memoryPromotion) error {
 		return err
 	}
 	if latest.Before != p.Before {
-		return errors.New("项目文件已变化，请重新预览")
+		return errors.New("Project file changed. Preview again.")
 	}
 	return os.Rename(f.Name(), path)
 }

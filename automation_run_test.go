@@ -93,7 +93,7 @@ func TestAutomationRunsOnScheduleAndRetriesFailedChecks(t *testing.T) {
 	}
 	run := h.last(a.ID)
 	thread := h.c.threadWithID(run.Thread)
-	if run.Result != runRunning || run.CatchUp || thread.Automation != a.ID || !strings.HasPrefix(thread.Title, "Issue 分拣 · 11月2日") {
+	if run.Result != runRunning || run.CatchUp || thread.Automation != a.ID || !strings.HasPrefix(thread.Title, "Issue 分拣 · Nov 2") {
 		t.Fatalf("bad run start: %+v %+v", run, thread)
 	}
 	h.c.automationTick()
@@ -103,7 +103,7 @@ func TestAutomationRunsOnScheduleAndRetriesFailedChecks(t *testing.T) {
 	h.checks = []bool{false, true}
 	h.endTurn(run.Thread, "修了 #142")
 	h.c.automationTick()
-	if len(h.sent) != 2 || h.sent[1].ThreadID != run.Thread || !strings.Contains(h.sent[1].Text, "检查未通过（第 1/3 轮）") || !strings.Contains(h.sent[1].Text, "FAIL: TestX") {
+	if len(h.sent) != 2 || h.sent[1].ThreadID != run.Thread || !strings.Contains(h.sent[1].Text, "Check failed (round 1/3)") || !strings.Contains(h.sent[1].Text, "FAIL: TestX") {
 		t.Fatalf("failed check did not start round 2: %+v", h.sent)
 	}
 	if r := h.last(a.ID); r.Round != 2 || r.Result != runRunning {
@@ -131,7 +131,7 @@ func TestAutomationFailsWhenRoundsRunOut(t *testing.T) {
 	h.c.automationTick()
 	h.endTurn(thread, "再试一次")
 	h.c.automationTick()
-	if r := h.last(a.ID); r.Result != runFailed || r.Round != 2 || r.Summary != "检查未通过：FAIL demo 0.01s" {
+	if r := h.last(a.ID); r.Result != runFailed || r.Round != 2 || r.Summary != "Check failed: FAIL demo 0.01s" {
 		t.Fatalf("bad failed run: %+v", r)
 	}
 }
@@ -174,7 +174,7 @@ func TestAutomationWithoutProjectFails(t *testing.T) {
 	a := h.add(t, Automation{Name: "x", Project: "/nonexistent/miya-test", Instructions: "y", Schedule: "* * * * *"})
 	h.now = h.now.Add(time.Minute)
 	h.c.automationTick()
-	if r := h.last(a.ID); r.Result != runFailed || !strings.Contains(r.Summary, "项目目录不存在") || len(h.sent) != 0 {
+	if r := h.last(a.ID); r.Result != runFailed || !strings.Contains(r.Summary, "Project directory does not exist") || len(h.sent) != 0 {
 		t.Fatalf("missing project not reported: %+v", r)
 	}
 }
@@ -187,7 +187,7 @@ func TestAutomationWaitsForApprovals(t *testing.T) {
 	thread := h.last(a.ID).Thread
 	id, _ := json.Marshal("claude:" + itoa(thread) + ":req1")
 	h.c.setApprovals([]codex.Approval{{ID: id, Method: "claude/permission"}})
-	h.endTurn(thread, "等待中")
+	h.endTurn(thread, "Waiting")
 	h.c.automationTick()
 	if h.last(a.ID).Result != runRunning {
 		t.Fatal("a round waiting for approval was taken as ended")

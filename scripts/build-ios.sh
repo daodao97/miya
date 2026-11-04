@@ -25,5 +25,11 @@ for key in ('bindings', 'frontendDist'):
 config['resources'] = [str(root / p) for p in config.get('resources', [])]
 (stage / 'mygo.json').write_text(json.dumps(config, indent=2) + '\n')
 (stage / 'resources').symlink_to(root / 'resources', target_is_directory=True)
+if config.get('i18n'):
+    locale_dir = Path(config['i18n'].get('dir', 'locales'))
+    locale_stage = stage / locale_dir
+    if not locale_stage.exists():
+        locale_stage.parent.mkdir(parents=True, exist_ok=True)
+        locale_stage.symlink_to(root / locale_dir, target_is_directory=True)
 PY
 go tool mygo build -platform ios/arm64 "$@" "$STAGE"

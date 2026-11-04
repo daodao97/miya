@@ -32,7 +32,8 @@ type desktopLease struct {
 	lastWake      time.Time
 	// pick lets a lease opened from the phone menu choose any window or the
 	// full desktop. Authorization leases stay bound to their window.
-	pick bool
+	pick      bool
+	unlocking bool
 }
 
 // One operator at a time. A lease belongs to one live phone control
@@ -50,13 +51,15 @@ type desktopControl struct {
 	dialog        func(desktop.Window) (desktop.Dialog, error)
 	pressAction   func(desktop.Window, string) error
 	wake          func() error
+	// locked reports the console lock screen; nil disables remote unlock.
+	locked func() (bool, error)
 }
 
 func (c *chatController) desktopControls() *desktopControl {
 	c.desktopMu.Lock()
 	defer c.desktopMu.Unlock()
 	if c.desktop == nil {
-		c.desktop = &desktopControl{authorize: desktop.Authorize, capture: desktop.Capture, input: desktop.SendInput, windows: desktop.Windows, captureWindow: desktop.CaptureWindow, inputWindow: desktop.SendWindowInput, dialog: desktop.WindowDialog, pressAction: desktop.PressWindowAction, wake: desktop.WakeDisplay}
+		c.desktop = &desktopControl{authorize: desktop.Authorize, capture: desktop.Capture, input: desktop.SendInput, windows: desktop.Windows, captureWindow: desktop.CaptureWindow, inputWindow: desktop.SendWindowInput, dialog: desktop.WindowDialog, pressAction: desktop.PressWindowAction, wake: desktop.WakeDisplay, locked: desktop.ScreenLocked}
 	}
 	return c.desktop
 }
@@ -88,7 +91,7 @@ func (d *desktopControl) openWindow(ctx context.Context, window *desktop.Window)
 		return "", ctx.Err()
 	}
 	if old := d.lease; old != nil && old.ctx.Err() == nil && time.Now().Before(old.expires) {
-		return "", errors.New("另一个远程桌面界面尚未关闭，请先结束控制")
+		return "", errors.New("Another remote desktop view is still open. End that control session first.")
 	}
 	if old := d.lease; old != nil {
 		old.stop()
@@ -161,7 +164,7 @@ func (d *desktopControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	l := d.valid(token)
 	d.mu.Unlock()
 	if l == nil {
-		http.Error(w, "远程控制已结束或连接已断开，请返回对话重新打开", http.StatusGone)
+		http.Error(w, "Remote control ended or disconnected. Return to the conversation to reopen it.", http.StatusGone)
 		return
 	}
 	path := strings.TrimPrefix(r.URL.Path, desktopControlPrefix)
@@ -174,7 +177,7 @@ func (d *desktopControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		d.mu.Lock()
 		defer d.mu.Unlock()
 		if d.valid(token) != l {
-			http.Error(w, "远程控制已结束", 410)
+			http.Error(w, "Remote control ended", 410)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -189,7 +192,7 @@ func (d *desktopControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		d.serveWindowActions(w, r, token, l, path == "/action")
 		return
 	}
-	if path != "/frame" && path != "/start" && path != "/input" && path != "/windows" && path != "/select" && path != "/thumbnail" {
+	if path != "/frame" && path != "/start" && path != "/input" && path != "/windows" && path != "/select" && path != "/thumbnail" && path != "/unlock" {
 		http.NotFound(w, r)
 		return
 	}
@@ -200,9 +203,9 @@ func (d *desktopControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	// Image capture may wait on ScreenCaptureKit. Keep clicks and typing on
 	// their own path so a slow frame never holds the input channel hostage.
-	if path != "/input" {
+	if path != "/input" && path != "/unlock" {
 		if !d.work.TryLock() {
-			http.Error(w, "桌面正忙，请稍后重试", http.StatusTooManyRequests)
+			http.Error(w, "The desktop is busy. Try again later.", http.StatusTooManyRequests)
 			return
 		}
 		defer d.work.Unlock()
@@ -210,7 +213,7 @@ func (d *desktopControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	d.mu.Lock()
 	if d.valid(token) != l {
 		d.mu.Unlock()
-		http.Error(w, "远程控制已结束", 410)
+		http.Error(w, "Remote control ended", 410)
 		return
 	}
 	active := l.active
@@ -227,7 +230,7 @@ func (d *desktopControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if path == "/windows" || path == "/select" {
 		if window == nil && !pick {
-			http.Error(w, "此界面未启用单窗口操作", 400)
+			http.Error(w, "Window control is not enabled in this view", 400)
 			return
 		}
 		windows, err := d.windows()
@@ -242,7 +245,7 @@ func (d *desktopControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		var selected desktop.Window
 		if json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&selected) != nil {
-			http.Error(w, "无效的窗口", 400)
+			http.Error(w, "Invalid window", 400)
 			return
 		}
 		// Window 0 is the full desktop, offered only to menu leases.
@@ -250,7 +253,11 @@ func (d *desktopControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			d.mu.Lock()
 			defer d.mu.Unlock()
 			if d.valid(token) != l {
-				http.Error(w, "远程控制已结束", 410)
+				http.Error(w, "Remote control ended", 410)
+				return
+			}
+			if l.unlocking {
+				http.Error(w, "Unlocking Mac. Please wait.", 409)
 				return
 			}
 			l.window = nil
@@ -267,11 +274,11 @@ func (d *desktopControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			d.mu.Lock()
 			defer d.mu.Unlock()
 			if d.valid(token) != l {
-				http.Error(w, "远程控制已结束", 410)
+				http.Error(w, "Remote control ended", 410)
 				return
 			}
-			if l.actionPending {
-				http.Error(w, "正在确认授权结果，请稍候", 409)
+			if l.actionPending || l.unlocking {
+				http.Error(w, "Checking the authorization result. Please wait.", 409)
 				return
 			}
 			l.window = &candidate
@@ -281,7 +288,7 @@ func (d *desktopControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(204)
 			return
 		}
-		http.Error(w, "窗口已关闭，请刷新列表", 404)
+		http.Error(w, "The window closed. Refresh the list.", 404)
 		return
 	}
 	if path == "/start" {
@@ -291,13 +298,13 @@ func (d *desktopControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		d.keepAwake(l, true)
 		if window != nil && window.ID == 0 {
-			http.Error(w, "请先选择目标窗口", 409)
+			http.Error(w, "Select a target window first", 409)
 			return
 		}
 		d.mu.Lock()
 		if d.valid(token) != l {
 			d.mu.Unlock()
-			http.Error(w, "远程控制已结束", 410)
+			http.Error(w, "Remote control ended", 410)
 			return
 		}
 		l.active = true
@@ -306,7 +313,11 @@ func (d *desktopControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !active {
-		http.Error(w, "请先确认开始远程控制", http.StatusForbidden)
+		http.Error(w, "Confirm that you want to start remote control first", http.StatusForbidden)
+		return
+	}
+	if path == "/unlock" {
+		d.serveUnlock(w, r, token, l, window, pick)
 		return
 	}
 	if path == "/frame" {
@@ -317,10 +328,15 @@ func (d *desktopControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		d.mu.Unlock()
 		if tooSoon {
-			http.Error(w, "请求过快", 429)
+			http.Error(w, "Too many requests", 429)
 			return
 		}
 		d.keepAwake(l, false)
+		if d.unlockAllowed(window, pick) && d.screenLocked() {
+			w.Header().Set(desktopLockedHeader, "1")
+			http.Error(w, "Mac is locked. Unlock it first.", http.StatusLocked)
+			return
+		}
 		var data []byte
 		var err error
 		if window != nil {
@@ -342,14 +358,14 @@ func (d *desktopControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			if window != nil && errors.Is(err, desktop.ErrWindowUnavailable) {
 				d.revoke(token)
-				http.Error(w, "目标授权窗口已关闭。关闭此界面返回会话。", 410)
+				http.Error(w, "The authorization window closed. Close this view to return to the conversation.", 410)
 				return
 			}
 			http.Error(w, err.Error(), http.StatusServiceUnavailable)
 			return
 		}
 		if len(data) == 0 || len(data) > 2<<20 {
-			http.Error(w, "画面无效或过大", 503)
+			http.Error(w, "Invalid or oversized frame", 503)
 			return
 		}
 		d.mu.Lock()
@@ -359,8 +375,11 @@ func (d *desktopControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		d.mu.Unlock()
 		if !valid || r.Context().Err() != nil {
-			http.Error(w, "远程控制已结束", 410)
+			http.Error(w, "Remote control ended", 410)
 			return
+		}
+		if d.unlockAllowed(window, pick) && d.screenLocked() {
+			w.Header().Set(desktopLockedHeader, "1")
 		}
 		_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(10 * time.Second))
 		w.Header().Set("Content-Type", "image/jpeg")
@@ -372,7 +391,7 @@ func (d *desktopControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 32<<10))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&in); err != nil {
-		http.Error(w, "无效的操作", 400)
+		http.Error(w, "Invalid operation", 400)
 		return
 	}
 	if err := in.Validate(); err != nil {
@@ -382,23 +401,27 @@ func (d *desktopControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.valid(token) != l || r.Context().Err() != nil {
-		http.Error(w, "远程控制已结束", 410)
+		http.Error(w, "Remote control ended", 410)
 		return
 	}
 	if (window == nil) != (l.window == nil) || window != nil && (window.ID != l.window.ID || window.PID != l.window.PID) {
-		http.Error(w, "目标窗口已切换，请等待新画面", 409)
+		http.Error(w, "The target window changed. Wait for a new frame.", 409)
 		return
 	}
 	if time.Since(l.capturedAt) > 10*time.Second {
-		http.Error(w, "请等待新的桌面画面后再操作", 409)
+		http.Error(w, "Wait for a new desktop frame before continuing", 409)
 		return
 	}
 	if time.Since(l.lastInput) < 20*time.Millisecond {
-		http.Error(w, "操作过快", 429)
+		http.Error(w, "Input is too frequent", 429)
 		return
 	}
 	if l.actionPending {
-		http.Error(w, "正在确认授权结果，请稍候", 409)
+		http.Error(w, "Checking the authorization result. Please wait.", 409)
+		return
+	}
+	if l.unlocking {
+		http.Error(w, "Unlocking Mac. Please wait.", http.StatusConflict)
 		return
 	}
 	l.lastInput = time.Now()

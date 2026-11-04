@@ -28,23 +28,23 @@ func Link(addr tailcat.Addr) string {
 func ParseLink(raw string) (tailcat.Addr, error) {
 	raw = strings.TrimSpace(raw)
 	if len(raw) > 4096 {
-		return "", errors.New("连接码过长")
+		return "", errors.New("Connection code is too long")
 	}
 	addr := raw
 	if strings.Contains(raw, "://") {
 		u, err := url.Parse(raw)
 		if err != nil || u.Scheme != "miya" || u.Host != "connect" || u.Path != "" || u.Fragment != "" || u.User != nil {
-			return "", errors.New("请扫描 Miya 桌面端的连接二维码")
+			return "", errors.New("Scan the connection QR code in the Miya desktop app")
 		}
 		q, err := url.ParseQuery(u.RawQuery)
 		if err != nil || q.Get("v") != "1" || len(q["address"]) != 1 {
-			return "", errors.New("不支持的连接码版本")
+			return "", errors.New("Unsupported connection code version")
 		}
 		addr = q.Get("address")
 	}
 	ci, err := tailcat.ParseAddr(tailcat.Addr(addr))
 	if err != nil || ci.PresharedKey.IsZero() {
-		return "", errors.New("无效的 Miya 连接码")
+		return "", errors.New("Invalid Miya connection code")
 	}
 	return tailcat.Addr(addr), nil
 }

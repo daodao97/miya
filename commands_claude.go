@@ -57,6 +57,28 @@ func (c *chatController) loadClaudeCommands(cwd string) {
 		c.claudeCmdLoading = map[string]bool{}
 	}
 	c.claudeCmdLoading[cwd] = true
+	if c.remoteHost() {
+		cl := c.remote
+		go func() {
+			var list hostCommands
+			err := cl.call("commands", cwd, &list)
+			c.dispatch(func() {
+				delete(c.claudeCmdLoading, cwd)
+				if err == nil && list.Known {
+					c.setClaudeCommands(cwd, list.Choices, claudeCommandsKept)
+				} else {
+					time.AfterFunc(time.Second, func() {
+						c.dispatch(func() {
+							if c.ctx.Err() == nil {
+								c.loadClaudeCommands(cwd)
+							}
+						})
+					})
+				}
+			})
+		}()
+		return
+	}
 	binary, args, env, ctx := c.claudeBinary, c.claudeArgs, c.claudeEnv, c.ctx
 	go func() {
 		list, err := claude.ListCommands(ctx, binary, args, env, cwd)
@@ -152,7 +174,7 @@ func (app *chatApp) commandMenuState() string {
 	c := app.c
 	if c.currentAgent() == agentClaude {
 		if _, known := c.claudeCommandsFor(c.cwd); !known {
-			return "正在读取 Claude Code 命令…"
+			return "Loading Claude Code commands…"
 		}
 	}
 	return "No matching commands"

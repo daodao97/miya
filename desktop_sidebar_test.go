@@ -38,26 +38,26 @@ func TestSidebarActivityAcrossProjects(t *testing.T) {
 	app.expandedProject = ""
 	tt := ui.NewTester(app.sidebarView, 260, 1000)
 	tt.Frame()
-	for _, label := range []string{"进行中", "已完成", "其他项目运行", "其他项目完成", "待查看 3"} {
+	for _, label := range []string{"In progress", "Completed", "其他项目运行", "其他项目完成", "待查看 3"} {
 		if !tt.HasText(label) {
 			t.Fatalf("missing %q in %v", label, tt.Texts())
 		}
 	}
-	for _, label := range []string{"进行中", "已完成"} {
+	for _, label := range []string{"In progress", "Completed"} {
 		group, _ := tt.Find(label)
 		projects, _ := tt.Find("Projects")
 		if group.Y >= projects.Y {
 			t.Fatal("activity groups should precede Projects")
 		}
 	}
-	if _, ok := tt.Find("待读：其他项目完成"); !ok {
+	if _, ok := tt.Find("Unread: 其他项目完成"); !ok {
 		t.Fatal("unread completion has no green dot")
 	}
 	c.desktopUnread = nil
 	c.setThreads(nil)
 	c.projectCache = nil
 	tt.Frame()
-	if tt.HasText("进行中") || tt.HasText("已完成") {
+	if tt.HasText("In progress") || tt.HasText("Completed") {
 		t.Fatal("empty activity groups should be hidden")
 	}
 }
@@ -188,10 +188,10 @@ func TestDesktopCompletionStaysUnreadWithoutDisplayingMessages(t *testing.T) {
 	}
 	tt := ui.NewTester(app.sidebarView, 260, 750)
 	tt.Frame()
-	if !c.desktopThreadUnread(c.current()) || !tt.HasText("已完成") {
+	if !c.desktopThreadUnread(c.current()) || !tt.HasText("Completed") {
 		t.Fatal("completion vanished before the user chose to view it")
 	}
-	if _, ok := tt.Find("待读：完成后保留待读"); !ok {
+	if _, ok := tt.Find("Unread: 完成后保留待读"); !ok {
 		t.Fatal("the finished conversation should retain its unread dot")
 	}
 	if err := tt.Click("完成后保留待读"); err != nil {
@@ -199,7 +199,7 @@ func TestDesktopCompletionStaysUnreadWithoutDisplayingMessages(t *testing.T) {
 	}
 	app.markRequestedThreadRead()
 	tt.Frame()
-	if c.desktopThreadUnread(c.current()) || tt.HasText("已完成") {
+	if c.desktopThreadUnread(c.current()) || tt.HasText("Completed") {
 		t.Fatal("explicitly viewing the completed result should clear unread")
 	}
 }
@@ -231,10 +231,10 @@ func TestDesktopOpenCompletionBecomesReadAfterDisplayingLatest(t *testing.T) {
 	// Exercise the displayed-content check after the window focus guard.
 	app.markDisplayedThreadRead()
 	tt.Frame()
-	if c.desktopThreadUnread(c.current()) || tt.HasText("已完成") {
+	if c.desktopThreadUnread(c.current()) || tt.HasText("Completed") {
 		t.Fatal("the result already displayed at the end stayed unread")
 	}
-	if _, ok := tt.Find("待读：当前对话"); ok {
+	if _, ok := tt.Find("Unread: 当前对话"); ok {
 		t.Fatal("the viewed conversation still has a green unread dot")
 	}
 }
@@ -257,9 +257,10 @@ func TestDesktopDisplayedReadWaitsForLatestAndVisibleConversation(t *testing.T) 
 	}
 	list.ScrollToEnd()
 	tt.Frame()
-	for _, hidden := range []string{"settings", "switcher", "shortcuts", "project-dialog", "mobile"} {
+	for _, hidden := range []string{"settings", "switcher", "shortcuts", "command-palette", "project-dialog", "mobile"} {
 		app.section = ""
 		app.switcher.open, app.shortcutsOpen, app.projectDialog, app.mobile = false, false, false, false
+		app.commandPalette.open = false
 		switch hidden {
 		case "settings":
 			app.section = "Settings"
@@ -267,6 +268,8 @@ func TestDesktopDisplayedReadWaitsForLatestAndVisibleConversation(t *testing.T) 
 			app.switcher.open = true
 		case "shortcuts":
 			app.shortcutsOpen = true
+		case "command-palette":
+			app.commandPalette.open = true
 		case "project-dialog":
 			app.projectDialog = true
 		case "mobile":

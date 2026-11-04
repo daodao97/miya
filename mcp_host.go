@@ -21,7 +21,7 @@ var miyaMCPEnabled bool
 const maxDelegationDepth = 2
 
 // miyaReadOnlyTools are the miya tools an agent may call without asking.
-var miyaReadOnlyTools = []string{"list_threads", "read_thread", "thread_status", "list_automations", "report_result", "search_memory", "runtime_info", "request_desktop_control"}
+var miyaReadOnlyTools = []string{"list_threads", "read_thread", "thread_status", "list_agents", "read_task", "wait_task", "list_tasks", "list_automations", "report_result", "search_memory", "runtime_info", "request_desktop_control"}
 
 func miyaMCPCommand() (string, bool) {
 	if !miyaMCPEnabled {
@@ -75,13 +75,34 @@ func tomlString(s string) string {
 
 // mcpHandle answers a miya tool call the service received.
 func (c *chatController) mcpHandle(op string, r mcpRequest) (any, error) {
+	if op == "mcpCollaboration" {
+		return c.collaborationMCP(r)
+	}
+	if c.collaboration != nil && (op == "mcpThreads" || op == "mcpRead" || op == "mcpStatus" || op == "mcpDelegate" || op == "mcpLegacyTask") {
+		if len(r.Arguments) == 0 {
+			return nil, errors.New("CALLER_UNAVAILABLE: Restart the agent to use verified conversation tools")
+		}
+		caller, _, err := c.mcpCallerWithArguments(r.Tool, r.Arguments)
+		if err != nil {
+			return nil, err
+		}
+		if op == "mcpThreads" {
+			return c.mcpThreadsFor(caller, c.threadWorkspace(caller.ID)), nil
+		}
+		if op == "mcpDelegate" {
+			return c.legacyDelegate(r, caller)
+		}
+		if op == "mcpLegacyTask" {
+			return c.legacyTaskRead(r, caller)
+		}
+	}
 	if op == "mcpRuntime" {
 		return c.mcpRuntime(r)
 	}
 	if r.Reference != "" {
 		ref, ok := parseThreadURL(r.Reference)
 		if !ok || ref.Source != c.referenceSource {
-			return nil, errors.New("会话链接无效或属于另一台桌面")
+			return nil, errors.New("Session link is invalid or belongs to another desktop")
 		}
 		r.Thread = 0
 		for _, t := range c.allThreads() {
@@ -101,7 +122,7 @@ func (c *chatController) mcpHandle(op string, r mcpRequest) (any, error) {
 				}
 				return mcpReadResult{Loaded: true, Packet: threadPacket(t, messages)}, nil
 			}
-			return nil, errors.New("会话不存在或已不可用")
+			return nil, errors.New("The conversation no longer exists or is unavailable")
 		}
 	}
 	// The MCP server's workspace argument is not trusted: Codex runs one
@@ -185,6 +206,10 @@ func (c *chatController) mcpThreads(r mcpRequest) mcpThreadsResult {
 	if ok {
 		project = c.threadWorkspace(caller.ID)
 	}
+	return c.mcpThreadsFor(caller, project)
+}
+
+func (c *chatController) mcpThreadsFor(caller Thread, project string) mcpThreadsResult {
 	res := mcpThreadsResult{Threads: []mcpThreadInfo{}}
 	for _, t := range c.projectThreads(project) {
 		if t.ID == 0 || t.ID == caller.ID || !c.threadRef(t).valid() {
@@ -202,7 +227,7 @@ func (c *chatController) mcpThreads(r mcpRequest) mcpThreadsResult {
 func (c *chatController) mcpRead(r mcpRequest) (mcpReadResult, error) {
 	t, messages, ok := c.resolveThreadRef(r.Thread)
 	if !ok {
-		return mcpReadResult{}, errors.New("会话不存在：用 list_threads 查看可用会话链接")
+		return mcpReadResult{}, errors.New("Session not found. Use list_threads to see available session links.")
 	}
 	loaded := t.HistoryLoaded
 	if !loaded {
@@ -214,7 +239,7 @@ func (c *chatController) mcpRead(r mcpRequest) (mcpReadResult, error) {
 func (c *chatController) mcpStatus(r mcpRequest) (mcpStatusResult, error) {
 	t, _, ok := c.resolveThreadRef(r.Thread)
 	if !ok {
-		return mcpStatusResult{}, errors.New("会话不存在或已不可用")
+		return mcpStatusResult{}, errors.New("The conversation no longer exists or is unavailable")
 	}
 	status, _ := c.handoffState(t.ID)
 	last := -1
@@ -235,39 +260,39 @@ func (c *chatController) mcpDelegate(r mcpRequest) (mcpDelegateResult, error) {
 	}
 	task := strings.TrimSpace(r.Task)
 	if task == "" {
-		return mcpDelegateResult{}, errors.New("task 不能为空")
+		return mcpDelegateResult{}, errors.New("task cannot be empty")
 	}
 	if c.delegationDepth(caller.ID) >= maxDelegationDepth {
-		return mcpDelegateResult{}, fmt.Errorf("委派最多 %d 层：这个对话本身就是委派来的任务，请直接完成它", maxDelegationDepth)
+		return mcpDelegateResult{}, fmt.Errorf("Delegation is limited to %d levels. This conversation is itself a delegated task; complete it directly.", maxDelegationDepth)
 	}
 	if r.Thread != 0 {
 		if r.Thread == caller.ID {
-			return mcpDelegateResult{}, errors.New("不能把任务交付给自己")
+			return mcpDelegateResult{}, errors.New("Cannot delegate a task to yourself")
 		}
 		if c.delegatedFrom(caller.ID, r.Thread) {
-			return mcpDelegateResult{}, errors.New("目标会话是把任务交给你的上游，不能再派回去")
+			return mcpDelegateResult{}, errors.New("The target session delegated this task to you. You cannot delegate it back.")
 		}
 		if _, _, ok := c.resolveThreadRef(r.Thread); !ok {
-			return mcpDelegateResult{}, errors.New("会话不存在或已不可用")
+			return mcpDelegateResult{}, errors.New("The conversation no longer exists or is unavailable")
 		}
 	}
 	agent := threadAgent(caller)
 	if r.Thread == 0 && r.Agent != "" {
 		if agent = normalizeAgentID(r.Agent); agent == "" {
-			return mcpDelegateResult{}, fmt.Errorf("没有 agent %q：可选 %s 或 %s", r.Agent, agentCodex, agentClaude)
+			return mcpDelegateResult{}, fmt.Errorf("Agent %q not found. Choose %s or %s.", r.Agent, agentCodex, agentClaude)
 		}
 	}
 	text := task
 	if !r.NoContext {
 		ref := c.threadRef(caller)
 		if !ref.valid() {
-			return mcpDelegateResult{}, errors.New("会话创建后才能交付上下文")
+			return mcpDelegateResult{}, errors.New("The session must be created before its context can be handed off")
 		}
 		text += "\n\n" + referenceText(ref, threadRefTitle(caller))
 	}
 	id := c.submit(sendRequest{ThreadID: r.Thread, Agent: agent, Project: c.threadWorkspace(caller.ID), Text: text, MemoryControl: true})
 	if id == 0 {
-		return mcpDelegateResult{}, errors.New(firstNonEmpty(c.lastSubmitError, "交付失败：目标 agent 还没有就绪，或对话是只读的"))
+		return mcpDelegateResult{}, errors.New(firstNonEmpty(c.lastSubmitError, "Handoff failed: the target agent is not ready, or the conversation is read-only"))
 	}
 	c.noteHandoffs([]Thread{caller}, id, threadRefTask(task))
 	if c.delegationParent == nil {
@@ -280,7 +305,11 @@ func (c *chatController) mcpDelegate(r mcpRequest) (mcpDelegateResult, error) {
 }
 
 func normalizeAgentID(id string) string {
-	switch strings.ToLower(strings.TrimSpace(id)) {
+	normalized := strings.ToLower(strings.TrimSpace(id))
+	if registeredBackend(normalized) {
+		return normalized
+	}
+	switch normalized {
 	case agentCodex:
 		return agentCodex
 	case agentClaude, "claude", "claude code":
@@ -346,7 +375,7 @@ func (c *chatController) mcpRuntime(r mcpRequest) (any, error) {
 		return nil, errors.New(mcpCallerUnknown)
 	}
 	if count != 1 {
-		return nil, errors.New("多个对话正在查询运行信息，无法唯一核验调用来源，请稍后重试")
+		return nil, errors.New("Multiple conversations are querying runtime information. Unable to identify the caller uniquely. Try again shortly.")
 	}
 	work, err := c.prepareRuntime(c.threadRef(caller), c.threadWorkspace(caller.ID))
 	if err != nil {

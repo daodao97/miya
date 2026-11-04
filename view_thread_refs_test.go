@@ -32,7 +32,7 @@ func TestInlineThreadReferencesKeepTheirPosition(t *testing.T) {
 func TestComposerShowsInlineTagsAndEditsThemAsOneObject(t *testing.T) {
 	app, tt := testApp(t)
 	c := app.c
-	c.setThreads([]Thread{{ID: 1, Title: "当前", HistoryLoaded: true}, handoffSource()})
+	c.setThreads([]Thread{{ID: 1, Title: "Current: ", HistoryLoaded: true}, handoffSource()})
 	c.setActive(1)
 	tt.Frame()
 	tt.Type("@登录")
@@ -91,7 +91,7 @@ func TestComposerShowsInlineTagsAndEditsThemAsOneObject(t *testing.T) {
 func TestInlineCompletionPreservesMidSentenceCaretAndChineseInput(t *testing.T) {
 	app, tt := testApp(t)
 	c := app.c
-	c.setThreads([]Thread{{ID: 1, Title: "当前", HistoryLoaded: true}, handoffSource()})
+	c.setThreads([]Thread{{ID: 1, Title: "Current: ", HistoryLoaded: true}, handoffSource()})
 	c.setActive(1)
 	c.rememberDraft("检查  的问题")
 	tt.Frame()
@@ -138,7 +138,7 @@ func TestMessagesShowThreadTagsWithoutContextPackets(t *testing.T) {
 	message := Message{ID: 50, Role: "user", Content: text}
 	tt := ui.NewTester(func(c *ui.Context) { app.messageView(c, message, false) }, 600, 280)
 	tt.Frame()
-	if !tt.HasText(source.Title) || !tt.HasText("继续修复") || tt.HasText("miya-thread-context") || tt.HasText("最初的请求") || tt.HasText("引用对话：") || tt.HasText("@#2") {
+	if !tt.HasText(source.Title) || !tt.HasText("继续修复") || tt.HasText("miya-thread-context") || tt.HasText("Original request") || tt.HasText("引用对话：") || tt.HasText("@#2") {
 		t.Fatalf("message did not hide expanded context behind a named tag: %q", tt.Texts())
 	}
 	app.startEdit(message)
@@ -161,7 +161,7 @@ func TestMobileThreadTagRetainsGlobalTitleAndReference(t *testing.T) {
 	if a := doc.Text().AttributesAt(0).Attachment; a == nil || a.Name != "thread-two" {
 		t.Fatal("phone did not resolve the global title")
 	}
-	if err := tt.Click("消息"); err != nil {
+	if err := tt.Click("Message"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Type("你好👋")
@@ -180,7 +180,7 @@ func TestMobileThreadTagRetainsGlobalTitleAndReference(t *testing.T) {
 func TestComposerConvertsPastedLinkOnlyWhenRequested(t *testing.T) {
 	app, tt := testApp(t)
 	src := handoffSource()
-	app.c.setThreads([]Thread{{ID: 1, Title: "当前", HistoryLoaded: true}, src})
+	app.c.setThreads([]Thread{{ID: 1, Title: "Current: ", HistoryLoaded: true}, src})
 	app.c.setActive(1)
 	tt.Frame()
 	tt.SetClipboard(testReference(src).URL())
@@ -195,7 +195,7 @@ func TestComposerConvertsPastedLinkOnlyWhenRequested(t *testing.T) {
 	if err := tt.RightClick("Message Codex"); err != nil {
 		t.Fatal(err)
 	}
-	if err := tt.ChooseMenuItem("粘贴为会话引用"); err != nil {
+	if err := tt.ChooseMenuItem("Paste as conversation reference"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
@@ -207,7 +207,7 @@ func TestComposerConvertsPastedLinkOnlyWhenRequested(t *testing.T) {
 	if err := tt.RightClick("Message Codex"); err != nil {
 		t.Fatal(err)
 	}
-	if err := tt.ChooseMenuItem("复制会话链接"); err != nil {
+	if err := tt.ChooseMenuItem("Copy session link"); err != nil {
 		t.Fatal(err)
 	}
 	if tt.Clipboard() != testReference(src).URL() {

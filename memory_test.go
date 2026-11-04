@@ -127,7 +127,7 @@ func TestMemoryAmbiguousOrMissingCallerNeverFallsBack(t *testing.T) {
 	r := memoryMCPRequest("remember", memoryArgs{Kind: "fact", Content: "协议", Quote: "记住协议"})
 	call := memoryToolMessage(agentCodex, r.Tool, r.Arguments, 11, 2000)
 	c.setThreads([]Thread{{ID: 1, ServerID: "a", Messages: []Message{call}}, {ID: 2, ServerID: "b", Messages: []Message{call}}})
-	if _, err := c.mcpMemory(r); err == nil || !strings.Contains(err.Error(), "不唯一") {
+	if _, err := c.mcpMemory(r); err == nil || !strings.Contains(err.Error(), "ambiguous") {
 		t.Fatalf("ambiguous accepted: %v", err)
 	}
 	c.setThreads(nil)

@@ -141,7 +141,7 @@ func TestClaudeBackgroundActivityCountsAndFooter(t *testing.T) {
 	}, 744, 500)
 	tt.Frame()
 	text := strings.Join(tt.Texts(), "\n")
-	if !strings.Contains(text, "2 activities · 2 运行中") || strings.Contains(text, "Worked for") || strings.Contains(text, "2 已完成") {
+	if !strings.Contains(text, "2 activities · 2 Running") || strings.Contains(text, "Worked for") || strings.Contains(text, "2 Completed") {
 		t.Fatalf("pending task UI is wrong: %s", text)
 	}
 	automationSnapshot(t, tt, "claude-background-running")
@@ -151,7 +151,7 @@ func TestClaudeBackgroundActivityCountsAndFooter(t *testing.T) {
 	c.finishClaude(1, c.cwd, nil)
 	tt.Frame()
 	text = strings.Join(tt.Texts(), "\n")
-	if !strings.Contains(text, "2 activities · 2 已完成") || !strings.Contains(text, "Worked for") {
+	if !strings.Contains(text, "2 activities · 2 Completed") || !strings.Contains(text, "Worked for") {
 		t.Fatalf("completed task UI is wrong: %s", text)
 	}
 	automationSnapshot(t, tt, "claude-background-completed")

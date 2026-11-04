@@ -49,7 +49,7 @@ func (m *mobileApp) openDesktopWindow(approval *codex.Approval, window desktop.W
 		return
 	}
 	if !m.state.DesktopControl {
-		m.sendErr = "请更新 macOS 14 及以上电脑的 Miya 桌面端，并等待后台空闲后切换到新版"
+		m.sendErr = tr("Update Miya on your Mac running macOS 14 or later, then wait for the background service to switch versions when idle")
 		return
 	}
 	var raw [16]byte
@@ -93,7 +93,7 @@ func (m *mobileApp) openDesktopWindow(approval *codex.Approval, window desktop.W
 			if m.desktopRequest == id {
 				m.desktopRequest = ""
 				m.desktopApproval = mobileDesktopApproval{}
-				m.sendErr = "远程桌面暂时无法响应，请重试"
+				m.sendErr = tr("Remote desktop is not responding. Try again.")
 			}
 		})
 	})
@@ -118,7 +118,7 @@ func (m *mobileApp) receiveDesktopControl(conn *remote.Conn, data json.RawMessag
 	}
 	if len(reply.Token) != 64 {
 		m.desktopApproval = mobileDesktopApproval{}
-		m.sendErr = "无效的远程桌面连接"
+		m.sendErr = tr("Invalid remote desktop connection")
 		return
 	}
 	m.openDesktopPage(conn, reply.Token)
@@ -139,7 +139,7 @@ func (m *mobileApp) desktopControlAction(c *ui.Context, a codex.Approval) {
 		m.desktopWindowPreview(c, a)
 		return
 	}
-	if m.pill(c, "remote-desktop", "打开远程桌面", false).FillWidth().Disabled(!m.connected || m.desktopRequest != "" || m.desktopUIOpen()).Clicked() {
+	if m.pill(c, "remote-desktop", tr("Open remote desktop"), false).FillWidth().Disabled(!m.connected || m.desktopRequest != "" || m.desktopUIOpen()).Clicked() {
 		m.openRemoteDesktop()
 	}
 }
@@ -189,14 +189,14 @@ func (m *mobileApp) requestWindowPreview(a codex.Approval) {
 	go func() {
 		if err := conn.Send(r); err != nil {
 			m.onMain(gen, func() {
-				m.failWindowPreview(id, p, "连接已中断，请重新连接后重试预览。")
+				m.failWindowPreview(id, p, tr("Connection lost. Reconnect to retry the preview."))
 			})
 		}
 	}()
 	time.AfterFunc(12*time.Second, func() {
 		m.onMain(gen, func() {
 			if m.desktopPreviews[id] == p && p.loading {
-				m.failWindowPreview(id, p, "窗口预览暂时不可用，请重试。")
+				m.failWindowPreview(id, p, tr("Window preview unavailable. Try again."))
 			}
 		})
 	})
@@ -222,7 +222,7 @@ func (m *mobileApp) receiveWindowPreview(conn *remote.Conn, p phoneDesktopPrevie
 		return
 	}
 	if message != "" || image == nil {
-		m.failWindowPreview(string(p.Approval), current, firstNonEmpty(message, "未能加载窗口预览，请重试。"))
+		m.failWindowPreview(string(p.Approval), current, firstNonEmpty(message, tr("Unable to load window preview. Try again.")))
 		return
 	}
 	current.loading, current.stale, current.message = false, false, ""
@@ -290,7 +290,7 @@ func (m *mobileApp) pressWindowAction(a codex.Approval, p *mobileWindowPreview, 
 		m.onMain(gen, func() {
 			if m.desktopPreviews[string(a.ID)] == p && p.actionPending {
 				p.actionPending = false
-				p.message = "尚未确认授权结果，请先查看窗口状态"
+				p.message = tr("Permission result unconfirmed. Check the window state first.")
 				invalidate()
 			}
 		})
@@ -327,7 +327,7 @@ func (m *mobileApp) desktopWindowPreview(c *ui.Context, a codex.Approval) {
 	}
 	if p == nil {
 		ui.Text(c, a.Reason).FontSize(m.font(16)).FontWeight(600)
-		ui.Text(c, "连接电脑后预览授权窗口").FontSize(m.font(13)).TextColor(m.pal.muted)
+		ui.Text(c, tr("Connect to your computer to preview the permission window")).FontSize(m.font(13)).TextColor(m.pal.muted)
 		return
 	}
 	blocked := !m.connected || m.desktopRequest != "" || m.desktopUIOpen()
@@ -339,9 +339,9 @@ func (m *mobileApp) desktopWindowPreview(c *ui.Context, a codex.Approval) {
 			ui.Text(c, p.dialog.Message).FillWidth().FontSize(m.font(14)).TextColor(m.pal.muted).LineHeight(1.45).MaxLines(3)
 		}
 		if len([]rune(p.dialog.Message)) > 100 {
-			label := "完整说明"
+			label := tr("Full description")
 			if p.expanded {
-				label = "收起说明"
+				label = tr("Collapse description")
 			}
 			if m.pill(c, "window-details", label, false).Clicked() {
 				p.expanded = !p.expanded
@@ -349,7 +349,7 @@ func (m *mobileApp) desktopWindowPreview(c *ui.Context, a codex.Approval) {
 		}
 	}
 	if p.image != nil {
-		button := m.phoneButton(c.Key("window-preview")).Column().FillWidth().Padding(8).Background(m.pal.bg).Label("操作授权窗口").Disabled(blocked)
+		button := m.phoneButton(c.Key("window-preview")).Column().FillWidth().Padding(8).Background(m.pal.bg).Label(tr("Control permission window")).Disabled(blocked)
 		button.Children(func() {
 			w, h := ui.ImageSize(p.image)
 			ratio := float32(1.5)
@@ -364,32 +364,32 @@ func (m *mobileApp) desktopWindowPreview(c *ui.Context, a codex.Approval) {
 	} else {
 		message := p.message
 		if p.loading {
-			message = "正在预览授权窗口…"
+			message = tr("Opening permission window preview…")
 		}
 		ui.Column(c).FillWidth().Height(200).Padding(16).Background(m.pal.bg).Radius(12).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
 			ui.Text(c, message).FontSize(m.font(13)).TextColor(m.pal.muted).TextAlign(ui.Center).MaxLines(3)
 		})
 	}
-	status := "点预览操作目标窗口"
+	status := tr("Tap the preview to control the target window")
 	needsInput := false
 	for _, action := range p.dialog.Actions {
 		if !action.Cancel && !action.Enabled {
 			needsInput = true
-			status = "先填写授权信息，再允许访问"
+			status = tr("Enter the required information before allowing access")
 			break
 		}
 	}
 	if p.stale {
-		status = "预览已暂停"
+		status = tr("Preview paused")
 		if p.image != nil {
-			status += "，保留上次画面"
+			status += tr(", showing the last image")
 		}
 	}
 	ui.Text(c, status).FontSize(m.font(12)).TextColor(m.pal.muted).MaxLines(1)
 	if len(p.dialog.Actions) > 0 {
 		ui.Row(c).FillWidth().Wrap().Justify(ui.End).Gap(8).Children(func() {
 			if needsInput {
-				if m.approvalButton(c, "fill-authorization", "填写授权信息", true, blocked || p.actionPending).Clicked() {
+				if m.approvalButton(c, "fill-authorization", tr("Enter permission details"), true, blocked || p.actionPending).Clicked() {
 					m.openDesktopWindow(&a, p.window)
 				}
 			}
@@ -409,10 +409,10 @@ func (m *mobileApp) desktopWindowPreview(c *ui.Context, a codex.Approval) {
 			ui.Text(c, p.message).FontSize(m.font(13)).TextColor(m.pal.muted).MinHeight(38).MaxLines(2)
 		}
 		ui.Row(c).FillWidth().Wrap().Gap(8).Children(func() {
-			if m.pill(c, "retry-preview", "重试预览", false).Grow(1).Disabled(blocked || p.loading).Clicked() {
+			if m.pill(c, "retry-preview", tr("Retry preview"), false).Grow(1).Disabled(blocked || p.loading).Clicked() {
 				m.requestWindowPreview(a)
 			}
-			if m.pill(c, "open-window", "打开授权窗口", false).Grow(1).Disabled(blocked).Clicked() {
+			if m.pill(c, "open-window", tr("Open permission window"), false).Grow(1).Disabled(blocked).Clicked() {
 				m.openDesktopWindow(&a, p.window)
 			}
 		})

@@ -55,17 +55,22 @@ func newDesktopClient(dial func(context.Context) (net.Conn, error), token string
 }
 
 func (c *desktopClient) do(ctx context.Context, method, path string, body any) ([]byte, error) {
+	data, _, err := c.doHeader(ctx, method, path, body)
+	return data, err
+}
+
+func (c *desktopClient) doHeader(ctx context.Context, method, path string, body any) ([]byte, http.Header, error) {
 	var reader io.Reader
 	if body != nil {
 		data, err := json.Marshal(body)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		reader = bytes.NewReader(data)
 	}
 	request, err := http.NewRequestWithContext(ctx, method, "http://desktop"+desktopControlPrefix+path, reader)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	request.Header.Set("Authorization", "Bearer "+c.token)
 	if body != nil {
@@ -74,9 +79,9 @@ func (c *desktopClient) do(ctx context.Context, method, path string, body any) (
 	response, err := c.http.Do(request)
 	if err != nil {
 		if ctx.Err() != nil {
-			return nil, ctx.Err()
+			return nil, nil, ctx.Err()
 		}
-		return nil, errors.New("无法连接 Mac，请确认电脑在线后重试")
+		return nil, nil, errors.New(tr("Unable to connect to your Mac. Check that it is online and retry."))
 	}
 	defer response.Body.Close()
 	data, err := io.ReadAll(io.LimitReader(response.Body, desktopClientMaxBody+1))
@@ -85,15 +90,15 @@ func (c *desktopClient) do(ctx context.Context, method, path string, body any) (
 		if r := []rune(message); len(r) > 300 {
 			message = string(r[:300])
 		}
-		return nil, &desktopHTTPError{Status: response.StatusCode, Message: firstNonEmpty(message, fmt.Sprintf("Mac 返回错误（%d）", response.StatusCode))}
+		return nil, response.Header, &desktopHTTPError{Status: response.StatusCode, Message: firstNonEmpty(message, fmt.Sprintf(tr("Mac returned an error (%d)"), response.StatusCode))}
 	}
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if len(data) > desktopClientMaxBody {
-		return nil, errors.New("画面无效或过大")
+		return nil, nil, errors.New(tr("Invalid or oversized frame"))
 	}
-	return data, nil
+	return data, response.Header, nil
 }
 
 type desktopSession struct {
@@ -144,12 +149,21 @@ func (c *desktopClient) start(ctx context.Context) error {
 	return err
 }
 
-func (c *desktopClient) frame(ctx context.Context) ([]byte, error) {
-	data, err := c.do(ctx, http.MethodGet, "/frame", nil)
+// frame also reports whether the Mac currently shows its lock screen.
+func (c *desktopClient) frame(ctx context.Context) ([]byte, bool, error) {
+	data, header, err := c.doHeader(ctx, http.MethodGet, "/frame", nil)
 	if err == nil && len(data) == 0 {
-		err = errors.New("画面无效或过大")
+		err = errors.New(tr("Invalid or oversized frame"))
 	}
-	return data, err
+	return data, header.Get(desktopLockedHeader) == "1", err
+}
+
+// unlock types password into the Mac's lock screen and waits for the result.
+func (c *desktopClient) unlock(ctx context.Context, password string) error {
+	_, err := c.do(ctx, http.MethodPost, "/unlock", struct {
+		Password string `json:"password"`
+	}{password})
+	return err
 }
 
 func (c *desktopClient) input(ctx context.Context, in desktop.Input) error {

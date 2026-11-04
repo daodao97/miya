@@ -33,7 +33,7 @@ const (
 var surfaceKinds = []surfaceKind{surfaceBrowser, surfaceTerminal, surfaceFiles, surfaceDiff, surfaceRuntime}
 
 func (k surfaceKind) label() string {
-	return [...]string{"浏览器", "终端", "文件", "审阅", "后台运行"}[k]
+	return [...]string{tr("Browser"), tr("Terminal"), tr("Files"), tr("Review"), tr("Background tasks")}[k]
 }
 
 func (k surfaceKind) icon() string {
@@ -41,7 +41,7 @@ func (k surfaceKind) icon() string {
 }
 
 func (k surfaceKind) description() string {
-	return [...]string{"打开本地应用或网址", "在此工作区中打开终端", "浏览并阅读工作区文件", "审阅文件更改", "查看本对话的任务、进程和服务"}[k]
+	return [...]string{tr("Open a local app or URL"), tr("Open a terminal in this workspace"), tr("Browse and read workspace files"), tr("Review file changes"), tr("View this conversation's tasks, processes, and services")}[k]
 }
 
 // Browsers and terminals open as many tabs as asked; the files and the
@@ -60,10 +60,12 @@ type panelSurface struct {
 	kind           surfaceKind
 	closed         bool
 
-	web     *mygo.WebView
-	address string
-	loaded  string
-	webErr  string
+	web           *mygo.WebView
+	address       string
+	loaded        string
+	webErr        string
+	webProxy      *phoneFileProxy
+	webGeneration int
 
 	term     *terminal.Terminal
 	termErr  string
@@ -76,6 +78,23 @@ type fileEditor struct {
 	loading bool
 	preview bool
 	saveErr string
+	saving  bool
+	// image is the picture an image file previews as; an SVG's is parsed
+	// again from its text each time the preview opens.
+	image ui.ImageSource
+}
+
+// svgPreview parses an SVG's text for the preview, nil when it is not a
+// valid SVG of a size.
+func svgPreview(text string) ui.ImageSource {
+	s, err := ui.ParseSVG([]byte(text))
+	if err != nil {
+		return nil
+	}
+	if w, h := ui.ImageSize(s); w <= 0 || h <= 0 {
+		return nil
+	}
+	return s
 }
 
 type panelState struct {
@@ -181,6 +200,10 @@ func (app *chatApp) closePanels() {
 
 func closeSurfaceResources(s *panelSurface) {
 	s.closed = true
+	if s.webProxy != nil {
+		s.webProxy.Close()
+		s.webProxy = nil
+	}
 	if s.term != nil {
 		t := s.term
 		s.term = nil
@@ -274,7 +297,7 @@ func (app *chatApp) rightPanel(c *ui.Context, p *panelState) {
 	}
 	p.lastBusy = app.c.current().Busy
 
-	divider := ui.Box(c.Key("panel-divider")).Width(5).FillHeight().Shrink(0).Cursor(ui.CursorResizeEW).Label("调整右侧面板宽度")
+	divider := ui.Box(c.Key("panel-divider")).Width(5).FillHeight().Shrink(0).Cursor(ui.CursorResizeEW).Label(tr("Resize right panel"))
 	if dx, _, ok := divider.Dragged(); ok {
 		app.panelWidth = min(max(app.panelWidth-dx, 320), 960)
 	}
@@ -319,7 +342,7 @@ func (app *chatApp) workspaceChanged(p *panelState) {
 
 func (app *chatApp) panelHeader(c *ui.Context, p *panelState) {
 	ui.Row(c).Height(56).Shrink(0).AlignItems(ui.Center).Gap(6).Padding(0, 14, 0, 10).DragWindow().Children(func() {
-		ui.ScrollHorizontal(c.Key("tabs")).Grow(1).MinWidth(0).Scrollbars(false).Label("右侧面板标签页").Children(func() {
+		ui.ScrollHorizontal(c.Key("tabs")).Grow(1).MinWidth(0).Scrollbars(false).Label(tr("Right panel tabs")).Children(func() {
 			ui.Row(c).Gap(4).AlignItems(ui.Center).Children(func() {
 				for i, s := range p.surfaces {
 					app.panelTab(c.Key(s.id), p, i, s)
@@ -327,7 +350,7 @@ func (app *chatApp) panelHeader(c *ui.Context, p *panelState) {
 			})
 		})
 		if len(p.surfaces) > 0 {
-			add := toolButton(c.Key("add-surface"), "plus", "添加面板标签页")
+			add := toolButton(c.Key("add-surface"), "plus", tr("Add panel tab"))
 			add.PopoverMenuButton(func(m *ui.Menu) {
 				for _, k := range surfaceKinds {
 					item := m.Item(k.label())
@@ -340,7 +363,7 @@ func (app *chatApp) panelHeader(c *ui.Context, p *panelState) {
 				}
 			})
 		}
-		if toolButton(c.Key("hide-panel"), "layout-sidebar-right", "隐藏右侧面板").Tooltip("隐藏右侧面板 · " + shortcutKeys(ui.Cmd|ui.Alt, "B")).Clicked() {
+		if toolButton(c.Key("hide-panel"), "layout-sidebar-right", tr("Hide right panel")).Tooltip(tr("Hide right panel · ") + shortcutKeys(ui.Cmd|ui.Alt, "B")).Clicked() {
 			app.hidePanel(p)
 		}
 	})
@@ -363,9 +386,9 @@ func (app *chatApp) panelTab(c *ui.Context, p *panelState, i int, s *panelSurfac
 		}
 		ui.Text(c, label).Grow(1).MinWidth(0).SingleLine().Ellipsis("…").FontSize(12).TextColor(color)
 		if p.dirty(s) {
-			ui.Box(c.Key("dirty")).Size(7, 7).Radius(4).Shrink(0).Background(ui.Hex("#e0a030")).Tooltip("有未保存的更改，按 ⌘S 保存")
+			ui.Box(c.Key("dirty")).Size(7, 7).Radius(4).Shrink(0).Background(ui.Hex("#e0a030")).Tooltip(tr("Unsaved changes. Press ⌘S to save."))
 		}
-		x := ui.ButtonBase(c.Key("close")).Size(16, 16).Shrink(0).Radius(4).Justify(ui.Center).AlignItems(ui.Center).Label("关闭" + label)
+		x := ui.ButtonBase(c.Key("close")).Size(16, 16).Shrink(0).Radius(4).Justify(ui.Center).AlignItems(ui.Center).Label(tr("Close") + label)
 		if x.Hovered() {
 			x.Background(chosen)
 		}
@@ -380,8 +403,8 @@ func (app *chatApp) panelTab(c *ui.Context, p *panelState, i int, s *panelSurfac
 func (app *chatApp) panelChooser(c *ui.Context, p *panelState) {
 	ui.Column(c).Grow(1).MinHeight(0).AlignItems(ui.Center).Justify(ui.Center).Padding(0, 20, 32, 20).Children(func() {
 		ui.Column(c).FillWidth().MaxWidth(420).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, "打开一个面板").FontSize(13).FontWeight(500)
-			ui.Text(c, "选择要在右侧面板中显示的内容").FontSize(12).TextColor(muted).Margin(5, 0, 0, 0)
+			ui.Text(c, tr("Open a panel")).FontSize(13).FontWeight(500)
+			ui.Text(c, tr("Choose what to show in the right panel")).FontSize(12).TextColor(muted).Margin(5, 0, 0, 0)
 			for row, kinds := range [][]surfaceKind{{surfaceBrowser, surfaceTerminal}, {surfaceFiles, surfaceDiff}, {surfaceRuntime}} {
 				ui.Row(c.Key(row)).FillWidth().Gap(8).Margin(map[bool]float32{true: 18, false: 8}[row == 0], 0, 0, 0).Children(func() {
 					for _, k := range kinds {
@@ -427,7 +450,7 @@ func panelBar(c *ui.Context, fn func()) {
 func (app *chatApp) startBrowser(s *panelSurface) {
 	w := currentWindow()
 	if w == nil {
-		s.webErr = "浏览器需要应用窗口"
+		s.webErr = tr("The browser requires an app window")
 		return
 	}
 	web, err := w.NewWebView(mygo.WebViewOptions{BackgroundColor: "#ffffff"})
@@ -444,6 +467,10 @@ func (app *chatApp) navigate(s *panelSurface) {
 		return
 	}
 	s.address, s.loaded = target, target
+	if app.c.remoteHost() {
+		app.navigateRemoteBrowser(s, target, phoneWebService{})
+		return
+	}
 	if err := s.web.Page().LoadURL(target); err != nil {
 		s.webErr = err.Error()
 	}
@@ -453,17 +480,17 @@ func (app *chatApp) browserView(c *ui.Context, s *panelSurface) {
 	ui.Column(c).Grow(1).MinHeight(0).Children(func() {
 		panelBar(c, func() {
 			if s.web != nil {
-				if toolButton(c.Key("back"), "arrow-left", "后退").Clicked() {
+				if toolButton(c.Key("back"), "arrow-left", tr("Back")).Clicked() {
 					s.web.Page().GoBack()
 				}
-				if toolButton(c.Key("forward"), "arrow-right", "前进").Clicked() {
+				if toolButton(c.Key("forward"), "arrow-right", tr("Forward")).Clicked() {
 					s.web.Page().GoForward()
 				}
-				if toolButton(c.Key("reload"), "refresh", "重新加载").Clicked() {
+				if toolButton(c.Key("reload"), "refresh", tr("Reload")).Clicked() {
 					s.web.Page().Reload()
 				}
 			}
-			in := ui.TextInput(c.Key("address"), &s.address).Placeholder("输入网址或 localhost 端口").Label("地址").Grow(1).FontSize(12)
+			in := ui.TextInput(c.Key("address"), &s.address).Placeholder(tr("Enter a URL or localhost port")).Label(tr("Address")).Grow(1).FontSize(12)
 			if s.loaded == "" {
 				in.AutoFocus()
 			}
@@ -473,7 +500,7 @@ func (app *chatApp) browserView(c *ui.Context, s *panelSurface) {
 		})
 		switch {
 		case s.webErr != "":
-			panelMessage(c, "浏览器不可用", s.webErr)
+			panelMessage(c, tr("Browser unavailable"), s.webErr)
 		case s.web != nil:
 			ui.WebView(c, s.web).Grow(1)
 		}
@@ -484,14 +511,29 @@ func (app *chatApp) browserView(c *ui.Context, s *panelSurface) {
 
 func (app *chatApp) startTerminal(s *panelSurface, dir string) {
 	s.starting, s.termErr = true, ""
+	var cl *serviceClient
+	if app.c.remoteHost() {
+		cl = app.c.remote
+	}
 	goAsync(func() {
-		t, err := terminal.New(terminal.Options{
+		opts := terminal.Options{
 			Dir:                     dir,
 			ShellIntegration:        true,
 			CopyOnSelect:            terminal.CopyOnSelectClipboard,
 			SelectOnDrag:            true,
 			SelectOnDragInAltScreen: true,
-		})
+		}
+		var err error
+		if cl != nil {
+			opts.Conn, err = openRemoteTerminal(cl, dir)
+		}
+		var t *terminal.Terminal
+		if err == nil {
+			t, err = terminal.New(opts)
+		}
+		if err != nil && opts.Conn != nil {
+			opts.Conn.Close()
+		}
 		app.c.dispatch(func() {
 			s.starting = false
 			if err != nil {
@@ -527,7 +569,7 @@ func (app *chatApp) terminalView(c *ui.Context, p *panelState, s *panelSurface) 
 			if detail != "" {
 				ui.Text(c, detail).FontSize(12).TextColor(muted).TextAlign(ui.Center)
 			}
-			if ui.Button(c.Key("restart"), "重新启动").Clicked() {
+			if ui.Button(c.Key("restart"), tr("Restart")).Clicked() {
 				if s.term != nil {
 					go s.term.Close()
 					s.term = nil
@@ -540,14 +582,14 @@ func (app *chatApp) terminalView(c *ui.Context, p *panelState, s *panelSurface) 
 	case s.starting:
 		ui.Row(c).Grow(1).Justify(ui.Center).AlignItems(ui.Center).Gap(8).Children(func() {
 			ui.Spinner(c)
-			mutedText(c, "正在启动终端…")
+			mutedText(c, tr("Starting terminal…"))
 		})
 	case s.termErr != "":
-		restart("终端不可用", s.termErr)
+		restart(tr("Terminal unavailable"), s.termErr)
 	case s.term == nil:
-		restart("终端不可用", "请关闭后重新打开终端面板")
+		restart(tr("Terminal unavailable"), tr("Close and reopen the terminal panel"))
 	case terminalExited(s.term):
-		restart("终端已退出", fmt.Sprintf("退出码 %d", s.term.ExitCode()))
+		restart(tr("Terminal exited"), fmt.Sprintf(tr("Exit code %d"), s.term.ExitCode()))
 	default:
 		ui.Box(c).Grow(1).MinHeight(0).Background(canvas).Padding(6, 4, 4, 8).Children(func() {
 			// Keep the terminal distinct from the loading state's children so
@@ -585,8 +627,22 @@ func (app *chatApp) loadDir(p *panelState, rel string) {
 	}
 	p.loading[rel] = true
 	root := p.cwd
+	var cl *serviceClient
+	if app.c.remoteHost() {
+		cl = app.c.remote
+	}
 	goAsync(func() {
-		entries, err := readDirEntries(root, rel)
+		var entries []fileEntry
+		var err error
+		if cl == nil {
+			entries, err = readDirEntries(root, rel)
+		} else {
+			var rows []hostEntry
+			err = cl.call("host", hostRequest{Action: "dir", Project: root, Path: rel}, &rows)
+			for _, e := range rows {
+				entries = append(entries, fileEntry{e.Name, e.Path, e.Dir})
+			}
+		}
 		app.c.dispatch(func() {
 			if p.cwd != root {
 				return
@@ -609,15 +665,48 @@ func (app *chatApp) openFile(p *panelState, rel string) {
 	if ed := p.editors[rel]; ed != nil && ed.err == "" {
 		return
 	}
-	ed := &fileEditor{loading: true, preview: strings.EqualFold(path.Ext(rel), ".md")}
+	kind := imageFileKind(rel)
+	ed := &fileEditor{loading: true, preview: strings.EqualFold(path.Ext(rel), ".md") || kind != ""}
 	p.editors[rel] = ed
 	root := p.cwd
+	var cl *serviceClient
+	if app.c.remoteHost() {
+		cl = app.c.remote
+	}
 	goAsync(func() {
-		text, err := readTextFile(filepath.Join(root, rel))
+		var text string
+		var img ui.ImageSource
+		var err error
+		if kind == "bitmap" {
+			var data []byte
+			if cl == nil {
+				data, err = readImageFile(filepath.Join(root, rel))
+			} else {
+				err = cl.call("host", hostRequest{Action: "image", Project: root, Path: rel}, &data)
+			}
+			if err == nil {
+				if img, err = ui.DecodeImage(data); err != nil {
+					err = fmt.Errorf(tr("Unable to decode image: %w"), err)
+				}
+			}
+		} else {
+			if cl == nil {
+				text, err = readTextFile(filepath.Join(root, rel))
+			} else {
+				err = cl.call("host", hostRequest{Action: "read", Project: root, Path: rel}, &text)
+			}
+			if err == nil && kind == "svg" {
+				img = svgPreview(text)
+			}
+		}
 		app.c.dispatch(func() {
 			ed.loading = false
 			if err != nil {
 				ed.err = err.Error()
+				return
+			}
+			ed.image = img
+			if kind == "bitmap" {
 				return
 			}
 			buf := editor.NewBuffer(text)
@@ -628,16 +717,41 @@ func (app *chatApp) openFile(p *panelState, rel string) {
 }
 
 func (app *chatApp) saveFile(p *panelState, rel string, ed *fileEditor) {
-	if ed.state == nil || !ed.state.Buffer.Modified() {
+	if ed.state == nil || !ed.state.Buffer.Modified() || ed.saving {
 		return
 	}
 	buf := ed.state.Buffer
+	if app.c.remoteHost() {
+		text, root, cl := buf.String(), p.cwd, app.c.remote
+		ed.saving, ed.saveErr = true, ""
+		goAsync(func() {
+			err := cl.call("host", hostRequest{Action: "write", Project: root, Path: rel, Text: text}, nil)
+			app.c.dispatch(func() {
+				ed.saving = false
+				if p.cwd != root {
+					return
+				}
+				if err != nil {
+					ed.saveErr = tr("Unable to save: ") + err.Error()
+					return
+				}
+				ed.saveErr = ""
+				if buf.String() == text {
+					buf.MarkSaved()
+				}
+				if p.find(surfaceDiff) != nil {
+					app.refreshDiff(p)
+				}
+			})
+		})
+		return
+	}
 	err := writeFileAtomic(filepath.Join(p.cwd, rel), func(f *os.File) error {
 		_, err := buf.WriteTo(f)
 		return err
 	})
 	if err != nil {
-		ed.saveErr = "无法保存：" + err.Error()
+		ed.saveErr = tr("Unable to save: ") + err.Error()
 		return
 	}
 	ed.saveErr = ""
@@ -660,14 +774,14 @@ func (app *chatApp) filesView(c *ui.Context, p *panelState) {
 	}).Grow(1).MinHeight(0).Padding(4, 8).Children(func() {
 		switch {
 		case p.dirErr[""] != "":
-			panelMessage(c, "无法读取工作区", p.dirErr[""])
+			panelMessage(c, tr("Unable to read workspace"), p.dirErr[""])
 		case p.loading[""] && len(rows) == 0:
 			ui.Row(c).Gap(8).Margin(ui.Auto).Children(func() {
 				ui.Spinner(c)
-				mutedText(c, "正在读取文件…")
+				mutedText(c, tr("Loading files…"))
 			})
 		case len(rows) == 0:
-			panelMessage(c, "此文件夹为空", p.cwd)
+			panelMessage(c, tr("This folder is empty"), p.cwd)
 		}
 	})
 }
@@ -709,23 +823,27 @@ func (app *chatApp) fileEditorView(c *ui.Context, p *panelState, rel string) {
 		return
 	}
 	markdownFile := strings.EqualFold(path.Ext(rel), ".md")
+	imageKind := imageFileKind(rel)
 	ui.Column(c).Grow(1).MinHeight(0).Children(func() {
 		panelBar(c, func() {
-			if toolButton(c.Key("back"), "arrow-left", "返回文件列表").Clicked() {
+			if toolButton(c.Key("back"), "arrow-left", tr("Back to file list")).Clicked() {
 				p.selected = ""
 			}
 			ui.Text(c, rel).Grow(1).MinWidth(0).SingleLine().Ellipsis("…").FontSize(12).TextColor(muted)
-			if markdownFile && ed.state != nil {
-				label, symbol := "预览", "eye"
+			if (markdownFile || imageKind == "svg") && ed.state != nil {
+				label, symbol := tr("Preview"), "eye"
 				if ed.preview {
-					label, symbol = "源码", "code"
+					label, symbol = tr("Source"), "code"
 				}
 				if toolButton(c.Key("preview"), symbol, label).Clicked() {
 					ed.preview = !ed.preview
+					if ed.preview && imageKind == "svg" {
+						ed.image = svgPreview(ed.state.Buffer.String())
+					}
 				}
 			}
 			if ed.state != nil && ed.state.Buffer.Modified() {
-				if toolButton(c.Key("save"), "device-floppy", "保存 (⌘S)").Clicked() {
+				if toolButton(c.Key("save"), "device-floppy", tr("Save (⌘S)")).Disabled(ed.saving).Clicked() {
 					app.saveFile(p, rel, ed)
 				}
 			}
@@ -733,15 +851,28 @@ func (app *chatApp) fileEditorView(c *ui.Context, p *panelState, rel string) {
 		if ed.saveErr != "" {
 			ui.Text(c, ed.saveErr).FontSize(11).TextColor(danger).Padding(4, 10)
 		}
+		if ed.saving {
+			ui.Text(c, tr("Saving…")).FontSize(11).TextColor(muted).Padding(4, 10)
+		}
 		switch {
 		case ed.loading:
 			ui.Row(c).Grow(1).Justify(ui.Center).AlignItems(ui.Center).Gap(8).Children(func() {
 				ui.Spinner(c)
-				mutedText(c, "正在读取文件…")
+				mutedText(c, tr("Loading files…"))
 			})
 		case ed.err != "":
-			panelMessage(c, "无法打开此文件", ed.err)
-		case ed.preview:
+			panelMessage(c, tr("Unable to open this file"), ed.err)
+		case ed.preview && imageKind != "" && ed.image == nil:
+			panelMessage(c, tr("Unable to preview this image"), tr("Invalid SVG content or missing dimensions. Switch to source to view it."))
+		case ed.preview && imageKind != "":
+			w, h := ui.ImageSize(ed.image)
+			ui.Column(c.Key("image")).Grow(1).MinHeight(0).Padding(16).Gap(8).Background(canvas).Children(func() {
+				ui.Column(c).Grow(1).MinHeight(0).Children(func() {
+					ui.Image(c, ed.image).Fill().Fit(ui.ScaleDown).Label(path.Base(rel))
+				})
+				ui.Text(c, fmt.Sprintf("%d × %d", int(w+0.5), int(h+0.5))).FontSize(11).TextColor(muted).TextAlign(ui.Center).FillWidth()
+			})
+		case ed.preview && ed.state != nil:
 			ui.Scroll(c.Key("preview")).Grow(1).MinHeight(0).Background(canvas).Children(func() {
 				ui.Column(c).Padding(16, 20).Children(func() {
 					markdown.View(c, ed.state.Buffer.String(), &app.md)
@@ -765,10 +896,20 @@ func (app *chatApp) refreshDiff(p *panelState) {
 	if parent == nil {
 		parent = context.Background()
 	}
+	var cl *serviceClient
+	if app.c.remoteHost() {
+		cl = app.c.remote
+	}
 	goAsync(func() {
 		ctx, cancel := context.WithTimeout(parent, 20*time.Second)
 		defer cancel()
-		snap, err := collectDiff(ctx, root, src)
+		var snap diffSnapshot
+		var err error
+		if cl == nil {
+			snap, err = collectDiff(ctx, root, src)
+		} else {
+			err = cl.call("host", hostRequest{Action: "diff", Project: root, Source: src}, &snap)
+		}
 		app.c.dispatch(func() {
 			if p.diffGen != gen || p.cwd != root {
 				return
@@ -778,7 +919,7 @@ func (app *chatApp) refreshDiff(p *panelState) {
 				if p.diff == nil {
 					p.diffErr = err.Error()
 				} else {
-					p.diffErr = "刷新失败：" + err.Error()
+					p.diffErr = tr("Refresh failed: ") + err.Error()
 				}
 				return
 			}
@@ -806,7 +947,7 @@ func (app *chatApp) loadDiffFile(p *panelState, i int) {
 	f, snap, gen, root := p.diff.Files[i], *p.diff, p.diffGen, p.cwd
 	p.diffViewPath = f.Path
 	if f.Binary {
-		p.diffView, p.sideNote = nil, "二进制文件，不显示差异"
+		p.diffView, p.sideNote = nil, tr("Binary file; no diff available")
 		return
 	}
 	p.sideNote = ""
@@ -814,12 +955,28 @@ func (app *chatApp) loadDiffFile(p *panelState, i int) {
 	if parent == nil {
 		parent = context.Background()
 	}
+	var cl *serviceClient
+	if app.c.remoteHost() {
+		cl = app.c.remote
+	}
 	goAsync(func() {
 		ctx, cancel := context.WithTimeout(parent, 20*time.Second)
 		defer cancel()
-		old, new := fileSides(ctx, root, snap, f)
+		var old, new string
+		var err error
+		if cl == nil {
+			old, new = fileSides(ctx, root, snap, f)
+		} else {
+			var sides hostSides
+			err = cl.call("host", hostRequest{Action: "sides", Project: root, Snapshot: snap, File: f}, &sides)
+			old, new = sides.Old, sides.New
+		}
 		app.c.dispatch(func() {
 			if p.diffGen != gen || p.diffViewPath != f.Path {
+				return
+			}
+			if err != nil {
+				p.sideNote = err.Error()
 				return
 			}
 			lang := editor.LanguageFor(f.Path)
@@ -834,7 +991,7 @@ func (app *chatApp) loadDiffFile(p *panelState, i int) {
 func (app *chatApp) diffSurface(c *ui.Context, p *panelState) {
 	ui.Column(c).Grow(1).MinHeight(0).Children(func() {
 		panelBar(c, func() {
-			if ui.Select(c.Key("source"), &p.sourceName, diffSourceNames).Label("审阅来源").FontSize(12).Changed() {
+			if ui.Select(c.Key("source"), &p.sourceName, diffSourceNames).Label(tr("Review source")).FontSize(12).Changed() {
 				for i, name := range diffSourceNames {
 					if name == p.sourceName {
 						p.source = diffSource(i)
@@ -845,14 +1002,14 @@ func (app *chatApp) diffSurface(c *ui.Context, p *panelState) {
 			}
 			ui.Spacer(c)
 			if p.diff != nil {
-				ui.Text(c, fmt.Sprintf("%d 个文件", len(p.diff.Files))).FontSize(11).TextColor(muted)
+				ui.Text(c, fmt.Sprintf(tr("%d files"), len(p.diff.Files))).FontSize(11).TextColor(muted)
 				ui.Text(c, fmt.Sprintf("+%d", p.diff.Added)).FontSize(11).TextColor(success)
 				ui.Text(c, fmt.Sprintf("−%d", p.diff.Deleted)).FontSize(11).TextColor(danger)
 			}
 			if p.diffBusy {
 				ui.Spinner(c).FontSize(12)
 			}
-			if toolButton(c.Key("refresh"), "refresh", "刷新").Clicked() {
+			if toolButton(c.Key("refresh"), "refresh", tr("Refresh")).Clicked() {
 				app.refreshDiff(p)
 			}
 		})
@@ -861,16 +1018,16 @@ func (app *chatApp) diffSurface(c *ui.Context, p *panelState) {
 		}
 		switch {
 		case p.diff == nil && p.diffErr != "":
-			panelMessage(c, "无法读取更改", p.diffErr)
+			panelMessage(c, tr("Unable to read changes"), p.diffErr)
 			return
 		case p.diff == nil:
 			ui.Row(c).Grow(1).Justify(ui.Center).AlignItems(ui.Center).Gap(8).Children(func() {
 				ui.Spinner(c)
-				mutedText(c, "正在读取更改…")
+				mutedText(c, tr("Loading changes…"))
 			})
 			return
 		case len(p.diff.Files) == 0:
-			panelMessage(c, "没有更改", diffSourceNames[p.diff.Source]+"为空")
+			panelMessage(c, tr("No changes"), diffSourceNames[p.diff.Source]+tr(" is empty"))
 			return
 		}
 		ui.Scroll(c.Key("changed-files")).MaxHeight(180).Shrink(0).Children(func() {
@@ -904,10 +1061,10 @@ func (app *chatApp) changedFileRow(c *ui.Context, p *panelState, i int, f change
 		ui.Text(c, strings.TrimSuffix(dir, "/")).Grow(1).MinWidth(0).SingleLine().Ellipsis("…").FontSize(11).TextColor(muted)
 		switch {
 		case f.Binary:
-			ui.Text(c, "二进制").FontSize(11).TextColor(muted)
+			ui.Text(c, tr("Binary")).FontSize(11).TextColor(muted)
 		default:
 			if f.Untracked {
-				ui.Text(c, "新文件").FontSize(11).TextColor(muted)
+				ui.Text(c, tr("New file")).FontSize(11).TextColor(muted)
 			}
 			ui.Text(c, fmt.Sprintf("+%d", f.Added)).FontSize(11).TextColor(success)
 			ui.Text(c, fmt.Sprintf("−%d", f.Deleted)).FontSize(11).TextColor(danger)

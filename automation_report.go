@@ -51,7 +51,7 @@ func (f *flexString) UnmarshalJSON(b []byte) error {
 }
 
 func (m RunMetric) text() string {
-	return strings.TrimSpace(m.Name) + "：" + strings.TrimSpace(string(m.Value)) + strings.TrimSpace(m.Unit)
+	return strings.TrimSpace(m.Name) + ": " + strings.TrimSpace(string(m.Value)) + strings.TrimSpace(m.Unit)
 }
 
 const (
@@ -106,24 +106,24 @@ func (s automationStore) lastReport(id string) (AutomationRun, bool) {
 // formatRunReport writes a result as a message reads it.
 func formatRunReport(r RunReport) string {
 	var b strings.Builder
-	b.WriteString("总结：" + r.Summary + "\n")
+	b.WriteString("Summary: " + r.Summary + "\n")
 	if len(r.Findings) > 0 {
-		b.WriteString("要点：\n")
+		b.WriteString("Findings:\n")
 		for _, f := range r.Findings {
 			b.WriteString("- " + f + "\n")
 		}
 	}
 	if len(r.Metrics) > 0 {
-		b.WriteString("指标：\n")
+		b.WriteString("Metrics:\n")
 		for _, m := range r.Metrics {
 			b.WriteString("- " + m.text() + "\n")
 		}
 	}
 	if len(r.Artifacts) > 0 {
-		b.WriteString("产出：" + strings.Join(r.Artifacts, "、") + "\n")
+		b.WriteString("Artifacts: " + strings.Join(r.Artifacts, ", ") + "\n")
 	}
 	if r.NeedsUser {
-		b.WriteString("当时需要人处理。\n")
+		b.WriteString("User action was required.\n")
 	}
 	return strings.TrimRight(b.String(), "\n")
 }
@@ -134,9 +134,9 @@ func automationRunMessage(a Automation, prev *AutomationRun) string {
 	var b strings.Builder
 	b.WriteString(a.Instructions)
 	b.WriteString("\n\n---\n")
-	fmt.Fprintf(&b, "这是 Miya 的定时自动化「%s」。结束前请调用 miya 的 report_result 工具上报本次结果：summary（一两句总结）、findings（结论要点）、metrics（关键指标，每项含 name、value、unit）、artifacts（产出的文件或链接）、needs_user（是否需要人处理）。", a.Name)
+	fmt.Fprintf(&b, "This is Miya scheduled automation \"%s\". Before finishing, call Miya's report_result tool with this run's result: summary (one or two sentences), findings (key conclusions), metrics (each with name, value, unit), artifacts (output files or links), and needs_user (whether user action is required).", a.Name)
 	if prev != nil && prev.Report != nil {
-		fmt.Fprintf(&b, "\n\n上一次运行（%s）的结果如下，请与本次结果对比，指出新增、消失和变化较大的项：\n%s", formatAutomationTime(prev.Started), formatRunReport(*prev.Report))
+		fmt.Fprintf(&b, "\n\nResults from the previous run (%s) follow. Compare them with this run and identify new, removed, and significantly changed items:\n%s", formatAutomationTime(prev.Started), formatRunReport(*prev.Report))
 	}
 	return b.String()
 }
@@ -162,10 +162,10 @@ func init() {
 // mcpReportResult keeps a reported result with the caller's run.
 func (c *chatController) mcpReportResult(r mcpRequest) (any, error) {
 	if c.auto == nil {
-		return nil, errors.New("自动化需要 Miya 后台服务")
+		return nil, errors.New("Automations require the Miya background service")
 	}
 	if r.Report == nil || strings.TrimSpace(r.Report.Summary) == "" {
-		return nil, errors.New("summary 不能为空")
+		return nil, errors.New("Summary is required")
 	}
 	caller, ok := c.mcpCaller(r.Tool)
 	if !ok {
@@ -179,7 +179,7 @@ func (c *chatController) mcpReportResult(r mcpRequest) (any, error) {
 		rep.Auto = false
 		c.auto.store.updateLastRun(id, func(x *AutomationRun) { x.Report = &rep })
 		c.auto.persist()
-		return "已记录本次运行的结果。", nil
+		return "Run result recorded.", nil
 	}
-	return nil, errors.New("这个对话不是正在运行的自动化，不需要上报结果")
+	return nil, errors.New("This conversation is not an active automation run. No report is needed.")
 }

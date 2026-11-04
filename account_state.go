@@ -35,10 +35,10 @@ func (c *chatController) refreshAccount() {
 	cached := c.accountCache
 	if c.ready == nil || !c.ready() || client == nil {
 		if !cached.Updated.IsZero() {
-			cached.Notice = "Codex 尚未连接，显示上次读取的结果。"
+			cached.Notice = tr("Codex is not connected. Showing the last result.")
 			c.accountState = cached
 		} else {
-			c.accountState = accountDisplay{Error: "尚未连接 Codex，请连接后重试。"}
+			c.accountState = accountDisplay{Error: tr("Connect to Codex and try again.")}
 		}
 		invalidate()
 		return
@@ -85,7 +85,7 @@ func (c *chatController) refreshQuota() {
 		c.quotaCancel()
 	}
 	if len(composerQuotaWindows(c.quotaLimits)) == 0 {
-		c.quotaStatus = "正在读取额度…"
+		c.quotaStatus = tr("Loading quota…")
 	}
 	ctx, stop := context.WithTimeout(c.parentContext(), 15*time.Second)
 	c.quotaCancel = stop
@@ -97,7 +97,7 @@ func (c *chatController) refreshQuota() {
 			if request != c.quotaVersion || client != c.client {
 				return
 			}
-			c.quotaStatus = "暂无可用额度"
+			c.quotaStatus = tr("No quota available")
 			if err == nil {
 				c.quotaLimits = result
 			}

@@ -40,7 +40,7 @@ func TestComposerPastesAttachmentsBeforeClipboardText(t *testing.T) {
 		for _, kind := range []string{"image", "image-with-text", "files-with-text-and-thumbnail"} {
 			t.Run(method+"/"+kind, func(t *testing.T) {
 				app, tt := testApp(t)
-				app.c.setThreads([]Thread{{ID: 1, Title: "当前", HistoryLoaded: true}, handoffSource()})
+				app.c.setThreads([]Thread{{ID: 1, Title: "Current: ", HistoryLoaded: true}, handoffSource()})
 				app.c.setActive(1)
 				app.c.rememberDraft(referenceText(testReference(handoffSource()), "登录修复") + " 保留这段正文")
 				tt.Frame()
@@ -67,7 +67,7 @@ func TestComposerPastesAttachmentsBeforeClipboardText(t *testing.T) {
 					if err := tt.RightClick("Message Codex"); err != nil {
 						t.Fatal(err)
 					}
-					if err := tt.ChooseMenuItem("粘贴"); err != nil {
+					if err := tt.ChooseMenuItem("Paste"); err != nil {
 						t.Fatal(err)
 					}
 				}

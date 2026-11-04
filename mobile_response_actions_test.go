@@ -26,7 +26,7 @@ func TestMobileResponseActionsWorkWithoutHover(t *testing.T) {
 				tt.Move(-1, -1)
 				tt.Frame()
 				saveMobileNativeSnapshot(t, tt, fmt.Sprintf("response-actions-%d-%s", width, agent))
-				for _, label := range []string{"Copy response", "交付到新对话"} {
+				for _, label := range []string{"Copy response", "Hand off to a new conversation"} {
 					r, ok := tt.Find(label)
 					if !ok || r.W < 44 || r.H < 44 || r.X < 0 || r.X+r.W > float32(width) {
 						t.Fatalf("touch action missing or too small: %s %v", label, r)
@@ -46,7 +46,7 @@ func TestMobileResponseActionsWorkWithoutHover(t *testing.T) {
 					t.Fatal(err)
 				}
 				m.images = []string{photo}
-				if err := tt.Click("交付到新对话"); err != nil {
+				if err := tt.Click("Hand off to a new conversation"); err != nil {
 					t.Fatal(err)
 				}
 				want := referenceText(testRef(agent, th.ServerID), th.Title) + " 继续修复这个问题"

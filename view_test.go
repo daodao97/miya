@@ -196,12 +196,12 @@ func TestSidebarSelectsAndArchivesThreads(t *testing.T) {
 		t.Fatalf("thread not selected: active %d agent %s", c.active(), c.currentAgent())
 	}
 	tt.Move(1100, 780)
-	if tt.HasText("对话操作") || !tt.HasText(tr("Working…")) {
+	if tt.HasText("Conversation actions") || !tt.HasText(tr("Working…")) {
 		t.Fatal("unhovered conversations should only show run status")
 	}
 	first, _ := tt.Find("First thread")
 	tt.Move(first.X+first.W/2, first.Y+first.H/2)
-	if !tt.HasText("对话操作") {
+	if !tt.HasText("Conversation actions") {
 		t.Fatal("hovering should replace run status with the more button")
 	}
 	// The same conversation also appears under Projects. Its other row
@@ -212,19 +212,19 @@ func TestSidebarSelectsAndArchivesThreads(t *testing.T) {
 	if title, _ := tt.Find("First thread"); title != first {
 		t.Fatal("hovering changed the title's layout")
 	}
-	if tt.HasText("归档对话") || tt.HasText("删除对话") {
+	if tt.HasText("Archive conversation") || tt.HasText("Delete conversation") {
 		t.Fatal("destructive actions are exposed before opening the menu")
 	}
-	if err := tt.Click("对话操作"); err != nil {
+	if err := tt.Click("Conversation actions"); err != nil {
 		t.Fatal(err)
 	}
 	if len(c.threads()) != 2 || c.active() != 2 {
 		t.Fatal("opening the actions menu changed the conversation")
 	}
-	if !tt.HasText("归档对话") || !tt.HasText("删除对话") {
+	if !tt.HasText("Archive conversation") || !tt.HasText("Delete conversation") {
 		t.Fatalf("conversation actions are missing from the dropdown: %q", tt.Texts())
 	}
-	if err := tt.Click("归档对话"); err != nil {
+	if err := tt.Click("Archive conversation"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
@@ -238,25 +238,24 @@ func TestSettingsGeneralAndAccount(t *testing.T) {
 	if err := tt.Click("Settings"); err != nil {
 		t.Fatal(err)
 	}
-	if !tt.HasText("Interface language") || !tt.HasText("完全访问") {
+	if !tt.HasText("Appearance") || !tt.HasText("Full access") {
 		t.Fatalf("general settings missing: %q", tt.Texts())
 	}
-	if err := tt.Click("完全访问"); err != nil {
+	if err := tt.Click("Full access"); err != nil {
 		t.Fatal(err)
 	}
 	if app.c.permissionPolicy() != "never" {
 		t.Fatalf("default permission %q", app.c.permissionPolicy())
 	}
-	if err := tt.Click("中文"); err != nil {
+	app.c.setLocale("zh")
+	tt.Frame()
+	if !tt.HasText("Appearance") || !tt.HasText("Interface language") {
+		t.Fatalf("legacy locale changed the English interface: %q", tt.Texts())
+	}
+	if err := tt.Click("Account"); err != nil {
 		t.Fatal(err)
 	}
-	if !tt.HasText("界面语言") {
-		t.Fatalf("language not switched: %q", tt.Texts())
-	}
-	if err := tt.Click("账号"); err != nil {
-		t.Fatal(err)
-	}
-	if !tt.HasText("尚未连接 Codex，请连接后重试。") {
+	if !tt.HasText("Connect to Codex and try again.") {
 		t.Fatalf("account view without connection: %q", tt.Texts())
 	}
 }
@@ -272,12 +271,12 @@ func TestAccountDetailsAndResetCard(t *testing.T) {
 			accountDetails(c, data)
 			resetCreditCard(c, data, action, true, func() {}, func() {}, func() {})
 		}, 800, 900)
-		for _, want := range []string{"可用 4 张", "Codex reset", "用量"} {
+		for _, want := range []string{"4 available", "Codex reset", "Usage"} {
 			if !tt.HasText(want) {
 				t.Fatalf("missing %q in %q", want, tt.Texts())
 			}
 		}
-		if action.Confirming && !tt.HasText("确认使用一张重置卡？") {
+		if action.Confirming && !tt.HasText("Use a reset card?") {
 			t.Fatalf("confirmation missing: %q", tt.Texts())
 		}
 	}

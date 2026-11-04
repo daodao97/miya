@@ -114,7 +114,7 @@ func (h *pushHub) publish(n taskNotice) {
 		select {
 		case h.queue <- pushDelivery{Registration: r, Notice: n, Version: d.Revision}:
 		default:
-			h.lastError = "通知队列已满"
+			h.lastError = "Notification queue is full"
 		}
 	}
 }

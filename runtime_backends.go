@@ -37,7 +37,7 @@ func (codexBackend) Runtime(c *chatController, t Thread) runtimeSource {
 				task.PID = *terminal.OSPID
 				out.Roots = append(out.Roots, rt.Root{PID: task.PID, TaskID: task.ID + "/" + task.RunID})
 			} else {
-				out.Notice = "部分后台任务没有提供系统进程身份，相关端口无法归属"
+				out.Notice = "Some background tasks did not provide system process identities; their ports cannot be attributed"
 			}
 			out.Tasks = append(out.Tasks, task)
 		}
@@ -62,13 +62,13 @@ func (claudeBackend) Runtime(c *chatController, t Thread) runtimeSource {
 		tasks, known, pid, _ := client.Runtime()
 		out := runtimeSnapshot{Known: known, Tasks: []rt.Task{}}
 		for _, task := range tasks {
-			out.Tasks = append(out.Tasks, rt.Task{ID: task.ID, RunID: task.RunID, RunOrder: task.RunID, ToolID: task.ToolUseID, Kind: task.Kind, Description: rt.Summary(firstNonEmpty(task.Description, task.Command, "后台任务")), Status: task.Status})
+			out.Tasks = append(out.Tasks, rt.Task{ID: task.ID, RunID: task.RunID, RunOrder: task.RunID, ToolID: task.ToolUseID, Kind: task.Kind, Description: rt.Summary(firstNonEmpty(task.Description, task.Command, "Background tasks")), Status: task.Status})
 		}
 		if pid > 0 {
 			out.Roots = []rt.Root{{PID: pid, TaskID: "_session"}}
 		}
 		if !known {
-			out.Notice = "原生后台任务集合尚未确认；进程按当前会话的执行进程核验"
+			out.Notice = "Native background tasks are unconfirmed. Processes are verified against the current session's execution processes."
 		}
 		return out, nil
 	}}
@@ -96,11 +96,11 @@ func (c *chatController) noteRuntime(t Thread) {
 // perform native RPC/system observation outside it.
 func (c *chatController) prepareRuntime(ref ThreadRef, project string) (deferred, error) {
 	if !ref.valid() || ref.Source != c.referenceSource {
-		return nil, errors.New("对话运行信息属于另一台桌面或标识无效")
+		return nil, errors.New("Conversation runtime belongs to another desktop or has an invalid identity")
 	}
 	target := c.phoneThreadFor(remoteRuntimeRequest(ref, project))
 	if !target.found {
-		return nil, errors.New("对话不存在或已不在所选项目")
+		return nil, errors.New("Conversation does not exist or is no longer in the selected project")
 	}
 	source := backendOf(target.thread).Runtime(c, target.thread)
 	manager := c.runtimes()
@@ -117,7 +117,7 @@ func runtimeResult(manager *runtimeManager, key rt.SessionKey, view rt.View) con
 		if e.Protocol != "http" {
 			continue
 		}
-		name := "Web 服务"
+		name := "Web services"
 		for _, p := range view.Processes {
 			if p.Identity == e.Process {
 				name = p.Name
@@ -140,9 +140,13 @@ type conversationRuntime struct {
 }
 
 func (c *chatController) readRuntime(ctx context.Context, ref ThreadRef, project string) (conversationRuntime, error) {
-	if c.remote != nil {
+	cl, ok := onMain(ctx, c.dispatch, func() *serviceClient { return c.remote })
+	if !ok {
+		return conversationRuntime{}, ctx.Err()
+	}
+	if cl != nil {
 		var result conversationRuntime
-		err := c.remote.call("runtime", runtimeRequest{Ref: ref, Project: project}, &result)
+		err := cl.call("runtime", runtimeRequest{Ref: ref, Project: project}, &result)
 		return result, err
 	}
 	type prepared struct {
@@ -163,7 +167,7 @@ func (c *chatController) readRuntime(ctx context.Context, ref ThreadRef, project
 	if value, ok := data.(conversationRuntime); ok {
 		return value, nil
 	}
-	return conversationRuntime{}, fmt.Errorf("无效的运行态数据")
+	return conversationRuntime{}, fmt.Errorf("Invalid runtime data")
 }
 
 type runtimeRequest struct {

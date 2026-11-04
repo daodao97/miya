@@ -60,10 +60,10 @@ func readAccountDisplay(ctx context.Context, client accountCaller, cached accoun
 	var identity accountRead
 	if err := client.Call(ctx, "account/read", map[string]any{"refreshToken": false}, &identity); err != nil {
 		if cached.Updated.IsZero() {
-			return accountDisplay{Error: "无法读取账号信息，请重试。"}, false
+			return accountDisplay{Error: tr("Unable to read account information. Try again.")}, false
 		}
 		cached.Loading, cached.Refreshing = false, false
-		cached.Notice = "刷新失败，显示上次读取的结果。"
+		cached.Notice = tr("Refresh failed. Showing the last result.")
 		return cached, false
 	}
 	result := accountDisplay{Identity: identity.Account}
@@ -71,9 +71,9 @@ func readAccountDisplay(ctx context.Context, client accountCaller, cached accoun
 		if err := client.Call(ctx, "account/rateLimits/read", map[string]any{"excludeResetCreditDetails": false}, &result.Limits); err != nil {
 			if sameAccount(identity.Account, cached.Identity) && !cached.Updated.IsZero() {
 				result.Limits, result.Updated = cached.Limits, cached.Updated
-				result.UsageError = "暂时无法更新用量和重置卡，显示上次结果。"
+				result.UsageError = tr("Unable to update usage and reset cards. Showing the last result.")
 			} else {
-				result.UsageError = "暂时无法获取用量和重置卡，请稍后刷新。"
+				result.UsageError = tr("Usage and reset cards are unavailable. Refresh later.")
 			}
 		}
 	}
@@ -94,11 +94,11 @@ type accountResetAttempt struct {
 func newAccountResetAttempt(data accountDisplay) (*accountResetAttempt, error) {
 	credit := data.Limits.ResetCredits.next()
 	if data.Identity == nil || data.Identity.Type != "chatgpt" || credit == nil {
-		return nil, errors.New("暂无可使用的重置卡详情，请刷新后重试。")
+		return nil, errors.New(tr("No reset card details available. Refresh and retry."))
 	}
 	var id [16]byte
 	if _, err := rand.Read(id[:]); err != nil {
-		return nil, errors.New("暂时无法创建使用请求，请重试。")
+		return nil, errors.New(tr("Unable to create a reset request. Try again."))
 	}
 	id[6], id[8] = id[6]&0x0f|0x40, id[8]&0x3f|0x80
 	key := fmt.Sprintf("%x-%x-%x-%x-%x", id[:4], id[4:6], id[6:8], id[8:10], id[10:])
@@ -131,15 +131,15 @@ func executeAccountReset(ctx context.Context, client accountCaller, attempt acco
 	fresh, readOK := readAccountDisplay(ctx, client, accountDisplay{})
 	result := resetExecution{Display: fresh, HaveDisplay: readOK, Submitted: attempt.Submitted}
 	if !readOK || fresh.UsageError != "" {
-		return result, errors.New("无法核实最新账号和重置卡，请刷新后重试。")
+		return result, errors.New(tr("Unable to verify the latest account and reset cards. Refresh and retry."))
 	}
 	if !attempt.matches(fresh) {
-		return result, errors.New("当前登录账号已变化，请重新选择重置卡。")
+		return result, errors.New(tr("The signed-in account changed. Select a reset card again."))
 	}
 	if !attempt.Submitted {
 		credit := fresh.Limits.ResetCredits.next()
 		if credit == nil || credit.ID != attempt.Credit.ID {
-			return result, errors.New("所选重置卡已变化，请取消后重新选择。")
+			return result, errors.New(tr("The selected reset card changed. Cancel and select it again."))
 		}
 	}
 	var response struct {
@@ -153,17 +153,17 @@ func executeAccountReset(ctx context.Context, client accountCaller, attempt acco
 		var rpc *codex.RPCError
 		if errors.As(err, &rpc) && rpc.Code == -32601 {
 			result.Submitted = false
-			return result, errors.New("当前 Codex 版本不支持重置卡兑换，请更新 Codex CLI。")
+			return result, errors.New(tr("This Codex version does not support reset cards. Update the Codex CLI."))
 		}
-		return result, errors.New("使用请求尚未获得确认，请重试以获取结果。")
+		return result, errors.New(tr("Reset request is unconfirmed. Retry to retrieve the result."))
 	}
 	if resetOutcomeText(response.Outcome) == "" {
-		return result, errors.New("使用请求返回了未知结果，请重试以获取确认。")
+		return result, errors.New(tr("Reset request returned an unknown result. Retry to confirm."))
 	}
 	result.Outcome = response.Outcome
 	result.Display, _ = readAccountDisplay(ctx, client, fresh)
 	if result.Display.Notice != "" || result.Display.UsageError != "" {
-		result.Display.Notice = "使用结果已确认，最新用量和重置卡暂时无法更新。"
+		result.Display.Notice = tr("Reset confirmed. Latest usage and reset cards cannot be updated yet.")
 	}
 	return result, nil
 }
@@ -171,13 +171,13 @@ func executeAccountReset(ctx context.Context, client accountCaller, attempt acco
 func resetOutcomeText(outcome string) string {
 	switch outcome {
 	case "reset":
-		return "已使用 1 张重置卡，额度窗口已重置。"
+		return tr("Used 1 reset card. Quota windows reset.")
 	case "nothingToReset":
-		return "当前没有需要重置的额度窗口，重置卡已保留。"
+		return tr("No quota windows need resetting. Card retained.")
 	case "noCredit":
-		return "账号已没有可用的重置卡。"
+		return tr("No reset cards available for this account.")
 	case "alreadyRedeemed":
-		return "这次使用请求已经完成，未重复兑换。"
+		return tr("This reset request already completed. No additional card used.")
 	default:
 		return ""
 	}
@@ -235,7 +235,7 @@ func (c *chatController) confirmAccountReset() {
 		return
 	}
 	if !c.ready() || c.client == nil || c.ctx == nil {
-		action.Notice, action.Failed = "Codex 尚未连接，请连接后重试。", true
+		action.Notice, action.Failed = tr("Codex is not connected. Connect and retry."), true
 		c.setAccountReset(action)
 		return
 	}
@@ -260,7 +260,7 @@ func (c *chatController) confirmAccountReset() {
 				finished = accountResetAction{Notice: resetOutcomeText(result.Outcome)}
 			}
 			if attempt.Account.Email != "" {
-				finished.Notice = attempt.Account.Email + "：" + finished.Notice
+				finished.Notice = attempt.Account.Email + ": " + finished.Notice
 			}
 			c.setAccountReset(finished)
 			c.accountState = c.accountCache
@@ -277,7 +277,7 @@ func (c *chatController) confirmAccountReset() {
 
 func resetExpiryText(credit resetCredit) string {
 	if credit.ExpiresAt == nil {
-		return "此重置卡无到期时间。"
+		return tr("This reset card has no expiration.")
 	}
-	return "最近到期：" + time.Unix(*credit.ExpiresAt, 0).Local().Format("2006-01-02 15:04")
+	return tr("Next expiration: ") + time.Unix(*credit.ExpiresAt, 0).Local().Format("2006-01-02 15:04")
 }

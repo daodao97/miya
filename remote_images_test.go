@@ -53,12 +53,12 @@ func TestMobileComposerAttachments(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if _, ok := tt.Find("添加图片"); !ok {
+	if _, ok := tt.Find("Add image"); !ok {
 		t.Fatal("the composer should offer to add photos")
 	}
 	m.images = []string{path}
 	tt.Frame()
-	if err := tt.Click("移除图片"); err != nil {
+	if err := tt.Click("Remove image"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()

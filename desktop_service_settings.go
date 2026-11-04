@@ -18,7 +18,7 @@ type serviceRestartUI struct {
 }
 
 func serviceConnected(cl *serviceClient) bool {
-	if cl == nil || cl.conn == nil {
+	if cl == nil || cl.conn == nil && cl.wire == nil {
 		return false
 	}
 	select {
@@ -113,7 +113,7 @@ func (app *chatApp) updateServiceRestart() {
 			if h.PID != s.pid && h.PID > 0 {
 				s.confirming, s.requested, s.completed = false, false, true
 			} else {
-				s.requested, s.err = false, zhOr(app.c.locale() == "zh", "后台服务尚未退出，请重新尝试重启。", "The background service has not exited. Try restarting again.")
+				s.requested, s.err = false, tr("The background service has not exited. Try restarting again.")
 			}
 		})
 	}()
@@ -125,52 +125,51 @@ func (app *chatApp) serviceSettings(c *ui.Context) {
 	}
 	app.updateServiceRestart()
 	s := &app.serviceRestart
-	zh := app.c.locale() == "zh"
 	if s.requested {
 		c.After(time.Second)
 	}
-	settingsGroup(c, zhOr(zh, "后台服务", "Background service"), "", func() {
-		help := zhOr(zh, "重启后窗口会自动重连，未发送的草稿会保留。", "The window reconnects automatically and keeps unsent drafts.")
+	settingsGroup(c, tr("Background service"), "", func() {
+		help := tr("The window reconnects automatically and keeps unsent drafts.")
 		if app.c.remote == nil {
-			help = zhOr(zh, "当前为独立运行模式，没有单独的后台服务。", "Standalone mode has no separate background service.")
+			help = tr("Standalone mode has no separate background service.")
 		}
-		settingRow(c, zhOr(zh, "重启后台服务", "Restart background service"), help, func() {
-			label := zhOr(zh, "重启", "Restart")
+		settingRow(c, tr("Restart background service"), help, func() {
+			label := tr("Restart")
 			if s.checking {
-				label = zhOr(zh, "处理中…", "Working…")
+				label = tr("Working…")
 			}
 			if smallButton(c.Key("restart-server"), label, !serviceConnected(app.c.remote) || s.checking || s.confirming || s.requested).Clicked() {
 				app.checkServiceRestart()
 			}
 		})
 		if s.confirming {
-			ui.Text(c, zhOr(zh, "后台仍有任务运行。立即重启将中断所有项目的运行任务，并暂时断开手机连接。", "Background tasks are still running. Restarting now interrupts tasks across all projects and briefly disconnects phones.")).FontSize(12).TextColor(warnInk).LineHeight(1.5)
+			ui.Text(c, tr("Background tasks are still running. Restarting now interrupts tasks across all projects and briefly disconnects phones.")).FontSize(12).TextColor(warnInk).LineHeight(1.5)
 			ui.Row(c).Wrap().Gap(8).Children(func() {
-				if smallButton(c.Key("cancel-restart"), zhOr(zh, "取消", "Cancel"), false).Clicked() {
+				if smallButton(c.Key("cancel-restart"), tr("Cancel"), false).Clicked() {
 					s.confirming = false
 				}
-				if smallButton(c.Key("restart-idle"), zhOr(zh, "空闲后重启", "Restart when idle"), false).Clicked() {
+				if smallButton(c.Key("restart-idle"), tr("Restart when idle"), false).Clicked() {
 					app.sendServiceRestart(true)
 				}
-				if smallButton(c.Key("restart-now"), zhOr(zh, "立即重启", "Restart now"), false).TextColor(danger).Clicked() {
+				if smallButton(c.Key("restart-now"), tr("Restart now"), false).TextColor(danger).Clicked() {
 					app.sendServiceRestart(false)
 				}
 			})
 		} else if s.err != "" {
-			ui.Text(c, zhOr(zh, "重启失败：", "Restart failed: ")+s.err).FontSize(12).TextColor(danger)
+			ui.Text(c, tr("Restart failed: ")+s.err).FontSize(12).TextColor(danger)
 		} else if s.requested {
-			text := zhOr(zh, "正在重启后台服务，等待自动重连…", "Restarting the background service; waiting to reconnect…")
+			text := tr("Restarting the background service; waiting to reconnect…")
 			if s.waitIdle {
-				text = zhOr(zh, "已安排重启，等待后台任务结束后自动重连。", "Restart scheduled. The window will reconnect after background tasks finish.")
+				text = tr("Restart scheduled. The window will reconnect after background tasks finish.")
 			}
 			ui.Text(c, text).FontSize(12).TextColor(muted)
 			if s.waitIdle && !s.checking && serviceConnected(s.client) {
-				if smallButton(c.Key("override-restart"), zhOr(zh, "立即重启…", "Restart now…"), false).Clicked() {
+				if smallButton(c.Key("override-restart"), tr("Restart now…"), false).Clicked() {
 					s.confirming = true
 				}
 			}
 		} else if s.completed {
-			ui.Text(c, zhOr(zh, "后台服务已重启并重新连接。", "Background service restarted and reconnected.")).FontSize(12).TextColor(success)
+			ui.Text(c, tr("Background service restarted and reconnected.")).FontSize(12).TextColor(success)
 		}
 	})
 }

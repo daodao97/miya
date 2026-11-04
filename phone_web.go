@@ -28,7 +28,7 @@ func desktopWebServer(validators ...func(context.Context, string, string, int) e
 			return dialer.DialContext(ctx, "tcp", address)
 		}
 		if host != "localhost" {
-			return nil, fmt.Errorf("服务地址已不属于本机：%s", host)
+			return nil, fmt.Errorf("Service address is no longer local: %s", host)
 		}
 		conn, err := dialer.DialContext(ctx, "tcp", net.JoinHostPort("127.0.0.1", port))
 		if err != nil {
@@ -52,12 +52,12 @@ func desktopWebServer(validators ...func(context.Context, string, string, int) e
 		host := r.Header.Get("X-Miya-Web-Host")
 		token := r.Header.Get("X-Miya-Runtime")
 		if !validWebServiceHost(host, token) || host != "" && !rt.LocalHost(host) {
-			http.Error(w, "无效的本机服务地址", http.StatusBadRequest)
+			http.Error(w, "Invalid local service address", http.StatusBadRequest)
 			return
 		}
 		if token != "" {
 			if len(validators) == 0 {
-				http.Error(w, "需要更新桌面端", 403)
+				http.Error(w, "Desktop update required", 403)
 				return
 			}
 			if err := validators[0](r.Context(), token, host, port); err != nil {
@@ -89,7 +89,7 @@ func desktopWebServer(validators ...func(context.Context, string, string, int) e
 			}
 			return nil
 		}, ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
-			http.Error(w, fmt.Sprintf("无法访问电脑端口 %d，请确认 HTTP 服务已启动。", port), http.StatusBadGateway)
+			http.Error(w, fmt.Sprintf("Unable to reach port %d on your computer. Check that the HTTP service is running.", port), http.StatusBadGateway)
 		}}
 		proxy.ServeHTTP(w, r)
 	})
@@ -102,12 +102,12 @@ func localWebHost(host string) bool {
 func parseWebPort(value string) (int, error) {
 	for _, ch := range value {
 		if ch < '0' || ch > '9' {
-			return 0, fmt.Errorf("请输入 1–65535 之间的端口号")
+			return 0, fmt.Errorf("Enter a port number between 1 and 65535")
 		}
 	}
 	port, err := strconv.Atoi(value)
 	if err != nil || port < 1 || port > 65535 {
-		return 0, fmt.Errorf("请输入 1–65535 之间的端口号")
+		return 0, fmt.Errorf("Enter a port number between 1 and 65535")
 	}
 	return port, nil
 }

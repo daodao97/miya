@@ -7,16 +7,20 @@ import (
 func (app *chatApp) usageSettings(c *ui.Context) {
 	d := app.ensureUsage()
 	ui.Column(c).FillWidth().Gap(20).Children(func() {
-		settingsHeader(c, "本机订阅", "每 3 分钟刷新。读取本机 Codex 和 Claude Code 当前登录的账号。", func() {
-			if ui.Button(c, "刷新").Label("刷新订阅额度").Disabled(d.busy).Clicked() {
+		title, help := tr("Local subscriptions"), tr("Refreshes every 3 minutes using the Codex and Claude Code accounts signed in on this computer.")
+		if app.c.remoteHost() {
+			title, help = tr("Server subscriptions"), tr("Refreshes every 3 minutes using the Codex and Claude Code accounts signed in on the server.")
+		}
+		settingsHeader(c, title, help, func() {
+			if ui.Button(c, tr("Refresh")).Label(tr("Refresh subscription quota")).Disabled(d.busy).Clicked() {
 				app.refreshUsage()
 			}
 		})
-		settingsGroup(c, "菜单栏", "",
+		settingsGroup(c, tr("Menu bar"), "",
 			func() {
-				settingRow(c, "菜单栏用量", "在菜单栏显示订阅额度。", func() {
+				settingRow(c, tr("Menu bar usage"), tr("Show subscription quota in the menu bar."), func() {
 					show := !d.prefs.hidden
-					if ui.Switch(c, &show).Label("显示菜单栏用量").Changed() {
+					if ui.Switch(c, &show).Label(tr("Show menu bar usage")).Changed() {
 						d.prefs.hidden = !show
 						value := "on"
 						if !show {
@@ -28,14 +32,14 @@ func (app *chatApp) usageSettings(c *ui.Context) {
 				})
 			},
 			func() {
-				settingRow(c, "显示账号", "", func() {
+				settingRow(c, tr("Account to show"), "", func() {
 					agents, index := []string{"", "codex", "claude"}, 0
 					for i, agent := range agents {
 						if d.prefs.agent == agent {
 							index = i
 						}
 					}
-					if ui.Segmented(c, &index, "自动", "Codex", "Claude").Label("托盘账号").Changed() {
+					if ui.Segmented(c, &index, tr("Automatic"), "Codex", "Claude").Label(tr("Tray account")).Changed() {
 						d.prefs.agent = agents[index]
 						persistSetting("usageTrayAgent", d.prefs.agent)
 						app.syncUsageTray()
@@ -43,12 +47,12 @@ func (app *chatApp) usageSettings(c *ui.Context) {
 				})
 			},
 			func() {
-				settingRow(c, "图标", "", func() {
+				settingRow(c, tr("Icon"), "", func() {
 					index := 0
 					if d.prefs.agentIcon {
 						index = 1
 					}
-					if ui.Segmented(c, &index, "Miya", "Agent").Label("托盘图标").Changed() {
+					if ui.Segmented(c, &index, "Miya", tr("Agent")).Label(tr("Tray icon")).Changed() {
 						d.prefs.agentIcon = index == 1
 						value := "miya"
 						if d.prefs.agentIcon {
@@ -61,7 +65,7 @@ func (app *chatApp) usageSettings(c *ui.Context) {
 			})
 		_, palette := app.usageTheme(c)
 		ui.Column(c).FillWidth().Gap(8).Children(func() {
-			ui.Text(c, "账号").FontSize(12).FontWeight(600).TextColor(muted).PaddingX(4)
+			ui.Text(c, tr("Account")).FontSize(12).FontWeight(600).TextColor(muted).PaddingX(4)
 			ui.Column(c).FillWidth().Gap(12).Children(func() {
 				for _, agent := range []string{"codex", "claude"} {
 					r := d.reading(agent)

@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"syscall"
 	"time"
@@ -16,6 +17,11 @@ import (
 // runService is the executable run with -server: it owns the agents until
 // nothing needs it.
 func runService() error {
+	return runServiceWithOptions(serverOptions{})
+}
+
+func runServiceWithOptions(options serverOptions) error {
+	servingRemote = options.Persistent
 	dir := serviceDir()
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
@@ -34,6 +40,7 @@ func runService() error {
 	if err != nil {
 		return err
 	}
+	defer ln.Close()
 	os.Chmod(sock, 0o600)
 	ex := newExecutor()
 	runOnMain = ex.push
@@ -43,11 +50,16 @@ func runService() error {
 	ex.push(func() {
 		c := newChatController()
 		s = newService(c, ex)
+		s.persistent = options.Persistent
 		c.startAutomations(automationsPath(), true)
 		s.exe, s.exeTime = executableInfo()
 		setInvalidateHook(s.markDirty)
 		// Phones read the service's controller, which holds every project.
 		desktopPhone = newPhoneHost(c)
+		if options.Persistent {
+			desktopPhone.service = s
+			desktopPhone.start()
+		}
 		close(ready)
 	})
 	go func() {
@@ -58,9 +70,17 @@ func runService() error {
 		log.Printf("miya: service on %s (pid %d)", sock, os.Getpid())
 	}()
 	quit := make(chan struct{})
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(signals)
 	go func() {
 		<-ready
-		<-s.quit
+		select {
+		case <-s.quit:
+		case <-signals:
+			ex.push(s.stop)
+			<-s.quit
+		}
 		close(quit)
 	}()
 	ex.loop(quit)

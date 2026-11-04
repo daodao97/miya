@@ -130,7 +130,7 @@ func TestPhoneRetrySameSubscriptionReadsHistoryAgain(t *testing.T) {
 	conn, ex := serveTestPhone(t, c)
 	req := remote.Request{Op: "subscribe", Thread: 1, ServerID: "resume-thread"}
 	conn.requests <- req
-	if d := conn.nextThread(t); d.Thread.Status != "桌面端正在连接 Codex…" {
+	if d := conn.nextThread(t); d.Thread.Status != "Desktop is connecting to Codex…" {
 		t.Fatalf("expected a temporary history-read error, got %+v", d)
 	}
 	// Neither sidebar metadata nor its revision changes as the client returns.

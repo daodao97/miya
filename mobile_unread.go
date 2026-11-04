@@ -136,7 +136,7 @@ func notificationTarget(data map[string]string) remote.Request {
 
 func (m *mobileApp) markAllRead() {
 	if m.conn == nil {
-		m.sendErr = "未连接桌面端"
+		m.sendErr = tr("Not connected to desktop")
 		return
 	}
 	m.sendPhoneAction(remote.Request{Op: "read-all", ReadVersion: m.state.Notifications.Revision})

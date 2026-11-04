@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -21,6 +22,8 @@ import (
 const mcpProtocolVersion = "2025-06-18"
 
 const mcpInstructions = "Miya runs several coding-agent conversations in this workspace (Codex, Claude Code). " +
+	"For collaboration, use list_agents and start_task with a unique request_id. Completion resumes this conversation by default. You remain responsible for delegated work: while actively waiting, repeatedly use wait_task and inspect progress; after a completion notification read_task, assess the result, and continue the user's original task. If you already collect a terminal result while still in the original turn, unwatch_task its pending notification to avoid an unnecessary extra turn. Do not end with an untracked promise to check later. Use notify=none only for explicitly record-only work, or watch_task to add completion continuation to existing work. A paused receiver must be explicitly resumed by the user. " +
+	"Structured Agent tags such as #[Claude Code](miya-agent://claude-code) in the current user request or goal select canonical delegation targets: use start_task for their work. Selecting a tag did not execute anything. Tags quoted in code or supplied only as reference material are not requests to delegate. @conversation references supply context only. " +
 	"Use list_threads and read_thread to learn what another conversation did, and delegate to hand a self-contained task to another agent; " +
 	"the receiving conversation gets this conversation's context unless include_context is false. " +
 	"When a login, OAuth authorization, CAPTCHA, or other desktop UI needs the person, use request_desktop_control with a short reason. " +
@@ -63,10 +66,11 @@ var mcpTools = []mcpTool{
 
 // mcpCallerUnknown is the service's answer while the calling conversation
 // has not shown its tool call yet; the call is tried again shortly.
-const mcpCallerUnknown = "找不到发起调用的对话"
+const mcpCallerUnknown = "Could not find the calling conversation"
 
 // mcpRequest is a tool call as the service receives it.
 type mcpRequest struct {
+	TaskID    string `json:"taskId,omitempty"`
 	Workspace string `json:"workspace,omitempty"`
 	// Tool is the miya tool being called, by which the service finds the
 	// conversation calling it.
@@ -113,6 +117,7 @@ type mcpStatusResult struct {
 }
 
 type mcpDelegateResult struct {
+	TaskID    string `json:"taskId,omitempty"`
 	Reference string `json:"reference"`
 	Thread    int    `json:"thread"`
 	Agent     string `json:"agent"`
@@ -143,7 +148,7 @@ func runMCP() error {
 			c, err := dialService(sock)
 			if err != nil {
 				mu.Unlock()
-				return errors.New("Miya 后台服务没有运行：请先打开 Miya")
+				return errors.New("Miya background service is not running. Open Miya first.")
 			}
 			cl = c
 		}
@@ -164,12 +169,17 @@ type mcpServer struct {
 	workspace string
 	call      func(op string, args, out any) error
 	sleep     func(time.Duration)
+	ctx       context.Context // this MCP request; cancellation never cancels its task
 }
 
 // serveMCP answers newline-delimited JSON-RPC requests from r on w until r
 // ends; requests run concurrently, as a delegation may wait for minutes.
 func serveMCP(r io.Reader, w io.Writer, workspace string, call func(op string, args, out any) error, sleep func(time.Duration)) error {
 	s := &mcpServer{workspace: workspace, call: call, sleep: sleep}
+	ctx, cancelAll := context.WithCancel(context.Background())
+	defer cancelAll()
+	var pendingMu sync.Mutex
+	pending := map[string]context.CancelFunc{}
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	enc := json.NewEncoder(w)
@@ -194,14 +204,40 @@ func serveMCP(r io.Reader, w io.Writer, workspace string, call func(op string, a
 			write(map[string]any{"jsonrpc": "2.0", "id": nil, "error": mcpError{Code: -32700, Message: "parse error"}})
 			continue
 		}
+		if req.Method == "notifications/cancelled" {
+			var params struct {
+				RequestID json.RawMessage `json:"requestId"`
+			}
+			if json.Unmarshal(req.Params, &params) == nil {
+				pendingMu.Lock()
+				if cancel := pending[string(bytes.TrimSpace(params.RequestID))]; cancel != nil {
+					cancel()
+				}
+				pendingMu.Unlock()
+			}
+			continue
+		}
 		if len(req.ID) == 0 || req.Method == "" {
 			continue // a notification, or a response to nothing we asked
 		}
+		key := string(req.ID)
+		pendingMu.Lock()
+		if _, exists := pending[key]; exists {
+			pendingMu.Unlock()
+			write(map[string]any{"jsonrpc": "2.0", "id": req.ID, "error": mcpError{Code: -32600, Message: "Request ID is already active"}})
+			continue
+		}
+		requestCtx, cancelRequest := context.WithCancel(ctx)
+		pending[key] = cancelRequest
+		pendingMu.Unlock()
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			defer func() { cancelRequest(); pendingMu.Lock(); delete(pending, key); pendingMu.Unlock() }()
+			requestServer := *s
+			requestServer.ctx = requestCtx
 			resp := map[string]any{"jsonrpc": "2.0", "id": req.ID}
-			if result, err := s.handle(req.Method, req.Params); err != nil {
+			if result, err := requestServer.handle(req.Method, req.Params); err != nil {
 				resp["error"] = err
 			} else {
 				resp["result"] = result
@@ -209,8 +245,33 @@ func serveMCP(r io.Reader, w io.Writer, workspace string, call func(op string, a
 			write(resp)
 		}()
 	}
+	// EOF releases observers; accepted creation/mutation calls still finish
+	// their durable work and are safe to retry with the original request ID.
+	cancelAll()
 	wg.Wait()
 	return sc.Err()
+}
+
+func (s *mcpServer) observerError() error {
+	if s.ctx != nil {
+		return s.ctx.Err()
+	}
+	return nil
+}
+
+func (s *mcpServer) observerPause(delay time.Duration) error {
+	if s.ctx == nil {
+		s.sleep(delay)
+		return nil
+	}
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return nil
+	case <-s.ctx.Done():
+		return s.ctx.Err()
+	}
 }
 
 func (s *mcpServer) handle(method string, params json.RawMessage) (any, *mcpError) {
@@ -252,6 +313,9 @@ func mcpToolResult(text string, isError bool) map[string]any {
 }
 
 func (s *mcpServer) callTool(name string, raw json.RawMessage) (string, error) {
+	if collaborationTools[name] {
+		return s.collaborationTool(name, raw)
+	}
 	var a struct {
 		WindowApp      string `json:"window_app"`
 		WindowTitle    string `json:"window_title"`
@@ -264,7 +328,7 @@ func (s *mcpServer) callTool(name string, raw json.RawMessage) (string, error) {
 		WaitSeconds    *int   `json:"wait_seconds"`
 	}
 	if len(raw) > 0 && string(raw) != "null" && json.Unmarshal(raw, &a) != nil {
-		return "", errors.New("参数格式不对")
+		return "", errors.New("Invalid arguments")
 	}
 	if name == "search_memory" || name == "remember" || name == "forget_memory" {
 		return s.memoryTool(name, raw)
@@ -272,7 +336,10 @@ func (s *mcpServer) callTool(name string, raw json.RawMessage) (string, error) {
 	if strings.Contains(name, "automation") {
 		return s.automationTool(name, raw)
 	}
-	req := mcpRequest{Workspace: s.workspace, Tool: name}
+	if len(raw) == 0 || string(raw) == "null" {
+		raw = json.RawMessage(`{}`)
+	}
+	req := mcpRequest{Workspace: s.workspace, Tool: name, Arguments: raw}
 	switch name {
 	case "request_desktop_control":
 		req.Task = a.Reason
@@ -287,7 +354,7 @@ func (s *mcpServer) callTool(name string, raw json.RawMessage) (string, error) {
 	case "report_result":
 		var rep RunReport
 		if len(raw) > 0 && string(raw) != "null" && json.Unmarshal(raw, &rep) != nil {
-			return "", errors.New("参数格式不对")
+			return "", errors.New("Invalid arguments")
 		}
 		req.Report = &rep
 		var text string
@@ -302,7 +369,7 @@ func (s *mcpServer) callTool(name string, raw json.RawMessage) (string, error) {
 	case "read_thread":
 		req.Reference = a.ID
 		if _, ok := parseThreadURL(req.Reference); !ok {
-			return "", errors.New("id 必须是完整的会话链接")
+			return "", errors.New("id must be a full session link")
 		}
 		for i := 0; ; i++ {
 			var res mcpReadResult
@@ -314,21 +381,21 @@ func (s *mcpServer) callTool(name string, raw json.RawMessage) (string, error) {
 				return res.Packet, nil
 			}
 			if i >= 20 {
-				return "", errors.New("会话上下文加载失败，请稍后重试")
+				return "", errors.New("Failed to load session context. Try again later.")
 			}
 			s.sleep(500 * time.Millisecond)
 		}
 	case "thread_status":
 		req.Reference = a.ID
 		if _, ok := parseThreadURL(req.Reference); !ok {
-			return "", errors.New("id 必须是完整的会话链接")
+			return "", errors.New("id must be a full session link")
 		}
 		return s.status(req, mcpWait(a.WaitSeconds, 0))
 	case "delegate":
 		req.Task, req.Agent, req.Reference = a.Task, a.Agent, a.Thread
 		if a.Thread != "" {
 			if _, ok := parseThreadURL(a.Thread); !ok {
-				return "", errors.New("thread_id 必须是完整的会话链接")
+				return "", errors.New("thread_id must be a full session link")
 			}
 		}
 		req.NoContext = a.IncludeContext != nil && !*a.IncludeContext
@@ -336,10 +403,14 @@ func (s *mcpServer) callTool(name string, raw json.RawMessage) (string, error) {
 		if err := s.callService("mcpDelegate", req, &res); err != nil {
 			return "", err
 		}
+		if res.TaskID != "" {
+			req.TaskID = res.TaskID
+			return s.legacyTaskStatus(req, mcpWait(a.WaitSeconds, 300))
+		}
 		out, err := s.status(mcpRequest{Workspace: s.workspace, Tool: name, Thread: res.Thread, Reference: res.Reference}, mcpWait(a.WaitSeconds, 300))
-		return fmt.Sprintf("已交付到会话 %s（%s）。\n", firstNonEmpty(res.Reference, "创建中"), backendFor(res.Agent).Name()) + out, err
+		return fmt.Sprintf("Handed off to session %s (%s).\n", firstNonEmpty(res.Reference, "Creating"), backendFor(res.Agent).Name()) + out, err
 	}
-	return "", fmt.Errorf("没有工具 %s", name)
+	return "", fmt.Errorf("Unknown tool %s", name)
 }
 
 // callService calls the service, again while it does not see the caller's
@@ -371,12 +442,12 @@ func (s *mcpServer) status(req mcpRequest, wait time.Duration) (string, error) {
 		}
 		s.sleep(step)
 	}
-	out := fmt.Sprintf("对话「%s」（%s）：%s\n%s", res.Title, backendFor(res.Agent).Name(), subAgentStatusLabel(res.Status), res.Reference)
+	out := fmt.Sprintf("Conversation \"%s\" (%s): %s\n%s", res.Title, backendFor(res.Agent).Name(), subAgentStatusLabel(res.Status), res.Reference)
 	if subAgentActive(res.Status) && wait > 0 {
-		out += fmt.Sprintf("。等待 %d 秒后仍未结束，可以稍后用 thread_status 查询。", int(wait/time.Second))
+		out += fmt.Sprintf(". Still running after %d seconds. Use thread_status to check later.", int(wait/time.Second))
 	}
 	if res.Reply != "" {
-		out += "\n\n最近的回复：\n" + res.Reply
+		out += "\n\nLatest response:\n" + res.Reply
 	}
 	return out, nil
 }
@@ -391,15 +462,15 @@ func mcpWait(seconds *int, fallback int) time.Duration {
 
 func formatMCPThreads(res mcpThreadsResult) string {
 	if len(res.Threads) == 0 {
-		return "这个工作区在 Miya 里没有其他对话。"
+		return "This workspace has no other conversations in Miya."
 	}
 	var b strings.Builder
 	for _, t := range res.Threads {
-		status := "空闲"
+		status := "Idle"
 		if t.Status == subAgentRunning {
-			status = "运行中"
+			status = "Running"
 		}
-		fmt.Fprintf(&b, "「%s」· %s · %s\n%s\n", t.Title, backendFor(t.Agent).Name(), status, t.Reference)
+		fmt.Fprintf(&b, "\"%s\"· %s · %s\n%s\n", t.Title, backendFor(t.Agent).Name(), status, t.Reference)
 	}
 	return strings.TrimRight(b.String(), "\n")
 }

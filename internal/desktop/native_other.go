@@ -6,7 +6,8 @@ import "errors"
 
 func Available() bool                        { return false }
 func WakeDisplay() error                     { return Authorize() }
-func Authorize() error                       { return errors.New("远程桌面需要 macOS 14 或更新版本") }
+func ScreenLocked() (bool, error)            { return false, Authorize() }
+func Authorize() error                       { return errors.New("Remote desktop requires macOS 14 or later") }
 func Capture() ([]byte, error)               { return nil, Authorize() }
 func SendInput(Input) error                  { return Authorize() }
 func Windows() ([]Window, error)             { return nil, Authorize() }

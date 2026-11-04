@@ -98,7 +98,7 @@ func TestMemoryFailedStoppedSubAgentAndHistoryDoNotExtract(t *testing.T) {
 			scope, _ := memory.ProjectScope(c.cwd)
 			_ = c.memory.Configure(scope, memory.Settings{AutoExtract: true})
 			c.memoryEngine = &memoryEngine{wake: make(chan struct{}, 1)}
-			th := Thread{ID: 1, Agent: agentClaude, ServerID: "session", Busy: true, Messages: []Message{{ID: 10, Role: "user", Content: "记忆"}, {ID: 11, Role: "assistant", Content: "回复"}}}
+			th := Thread{ID: 1, Agent: agentClaude, ServerID: "session", Busy: true, Messages: []Message{{ID: 10, Role: "user", Content: "Memory"}, {ID: 11, Role: "assistant", Content: "回复"}}}
 			if variant == "stopped" {
 				th.StopRequested = true
 			}
@@ -136,13 +136,13 @@ func TestMemoryOversizedCompletedRoundReportsSkippedExtraction(t *testing.T) {
 	c.memoryEngine = &memoryEngine{wake: make(chan struct{}, 1)}
 	c.setThreads([]Thread{{ID: 1, ServerID: "session", Messages: []Message{
 		{ID: 10, Role: "user", Content: strings.Repeat("问", memory.MaxExtractionInput), SentAtMs: time.Now().UnixMilli()},
-		{ID: 11, Role: "assistant", Content: "已完成", SentAtMs: time.Now().UnixMilli()},
+		{ID: 11, Role: "assistant", Content: "Completed", SentAtMs: time.Now().UnixMilli()},
 	}}})
 	c.memoryTurns = map[int]memoryTurn{1: {LocalID: "local", FirstMessage: 10}}
 	c.completedMemoryTurn(1, "turn")
 	waitCodexResume(t, c, d, func() bool { return c.memoryCalls == 0 })
 	status, err := c.memory.ExtractionStatus(scope)
-	if err != nil || status.Failed != 1 || !strings.Contains(status.LastError, "输入超过上限") {
+	if err != nil || status.Failed != 1 || !strings.Contains(status.LastError, "input exceeds the limit") {
 		t.Fatalf("skipped round has no visible diagnostic: %+v %v", status, err)
 	}
 	if c.memoryRevision == 0 {

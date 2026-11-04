@@ -41,11 +41,11 @@ func TestMobileClaudeQuestionRoutesFromControllerToForm(t *testing.T) {
 			m.showThread(th)
 			tt := ui.NewTester(m.viewRoot, width, 750)
 			tt.Frame()
-			r, ok := tt.Find("填写回答")
+			r, ok := tt.Find("Enter your answer")
 			if !ok || r.Y < 0 || r.Y+r.H > 750 {
 				t.Fatalf("Claude question entry is missing or off-screen: %v", r)
 			}
-			if err := tt.Click("填写回答"); err != nil {
+			if err := tt.Click("Enter your answer"); err != nil {
 				t.Fatal(err)
 			}
 			for _, label := range []string{"Claude Code", "验证方式", "触发时机", "取用密码时验证身份。"} {
@@ -63,10 +63,10 @@ func TestMobileClaudeQuestionRoutesFromControllerToForm(t *testing.T) {
 				t.Fatal("Claude question options did not retain separate answers")
 			}
 			saveMobileNativeSnapshot(t, tt, fmt.Sprintf("claude-questions-%d", width))
-			if err := tt.Click("提交回答"); err != nil {
+			if err := tt.Click("Submit answer"); err != nil {
 				t.Fatal(err)
 			}
-			if m.view.formErrors[string(a.ID)] != "未连接桌面端" || len(m.state.Approvals) != 1 {
+			if m.view.formErrors[string(a.ID)] != "Not connected to desktop" || len(m.state.Approvals) != 1 {
 				t.Fatal("failed submission lost the question or its answers")
 			}
 			f.Type = "control_cancel_request"

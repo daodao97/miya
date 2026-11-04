@@ -256,26 +256,26 @@ func TestMobileDesktopManagerNavigationAndSwitch(t *testing.T) {
 	tt.SetSafeArea(ui.SafeArea{Top: 59, Bottom: 34})
 	tt.Frame()
 	openMobileDrawer(t, tt)
-	if err := tt.Click("切换桌面"); err != nil {
+	if err := tt.Click("Switch desktop"); err != nil {
 		t.Fatal(err)
 	}
 	if m.router().Path() != "/desktops" || !tt.HasText("Mac Studio") || !tt.HasText("MacBook Pro") || tt.HasText(a) || tt.HasText(b) {
 		t.Fatal("desktop manager did not show saved desktops without exposing pairing secrets")
 	}
 	saveMobileNativeSnapshot(t, tt, "desktop-manager")
-	if err := tt.Click("添加桌面"); err != nil {
+	if err := tt.Click("Add desktop"); err != nil {
 		t.Fatal(err)
 	}
-	if m.router().Path() != "/desktop/add" || !tt.HasText("扫码连接") || m.link != a {
+	if m.router().Path() != "/desktop/add" || !tt.HasText("Scan to connect") || m.link != a {
 		t.Fatal("adding a desktop disconnected the current desktop")
 	}
-	if err := tt.Click("返回"); err != nil {
+	if err := tt.Click("Back"); err != nil {
 		t.Fatal(err)
 	}
 	if m.router().Path() != "/desktops" {
 		t.Fatal("adding a desktop did not return to its manager")
 	}
-	if err := tt.Click("连接桌面 MacBook Pro"); err != nil {
+	if err := tt.Click("Connect to desktop MacBook Pro"); err != nil {
 		t.Fatal(err)
 	}
 	if m.currentDesktopID() != other.ID || len(m.desktops.Items) != 2 || m.router().Path() != "/" {
@@ -378,7 +378,7 @@ func TestMobileDesktopManagerSharesDrawerBackBehavior(t *testing.T) {
 	tt := ui.NewTester(m.viewRoot, 390, 844)
 	tt.Frame()
 	openMobileDrawer(t, tt)
-	if err := tt.Click("切换桌面"); err != nil {
+	if err := tt.Click("Switch desktop"); err != nil {
 		t.Fatal(err)
 	}
 	openMobileDrawer(t, tt)

@@ -24,23 +24,23 @@ func TestMobileWebServiceNavigation(t *testing.T) {
 				tt.SetSafeArea(ui.SafeArea{Top: 59, Bottom: 34})
 				tt.SetPreferences(ui.Preferences{TextScale: 1.8})
 				tt.Frame()
-				if err := tt.Click("更多"); err != nil {
+				if err := tt.Click("More"); err != nil {
 					t.Fatal(err)
 				}
 				tt.Advance(time.Second)
-				if err := tt.Click("Web 服务"); err != nil {
+				if err := tt.Click("Web services"); err != nil {
 					t.Fatal(err)
 				}
 				tt.Advance(time.Second)
 				if m.router().Path() != "/web" || m.conversationMenu || m.open != originalThread || m.draft != "保留草稿" {
 					t.Fatal("web navigation changed the conversation")
 				}
-				input, ok := tt.Find("Web 端口")
-				button, buttonOK := tt.Find("打开 Web 服务")
+				input, ok := tt.Find("Web port")
+				button, buttonOK := tt.Find("Open web service")
 				if !ok || !buttonOK || input.H < 44 || button.H < 44 || button.Y < input.Y+input.H || button.Y+button.H > 810 {
 					t.Fatalf("web controls outside safe area: input=%v button=%v", input, button)
 				}
-				if err := tt.Click("Web 端口"); err != nil {
+				if err := tt.Click("Web port"); err != nil {
 					t.Fatal(err)
 				}
 				tt.Type("5173")
@@ -48,7 +48,7 @@ func TestMobileWebServiceNavigation(t *testing.T) {
 					t.Fatal("port input did not update")
 				}
 				saveMobileNativeSnapshot(t, tt, fmt.Sprintf("web-service-%d-thread-%v", width, thread))
-				if err := tt.Click("返回"); err != nil {
+				if err := tt.Click("Back"); err != nil {
 					t.Fatal(err)
 				}
 				tt.Advance(time.Second)
@@ -66,12 +66,12 @@ func TestMobileWebServiceOldDesktopAndInvalidPort(t *testing.T) {
 	m.webPort = "65536"
 	tt := ui.NewTester(m.viewRoot, 390, 844)
 	tt.Frame()
-	if !tt.HasText("请先更新桌面端") || !tt.HasText("1–65535") {
+	if !tt.HasText("Update Miya on your desktop first") || !tt.HasText("1 and 65535") {
 		t.Fatal("missing compatibility or validation hint")
 	}
 	m.connected = false
 	tt.Frame()
-	if !tt.HasText("连接桌面端后") {
+	if !tt.HasText("Connect to your desktop") {
 		t.Fatal("missing disconnected hint")
 	}
 }
@@ -88,11 +88,11 @@ func TestMobileWebServicesListKeepsConversationProject(t *testing.T) {
 			tt.SetSafeArea(ui.SafeArea{Top: 59, Bottom: 34})
 			tt.SetPreferences(ui.Preferences{TextScale: 1.8})
 			tt.Frame()
-			if err := tt.Click("更多"); err != nil {
+			if err := tt.Click("More"); err != nil {
 				t.Fatal(err)
 			}
 			tt.Advance(time.Second)
-			if err := tt.Click("Web 服务"); err != nil {
+			if err := tt.Click("Web services"); err != nil {
 				t.Fatal(err)
 			}
 			tt.Advance(time.Second)
@@ -101,28 +101,28 @@ func TestMobileWebServicesListKeepsConversationProject(t *testing.T) {
 			}
 			m.webServices.services = []phoneWebService{{Port: 3000, Process: "node"}, {Port: 5173, Process: "vite"}}
 			tt.Frame()
-			for _, label := range []string{"proj-b", "端口 3000", "端口 5173", "刷新 Web 服务", "手动输入端口"} {
+			for _, label := range []string{"proj-b", "Port 3000", "Port 5173", "Refresh web services", "Enter port manually"} {
 				if !tt.HasText(label) {
 					t.Fatalf("missing list control %s", label)
 				}
 			}
-			if _, ok := tt.Find("Web 端口"); ok {
+			if _, ok := tt.Find("Web port"); ok {
 				t.Fatal("manual input should be collapsed by default")
 			}
-			for _, label := range []string{"打开 http://localhost:3000", "打开 http://localhost:5173"} {
+			for _, label := range []string{"Open http://localhost:3000", "Open http://localhost:5173"} {
 				row, ok := tt.Find(label)
 				if !ok || row.H < 44 || row.Y < 59 || row.Y+row.H > 810 {
 					t.Fatalf("service outside safe area: %v", row)
 				}
 			}
 			saveMobileNativeSnapshot(t, tt, fmt.Sprintf("web-services-list-%d", width))
-			if err := tt.Click("手动输入端口"); err != nil {
+			if err := tt.Click("Enter port manually"); err != nil {
 				t.Fatal(err)
 			}
 			if !m.webManual {
 				t.Fatal("manual entry did not expand")
 			}
-			if err := tt.Click("返回"); err != nil {
+			if err := tt.Click("Back"); err != nil {
 				t.Fatal(err)
 			}
 			tt.Advance(time.Second)
@@ -139,24 +139,24 @@ func TestMobileWebServicesEmptyLoadingRefreshAndCancel(t *testing.T) {
 	m.openWebServices("/a")
 	tt := ui.NewTester(m.viewRoot, 390, 844)
 	tt.Frame()
-	if !tt.HasText("未发现项目") {
+	if !tt.HasText("No project HTTP services found") {
 		t.Fatal("missing empty state")
 	}
 	state := m.webServices
 	state.loading = true
 	tt.Frame()
-	if !tt.HasText("正在查找项目") {
+	if !tt.HasText("Finding project web services") {
 		t.Fatal("missing loading state")
 	}
 	state.loading = false
-	state.err = "读取失败，请刷新"
+	state.err = "Failed to load. Refresh."
 	tt.Frame()
-	if !tt.HasText("读取失败") {
+	if !tt.HasText("Failed to load") {
 		t.Fatal("missing error state")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	state.cancel = cancel
-	if err := tt.Click("刷新 Web 服务"); err != nil {
+	if err := tt.Click("Refresh web services"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()

@@ -160,7 +160,7 @@ func nativeText(value string) string {
 	for end > 0 && value[end]&0xc0 == 0x80 {
 		end--
 	}
-	return value[:end] + "\n[内容过长，显示已截断]"
+	return value[:end] + tr("\n[Content truncated for display]")
 }
 
 func cleanUserText(text string) string {
@@ -246,7 +246,7 @@ func itemMessage(item codex.Item) (Message, bool) {
 				if uri := localImageDataURI(v.Path); uri != "" {
 					m.Images = append(m.Images, uri)
 				} else if strings.Contains(v.Path, "/") || strings.Contains(v.Path, "\\") {
-					m.Content += "\nImage: " + v.Path
+					m.Content += tr("\nImage: ") + v.Path
 				}
 			case "skill", "mention":
 				m.Content += "\n[" + v.Type + ": " + v.Name + " " + v.Path + "]"
@@ -258,7 +258,7 @@ func itemMessage(item codex.Item) (Message, bool) {
 		m.Role = "activity"
 		m.Content = strings.Join(item.Summary, "\n")
 		if m.Content == "" {
-			m.Content = "Thinking…"
+			m.Content = tr("Thinking…")
 		}
 	case "plan":
 		m.Role = "activity"
@@ -267,14 +267,14 @@ func itemMessage(item codex.Item) (Message, bool) {
 		m.Role = "tool"
 		m.Content = item.Status + " · " + item.Command
 		if item.ExitCode != nil {
-			m.Content += fmt.Sprintf("\nExit code: %d", *item.ExitCode)
+			m.Content += fmt.Sprintf(tr("\nExit code: %d"), *item.ExitCode)
 		}
 		if item.AggregatedOutput != "" {
 			m.Content += "\n" + bounded(item.AggregatedOutput)
 		}
 	case "filechange":
 		m.Role = "tool"
-		m.Content = "File changes · " + item.Status
+		m.Content = tr("File changes · ") + item.Status
 		for _, change := range item.Changes {
 			m.Content += "\n" + change.Path + "\n" + bounded(change.Diff)
 		}
@@ -300,34 +300,34 @@ func itemMessage(item codex.Item) (Message, bool) {
 		m.Content = codexSubAgentActivity(item)
 	case "websearch":
 		m.Role = "tool"
-		m.Content = "Web search · " + item.Query + "\n" + jsonText(item.Result)
+		m.Content = tr("Web search · ") + item.Query + "\n" + jsonText(item.Result)
 	case "imageview":
 		m.Role = "tool"
-		m.Content = "Viewed image\n" + item.Path
+		m.Content = tr("Viewed image\n") + item.Path
 	case "imagegeneration":
 		m.Role = "tool"
-		m.Content = "Image generation · " + item.Status + "\n" + item.SavedPath + "\n" + jsonText(item.Failure)
+		m.Content = tr("Image generation · ") + item.Status + "\n" + item.SavedPath + "\n" + jsonText(item.Failure)
 	case "enteredreviewmode", "exitedreviewmode":
 		m.Role = "activity"
 		m.Content = item.Type + "\n" + item.Review
 	case "contextcompaction":
 		m.Role = "activity"
-		m.Content = "Conversation context compacted"
+		m.Content = tr("Conversation context compacted")
 	case "sleep":
 		m.Role = "activity"
-		m.Content = fmt.Sprintf("Waiting · %d ms", item.DurationMS)
+		m.Content = fmt.Sprintf(tr("Waiting · %d ms"), item.DurationMS)
 	case "functioncalloutput":
 		m.Role = "tool"
 		m.Content = jsonText(item.Output)
 	case "hookprompt":
 		m.Role = "activity"
-		m.Content = "Hook prompt"
+		m.Content = tr("Hook prompt")
 	default:
 		if item.Type == "" {
 			return m, false
 		}
 		m.Role = "activity"
-		m.Content = "Codex event: " + item.Type
+		m.Content = tr("Codex event: ") + item.Type
 	}
 	// Attachment placeholders can be introduced by more than one content item;
 	// sanitize after the complete message has been assembled as the final guard.
@@ -338,11 +338,11 @@ func itemMessage(item codex.Item) (Message, bool) {
 }
 
 func messageLabel(kind string) string {
-	labels := map[string]string{"reasoning": "Thinking", "plan": "Plan", "commandexecution": "Command", "filechange": "File changes", "diff": "Changes", "mcptoolcall": "MCP tool", "dynamictoolcall": "Tool", "collabagenttoolcall": "Agent task", "subagentactivity": "Agent activity", "websearch": "Web search", "imageview": "Image", "imagegeneration": "Generated image", "enteredreviewmode": "Review started", "exitedreviewmode": "Review completed", "contextcompaction": "Context compacted", "sleep": "Waiting", "functioncalloutput": "Tool result", "hookprompt": "Hook", "handoff": "交付"}
+	labels := map[string]string{"reasoning": tr("Thinking"), "plan": tr("Plan"), "commandexecution": tr("Command"), "filechange": tr("File changes"), "diff": tr("Changes"), "mcptoolcall": tr("MCP tool"), "dynamictoolcall": tr("Tool"), "collabagenttoolcall": tr("Agent task"), "subagentactivity": tr("Agent activity"), "websearch": tr("Web search"), "imageview": tr("Image"), "imagegeneration": tr("Generated image"), "enteredreviewmode": tr("Review started"), "exitedreviewmode": tr("Review completed"), "contextcompaction": tr("Context compacted"), "sleep": tr("Waiting"), "functioncalloutput": tr("Tool result"), "hookprompt": tr("Hook"), "handoff": tr("Handoff")}
 	if label := labels[strings.ToLower(kind)]; label != "" {
 		return label
 	}
-	return "Activity"
+	return tr("Activity")
 }
 
 func messageIcon(kind string) string {

@@ -25,7 +25,7 @@ func subAgentList(c *ui.Context, agents []SubAgent) {
 					ui.Text(c, nativeText(firstNonEmpty(a.Name, a.ID))).FontSize(12).TextColor(ink).SingleLine().Ellipsis("…")
 					line := subAgentStatusLabel(a.Status)
 					if a.Steps > 0 {
-						line += fmt.Sprintf(" · %d 步", a.Steps)
+						line += fmt.Sprintf(tr(" · %d steps"), a.Steps)
 					}
 					if a.Detail != "" {
 						line += " · " + a.Detail

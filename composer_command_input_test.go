@@ -29,7 +29,7 @@ func TestComposerCommandSelectionStagesChipAndEditableArguments(t *testing.T) {
 	if a := doc.Text().AttributesAt(0); a.Tag != composerCommandTag || a.Attachment == nil || a.Attachment.Name != "/goal" {
 		t.Fatal("missing command identity", a)
 	}
-	if !tt.HasText("描述目标，或输入 pause / resume / clear") {
+	if !tt.HasText("Describe a goal, or enter pause / resume / clear") {
 		t.Fatal("missing command argument hint")
 	}
 	tt.Type("修复手机按钮👋")
@@ -127,7 +127,7 @@ func TestMobileCommandSelectionUsesInlineChip(t *testing.T) {
 			if m.draft != "/goal " || doc.Text().AttributesAt(0).Tag != composerCommandTag {
 				t.Fatal("phone selection is not a chip", m.draft)
 			}
-			if err := tt.Click("消息"); err != nil {
+			if err := tt.Click("Message"); err != nil {
 				t.Fatal(err)
 			}
 			tt.Type("修复通知文案")
@@ -150,7 +150,7 @@ func TestMobileLongCommandFitsTheComposer(t *testing.T) {
 	m.draft = "/" + name + " "
 	tt := ui.NewTester(m.viewRoot, 320, 750)
 	tt.Frame()
-	r, ok := tt.Find("消息")
+	r, ok := tt.Find("Message")
 	a := m.inlineInput.doc.Text().AttributesAt(0).Attachment
 	if !ok || a == nil || a.Width > r.W || inlineThreadRaw(m.inlineInput.doc.Text()) != m.draft {
 		t.Fatalf("long command overflowed or lost its full name: input=%+v attachment=%+v", r, a)

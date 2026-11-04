@@ -29,13 +29,13 @@ func TestDesktopClientConsentCaptureInputAndStop(t *testing.T) {
 	if err != nil || session.WindowOnly || session.Window != nil {
 		t.Fatal(session, err)
 	}
-	if _, err := c.frame(ctx); desktopStatus(err) != 403 {
+	if _, _, err := c.frame(ctx); desktopStatus(err) != 403 {
 		t.Fatal("captured before consent", err)
 	}
 	if err := c.start(ctx); err != nil {
 		t.Fatal(err)
 	}
-	data, err := c.frame(ctx)
+	data, _, err := c.frame(ctx)
 	if err != nil || string(data) != "jpeg" {
 		t.Fatal(string(data), err)
 	}
@@ -46,7 +46,7 @@ func TestDesktopClientConsentCaptureInputAndStop(t *testing.T) {
 		t.Fatal("invalid input was sent")
 	}
 	c.stop()
-	if _, err := c.frame(ctx); desktopStatus(err) != 410 {
+	if _, _, err := c.frame(ctx); desktopStatus(err) != 410 {
 		t.Fatal("frame after stop", err)
 	}
 }

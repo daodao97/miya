@@ -77,7 +77,7 @@ func (d *mobileDesktops) remember(raw, name string) (mobileDesktop, error) {
 	}
 	item := mobileDesktop{ID: id, Link: strings.TrimSpace(raw), Name: strings.TrimSpace(name)}
 	if item.Name == "" {
-		item.Name = fmt.Sprintf("桌面端 %d", len(d.Items)+1)
+		item.Name = fmt.Sprintf(tr("Desktop %d"), len(d.Items)+1)
 	}
 	d.Version = 1
 	d.Items = append(d.Items, item)
@@ -105,11 +105,11 @@ func readMobileDesktops(store mobileSecretStore) (mobileDesktops, bool, error) {
 	if err == nil {
 		var saved mobileDesktops
 		if json.Unmarshal(data, &saved) != nil || saved.Version != 1 {
-			return d, false, errors.New("无法读取已保存的桌面列表")
+			return d, false, errors.New(tr("Unable to read saved desktops"))
 		}
 		for _, item := range saved.Items {
 			if _, err := d.remember(item.Link, item.Name); err != nil {
-				return mobileDesktops{Version: 1}, false, errors.New("已保存的桌面连接无效")
+				return mobileDesktops{Version: 1}, false, errors.New(tr("Invalid saved desktop connection"))
 			}
 		}
 		d.Active = saved.Active
@@ -122,18 +122,18 @@ func readMobileDesktops(store mobileSecretStore) (mobileDesktops, bool, error) {
 		return d, false, nil
 	}
 	if !errors.Is(err, mygo.ErrSecretNotFound) {
-		return d, false, errors.New("请解锁手机后重新读取桌面列表")
+		return d, false, errors.New(tr("Unlock your phone and reload desktops"))
 	}
 	legacy, err := store.Get("desktop-link")
 	if errors.Is(err, mygo.ErrSecretNotFound) {
 		return d, false, nil
 	}
 	if err != nil {
-		return d, false, errors.New("请解锁手机后重新读取桌面连接")
+		return d, false, errors.New(tr("Unlock your phone and reload the desktop connection"))
 	}
 	item, err := d.remember(string(legacy), "")
 	if err != nil {
-		return d, false, errors.New("已保存的桌面连接无效")
+		return d, false, errors.New(tr("Invalid saved desktop connection"))
 	}
 	d.Active = item.ID
 	return d, true, nil
@@ -167,7 +167,7 @@ func (m *mobileApp) saveDesktops() {
 			}
 			m.desktopError = ""
 			if err != nil {
-				m.desktopError = "桌面列表保存失败，请重试"
+				m.desktopError = tr("Unable to save desktops. Try again.")
 			}
 		})
 	}()
@@ -247,6 +247,20 @@ func (m *mobileApp) removeDesktop(id string) {
 			m.home()
 			m.updateBadge()
 		}
+	}
+	if store, key := m.store, desktopUnlockKey(id); store != nil && key != "" {
+		gen := m.generation
+		go func() {
+			m.desktopWrites.mu.Lock()
+			err := store.Delete(key)
+			m.desktopWrites.mu.Unlock()
+			if err != nil {
+				m.onMain(gen, func() {
+					m.desktopError = tr("Connection removed, but the login password could not be deleted from Keychain")
+					invalidate()
+				})
+			}
+		}()
 	}
 	m.saveDesktops()
 }
@@ -383,7 +397,7 @@ func (m *mobileApp) openNotification(data map[string]string) {
 	target := notificationTarget(data)
 	id := m.desktopForNotification(target)
 	if len(m.desktops.Items) > 1 && id == "" {
-		m.desktopNotice = "请选择这条通知所属的桌面"
+		m.desktopNotice = tr("Select the desktop for this notification")
 		m.openDesktopManager()
 		return
 	}

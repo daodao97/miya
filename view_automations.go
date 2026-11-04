@@ -143,20 +143,20 @@ func autoTile(c *ui.Context, agent string, size float32) {
 
 // runBadge says how a run went, or that it runs.
 func runBadge(c *ui.Context, run AutomationRun, has, running bool) {
-	label, fg, bg := "未运行", muted, autoGrayBg
+	label, fg, bg := tr("Not run yet"), muted, autoGrayBg
 	switch {
 	case running:
-		label, fg, bg = fmt.Sprintf("运行中 %d/%d 轮", max(run.Round, 1), max(run.Rounds, 1)), autoRun, autoRunBg
+		label, fg, bg = fmt.Sprintf(tr("Running · Turn %d/%d"), max(run.Round, 1), max(run.Rounds, 1)), autoRun, autoRunBg
 	case !has:
 	case run.Result == runPassed:
-		label, fg, bg = "通过", autoOK, autoOKBg
+		label, fg, bg = tr("Passed"), autoOK, autoOKBg
 		if run.Rounds > 1 {
-			label += fmt.Sprintf(" · 第 %d 轮", run.Round)
+			label += fmt.Sprintf(tr(" · Turn %d"), run.Round)
 		}
 	case run.Result == runFailed:
-		label, fg, bg = "失败", autoBad, autoBadBg
+		label, fg, bg = tr("Failed"), autoBad, autoBadBg
 		if run.Rounds > 1 {
-			label += fmt.Sprintf(" · %d/%d 轮", run.Round, run.Rounds)
+			label += fmt.Sprintf(tr(" · %d/%d turns"), run.Round, run.Rounds)
 		}
 	default:
 		label = runResultLabel(run.Result)
@@ -181,9 +181,9 @@ func lastAutomationRun(v automationView) (AutomationRun, bool) {
 func automationSubline(v automationView) string {
 	parts := []string{filepath.Base(v.Project), backendFor(v.Agent).Name()}
 	if v.Check != "" {
-		parts = append(parts, "完成标准 "+v.Check)
+		parts = append(parts, tr("Completion criteria ")+v.Check)
 	} else {
-		parts = append(parts, "单轮")
+		parts = append(parts, tr("Single turn"))
 	}
 	return strings.Join(parts, " · ")
 }
@@ -193,9 +193,9 @@ func (app *chatApp) automationList(c *ui.Context) {
 	ui.Row(c).FillWidth().AlignItems(ui.End).Gap(16).Children(func() {
 		ui.Column(c).Grow(1).MinWidth(0).Gap(4).Children(func() {
 			ui.Text(c, tr("Automations")).FontSize(26).FontWeight(600)
-			ui.Text(c, "按计划在项目里新开一个对话执行指令，结束后推送到手机。").TextColor(muted)
+			ui.Text(c, tr("Start a new conversation in the project on schedule, then send the result to your phone.")).TextColor(muted)
 		})
-		if ui.PrimaryButton(c.Key("new"), "新建").Clicked() {
+		if ui.PrimaryButton(c.Key("new"), tr("New")).Clicked() {
 			app.openAutomationForm(nil)
 		}
 	})
@@ -206,13 +206,13 @@ func (app *chatApp) automationList(c *ui.Context) {
 	case !a.loaded:
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			ui.Spinner(c).FontSize(12)
-			ui.Text(c, "正在读取…").TextColor(muted)
+			ui.Text(c, tr("Loading…")).TextColor(muted)
 		})
 	case len(a.list) == 0:
 		ui.Column(c).FillWidth().Padding(28).Gap(6).AlignItems(ui.Center).Border(1, line).Radius(12).Children(func() {
 			icon(c, "clock", 22, muted)
-			ui.Text(c, "还没有自动化").FontWeight(600)
-			ui.Text(c, "点「新建」写一句话，或在任意对话里让 agent 创建。").FontSize(12).TextColor(muted)
+			ui.Text(c, tr("No automations yet")).FontWeight(600)
+			ui.Text(c, tr("Click New to describe a task, or ask an agent to create one in any conversation.")).FontSize(12).TextColor(muted)
 		})
 	default:
 		ui.Column(c).FillWidth().Gap(8).Children(func() {
@@ -223,7 +223,7 @@ func (app *chatApp) automationList(c *ui.Context) {
 	}
 	ui.Row(c).FillWidth().Gap(12).Padding(14, 16, 14, 16).Border(1, line).Radius(12).AlignItems(ui.Start).Children(func() {
 		icon(c, "message-circle", 16, ink)
-		ui.Text(c, "在任意对话里描述要定期做的事，确认后会显示在这里。关闭窗口后，已启用的自动化照常运行。").
+		ui.Text(c, tr("Describe a recurring task in any conversation. It appears here after confirmation. Enabled automations keep running when the window is closed.")).
 			Grow(1).MinWidth(0).FontSize(12).LineHeight(1.6).TextColor(muted)
 	})
 }
@@ -245,10 +245,10 @@ func (app *chatApp) automationRow(c *ui.Context, v automationView) {
 			a.page, a.detail, a.confirmDelete = "detail", v.ID, ""
 		}
 		ui.Column(c).Width(150).Shrink(0).Gap(1).Children(func() {
-			ui.Text(c, v.ScheduleText).FontWeight(500).SingleLine().Ellipsis("…")
-			next := "已暂停"
+			ui.Text(c, describeCron(v.Schedule)).FontWeight(500).SingleLine().Ellipsis("…")
+			next := tr("Paused")
 			if v.Enabled {
-				next = "下次 " + formatAutomationTime(v.Next)
+				next = tr("Next ") + formatAutomationTime(v.Next)
 			}
 			ui.Text(c, next).FontSize(12).TextColor(muted).SingleLine()
 		})
@@ -263,10 +263,10 @@ func (app *chatApp) automationRow(c *ui.Context, v automationView) {
 			app.toggleAutomation(v.ID, on)
 		}
 		ui.Row(c).Width(64).Shrink(0).Justify(ui.End).Gap(2).Children(func() {
-			if !v.Running && toolButton(c.Key("run"), "arrow-right", "立即运行").Clicked() {
+			if !v.Running && toolButton(c.Key("run"), "arrow-right", tr("Run now")).Clicked() {
 				app.runAutomationNow(v.ID)
 			}
-			if has && last.Thread != 0 && toolButton(c.Key("last"), "message-circle", "打开上次对话").Clicked() {
+			if has && last.Thread != 0 && toolButton(c.Key("last"), "message-circle", tr("Open last conversation")).Clicked() {
 				app.openAutomationThread(v.Project, last.Thread)
 			}
 		})
@@ -344,23 +344,23 @@ func (app *chatApp) automationDetail(c *ui.Context) {
 		autoTile(c, v.Agent, 48)
 		ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
 			ui.Text(c, v.Name).FontSize(24).FontWeight(600).SingleLine().Ellipsis("…")
-			ui.Text(c, filepath.Base(v.Project)+" · "+backendFor(v.Agent).Name()+" · "+v.ScheduleText).TextColor(muted).SingleLine().Ellipsis("…")
+			ui.Text(c, filepath.Base(v.Project)+" · "+backendFor(v.Agent).Name()+" · "+describeCron(v.Schedule)).TextColor(muted).SingleLine().Ellipsis("…")
 		})
 		on := v.Enabled
 		if ui.Switch(c.Key("on"), &on).Shrink(0).Changed() {
 			app.toggleAutomation(v.ID, on)
 		}
-		if ui.Button(c.Key("edit"), "编辑").Clicked() {
+		if ui.Button(c.Key("edit"), tr("Edit")).Clicked() {
 			app.openAutomationForm(&v)
 		}
-		if ui.PrimaryButton(c.Key("run"), "立即运行").Disabled(v.Running).Clicked() {
+		if ui.PrimaryButton(c.Key("run"), tr("Run now")).Disabled(v.Running).Clicked() {
 			app.runAutomationNow(v.ID)
 		}
 		if a.confirmDelete == v.ID {
-			if ui.Button(c.Key("delete-confirm"), "确认删除").Clicked() {
+			if ui.Button(c.Key("delete-confirm"), tr("Confirm deletion")).Clicked() {
 				app.deleteAutomation(v.ID)
 			}
-		} else if toolButton(c.Key("delete"), "trash-2", "删除").Clicked() {
+		} else if toolButton(c.Key("delete"), "trash-2", tr("Delete")).Clicked() {
 			a.confirmDelete = v.ID
 		}
 	})
@@ -376,37 +376,37 @@ func (app *chatApp) automationDetail(c *ui.Context) {
 		}
 	}
 	ui.Row(c).FillWidth().Gap(10).Children(func() {
-		next := "已暂停"
+		next := tr("Paused")
 		if v.Enabled {
 			next = formatAutomationTime(v.Next)
 		}
-		stat(c, "下次运行", next)
+		stat(c, tr("Next run"), next)
 		if total > 0 {
-			stat(c, fmt.Sprintf("最近 %d 次", total), fmt.Sprintf("%d 次通过", passed))
-			stat(c, "平均", fmt.Sprintf("%.1f 轮", float64(rounds)/float64(total)))
+			stat(c, fmt.Sprintf(tr("Last %d runs"), total), fmt.Sprintf(tr("%d passed"), passed))
+			stat(c, tr("Average"), fmt.Sprintf(tr("%.1f turns"), float64(rounds)/float64(total)))
 		} else {
-			stat(c, "运行记录", "还没有运行")
+			stat(c, tr("Run history"), tr("No runs yet"))
 		}
 	})
 	ui.Column(c).FillWidth().Gap(10).Padding(16).Border(1, line).Radius(12).Children(func() {
-		ui.Text(c, "指令").FontSize(12).TextColor(muted)
+		ui.Text(c, tr("Instructions")).FontSize(12).TextColor(muted)
 		ui.Text(c, v.Instructions).FontSize(14).LineHeight(1.7).Selectable()
 		ui.Row(c).Gap(8).Children(func() {
 			settingChip(c, "clock", v.Schedule)
 			if v.Check != "" {
 				settingChip(c, "terminal-2", v.Check)
-				settingChip(c, "refresh", fmt.Sprintf("最多 %d 轮", v.Rounds))
+				settingChip(c, "refresh", fmt.Sprintf(tr("Up to %d turns"), v.Rounds))
 			} else {
-				settingChip(c, "refresh", "单轮")
+				settingChip(c, "refresh", tr("Single turn"))
 			}
 		})
 		if v.Request != "" && v.Request != v.Instructions {
-			ui.Text(c, "原话："+v.Request).FontSize(12).TextColor(muted).LineHeight(1.5)
+			ui.Text(c, tr("Original request: ")+v.Request).FontSize(12).TextColor(muted).LineHeight(1.5)
 		}
 	})
 	ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
 		carry := !v.NoCarryOver
-		if ui.Switch(c.Key("carry"), &carry).Label("带上上次结果").Shrink(0).Changed() {
+		if ui.Switch(c.Key("carry"), &carry).Label(tr("Include previous result")).Shrink(0).Changed() {
 			next := v.Automation
 			next.NoCarryOver = !carry
 			app.autoCall("automationSave", automationRequest{Automation: &next}, func(_ json.RawMessage, err error) {
@@ -416,14 +416,14 @@ func (app *chatApp) automationDetail(c *ui.Context) {
 				app.loadAutomations()
 			})
 		}
-		ui.Text(c, "每次运行附上上一次的结构化结果，让 agent 对比变化").FontSize(12).TextColor(muted)
+		ui.Text(c, tr("Include the previous structured result with each run so the agent can compare changes")).FontSize(12).TextColor(muted)
 	})
 	ui.Row(c).FillWidth().AlignItems(ui.End).Margin(8, 0, 0, 0).Children(func() {
-		ui.Text(c, "运行历史").FontWeight(600).Grow(1)
-		ui.Text(c, fmt.Sprintf("最近 %d 次", automationRunHistory)).FontSize(12).TextColor(muted)
+		ui.Text(c, tr("Run history")).FontWeight(600).Grow(1)
+		ui.Text(c, fmt.Sprintf(tr("Last %d runs"), automationRunHistory)).FontSize(12).TextColor(muted)
 	})
 	if len(v.Runs) == 0 {
-		ui.Text(c, "还没有运行过。").TextColor(muted)
+		ui.Text(c, tr("No runs yet.")).TextColor(muted)
 		return
 	}
 	ui.Column(c).FillWidth().Gap(2).Children(func() {
@@ -454,7 +454,7 @@ func (app *chatApp) runRow(c *ui.Context, v automationView, r AutomationRun, run
 	color, title := ui.Color(muted), r.Summary
 	switch {
 	case running:
-		color, title = autoRun, fmt.Sprintf("运行中 · 第 %d/%d 轮", max(r.Round, 1), max(r.Rounds, 1))
+		color, title = autoRun, fmt.Sprintf(tr("Running · Turn %d/%d"), max(r.Round, 1), max(r.Rounds, 1))
 	case r.Result == runPassed:
 		color = autoOK
 	case r.Result == runFailed:
@@ -462,16 +462,16 @@ func (app *chatApp) runRow(c *ui.Context, v automationView, r AutomationRun, run
 	}
 	title = firstNonEmpty(title, runResultLabel(r.Result))
 	if r.Result == runSkipped {
-		title = "已跳过，" + r.Summary
+		title = tr("Skipped, ") + r.Summary
 	}
-	meta := r.Started.Format("1月2日 ") + "周" + weekdayNames[r.Started.Weekday()] + r.Started.Format(" 15:04")
+	meta := r.Started.Format("Jan 2 ") + tr(weekdayNames[r.Started.Weekday()]) + r.Started.Format(" 15:04")
 	if r.CatchUp {
-		meta += " · 补跑"
+		meta += tr(" · Catch-up run")
 	}
 	if r.Result != runSkipped {
-		meta += fmt.Sprintf(" · %s · 第 %d/%d 轮", runResultLabel(r.Result), max(r.Round, 1), max(r.Rounds, 1))
+		meta += fmt.Sprintf(tr(" · %s · Turn %d/%d"), runResultLabel(r.Result), max(r.Round, 1), max(r.Rounds, 1))
 		if !r.Finished.IsZero() {
-			meta += fmt.Sprintf(" · %d 分钟", max(int(r.Finished.Sub(r.Started).Minutes()+0.5), 1))
+			meta += fmt.Sprintf(tr(" · %d minutes"), max(int(r.Finished.Sub(r.Started).Minutes()+0.5), 1))
 		}
 	}
 	// The caller keys each row.
@@ -486,7 +486,7 @@ func (app *chatApp) runRow(c *ui.Context, v automationView, r AutomationRun, run
 			ui.Text(c, meta).FontSize(12).TextColor(muted).SingleLine().Ellipsis("…")
 		})
 		if r.Thread != 0 {
-			ui.Text(c, "打开对话").FontSize(12).TextColor(muted)
+			ui.Text(c, tr("Open conversation")).FontSize(12).TextColor(muted)
 			icon(c, "arrow-right", 12, muted)
 		}
 	})
@@ -557,7 +557,7 @@ func (app *chatApp) startDraft(g int) {
 		}
 		var v automationView
 		if json.Unmarshal(raw, &v) != nil {
-			a.draftErr = "整理结果无法读取"
+			a.draftErr = tr("Unable to read generated settings")
 			return
 		}
 		a.draft, a.editing = &v, ""
@@ -574,13 +574,13 @@ func (app *chatApp) automationForm(c *ui.Context) {
 			}
 			return
 		}
-		title := "新建自动化"
+		title := tr("New automation")
 		if a.editID != "" {
-			title = "编辑自动化"
+			title = tr("Edit automation")
 		}
 		ui.Column(c).Gap(4).Children(func() {
 			ui.Text(c, title).FontSize(24).FontWeight(600)
-			ui.Text(c, "用一句话说明做什么、何时做，agent 会整理出时间、完成标准和轮数。").TextColor(muted)
+			ui.Text(c, tr("Describe what to do and when. The agent will generate a schedule, completion criteria, and turn limit.")).TextColor(muted)
 		})
 		app.automationComposer(c)
 		app.draftStatus(c)
@@ -591,22 +591,22 @@ func (app *chatApp) automationForm(c *ui.Context) {
 			draftSkeleton(c)
 		}
 		ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Margin(4, 0, 0, 0).Children(func() {
-			ui.Switch(c.Key("enable"), &a.enable).Label("保存后启用").Shrink(0)
-			ui.Text(c, "保存后启用").TextColor(muted)
+			ui.Switch(c.Key("enable"), &a.enable).Label(tr("Enable after saving")).Shrink(0)
+			ui.Text(c, tr("Enable after saving")).TextColor(muted)
 			ui.Spacer(c)
-			if ui.Button(c.Key("cancel"), "取消").Clicked() {
+			if ui.Button(c.Key("cancel"), tr("Cancel")).Clicked() {
 				a.page = ""
 				if a.editID != "" {
 					a.page = "detail"
 				}
 			}
 			blocked := a.draft == nil || a.drafting || a.saving || a.editing != ""
-			if ui.Button(c.Key("save-run"), "保存并运行一次").Disabled(blocked).Clicked() {
+			if ui.Button(c.Key("save-run"), tr("Save and run once")).Disabled(blocked).Clicked() {
 				app.saveAutomationForm(true)
 			}
-			label := "创建"
+			label := tr("Create")
 			if a.editID != "" {
-				label = "保存"
+				label = tr("Save")
 			}
 			if ui.PrimaryButton(c.Key("save"), label).Disabled(blocked).Clicked() {
 				app.saveAutomationForm(false)
@@ -618,14 +618,14 @@ func (app *chatApp) automationForm(c *ui.Context) {
 func (app *chatApp) automationComposer(c *ui.Context) {
 	a := &app.autos
 	ui.Column(c).FillWidth().Border(1, line).Radius(16).Background(canvas).Children(func() {
-		in := ui.TextAreaBase(c.Key("request"), &a.request).Label("要做什么").
-			Placeholder("例如：每个工作日 9 点检查新 Issue，修复能修的并保证 go test 通过，修不了的列给我").
+		in := ui.TextAreaBase(c.Key("request"), &a.request).Label(tr("What to do")).
+			Placeholder(tr("For example: Check new issues every weekday at 9 AM, fix what you can and pass go test, then list anything unresolved")).
 			Lines(3, 8).FillWidth().Padding(16, 18, 6, 18).FontSize(15).LineHeight(1.6)
 		if in.Changed() {
 			app.scheduleDraft()
 		}
 		ui.Row(c).FillWidth().Gap(4).Padding(4, 10, 10, 10).AlignItems(ui.Center).Children(func() {
-			pb := quiet(c.Key("project")).Height(28).Gap(6).PaddingX(9).Label("项目")
+			pb := quiet(c.Key("project")).Height(28).Gap(6).PaddingX(9).Label(tr("Projects"))
 			pb.Children(func() {
 				icon(c, "folder", 14, muted)
 				ui.Text(c, filepath.Base(a.project)).FontWeight(500).SingleLine()
@@ -667,7 +667,7 @@ func (app *chatApp) automationComposer(c *ui.Context) {
 				}
 			}
 			ui.Spacer(c)
-			ui.Text(c, "输入 @ 选择并引用其他对话").FontSize(12).TextColor(muted).SingleLine()
+			ui.Text(c, tr("Type @ to select and reference other conversations")).FontSize(12).TextColor(muted).SingleLine()
 		})
 	})
 }
@@ -676,22 +676,22 @@ func (app *chatApp) draftStatus(c *ui.Context) {
 	a := &app.autos
 	ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Margin(6, 2, 0, 2).Children(func() {
 		icon(c, "check", 14, ink)
-		ui.Text(c, "整理结果").FontWeight(600).Grow(1)
+		ui.Text(c, tr("Generated settings")).FontWeight(600).Grow(1)
 		switch {
 		case a.drafting:
 			ui.Spinner(c).FontSize(11)
-			ui.Text(c, "正在整理…").FontSize(12).TextColor(muted)
+			ui.Text(c, tr("Generating…")).FontSize(12).TextColor(muted)
 		case a.draftErr != "":
-			if ui.Button(c.Key("retry"), "重试").Clicked() {
+			if ui.Button(c.Key("retry"), tr("Retry")).Clicked() {
 				a.gen++
 				app.startDraft(a.gen)
 			}
 		case a.draft != nil && a.draft.TimeMissing:
-			ui.Text(c, "需要补充时间").FontSize(12).TextColor(autoWarn)
+			ui.Text(c, tr("Schedule needed")).FontSize(12).TextColor(autoWarn)
 		case a.draft != nil:
-			ui.Text(c, "已整理").FontSize(12).TextColor(autoOK)
+			ui.Text(c, tr("Ready")).FontSize(12).TextColor(autoOK)
 		default:
-			ui.Text(c, "写完后自动整理").FontSize(12).TextColor(muted)
+			ui.Text(c, tr("Settings generate automatically as you type")).FontSize(12).TextColor(muted)
 		}
 	})
 	if a.draftErr != "" {
@@ -717,22 +717,22 @@ func draftSkeleton(c *ui.Context) {
 
 func (app *chatApp) draftPreview(c *ui.Context, d *automationView) {
 	ui.Column(c).FillWidth().Border(1, line).Radius(14).Clip().Children(func() {
-		app.draftRow(c, "name", "edit", "名称", d.Name, false, func() {
+		app.draftRow(c, "name", "edit", tr("Name"), d.Name, false, func() {
 			ui.Text(c, d.Name).Grow(1).MinWidth(0)
 		})
-		app.draftRow(c, "schedule", "clock", "时间", d.Schedule, d.TimeMissing, func() {
+		app.draftRow(c, "schedule", "clock", tr("Schedule"), d.Schedule, d.TimeMissing, func() {
 			ui.Column(c).Grow(1).MinWidth(0).Gap(6).Children(func() {
 				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 					if d.TimeMissing {
-						ui.Text(c, "句子里没写时间，暂定"+d.ScheduleText).TextColor(autoWarn)
+						ui.Text(c, tr("No time specified. Using ")+describeCron(d.Schedule)).TextColor(autoWarn)
 					} else {
-						ui.Text(c, d.ScheduleText).FontWeight(500)
+						ui.Text(c, describeCron(d.Schedule)).FontWeight(500)
 					}
 					codeChip(c, d.Schedule)
 				})
 				ui.Row(c).Gap(6).Children(func() {
 					for i, t := range d.Upcoming {
-						chip := ui.Text(c.Key(i), fmt.Sprintf("%d/%d 周%s %s", t.Month(), t.Day(), weekdayNames[t.Weekday()], t.Format("15:04"))).
+						chip := ui.Text(c.Key(i), fmt.Sprintf(tr("%d/%d %s %s"), t.Month(), t.Day(), tr(weekdayNames[t.Weekday()]), t.Format("15:04"))).
 							FontSize(12).Padding(1, 8, 1, 8).Radius(6).Background(subtle).TextColor(muted)
 						if i == 0 {
 							chip.TextColor(ink)
@@ -741,27 +741,27 @@ func (app *chatApp) draftPreview(c *ui.Context, d *automationView) {
 				})
 			})
 		})
-		app.draftRow(c, "check", "terminal-2", "完成标准", d.Check, false, func() {
+		app.draftRow(c, "check", "terminal-2", tr("Completion check"), d.Check, false, func() {
 			if d.Check == "" {
-				ui.Text(c, "不检查，跑完一轮就结束").TextColor(muted).Grow(1)
+				ui.Text(c, tr("No check; finish after one turn")).TextColor(muted).Grow(1)
 				return
 			}
 			ui.Column(c).Grow(1).MinWidth(0).Gap(3).Children(func() {
 				ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 					codeChip(c, d.Check)
-					ui.Text(c, "通过")
+					ui.Text(c, tr("Passed"))
 				})
-				ui.Text(c, "不通过时把输出发回同一个对话继续修").FontSize(12).TextColor(muted)
+				ui.Text(c, tr("If the check fails, send the output back to the same conversation to continue fixing")).FontSize(12).TextColor(muted)
 			})
 		})
-		app.draftRow(c, "rounds", "refresh", "轮数", strconv.Itoa(d.Rounds), false, func() {
-			text := "1 轮"
+		app.draftRow(c, "rounds", "refresh", tr("Turns"), strconv.Itoa(d.Rounds), false, func() {
+			text := tr("1 turn")
 			if d.Check != "" {
-				text = fmt.Sprintf("最多 %d 轮", d.Rounds)
+				text = fmt.Sprintf(tr("Up to %d turns"), d.Rounds)
 			}
 			ui.Text(c, text).Grow(1)
 		})
-		app.draftRow(c, "instructions", "file-text", "指令", d.Instructions, false, func() {
+		app.draftRow(c, "instructions", "file-text", tr("Instructions"), d.Instructions, false, func() {
 			ui.Text(c, d.Instructions).Grow(1).MinWidth(0).TextColor(muted).LineHeight(1.6).Selectable()
 		})
 	})
@@ -790,7 +790,7 @@ func (app *chatApp) draftRow(c *ui.Context, key, symbol, label, raw string, warn
 		ui.Text(c, label).Width(64).Shrink(0).TextColor(color)
 		if a.editing != key {
 			value()
-			if toolButton(c.Key("edit"), "edit", "修改"+label).Clicked() {
+			if toolButton(c.Key("edit"), "edit", tr("Change")+label).Clicked() {
 				a.editing, a.editText, a.editErr = key, raw, ""
 			}
 			return
@@ -806,7 +806,7 @@ func (app *chatApp) draftRow(c *ui.Context, key, symbol, label, raw string, warn
 				}
 			}
 			if key == "schedule" {
-				hint := "5 段 cron：分 时 日 月 周"
+				hint := tr("5-field cron: minute hour day month weekday")
 				if s := strings.TrimSpace(a.editText); s != "" {
 					if _, err := parseCron(s); err == nil {
 						hint = describeCron(s)
@@ -818,10 +818,10 @@ func (app *chatApp) draftRow(c *ui.Context, key, symbol, label, raw string, warn
 				ui.Text(c, a.editErr).FontSize(12).TextColor(failed)
 			}
 			ui.Row(c).Gap(8).Children(func() {
-				if ui.PrimaryButton(c.Key("done"), "完成").Clicked() || in.Submitted() {
+				if ui.PrimaryButton(c.Key("done"), tr("Done")).Clicked() || in.Submitted() {
 					app.applyDraftEdit(key)
 				}
-				if ui.Button(c.Key("cancel"), "取消").Clicked() {
+				if ui.Button(c.Key("cancel"), tr("Cancel")).Clicked() {
 					a.editing = ""
 				}
 			})
@@ -849,9 +849,9 @@ func (app *chatApp) applyDraftEdit(key string) {
 			next.Rounds = 3
 		}
 	case "rounds":
-		n, err := strconv.Atoi(strings.TrimSuffix(text, "轮"))
+		n, err := strconv.Atoi(strings.TrimSuffix(text, tr("turns")))
 		if err != nil {
-			a.editErr = "请填 1 到 5 的数字"
+			a.editErr = tr("Enter a number from 1 to 5")
 			return
 		}
 		next.Rounds = n
@@ -928,15 +928,15 @@ func (app *chatApp) reportView(c *ui.Context, r AutomationRun, latest bool) {
 	// Indented under the run row, within the page width.
 	ui.Row(c).FillWidth().Padding(0, 0, 6, 33).Children(func() {
 		ui.Column(c.Key("body")).Grow(1).MinWidth(0).Gap(8).Padding(10, 14, 12, 14).Background(subtle).Radius(10).Children(func() {
-			head := quiet(c.Key("head")).FillWidth().Height(0).MinHeight(24).Padding(0).Gap(6).Label("结构化结果")
+			head := quiet(c.Key("head")).FillWidth().Height(0).MinHeight(24).Padding(0).Gap(6).Label(tr("Structured result"))
 			head.Children(func() {
-				label := "结构化结果"
+				label := tr("Structured result")
 				if rep.Auto {
-					label = "自动摘要 · agent 未上报结果"
+					label = tr("Automatic summary · Agent did not report a result")
 				}
 				ui.Text(c, label).FontSize(12).FontWeight(600).TextColor(muted)
 				if rep.NeedsUser {
-					ui.Text(c, "需要处理").FontSize(11).Padding(1, 8, 1, 8).Radius(8).Background(autoWarnBg).TextColor(autoWarn)
+					ui.Text(c, tr("Needs attention")).FontSize(11).Padding(1, 8, 1, 8).Radius(8).Background(autoWarnBg).TextColor(autoWarn)
 				}
 				ui.Spacer(c)
 				app.chevron(c, open)
@@ -963,7 +963,7 @@ func (app *chatApp) reportView(c *ui.Context, r AutomationRun, latest bool) {
 				ui.Text(c.Key(fmt.Sprintf("f%d", i)), "· "+f).FontSize(12).LineHeight(1.5).Selectable()
 			}
 			if len(rep.Artifacts) > 0 {
-				ui.Text(c, "产出："+strings.Join(rep.Artifacts, "、")).FontSize(12).TextColor(muted).Selectable()
+				ui.Text(c, tr("Artifacts: ")+strings.Join(rep.Artifacts, ", ")).FontSize(12).TextColor(muted).Selectable()
 			}
 		})
 	})

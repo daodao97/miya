@@ -60,13 +60,13 @@ func TestMobileComposerOffersFilesAlongsideConversations(t *testing.T) {
 	m.showThread(th)
 	tt := ui.NewTester(m.viewRoot, 390, 844)
 	tt.Frame()
-	if err := tt.Click("消息"); err != nil {
+	if err := tt.Click("Message"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Type("查看 @memory")
 	m.fileRefs = &mobileFileReferences{project: "/a", query: "memory", supported: true, choices: []composerChoice{{Name: "docs/memory notes.md"}}}
 	tt.Frame()
-	if !tt.HasText("引用对话") || !tt.HasText("memory 设计") || !tt.HasText("引用文件") || !tt.HasText("docs/memory notes.md") {
+	if !tt.HasText("Referenced conversation") || !tt.HasText("memory 设计") || !tt.HasText("Reference file") || !tt.HasText("docs/memory notes.md") {
 		t.Fatalf("missing reference choices: %q", tt.Texts())
 	}
 	saveMobileNativeSnapshot(t, tt, "composer-file-references")
@@ -74,7 +74,7 @@ func TestMobileComposerOffersFilesAlongsideConversations(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if m.draft != `查看 @"docs/memory notes.md" ` || tt.HasText("引用文件") {
+	if m.draft != `查看 @"docs/memory notes.md" ` || tt.HasText("Reference file") {
 		t.Fatalf("file choice did not replace token or close menu: %q", m.draft)
 	}
 	if m.fileRefs != nil {
@@ -89,7 +89,7 @@ func TestMobileFileReferencesWithoutConversationSource(t *testing.T) {
 	m.fileRefs = &mobileFileReferences{project: "/a", query: "memory", supported: true, choices: []composerChoice{{Name: "docs/memory.md"}}}
 	tt := ui.NewTester(m.viewRoot, 390, 844)
 	tt.Frame()
-	if !tt.HasText("docs/memory.md") || tt.HasText("引用对话") {
+	if !tt.HasText("docs/memory.md") || tt.HasText("Referenced conversation") {
 		t.Fatalf("file search depends on conversation references: %q", tt.Texts())
 	}
 	if err := tt.Click("docs/memory.md"); err != nil {

@@ -93,7 +93,7 @@ func TestPhonePreviewSurvivesSendAndRelaunch(t *testing.T) {
 	}
 	tt := ui.NewTester(m.viewRoot, 390, 750)
 	tt.Frame()
-	if _, ok := tt.Find("图片预览"); !ok {
+	if _, ok := tt.Find("Image preview"); !ok {
 		t.Fatal("sent image is missing from the conversation")
 	}
 	m.flushCache(true)

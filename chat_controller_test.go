@@ -107,7 +107,7 @@ func TestPermissionPolicySandboxMapping(t *testing.T) {
 
 func TestNormalizeLocale(t *testing.T) {
 	tests := map[string]string{
-		"zh": "zh", "zh-CN": "zh", "中文": "zh",
+		"zh": "en", "zh-CN": "en", "中文": "en",
 		"en": "en", "en-US": "en", "English": "en", "": "en", "fr": "en",
 	}
 	for input, want := range tests {

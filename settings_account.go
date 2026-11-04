@@ -51,23 +51,23 @@ func quotaLabel(w *quotaWindow, index int) string {
 	if w.WindowDurationMins != nil {
 		m := *w.WindowDurationMins
 		if m == 300 {
-			return "5 小时额度"
+			return tr("5-hour quota")
 		}
 		if m == 10080 {
-			return "每周额度"
+			return tr("Weekly quota")
 		}
 		if m > 0 && m%1440 == 0 {
-			return fmt.Sprintf("%d 天额度", m/1440)
+			return fmt.Sprintf(tr("%d-day quota"), m/1440)
 		}
 		if m > 0 && m%60 == 0 {
-			return fmt.Sprintf("%d 小时额度", m/60)
+			return fmt.Sprintf(tr("%d-hour quota"), m/60)
 		}
 		if m > 0 {
-			return fmt.Sprintf("%d 分钟额度", m)
+			return fmt.Sprintf(tr("%d-minute quota"), m)
 		}
 	}
 	if index == 0 {
-		return "主要额度"
+		return tr("Primary quota")
 	}
-	return "次要额度"
+	return tr("Secondary quota")
 }

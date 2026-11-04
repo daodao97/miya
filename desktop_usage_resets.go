@@ -13,25 +13,25 @@ import (
 
 func usageResetExpiryText(r *agentusage.ResetCredits) (string, string) {
 	if r == nil || r.Count == 0 {
-		return "暂无可用重置卡", ""
+		return tr("No reset cards available"), ""
 	}
 	if len(r.Credits) == 0 {
-		return "到期时间暂不可用", ""
+		return tr("Expiration unavailable"), ""
 	}
 	var details []string
 	for i, card := range r.Credits {
-		when := "无到期限制"
+		when := tr("No expiration")
 		if card.ExpiresAt != nil {
-			when = time.Unix(*card.ExpiresAt, 0).Local().Format("2006-01-02 15:04") + " 到期"
+			when = time.Unix(*card.ExpiresAt, 0).Local().Format("2006-01-02 15:04") + tr(" expires")
 		}
-		details = append(details, fmt.Sprintf("第 %d 张：%s", i+1, when))
+		details = append(details, fmt.Sprintf(tr("Card %d: %s"), i+1, when))
 	}
 	if len(r.Credits) != r.Count {
-		return fmt.Sprintf("已提供 %d / %d 张卡的到期信息", len(r.Credits), r.Count), strings.Join(details, "\n")
+		return fmt.Sprintf(tr("Expiration available for %d / %d cards"), len(r.Credits), r.Count), strings.Join(details, "\n")
 	}
-	text := "无到期限制"
+	text := tr("No expiration")
 	if at := r.Credits[0].ExpiresAt; at != nil {
-		text = "最近到期 " + time.Unix(*at, 0).Local().Format("01-02 15:04")
+		text = tr("Next expiration ") + time.Unix(*at, 0).Local().Format("01-02 15:04")
 	}
 	return text, strings.Join(details, "\n")
 }
@@ -47,16 +47,16 @@ func (a *chatApp) usageResetSection(c *ui.Context, r agentusage.Reading, compact
 		if r.Resets != nil {
 			ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
 				icon(c, "refresh", 13, theme.TextMuted)
-				ui.Text(c, fmt.Sprintf("%d 张重置卡", r.Resets.Count)).FontSize(12).FontWeight(500).TextColor(theme.Text).Grow(1)
-				label := "使用一张…"
+				ui.Text(c, fmt.Sprintf(tr("%d reset cards"), r.Resets.Count)).FontSize(12).FontWeight(500).TextColor(theme.Text).Grow(1)
+				label := tr("Use a card…")
 				retry := d.resetRetry && d.resetAttempt != nil && d.resetAttempt.AccountKey == r.AccountKey
 				if retry {
-					label = "重试用卡…"
+					label = tr("Retry reset…")
 				}
 				if d.resetting {
-					label = "正在使用…"
+					label = tr("Using card…")
 				}
-				button := ui.Button(c, label).Label("Use Codex reset").Disabled(d.busy || r.Error != "" || r.AccountKey == "" || r.Home == "" || r.Resets.Count == 0 && !retry)
+				button := ui.Button(c, label).Label(tr("Use Codex reset")).Disabled(d.busy || r.Error != "" || r.AccountKey == "" || r.Home == "" || r.Resets.Count == 0 && !retry)
 				if compact {
 					button.FontSize(11).Height(25).Padding(0, 8)
 				}
@@ -100,24 +100,24 @@ func (a *chatApp) usageResetConfirmation(c *ui.Context, _ agentusage.Reading) {
 	r := d.resetReading
 	theme := c.Theme()
 	ui.Column(c).FillWidth().Gap(12).Children(func() {
-		title := "使用一张 Codex 重置卡？"
+		title := tr("Use a Codex reset card?")
 		if d.resetRetry {
-			title = "重试上次用卡操作？"
+			title = tr("Retry the last reset?")
 		}
 		ui.Text(c, title).FontSize(15).FontWeight(600).TextColor(theme.Text)
 		if r.Account != "" {
 			ui.Text(c, r.Account).FillWidth().FontSize(11).TextColor(theme.TextMuted).SingleLine().Ellipsis("…").Tooltip(r.Account)
 		}
-		body := "消耗 1 张卡，重置符合条件的额度周期。无法撤销。"
+		body := tr("Uses 1 card to reset eligible quota cycles. This cannot be undone.")
 		if d.resetRetry {
-			body = "上次结果未确认。重试同一次操作，不会重复扣卡。"
+			body = tr("The last result is unconfirmed. Retrying the same operation will not use another card.")
 		}
 		ui.Text(c, body).FillWidth().FontSize(11).LineHeight(1.5).TextColor(theme.TextMuted)
-		selection := "由 Codex 选择一张可用卡。"
+		selection := tr("Codex will select an available card.")
 		if d.resetRetry {
-			selection = "仅重试上次确认的操作，不会另选一张卡。"
+			selection = tr("Only retries the last confirmed operation without selecting another card.")
 		} else if d.resetAttempt.CreditID != "" {
-			selection = "优先使用最早到期的卡。"
+			selection = tr("Uses the card that expires soonest.")
 			if text, _ := usageResetExpiryText(r.Resets); text != "" {
 				selection += "\n" + text
 			}
@@ -127,18 +127,18 @@ func (a *chatApp) usageResetConfirmation(c *ui.Context, _ agentusage.Reading) {
 			ui.Text(c, d.resetMessage).FillWidth().FontSize(11).TextColor(theme.TextMuted)
 		}
 		ui.Row(c).FillWidth().Gap(8).Justify(ui.End).Children(func() {
-			if ui.Button(c, "取消").Label("Cancel Codex reset").Disabled(d.resetting).Clicked() {
+			if ui.Button(c, tr("Cancel")).Label(tr("Cancel Codex reset")).Disabled(d.resetting).Clicked() {
 				d.resetOpen = false
 				a.invalidateUsageViews()
 			}
-			label := "确认使用"
+			label := tr("Confirm")
 			if d.resetRetry {
-				label = "重试同次操作"
+				label = tr("Retry operation")
 			}
 			if d.resetting {
-				label = "正在使用…"
+				label = tr("Using card…")
 			}
-			if ui.Button(c, label).Label("Confirm Codex reset").Disabled(d.busy).Clicked() {
+			if ui.Button(c, label).Label(tr("Confirm Codex reset")).Disabled(d.busy).Clicked() {
 				a.consumeUsageReset()
 			}
 		})
@@ -158,9 +158,19 @@ func (a *chatApp) consumeUsageReset() {
 	ctx, cancel := context.WithCancel(context.Background())
 	d.cancel = cancel
 	a.invalidateUsageViews()
+	var cl *serviceClient
+	if a.c.remoteHost() {
+		cl = a.c.remote
+	}
 	go func() {
 		defer cancel()
-		result, err := agentusage.UseCodexReset(ctx, attempt)
+		var result agentusage.ResetResult
+		var err error
+		if cl == nil {
+			result, err = agentusage.UseCodexReset(ctx, attempt)
+		} else {
+			err = cl.call("host", hostRequest{Action: "usage-reset", Reset: &attempt}, &result)
+		}
 		mygo.RunOnMain(func() {
 			if d.closed {
 				return
@@ -172,7 +182,7 @@ func (a *chatApp) consumeUsageReset() {
 				d.resetRetry, d.resetOpen, d.resetAttempt = false, false, nil
 				d.resetMessage = usageResetOutcome(result.Outcome)
 				if result.Reading.Error != "" {
-					d.resetMessage += "；额度读取失败，请刷新"
+					d.resetMessage += tr("; failed to read quota, please refresh")
 				}
 				found := false
 				for i := range d.readings {
@@ -194,13 +204,13 @@ func (a *chatApp) consumeUsageReset() {
 func usageResetOutcome(outcome string) string {
 	switch outcome {
 	case "reset":
-		return "已使用 1 张重置卡，额度已更新"
+		return tr("Used 1 reset card. Quota updated.")
 	case "alreadyRedeemed":
-		return "上次用卡已完成，未重复消耗"
+		return tr("The last reset completed. No additional card used.")
 	case "nothingToReset":
-		return "当前没有可重置的周期，未消耗卡片"
+		return tr("No eligible cycles to reset. No card used.")
 	case "noCredit":
-		return "当前账号已无可用重置卡"
+		return tr("No reset cards left for this account")
 	}
-	return "请刷新确认重置卡状态"
+	return tr("Refresh to check reset card status")
 }

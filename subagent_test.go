@@ -42,7 +42,7 @@ func TestClaudeSubAgentFramesStayOnTheirTask(t *testing.T) {
 	if len(a) != 1 || a[0].Name != "Find bugs" || a[0].Status != subAgentRunning || a[0].Steps != 1 || !strings.Contains(a[0].Detail, "a.go") {
 		t.Fatalf("bad running sub-agent: %+v", a)
 	}
-	if got := subAgentSummary(a); !strings.Contains(got, "1 步") || !strings.Contains(got, "a.go") {
+	if got := subAgentSummary(a); !strings.Contains(got, "1 steps") || !strings.Contains(got, "a.go") {
 		t.Fatalf("summary lost progress: %q", got)
 	}
 	emit(`{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"task1","content":[{"type":"text","text":"Found 2 bugs\nDetails"}]}]}}`)
@@ -127,7 +127,7 @@ func TestCodexCollabAgentStatesNormalize(t *testing.T) {
 	if m.Agents[0].Detail != "boom" {
 		t.Fatalf("agent message lost: %+v", m.Agents[0])
 	}
-	if got := subAgentSummary(m.Agents); got != "1 运行中 · 1 等待中 · 1 失败 · 1 已中断" {
+	if got := subAgentSummary(m.Agents); got != "1 Running · 1 Waiting · 1 Failed · 1 Interrupted" {
 		t.Fatalf("bad summary: %q", got)
 	}
 }
@@ -138,7 +138,7 @@ func TestCodexSpawnedAgentWithoutState(t *testing.T) {
 		t.Fatalf("spawned agent not shown: %+v", m.Agents)
 	}
 	m, _ = itemMessage(codex.Item{Type: "subAgentActivity", Kind: "started", AgentPath: "reviewer"})
-	if m.Content != "子 agent 已启动 · reviewer" || len(m.Agents) != 0 {
+	if m.Content != "Subagent started · reviewer" || len(m.Agents) != 0 {
 		t.Fatalf("bad activity: %+v", m)
 	}
 }
@@ -249,7 +249,7 @@ func TestCollapsedRunSummarizesLatestSubAgents(t *testing.T) {
 	if len(agents) != 2 || agents[0].Status != subAgentCompleted || subAgentsActive(agents) {
 		t.Fatalf("stale or repeated sub-agents: %+v", agents)
 	}
-	if got := subAgentCounts(agents); got != "1 失败 · 1 已完成" {
+	if got := subAgentCounts(agents); got != "1 Failed · 1 Completed" {
 		t.Fatalf("bad counts: %q", got)
 	}
 }

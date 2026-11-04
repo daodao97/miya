@@ -91,7 +91,7 @@ func codexCallStatus(s string) string {
 // codexSubAgentActivity titles a sub-agent activity, an event in a
 // sub-agent's life rather than a state to follow.
 func codexSubAgentActivity(item codex.Item) string {
-	labels := map[string]string{"started": "子 agent 已启动", "interacted": "子 agent 已交互", "interrupted": "子 agent 已中断", "completed": "子 agent 已完成"}
+	labels := map[string]string{"started": "Subagent started", "interacted": "Subagent input sent", "interrupted": "Subagent interrupted", "completed": "Subagent completed"}
 	s := firstNonEmpty(labels[item.Kind], "Sub-agent activity")
 	if who := firstNonEmpty(item.AgentPath, item.AgentThreadID); who != "" {
 		s += " · " + who

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"mime"
 	"os"
@@ -16,27 +17,13 @@ import (
 
 	"miya/internal/claude"
 	"miya/internal/codex"
+	dg "miya/internal/delegation"
 	"miya/internal/memory"
 )
 
 var appLocale atomic.Value
 
-var translations = map[string]string{
-	"New thread": "新建对话", "Automations": "自动化", "Skills": "技能", "Projects": "项目", "Settings": "设置", "Open": "打开", "Commit": "提交",
-	"Reconnecting…": "正在重连…",
-	"Thinking…":     "思考中…", "Thought": "已思考", "Ran ": "已运行 ", "Running ": "正在运行 ", "Failed · ": "失败 · ", "Stopped · ": "已停止 · ", "Edited": "已编辑", "Editing": "正在编辑", "Failed to edit": "编辑失败", "Proposed plan": "建议计划", "Changes in this turn": "本回合更改", "No matching commands": "没有匹配的命令", "Searching project files…": "正在搜索项目文件…", "No matching files": "没有匹配的文件", "Project files": "项目文件", "Commands": "命令", "Ask Codex anything… / commands · @ files": "询问 Codex… / 命令 · @ 文件", "Message Codex": "发送消息给 Codex", "Copy code": "复制代码", "Copied": "已复制", "Copy failed": "复制失败", "Reconnect": "重新连接", "Close": "关闭", "Local": "本地", "Not connected yet": "尚未连接",
-	"Worked for ": "已工作 ", "Working for ": "工作中 ", "seconds": "秒",
-	"Connecting to Codex…": "正在连接 Codex…", "Connected · Codex app-server": "已连接 Codex", "Connection lost. Reconnect to retry.": "连接已断开，请重新连接。", "History unavailable": "历史记录不可用", "Working…": "工作中…", "Starting…": "正在启动…", "Codex is reconnecting…": "Codex 正在重新连接…", "Loading conversation…": "正在加载对话…", "Stopped": "已停止", "Turn failed": "回合失败",
-}
-
-func tr(english string) string {
-	if value, ok := appLocale.Load().(string); ok && value == "zh" {
-		if translated, exists := translations[english]; exists {
-			return translated
-		}
-	}
-	return english
-}
+func tr(english string) string { return interfaceText(english) }
 
 type chatController struct {
 	desktopMu      sync.Mutex
@@ -66,14 +53,20 @@ type chatController struct {
 	// handoffs track work explicitly delegated to another conversation.
 	handoffs []handoff
 	// delegationParent is the conversation that handed each its work.
-	delegationParent      map[int]int
-	mcpSessionAccess      map[string]bool
-	fastMode              bool
-	push                  *pushHub
-	claudeBinary          string
-	claudeError           string
-	claudeArgs, claudeEnv []string
-	claudeCommand         string
+	delegationParent             map[int]int
+	collaboration                *collaborationState
+	collaborationRemote          *collaborationStatus
+	managedReservations          map[int]string
+	collaborationPaused          map[string]bool
+	collaborationPauseGeneration map[string]uint64
+	managedExecutions            map[string]*managedExecution
+	mcpSessionAccess             map[string]bool
+	fastMode                     bool
+	push                         *pushHub
+	claudeBinary                 string
+	claudeError                  string
+	claudeArgs, claudeEnv        []string
+	claudeCommand                string
 	// claudeModel and claudeEffort are Claude Code's choices, "" its default.
 	claudeModel, claudeEffort string
 	// claudeDefaultModel is the model Claude Code uses when none is chosen.
@@ -140,6 +133,9 @@ type chatController struct {
 	serial              int
 	connectionID        int
 	closed              bool
+	remoteTerminals     atomic.Int64
+	workspaceVisible    func() bool
+	revealWorkspace     func()
 	connecting          bool
 	connectionCancel    context.CancelFunc
 	projectCache        map[string][]Thread
@@ -193,12 +189,10 @@ func newChatController() *chatController {
 		persistPermissionPolicy(policy)
 	}
 	initialLocale := loadLocale()
-	appLocale.Store(initialLocale)
 	var setLocale func(string)
 	c.locale, setLocale = createSignal(initialLocale)
 	c.setLocale = func(locale string) {
 		locale = normalizeLocale(locale)
-		appLocale.Store(locale)
 		setLocale(locale)
 		persistLocale(locale)
 	}
@@ -208,7 +202,7 @@ func newChatController() *chatController {
 	c.historyStatus, c.setHistoryStatus = createSignal("Loading conversations…")
 	c.revision, c.setRevision = createSignal(0)
 	c.status, c.setStatus = createSignal(firstNonEmpty(c.lastSubmitError, "Connecting to Codex…"))
-	c.quotaStatus = "正在读取额度…"
+	c.quotaStatus = "Loading quota…"
 	c.ready, c.setReady = createSignal(false)
 	c.approvals, c.setApprovals = createSignal([]codex.Approval{})
 	c.installApprovalNotifications()
@@ -267,18 +261,8 @@ func normalizePermissionPolicy(policy string) string {
 	}
 }
 
-// Locale controls the language used by the native UI. Keep the persisted
-// values deliberately small so older settings files remain forward compatible.
-func normalizeLocale(locale string) string {
-	switch strings.ToLower(strings.TrimSpace(locale)) {
-	case "zh", "zh-cn", "zh_cn", "中文":
-		return "zh"
-	case "en", "en-us", "en_us", "english":
-		return "en"
-	default:
-		return "en"
-	}
-}
+// Keep the legacy service preference stable; device UI uses MyGo i18n.
+func normalizeLocale(_ string) string { return "en" }
 
 func permissionPolicyPath() string {
 	home, err := os.UserHomeDir()
@@ -324,15 +308,16 @@ var persistThreadListCache = writeThreadListCache
 
 // threadMeta is what the sidebar's cache keeps of a conversation.
 type threadMeta struct {
-	MemoryDisabled                       bool
-	ID                                   int
-	ServerID, Title, Agent, Project, Age string
-	LastActivityAt                       int64
-	Resumed                              bool
+	MemoryDisabled                              bool
+	ID                                          int
+	ServerID, Title, Agent, Project, Age        string
+	LastActivityAt                              int64
+	Resumed                                     bool
+	LaunchModel, LaunchEffort, PermissionPolicy string
 }
 
 func threadMetaOf(t Thread) threadMeta {
-	return threadMeta{t.MemoryDisabled, t.ID, t.ServerID, t.Title, t.Agent, t.Project, t.Age, t.LastActivityAt, t.Resumed}
+	return threadMeta{MemoryDisabled: t.MemoryDisabled, ID: t.ID, ServerID: t.ServerID, Title: t.Title, Agent: t.Agent, Project: t.Project, Age: t.Age, LastActivityAt: t.LastActivityAt, Resumed: t.Resumed, LaunchModel: t.LaunchModel, LaunchEffort: t.LaunchEffort, PermissionPolicy: t.PermissionPolicy}
 }
 
 func writeThreadListCache(projects map[string][]Thread) {
@@ -352,6 +337,7 @@ func writeThreadListCache(projects map[string][]Thread) {
 				ID:             thread.ID, ServerID: thread.ServerID, Title: thread.Title, Agent: thread.Agent,
 				Resumed: threadAgent(thread) != agentCodex && thread.Resumed,
 				Project: thread.Project, Age: thread.Age, LastActivityAt: thread.LastActivityAt,
+				LaunchModel: thread.LaunchModel, LaunchEffort: thread.LaunchEffort, PermissionPolicy: thread.PermissionPolicy,
 			})
 		}
 	}
@@ -663,9 +649,9 @@ func (c *chatController) deleteProject(path string) {
 }
 
 func (c *chatController) dispatch(f func()) {
-	run := runOnMain
-	if c.run != nil {
-		run = c.run
+	run := c.run
+	if run == nil {
+		run = runOnMain
 	}
 	run(func() {
 		if !c.closed {
@@ -704,7 +690,7 @@ func (c *chatController) current() Thread {
 			return t
 		}
 	}
-	return Thread{Title: "New thread", Project: filepath.Base(c.cwd)}
+	return Thread{Title: tr("New thread"), Project: filepath.Base(c.cwd)}
 }
 
 func (c *chatController) projectBusy(path string) bool {
@@ -732,6 +718,13 @@ func (c *chatController) update(id int, fn func(*Thread)) {
 			before := threadMetaOf(items[i])
 			wasBusy := items[i].Busy
 			fn(&items[i])
+			if items[i].ExecutionID != "" && len(items[i].Messages) >= len(old.Messages) {
+				for j := len(old.Messages); j < len(items[i].Messages); j++ {
+					if items[i].Messages[j].ExecutionID == "" {
+						items[i].Messages[j].ExecutionID = items[i].ExecutionID
+					}
+				}
+			}
 			updateCompletionNoticeBody(old, &items[i])
 			if old.ServerID != items[i].ServerID && old.ServerID != "" {
 				c.rememberForkedReference(old, c.cwd)
@@ -774,6 +767,13 @@ func (c *chatController) update(id int, fn func(*Thread)) {
 			items[i].Messages = append([]Message(nil), old.Messages...)
 			items[i].Tasks = append([]ThreadTask(nil), old.Tasks...)
 			fn(&items[i])
+			if items[i].ExecutionID != "" && len(items[i].Messages) >= len(old.Messages) {
+				for j := len(old.Messages); j < len(items[i].Messages); j++ {
+					if items[i].Messages[j].ExecutionID == "" {
+						items[i].Messages[j].ExecutionID = items[i].ExecutionID
+					}
+				}
+			}
 			updateCompletionNoticeBody(old, &items[i])
 			if old.ServerID != items[i].ServerID && old.ServerID != "" {
 				c.rememberForkedReference(old, path)
@@ -1284,7 +1284,11 @@ func (c *chatController) resume(t Thread, after *sendRequest) {
 			t.Status = "Codex is reconnecting…"
 		})
 		if after != nil {
-			c.returnDraft(t.ID, after.Text, after.Attachments)
+			if after.ExecutionID == "" {
+				c.returnDraft(t.ID, after.Text, after.Attachments)
+			} else {
+				c.managedBeforeInputFailed(after.ExecutionID, "Codex is not connected before resuming")
+			}
 		}
 		return
 	}
@@ -1324,7 +1328,11 @@ func (c *chatController) resume(t Thread, after *sendRequest) {
 					t.Status = "Connection changed while loading. Click to retry."
 				})
 				if after != nil {
-					c.returnDraft(t.ID, after.Text, after.Attachments)
+					if after.ExecutionID == "" {
+						c.returnDraft(t.ID, after.Text, after.Attachments)
+					} else {
+						c.managedBeforeInputFailed(after.ExecutionID, "Codex connection changed before native input was submitted")
+					}
 				}
 				return
 			}
@@ -1343,7 +1351,7 @@ func (c *chatController) resume(t Thread, after *sendRequest) {
 				t.HistoryLoaded = true
 				t.ReadOnly = readOnly
 				if readOnly {
-					t.Status = "只读 · 此对话正在其他窗口运行"
+					t.Status = "Read-only · This conversation is running in another window"
 				} else {
 					t.Status = ""
 				}
@@ -1365,7 +1373,16 @@ func (c *chatController) resume(t Thread, after *sendRequest) {
 				c.refreshCodexGoal(t.ID)
 			}
 			if after != nil && (err != nil || readOnly || c.submit(*after) == 0) {
-				c.returnDraft(t.ID, after.Text, after.Attachments)
+				if after.ExecutionID != "" {
+					reason := "Unable to resume target session before submission"
+					if err != nil {
+						reason = err.Error()
+					}
+					c.managedBeforeInputFailed(after.ExecutionID, reason)
+				}
+				if after.ExecutionID == "" {
+					c.returnDraft(t.ID, after.Text, after.Attachments)
+				}
 			}
 		})
 	}()
@@ -1444,6 +1461,7 @@ func (c *chatController) sendCodex(req sendRequest) int {
 			t.Busy = false
 			t.Status = "Codex is reconnecting…"
 		})
+		c.managedEvent(req.ExecutionID, dg.Event{State: dg.Failed, Result: dg.Result{Error: "Codex is not connected before submission"}})
 		return id
 	}
 	cwd := c.threadWorkspace(id)
@@ -1454,6 +1472,10 @@ func (c *chatController) sendCodex(req sendRequest) int {
 	localTurn := c.beginMemoryTurn(t, req, pendingUserID)
 	c.update(id, func(t *Thread) {
 		resetTurnOutput(t)
+		t.ExecutionID = req.ExecutionID
+		if !req.KeepSessionSettings {
+			t.LaunchModel, t.LaunchEffort = req.Model, req.Effort
+		}
 		t.Busy = true
 		t.LastActivityAt = sentAt
 		t.Status = "Starting…"
@@ -1468,6 +1490,7 @@ func (c *chatController) sendCodex(req sendRequest) int {
 		serverID := t.ServerID
 		var err error
 		missingThread := false
+		mayHaveStarted := false
 		if serverID == "" {
 			var r codex.ThreadResponse
 			params := map[string]any{"cwd": cwd, "sandbox": sandboxForPermissionPolicy(policy), "approvalPolicy": approvalForPermissionPolicy(policy), "approvalsReviewer": reviewerForPermissionPolicy(policy)}
@@ -1498,8 +1521,11 @@ func (c *chatController) sendCodex(req sendRequest) int {
 			Turn codex.Turn `json:"turn"`
 		}
 		if err == nil {
+			err = c.persistManagedBinding(ctx, req.ExecutionID, ThreadRef{Source: c.referenceSource, Backend: agentCodex, SessionID: serverID}.URL())
+		}
+		if err == nil {
 			mem := c.prepareMemoryInput(t, req, cwd, c.threadRef(Thread{ServerID: serverID}).URL())
-			input := []map[string]any{{"type": "text", "text": mem.text(text), "text_elements": []any{}}}
+			input := []map[string]any{{"type": "text", "text": collaborationTaggedInput(mem.text(text), req.Parts), "text_elements": []any{}}}
 			own, _ := splitReferenceContext(text)
 			input = append(input, fileMentionInputs(own, cwd)...)
 			input = append(input, c.attachmentInputs(attachments)...)
@@ -1513,14 +1539,17 @@ func (c *chatController) sendCodex(req sendRequest) int {
 			if serviceTier != "" {
 				params["serviceTierForTurn"] = serviceTier
 			}
+			mayHaveStarted = true
 			err = client.Call(ctx, "turn/start", params, &result)
 			if isMissingCodexThread(err, serverID) {
 				// The server explicitly rejected this turn before accepting input.
 				// Restore the same thread and retry once, without another user bubble.
 				missingThread = true
+				mayHaveStarted = false
 				err = client.Call(ctx, "thread/resume", map[string]any{"threadId": serverID, "cwd": cwd, "sandbox": sandboxForPermissionPolicy(policy), "approvalPolicy": approvalForPermissionPolicy(policy), "approvalsReviewer": reviewerForPermissionPolicy(policy)}, nil)
 				if err == nil {
-					input[0]["text"] = mem.text(text)
+					input[0]["text"] = collaborationTaggedInput(mem.text(text), req.Parts)
+					mayHaveStarted = true
 					err = client.Call(ctx, "turn/start", params, &result)
 				}
 			}
@@ -1528,8 +1557,10 @@ func (c *chatController) sendCodex(req sendRequest) int {
 		}
 		c.dispatch(func() {
 			if c.client != client {
+				c.managedCodexAccepted(req.ExecutionID, "", client.RuntimeEpoch(), errors.New("Codex connection changed before submission acknowledgement"), mayHaveStarted)
 				return
 			}
+			c.managedCodexAccepted(req.ExecutionID, result.Turn.ID, client.RuntimeEpoch(), err, mayHaveStarted)
 			if err != nil {
 				c.update(id, func(t *Thread) {
 					t.Busy = false
@@ -1538,10 +1569,14 @@ func (c *chatController) sendCodex(req sendRequest) int {
 					}
 					t.Status = "Send failed: " + err.Error()
 					c.upsert(t, Message{Role: "error", Kind: "error", Status: "failed", Content: "Send failed: " + err.Error(), ItemID: "send-error-" + fmt.Sprint(c.nextID())})
-					t.Draft = text
+					if req.ExecutionID == "" {
+						t.Draft = text
+					}
 					t.Loaded = t.ServerID == ""
 				})
-				c.returnDraft(id, text, attachments)
+				if req.ExecutionID == "" {
+					c.returnDraft(id, text, attachments)
+				}
 				return
 			}
 			c.update(id, func(t *Thread) {
@@ -1566,6 +1601,23 @@ func (c *chatController) stopThread(id int) {
 		return
 	}
 	t := c.threadWithID(id)
+	if c.collaboration != nil {
+		ref := c.threadRef(t).URL()
+		if ref != "" {
+			s := c.collaboration
+			if c.collaborationPaused == nil {
+				c.collaborationPaused = map[string]bool{}
+			}
+			if c.collaborationPauseGeneration == nil {
+				c.collaborationPauseGeneration = map[string]uint64{}
+			}
+			c.collaborationPaused[ref] = true
+			c.collaborationPauseGeneration[ref]++
+			if s.manager != nil {
+				s.post(func() { _ = s.manager.Pause(ref, true) })
+			}
+		}
+	}
 	if !t.Busy && c.claudeRuns[t.ID] == nil {
 		return
 	}

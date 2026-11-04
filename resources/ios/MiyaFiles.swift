@@ -3,6 +3,22 @@ import UIKit
 import WebKit
 import QuickLook
 
+private func miyaLanguage() -> String {
+    let preferred = UserDefaults.standard.stringArray(forKey: "AppleLanguages") ?? Locale.preferredLanguages
+    for tag in preferred {
+        let language = tag.lowercased().replacingOccurrences(of: "_", with: "-")
+        if language.hasPrefix("zh") && !language.contains("hant") && !["zh-tw", "zh-hk", "zh-mo"].contains(language) { return "zh-Hans" }
+        if language.hasPrefix("en") { return "en" }
+    }
+    return "en"
+}
+
+private func miyaText(_ key: String) -> String {
+    guard let path = Bundle.main.path(forResource: miyaLanguage(), ofType: "lproj"),
+          let bundle = Bundle(path: path) else { return key }
+    return bundle.localizedString(forKey: key, value: key, table: nil)
+}
+
 @_silgen_name("goIOSSystemResult") private func filesResult(_ token: UInt64, _ value: UnsafePointer<CChar>, _ code: Int32, _ message: UnsafePointer<CChar>)
 
 // Miya's file and Web service viewer implements MyGo's optional in-app browser hook.
@@ -14,7 +30,7 @@ import QuickLook
     let initial: URL
     let cache: URL
     var isWebService: Bool { initial.path.hasPrefix("/.miya-web-open/") }
-    var viewerTitle: String { isWebService ? "Web 服务" : "项目文件" }
+    var viewerTitle: String { miyaText(isWebService ? "Web services" : "Project files") }
     var web: WKWebView!
     var downloads: [ObjectIdentifier: (WKDownload, URL?)] = [:]
     var preview: URL?
@@ -42,17 +58,19 @@ import QuickLook
         NSLayoutConstraint.activate([web.leadingAnchor.constraint(equalTo: view.leadingAnchor), web.trailingAnchor.constraint(equalTo: view.trailingAnchor), web.topAnchor.constraint(equalTo: view.topAnchor), web.bottomAnchor.constraint(equalTo: view.bottomAnchor)])
         navigationItem.title = viewerTitle
         navigationItem.leftBarButtonItem = UIBarButtonItem(barButtonSystemItem: .done, target: self, action: #selector(close))
-        navigationItem.rightBarButtonItem = UIBarButtonItem(title: isWebService ? "首页" : "目录", style: .plain, target: self, action: #selector(home))
+        navigationItem.rightBarButtonItem = UIBarButtonItem(title: miyaText(isWebService ? "Home" : "Folder"), style: .plain, target: self, action: #selector(home))
         back = UIBarButtonItem(image: UIImage(systemName: "chevron.left"), style: .plain, target: self, action: #selector(goBack))
-        back.accessibilityLabel = "后退"
+        back.accessibilityLabel = miyaText("Back")
         forward = UIBarButtonItem(image: UIImage(systemName: "chevron.right"), style: .plain, target: self, action: #selector(goForward))
-        forward.accessibilityLabel = "前进"
+        forward.accessibilityLabel = miyaText("Forward")
         save = UIBarButtonItem(barButtonSystemItem: .action, target: self, action: #selector(downloadCurrent))
-        save.accessibilityLabel = "下载或分享当前文件"
+        save.accessibilityLabel = miyaText("Download or share this file")
         toolbarItems = [back, .flexibleSpace(), forward, .flexibleSpace(), UIBarButtonItem(barButtonSystemItem: .refresh, target: self, action: #selector(reload)), .flexibleSpace(), save]
         if isWebService { toolbarItems = Array(toolbarItems!.dropLast(2)) }
         navigationController?.setToolbarHidden(false, animated: false)
-        web.load(URLRequest(url: initial))
+        var request = URLRequest(url: initial)
+        request.setValue(miyaLanguage(), forHTTPHeaderField: "Accept-Language")
+        web.load(request)
     }
     @objc func goBack() { web.goBack() }
     @objc func goForward() { web.goForward() }
@@ -110,14 +128,14 @@ import QuickLook
     }
     func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
         if let (_, file) = downloads.removeValue(forKey: ObjectIdentifier(download)), let file { try? FileManager.default.removeItem(at: file) }
-        if !finished { showError("下载失败：" + error.localizedDescription) }
+        if !finished { showError(miyaText("Download failed: ") + error.localizedDescription) }
     }
     func numberOfPreviewItems(in controller: QLPreviewController) -> Int { preview == nil ? 0 : 1 }
     func previewController(_ controller: QLPreviewController, previewItemAt index: Int) -> QLPreviewItem { preview! as NSURL }
     func showError(_ message: String) {
         guard presentedViewController == nil else { return }
         let alert = UIAlertController(title: viewerTitle, message: message, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "好", style: .default)); present(alert, animated: true)
+        alert.addAction(UIAlertAction(title: miyaText("OK"), style: .default)); present(alert, animated: true)
     }
     @objc func close() { finish(dismiss: true) }
     func presentationControllerDidDismiss(_ presentationController: UIPresentationController) { finish(dismiss: false) }

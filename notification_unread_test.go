@@ -17,7 +17,7 @@ func testUnreadHub(t *testing.T) *pushHub {
 func TestUnreadBadgeCountsConversationsAndRejectsStaleReads(t *testing.T) {
 	h := testUnreadHub(t)
 	device := strings.Repeat("a", 32)
-	first := taskNotice{ID: "done-1", Thread: "1", ServerID: "s1", Agent: agentCodex, Project: "/a", Title: "完成"}
+	first := taskNotice{ID: "done-1", Thread: "1", ServerID: "s1", Agent: agentCodex, Project: "/a", Title: "Done"}
 	h.publish(first)
 	delivery := <-h.queue
 	state := h.notificationState(device)
@@ -36,7 +36,7 @@ func TestUnreadBadgeCountsConversationsAndRejectsStaleReads(t *testing.T) {
 	if len(state.Unread) != 1 {
 		t.Fatal("a stale read erased a newer notification")
 	}
-	second := taskNotice{ID: "done-3", Thread: "2", ServerID: "s2", Agent: agentCodex, Project: "/a", Title: "完成"}
+	second := taskNotice{ID: "done-3", Thread: "2", ServerID: "s2", Agent: agentCodex, Project: "/a", Title: "Done"}
 	h.publish(second)
 	<-h.queue
 	if n, ok := h.notificationFor(newDelivery); !ok || n.Payload.Badge == nil || *n.Payload.Badge != 2 {

@@ -127,13 +127,13 @@ func TestPanelOpensFilesEditsAndSaves(t *testing.T) {
 	cwd := app.c.cwd
 	writeFile(t, filepath.Join(cwd, "README.md"), "# Demo\n")
 	writeFile(t, filepath.Join(cwd, "src", "main.go"), "package main\n")
-	if err := tt.Click("显示右侧面板"); err != nil {
+	if err := tt.Click("Show right panel"); err != nil {
 		t.Fatal(err)
 	}
-	if !tt.HasText("打开一个面板") || !tt.HasText("在此工作区中打开终端") {
+	if !tt.HasText("Open a panel") || !tt.HasText("Open a terminal in this workspace") {
 		t.Fatalf("chooser missing: %q", tt.Texts())
 	}
-	if err := tt.Click("文件"); err != nil {
+	if err := tt.Click("Files"); err != nil {
 		t.Fatal(err)
 	}
 	if !tt.HasText("src") || !tt.HasText("README.md") {
@@ -155,20 +155,20 @@ func TestPanelOpensFilesEditsAndSaves(t *testing.T) {
 	if !p.dirty(p.surfaces[p.active]) {
 		t.Fatal("edited file not marked unsaved")
 	}
-	if err := tt.Click("保存 (⌘S)"); err != nil {
+	if err := tt.Click("Save (⌘S)"); err != nil {
 		t.Fatal(err)
 	}
 	data, _ := os.ReadFile(filepath.Join(cwd, "src", "main.go"))
 	if string(data) != "package main\n\n// edited\n" || ed.state.Buffer.Modified() {
 		t.Fatalf("save wrote %q", data)
 	}
-	if err := tt.Click("返回文件列表"); err != nil {
+	if err := tt.Click("Back to file list"); err != nil {
 		t.Fatal(err)
 	}
 	if p.selected != "" || !tt.HasText("README.md") {
 		t.Fatal("did not return to the tree")
 	}
-	if err := tt.Click("隐藏右侧面板"); err != nil {
+	if err := tt.Click("Hide right panel"); err != nil {
 		t.Fatal(err)
 	}
 	if p.visible || tt.HasText("README.md") {
@@ -180,17 +180,17 @@ func TestPanelReviewsChanges(t *testing.T) {
 	syncPanel(t)
 	app, tt := testApp(t)
 	testRepo(t, app.c.cwd)
-	if err := tt.Click("显示右侧面板"); err != nil {
+	if err := tt.Click("Show right panel"); err != nil {
 		t.Fatal(err)
 	}
-	if err := tt.Click("审阅"); err != nil {
+	if err := tt.Click("Review"); err != nil {
 		t.Fatal(err)
 	}
 	p := app.panel()
 	if p.diff == nil || len(p.diff.Files) != 2 {
 		t.Fatalf("review not read: %+v %s", p.diff, p.diffErr)
 	}
-	if !tt.HasText("a.txt") || !tt.HasText("c.txt") || !tt.HasText("新文件") || !tt.HasText("2 个文件") {
+	if !tt.HasText("a.txt") || !tt.HasText("c.txt") || !tt.HasText("New file") || !tt.HasText("2 files") {
 		t.Fatalf("changed files missing: %q", tt.Texts())
 	}
 	if p.diffView == nil || p.diffViewPath != "a.txt" || p.diffView.New.String() != "one\ntwo\nthree\n" {
@@ -211,16 +211,16 @@ func TestPanelBelongsToItsConversation(t *testing.T) {
 	c.setThreads([]Thread{{ID: 1, Title: "First thread", HistoryLoaded: true, Agent: "claude-code"}, {ID: 2, Title: "Second thread", HistoryLoaded: true, Agent: "claude-code"}})
 	c.setActive(1)
 	tt.Frame()
-	if err := tt.Click("显示右侧面板"); err != nil {
+	if err := tt.Click("Show right panel"); err != nil {
 		t.Fatal(err)
 	}
-	if err := tt.Click("文件"); err != nil {
+	if err := tt.Click("Files"); err != nil {
 		t.Fatal(err)
 	}
 	if err := tt.Click("Second thread"); err != nil {
 		t.Fatal(err)
 	}
-	if p := app.panel(); len(p.surfaces) != 0 || !p.visible || !tt.HasText("打开一个面板") {
+	if p := app.panel(); len(p.surfaces) != 0 || !p.visible || !tt.HasText("Open a panel") {
 		t.Fatalf("second conversation shares the first's tabs: %+v", p.surfaces)
 	}
 	if err := tt.Click("First thread"); err != nil {
@@ -230,10 +230,10 @@ func TestPanelBelongsToItsConversation(t *testing.T) {
 		t.Fatal("first conversation lost its tab")
 	}
 	// Closing the last tab shows the chooser again.
-	if err := tt.Click("关闭文件"); err != nil {
+	if err := tt.Click("CloseFiles"); err != nil {
 		t.Fatal(err)
 	}
-	if !tt.HasText("打开一个面板") {
+	if !tt.HasText("Open a panel") {
 		t.Fatalf("chooser not back: %q", tt.Texts())
 	}
 }

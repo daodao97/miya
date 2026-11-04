@@ -54,6 +54,9 @@ func (c *chatController) drainQueue(id int) {
 		return
 	}
 	t := c.threadWithID(id)
+	if c.managedReservations[id] != "" {
+		return
+	}
 	if t.ID == 0 || len(t.Queue) == 0 || t.Busy || t.Loading || t.ReadOnly || t.StopRequested {
 		return
 	}

@@ -28,22 +28,22 @@ func (d *desktopControl) serveWindowActions(w http.ResponseWriter, r *http.Reque
 		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096))
 		decoder.DisallowUnknownFields()
 		if decoder.Decode(&request) != nil || request.ID == "" {
-			http.Error(w, "无效的授权操作", 400)
+			http.Error(w, "Invalid authorization action", 400)
 			return
 		}
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.valid(token) != lease || r.Context().Err() != nil {
-		http.Error(w, "远程控制已结束", 410)
+		http.Error(w, "Remote control ended", 410)
 		return
 	}
 	if !lease.active || lease.window == nil || lease.onAction == nil || d.dialog == nil {
-		http.Error(w, "当前界面没有可用的授权窗口操作", 403)
+		http.Error(w, "No authorization actions are available in this view", 403)
 		return
 	}
 	if press && (request.WindowID != lease.window.ID || request.WindowPID != lease.window.PID || d.pressAction == nil) {
-		http.Error(w, "授权窗口已切换，请刷新操作按钮", 409)
+		http.Error(w, "The authorization window changed. Refresh the action buttons.", 409)
 		return
 	}
 	if !press {
@@ -53,7 +53,7 @@ func (d *desktopControl) serveWindowActions(w http.ResponseWriter, r *http.Reque
 			return
 		}
 		if d.valid(token) != lease || r.Context().Err() != nil {
-			http.Error(w, "远程控制已结束", 410)
+			http.Error(w, "Remote control ended", 410)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -65,15 +65,15 @@ func (d *desktopControl) serveWindowActions(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	if lease.actionPending {
-		http.Error(w, "正在确认授权结果，请稍候", 409)
+		http.Error(w, "Checking the authorization result. Please wait.", 409)
 		return
 	}
 	if time.Since(lease.capturedAt) > 10*time.Second {
-		http.Error(w, "请等待新的窗口画面后再操作", 409)
+		http.Error(w, "Wait for a new window frame before continuing", 409)
 		return
 	}
 	if time.Since(lease.lastInput) < 20*time.Millisecond {
-		http.Error(w, "操作过快", 429)
+		http.Error(w, "Input is too frequent", 429)
 		return
 	}
 	before, err := d.actionWindows(*lease.window)

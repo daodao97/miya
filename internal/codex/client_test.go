@@ -197,6 +197,7 @@ func TestRealServer(t *testing.T) {
 					deltas++
 				}
 				if f.Method == "item/completed" && e.Item.Type == "agentMessage" {
+					t.Logf("native assistant phase=%q", e.Item.Phase)
 					answer += e.Item.Text
 				}
 				if f.Method == "turn/completed" && e.Turn.ID == result.Turn.ID {

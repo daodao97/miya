@@ -7,10 +7,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"miya/internal/memory"
+	"miya/internal/remote"
 	"net"
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -33,12 +35,17 @@ type service struct {
 	idleSince    time.Time
 	quitWhenIdle bool
 	idleTimeout  time.Duration
+	persistent   bool
 }
 
 // svcPeer is a connected window.
 type svcPeer struct {
-	conn net.Conn
-	wmu  sync.Mutex
+	conn     net.Conn
+	wire     *remote.Conn
+	out      chan []byte
+	queued   atomic.Int64
+	inflight atomic.Int32
+	wmu      sync.Mutex
 
 	// Owned by the executor: the subscribed conversation and what the
 	// window has of it.
@@ -49,6 +56,18 @@ type svcPeer struct {
 }
 
 func (p *svcPeer) write(data []byte) error {
+	if p.wire != nil {
+		if p.queued.Add(int64(len(data))) <= 64<<20 {
+			select {
+			case p.out <- data:
+				return nil
+			default:
+			}
+		}
+		p.queued.Add(-int64(len(data)))
+		p.wire.Close()
+		return errServiceClosed
+	}
 	line := make([]byte, len(data)+1)
 	copy(line, data)
 	line[len(data)] = '\n'
@@ -70,6 +89,7 @@ func newService(c *chatController, ex *executor) *service {
 	c.run = ex.push
 	c.onDraftReturned = s.draftReturned
 	c.memoryEngine = newMemoryEngine(c)
+	c.collaboration = newCollaboration(c, filepath.Join(serviceDir(), "delegations"))
 	return s
 }
 
@@ -82,6 +102,9 @@ func (s *service) markDirty() {
 
 func (s *service) stop() {
 	s.quitOnce.Do(func() {
+		if s.c.collaboration != nil {
+			s.c.collaboration.cancel()
+		}
 		if s.c.memoryEngine != nil {
 			s.c.memoryEngine.cancel()
 		}
@@ -100,6 +123,24 @@ func (s *service) serve(ln net.Listener) {
 }
 
 func (s *service) handleConn(p *svcPeer) {
+	if p.wire != nil {
+		p.out = make(chan []byte, 64)
+		go func() {
+			for {
+				select {
+				case <-p.wire.Context().Done():
+					return
+				case data := <-p.out:
+					err := p.wire.Send(json.RawMessage(data))
+					p.queued.Add(-int64(len(data)))
+					if err != nil {
+						p.wire.Close()
+						return
+					}
+				}
+			}
+		}()
+	}
 	s.mu.Lock()
 	s.peers[p] = true
 	s.mu.Unlock()
@@ -107,11 +148,25 @@ func (s *service) handleConn(p *svcPeer) {
 		s.mu.Lock()
 		delete(s.peers, p)
 		s.mu.Unlock()
-		p.conn.Close()
+		if p.wire != nil {
+			p.wire.Close()
+		} else {
+			p.conn.Close()
+		}
 	}()
-	r := bufio.NewReaderSize(p.conn, 64<<10)
+	var r *bufio.Reader
+	if p.wire == nil {
+		r = bufio.NewReaderSize(p.conn, 64<<10)
+	}
 	for {
-		line, err := r.ReadBytes('\n')
+		var line []byte
+		var err error
+		if p.wire != nil {
+			_ = p.wire.SetReadDeadline(time.Now().Add(time.Minute))
+			err = p.wire.Receive((*json.RawMessage)(&line))
+		} else {
+			line, err = r.ReadBytes('\n')
+		}
 		if len(bytes.TrimSpace(line)) > 0 {
 			var req svcRequest
 			if json.Unmarshal(line, &req) == nil {
@@ -129,6 +184,11 @@ func (s *service) request(p *svcPeer, req svcRequest) {
 		s.exec.push(func() { _, _ = s.handle(p, req) })
 		return
 	}
+	if p.wire != nil && p.inflight.Add(1) > 32 {
+		p.inflight.Add(-1)
+		p.wire.Close()
+		return
+	}
 	done := make(chan svcMessage, 1)
 	s.exec.push(func() {
 		res, err := s.handle(p, req)
@@ -142,12 +202,28 @@ func (s *service) request(p *svcPeer, req svcRequest) {
 		}
 		done <- svcReply(req, res, err)
 	})
-	select {
-	case msg := <-done:
-		if data, err := json.Marshal(msg); err == nil {
-			_ = p.write(data)
+	wait := func() {
+		var disconnected <-chan struct{}
+		if p.wire != nil {
+			disconnected = p.wire.Context().Done()
+			defer p.inflight.Add(-1)
 		}
-	case <-s.quit:
+		select {
+		case msg := <-done:
+			if data, err := json.Marshal(msg); err == nil {
+				_ = p.write(data)
+			}
+		case <-disconnected:
+		case <-s.quit:
+		}
+	}
+	// Keep accepting remote heartbeats and stop/approval requests while a
+	// deferred operation (such as drafting an automation) waits on an agent.
+	// Enqueue above, before spawning the waiter, to preserve request order.
+	if p.wire != nil {
+		go wait()
+	} else {
+		wait()
 	}
 }
 
@@ -174,6 +250,16 @@ func (s *service) handle(p *svcPeer, req svcRequest) (any, error) {
 	var id int
 	var value string
 	switch req.Op {
+	case "host":
+		var r hostRequest
+		if err := arg(&r); err != nil {
+			return nil, err
+		}
+		return c.prepareHost(r)
+	case "commands":
+		_ = arg(&value)
+		list, known := c.claudeCommandsFor(value)
+		return hostCommands{Choices: list, Known: known}, nil
 	case "notification-presence":
 		var present bool
 		if err := arg(&present); err != nil {
@@ -185,7 +271,7 @@ func (s *service) handle(p *svcPeer, req svcRequest) (any, error) {
 			c.push.mu.Unlock()
 		}
 	case "hello":
-		return svcHello{Version: serviceVersion, Exe: s.exe, ExeTime: s.exeTime, PID: os.Getpid(), Busy: s.busy()}, nil
+		return svcHello{Version: serviceVersion, Exe: s.exe, ExeTime: s.exeTime, PID: os.Getpid(), Busy: s.busy(), Remote: s.persistent}, nil
 	case "runtimeValidate":
 		var r phoneWebService
 		if err := arg(&r); err != nil {
@@ -216,12 +302,18 @@ func (s *service) handle(p *svcPeer, req svcRequest) (any, error) {
 		_ = arg(&id)
 		p.sub, p.sent, p.order = id, nil, nil
 		s.markDirty()
-	case "mcpDesktopControl", "mcpMemory", "mcpThreads", "mcpRead", "mcpStatus", "mcpDelegate", "mcpAutomationList", "mcpAutomationCreate", "mcpAutomationUpdate", "mcpReportResult", "mcpRuntime":
+	case "mcpDesktopControl", "mcpMemory", "mcpThreads", "mcpRead", "mcpStatus", "mcpDelegate", "mcpLegacyTask", "mcpCollaboration", "mcpAutomationList", "mcpAutomationCreate", "mcpAutomationUpdate", "mcpReportResult", "mcpRuntime":
 		var r mcpRequest
 		if err := arg(&r); err != nil {
 			return nil, err
 		}
 		return c.mcpHandle(req.Op, r)
+	case "collaboration":
+		var r collaborationRequest
+		if err := arg(&r); err != nil {
+			return nil, err
+		}
+		return c.collaborationUserOp(r)
 	case "memoryList", "memoryGet", "memorySave", "memoryForget", "memoryConfigure", "memorySessionConfigure", "memoryPromoteUser", "memoryPromotionPreview", "memoryPromoteFile":
 		var r memoryRequest
 		if err := arg(&r); err != nil {
@@ -294,7 +386,7 @@ func (s *service) handle(p *svcPeer, req svcRequest) (any, error) {
 			}
 		}
 		if a.Remember {
-			return nil, fmt.Errorf("请求已处理或已过期")
+			return nil, fmt.Errorf("Request already handled or expired")
 		}
 	case "rewind":
 		var a svcRewind
@@ -403,6 +495,12 @@ func (s *service) handle(p *svcPeer, req svcRequest) (any, error) {
 
 // busy reports a turn running or starting, which quitting would end.
 func (s *service) busy() bool {
+	if s.c.collaboration != nil && s.c.collaboration.ctx.Err() == nil && s.c.collaboration.busy.Load() > 0 {
+		return true
+	}
+	if s.c.remoteTerminals.Load() > 0 {
+		return true
+	}
 	if s.c.desktopBusy() {
 		return true
 	}
@@ -552,24 +650,24 @@ func (s *service) watchIdle(every time.Duration) {
 			return
 		case <-t.C:
 		}
-		s.exec.push(func() {
-			busy := s.busy()
-			if s.quitWhenIdle && !busy {
-				s.stop()
-				return
-			}
-			// A connected phone keeps the service up, as a window does, and so
-			// does an automation that is on.
-			if busy || len(s.peerList()) > 0 || desktopPhone.connected() || s.c.automationsEnabled() {
-				s.idleSince = time.Time{}
-				return
-			}
-			if s.idleSince.IsZero() {
-				s.idleSince = time.Now()
-			} else if time.Since(s.idleSince) >= s.idleTimeout {
-				s.stop()
-			}
-		})
+		s.exec.push(s.checkIdle)
+	}
+}
+
+func (s *service) checkIdle() {
+	busy := s.busy()
+	if s.quitWhenIdle && !busy {
+		s.stop()
+		return
+	}
+	if s.persistent || busy || len(s.peerList()) > 0 || desktopPhone.connected() || s.c.automationsEnabled() {
+		s.idleSince = time.Time{}
+		return
+	}
+	if s.idleSince.IsZero() {
+		s.idleSince = time.Now()
+	} else if time.Since(s.idleSince) >= s.idleTimeout {
+		s.stop()
 	}
 }
 
@@ -600,6 +698,7 @@ func (c *chatController) snapshotState() svcState {
 		projectThreads[path] = items
 	}
 	return svcState{
+		Collaboration:   c.collaborationCapabilities(),
 		ReferenceSource: c.referenceSource,
 		MemoryRevision:  c.memoryRevision,
 		FastMode:        c.fastMode,

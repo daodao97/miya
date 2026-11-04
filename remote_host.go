@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -36,24 +37,26 @@ type phoneProject struct {
 }
 
 type phoneState struct {
-	DesktopWindows  bool                   `json:"desktopWindows,omitempty"`
-	DesktopControl  bool                   `json:"desktopControl,omitempty"`
-	MemoryRevision  uint64                 `json:"memoryRevision,omitempty"`
-	Memory          bool                   `json:"memory,omitempty"`
-	ReferenceSource string                 `json:"referenceSource"`
-	Files           bool                   `json:"files,omitempty"`
-	WebPorts        bool                   `json:"webPorts,omitempty"`
-	Runtime         bool                   `json:"runtime,omitempty"`
-	WebServices     bool                   `json:"webServices,omitempty"`
-	FileReferences  bool                   `json:"fileReferences,omitempty"`
-	Automations     bool                   `json:"automations,omitempty"`
-	AutomationRun   bool                   `json:"automationRun,omitempty"`
-	Projects        []phoneProject         `json:"projects"`
-	Status          string                 `json:"status"`
-	Approvals       []codex.Approval       `json:"approvals"`
-	Agents          []phoneAgentOptions    `json:"agents,omitempty"`
-	Quotas          []phoneAgentQuota      `json:"quotas,omitempty"`
-	Notifications   phoneNotificationState `json:"notifications"`
+	Collaboration    *collaborationStatus   `json:"collaboration,omitempty"`
+	DesktopWindows   bool                   `json:"desktopWindows,omitempty"`
+	DesktopControl   bool                   `json:"desktopControl,omitempty"`
+	MemoryRevision   uint64                 `json:"memoryRevision,omitempty"`
+	Memory           bool                   `json:"memory,omitempty"`
+	ReferenceSource  string                 `json:"referenceSource"`
+	Files            bool                   `json:"files,omitempty"`
+	WebPorts         bool                   `json:"webPorts,omitempty"`
+	Runtime          bool                   `json:"runtime,omitempty"`
+	WebServices      bool                   `json:"webServices,omitempty"`
+	FileReferences   bool                   `json:"fileReferences,omitempty"`
+	Automations      bool                   `json:"automations,omitempty"`
+	AutomationRun    bool                   `json:"automationRun,omitempty"`
+	AutomationCreate bool                   `json:"automationCreate,omitempty"`
+	Projects         []phoneProject         `json:"projects"`
+	Status           string                 `json:"status"`
+	Approvals        []codex.Approval       `json:"approvals"`
+	Agents           []phoneAgentOptions    `json:"agents,omitempty"`
+	Quotas           []phoneAgentQuota      `json:"quotas,omitempty"`
+	Notifications    phoneNotificationState `json:"notifications"`
 	// Agent, Model and Effort are the desktop's defaults for new messages.
 	Agent  string `json:"agent"`
 	Model  string `json:"model"`
@@ -70,8 +73,10 @@ func listThread(t Thread) Thread {
 
 func (c *chatController) phoneSnapshot() phoneState {
 	s := phoneState{DesktopControl: desktop.Available(), ReferenceSource: c.referenceSource, MemoryRevision: c.memoryRevision, Memory: c.memory != nil, Files: true, WebPorts: true, WebServices: true, Runtime: true, FileReferences: true, Automations: c.auto != nil, Status: c.status(), Approvals: c.approvals(), Agents: c.phoneAgentOptions(), Quotas: c.phoneQuotas()}
+	s.Collaboration = c.collaborationCapabilities()
 	s.DesktopWindows = s.DesktopControl
 	s.AutomationRun = c.auto != nil
+	s.AutomationCreate = c.auto != nil
 	if c.agent != nil {
 		s.Agent = c.agent()
 	}
@@ -198,7 +203,7 @@ func (c *chatController) sendPhonePreview(ctx context.Context, conn phoneConnect
 		}
 	}
 	if !allowed {
-		imageErr = fmt.Errorf("图片不在当前对话中")
+		imageErr = fmt.Errorf("Image is not in the current conversation")
 	} else {
 		preview.Data, imageErr = phonePreview(r.ImageSource)
 	}
@@ -251,6 +256,40 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 		return
 	}
 	requests := make(chan remote.Request)
+	collaborationJobs := make(chan remote.Request, 8)
+	collaborationDone := make(chan struct{})
+	go func() {
+		defer close(collaborationDone)
+		for {
+			select {
+			case r := <-collaborationJobs:
+				if !send(c.phoneCollaboration(ctx, r)) {
+					cancel()
+					return
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	defer func() { cancel(); <-collaborationDone }()
+	drafts := make(chan remote.Request, 1)
+	draftDone := make(chan struct{})
+	go func() {
+		defer close(draftDone)
+		for {
+			select {
+			case r := <-drafts:
+				if !send(c.phoneAutomationDraft(ctx, r)) {
+					cancel()
+					return
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	defer func() { cancel(); <-draftDone }()
 	go func() {
 		defer close(requests)
 		defer cancel() // Revoke desktop control immediately when Receive sees EOF.
@@ -365,9 +404,9 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 			t := s.t.thread
 			switch {
 			case !s.t.found:
-				t = Thread{ID: sub, ServerID: subscription.ServerID, Agent: subscription.Agent, Status: "对话已不在桌面端"}
+				t = Thread{ID: sub, ServerID: subscription.ServerID, Agent: subscription.Agent, Status: "Conversation is no longer on the desktop"}
 				if s.loading {
-					t.Loading, t.Status = true, "正在加载对话…"
+					t.Loading, t.Status = true, "Loading conversation…"
 				}
 			case hasHistory(t) || t.Loading:
 				// The desktop's own copy is live; prefer it.
@@ -399,7 +438,7 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 			}
 			reply := remote.Frame{Type: "sent", Thread: res.thread, Error: res.err}
 			if res.thread == 0 && res.err == "" && time.Now().After(pending.until) {
-				reply.Error = "桌面端还没准备好，请稍后再试"
+				reply.Error = "Desktop is not ready. Try again shortly."
 			}
 			if res.thread != 0 || reply.Error != "" {
 				pending = nil
@@ -452,7 +491,7 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 				case previews <- previewRequest{request: r, allowed: allowed, hint: hint}:
 				default:
 					data, _ := json.Marshal(phoneDesktopPreview{RequestID: r.RequestID, Approval: r.Approval})
-					if !send(remote.Frame{Type: r.Op, Data: data, Error: "授权窗口正忙，请稍后重试"}) {
+					if !send(remote.Frame{Type: r.Op, Data: data, Error: "The permission window is busy. Try again later."}) {
 						return
 					}
 				}
@@ -464,9 +503,9 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 				reply := phoneDesktopReply{RequestID: r.RequestID}
 				var err error
 				if !desktop.Available() {
-					err = fmt.Errorf("远程桌面需要 macOS 14 或更新版本")
+					err = fmt.Errorf("Remote desktop requires macOS 14 or later")
 				} else if !target.found || r.ServerID == "" {
-					err = fmt.Errorf("对话已不在桌面端，请重新打开对话")
+					err = fmt.Errorf("Conversation is no longer on the desktop. Reopen it.")
 				} else {
 					var window *desktop.Window
 					if r.WindowOnly {
@@ -476,7 +515,7 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 							return
 						}
 						if !allowed {
-							err = fmt.Errorf("授权请求已处理，请返回会话")
+							err = fmt.Errorf("Permission request handled. Return to the conversation.")
 						}
 					} else if r.WindowPick {
 						// Choosing a window shares no more than the full desktop the
@@ -518,7 +557,7 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 				case previews <- previewRequest{request: r, allowed: allowed}:
 				default:
 					data, _ := json.Marshal(phoneImagePreview{Source: r.ImageSource})
-					if !send(remote.Frame{Type: "image", Data: data, Error: "图片预览繁忙，请稍后重试"}) {
+					if !send(remote.Frame{Type: "image", Data: data, Error: "Image preview is busy. Try again shortly."}) {
 						return
 					}
 				}
@@ -549,6 +588,27 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 				}
 				frame.Data, _ = json.Marshal(reply)
 				if !send(frame) {
+					return
+				}
+			case "collaboration":
+				select {
+				case collaborationJobs <- r:
+				default:
+					if !send(collaborationPhoneFrame(r.RequestID, nil, fmt.Errorf("Collaboration requests are busy. Retry with the same request_id."))) {
+						return
+					}
+				}
+			case "automation-draft":
+				select {
+				case drafts <- r:
+				default:
+					if !send(phoneAutomationFormFrame(r, nil, fmt.Errorf("Another automation is being generated. Try again shortly."))) {
+						return
+					}
+				}
+			case "automation-create":
+				frame, ok := onMain(ctx, c.dispatch, func() remote.Frame { return c.phoneAutomationCreate(r) })
+				if !ok || !send(frame) {
 					return
 				}
 			case "automation-run":
@@ -590,11 +650,11 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 				var registration pushRegistration
 				var message string
 				if json.Unmarshal(r.Push, &registration) != nil {
-					message = "无效的通知注册"
+					message = "Invalid notification registration"
 				} else {
 					result, _ := onMain(ctx, c.dispatch, func() string {
 						if c.push == nil {
-							return "通知服务不可用"
+							return "Notification service unavailable"
 						}
 						if err := c.push.register(registration); err != nil {
 							return err.Error()
@@ -607,7 +667,7 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 					}
 					if message == "" && !registration.Disabled {
 						if _, err := apns.OpenProvider(serviceDir()); err != nil {
-							message = "手机已注册；桌面端尚未配置 APNs，请运行 mygo push setup"
+							message = "Phone registered. APNs is not configured on the desktop; run mygo push setup."
 						}
 					}
 				}
@@ -644,7 +704,7 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 				sync = newPhoneThreadSync(r.Have)
 			case "send":
 				if pending != nil {
-					if !send(remote.Frame{Type: "sent", Error: "上一条消息还在发送"}) {
+					if !send(remote.Frame{Type: "sent", Error: "The previous message is still being sent"}) {
 						return
 					}
 				} else {
@@ -676,7 +736,7 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 				message, _ := onMain(ctx, c.dispatch, func() string {
 					t := c.phoneThreadFor(r)
 					if !t.found {
-						return "对话已不在桌面端"
+						return "Conversation is no longer on the desktop"
 					}
 					id, action, _ := strings.Cut(r.Text, " ")
 					return c.taskAction(t.thread.ID, id, action)
@@ -688,7 +748,7 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 				message, _ := onMain(ctx, c.dispatch, func() string {
 					t := c.phoneThreadFor(r)
 					if !t.found {
-						return "对话已不在桌面端"
+						return "Conversation is no longer on the desktop"
 					}
 					if err := c.retryResponse(retryRequest{ThreadID: t.thread.ID, MessageID: r.MessageID}); err != nil {
 						return err.Error()
@@ -751,7 +811,7 @@ func readOnlyHistory(ctx context.Context, t phoneThread) ([]Message, string) {
 			}
 		}
 	} else if t.client == nil || th.ServerID == "" {
-		return nil, "桌面端正在连接 Codex…"
+		return nil, "Desktop is connecting to Codex…"
 	} else {
 		cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
@@ -762,7 +822,7 @@ func readOnlyHistory(ctx context.Context, t phoneThread) ([]Message, string) {
 		}
 	}
 	if err != nil && len(messages) == 0 {
-		return nil, "无法读取对话：" + err.Error()
+		return nil, "Unable to read conversation: " + err.Error()
 	}
 	for i := range messages {
 		messages[i].ID = i + 1
@@ -776,6 +836,7 @@ func readOnlyHistory(ctx context.Context, t phoneThread) ([]Message, string) {
 
 // phoneHost owns the desktop's bridge. Its fields belong to the main thread.
 type phoneHost struct {
+	service    *service
 	c          *chatController
 	bridge     *remote.Bridge
 	link       string
@@ -790,6 +851,9 @@ type phoneHost struct {
 var desktopPhone *phoneHost
 
 func phoneDir() string {
+	if os.Getenv("MIYA_DIR") != "" {
+		return filepath.Join(serviceDir(), "remote")
+	}
 	home, err := os.UserHomeDir()
 	if err != nil || home == "" {
 		return ""
@@ -832,7 +896,7 @@ func newPhoneHost(c *chatController) *phoneHost {
 			b.Close()
 		}
 	})
-	if loadPhoneEnabled() {
+	if loadPhoneEnabled() && !servingRemote {
 		p.start()
 	}
 	return p
@@ -844,7 +908,7 @@ func (p *phoneHost) start() {
 	}
 	dir := phoneDir()
 	if dir == "" {
-		p.message = "无法确定数据目录"
+		p.message = "Unable to determine data directory"
 		return
 	}
 	p.enabled = true
@@ -856,7 +920,7 @@ func (p *phoneHost) start() {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
 		defer cancel()
-		b, err := remote.Start(ctx, remote.Options{
+		options := remote.Options{
 			StateDir: dir,
 			Serve:    c.servePhone,
 			Files:    c.fileServer(),
@@ -868,7 +932,12 @@ func (p *phoneHost) start() {
 					}
 				})
 			},
-		})
+		}
+		if p.service != nil {
+			options.Service = func(ctx context.Context, conn *remote.Conn) { p.service.handleConn(&svcPeer{wire: conn}) }
+			options.Terminal = c.serveRemoteTerminal
+		}
+		b, err := remote.Start(ctx, options)
 		var link string
 		var qr [][]bool
 		if err == nil {
@@ -886,9 +955,27 @@ func (p *phoneHost) start() {
 			}
 			p.busy = false
 			if err != nil {
-				p.message = "无法开启手机连接：" + err.Error()
+				p.message = "Unable to enable mobile connections: " + err.Error()
+				if p.service != nil {
+					log.Printf("miya: Tailcat startup failed: %v; retrying", err)
+					time.AfterFunc(5*time.Second, func() {
+						c.dispatch(func() {
+							if p.enabled && p.generation == gen {
+								p.start()
+							}
+						})
+					})
+				}
 			} else {
 				p.bridge, p.link, p.qr = b, link, qr
+				if p.service != nil {
+					if err := saveServerConnection(link); err != nil {
+						p.message = err.Error()
+						log.Printf("miya: cannot save pairing link: %v", err)
+					} else {
+						log.Printf("miya: Tailcat ready; pairing link saved in %s", connectionFile())
+					}
+				}
 			}
 			invalidate()
 		})
@@ -927,7 +1014,7 @@ func (p *phoneHost) reset() {
 		runOnMain(func() {
 			p.busy = false
 			if err != nil {
-				p.message = "无法重置连接：" + err.Error()
+				p.message = "Unable to reset connection: " + err.Error()
 				invalidate()
 				return
 			}
@@ -1008,7 +1095,7 @@ type phoneSendResult struct {
 func (c *chatController) phoneSend(r remote.Request, paths []string) phoneSendResult {
 	text := strings.TrimSpace(r.Text)
 	if text == "" && len(paths) == 0 {
-		return phoneSendResult{err: "消息为空"}
+		return phoneSendResult{err: "Message is empty"}
 	}
 	project := r.Project
 	if r.Thread != 0 || r.ServerID != "" {
@@ -1017,7 +1104,7 @@ func (c *chatController) phoneSend(r remote.Request, paths []string) phoneSendRe
 			if c.connecting || !c.ready() || c.historyStatus() == "Loading conversations…" {
 				return phoneSendResult{}
 			}
-			return phoneSendResult{err: "对话已不在桌面端"}
+			return phoneSendResult{err: "Conversation is no longer on the desktop"}
 		}
 		project = resolved.cwd
 		if project == c.cwd {
@@ -1026,7 +1113,7 @@ func (c *chatController) phoneSend(r remote.Request, paths []string) phoneSendRe
 			case t.Loading:
 				return phoneSendResult{}
 			case t.ReadOnly:
-				return phoneSendResult{err: "另一个 Codex 进程正在使用此对话，只能查看"}
+				return phoneSendResult{err: "Another Codex process is using this conversation. Read-only access."}
 			}
 			req, err := c.phoneSendRequest(r, paths, threadAgent(t))
 			if err != nil {
@@ -1042,7 +1129,7 @@ func (c *chatController) phoneSend(r remote.Request, paths []string) phoneSendRe
 	}
 	if project != "" && project != c.cwd {
 		if err := c.changeWorkspace(project); err != nil {
-			return phoneSendResult{err: "无法切换到该项目：" + err.Error()}
+			return phoneSendResult{err: "Unable to switch to this project: " + err.Error()}
 		}
 		return phoneSendResult{}
 	}

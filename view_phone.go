@@ -15,7 +15,7 @@ func (app *chatApp) phoneSettings(c *ui.Context) {
 	var st phoneStatus
 	var act func(string)
 	switch {
-	case desktopPhone != nil:
+	case desktopPhone != nil && !app.c.remoteHost():
 		st, act = desktopPhone.status(), desktopPhone.do
 	case app.c.remote != nil && app.c.mirror != nil:
 		st, act = app.c.mirror.phone, func(a string) { app.c.forward("phone", a) }
@@ -23,18 +23,22 @@ func (app *chatApp) phoneSettings(c *ui.Context) {
 		return
 	}
 	ui.Column(c).FillWidth().Gap(16).Children(func() {
-		settingsHeader(c, "手机连接", "用 Miya 手机端扫码连接。手机可以继续对话和处理审批，不能修改设置。连接经 Tailcat 端到端加密。", nil)
+		help := tr("Scan with the Miya mobile app to continue conversations and handle approvals. Settings cannot be changed from your phone. Connections use Tailcat end-to-end encryption.")
+		if app.c.remoteHost() {
+			help = tr("Scan the server's QR code with Miya on your phone. Desktop and mobile share the server's projects and conversations. Connections use Tailcat end-to-end encryption.")
+		}
+		settingsHeader(c, tr("Mobile connections"), help, nil)
 		settingsCard(c).Padding(20).Gap(14).Children(func() {
 			switch {
 			case st.Busy:
 				ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
 					ui.Spinner(c)
-					mutedText(c, "正在开启手机连接…")
+					mutedText(c, tr("Enabling mobile connections…"))
 				})
 			case st.Link == "":
 				ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(16).Children(func() {
-					settingLabel(c, "未开启", "开启后生成二维码，用手机扫码即可连接。").Grow(1)
-					if ui.PrimaryButton(c.Key("phone-start"), "开启手机连接").Clicked() {
+					settingLabel(c, tr("Disabled"), tr("Enable to generate a QR code, then scan it with your phone.")).Grow(1)
+					if ui.PrimaryButton(c.Key("phone-start"), tr("Enable mobile connections")).Clicked() {
 						act("start")
 					}
 				})
@@ -43,27 +47,31 @@ func (app *chatApp) phoneSettings(c *ui.Context) {
 					if qr := phoneQR(st.Link); len(qr) > 0 {
 						// A QR code reads on white in either theme.
 						ui.Box(c.Key("phone-qr-frame")).Shrink(0).Padding(10).Background(ui.Hex("#ffffff")).Border(1, line).Radius(12).Children(func() {
-							ui.Box(c.Key("phone-qr")).Label("手机连接二维码").Size(200, 200).Background(ui.Hex("#ffffff")).Draw(func(painter *ui.Painter, r ui.Rect) { paintQR(painter, r, qr) })
+							ui.Box(c.Key("phone-qr")).Label(tr("Mobile connection QR code")).Size(200, 200).Background(ui.Hex("#ffffff")).Draw(func(painter *ui.Painter, r ui.Rect) { paintQR(painter, r, qr) })
 						})
 					}
 					ui.Column(c).Grow(1).Basis(240).MinWidth(0).Gap(14).Children(func() {
 						ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
-							dot, status := muted, "等待手机扫码…"
+							dot, status := muted, tr("Waiting for your phone to scan…")
 							if st.Peers > 0 {
-								dot, status = added, fmt.Sprintf("已连接 %d 台手机", st.Peers)
+								dot, status = added, fmt.Sprintf(tr("%d phones connected"), st.Peers)
 							}
 							ui.Box(c).Size(8, 8).Radius(4).Background(dot).Shrink(0)
 							ui.Text(c, status).FontSize(14).FontWeight(500)
 						})
-						ui.Text(c, "连接码等同于查看权限，请勿分享。重置后，手机需要重新扫码。").TextColor(muted).FontSize(12).LineHeight(1.5)
+						access := tr("The connection code grants viewing access. Keep it private. Resetting requires your phone to scan again.")
+						if app.c.remoteHost() {
+							access = tr("The server connection code lets desktop clients act as the server account. Share only with trusted devices. Resetting requires all devices to reconnect.")
+						}
+						ui.Text(c, access).TextColor(muted).FontSize(12).LineHeight(1.5)
 						ui.Row(c).Wrap().Gap(8).Children(func() {
-							if smallButton(c.Key("phone-copy"), "复制连接码", false).Clicked() {
+							if smallButton(c.Key("phone-copy"), tr("Copy connection code"), false).Clicked() {
 								c.WriteClipboard(st.Link)
 							}
-							if smallButton(c.Key("phone-reset"), "重置二维码", false).Clicked() {
+							if smallButton(c.Key("phone-reset"), tr("Reset QR code"), false).Clicked() {
 								act("reset")
 							}
-							if smallButton(c.Key("phone-stop"), "关闭", false).TextColor(danger).Clicked() {
+							if smallButton(c.Key("phone-stop"), tr("Close"), false).TextColor(danger).Clicked() {
 								act("stop")
 							}
 						})

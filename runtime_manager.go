@@ -143,7 +143,7 @@ func (m *runtimeManager) refresh(ctx context.Context, key rt.SessionKey) rt.View
 	if binding == nil {
 		m.mu.Unlock()
 		v := m.store.Read(key)
-		v.Notice = "当前没有可核验的 Agent 执行连接"
+		v.Notice = "No agent execution connection available for verification"
 		return v
 	}
 	source := binding.source
@@ -157,16 +157,16 @@ func (m *runtimeManager) refresh(ctx context.Context, key rt.SessionKey) rt.View
 	defer cancel()
 	stop := context.AfterFunc(ctx, cancel)
 	defer stop()
-	snapshot := runtimeSnapshot{Notice: "Agent 连接已结束，正在核验已记录的进程"}
+	snapshot := runtimeSnapshot{Notice: "Agent connection ended. Verifying recorded processes."}
 	var err error
 	alive := source.Alive == nil || source.Alive()
 	if alive && source.Snapshot == nil {
-		err = errors.New("运行态适配器没有提供快照能力")
+		err = errors.New("Runtime adapter does not support snapshots")
 	} else if alive {
 		snapshot, err = source.Snapshot(work)
 	}
 	if err != nil {
-		snapshot.Notice = "原生后台信息暂时不可用，保留最后一次进程核验"
+		snapshot.Notice = "Native background information unavailable. Keeping the last process verification."
 	}
 	if !snapshot.Known && err == nil {
 		for _, task := range snapshot.Tasks {
@@ -179,7 +179,7 @@ func (m *runtimeManager) refresh(ctx context.Context, key rt.SessionKey) rt.View
 	}
 	all, err := m.observer.processes(false)
 	if err != nil {
-		m.store.Unknown(key, source.Epoch, "无法核验系统进程："+err.Error())
+		m.store.Unknown(key, source.Epoch, "Unable to verify system processes: "+err.Error())
 		return m.store.Read(key)
 	}
 	if source.Caps.SessionTag {
@@ -187,7 +187,7 @@ func (m *runtimeManager) refresh(ctx context.Context, key rt.SessionKey) rt.View
 		// The marker was read asynchronously; join it only to the same identity.
 		all, err = m.observer.processes(true)
 		if err != nil {
-			m.store.Unknown(key, source.Epoch, "无法重新核验系统进程")
+			m.store.Unknown(key, source.Epoch, "Unable to reverify system processes")
 			return m.store.Read(key)
 		}
 	}
@@ -198,13 +198,13 @@ func (m *runtimeManager) refresh(ctx context.Context, key rt.SessionKey) rt.View
 		endpoints, err = rt.ProbeHTTP(work, endpoints)
 	}
 	if err != nil {
-		m.store.Unknown(key, source.Epoch, "进程已发现，但监听端口暂时无法核验")
+		m.store.Unknown(key, source.Epoch, "Process found, but listening ports cannot be verified yet")
 		return m.store.Read(key)
 	}
 	// Recheck identities after the asynchronous probe; do not attach a reused PID.
 	all, err = m.observer.processes(true)
 	if err != nil {
-		m.store.Unknown(key, source.Epoch, "无法重新核验系统进程")
+		m.store.Unknown(key, source.Epoch, "Unable to reverify system processes")
 		return m.store.Read(key)
 	}
 	m.store.Observe(key, source.Epoch, all, nil, endpoints)
@@ -292,16 +292,16 @@ func (m *runtimeManager) token(key rt.SessionKey, endpoint rt.Endpoint) string {
 func (m *runtimeManager) validateToken(ctx context.Context, token, host string, port int) error {
 	raw, err := base64.RawURLEncoding.DecodeString(token)
 	if err != nil || len(raw) <= sha256.Size {
-		return errors.New("无效的服务访问标识")
+		return errors.New("Invalid service access token")
 	}
 	mac := hmac.New(sha256.New, m.secret[:])
 	mac.Write(raw[sha256.Size:])
 	if !hmac.Equal(raw[:sha256.Size], mac.Sum(nil)) {
-		return errors.New("服务访问标识已失效，请刷新列表")
+		return errors.New("Service access token is no longer valid. Refresh the list.")
 	}
 	var claim runtimeEndpointToken
 	if json.Unmarshal(raw[sha256.Size:], &claim) != nil || claim.Expires < time.Now().Unix() || claim.Endpoint.Host != host || claim.Endpoint.Port != port {
-		return errors.New("服务访问标识已过期或目标不匹配")
+		return errors.New("Service access token expired or target mismatch")
 	}
 	all, err := m.observer.processes(true)
 	if err != nil {
@@ -315,7 +315,7 @@ func (m *runtimeManager) validateToken(ctx context.Context, token, host string, 
 		}
 	}
 	if !present {
-		return errors.New("原服务进程已结束，请刷新列表")
+		return errors.New("Original service process ended. Refresh the list.")
 	}
 	endpoints, err := runtimeListeners(ctx, []rt.Process{{Identity: claim.Endpoint.Process, Status: "running"}})
 	if err != nil {
@@ -326,7 +326,7 @@ func (m *runtimeManager) validateToken(ctx context.Context, token, host string, 
 			return nil
 		}
 	}
-	return fmt.Errorf("原进程已不再监听端口 %d，请刷新列表", port)
+	return fmt.Errorf("Original process is no longer listening on port %d. Refresh the list.", port)
 }
 
 func (c *chatController) runtimeBusy() bool {

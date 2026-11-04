@@ -28,7 +28,7 @@ func (m *mobileApp) submitApproval(a codex.Approval, result any, allow, remember
 		return
 	}
 	if m.conn == nil {
-		m.view.formErrors[id] = "未连接桌面端"
+		m.view.formErrors[id] = tr("Not connected to desktop")
 		return
 	}
 	raw, err := json.Marshal(result)
@@ -45,7 +45,7 @@ func (m *mobileApp) submitApproval(a codex.Approval, result any, allow, remember
 	r := remote.Request{ApprovalVersion: approvalFingerprint(a), Op: "respond", Approval: a.ID, Result: raw, Allow: allow, Remember: remember}
 	go func() {
 		if err := conn.Send(r); err != nil {
-			m.onMain(gen, func() { delete(m.approvalPending, id); m.view.formErrors[id] = "提交失败：" + err.Error() })
+			m.onMain(gen, func() { delete(m.approvalPending, id); m.view.formErrors[id] = tr("Failed to submit: ") + err.Error() })
 		}
 	}()
 }
@@ -78,9 +78,9 @@ func (m *mobileApp) approvalCard(c *ui.Context, a codex.Approval) {
 	ui.Column(c).Margin(0, 12, 8, 12).Padding(14).Gap(10).Background(p.surface).Border(1, p.warn).Radius(18).Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			icon(c, "shield-exclamation", 16, p.warn)
-			label := requestAgent(a) + " 请求确认"
+			label := requestAgent(a) + tr(" requests confirmation")
 			if a.Method == "miya/desktopControl" && m.state.DesktopWindows {
-				label = "等你处理"
+				label = tr("Needs your attention")
 			}
 			ui.Text(c, label).FontSize(m.font(14)).FontWeight(600)
 		})
@@ -92,10 +92,10 @@ func (m *mobileApp) approvalCard(c *ui.Context, a codex.Approval) {
 			}
 			ui.Text(c, m.view.c.approvalDetail(a)).FontSize(m.font(13)).LineHeight(1.45)
 			ui.Row(c).Gap(8).Children(func() {
-				if m.pill(c, "done", "已完成，继续", true).Disabled(m.approvalPending[id]).Clicked() {
+				if m.pill(c, "done", tr("Done, continue"), true).Disabled(m.approvalPending[id]).Clicked() {
 					m.submitApproval(a, nil, true, false)
 				}
-				if m.pill(c, "cancel", "取消接管", false).Disabled(m.approvalPending[id]).Clicked() {
+				if m.pill(c, "cancel", tr("Cancel takeover"), false).Disabled(m.approvalPending[id]).Clicked() {
 					m.submitApproval(a, nil, false, false)
 				}
 			})
@@ -109,7 +109,7 @@ func (m *mobileApp) approvalCard(c *ui.Context, a codex.Approval) {
 			}
 			fallthrough
 		case "item/tool/requestUserInput":
-			label := "填写回答"
+			label := tr("Enter your answer")
 			summary := a.Message
 			if len(a.Questions) > 0 {
 				summary = a.Questions[0].Question
@@ -118,7 +118,7 @@ func (m *mobileApp) approvalCard(c *ui.Context, a codex.Approval) {
 				ui.Text(c, summary).FontSize(m.font(15)).LineHeight(1.4).MaxLines(3)
 			}
 			if a.Method == "mcpServer/elicitation/request" {
-				label = "查看并确认"
+				label = tr("Review and confirm")
 			}
 			if m.pill(c, "open", label, true).Clicked() {
 				m.approvalID = a.ID
@@ -127,10 +127,10 @@ func (m *mobileApp) approvalCard(c *ui.Context, a codex.Approval) {
 		default:
 			ui.Scroll(c).MaxHeight(140).Children(func() { ui.Text(c, m.view.c.approvalDetail(a)).FontSize(m.font(13)).LineHeight(1.45).Selectable() })
 			ui.Row(c).Gap(8).Children(func() {
-				if m.approvalButton(c, "allow", "允许一次", true, m.approvalPending[id]).Clicked() {
+				if m.approvalButton(c, "allow", tr("Allow once"), true, m.approvalPending[id]).Clicked() {
 					m.submitApproval(a, nil, true, false)
 				}
-				if m.approvalButton(c, "deny", "拒绝", false, m.approvalPending[id]).Clicked() {
+				if m.approvalButton(c, "deny", tr("Deny"), false, m.approvalPending[id]).Clicked() {
 					m.submitApproval(a, nil, false, false)
 				}
 			})
@@ -158,7 +158,7 @@ func (m *mobileApp) approvalPage(c *ui.Context) {
 	p := m.pal
 	ui.Row(c).FillWidth().MinHeight(64).Padding(0, 12).Gap(8).AlignItems(ui.Center).Children(func() {
 		m.navigationBack(c, "/approval")
-		ui.Text(c, "确认请求").Grow(1).TextAlign(ui.Center).FontSize(m.font(16)).FontWeight(600)
+		ui.Text(c, tr("Confirm request")).Grow(1).TextAlign(ui.Center).FontSize(m.font(16)).FontWeight(600)
 		ui.Box(c).Size(44, 44)
 	})
 	var approval *codex.Approval
@@ -170,7 +170,7 @@ func (m *mobileApp) approvalPage(c *ui.Context) {
 		}
 	}
 	if approval == nil {
-		ui.Text(c, "请求已处理或已过期").Margin(ui.Auto).TextColor(p.muted)
+		ui.Text(c, tr("Request already handled or expired")).Margin(ui.Auto).TextColor(p.muted)
 		return
 	}
 	a := *approval
@@ -190,7 +190,7 @@ func (m *mobileApp) approvalPage(c *ui.Context) {
 			ui.Text(c, message).TextColor(danger).FontSize(m.font(13)).MaxLines(2)
 		}
 		if m.approvalPending[string(a.ID)] {
-			ui.Text(c, "正在提交…").TextColor(p.muted).FontSize(m.font(13))
+			ui.Text(c, tr("Submitting…")).TextColor(p.muted).FontSize(m.font(13))
 		}
 		if a.Method == "item/tool/requestUserInput" {
 			m.questionActions(c, a)
@@ -226,7 +226,7 @@ func (m *mobileApp) questionFields(c *ui.Context, a codex.Approval) {
 				}
 			}
 			value := fields[q.ID]
-			input := ui.TextInput(c.Key("answer"), &value).FillWidth().MinHeight(44).FontSize(m.font(16)).Placeholder("也可以输入自己的回答").Label(firstNonEmpty(q.Header, q.Question))
+			input := ui.TextInput(c.Key("answer"), &value).FillWidth().MinHeight(44).FontSize(m.font(16)).Placeholder(tr("You can also enter your own answer")).Label(firstNonEmpty(q.Header, q.Question))
 			if q.IsSecret {
 				input.Password()
 			}
@@ -246,14 +246,14 @@ func (m *mobileApp) questionActions(c *ui.Context, a codex.Approval) {
 	}
 	pending := m.approvalPending[string(a.ID)]
 	ui.Row(c).FillWidth().Wrap().Gap(10).Children(func() {
-		if m.pill(c, "submit", "提交回答", true).Disabled(!complete || pending).Clicked() {
+		if m.pill(c, "submit", tr("Submit answer"), true).Disabled(!complete || pending).Clicked() {
 			answers := map[string]any{}
 			for _, q := range a.Questions {
 				answers[q.ID] = map[string]any{"answers": []string{fields[q.ID]}}
 			}
 			m.submitApproval(a, map[string]any{"answers": answers}, false, false)
 		}
-		if m.pill(c, "skip", "跳过问题", false).Disabled(pending).Clicked() {
+		if m.pill(c, "skip", tr("Skip question"), false).Disabled(pending).Clicked() {
 			m.submitApproval(a, map[string]any{"answers": map[string]any{}}, false, false)
 		}
 	})
@@ -263,7 +263,7 @@ func (m *mobileApp) elicitationFields(c *ui.Context, a codex.Approval) {
 	fields := m.fieldsFor(a)
 	ui.Text(c, a.Message).FontSize(m.font(15)).LineHeight(1.45).Selectable()
 	if a.Mode == "url" {
-		ui.Text(c, "先在浏览器完成操作，再回到这里确认。").FontSize(m.font(13)).TextColor(p.muted)
+		ui.Text(c, tr("Complete the action in your browser, then return here to confirm.")).FontSize(m.font(13)).TextColor(p.muted)
 		ui.Link(c, a.URL, a.URL).FontSize(m.font(14))
 	} else {
 		var schema phoneFormSchema
@@ -278,7 +278,7 @@ func (m *mobileApp) elicitationFields(c *ui.Context, a codex.Approval) {
 			ui.Column(c.Key(key)).FillWidth().Gap(8).Children(func() {
 				label := firstNonEmpty(field.Title, key)
 				if slices.Contains(schema.Required, key) {
-					label += " · 必填"
+					label += tr(" · Required")
 				}
 				ui.Text(c, label).FontWeight(500)
 				if field.Description != "" {
@@ -295,7 +295,7 @@ func (m *mobileApp) elicitationFields(c *ui.Context, a codex.Approval) {
 					}
 				case field.Type == "boolean":
 					ui.Row(c).Gap(10).Children(func() {
-						for _, option := range []struct{ value, label string }{{"true", "是"}, {"false", "否"}} {
+						for _, option := range []struct{ value, label string }{{"true", tr("Yes")}, {"false", tr("No")}} {
 							if m.pill(c, option.value, option.label, fields[key] == option.value).Clicked() {
 								fields[key] = option.value
 							}
@@ -315,9 +315,9 @@ func (m *mobileApp) elicitationActions(c *ui.Context, a codex.Approval) {
 	id := string(a.ID)
 	fields := m.fieldsFor(a)
 	pending := m.approvalPending[id]
-	label := "确认"
+	label := tr("Confirm")
 	if rememberableMCPAccess(a) {
-		label = "允许一次"
+		label = tr("Allow once")
 	}
 	ui.Row(c).FillWidth().Gap(10).Children(func() {
 		if m.approvalButton(c, "confirm", label, true, pending).Grow(1).Clicked() {
@@ -332,15 +332,15 @@ func (m *mobileApp) elicitationActions(c *ui.Context, a codex.Approval) {
 			}
 			m.submitApproval(a, result, false, false)
 		}
-		if m.approvalButton(c, "decline", "拒绝", false, pending).Grow(1).Clicked() {
+		if m.approvalButton(c, "decline", tr("Deny"), false, pending).Grow(1).Clicked() {
 			m.submitApproval(a, map[string]any{"action": "decline"}, false, false)
 		}
 	})
 	ui.Row(c).FillWidth().Wrap().Gap(10).Children(func() {
-		if rememberableMCPAccess(a) && m.approvalButton(c, "remember", "此对话始终允许", false, pending).Clicked() {
+		if rememberableMCPAccess(a) && m.approvalButton(c, "remember", tr("Always allow in this conversation"), false, pending).Clicked() {
 			m.submitApproval(a, nil, false, true)
 		}
-		if m.approvalButton(c, "cancel", "取消请求", false, pending).Clicked() {
+		if m.approvalButton(c, "cancel", tr("Cancel request"), false, pending).Clicked() {
 			m.submitApproval(a, map[string]any{"action": "cancel"}, false, false)
 		}
 	})

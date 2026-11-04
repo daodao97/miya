@@ -42,7 +42,7 @@ func (c *chatController) threadCommand(threadID int, agent, command, policy stri
 	}
 	if command == "fast" || command == "fast on" || command == "fast off" {
 		if b.ID() != agentCodex {
-			return 0, "/fast 仅支持 Codex。"
+			return 0, tr("/fast is only supported by Codex.")
 		}
 		tier := loadSetting("codexServiceTier")
 		enabled := command == "fast on" || (command == "fast" && tier != "fast")
@@ -56,29 +56,29 @@ func (c *chatController) threadCommand(threadID int, agent, command, policy stri
 		return t.ID, ""
 	}
 	if !b.Caps().ThreadCommands {
-		return 0, b.Name() + " 不支持此命令。"
+		return 0, b.Name() + tr(" does not support this command.")
 	}
 	if !c.ready() || c.client == nil {
-		return 0, "Connect to Codex before running /" + command + "."
+		return 0, tr("Connect to Codex before running /") + command + "."
 	}
 	if t.Busy || t.Loading {
-		return 0, "Wait for the current operation to finish before running /" + command + "."
+		return 0, tr("Wait for the current operation to finish before running /") + command + "."
 	}
 	if t.ReadOnly {
-		return 0, "This conversation is read-only."
+		return 0, tr("This conversation is read-only.")
 	}
 	if command == "compact" && t.ServerID == "" {
-		return 0, "Start a conversation before using /compact."
+		return 0, tr("Start a conversation before using /compact.")
 	}
 	if command != "compact" && command != "review" {
-		return 0, "Unsupported thread command."
+		return 0, tr("Unsupported thread command.")
 	}
 	if t.ID == 0 {
-		t = Thread{PermissionPolicy: policy, ID: c.nextID(), Title: "Code review", Project: filepath.Base(c.cwd), Age: "now", Loaded: true, HistoryLoaded: true}
+		t = Thread{PermissionPolicy: policy, ID: c.nextID(), Title: tr("Code review"), Project: filepath.Base(c.cwd), Age: "now", Loaded: true, HistoryLoaded: true}
 		c.setThreads(append([]Thread{t}, c.threads()...))
 	}
 	client, id, cwd, model := c.client, t.ID, c.cwd, c.model()
-	c.update(id, func(t *Thread) { t.Busy = true; t.Status = "Starting /" + command + "…"; t.Draft = "" })
+	c.update(id, func(t *Thread) { t.Busy = true; t.Status = tr("Starting /") + command + "…"; t.Draft = "" })
 	go func() {
 		ctx, cancel := context.WithTimeout(c.ctx, 45*time.Second)
 		defer cancel()
@@ -99,7 +99,7 @@ func (c *chatController) threadCommand(threadID int, agent, command, policy stri
 			if err == nil {
 				serverID = result.Thread.ID
 				if serverID == "" {
-					err = fmt.Errorf("Codex returned an empty thread ID")
+					err = fmt.Errorf("%s", tr("Codex returned an empty thread ID"))
 				} else {
 					sid := serverID
 					c.dispatch(func() {

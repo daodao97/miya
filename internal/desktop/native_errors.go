@@ -13,33 +13,33 @@ func permissionError(code int) error {
 	case 0:
 		return nil
 	case 1:
-		return errors.New("请在 Mac 的「系统设置 → 隐私与安全性 → 屏幕录制」中允许 Miya，然后重试；系统可能要求重开应用")
+		return errors.New("Allow Miya in System Settings → Privacy & Security → Screen Recording on your Mac, then retry. macOS may require reopening the app.")
 	case 2:
-		return errors.New("请在 Mac 的「系统设置 → 隐私与安全性 → 辅助功能」中允许 Miya，然后重试")
+		return errors.New("Allow Miya in System Settings → Privacy & Security → Accessibility on your Mac, then retry.")
 	case 3:
-		return errors.New("远程桌面需要 macOS 14 或更新版本")
+		return errors.New("Remote desktop requires macOS 14 or later")
 	case 4:
 		return ErrWindowUnavailable
 	case 5:
-		return errors.New("系统暂时无法获取可共享窗口；Mac 可能正在唤醒，请稍候重试。若持续失败，请确认 Mac 已登录")
+		return errors.New("Unable to list shareable windows. Your Mac may be waking up; try again shortly. If this continues, check that your Mac is signed in.")
 	case 6:
-		return errors.New("目标窗口不在系统可共享列表中；请在 Mac 上完成此步骤")
+		return errors.New("The target window is not shareable. Complete this step on your Mac.")
 	case 7:
-		return errors.New("系统未能生成目标画面；可重试，若持续失败请在 Mac 上完成此步骤")
+		return errors.New("Unable to capture the target screen. Retry, or complete this step on your Mac if it continues.")
 	case 8:
-		return errors.New("获取画面超时；Mac 可能正在唤醒，请稍候重试。若持续失败，请确认 Mac 在线并已登录")
+		return errors.New("Screen capture timed out. Your Mac may be waking up; try again shortly. If this continues, check that your Mac is online and signed in.")
 	case 9:
-		return errors.New("画面编码失败，请重试")
+		return errors.New("Failed to encode the screen image. Try again.")
 	case 10:
-		return errors.New("画面超过大小限制，请重试")
+		return errors.New("The screen image exceeds the size limit. Try again.")
 	case 11:
-		return errors.New("无法分配画面内存，请稍后重试")
+		return errors.New("Unable to allocate screen image memory. Try again later.")
 	case 13:
-		return errors.New("Mac 屏幕暂不可用，可能处于休眠；正在唤醒，请稍后重试")
+		return errors.New("The Mac screen is unavailable, possibly asleep. Waking it up; try again shortly.")
 	case 12:
-		return errors.New("无法唤醒 Mac 显示器，请在 Mac 上唤醒后重试")
+		return errors.New("Unable to wake the Mac display. Wake it on your Mac and retry.")
 	default:
-		return fmt.Errorf("远程操作失败（错误码 %d），请重试", code)
+		return fmt.Errorf("Remote action failed (error %d). Try again.", code)
 	}
 }
 
@@ -48,5 +48,5 @@ func captureError(code int, diagnostic string) error {
 	if err == nil || diagnostic == "" {
 		return err
 	}
-	return fmt.Errorf("%w（%s）", err, diagnostic)
+	return fmt.Errorf("%w (%s)", err, diagnostic)
 }

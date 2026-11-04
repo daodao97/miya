@@ -53,8 +53,8 @@ func (claudeBackend) Respond(c *chatController, a codex.Approval, result any) {
 func (claudeBackend) Settings() []agentSetting {
 	return []agentSetting{{
 		ID:          "claude-command",
-		Title:       "Claude Code 启动命令",
-		Help:        "留空使用 claude。可以带参数和环境变量，例如 claude --settings ~/settings.json。新的对话轮次生效。",
+		Title:       tr("Claude Code launch command"),
+		Help:        tr("Leave blank to use claude. Arguments and environment variables are supported, for example: claude --settings ~/settings.json. Changes apply to new turns."),
 		Placeholder: "claude",
 		Value:       func(c *chatController) string { return c.claudeCommand },
 		Save:        func(c *chatController, v string) { c.setClaudeCommand(v) },
@@ -91,7 +91,7 @@ func (claudeBackend) Rewind(c *chatController, t Thread, m Message, text string)
 		var err error
 		if prompt > 0 {
 			if path := findClaudeSession(cwd, old); path == "" {
-				err = errors.New("找不到 Claude Code 的对话记录")
+				err = errors.New(tr("Claude Code conversation history not found"))
 			} else {
 				forked, err = forkClaudeSessionBefore(path, prompt)
 			}

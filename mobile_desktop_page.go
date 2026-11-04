@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"time"
 
 	"github.com/egoist/mygo/ui"
@@ -60,6 +62,13 @@ type mobileDesktopPage struct {
 	text     string
 	modifier string
 	moreKeys bool
+	// keyboard shows the text field and keys; otherwise the screen gets the room.
+	keyboard bool
+	// focusText raises the system keyboard once; more opens the options panel.
+	focusText, more bool
+	// overlays are the floating controls over the screen, in viewport DIPs;
+	// touches there never reach the Mac.
+	overlays []ui.Rect
 	// secret hides typed text; authorization windows start with it on.
 	secret bool
 	// pickable leases came from the menu and may choose any window.
@@ -77,6 +86,8 @@ type mobileDesktopPage struct {
 	actionsFresh, actionsBusy, actionPending bool
 	actionsUnsupported                       bool
 	actionStatus                             string
+
+	unlock desktopUnlockState
 }
 
 func (m *mobileApp) desktopPrefsFile() string {
@@ -92,6 +103,7 @@ func (m *mobileApp) openDesktopPage(conn *remote.Conn, token string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	p := &mobileDesktopPage{client: newDesktopClient(conn.DialFiles, token), conn: conn, ctx: ctx, cancel: cancel, gen: m.generation,
 		zoom: 1, cursor: desktopPoint{.5, .5}, trackpad: readDesktopPrefs(m.desktopPrefsFile()).PointerMode != "touch"}
+	p.unlock.key = desktopUnlockKey(m.currentDesktopID())
 	m.desktopPage = p
 	m.router().Push("/desktop")
 	m.desktopInitialize(p)
@@ -111,7 +123,7 @@ func (m *mobileApp) closeDesktopPage(back bool) {
 		go p.client.stop()
 	}
 	p.cancel()
-	p.image, p.queue, p.text = nil, nil, ""
+	p.image, p.queue, p.text, p.unlock.text = nil, nil, "", ""
 	if back && m.router().Path() == "/desktop" {
 		m.router().Back()
 	}
@@ -171,8 +183,8 @@ func (m *mobileApp) desktopFinish(p *mobileDesktopPage, message string) {
 	if p.phase == "ended" {
 		return
 	}
-	p.active, p.image, p.queue, p.text = false, nil, nil, ""
-	m.desktopStage(p, "ended", "控制已结束", message, false)
+	p.active, p.image, p.queue, p.text, p.unlock.text = false, nil, nil, "", ""
+	m.desktopStage(p, "ended", tr("Control session ended"), message, false)
 	p.cancel()
 	go p.client.stop()
 	m.desktopRelease(p)
@@ -180,11 +192,11 @@ func (m *mobileApp) desktopFinish(p *mobileDesktopPage, message string) {
 }
 
 func (m *mobileApp) desktopInitialize(p *mobileDesktopPage) {
-	m.desktopStage(p, "connecting", "正在连接 Mac", "Mac 休眠时会先唤醒屏幕。", true)
+	m.desktopStage(p, "connecting", tr("Connecting to Mac"), tr("If your Mac is asleep, its screen will wake first."), true)
 	m.desktopDo(p, func(ctx context.Context) func() {
 		s, err := p.client.session(ctx)
 		if err != nil {
-			return func() { m.desktopFail(p, "连接未完成", err) }
+			return func() { m.desktopFail(p, tr("Connection incomplete"), err) }
 		}
 		if s.Pick && s.WindowOnly && s.Window != nil && s.Window.ID == 0 {
 			return func() { p.pickable, p.windowOnly = true, true; m.desktopChoose(p) }
@@ -195,9 +207,10 @@ func (m *mobileApp) desktopInitialize(p *mobileDesktopPage) {
 		want := *s.Window
 		windows, err := p.client.windows(ctx)
 		return func() {
-			p.windowOnly, p.secret = true, true
+			p.windowOnly, p.secret, p.pickable = true, true, s.Pick
+			p.keyboard = true // authorization windows usually need a password
 			if err != nil {
-				m.desktopFail(p, "连接未完成", err)
+				m.desktopFail(p, tr("Connection incomplete"), err)
 				return
 			}
 			p.windows = windows
@@ -207,7 +220,7 @@ func (m *mobileApp) desktopInitialize(p *mobileDesktopPage) {
 					return
 				}
 			}
-			m.desktopFinish(p, "目标授权窗口已关闭。可以返回会话查看结果。")
+			m.desktopFinish(p, tr("The permission window closed. Return to the conversation to view the result."))
 		}
 	})
 }
@@ -215,12 +228,12 @@ func (m *mobileApp) desktopInitialize(p *mobileDesktopPage) {
 func (m *mobileApp) desktopChoose(p *mobileDesktopPage) {
 	// Switching revokes input: the next window needs its own frame first.
 	p.active, p.image, p.queue, p.actionsFresh = false, nil, nil, false
-	m.desktopStage(p, "picker", "选择操作窗口", "", true)
+	m.desktopStage(p, "picker", tr("Select a window to control"), "", true)
 	m.desktopDo(p, func(ctx context.Context) func() {
 		windows, err := p.client.windows(ctx)
 		return func() {
 			if err != nil {
-				m.desktopFail(p, "暂时无法获取窗口", err)
+				m.desktopFail(p, tr("Unable to load windows"), err)
 				return
 			}
 			p.windows, p.busy, p.thumbs = windows, false, nil
@@ -230,12 +243,12 @@ func (m *mobileApp) desktopChoose(p *mobileDesktopPage) {
 }
 
 func (m *mobileApp) desktopSelect(p *mobileDesktopPage, w desktop.Window) {
-	m.desktopStage(p, "connecting", "正在打开窗口", "正在确认连接和系统权限。", true)
+	m.desktopStage(p, "connecting", tr("Opening window"), tr("Checking the connection and system permissions."), true)
 	m.desktopDo(p, func(ctx context.Context) func() {
 		err := p.client.selectWindow(ctx, w)
 		return func() {
 			if err != nil {
-				m.desktopFail(p, "暂时无法打开窗口", err)
+				m.desktopFail(p, tr("Unable to open window"), err)
 				return
 			}
 			p.window, p.windowOnly, p.zoom, p.panX, p.panY = w, true, 1, 0, 0
@@ -248,19 +261,20 @@ func (m *mobileApp) desktopStart(p *mobileDesktopPage) {
 	if p.active {
 		return
 	}
-	title := "正在连接 Mac"
+	title := tr("Connecting to Mac")
 	if p.windowOnly {
-		title = "正在打开窗口"
+		title = tr("Opening window")
 	}
-	m.desktopStage(p, "connecting", title, "Mac 休眠时会先唤醒屏幕。", true)
+	m.desktopStage(p, "connecting", title, tr("If your Mac is asleep, its screen will wake first."), true)
 	m.desktopDo(p, func(ctx context.Context) func() {
 		err := p.client.start(ctx)
 		return func() {
 			if err != nil {
-				m.desktopFail(p, "暂时无法操作", err)
+				m.desktopFail(p, tr("Controls unavailable"), err)
 				return
 			}
-			p.active, p.status = true, "正在获取画面…"
+			p.active, p.status = true, tr("Loading screen…")
+			m.desktopCheckSavedUnlock(p)
 			m.desktopStage(p, "live", "", "", false)
 			m.desktopPoll(p)
 			m.desktopRefreshActions(p)
@@ -281,9 +295,9 @@ func (m *mobileApp) desktopRetry(p *mobileDesktopPage) {
 
 func (p *mobileDesktopPage) connectedStatus() string {
 	if p.windowOnly {
-		return "已连接 · " + firstNonEmpty(p.window.Title, p.window.App, "授权窗口")
+		return tr("Connected · ") + firstNonEmpty(p.window.Title, p.window.App, tr("Permission window"))
 	}
-	return "已连接 · 完整桌面"
+	return tr("Connected · Full desktop")
 }
 
 // desktopPoll fetches frames one at a time; a slow frame never blocks input.
@@ -293,21 +307,24 @@ func (m *mobileApp) desktopPoll(p *mobileDesktopPage) {
 	}
 	p.polling = true
 	m.desktopDo(p, func(ctx context.Context) func() {
-		data, err := p.client.frame(ctx)
+		data, locked, err := p.client.frame(ctx)
 		var image ui.ImageSource
 		if err == nil {
 			if image, _ = ui.DecodeImage(data); image == nil {
-				err = fmt.Errorf("无法解码画面，正在重试")
+				err = fmt.Errorf("%s", tr("Unable to decode the screen. Retrying."))
 			}
 		}
-		return func() { m.receiveDesktopFrame(p, data, image, err) }
+		return func() { m.receiveDesktopFrame(p, data, image, locked, err) }
 	})
 }
 
-func (m *mobileApp) receiveDesktopFrame(p *mobileDesktopPage, data []byte, image ui.ImageSource, err error) {
+func (m *mobileApp) receiveDesktopFrame(p *mobileDesktopPage, data []byte, image ui.ImageSource, locked bool, err error) {
 	p.polling = false
 	if !p.active {
 		return
+	}
+	if locked {
+		m.desktopLockChanged(p, true)
 	}
 	delay := 300 * time.Millisecond
 	switch status := desktopStatus(err); {
@@ -317,15 +334,19 @@ func (m *mobileApp) receiveDesktopFrame(p *mobileDesktopPage, data []byte, image
 			p.image, p.imageHash = image, hash
 		}
 		p.status = p.connectedStatus()
+		m.desktopLockChanged(p, locked)
 	case status == 410:
 		m.desktopFinish(p, err.Error())
 		return
 	case status == 403:
-		m.desktopFail(p, "需要 Mac 授权", err)
+		m.desktopFail(p, tr("Permission required on Mac"), err)
 		return
+	case status == 423:
+		delay = 750 * time.Millisecond
+		p.status = tr("Mac is locked")
 	case status == 429:
 		delay = 350 * time.Millisecond
-		p.status = "正在等待 Mac 响应…"
+		p.status = tr("Waiting for Mac…")
 	default:
 		delay = 1500 * time.Millisecond
 		p.status = err.Error()
@@ -364,7 +385,7 @@ func (m *mobileApp) desktopPressAction(p *mobileDesktopPage, a desktop.Action) {
 	if p.actionPending || !p.actionsFresh || !a.Enabled || !p.active {
 		return
 	}
-	p.actionPending, p.actionStatus = true, "正在确认授权结果…"
+	p.actionPending, p.actionStatus = true, tr("Checking permission result…")
 	w := p.actions.Window
 	m.desktopDo(p, func(ctx context.Context) func() {
 		err := p.client.pressAction(ctx, a.ID, w)
@@ -375,9 +396,9 @@ func (m *mobileApp) desktopPressAction(p *mobileDesktopPage, a desktop.Action) {
 				return
 			}
 			if err != nil {
-				p.actionStatus = "尚未确认授权结果，请查看窗口状态后重试。" + err.Error()
+				p.actionStatus = tr("Permission result unconfirmed. Check the window state and retry.") + err.Error()
 			} else {
-				p.actionStatus = "请查看窗口提示；授权尚未完成时可在这里重试。"
+				p.actionStatus = tr("Check the window instructions. If permission is still pending, retry here.")
 			}
 			m.desktopRefreshActions(p)
 		}
@@ -387,7 +408,7 @@ func (m *mobileApp) desktopPressAction(p *mobileDesktopPage, a desktop.Action) {
 // desktopSend keeps input in order. Consecutive moves keep the latest;
 // consecutive scrolls add up, so a fast swipe cannot flood the Mac.
 func (m *mobileApp) desktopSend(p *mobileDesktopPage, in desktop.Input) {
-	if !p.active || p.image == nil {
+	if !p.active || p.image == nil || p.unlock.locked || p.unlock.busy {
 		return
 	}
 	if n := len(p.queue); n > 0 {
@@ -403,7 +424,7 @@ func (m *mobileApp) desktopSend(p *mobileDesktopPage, in desktop.Input) {
 			return
 		}
 		if n >= 64 {
-			p.status = "操作过多，请稍候"
+			p.status = tr("Too many actions. Please wait.")
 			return
 		}
 	}
@@ -413,7 +434,7 @@ func (m *mobileApp) desktopSend(p *mobileDesktopPage, in desktop.Input) {
 }
 
 func (m *mobileApp) desktopPump(p *mobileDesktopPage) {
-	if p.sending || len(p.queue) == 0 || !p.active {
+	if p.sending || len(p.queue) == 0 || !p.active || p.unlock.locked || p.unlock.busy {
 		return
 	}
 	in := p.queue[0]
@@ -428,9 +449,9 @@ func (m *mobileApp) desktopPump(p *mobileDesktopPage) {
 				m.desktopFinish(p, err.Error())
 				return
 			case err != nil && in.Kind != "move" && in.Kind != "scroll":
-				p.status = "尚未确认送达，请先查看画面再重试。" + err.Error()
+				p.status = tr("Delivery unconfirmed. Check the screen before retrying.") + err.Error()
 			case err == nil && in.Kind == "text":
-				p.status = "已发送到窗口，请在画面中确认。"
+				p.status = tr("Sent to the window. Check the screen to confirm.")
 			}
 			if in.Kind != "move" && in.Kind != "scroll" {
 				p.actionsFresh = false
@@ -453,7 +474,7 @@ func (p *mobileDesktopPage) imageRect() (ui.Rect, bool) {
 		return ui.Rect{}, false
 	}
 	iw, ih := ui.ImageSize(p.image)
-	vw, vh := p.view.W-16, p.view.H-16
+	vw, vh := p.view.W, p.view.H
 	if iw <= 0 || ih <= 0 || vw <= 0 || vh <= 0 {
 		return ui.Rect{}, false
 	}
@@ -505,7 +526,7 @@ func (m *mobileApp) desktopAtCursor(p *mobileDesktopPage, kind string) {
 }
 
 func (m *mobileApp) desktopPointerInput(p *mobileDesktopPage, ev ui.InputEvent) bool {
-	if !p.active || p.image == nil {
+	if !p.active || p.image == nil || p.unlock.locked || p.unlock.busy {
 		return false
 	}
 	g := &p.pointer
@@ -513,6 +534,11 @@ func (m *mobileApp) desktopPointerInput(p *mobileDesktopPage, ev ui.InputEvent) 
 	case ui.InputPointerDown:
 		if ev.Button != 0 {
 			return false
+		}
+		for _, o := range p.overlays {
+			if o.Contains(ev.X, ev.Y) {
+				return false
+			}
 		}
 		*g = desktopPointer{active: true, startX: ev.X, startY: ev.Y, lastX: ev.X, lastY: ev.Y, at: time.Now(), from: p.cursor, seq: g.seq + 1}
 		if p.trackpad {
@@ -633,7 +659,7 @@ func (m *mobileApp) desktopSendText(p *mobileDesktopPage) {
 		return
 	}
 	if len(text) > 4096 {
-		p.status = "每次最多发送 4096 字节文字"
+		p.status = tr("Send up to 4096 bytes of text at a time")
 		return
 	}
 	p.text = ""
@@ -650,30 +676,30 @@ func (m *mobileApp) desktopPageView(c *ui.Context) {
 	ui.Column(c).Fill().Children(func() {
 		ui.Row(c).FillWidth().MinHeight(56).Padding(0, 12).Gap(8).AlignItems(ui.Center).Children(func() {
 			m.navigationBack(c, "/desktop")
-			title := "远程桌面"
+			title := tr("Remote desktop")
 			if p.windowOnly {
-				title = firstNonEmpty(p.window.Title, p.window.App, "授权窗口")
+				title = firstNonEmpty(p.window.Title, p.window.App, tr("Permission window"))
 			}
 			if p.phase == "picker" {
-				title = "选择窗口"
+				title = tr("Select window")
 			}
-			ui.Text(c, title).Grow(1).MinWidth(0).TextAlign(ui.Center).FontSize(m.font(15)).FontWeight(600).MaxLines(1)
-			if p.phase == "live" {
-				label := "触控板"
-				if !p.trackpad {
-					label = "触控"
+			ui.Column(c).Grow(1).MinWidth(0).AlignItems(ui.Center).Gap(2).Children(func() {
+				ui.Text(c, title).TextAlign(ui.Center).FontSize(m.font(16)).FontWeight(600).MaxLines(1)
+				if p.phase == "live" && p.status != "" {
+					ui.Text(c, p.status).TextAlign(ui.Center).FontSize(m.font(12)).TextColor(pal.muted).MaxLines(1)
 				}
-				if m.pill(c, "desktop-pointer", label, false).Label("切换操作方式，当前" + label).Clicked() {
-					p.trackpad, p.pointer = !p.trackpad, desktopPointer{}
-					mode := map[bool]string{true: "trackpad", false: "touch"}[p.trackpad]
-					path := m.desktopPrefsFile()
-					go func() { _ = writeDesktopPrefs(path, mode) }()
-				}
-			}
-			if (p.windowOnly || p.pickable) && (p.phase == "live" || p.phase == "error") {
-				if m.pill(c, "desktop-choose", "切换窗口", false).Clicked() {
+			})
+			if p.phase == "picker" && !p.busy {
+				if m.circle(c, "desktop-refresh-windows", tr("Refresh list"), func() { icon(c, "refresh", 20, pal.ink) }).Clicked() {
 					m.desktopChoose(p)
 				}
+			} else if (p.windowOnly || p.pickable) && (p.phase == "live" || p.phase == "error") {
+				if m.circle(c, "desktop-choose", tr("Switch window"), func() { icon(c, "stack-2", 20, pal.ink) }).Clicked() {
+					m.desktopChoose(p)
+				}
+			} else {
+				// Balance the back button so the title stays centered.
+				ui.Box(c).Size(44, 44).Shrink(0)
 			}
 		})
 		switch p.phase {
@@ -698,12 +724,12 @@ func (m *mobileApp) desktopStateView(c *ui.Context, p *mobileDesktopPage) {
 			ui.Text(c, p.detail).FontSize(m.font(15)).TextColor(pal.muted).TextAlign(ui.Center).LineHeight(1.5)
 		}
 		if p.phase == "error" {
-			if m.pill(c, "desktop-retry", "重新连接", true).Clicked() {
+			if m.pill(c, "desktop-retry", tr("Reconnect"), true).Clicked() {
 				m.desktopRetry(p)
 			}
 		}
 		if p.phase == "error" || p.phase == "ended" {
-			if m.pill(c, "desktop-return", "返回会话", p.phase == "ended").Clicked() {
+			if m.pill(c, "desktop-return", tr("Back to conversation"), p.phase == "ended").Clicked() {
 				m.router().Back()
 			}
 		}
@@ -714,34 +740,34 @@ func (m *mobileApp) desktopPickerView(c *ui.Context, p *mobileDesktopPage) {
 	pal := m.pal
 	ui.Scroll(c).FillWidth().Grow(1).MinHeight(0).Children(func() {
 		ui.Column(c).FillWidth().Padding(16).Gap(10).Children(func() {
-			ui.Text(c, "仅共享选中的窗口。系统要求 Touch ID 或本机确认时，请在 Mac 上完成。").FontSize(m.font(14)).TextColor(pal.muted).LineHeight(1.5)
-			if p.pickable && !p.busy {
-				if m.pill(c, "desktop-full", "完整桌面", false).FillWidth().Clicked() {
-					m.desktopSelectFull(p)
-				}
-			}
+			ui.Text(c, tr("Only the selected window is shared. Complete Touch ID or local confirmation on your Mac when required.")).FontSize(m.font(14)).TextColor(pal.muted).LineHeight(1.5)
 			if p.busy {
 				ui.Spinner(c).Margin(12)
 				return
 			}
 			if len(p.windows) == 0 {
-				ui.Text(c, "没有可共享的窗口。").FontSize(m.font(15)).TextColor(pal.muted)
+				ui.Text(c, tr("No shareable windows.")).FontSize(m.font(15)).TextColor(pal.muted)
 			}
 			m.desktopWindowGrid(c, p)
-			if m.pill(c, "desktop-refresh-windows", "刷新列表", false).Clicked() {
-				m.desktopChoose(p)
-			}
 		})
 	})
 }
 
-var desktopKeys = []struct{ key, label string }{{"enter", "回车"}, {"tab", "Tab"}, {"backspace", "退格"}, {"escape", "Esc"}}
-var desktopMoreKeys = []struct{ key, label string }{{"left", "←"}, {"right", "→"}, {"up", "↑"}, {"down", "↓"}, {"a", "A"}, {"c", "C"}, {"v", "V"}, {"z", "Z"}, {"l", "L"}}
-var desktopModifiers = []struct{ key, label string }{{"command", "⌘"}, {"control", "⌃"}, {"shift", "⇧"}, {"option", "⌥"}}
+// desktopKeyDef is a key cap: cap is drawn, label is read by VoiceOver.
+type desktopKeyDef struct{ key, cap, label string }
+
+var desktopKeys = []desktopKeyDef{{"escape", "esc", "Esc"}, {"tab", "⇥", "Tab"}, {"backspace", "⌫", tr("Backspace")}, {"enter", "⏎", tr("Return")}}
+var desktopArrowKeys = []desktopKeyDef{{"left", "←", "←"}, {"up", "↑", "↑"}, {"down", "↓", "↓"}, {"right", "→", "→"}}
+var desktopLetterKeys = []desktopKeyDef{{"a", "A", "A"}, {"c", "C", "C"}, {"v", "V", "V"}, {"z", "Z", "Z"}, {"l", "L", "L"}}
+var desktopModifiers = []desktopKeyDef{{"command", "⌘", "⌘"}, {"control", "⌃", "⌃"}, {"shift", "⇧", "⇧"}, {"option", "⌥", "⌥"}}
+
+var desktopKeySymbols = map[string]string{"escape": "escape", "tab": "arrow.right.to.line", "backspace": "delete.left", "enter": "return",
+	"left": "arrow.left", "up": "arrow.up", "down": "arrow.down", "right": "arrow.right",
+	"command": "command", "control": "control", "shift": "shift", "option": "option"}
 
 func (m *mobileApp) desktopLiveView(c *ui.Context, p *mobileDesktopPage) {
 	pal := m.pal
-	vp := ui.Column(c.Key("desktop-viewport")).FillWidth().Grow(1).MinHeight(0).Clip().Background(pal.surface).Label("Mac 实时画面，可轻点、滑动或双指缩放")
+	vp := ui.Column(c.Key("desktop-viewport")).FillWidth().Grow(1).MinHeight(0).Clip().Background(pal.bg).Label(tr("Live Mac screen. Tap, swipe, or pinch to zoom."))
 	if b := vp.Bounds(); b.W > 0 && b.H > 0 {
 		p.view = ui.Rect{W: b.W, H: b.H}
 	}
@@ -778,84 +804,31 @@ func (m *mobileApp) desktopLiveView(c *ui.Context, p *mobileDesktopPage) {
 			painter.StrokePath(new(ui.Path).Circle(x, y, radius), 2, pal.bg)
 		})
 	}
+	p.overlays = p.overlays[:0]
 	vp.Children(func() {
 		if haveImage {
 			ui.Image(c, p.image).Absolute().Left(r.X).Top(r.Y).Width(r.W).Height(r.H).Fit(ui.FillBox)
-			return
+		} else {
+			ui.Column(c).Fill().Gap(10).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
+				if !p.unlock.locked {
+					ui.Spinner(c)
+				}
+				ui.Text(c, p.status).FontSize(m.font(14)).TextColor(pal.muted).TextAlign(ui.Center).MaxLines(3)
+			})
 		}
-		ui.Column(c).Fill().Gap(10).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
-			ui.Spinner(c)
-			ui.Text(c, p.status).FontSize(m.font(14)).TextColor(pal.muted).TextAlign(ui.Center).MaxLines(3)
-		})
+		if !p.unlock.locked {
+			m.desktopControls(c, p)
+		}
 	})
-	ui.Column(c).FillWidth().Padding(8, 12, 10, 12).Gap(8).Children(func() {
-		ui.Text(c, p.status).FontSize(m.font(12)).TextColor(pal.muted).MaxLines(1)
-		ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
-			// A secure field forces iOS's ASCII keyboard without input methods,
-			// so hide the text only when the person chooses password entry.
-			mode, other := "文字", "密码"
-			if p.secret {
-				mode, other = other, mode
-			}
-			if m.pill(c, "desktop-secret", mode, false).Label("当前" + mode + "输入，切换为" + other + "输入").Clicked() {
-				p.secret = !p.secret
-			}
-			field := ui.TextInput(c.Key("desktop-text"), &p.text).Grow(1).MinWidth(0).MinHeight(46).Padding(12).Background(pal.surface).Radius(12).
-				InputOptions(ui.InputOptions{Correction: ui.CorrectionOff, Capitalization: ui.CapitalizeNone, Return: ui.ReturnGo})
-			if p.secret {
-				field.Password().Label("发送到 Mac 的密码").Placeholder("输入密码")
-			} else {
-				field.Label("发送到 Mac 的文字").Placeholder("输入要发送的文字")
-			}
-			if m.pill(c, "desktop-send", "发送", true).Disabled(p.text == "").Clicked() {
-				m.desktopSendText(p)
-			}
-		})
-		ui.Row(c).FillWidth().Wrap().Gap(6).Children(func() {
-			for _, k := range desktopKeys {
-				if m.pill(c, "desktop-key-"+k.key, k.label, false).Clicked() {
-					m.desktopKey(p, k.key)
-				}
-			}
-			label := "更多"
-			if p.moreKeys {
-				label = "收起"
-			}
-			if m.pill(c, "desktop-more", label, false).Clicked() {
-				p.moreKeys = !p.moreKeys
-			}
-		})
-		if p.moreKeys {
-			ui.Row(c).FillWidth().Wrap().Gap(6).Children(func() {
-				for _, k := range desktopModifiers {
-					if m.pill(c, "desktop-mod-"+k.key, k.label, p.modifier == k.key).Clicked() {
-						if p.modifier == k.key {
-							p.modifier = ""
-						} else {
-							p.modifier = k.key
-						}
-					}
-				}
-				for _, k := range desktopMoreKeys {
-					if m.pill(c, "desktop-key-"+k.key, k.label, false).Clicked() {
-						m.desktopKey(p, k.key)
-					}
-				}
-			})
-			ui.Row(c).FillWidth().Gap(6).AlignItems(ui.Center).Children(func() {
-				if m.pill(c, "desktop-zoom-out", "缩小", false).Disabled(p.zoom <= 1).Clicked() {
-					p.setZoom(p.zoom / 1.25)
-				}
-				ui.Text(c, fmt.Sprintf("%d%%", int(math.Round(float64(p.zoom*100))))).FontSize(m.font(13)).TextColor(pal.muted).MinWidth(48).TextAlign(ui.Center)
-				if m.pill(c, "desktop-zoom-in", "放大", false).Disabled(p.zoom >= 4).Clicked() {
-					p.setZoom(p.zoom * 1.25)
-				}
-			})
-			if !p.trackpad {
-				ui.Segmented(c.Key("desktop-touch-mode"), &p.touchMode, "点击·滚动", "拖动", "移动画面").FillWidth()
-			}
-		}
-		if p.windowOnly && !p.actionsUnsupported && len(p.actions.Actions) > 0 {
+	hasActions := p.windowOnly && !p.actionsUnsupported && len(p.actions.Actions) > 0
+	unlock := p.canUnlock() && (p.unlock.locked || p.unlock.status != "")
+	typing := !p.unlock.locked && p.keyboard
+	if !hasActions && !unlock && !typing && p.actionStatus == "" {
+		return // the screen keeps the whole page
+	}
+	ui.Column(c).FillWidth().Padding(8, 12, 8, 12).Gap(8).Children(func() {
+		m.desktopUnlockView(c, p)
+		if hasActions {
 			ui.Row(c).FillWidth().Wrap().Justify(ui.End).Gap(8).Children(func() {
 				for _, a := range p.actions.Actions {
 					primary := a.Default && !a.Cancel
@@ -868,7 +841,201 @@ func (m *mobileApp) desktopLiveView(c *ui.Context, p *mobileDesktopPage) {
 		if p.actionStatus != "" {
 			ui.Text(c, p.actionStatus).FontSize(m.font(12)).TextColor(pal.muted).MaxLines(2)
 		}
+		if typing {
+			m.desktopInputBar(c, p)
+		}
 	})
+}
+
+// desktopControls floats a small capsule over the bottom of the screen, as
+// remote desktop apps do; the options panel opens above it.
+func (m *mobileApp) desktopControls(c *ui.Context, p *mobileDesktopPage) {
+	if p.view.W == 0 {
+		return
+	}
+	pal := m.pal
+	hasMore := !p.trackpad || (p.canUnlock() && p.unlock.saved)
+	if !hasMore {
+		p.more = false
+	}
+	n := float32(2)
+	if hasMore {
+		n = 3
+	}
+	const size, gap, pad = 44, 4, 4
+	w, h := n*size+(n-1)*gap+2*pad, float32(size+2*pad)
+	x, y := (p.view.W-w)/2, p.view.H-h-16
+	p.overlays = append(p.overlays, ui.Rect{X: x, Y: y, W: w, H: h})
+	if p.more {
+		pw := min(p.view.W-24, 340)
+		m.desktopMorePanel(c, p, (p.view.W-pw)/2, p.view.H-y+10, pw)
+	}
+	ui.Row(c.Key("desktop-controls")).Absolute().Left(x).Top(y).Width(w).Height(h).Padding(pad).Gap(gap).AlignItems(ui.Center).
+		Radius(h/2).Background(pal.surface).Border(1, pal.line).Shadow(0, 6, 20, 0, ui.RGBA(0, 0, 0, 0.22)).Children(func() {
+		if m.desktopControl(c, "desktop-keyboard", "keyboard", tr("Keyboard"), p.keyboard).Clicked() {
+			p.keyboard, p.more, p.moreKeys = !p.keyboard, false, false
+			p.focusText = p.keyboard
+			if !p.keyboard {
+				c.Blur()
+			}
+		}
+		label, glyph := tr("Trackpad"), "pointer"
+		if !p.trackpad {
+			label, glyph = tr("Touch"), "hand-stop"
+		}
+		if m.desktopControl(c, "desktop-pointer", glyph, tr("Switch control mode, currently ")+label, false).Clicked() {
+			p.trackpad, p.pointer = !p.trackpad, desktopPointer{}
+			prefs := map[bool]string{true: "trackpad", false: "touch"}[p.trackpad]
+			path := m.desktopPrefsFile()
+			go func() { _ = writeDesktopPrefs(path, prefs) }()
+		}
+		if hasMore && m.desktopControl(c, "desktop-more-options", "dots", tr("More options"), p.more).Clicked() {
+			p.more = !p.more
+		}
+	})
+}
+
+// desktopControl is a round icon button in the floating capsule.
+func (m *mobileApp) desktopControl(c *ui.Context, key, glyph, label string, on bool) ui.Element {
+	fg := m.pal.ink
+	b := m.phoneButton(c.Key(key)).Size(44, 44).Padding(0).Radius(22).Justify(ui.Center).Label(label)
+	if on {
+		b.Background(m.pal.ink)
+		fg = m.pal.bg
+	}
+	b.Children(func() { icon(c, glyph, 22, fg) })
+	return b
+}
+
+// desktopMorePanel holds the occasional settings: how touches act in touch
+// mode and the saved login password.
+func (m *mobileApp) desktopMorePanel(c *ui.Context, p *mobileDesktopPage, left, bottom, width float32) {
+	pal := m.pal
+	panel := ui.Column(c.Key("desktop-more-panel")).Absolute().Left(left).Bottom(bottom).Width(width).Padding(12).Gap(12).
+		Radius(18).Background(pal.surface).Border(1, pal.line).Shadow(0, 6, 20, 0, ui.RGBA(0, 0, 0, 0.22))
+	if b := panel.Bounds(); b.H > 0 {
+		p.overlays = append(p.overlays, ui.Rect{X: left, Y: p.view.H - bottom - b.H, W: width, H: b.H})
+	}
+	panel.Children(func() {
+		if !p.trackpad {
+			ui.Segmented(c.Key("desktop-touch-mode"), &p.touchMode, tr("Click / Scroll"), tr("Drag"), tr("Move screen")).FillWidth()
+		}
+		if p.canUnlock() && p.unlock.saved {
+			ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
+				icon(c, "shield-check", 18, pal.ok)
+				ui.Text(c, tr("Password saved for this Mac")).Grow(1).MinWidth(0).FontSize(m.font(14)).MaxLines(1)
+				forget := m.phoneButton(c.Key("desktop-forget-saved")).PaddingX(8).Justify(ui.Center).Label(tr("Forget password")).Disabled(p.unlock.busy)
+				forget.Children(func() {
+					ui.Text(c, tr("Forget password")).FontSize(m.font(14)).FontWeight(500).TextColor(pal.warn)
+				})
+				if forget.Clicked() {
+					p.more = false
+					m.desktopForgetUnlock(p)
+				}
+			})
+		}
+	})
+}
+
+// desktopInputBar is a message-style capsule: the lock toggles password
+// entry and the round arrow sends. Keys ride above the system keyboard.
+func (m *mobileApp) desktopInputBar(c *ui.Context, p *mobileDesktopPage) {
+	pal := m.pal
+	svc := c.Services()
+	handler := func(id string) { m.desktopAccessory(p, svc, id) }
+	ui.Row(c.Key("desktop-input")).FillWidth().MinHeight(46).Padding(0, 2).Gap(2).AlignItems(ui.Center).Background(pal.surface).Radius(23).Children(func() {
+		// A secure field forces iOS's ASCII keyboard without input methods,
+		// so hide the text only when the person chooses password entry.
+		mode, other, glyph := tr("Text"), tr("Password"), "lock-open"
+		if p.secret {
+			mode, other, glyph = other, mode, "lock"
+		}
+		secret := m.phoneButton(c.Key("desktop-secret")).Size(44, 44).Padding(0).Radius(22).Justify(ui.Center).KeepFocus().
+			Label(tr("Current: ") + mode + tr(" input, switch to ") + other + tr(" input"))
+		secret.Children(func() {
+			color := pal.muted
+			if p.secret {
+				color = pal.ink
+			}
+			icon(c, glyph, 20, color)
+		})
+		if secret.Clicked() {
+			p.secret = !p.secret
+		}
+		field := ui.TextInput(c.Key("desktop-text"), &p.text).Grow(1).MinWidth(0).MinHeight(44).Padding(10, 4).Background(pal.surface).Border(1, pal.surface).
+			InputOptions(ui.InputOptions{Correction: ui.CorrectionOff, Capitalization: ui.CapitalizeNone, Return: ui.ReturnGo})
+		if p.secret {
+			field.Password().Label(tr("Password to send to Mac")).Placeholder(tr("Enter password"))
+		} else {
+			field.Label(tr("Text to send to Mac")).Placeholder(tr("Enter text to send"))
+		}
+		field.InputAccessory(p.accessoryActions(), handler)
+		if p.focusText {
+			field.Focus()
+			p.focusText = false
+		}
+		if field.Submitted() {
+			m.desktopSendText(p)
+		}
+		ready := p.text != ""
+		send := m.phoneButton(c.Key("desktop-send")).Size(44, 44).Padding(0).Radius(22).Justify(ui.Center).KeepFocus().Label(tr("Send")).Disabled(!ready)
+		send.Children(func() {
+			bg := pal.line
+			if ready {
+				bg = pal.ink
+			}
+			ui.Row(c).Size(34, 34).Radius(17).Background(bg).Justify(ui.Center).AlignItems(ui.Center).Children(func() {
+				icon(c, "arrow-up", 18, pal.bg)
+			})
+		})
+		if send.Clicked() {
+			m.desktopSendText(p)
+		}
+	})
+	// iOS draws the keys natively above its keyboard; elsewhere, as in tests,
+	// the same actions show as a Go bar.
+	if runtime.GOOS != "ios" {
+		ui.InputAccessoryBar(c, p.accessoryActions(), &p.moreKeys, handler)
+	}
+}
+
+// accessoryActions are the Mac keys above the software keyboard: the common
+// four, a panel of modifiers, arrows and shortcut letters, and hide.
+func (p *mobileDesktopPage) accessoryActions() []ui.InputAction {
+	var actions []ui.InputAction
+	for _, k := range desktopKeys {
+		actions = append(actions, ui.InputAction{ID: "key-" + k.key, Label: k.label, Symbol: desktopKeySymbols[k.key]})
+	}
+	more := ui.InputAction{ID: "more", Label: tr("More"), Symbol: "ellipsis"}
+	for _, k := range desktopModifiers {
+		more.Items = append(more.Items, ui.InputAction{ID: "mod-" + k.key, Label: k.label, Symbol: desktopKeySymbols[k.key], Selected: p.modifier == k.key})
+	}
+	for _, keys := range [][]desktopKeyDef{desktopArrowKeys, desktopLetterKeys} {
+		for _, k := range keys {
+			more.Items = append(more.Items, ui.InputAction{ID: "key-" + k.key, Label: k.label, Symbol: desktopKeySymbols[k.key]})
+		}
+	}
+	return append(actions, more, ui.InputAction{ID: "hide", Label: tr("Hide keyboard"), Symbol: "keyboard.chevron.compact.down"})
+}
+
+func (m *mobileApp) desktopAccessory(p *mobileDesktopPage, svc ui.Services, id string) {
+	if m.desktopPage != p {
+		return
+	}
+	switch {
+	case id == "hide":
+		p.keyboard, p.moreKeys = false, false
+		svc.Blur()
+	case strings.HasPrefix(id, "mod-"):
+		if k := strings.TrimPrefix(id, "mod-"); p.modifier == k {
+			p.modifier = ""
+		} else {
+			p.modifier = k
+		}
+	case strings.HasPrefix(id, "key-"):
+		m.desktopKey(p, strings.TrimPrefix(id, "key-"))
+	}
+	invalidate()
 }
 
 // desktopSelectFull switches a menu lease to the full desktop.
@@ -876,12 +1043,12 @@ func (m *mobileApp) desktopSelectFull(p *mobileDesktopPage) {
 	if !p.pickable {
 		return
 	}
-	m.desktopStage(p, "connecting", "正在连接 Mac", "正在切换到完整桌面。", true)
+	m.desktopStage(p, "connecting", tr("Connecting to Mac"), tr("Switching to full desktop."), true)
 	m.desktopDo(p, func(ctx context.Context) func() {
 		err := p.client.selectWindow(ctx, desktop.Window{})
 		return func() {
 			if err != nil {
-				m.desktopFail(p, "暂时无法切换", err)
+				m.desktopFail(p, tr("Unable to switch"), err)
 				return
 			}
 			p.window, p.windowOnly, p.zoom, p.panX, p.panY = desktop.Window{}, false, 1, 0, 0
@@ -945,13 +1112,21 @@ func (m *mobileApp) desktopLoadThumbs(p *mobileDesktopPage) {
 	}
 }
 
-// desktopWindowGrid shows the shareable windows two to a row.
+// desktopWindowGrid shows the full desktop, when offered, and the shareable
+// windows as preview cards two to a row.
 func (m *mobileApp) desktopWindowGrid(c *ui.Context, p *mobileDesktopPage) {
-	for i := 0; i < len(p.windows); i += 2 {
-		row := p.windows[i:min(i+2, len(p.windows))]
+	var cards []func()
+	if p.pickable {
+		cards = append(cards, func() { m.desktopFullCard(c, p) })
+	}
+	for _, w := range p.windows {
+		cards = append(cards, func() { m.desktopWindowCard(c, p, w) })
+	}
+	for i := 0; i < len(cards); i += 2 {
+		row := cards[i:min(i+2, len(cards))]
 		ui.Row(c.Key(fmt.Sprintf("desktop-window-row-%d", i))).FillWidth().Gap(10).AlignItems(ui.Start).Children(func() {
-			for _, w := range row {
-				m.desktopWindowCard(c, p, w)
+			for _, card := range row {
+				card()
 			}
 			if len(row) == 1 {
 				ui.Column(c).Grow(1).Basis(0).MinWidth(0)
@@ -960,11 +1135,25 @@ func (m *mobileApp) desktopWindowGrid(c *ui.Context, p *mobileDesktopPage) {
 	}
 }
 
+func (m *mobileApp) desktopFullCard(c *ui.Context, p *mobileDesktopPage) {
+	pal := m.pal
+	card := m.phoneButton(c.Key("desktop-full")).Column().Grow(1).Basis(0).MinWidth(0).Gap(6).Padding(8).Background(pal.surface).Radius(12).Label(tr("Full desktop"))
+	card.Children(func() {
+		ui.Column(c).FillWidth().AspectRatio(1.6).Radius(8).Background(pal.bg).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
+			icon(c, "device-desktop", 32, pal.muted)
+		})
+		ui.Text(c, tr("Full desktop")).FontSize(m.font(14)).FontWeight(600).LineHeight(1.3).MaxLines(2)
+	})
+	if card.Clicked() {
+		m.desktopSelectFull(p)
+	}
+}
+
 func (m *mobileApp) desktopWindowCard(c *ui.Context, p *mobileDesktopPage, w desktop.Window) {
 	pal := m.pal
 	key := desktopWindowKey(w)
 	img, loaded := p.thumbs[key]
-	title := firstNonEmpty(w.Title, w.App, "未命名窗口")
+	title := firstNonEmpty(w.Title, w.App, tr("Untitled window"))
 	card := m.phoneButton(c.Key("desktop-window-" + key)).Column().Grow(1).Basis(0).MinWidth(0).Gap(6).Padding(8).Background(pal.surface).Radius(12)
 	card.Children(func() {
 		ui.Column(c).FillWidth().AspectRatio(1.6).Radius(8).Clip().Background(pal.bg).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
@@ -974,7 +1163,7 @@ func (m *mobileApp) desktopWindowCard(c *ui.Context, p *mobileDesktopPage, w des
 			case !loaded && p.pickable:
 				ui.Spinner(c)
 			default:
-				ui.Text(c, firstNonEmpty(w.App, "窗口")).FontSize(m.font(12)).TextColor(pal.muted).MaxLines(1)
+				ui.Text(c, firstNonEmpty(w.App, tr("Window"))).FontSize(m.font(12)).TextColor(pal.muted).MaxLines(1)
 			}
 		})
 		ui.Text(c, title).FontSize(m.font(14)).FontWeight(600).LineHeight(1.3).MaxLines(2)

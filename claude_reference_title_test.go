@@ -18,7 +18,7 @@ func TestClaudeReferencePromptTitles(t *testing.T) {
 		{"reference labels only", mention + "\n" + other, clippedTitle("本机中安装了 Alma 看看他有那些好的设计实现值得吸纳 抽屉 [布局] 调整")},
 		{"inline reference", "检查 " + other + " 的动画", "检查 抽屉 [布局] 调整 的动画"},
 		{"escaped title", other, "抽屉 [布局] 调整"},
-		{"empty label", referenceText(ref, ""), "引用对话"},
+		{"empty label", referenceText(ref, ""), "Referenced conversation"},
 		{"command arguments", "<command-name>/review</command-name><command-args>" + other + " 的布局</command-args>", "/review 抽屉 [布局] 调整 的布局"},
 		{"literal example", "`" + other + "`", clippedTitle("`" + other + "`")},
 		{"escaped example", `\` + other, clippedTitle(`\` + other)},

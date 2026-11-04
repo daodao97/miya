@@ -25,7 +25,7 @@ func (app *chatApp) referenceTitle(ref ThreadRef) string {
 			}
 		}
 	}
-	return "会话不可用"
+	return tr("Session unavailable")
 }
 
 // Tokens retain their identities; history never reconstructs them from titles.

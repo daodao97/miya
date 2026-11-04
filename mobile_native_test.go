@@ -37,17 +37,17 @@ func TestMobileComposerTargetsAndDynamicType(t *testing.T) {
 			tt := ui.NewTester(m.viewRoot, width, 750)
 			tt.Frame()
 			body, _ := tt.Find("Readable message")
-			if err := tt.Click("消息"); err != nil {
+			if err := tt.Click("Message"); err != nil {
 				t.Fatal(err)
 			}
 			tt.Type("短消息")
 			saveMobileNativeSnapshot(t, tt, fmt.Sprintf("composer-%d", width))
 			tt.SetPreferences(ui.Preferences{TextScale: 1.8})
 			larger, _ := tt.Find("Readable message")
-			if larger.H <= body.H || m.draft != "短消息" || !tt.Focused("消息") {
+			if larger.H <= body.H || m.draft != "短消息" || !tt.Focused("Message") {
 				t.Fatalf("text scaling lost size, draft or focus: before=%v after=%v draft=%q", body, larger, m.draft)
 			}
-			for _, label := range []string{"添加图片", "模型设置", "发送"} {
+			for _, label := range []string{"Add image", "Model settings", "Send"} {
 				r, ok := tt.Find(label)
 				if !ok || r.W < 44 || r.H < 44 || r.X < 0 || r.X+r.W > float32(width) || r.Y+r.H > 750 {
 					t.Fatalf("%q has an inaccessible target at large text size: %v", label, r)
@@ -57,9 +57,9 @@ func TestMobileComposerTargetsAndDynamicType(t *testing.T) {
 			th.Busy = true
 			m.showThread(th)
 			tt.Frame()
-			steer, _ := tt.Find("立即引导")
-			send, _ := tt.Find("加入队列")
-			model, _ := tt.Find("模型设置")
+			steer, _ := tt.Find("Steer now")
+			send, _ := tt.Find("Add to queue")
+			model, _ := tt.Find("Model settings")
 			if steer.X < model.X+model.W || steer.X+steer.W > send.X || send.X+send.W > float32(width) {
 				t.Fatalf("busy controls overlap: model=%v steer=%v send=%v", model, steer, send)
 			}
@@ -77,13 +77,13 @@ func TestMobileComposerCentersCaretWithTools(t *testing.T) {
 				m.draft = draft
 				tt := ui.NewTester(m.viewRoot, width, 750)
 				tt.SetSafeArea(ui.SafeArea{Top: 59, Bottom: 34})
-				if err := tt.Click("消息"); err != nil {
+				if err := tt.Click("Message"); err != nil {
 					t.Fatal(err)
 				}
 				for _, scale := range []float32{1, 1.8} {
 					tt.SetPreferences(ui.Preferences{TextScale: scale})
 					caret, active := tt.TextCaret()
-					send, ok := tt.Find("发送")
+					send, ok := tt.Find("Send")
 					delta := caret.Y + caret.H/2 - (send.Y + send.H/2)
 					if !active || !ok || delta < -2 || delta > 2 {
 						t.Fatalf("caret is not centered at text scale %v: caret=%v send=%v", scale, caret, send)
@@ -125,7 +125,7 @@ func TestMobileNavigationKeepsConversationWhileOpeningDrawer(t *testing.T) {
 
 func TestMobileDrawerPagesUseTheSameSlideTransition(t *testing.T) {
 	for _, conversation := range []bool{false, true} {
-		for _, destination := range []struct{ label, path string }{{"自动化", "/automations"}, {"设置", "/settings"}} {
+		for _, destination := range []struct{ label, path string }{{"Automations", "/automations"}, {"Settings", "/settings"}} {
 			t.Run(fmt.Sprintf("conversation=%v/%s", conversation, destination.path), func(t *testing.T) {
 				m := testMobileApp()
 				m.nav = nil // Use the production navigation animation.
@@ -139,17 +139,17 @@ func TestMobileDrawerPagesUseTheSameSlideTransition(t *testing.T) {
 				if err := tt.Click(destination.label); err != nil {
 					t.Fatal(err)
 				}
-				start, ok := tt.Find("打开侧边栏")
+				start, ok := tt.Find("Open sidebar")
 				if !ok || start.X < 390 || !m.router().Transitioning() || m.router().Path() != destination.path || m.menu {
 					t.Fatalf("drawer navigation should slide the page in from the right: header=%v path=%s", start, m.router().Path())
 				}
 				tt.Advance(70 * time.Millisecond)
-				middle, _ := tt.Find("打开侧边栏")
+				middle, _ := tt.Find("Open sidebar")
 				if middle.X <= 12 || middle.X >= start.X {
 					t.Fatalf("the new page did not move during its transition: start=%v middle=%v", start, middle)
 				}
 				tt.Advance(time.Second)
-				end, _ := tt.Find("打开侧边栏")
+				end, _ := tt.Find("Open sidebar")
 				if end.X != 12 || end.Y < 59 || end.Y+end.H > 810 || m.router().Transitioning() {
 					t.Fatalf("the page did not settle within the safe area: %v", end)
 				}
@@ -180,7 +180,7 @@ func TestMobileConversationEdgeOpensDrawer(t *testing.T) {
 			if !m.menu || m.open != 1 || m.router().Path() != "/thread" || m.view.c.current().ServerID != "s1" || m.draft != "保留草稿" {
 				t.Fatal("the edge swipe should open the drawer and preserve the conversation and draft")
 			}
-			if _, ok := tt.Find("项目 proj-a"); !ok {
+			if _, ok := tt.Find("Project proj-a"); !ok {
 				t.Fatal("the edge swipe did not reveal the project drawer")
 			}
 			saveMobileNativeSnapshot(t, tt, fmt.Sprintf("conversation-edge-drawer-%d", width))
@@ -195,12 +195,12 @@ func TestMobileNavigationKeepsHomeGeometryStable(t *testing.T) {
 	tt.SetSafeArea(ui.SafeArea{Top: 59, Bottom: 34})
 	header, _ := tt.Find("Miya")
 	intro, _ := tt.Find("Let’s build")
-	composer, _ := tt.Find("消息")
+	composer, _ := tt.Find("Message")
 	check := func(phase string) {
 		t.Helper()
 		h, headerOK := tt.Find("Miya")
 		i, introOK := tt.Find("Let’s build")
-		input, inputOK := tt.Find("消息")
+		input, inputOK := tt.Find("Message")
 		if !headerOK || !introOK || !inputOK || h.Y != header.Y || h.H != header.H || i.Y != intro.Y || i.H != intro.H || input.Y != composer.Y || input.H != composer.H {
 			t.Fatalf("%s moved the new-conversation page: header %v → %v, intro %v → %v, composer %v → %v", phase, header, h, intro, i, composer, input)
 		}
@@ -209,7 +209,7 @@ func TestMobileNavigationKeepsHomeGeometryStable(t *testing.T) {
 	tt.Frame()
 	tt.Advance(time.Second)
 	openMobileDrawer(t, tt)
-	if err := tt.Click("新建对话"); err != nil {
+	if err := tt.Click("New thread"); err != nil {
 		t.Fatal(err)
 	}
 	check("new conversation")

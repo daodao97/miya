@@ -103,7 +103,7 @@ func TestCodexReadsOnlyAccountAndGeneralLimits(t *testing.T) {
 	if err != nil || plan != "pro" || len(windows) != 2 {
 		t.Fatalf("%s %+v %v", plan, windows, err)
 	}
-	if windows[0].Name != "5 小时" || windows[0].Used != 17 || windows[0].Reset == "" || windows[1].Name != "7 天" {
+	if windows[0].Name != "5 hours" || windows[0].Used != 17 || windows[0].Reset == "" || windows[1].Name != "7 days" {
 		t.Fatalf("wrong windows: %+v", windows)
 	}
 	if windows[0].DurationMins != 300 || windows[0].ResetsAt != 1900000000 || windows[1].DurationMins != 10080 || windows[1].ResetsAt != 0 {

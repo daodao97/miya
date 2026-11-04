@@ -42,35 +42,36 @@ type svcMessage struct {
 
 // svcState is everything a window shows but the messages.
 type svcState struct {
-	MemoryRevision     uint64             `json:"memoryRevision,omitempty"`
-	ReferenceSource    string             `json:"referenceSource"`
-	FastMode           bool               `json:"fastMode"`
-	Cwd                string             `json:"cwd"`
-	Projects           []Project          `json:"projects"`
-	ProjectBusy        map[string]bool    `json:"projectBusy,omitempty"`
-	Threads            []Thread           `json:"threads"`
-	Approvals          []codex.Approval   `json:"approvals"`
-	Status             string             `json:"status"`
-	HistoryStatus      string             `json:"historyStatus"`
-	Ready              bool               `json:"ready"`
-	Models             []codex.Model      `json:"models"`
-	Model              string             `json:"model"`
-	Effort             string             `json:"effort"`
-	PermissionPolicy   string             `json:"permissionPolicy"`
-	Locale             string             `json:"locale"`
-	ClaudeCommand      string             `json:"claudeCommand"`
-	ClaudeError        string             `json:"claudeError"`
-	ClaudeBinary       string             `json:"claudeBinary"`
-	ClaudeArgs         []string           `json:"claudeArgs"`
-	ClaudeEnv          []string           `json:"claudeEnv"`
-	ClaudeModel        string             `json:"claudeModel"`
-	ClaudeEffort       string             `json:"claudeEffort"`
-	ClaudeDefaultModel string             `json:"claudeDefaultModel"`
-	Account            accountDisplay     `json:"account"`
-	AccountReset       accountResetAction `json:"accountReset"`
-	QuotaLimits        accountLimits      `json:"quotaLimits"`
-	QuotaStatus        string             `json:"quotaStatus"`
-	Phone              phoneStatus        `json:"phone"`
+	Collaboration      *collaborationStatus `json:"collaboration,omitempty"`
+	MemoryRevision     uint64               `json:"memoryRevision,omitempty"`
+	ReferenceSource    string               `json:"referenceSource"`
+	FastMode           bool                 `json:"fastMode"`
+	Cwd                string               `json:"cwd"`
+	Projects           []Project            `json:"projects"`
+	ProjectBusy        map[string]bool      `json:"projectBusy,omitempty"`
+	Threads            []Thread             `json:"threads"`
+	Approvals          []codex.Approval     `json:"approvals"`
+	Status             string               `json:"status"`
+	HistoryStatus      string               `json:"historyStatus"`
+	Ready              bool                 `json:"ready"`
+	Models             []codex.Model        `json:"models"`
+	Model              string               `json:"model"`
+	Effort             string               `json:"effort"`
+	PermissionPolicy   string               `json:"permissionPolicy"`
+	Locale             string               `json:"locale"`
+	ClaudeCommand      string               `json:"claudeCommand"`
+	ClaudeError        string               `json:"claudeError"`
+	ClaudeBinary       string               `json:"claudeBinary"`
+	ClaudeArgs         []string             `json:"claudeArgs"`
+	ClaudeEnv          []string             `json:"claudeEnv"`
+	ClaudeModel        string               `json:"claudeModel"`
+	ClaudeEffort       string               `json:"claudeEffort"`
+	ClaudeDefaultModel string               `json:"claudeDefaultModel"`
+	Account            accountDisplay       `json:"account"`
+	AccountReset       accountResetAction   `json:"accountReset"`
+	QuotaLimits        accountLimits        `json:"quotaLimits"`
+	QuotaStatus        string               `json:"quotaStatus"`
+	Phone              phoneStatus          `json:"phone"`
 
 	ProjectThreads map[string][]Thread `json:"projectThreads,omitempty"`
 	DesktopUnread  map[string]int64    `json:"desktopUnread,omitempty"`
@@ -93,6 +94,7 @@ type svcDraft struct {
 }
 
 type svcHello struct {
+	Remote  bool      `json:"remote,omitempty"`
 	Version int       `json:"version"`
 	Exe     string    `json:"exe"`
 	ExeTime time.Time `json:"exeTime"`

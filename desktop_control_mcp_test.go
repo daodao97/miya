@@ -65,7 +65,7 @@ func TestDesktopMCPWaitsForExplicitCompletion(t *testing.T) {
 	}
 	select {
 	case text := <-done:
-		if !strings.Contains(text, "用户已确认") {
+		if !strings.Contains(text, "The user confirmed") {
 			t.Fatal(text)
 		}
 	case <-time.After(time.Second):
@@ -159,7 +159,7 @@ func TestDesktopMobileTakeoverEntry(t *testing.T) {
 		m.state.Approvals = []codex.Approval{a}
 		tt := ui.NewTester(m.viewRoot, width, 844)
 		tt.Frame()
-		for _, label := range []string{"打开远程桌面", "已完成，继续", "取消接管"} {
+		for _, label := range []string{"Open remote desktop", "Done, continue", "Cancel takeover"} {
 			r, ok := tt.Find(label)
 			if !ok || r.H < 44 || r.X < 0 || r.X+r.W > float32(width) {
 				t.Fatalf("takeover action unavailable: %s %v", label, r)

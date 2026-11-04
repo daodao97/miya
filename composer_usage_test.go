@@ -9,7 +9,7 @@ func TestComposerUsageEventMapping(t *testing.T) {
 	c := testController()
 	c.handle(event("thread/tokenUsage/updated", `{"threadId":"t1","tokenUsage":{"last":{"totalTokens":25000,"inputTokens":20000,"cachedInputTokens":15000},"total":{"totalTokens":123000,"inputTokens":100000,"cachedInputTokens":70000,"outputTokens":23000,"reasoningOutputTokens":3000},"modelContextWindow":100000}}`))
 	u := c.threads()[0].Usage
-	if u == nil || usageSummary(u) != "上下文 25%" || c.threads()[1].Usage != nil {
+	if u == nil || usageSummary(u) != "Context 25%" || c.threads()[1].Usage != nil {
 		t.Fatal("incorrect usage routing or context")
 	}
 	c.handle(event("thread/tokenUsage/updated", `{"threadId":"t1","tokenUsage":null}`))

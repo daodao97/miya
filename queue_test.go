@@ -134,13 +134,13 @@ func TestComposerQueuesWhileBusy(t *testing.T) {
 	}
 	c.rememberDraft("follow up")
 	tt.Frame()
-	if err := tt.Click("加入队列"); err != nil {
+	if err := tt.Click("Add to queue"); err != nil {
 		t.Fatalf("no queue button: %v", err)
 	}
-	if c.draft() != "" || len(c.current().Queue) != 1 || !tt.HasText("待发送 1 条 · 当前回合结束后一起发送") || !tt.HasText("follow up") {
+	if c.draft() != "" || len(c.current().Queue) != 1 || !tt.HasText("1 queued · Sent together when the current turn ends") || !tt.HasText("follow up") {
 		t.Fatalf("not queued: draft %q queue %+v texts %q", c.draft(), c.current().Queue, tt.Texts())
 	}
-	if err := tt.Click("编辑排队消息"); err != nil {
+	if err := tt.Click("Edit queued message"); err != nil {
 		t.Fatal(err)
 	}
 	if c.draft() != "follow up" || len(c.current().Queue) != 0 {
@@ -148,7 +148,7 @@ func TestComposerQueuesWhileBusy(t *testing.T) {
 	}
 	c.send()
 	tt.Frame()
-	if err := tt.Click("删除排队消息"); err != nil {
+	if err := tt.Click("Delete queued message"); err != nil {
 		t.Fatal(err)
 	}
 	if len(c.current().Queue) != 0 || tt.HasText("待发送") {

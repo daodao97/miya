@@ -15,22 +15,19 @@ import (
 
 func (app *chatApp) settingsView(c *ui.Context) {
 	cc := app.c
-	zh := cc.locale() == "zh"
-	tabs := []string{"General", "Account", "Phone", "Usage", "Memory"}
-	if zh {
-		tabs = []string{"通用", "账号", "手机", "用量", "记忆"}
-	}
+	tabs := []string{tr("General"), tr("Account"), tr("Phone"), tr("Usage"), tr("Memory")}
+
 	ui.Column(c).FillWidth().MaxWidth(760).Gap(20).Children(func() {
 		ui.Tabs(c.Key("settings-tabs"), &app.settingsTab, tabs...).AlignSelf(ui.Start)
 		if app.settingsTab == 0 {
 			ui.Column(c).FillWidth().Gap(28).Children(func() {
-				settingsGroup(c, zhOr(zh, "通用", "General"), "",
-					func() { app.languageSettings(c) },
+				settingsGroup(c, tr("General"), "",
+					func() { languageSettings(c) },
 					func() { app.appearanceSettings(c) })
-				notificationSettings(c, zh)
-				settingsGroup(c, zhOr(zh, "权限", "Permissions"), "", func() {
-					settingLabel(c, zhOr(zh, "新对话的默认权限", "Default permissions for new conversations"),
-						zhOr(zh, "可以在输入框中为当前对话单独修改。", "Change them for the current conversation from the composer."))
+				notificationSettings(c, false)
+				settingsGroup(c, tr("Permissions"), "", func() {
+					settingLabel(c, tr("Default permissions for new conversations"),
+						tr("Change them for the current conversation from the composer."))
 					permissionOptions(c.Key("default-permissions"), cc.selectedPermissionPolicy(), cc.setPermissionPolicy)
 				})
 				app.agentSettings(c)
@@ -44,26 +41,6 @@ func (app *chatApp) settingsView(c *ui.Context) {
 			app.usageSettings(c)
 		} else {
 			app.phoneSettings(c)
-		}
-	})
-}
-
-// languageSettings chooses the interface language explicitly rather than
-// following the system's; it is kept with the other settings.
-func (app *chatApp) languageSettings(c *ui.Context) {
-	cc := app.c
-	zh := cc.locale() == "zh"
-	title := zhOr(zh, "界面语言", "Interface language")
-	settingRow(c, title, "", func() {
-		ids := []string{"zh", "en"}
-		i := 1
-		if zh {
-			i = 0
-		}
-		before := i
-		ui.Segmented(c.Key("locale"), &i, "中文", "English").Label(title)
-		if i != before {
-			cc.setLocale(ids[i])
 		}
 	})
 }
@@ -87,11 +64,11 @@ func (s *accountView) view(c *ui.Context) {
 	}
 	data, action := cc.accountState, cc.accountReset
 	ui.Column(c).FillWidth().Gap(16).Children(func() {
-		settingsHeader(c, "当前账号", "与 Codex 登录状态同步", func() {
+		settingsHeader(c, tr("Current account"), tr("Synced with Codex sign-in"), func() {
 			if data.Refreshing {
-				mutedText(c, "更新中…")
+				mutedText(c, tr("Updating…"))
 			}
-			if smallButton(c.Key("refresh"), "刷新", data.Loading || data.Refreshing || action.Busy).Clicked() {
+			if smallButton(c.Key("refresh"), tr("Refresh"), data.Loading || data.Refreshing || action.Busy).Clicked() {
 				cc.refreshAccount()
 			}
 		})
@@ -113,14 +90,14 @@ func accountDetails(c *ui.Context, data accountDisplay) {
 		}
 		switch {
 		case data.Loading:
-			ui.Text(c, "正在读取账号和用量…").TextColor(muted)
+			ui.Text(c, tr("Loading account and usage…")).TextColor(muted)
 			return
 		case data.Error != "":
 			ui.Text(c, data.Error).TextColor(muted)
 			return
 		case data.Identity == nil:
-			ui.Text(c, "尚未登录").FontWeight(600)
-			ui.Text(c, "请先在 Codex CLI 中登录，再刷新此页面。").TextColor(muted)
+			ui.Text(c, tr("Not signed in")).FontWeight(600)
+			ui.Text(c, tr("Sign in to the Codex CLI, then refresh this page.")).TextColor(muted)
 			return
 		}
 		a := data.Identity
@@ -141,13 +118,13 @@ func accountDetails(c *ui.Context, data accountDisplay) {
 				}
 			})
 			if !data.Updated.IsZero() {
-				ui.Text(c, "更新于 "+data.Updated.Local().Format("15:04:05")).FontSize(11).TextColor(muted)
+				ui.Text(c, tr("Updated ")+data.Updated.Local().Format("15:04:05")).FontSize(11).TextColor(muted)
 			}
 		})
 		ui.Box(c).FillWidth().Height(1).Background(line)
-		ui.Text(c, "用量").FontSize(12).FontWeight(600).TextColor(muted)
+		ui.Text(c, tr("Usage")).FontSize(12).FontWeight(600).TextColor(muted)
 		if a.Type != "chatgpt" {
-			ui.Text(c, "此登录方式不提供 ChatGPT 套餐额度。").TextColor(muted)
+			ui.Text(c, tr("This sign-in method does not provide ChatGPT plan quota.")).TextColor(muted)
 			return
 		}
 		if data.UsageError != "" {
@@ -193,16 +170,16 @@ func accountDetails(c *ui.Context, data accountDisplay) {
 					})
 					if q.Credits != nil {
 						count++
-						text := "无额外额度"
+						text := tr("No extra credits")
 						if q.Credits.Unlimited {
-							text = "无限额"
+							text = tr("Unlimited")
 						} else if q.Credits.Balance != nil {
 							text = *q.Credits.Balance
 						} else if q.Credits.HasCredits {
-							text = "有可用额度"
+							text = tr("Credits available")
 						}
 						ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
-							ui.Text(c, "额外额度").FontSize(11).TextColor(muted)
+							ui.Text(c, tr("Extra credits")).FontSize(11).TextColor(muted)
 							ui.Text(c, text).FontSize(12).FontWeight(500)
 						})
 					}
@@ -210,7 +187,7 @@ func accountDetails(c *ui.Context, data accountDisplay) {
 			}
 		})
 		if count == 0 && data.UsageError == "" {
-			ui.Text(c, "暂无可用的用量数据。").TextColor(muted)
+			ui.Text(c, tr("No usage data available.")).TextColor(muted)
 		}
 	})
 }
@@ -230,11 +207,11 @@ func quotaBar(c *ui.Context, w *quotaWindow, index int) {
 	ui.Column(c).Grow(1).Basis(230).MinWidth(0).Gap(4).Children(func() {
 		ui.Row(c).Wrap().AlignItems(ui.Center).Gap(4).Children(func() {
 			ui.Text(c, quotaLabel(w, index)).FontSize(12).Grow(1)
-			ui.Text(c, fmt.Sprintf("已用 %.0f%% · 剩余 %.0f%%", used, 100-used)).FontSize(11).TextColor(muted)
+			ui.Text(c, fmt.Sprintf(tr("%.0f%% used · %.0f%% remaining"), used, 100-used)).FontSize(11).TextColor(muted)
 		})
 		progressBar(c, used, color)
 		if w.ResetsAt != nil && *w.ResetsAt > 0 {
-			ui.Text(c, "重置时间："+time.Unix(*w.ResetsAt, 0).Local().Format("01-02 15:04")).FontSize(11).TextColor(muted)
+			ui.Text(c, tr("Resets: ")+time.Unix(*w.ResetsAt, 0).Local().Format("01-02 15:04")).FontSize(11).TextColor(muted)
 		}
 	})
 }
@@ -245,15 +222,15 @@ func resetCreditCard(c *ui.Context, data accountDisplay, action accountResetActi
 	retry := action.Attempt != nil && action.Attempt.Submitted && action.Attempt.matches(data)
 	settingsCard(c).Gap(10).Children(func() {
 		ui.Row(c).Wrap().AlignItems(ui.Center).Gap(8).Children(func() {
-			ui.Text(c, "重置卡").FontSize(14).FontWeight(600)
+			ui.Text(c, tr("Reset cards")).FontSize(14).FontWeight(600)
 			if summary != nil {
-				badge(c, fmt.Sprintf("可用 %d 张", summary.AvailableCount))
+				badge(c, fmt.Sprintf(tr("%d available"), summary.AvailableCount))
 			}
 			ui.Spacer(c)
 			if credit != nil || retry {
-				label := "使用一张"
+				label := tr("Use a card")
 				if retry {
-					label = "查看上次使用结果"
+					label = tr("Check last reset result")
 				}
 				disabled := !connected || action.Busy || data.Refreshing || data.UsageError != "" || data.Notice != ""
 				if smallButton(c.Key("ask"), label, disabled).Clicked() {
@@ -262,7 +239,7 @@ func resetCreditCard(c *ui.Context, data accountDisplay, action accountResetActi
 			}
 		})
 		if summary == nil {
-			mutedText(c, "暂未取得重置卡数据。")
+			mutedText(c, tr("Reset card data unavailable."))
 		} else if credit != nil {
 			ui.Row(c).Wrap().AlignItems(ui.Center).Gap(8).Children(func() {
 				if credit.Title != "" {
@@ -275,32 +252,32 @@ func resetCreditCard(c *ui.Context, data accountDisplay, action accountResetActi
 			ui.Row(c).Wrap().AlignItems(ui.Center).Gap(12).Children(func() {
 				ui.Text(c, resetExpiryText(*credit)).FontSize(11).TextColor(muted)
 				if credit.GrantedAt > 0 {
-					ui.Text(c, "获得于 "+time.Unix(credit.GrantedAt, 0).Local().Format("2006-01-02 15:04")).FontSize(11).TextColor(muted)
+					ui.Text(c, tr("Received ")+time.Unix(credit.GrantedAt, 0).Local().Format("2006-01-02 15:04")).FontSize(11).TextColor(muted)
 				}
 			})
 		} else if summary.AvailableCount > 0 {
-			mutedText(c, "重置卡详情暂不可用，请刷新后使用。")
+			mutedText(c, tr("Reset card details unavailable. Refresh before using."))
 		}
 		if action.Confirming && action.Attempt.matches(data) {
-			label := "确认使用"
+			label := tr("Confirm")
 			if action.Attempt.Submitted {
-				label = "重试获取结果"
+				label = tr("Retry fetching result")
 			}
 			if action.Busy {
-				label = "正在使用…"
+				label = tr("Using card…")
 			}
-			who := firstNonEmpty(action.Attempt.Account.Email, "当前账号")
+			who := firstNonEmpty(action.Attempt.Account.Email, tr("Current account"))
 			ui.Column(c).Padding(12).Gap(8).Background(subtle).Radius(8).Children(func() {
 				ui.Row(c).Wrap().AlignItems(ui.Center).Gap(8).Children(func() {
-					ui.Text(c, "确认使用一张重置卡？").FontWeight(600).Grow(1)
-					if smallButton(c.Key("cancel"), "取消", action.Busy).Clicked() {
+					ui.Text(c, tr("Use a reset card?")).FontWeight(600).Grow(1)
+					if smallButton(c.Key("cancel"), tr("Cancel"), action.Busy).Clicked() {
 						cancel()
 					}
 					if smallButton(c.Key("use"), label, !connected || action.Busy || data.Refreshing).TextColor(danger).Clicked() {
 						use()
 					}
 				})
-				ui.Text(c, who+" 的额度窗口将立即重置。此操作无法撤销。").FontSize(11).TextColor(muted)
+				ui.Text(c, who+tr(" quota windows will reset immediately. This cannot be undone.")).FontSize(11).TextColor(muted)
 				ui.Text(c, resetExpiryText(action.Attempt.Credit)).FontSize(11).TextColor(muted)
 			})
 		}
@@ -377,13 +354,13 @@ func (app *chatApp) projectDialogView(c *ui.Context) {
 			Shadow(0, 18, 48, 0, ui.RGBA(0, 0, 0, 0.18)).TextColor(ink)
 		ui.Row(c).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, tr("Select project")).FontSize(18).FontWeight(600).Grow(1)
-			if toolButton(c.Key("close"), "x", "Close").Clicked() {
+			if toolButton(c.Key("close"), "x", tr("Close")).Clicked() {
 				app.projectDialog = false
 			}
 		})
 		mutedText(c, tr("Add a project name and choose its working folder."))
 		ui.Field(c, tr("Project name"), func() {
-			if ui.TextInput(c.Key("name"), &app.projectName).Placeholder("My project").AutoFocus().Submitted() {
+			if ui.TextInput(c.Key("name"), &app.projectName).Placeholder(tr("My project")).AutoFocus().Submitted() {
 				app.confirmProject()
 			}
 		})
@@ -397,6 +374,9 @@ func (app *chatApp) projectDialogView(c *ui.Context) {
 				}
 			})
 		}).Error(app.projectError)
+		if app.projectBrowse {
+			app.serverProjectFolders(c)
+		}
 		ui.Row(c).Justify(ui.End).Gap(8).Children(func() {
 			if ui.Button(c.Key("cancel"), tr("Cancel")).Clicked() {
 				app.projectDialog = false
@@ -410,10 +390,10 @@ func (app *chatApp) projectDialogView(c *ui.Context) {
 
 func usageSummary(u *codex.TokenUsage) string {
 	if u == nil {
-		return "用量"
+		return "Usage"
 	}
 	if u.ModelContextWindow != nil && *u.ModelContextWindow > 0 {
-		return fmt.Sprintf("上下文 %.0f%%", math.Min(100, 100*float64(u.Last.TotalTokens)/float64(*u.ModelContextWindow)))
+		return fmt.Sprintf(tr("Context %.0f%%"), math.Min(100, 100*float64(u.Last.TotalTokens)/float64(*u.ModelContextWindow)))
 	}
 	return fmt.Sprintf("%s tokens", usageTokenCount(u.Total.TotalTokens))
 }
@@ -430,7 +410,6 @@ func usageTokenCount(n int) string {
 
 // agentSettings shows the settings agents declare, without knowing them.
 func (app *chatApp) agentSettings(c *ui.Context) {
-	cc := app.c
 	if app.settingDrafts == nil {
 		app.settingDrafts = map[string]string{}
 	}
@@ -442,7 +421,7 @@ func (app *chatApp) agentSettings(c *ui.Context) {
 		}
 	}
 	if len(rows) > 0 {
-		settingsGroup(c, zhOr(cc.locale() == "zh", "智能体", "Agents"), "", rows...)
+		settingsGroup(c, tr("Agents"), "", rows...)
 	}
 }
 
@@ -462,7 +441,7 @@ func (app *chatApp) agentSetting(c *ui.Context, s agentSetting) {
 				app.settingDrafts[s.ID] = draft
 			}
 			changed := strings.TrimSpace(draft) != current
-			save := ui.Button(c.Key("save"), zhOr(cc.locale() == "zh", "保存", "Save")).Disabled(!changed).Clicked()
+			save := ui.Button(c.Key("save"), tr("Save")).Disabled(!changed).Clicked()
 			if (save || in.Submitted()) && changed {
 				s.Save(cc, draft)
 				delete(app.settingDrafts, s.ID)

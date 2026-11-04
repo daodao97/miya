@@ -51,7 +51,7 @@ func (c *chatController) phoneQuotas() []phoneAgentQuota {
 		if math.IsNaN(w.UsedPercent) || math.IsInf(w.UsedPercent, 0) {
 			continue
 		}
-		v := phoneQuotaWindow{Label: strings.TrimSuffix(quotaLabel(w, i), "额度"), UsedPercent: math.Max(0, math.Min(100, w.UsedPercent))}
+		v := phoneQuotaWindow{Label: strings.TrimSuffix(quotaLabel(w, i), tr("Quota")), UsedPercent: math.Max(0, math.Min(100, w.UsedPercent))}
 		if w.ResetsAt != nil && *w.ResetsAt > 0 {
 			v.ResetsAt = *w.ResetsAt
 		}
@@ -68,7 +68,7 @@ func quotaResetLabel(unix int64) string {
 		return ""
 	}
 	t := time.Unix(unix, 0).Local()
-	days := [...]string{"周日", "周一", "周二", "周三", "周四", "周五", "周六"}
+	days := [...]string{tr("Sun"), tr("Mon"), tr("Tue"), tr("Wed"), tr("Thu"), tr("Fri"), tr("Sat")}
 	return days[t.Weekday()] + t.Format(" 15:04")
 }
 
@@ -91,7 +91,7 @@ func (m *mobileApp) drawerQuotas(c *ui.Context) {
 				name = "Claude"
 			}
 			cc := c.Key(q.Agent)
-			button := m.phoneButton(cc).MinHeight(44).Padding(0).Gap(5).Radius(12).Label(name + " 额度")
+			button := m.phoneButton(cc).MinHeight(44).Padding(0).Gap(5).Radius(12).Label(name + tr(" quota"))
 			button.Children(func() {
 				track, fill := "#4a4a50", "#dedee3"
 				if !m.dark {
@@ -119,8 +119,8 @@ func (m *mobileApp) drawerQuotas(c *ui.Context) {
 					Shadow(0, 4, 16, 0, ui.RGBA(0, 0, 0, 0.2)).TextColor(p.ink)
 				for i, w := range q.Windows {
 					ui.Row(cc.Key(i)).FillWidth().Gap(10).AlignItems(ui.Center).Children(func() {
-						ui.Text(cc, w.Label).FontSize(m.font(13)).TextColor(p.muted)
-						ui.Text(cc, fmt.Sprintf("已用 %.0f%%", w.UsedPercent)).FontSize(m.font(13)).FontWeight(600).Grow(1)
+						ui.Text(cc, tr(w.Label)).FontSize(m.font(13)).TextColor(p.muted)
+						ui.Text(cc, fmt.Sprintf(tr("%.0f%% used"), w.UsedPercent)).FontSize(m.font(13)).FontWeight(600).Grow(1)
 						if reset := quotaResetLabel(w.ResetsAt); reset != "" {
 							ui.Text(cc, reset).FontSize(m.font(12)).TextColor(p.muted)
 						}

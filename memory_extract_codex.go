@@ -23,11 +23,11 @@ import (
 func codexExtractionOverrides(ctx context.Context, bin, directory string) ([]string, error) {
 	features, err := codexExtractionCommand(ctx, bin, directory, "features", "list")
 	if err != nil {
-		return nil, errors.New("无法确认 Codex 提炼隔离配置")
+		return nil, errors.New("Unable to verify Codex extraction isolation settings")
 	}
 	servers, err := codexExtractionCommand(ctx, bin, directory, "mcp", "list", "--json")
 	if err != nil {
-		return nil, errors.New("无法确认 Codex MCP 隔离配置")
+		return nil, errors.New("Unable to verify Codex MCP isolation settings")
 	}
 	overrides := []string{"web_search=\"disabled\"", "tools.view_image=false", "project_doc_max_bytes=0", "skills.include_instructions=false", "skills.bundled.enabled=false", "agents.enabled=false", "approval_policy=\"never\"", "developer_instructions=" + strconv.Quote(memoryExtractionSystem), "user_instructions=\"\""}
 	seen := map[string]bool{}
@@ -54,13 +54,13 @@ func codexExtractionOverrides(ctx context.Context, bin, directory string) ([]str
 		overrides = append(overrides, "features."+name+"=false")
 	}
 	if !seen["shell_tool"] || !seen["hooks"] || !seen["multi_agent"] {
-		return nil, errors.New("此 Codex 版本不支持受限记忆提炼")
+		return nil, errors.New("This Codex version does not support restricted memory extraction")
 	}
 	var list []struct {
 		Name string `json:"name"`
 	}
 	if json.Unmarshal(servers, &list) != nil {
-		return nil, errors.New("Codex MCP 配置无法解析")
+		return nil, errors.New("Unable to parse Codex MCP configuration")
 	}
 	var disabledServers []string
 	for _, server := range list {
@@ -98,7 +98,7 @@ func codexExtractionArgs(directory string, overrides []string) []string {
 func extractMemoryWithCodex(ctx context.Context, job memory.ExtractionJob) ([]memory.Candidate, error) {
 	bin, err := codex.Binary()
 	if err != nil {
-		return nil, errors.New("Codex 提炼器不可用")
+		return nil, errors.New("Codex extractor unavailable")
 	}
 	dir, err := os.MkdirTemp("", "miya-memory-codex-")
 	if err != nil {
@@ -124,19 +124,19 @@ func extractMemoryWithCodex(ctx context.Context, job memory.ExtractionJob) ([]me
 	var out extractionOutput
 	cmd.Stdout = &out
 	if err = cmd.Run(); err != nil {
-		return nil, errors.New("Codex 提炼调用失败")
+		return nil, errors.New("Codex extraction failed")
 	}
 	if err = validateCodexExtractionEvents(out.Bytes()); err != nil {
 		return nil, err
 	}
 	file, err := os.Open(filepath.Join(dir, "result.json"))
 	if err != nil {
-		return nil, errors.New("Codex 未返回提炼结果")
+		return nil, errors.New("Codex returned no extraction result")
 	}
 	defer file.Close()
 	raw, err := io.ReadAll(io.LimitReader(file, 1<<20+1))
 	if err != nil || len(raw) > 1<<20 {
-		return nil, errors.New("Codex 提炼结果超过上限")
+		return nil, errors.New("Codex extraction result exceeds the limit")
 	}
 	return decodeMemoryCandidates(raw)
 }
@@ -153,10 +153,10 @@ func validateCodexExtractionEvents(raw []byte) error {
 			} `json:"item"`
 		}
 		if json.Unmarshal(scanner.Bytes(), &event) != nil {
-			return errors.New("Codex 提炼事件无法解析")
+			return errors.New("Unable to parse Codex extraction event")
 		}
 		if event.Type == "turn.failed" || event.Type == "error" {
-			return errors.New("Codex 提炼回合失败")
+			return errors.New("Codex extraction turn failed")
 		}
 		if event.Type == "turn.completed" {
 			completed = true
@@ -174,14 +174,14 @@ func validateCodexExtractionEvents(raw []byte) error {
 			if len(kind) > 64 {
 				kind = "unknown"
 			}
-			return fmt.Errorf("Codex 提炼出现非预期事件类型 %s，结果未采用", kind)
+			return fmt.Errorf("Unexpected Codex extraction event type %s. Result discarded.", kind)
 		}
 	}
 	if err := scanner.Err(); err != nil {
 		return err
 	}
 	if !completed {
-		return errors.New("Codex 提炼未完成")
+		return errors.New("Codex extraction did not complete")
 	}
 	return nil
 }

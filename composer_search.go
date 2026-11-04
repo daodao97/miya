@@ -17,10 +17,11 @@ type composerChoice struct {
 	Name, Detail string
 	ArgumentHint string     `json:"argumentHint,omitempty"`
 	Ref          *ThreadRef `json:"ref,omitempty"`
+	Agent        string     `json:"agent,omitempty"`
 }
 
 var composerCommands = []composerChoice{
-	{Name: "goal", Detail: "Set a goal · /goal pause · /goal resume · /goal clear", ArgumentHint: "描述目标，或输入 pause / resume / clear"},
+	{Name: "goal", Detail: "Set a goal · /goal pause · /goal resume · /goal clear", ArgumentHint: "Describe a goal, or enter pause / resume / clear"},
 	{Name: "new", Detail: "Start a new conversation"},
 	{Name: "model", Detail: "Choose the model"},
 	{Name: "fast", Detail: "Toggle Codex fast mode"},
@@ -64,10 +65,25 @@ func composerTokenAt(value string, end int) composerToken {
 		return composerToken{'/', 0, end, prefix[1:]}
 	}
 	start := strings.LastIndex(prefix, "@")
+	if hash := strings.LastIndex(prefix, "#"); hash > start {
+		boundary := hash == 0
+		if hash > 0 {
+			previous, _ := utf8.DecodeLastRuneInString(prefix[:hash])
+			boundary = unicode.IsSpace(previous)
+		}
+		if boundary {
+			start = hash
+		}
+	}
 	if start < 0 {
 		return composerToken{}
 	}
 	for _, m := range threadMentions(value) {
+		if start >= m.Start && start < m.End {
+			return composerToken{}
+		}
+	}
+	for _, m := range agentMentions(value) {
 		if start >= m.Start && start < m.End {
 			return composerToken{}
 		}
@@ -90,7 +106,10 @@ func composerTokenAt(value string, end int) composerToken {
 	} else if strings.ContainsAny(query, " \t\r\n\"`") {
 		return composerToken{}
 	}
-	return composerToken{'@', start, end, query}
+	if value[start] == '#' && len(agentChoices(query, nil)) == 0 {
+		return composerToken{}
+	}
+	return composerToken{value[start], start, end, query}
 }
 
 func insertFileReference(value string, token composerToken, path string) string {

@@ -17,6 +17,10 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/egoist/mygo/i18n"
+	"golang.org/x/text/language"
+	"miya/locales"
 )
 
 func projectFileID(root string) string {
@@ -89,13 +93,13 @@ func (s desktopFileServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	if r.Method != "GET" && r.Method != "HEAD" {
 		w.Header().Set("Allow", "GET, HEAD")
-		http.Error(w, "只支持查看和下载", http.StatusMethodNotAllowed)
+		http.Error(w, "Only viewing and downloading are supported", http.StatusMethodNotAllowed)
 		return
 	}
 	// Do not normalize traversal into a different file or accept OS separators.
 	for _, part := range strings.Split(r.URL.Path, "/") {
 		if part == ".." || strings.ContainsAny(part, "\\\x00") {
-			http.Error(w, "无效路径", 400)
+			http.Error(w, "Invalid path", 400)
 			return
 		}
 	}
@@ -112,7 +116,7 @@ func (s desktopFileServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	projects, err := s.projects(ctx)
 	if err != nil {
-		http.Error(w, "桌面端暂时无法响应，请稍后重试", 503)
+		http.Error(w, "Desktop is not responding. Try again later.", 503)
 		return
 	}
 	var project fileProject
@@ -133,7 +137,7 @@ func (s desktopFileServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		ref, ok := parseThreadURL(r.URL.Query().Get("ref"))
 		if !ok {
-			http.Error(w, "无效的对话标识", 400)
+			http.Error(w, "Invalid conversation identity", 400)
 			return
 		}
 		result, err := s.runtime(ctx, ref, project.Path)
@@ -154,7 +158,7 @@ func (s desktopFileServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		services, err := discover(ctx, project.Path)
 		if err != nil {
-			http.Error(w, "无法查找项目 Web 服务，请刷新或手动输入端口", http.StatusServiceUnavailable)
+			http.Error(w, "Unable to find project web services. Refresh or enter a port manually.", http.StatusServiceUnavailable)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -165,14 +169,14 @@ func (s desktopFileServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	root, err := os.OpenRoot(project.Path)
 	if err != nil {
-		http.Error(w, "项目目录不可用", 404)
+		http.Error(w, "Project directory unavailable", 404)
 		return
 	}
 	defer root.Close()
 	if parts[1] == ".miya-references" {
 		files, err := indexProjectFiles(ctx, project.Path)
 		if err != nil {
-			http.Error(w, "无法搜索项目文件，请稍后重试", http.StatusServiceUnavailable)
+			http.Error(w, "Unable to search project files. Try again later.", http.StatusServiceUnavailable)
 			return
 		}
 		// Keep suggestions inside the selected project, including when rg
@@ -180,7 +184,7 @@ func (s desktopFileServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		valid := files[:0]
 		for _, name := range files {
 			if ctx.Err() != nil {
-				http.Error(w, "文件搜索已超时", http.StatusServiceUnavailable)
+				http.Error(w, "File search timed out", http.StatusServiceUnavailable)
 				return
 			}
 			if info, err := root.Stat(name); err == nil && info.Mode().IsRegular() {
@@ -222,14 +226,14 @@ func (s desktopFileServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		entries, err := file.ReadDir(-1)
 		if err != nil {
-			http.Error(w, "无法读取目录", 403)
+			http.Error(w, "Unable to read directory", 403)
 			return
 		}
 		s.directory(w, r, project, root, name, entries)
 		return
 	}
 	if !info.Mode().IsRegular() {
-		http.Error(w, "无法预览此文件", 403)
+		http.Error(w, "Unable to preview this file", 403)
 		return
 	}
 	if r.URL.Query().Get("download") == "1" {
@@ -256,8 +260,9 @@ type phoneFileEntry struct {
 	Dir                       bool
 }
 type fileDirectory struct {
-	Project, Path, Parent string
-	Entries               []phoneFileEntry
+	Project, Path, Parent                                        string
+	Language, FilesLabel, ParentLabel, DownloadLabel, EmptyLabel string
+	Entries                                                      []phoneFileEntry
 }
 
 func (s desktopFileServer) directory(w http.ResponseWriter, r *http.Request, project fileProject, root *os.Root, name string, entries []fs.DirEntry) {
@@ -267,7 +272,17 @@ func (s desktopFileServer) directory(w http.ResponseWriter, r *http.Request, pro
 		}
 		return strings.ToLower(entries[i].Name()) < strings.ToLower(entries[j].Name())
 	})
-	data := fileDirectory{Project: project.Name, Path: "/"}
+	preferred, _, _ := language.ParseAcceptLanguage(r.Header.Get("Accept-Language"))
+	tags := make([]string, len(preferred))
+	for i, tag := range preferred {
+		tags[i] = tag.String()
+	}
+	lang := i18n.Match(tags, locales.Catalog.Languages())
+	if lang == "" {
+		lang = locales.Catalog.Source()
+	}
+	text := func(source string) string { return locales.TextIn(lang, source) }
+	data := fileDirectory{Project: project.Name, Path: "/", Language: lang, FilesLabel: text("Files"), ParentLabel: text("Parent folder"), DownloadLabel: text("Download"), EmptyLabel: text("This folder is empty")}
 	if name != "." {
 		data.Path = "/" + name
 	}
@@ -288,7 +303,7 @@ func (s desktopFileServer) directory(w http.ResponseWriter, r *http.Request, pro
 		item.URL = url.PathEscape(entry.Name())
 		if item.Dir {
 			item.URL += "/"
-			item.Size = "目录"
+			item.Size = text("Directory")
 		} else {
 			item.Download = item.URL + "?download=1"
 		}
@@ -311,4 +326,4 @@ func fileSize(size int64) string {
 	return fmt.Sprintf("%.1f MB", float64(size)/(1<<20))
 }
 
-var fileDirectoryTemplate = template.Must(template.New("files").Parse(`<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><title>{{.Project}} · 文件</title><style>body{font:17px -apple-system,system-ui;margin:0;padding:24px 16px;background:#f2f2f7;color:#171719}header{margin:8px 4px 24px}h1{font-size:28px;margin:0 0 8px}small{color:#777;overflow-wrap:anywhere}main{background:white;border-radius:14px;overflow:hidden}article{display:flex;align-items:center;border-bottom:1px solid #ddd;min-height:64px;padding:0 14px;gap:12px}article:last-child{border:0}a{color:#007aff;text-decoration:none}article>a:first-child{flex:1;min-width:0;padding:16px 0;overflow-wrap:anywhere}.download{font-size:14px;padding:16px 0;white-space:nowrap}p{padding:20px;color:#777}@media(prefers-color-scheme:dark){body{background:#000;color:#eee}main{background:#1c1c1e}article{border-color:#333}a{color:#0a84ff}}</style><header><h1>{{.Project}}</h1><small>{{.Path}}</small></header><main>{{if .Parent}}<article><a href="{{.Parent}}">↰ 上一级</a></article>{{end}}{{range .Entries}}<article><a href="{{.URL}}">{{if .Dir}}📁{{else}}📄{{end}} {{.Name}}<br><small>{{.Size}}</small></a>{{if .Download}}<a class="download" href="{{.Download}}">下载</a>{{end}}</article>{{else}}<p>目录为空</p>{{end}}</main></html>`))
+var fileDirectoryTemplate = template.Must(template.New("files").Parse("<!doctype html><html lang=\"{{.Language}}\"><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta name=\"color-scheme\" content=\"light dark\"><title>{{.Project}} · {{.FilesLabel}}</title><style>body{font:17px -apple-system,system-ui;margin:0;padding:24px 16px;background:#f2f2f7;color:#171719}header{margin:8px 4px 24px}h1{font-size:28px;margin:0 0 8px}small{color:#777;overflow-wrap:anywhere}main{background:white;border-radius:14px;overflow:hidden}article{display:flex;align-items:center;border-bottom:1px solid #ddd;min-height:64px;padding:0 14px;gap:12px}article:last-child{border:0}a{color:#007aff;text-decoration:none}article>a:first-child{flex:1;min-width:0;padding:16px 0;overflow-wrap:anywhere}.download{font-size:14px;padding:16px 0;white-space:nowrap}p{padding:20px;color:#777}@media(prefers-color-scheme:dark){body{background:#000;color:#eee}main{background:#1c1c1e}article{border-color:#333}a{color:#0a84ff}}</style><header><h1>{{.Project}}</h1><small>{{.Path}}</small></header><main>{{if .Parent}}<article><a href=\"{{.Parent}}\">↰ {{.ParentLabel}}</a></article>{{end}}{{range .Entries}}<article><a href=\"{{.URL}}\">{{if .Dir}}📁{{else}}📄{{end}} {{.Name}}<br><small>{{.Size}}</small></a>{{if .Download}}<a class=\"download\" href=\"{{.Download}}\">{{$.DownloadLabel}}</a>{{end}}</article>{{else}}<p>{{.EmptyLabel}}</p>{{end}}</main></html>"))

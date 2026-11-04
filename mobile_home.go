@@ -54,7 +54,7 @@ func (m *mobileApp) drawerProject(c *ui.Context, project phoneProject) {
 	expanded := m.expandedProject == project.Path
 	ui.Column(c).FillWidth().Children(func() {
 		ui.Row(c).FillWidth().AlignItems(ui.Center).Children(func() {
-			row := m.phoneButton(c.Key("open")).Grow(1).MinWidth(0).MinHeight(44).Padding(0).Gap(10).Radius(10).Label("项目 " + project.Name)
+			row := m.phoneButton(c.Key("open")).Grow(1).MinWidth(0).MinHeight(44).Padding(0).Gap(10).Radius(10).Role(ui.RoleDisclosure).Expanded(expanded).Label(tr("Project ") + project.Name)
 			if row.Pressed() {
 				row.Background(p.surface)
 			}
@@ -66,7 +66,7 @@ func (m *mobileApp) drawerProject(c *ui.Context, project phoneProject) {
 					busy = busy || thread.Busy
 				}
 				if busy && !expanded {
-					ui.Spinner(c).FontSize(m.font(12)).Label("项目进行中：" + project.Name)
+					ui.Spinner(c).FontSize(m.font(12)).Label(tr("Project activity: ") + project.Name)
 				} else {
 					glyph := "chevron-right"
 					if expanded {
@@ -84,18 +84,18 @@ func (m *mobileApp) drawerProject(c *ui.Context, project phoneProject) {
 		}
 		ui.Column(c.Key("threads")).FillWidth().Children(func() {
 			if len(project.Threads) == 0 {
-				ui.Text(c, "还没有对话").Padding(8, 0).FontSize(m.font(14)).TextColor(p.muted)
+				ui.Text(c, tr("No conversations yet")).Padding(8, 0).FontSize(m.font(14)).TextColor(p.muted)
 			}
 			more := m.threadListExpanded[project.Path]
 			for _, thread := range displayedThreads(project.Threads, more) {
 				m.drawerThread(c.Key(thread.ID), thread)
 			}
 			if len(project.Threads) > collapsedThreadCount {
-				label := "展开显示"
+				label := tr("Expand")
 				if more {
-					label = "收起"
+					label = tr("Collapse")
 				}
-				button := m.phoneButton(c.Key("more-threads")).FillWidth().MinHeight(44).Padding(0).Radius(10).Label(label)
+				button := m.phoneButton(c.Key("more-threads")).FillWidth().MinHeight(44).Padding(0).Radius(10).Role(ui.RoleDisclosure).Expanded(more).Label(label)
 				button.Children(func() { ui.Text(c, label).FontSize(m.font(15)).TextColor(p.muted) })
 				if button.Clicked() {
 					if m.threadListExpanded == nil {
@@ -110,15 +110,23 @@ func (m *mobileApp) drawerProject(c *ui.Context, project phoneProject) {
 
 func (m *mobileApp) drawerThread(c *ui.Context, thread Thread) {
 	p := m.pal
-	title := firstNonEmpty(thread.Title, "未命名对话")
+	title := firstNonEmpty(thread.Title, tr("Untitled conversation"))
 	row := m.phoneButton(c).FillWidth().MinHeight(48).Padding(0).Gap(10).Radius(10).Background(ui.Transparent).Label(nativeText(title))
 	if thread.ID == m.open || row.Pressed() {
 		row.Background(p.surface)
 	}
 	row.Children(func() {
 		agentIcon(c, threadAgent(thread), 18)
-		ui.Text(c, nativeText(title)).FontSize(m.font(16)).FontWeight(400).Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
-		m.threadStatus(c, thread)
+		if m.textScale > 1.3 {
+			row.Padding(8, 0)
+			ui.Column(c).Grow(1).MinWidth(0).Gap(4).Children(func() {
+				ui.Text(c, nativeText(title)).FontSize(m.font(16)).FontWeight(400).MaxLines(3).Ellipsis("…")
+				m.threadStatus(c, thread)
+			})
+		} else {
+			ui.Text(c, nativeText(title)).FontSize(m.font(16)).FontWeight(400).Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
+			m.threadStatus(c, thread)
+		}
 	})
 	if row.Clicked() {
 		m.openThread(thread)

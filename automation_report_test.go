@@ -18,7 +18,7 @@ func TestAutomationRunsReportAndCarryResults(t *testing.T) {
 	a := h.add(t, Automation{Name: "上游对账", Instructions: "对账", Schedule: "* * * * *"})
 	h.now = h.now.Add(time.Minute)
 	h.c.automationTick()
-	if !strings.HasPrefix(h.sent[0].Text, "对账") || !strings.Contains(h.sent[0].Text, "report_result") || strings.Contains(h.sent[0].Text, "上一次运行") {
+	if !strings.HasPrefix(h.sent[0].Text, "对账") || !strings.Contains(h.sent[0].Text, "report_result") || strings.Contains(h.sent[0].Text, "previous run") {
 		t.Fatalf("bad first message: %q", h.sent[0].Text)
 	}
 	thread := h.last(a.ID).Thread
@@ -28,11 +28,11 @@ func TestAutomationRunsReportAndCarryResults(t *testing.T) {
 		t.Fatal(err)
 	}
 	res, err := h.c.mcpHandle("mcpReportResult", mcpRequest{Tool: "report_result", Report: &rep})
-	if err != nil || !strings.Contains(res.(string), "已记录") {
+	if err != nil || !strings.Contains(res.(string), "recorded") {
 		t.Fatalf("report not kept: %v %v", res, err)
 	}
 	h.c.update(thread, func(th *Thread) { th.Messages[len(th.Messages)-1].Status = "completed" })
-	h.endTurn(thread, "完成")
+	h.endTurn(thread, "Done")
 	h.c.automationTick()
 	r := h.last(a.ID)
 	if r.Result != runPassed || r.Report == nil || r.Report.Auto || !r.Report.NeedsUser || r.Summary != "上游多扣 3 笔" || string(r.Report.Metrics[0].Value) != "0.8" {
@@ -41,7 +41,7 @@ func TestAutomationRunsReportAndCarryResults(t *testing.T) {
 
 	h.now = h.now.Add(time.Minute)
 	h.c.automationTick()
-	if len(h.sent) != 2 || !strings.Contains(h.sent[1].Text, "上一次运行") || !strings.Contains(h.sent[1].Text, "多扣占比：0.8%") || !strings.Contains(h.sent[1].Text, "pomo 多扣 12.3 元") {
+	if len(h.sent) != 2 || !strings.Contains(h.sent[1].Text, "previous run") || !strings.Contains(h.sent[1].Text, "多扣占比: 0.8%") || !strings.Contains(h.sent[1].Text, "pomo 多扣 12.3 元") {
 		t.Fatalf("previous result not carried: %q", h.sent[len(h.sent)-1].Text)
 	}
 
@@ -57,7 +57,7 @@ func TestAutomationRunsReportAndCarryResults(t *testing.T) {
 	h.s.store.Automations[0].NoCarryOver = true
 	h.now = h.now.Add(time.Minute)
 	h.c.automationTick()
-	if strings.Contains(h.sent[len(h.sent)-1].Text, "上一次运行") {
+	if strings.Contains(h.sent[len(h.sent)-1].Text, "previous run") {
 		t.Fatal("previous result carried while off")
 	}
 }
@@ -66,7 +66,7 @@ func TestReportResultOutsideAutomations(t *testing.T) {
 	h := newAutomationHarness(t)
 	h.c.run = func(f func()) { f() }
 	automationCaller(h, "report_result")
-	if _, err := h.c.mcpHandle("mcpReportResult", mcpRequest{Tool: "report_result", Report: &RunReport{Summary: "x"}}); err == nil || !strings.Contains(err.Error(), "不是正在运行的自动化") {
+	if _, err := h.c.mcpHandle("mcpReportResult", mcpRequest{Tool: "report_result", Report: &RunReport{Summary: "x"}}); err == nil || !strings.Contains(err.Error(), "not an active automation") {
 		t.Fatalf("report outside a run accepted: %v", err)
 	}
 	if _, err := h.c.mcpHandle("mcpReportResult", mcpRequest{Tool: "report_result", Report: &RunReport{}}); err == nil {

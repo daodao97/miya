@@ -58,6 +58,7 @@ type MessagePart struct {
 	Text          string     `json:"text,omitempty"`
 	Ref           *ThreadRef `json:"ref,omitempty"`
 	TitleSnapshot string     `json:"titleSnapshot,omitempty"`
+	Agent         string     `json:"agent,omitempty"`
 }
 
 type threadMention struct {
@@ -83,6 +84,14 @@ func referenceCodeMask(s string) []bool {
 	sanitized := []byte(s)
 	for _, m := range threadMentionPattern.FindAllStringSubmatchIndex(s, -1) {
 		if _, ok := parseThreadURL(s[m[4]:m[5]]); !ok {
+			continue
+		}
+		for i := m[0]; i < m[1]; i++ {
+			sanitized[i] = 'x'
+		}
+	}
+	for _, m := range agentMentionPattern.FindAllStringSubmatchIndex(s, -1) {
+		if _, ok := parseAgentURL(s[m[4]:m[5]]); !ok {
 			continue
 		}
 		for i := m[0]; i < m[1]; i++ {
@@ -143,12 +152,11 @@ func threadMentions(text string) []threadMention {
 func messageParts(text string) []MessagePart {
 	var out []MessagePart
 	end := 0
-	for _, m := range threadMentions(text) {
+	for _, m := range composerMentions(text) {
 		if m.Start > end {
 			out = append(out, MessagePart{Type: "text", Text: text[end:m.Start]})
 		}
-		r := m.Ref
-		out = append(out, MessagePart{Type: "thread_ref", Ref: &r, TitleSnapshot: m.Title})
+		out = append(out, m.Part)
 		end = m.End
 	}
 	if end < len(text) {
@@ -165,11 +173,17 @@ func partsText(parts []MessagePart) (string, error) {
 			b.WriteString(p.Text)
 		case "thread_ref":
 			if p.Ref == nil || !p.Ref.valid() {
-				return "", errors.New("会话引用身份无效")
+				return "", errors.New("Invalid conversation reference identity")
 			}
 			b.WriteString(referenceText(*p.Ref, p.TitleSnapshot))
+		case "agent_ref":
+			tag := agentReferenceText(p.Agent, p.TitleSnapshot)
+			if tag == "" {
+				return "", errors.New("Invalid agent reference identity")
+			}
+			b.WriteString(tag)
 		default:
-			return "", fmt.Errorf("未知消息内容类型 %q", p.Type)
+			return "", fmt.Errorf("Unknown message content type %q", p.Type)
 		}
 	}
 	return b.String(), nil
@@ -186,7 +200,7 @@ func loadReferenceSource(dir string) (string, error) {
 		}
 		id := strings.TrimSpace(string(data))
 		if !sourceIDPattern.MatchString(id) {
-			return "", errors.New("会话引用来源文件无效")
+			return "", errors.New("Invalid conversation reference source file")
 		}
 		return id, nil
 	}
@@ -222,7 +236,7 @@ func loadReferenceSource(dir string) (string, error) {
 func referenceSourceForService() (string, string) {
 	id, err := loadReferenceSource(serviceDir())
 	if err != nil {
-		return "", "无法初始化会话引用来源：" + err.Error()
+		return "", "Unable to initialize conversation reference source: " + err.Error()
 	}
 	return id, ""
 }

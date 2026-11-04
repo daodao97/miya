@@ -28,22 +28,24 @@ func TestMemoryManagementPageAndPromotionPreview(t *testing.T) {
 			app.settingsTab = 4
 			app.memories = memoryUI{scope: "project", project: c.cwd, list: list, loadedAt: time.Now()}
 			tt.Frame()
-			for _, want := range []string{"共享记忆", "当前项目", "用户偏好", "本周暂缓手机协议升级", "忘记", "编辑", "提升到项目文件…", "在当前项目使用记忆工具", "查询时包含用户偏好", "发送时自动召回相关记忆", "回合完成后自动提炼记忆"} {
+			for _, want := range []string{"Shared memory", "Current project", "User preferences", "本周暂缓手机协议升级", "Forget", "Edit", "Promote to project file…", "Use memory tools in this project", "Include user preferences in searches", "Automatically recall relevant memories when sending", "Automatically extract memories after each turn"} {
 				if !tt.HasText(want) {
 					t.Fatalf("missing %s: %q", want, tt.Texts())
 				}
 			}
 			automationSnapshot(t, tt, fmt.Sprintf("memory-list-dark-%v", dark))
-			if err := tt.Click("编辑"); err != nil {
+			tt.Scroll(700, 500, 0, 400)
+			tt.Frame()
+			if err := tt.Click("Edit"); err != nil {
 				t.Fatal(err)
 			}
-			for _, want := range []string{"编辑记忆", "保存记忆", "取消"} {
+			for _, want := range []string{"Edit memory", "Save memory", "Cancel"} {
 				if !tt.HasText(want) {
 					t.Fatalf("missing form %s", want)
 				}
 			}
 			automationSnapshot(t, tt, fmt.Sprintf("memory-form-dark-%v", dark))
-			if err := tt.Click("取消"); err != nil {
+			if err := tt.Click("Cancel"); err != nil {
 				t.Fatal(err)
 			}
 			app.memories.promotion = &memoryPromotion{File: "AGENTS.md", After: "长期约定\n"}
@@ -52,7 +54,7 @@ func TestMemoryManagementPageAndPromotionPreview(t *testing.T) {
 			app.memories.content = e.Content
 			app.memories.file = "AGENTS.md"
 			tt.Frame()
-			if !tt.HasText("确认写入项目文件") {
+			if !tt.HasText("Confirm writing to project file") {
 				t.Fatalf("promotion lacked final confirmation: %q", tt.Texts())
 			}
 			automationSnapshot(t, tt, fmt.Sprintf("memory-promotion-dark-%v", dark))
@@ -75,7 +77,7 @@ func TestMemoryExtractorPickerSavesAgentWithoutEnablingAutomation(t *testing.T) 
 	app.memoryRevisionSeen = c.memoryRevision
 	app.memories = memoryUI{scope: "project", project: c.cwd, list: list, loadedAt: time.Now()}
 	tt.Frame()
-	if err := tt.Click("记忆提炼 Agent：Codex"); err != nil {
+	if err := tt.Click("Memory extraction agent: Codex"); err != nil {
 		t.Fatal(err)
 	}
 	scope, _ := memory.ProjectScope(c.cwd)
@@ -96,10 +98,10 @@ func TestMemoryExtractionFailureReasonVisible(t *testing.T) {
 	attachMemory(t, app.c)
 	app.section, app.settingsTab = "Settings", 4
 	app.memories = memoryUI{scope: "project", project: app.c.cwd, loadedAt: time.Now(), list: memoryList{
-		Extraction: memory.ExtractionStatus{Failed: 1, LastError: "提炼输入超过上限，已跳过此回合"},
+		Extraction: memory.ExtractionStatus{Failed: 1, LastError: "Extraction input exceeds the limit. Skipped this turn."},
 	}}
 	tt.Frame()
-	if !tt.HasText("最近提炼问题：提炼输入超过上限，已跳过此回合") {
+	if !tt.HasText("Latest extraction issue: Extraction input exceeds the limit. Skipped this turn.") {
 		t.Fatalf("missing extraction diagnostic: %q", tt.Texts())
 	}
 }
@@ -115,7 +117,7 @@ func TestMemoryExplicitNoticeContainsScopeAndUndo(t *testing.T) {
 	app.memoryRevisionSeen = c.memoryRevision
 	app.memoryNotes = map[string]*memoryNoticeUI{key: {entry: e, loadedAt: time.Now()}}
 	tt.Frame()
-	for _, want := range []string{"Miya 记忆 · 用户级偏好（跨项目）", "偏好中文解释", "撤销记忆"} {
+	for _, want := range []string{"Miya memory · User preferences (across projects)", "偏好中文解释", "Undo memory change"} {
 		if !tt.HasText(want) {
 			t.Fatalf("notice hidden: %q", tt.Texts())
 		}
@@ -125,7 +127,7 @@ func TestMemoryExplicitNoticeContainsScopeAndUndo(t *testing.T) {
 	app.memoryRevisionSeen = c.memoryRevision
 	app.memoryNotes[key] = &memoryNoticeUI{entry: e, loadedAt: time.Now()}
 	tt.Frame()
-	if tt.HasText("偏好中文解释") || tt.HasText("撤销记忆") || !tt.HasText("已忘记") {
+	if tt.HasText("偏好中文解释") || tt.HasText("Undo memory change") || !tt.HasText("Forgotten") {
 		t.Fatal("forgotten notice retained plaintext")
 	}
 }
@@ -139,7 +141,7 @@ func TestMemoryLegacyAutomaticCardsStayOutOfConversation(t *testing.T) {
 	}}})
 	c.setActive(1)
 	tt.Frame()
-	if !tt.HasText("正常回答") || tt.HasText("Miya 记忆 · 当前项目") || tt.HasText("正在读取记忆…") {
+	if !tt.HasText("正常回答") || tt.HasText("Miya memory · Current project") || tt.HasText("Loading memory…") {
 		t.Fatalf("legacy automatic card still occupies the timeline: %q", tt.Texts())
 	}
 	groups := groupMessages([]Message{legacy})
@@ -161,16 +163,16 @@ func TestMobileMemoryReadOnlyPageAndDesktopIsolation(t *testing.T) {
 	tt := ui.NewTester(m.viewRoot, 390, 844)
 	tt.Frame()
 	openMobileDrawer(t, tt)
-	if err := tt.Click("共享记忆"); err != nil {
+	if err := tt.Click("Shared memory"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	for _, want := range []string{"共享记忆", "本周暂缓手机协议升级", "当前项目", "用户偏好"} {
+	for _, want := range []string{"Shared memory", "本周暂缓手机协议升级", "Current project", "User preferences"} {
 		if !tt.HasText(want) {
 			t.Fatalf("mobile lacks %s: %q", want, tt.Texts())
 		}
 	}
-	for _, forbidden := range []string{"编辑", "忘记", "撤销记忆", "保存记忆"} {
+	for _, forbidden := range []string{"Edit", "Forget", "Undo memory change", "Save memory"} {
 		if _, ok := tt.Find(forbidden); ok {
 			t.Fatalf("mobile exposes %s", forbidden)
 		}

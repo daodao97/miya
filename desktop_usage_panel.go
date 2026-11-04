@@ -78,7 +78,7 @@ func (app *chatApp) toggleUsagePanel() {
 		Content: ui.View(app.usagePanelView),
 	})
 	d.panel = panel
-	panel.SetTitle("Miya 用量")
+	panel.SetTitle(tr("Miya Usage"))
 	panel.OnClosed(func() {
 		if d.panel == panel {
 			d.panel, d.resetOpen = nil, false
@@ -130,6 +130,7 @@ func usageIconButton(c *ui.Context, glyph, label string) ui.Element {
 }
 
 func (app *chatApp) usagePanelView(c *ui.Context) {
+	useInterfaceLanguage(c)
 	d := app.usage
 	if d == nil {
 		return
@@ -141,7 +142,7 @@ func (app *chatApp) usagePanelView(c *ui.Context) {
 	c.SetTheme(t)
 	c.Root().Background(ui.Transparent)
 	c.After(time.Minute)
-	box := ui.Column(c).Fill().TextColor(t.Text).FontSize(13).Label("用量面板")
+	box := ui.Column(c).Fill().TextColor(t.Text).FontSize(13).Label(tr("Usage panel"))
 	if !c.Vibrancy() {
 		box.Background(t.Background)
 		if runtime.GOOS != "windows" {
@@ -157,7 +158,7 @@ func (app *chatApp) usagePanelView(c *ui.Context) {
 			tabs := ui.TabsBase(c, &selected, 2)
 			tabs.List.Gap(4).Children(func() {
 				for i, agent := range agents {
-					tab := tabs.Tab(i).Height(30).Padding(0, 10).Gap(6).Radius(6).AlignItems(ui.Center).Label("查看 " + usageAgentName(agent) + " 用量")
+					tab := tabs.Tab(i).Height(30).Padding(0, 10).Gap(6).Radius(6).AlignItems(ui.Center).Label(tr("View ") + usageAgentName(agent) + tr(" usage"))
 					color := t.TextMuted
 					if i == selected {
 						tab.Background(t.SurfaceHover)
@@ -180,7 +181,7 @@ func (app *chatApp) usagePanelView(c *ui.Context) {
 				app.invalidateUsageViews()
 			}
 			ui.Box(c).Grow(1)
-			if usageIconButton(c, "settings", "用量设置").Clicked() {
+			if usageIconButton(c, "settings", tr("Usage settings")).Clicked() {
 				app.openUsageSettingsFromPanel()
 			}
 		})
@@ -206,7 +207,7 @@ func (app *chatApp) usagePanelView(c *ui.Context) {
 				ui.Text(c, r.Plan).FontSize(10).FontWeight(500).TextColor(t.TextMuted).Padding(3, 6).Radius(4).Background(t.SurfaceHover).MaxWidth(84).SingleLine().Ellipsis("…").Tooltip(r.Plan)
 			}
 			ui.Text(c, usagePanelStatus(r, d.busy, c.Now())).FontSize(11).TextColor(t.TextMuted).Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
-			if usageIconButton(c, "refresh", "刷新用量").Disabled(d.busy).Clicked() {
+			if usageIconButton(c, "refresh", tr("Refresh usage")).Disabled(d.busy).Clicked() {
 				app.refreshUsage()
 			}
 		})
@@ -225,16 +226,16 @@ func usagePanelWindow(c *ui.Context, w agentusage.Window, p desktopPalette) {
 	used := agentusage.Percent(w.Used)
 	ui.Column(c).FillWidth().Gap(6).Children(func() {
 		ui.Row(c).FillWidth().Height(30).Gap(6).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, w.Name).FontSize(12).TextColor(p.muted).Grow(1).MinWidth(0).SingleLine().Ellipsis("…").Tooltip(w.Name)
-			ui.Text(c, fmt.Sprintf("%.0f%%", used)).Label(fmt.Sprintf("已用 %.0f%%", used)).FontSize(26).FontWeight(600).TextColor(color).Shrink(0)
-			ui.Text(c, "已用").FontSize(11).TextColor(p.muted).Shrink(0)
+			ui.Text(c, tr(w.Name)).FontSize(12).TextColor(p.muted).Grow(1).MinWidth(0).SingleLine().Ellipsis("…").Tooltip(tr(w.Name))
+			ui.Text(c, fmt.Sprintf("%.0f%%", used)).Label(fmt.Sprintf(tr("%.0f%% used"), used)).FontSize(26).FontWeight(600).TextColor(color).Shrink(0)
+			ui.Text(c, tr("Used")).FontSize(11).TextColor(p.muted).Shrink(0)
 		})
-		ui.Box(c).FillWidth().Height(6).Radius(3).Clip().Background(p.line).Label("额度进度 " + w.Name).Children(func() {
+		ui.Box(c).FillWidth().Height(6).Radius(3).Clip().Background(p.line).Label(tr("Quota progress ") + w.Name).Children(func() {
 			ui.Box(c).WidthPercent(float32(used)).FillHeight().Background(color).Radius(3)
 			if timed {
 				ui.Box(c).Absolute().Left(1).Right(1).Top(0).Height(6).Children(func() {
 					ui.Box(c).Absolute().LeftPercent(float32(elapsed)).Top(0).Size(2, 6).Translate(-1, 0).Background(p.ink).Shadow(0, 0, 0, 1, p.canvas).
-						Label("时间进度 " + w.Name).Tooltip(fmt.Sprintf("周期已过 %.0f%%", elapsed))
+						Label(tr("Time progress ") + w.Name).Tooltip(fmt.Sprintf(tr("%.0f%% of cycle elapsed"), elapsed))
 				})
 			}
 		})
@@ -242,10 +243,10 @@ func usagePanelWindow(c *ui.Context, w agentusage.Window, p desktopPalette) {
 			ui.Row(c).FillWidth().Height(16).Gap(6).AlignItems(ui.Center).Children(func() {
 				if timed {
 					ui.Text(c, usagePaceText(used, elapsed)).FontSize(10).TextColor(p.muted).Grow(1).MinWidth(0).SingleLine().Ellipsis("…").
-						Tooltip("按周期时间均匀消耗额度的参考值，不代表实际请求速率。")
+						Tooltip(tr("Reference usage at a steady pace over the billing cycle, not the actual request rate."))
 				}
 				if w.Reset != "" {
-					ui.Text(c, w.Reset+" 重置").FontSize(10).TextColor(p.muted).Shrink(0).SingleLine().Tooltip(w.Reset + " 重置")
+					ui.Text(c, w.Reset+tr(" reset")).FontSize(10).TextColor(p.muted).Shrink(0).SingleLine().Tooltip(w.Reset + tr(" reset"))
 				}
 			})
 		}
@@ -265,21 +266,21 @@ func usagePaceText(used, elapsed float64) string {
 	pace := int(math.Round(elapsed))
 	delta := int(math.Round(elapsed - used))
 	if delta > 0 {
-		return fmt.Sprintf("均速 %d%% · 少用 %d 个百分点", pace, delta)
+		return fmt.Sprintf(tr("Steady pace %d%% · %d points under"), pace, delta)
 	}
 	if delta < 0 {
-		return fmt.Sprintf("均速 %d%% · 多用 %d 个百分点", pace, -delta)
+		return fmt.Sprintf(tr("Steady pace %d%% · %d points over"), pace, -delta)
 	}
-	return fmt.Sprintf("均速 %d%% · 与时间持平", pace)
+	return fmt.Sprintf(tr("Steady pace %d%% · On pace"), pace)
 }
 
 func usagePanelEmpty(c *ui.Context, r agentusage.Reading, busy bool) {
-	title, message := "暂无额度数据", "刷新以读取本机账号。"
+	title, message := tr("No usage data"), tr("Refresh to read local accounts.")
 	if r.Error != "" {
-		title, message = "读取失败", r.Error
+		title, message = tr("Failed to load"), r.Error
 	}
 	if busy {
-		title, message = "读取中", "正在查询 "+usageAgentName(r.Agent)+" 账号。"
+		title, message = tr("Loading"), tr("Checking ")+usageAgentName(r.Agent)+tr(" account.")
 	}
 	ui.Column(c).FillWidth().Gap(8).Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
@@ -294,17 +295,17 @@ func usagePanelEmpty(c *ui.Context, r agentusage.Reading, busy bool) {
 
 func usagePanelStatus(r agentusage.Reading, busy bool, now time.Time) string {
 	if busy {
-		return "更新中"
+		return tr("Updating")
 	}
 	if r.At.IsZero() {
-		return "尚未更新"
+		return tr("Not updated yet")
 	}
-	action := "更新"
+	action := tr("Updated")
 	if r.Error != "" || len(r.Windows) == 0 {
-		action = "检查"
+		action = tr("Checked")
 	}
 	if now.Sub(r.At) < time.Minute {
-		return "刚刚" + action
+		return action + " just now"
 	}
 	format := "15:04"
 	if y, m, d := r.At.Local().Date(); y != now.Year() || m != now.Month() || d != now.Day() {

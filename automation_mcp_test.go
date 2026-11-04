@@ -71,14 +71,14 @@ func TestMCPCreateAutomationAsksFirst(t *testing.T) {
 	res, err := h.c.mcpHandle("mcpAutomationCreate", mcpRequest{Tool: "create_automation", Auto: args})
 	out := startDeferred(t, res, err)
 	card := miyaCard(t, h.c)
-	if card.ThreadID != caller.ServerID || requestAgent(card) != "Miya" || !strings.Contains(card.Command, "工作日 9:00") || !strings.Contains(card.Command, "go test ./... 通过，最多 3 轮") || !h.c.threadAwaitsUser(caller) {
+	if card.ThreadID != caller.ServerID || requestAgent(card) != "Miya" || !strings.Contains(card.Command, "Weekdays 9:00") || !strings.Contains(card.Command, "Check: go test ./...; up to 3 rounds") || !h.c.threadAwaitsUser(caller) {
 		t.Fatalf("bad card: %+v", card)
 	}
 	if len(h.s.store.Automations) != 0 {
 		t.Fatal("created before the user accepted")
 	}
 	h.c.respond(card, approvalResult(card, true))
-	if got := await(t, out); !strings.Contains(got, "已创建自动化「每日分拣」") || !strings.Contains(got, "11月2日 周一 09:00") {
+	if got := await(t, out); !strings.Contains(got, "Created automation \"每日分拣\"") || !strings.Contains(got, "11/2 (Mon) 09:00") {
 		t.Fatalf("bad answer: %q", got)
 	}
 	if len(h.s.store.Automations) != 1 || len(h.c.approvals()) != 0 {
@@ -93,7 +93,7 @@ func TestMCPCreateAutomationAsksFirst(t *testing.T) {
 	out = startDeferred(t, res, err)
 	card = miyaCard(t, h.c)
 	h.c.respond(card, approvalResult(card, false))
-	if got := await(t, out); !strings.Contains(got, "未创建") || len(h.s.store.Automations) != 1 {
+	if got := await(t, out); !strings.Contains(got, "No automation was created") || len(h.s.store.Automations) != 1 {
 		t.Fatalf("declined card created one: %q", got)
 	}
 
@@ -111,22 +111,22 @@ func TestMCPUpdateAndListAutomations(t *testing.T) {
 	a := h.add(t, Automation{Name: "每日分拣", Instructions: "看 Issue", Schedule: "0 9 * * 1-5"})
 	off := false
 	res, err := h.c.mcpHandle("mcpAutomationUpdate", mcpRequest{Tool: "update_automation", Auto: &mcpAutomationArgs{ID: a.ID, Enabled: &off}})
-	if err != nil || !strings.Contains(res.(string), "已暂停") || h.s.store.Automations[0].Enabled || len(h.c.approvals()) != 0 {
+	if err != nil || !strings.Contains(res.(string), "Paused") || h.s.store.Automations[0].Enabled || len(h.c.approvals()) != 0 {
 		t.Fatalf("pausing: %v %v", res, err)
 	}
 	automationCaller(h, "update_automation")
 	res, err = h.c.mcpHandle("mcpAutomationUpdate", mcpRequest{Tool: "update_automation", Auto: &mcpAutomationArgs{ID: "每日分拣", Schedule: "0 7 * * *"}})
 	out := startDeferred(t, res, err)
 	card := miyaCard(t, h.c)
-	if !strings.Contains(card.Command, "时间：工作日 9:00 → 每天 7:00") {
+	if !strings.Contains(card.Command, "Schedule: Weekdays 9:00 → Daily at 7:00") {
 		t.Fatalf("bad diff: %q", card.Command)
 	}
 	h.c.respond(card, approvalResult(card, true))
-	if got := await(t, out); !strings.Contains(got, "已修改") || h.s.store.Automations[0].Schedule != "0 7 * * *" {
+	if got := await(t, out); !strings.Contains(got, "Updated") || h.s.store.Automations[0].Schedule != "0 7 * * *" {
 		t.Fatalf("not changed: %q %+v", got, h.s.store.Automations[0])
 	}
 	list, err := h.c.mcpHandle("mcpAutomationList", mcpRequest{Tool: "list_automations"})
-	if err != nil || !strings.Contains(list.(string), a.ID+"「每日分拣」") || !strings.Contains(list.(string), "已暂停") {
+	if err != nil || !strings.Contains(list.(string), a.ID+"\"每日分拣\"") || !strings.Contains(list.(string), "Paused") {
 		t.Fatalf("bad list: %v %v", list, err)
 	}
 	if _, err := h.c.mcpHandle("mcpAutomationUpdate", mcpRequest{Tool: "update_automation", Auto: &mcpAutomationArgs{ID: "nope"}}); err == nil {
@@ -150,7 +150,7 @@ func TestMCPCreateAutomationFromBackgroundProject(t *testing.T) {
 		t.Fatalf("card not in the caller's conversation: %+v", card)
 	}
 	h.c.respond(card, approvalResult(card, true))
-	if got := await(t, out); !strings.Contains(got, "已创建") {
+	if got := await(t, out); !strings.Contains(got, "Created") {
 		t.Fatalf("bad answer: %q", got)
 	}
 	if a := h.s.store.Automations[0]; a.Project != other || a.Agent != agentCodex {

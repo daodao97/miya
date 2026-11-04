@@ -13,7 +13,7 @@ import (
 func (app *chatApp) runtimeSurface(c *ui.Context, p *panelState, s *panelSurface) {
 	ref := app.c.threadRef(app.c.current())
 	if !ref.valid() {
-		panelMessage(c, "后台运行", "发送消息并建立对话后可查看运行信息")
+		panelMessage(c, tr("Background tasks"), tr("Send a message to start a conversation and view runtime information"))
 		return
 	}
 	if s.runtimeRef != ref {
@@ -27,8 +27,8 @@ func (app *chatApp) runtimeSurface(c *ui.Context, p *panelState, s *panelSurface
 	}
 	c.After(time.Second)
 	panelBar(c, func() {
-		ui.Text(c, "本对话后台运行").FontSize(12).Grow(1)
-		if toolButton(c, "refresh", "刷新运行信息").Disabled(s.runtimeLoading).Clicked() {
+		ui.Text(c, tr("Background activity")).FontSize(12).Grow(1)
+		if toolButton(c, "refresh", tr("Refresh runtime information")).Disabled(s.runtimeLoading).Clicked() {
 			s.runtimeAt = time.Time{}
 		}
 	})
@@ -48,29 +48,29 @@ func (app *chatApp) runtimeSurface(c *ui.Context, p *panelState, s *panelSurface
 			if view.Notice != "" {
 				ui.Text(c, view.Notice).FontSize(12).TextColor(muted).LineHeight(1.5)
 			}
-			ui.Text(c, "后台任务").FontWeight(600)
+			ui.Text(c, tr("Background tasks")).FontWeight(600)
 			if len(view.Tasks) == 0 {
-				ui.Text(c, map[bool]string{true: "当前没有原生后台任务", false: "原生任务集合尚未确认"}[view.TasksKnown]).FontSize(12).TextColor(muted)
+				ui.Text(c, map[bool]string{true: tr("No native background tasks"), false: tr("Native task list unconfirmed")}[view.TasksKnown]).FontSize(12).TextColor(muted)
 			}
 			for _, task := range view.Tasks {
 				ui.Column(c.Key("task-" + task.ID)).FillWidth().Padding(12).Gap(6).Radius(8).Background(panel).Children(func() {
-					ui.Text(c, firstNonEmpty(task.Description, "后台任务")).FontSize(12).LineHeight(1.4)
+					ui.Text(c, firstNonEmpty(task.Description, tr("Background tasks"))).FontSize(12).LineHeight(1.4)
 					ui.Text(c, runtimeStatus(task.Status)+" · "+runtimeKind(task.Kind)).FontSize(11).TextColor(muted)
 				})
 			}
-			ui.Text(c, "系统进程").FontWeight(600)
+			ui.Text(c, tr("System process")).FontWeight(600)
 			if len(view.Processes) == 0 {
-				ui.Text(c, "尚无可核验的进程身份").FontSize(12).TextColor(muted)
+				ui.Text(c, tr("No process identity available for verification")).FontSize(12).TextColor(muted)
 			}
 			for _, process := range view.Processes {
 				ui.Text(c, fmt.Sprintf("%s · PID %d · %s", process.Name, process.Identity.PID, runtimeStatus(process.Status))).FontSize(12).TextColor(muted)
 			}
-			ui.Text(c, "Web 服务").FontWeight(600)
+			ui.Text(c, tr("Web services")).FontWeight(600)
 			if len(s.runtimeData.Services) == 0 {
-				ui.Text(c, "尚未核验到本对话的 HTTP 服务").FontSize(12).TextColor(muted)
+				ui.Text(c, tr("No verified HTTP service for this conversation")).FontSize(12).TextColor(muted)
 			}
 			for _, service := range s.runtimeData.Services {
-				if ui.Button(c, fmt.Sprintf("打开端口 %d", service.Port)).FillWidth().MinHeight(40).Clicked() {
+				if ui.Button(c, fmt.Sprintf(tr("Open port %d"), service.Port)).FillWidth().MinHeight(40).Clicked() {
 					app.openRuntimeService(p, s, ref, service)
 				}
 			}
@@ -80,7 +80,7 @@ func (app *chatApp) runtimeSurface(c *ui.Context, p *panelState, s *panelSurface
 				}
 			}
 			if view.ObservedAt > 0 {
-				ui.Text(c, "最近核验 "+time.UnixMilli(view.ObservedAt).Local().Format("15:04:05")).FontSize(11).TextColor(muted)
+				ui.Text(c, tr("Last verified ")+time.UnixMilli(view.ObservedAt).Local().Format("15:04:05")).FontSize(11).TextColor(muted)
 			}
 		})
 	})
@@ -111,10 +111,11 @@ func (app *chatApp) loadRuntimeSurface(s *panelSurface, ref ThreadRef) {
 	}()
 }
 func (app *chatApp) openRuntimeService(p *panelState, s *panelSurface, ref ThreadRef, service phoneWebService) {
+	cl := app.c.remote
 	go func() {
 		var err error
-		if app.c.remote != nil {
-			err = app.c.remote.call("runtimeValidate", service, nil)
+		if cl != nil {
+			err = cl.call("runtimeValidate", service, nil)
 		} else {
 			err = app.c.runtimes().validateToken(context.Background(), service.RuntimeToken, service.Host, service.Port)
 		}
@@ -129,6 +130,11 @@ func (app *chatApp) openRuntimeService(p *panelState, s *panelSurface, ref Threa
 			app.openSurface(p, surfaceBrowser)
 			browser := p.surfaces[p.active]
 			browser.address = "http://" + net.JoinHostPort(service.Host, strconv.Itoa(service.Port)) + "/"
+			if app.c.remoteHost() {
+				browser.loaded = browser.address
+				app.navigateRemoteBrowser(browser, browser.address, service)
+				return
+			}
 			app.navigate(browser)
 		})
 	}()

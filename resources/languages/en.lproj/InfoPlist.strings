@@ -1,0 +1,3 @@
+"NSFaceIDUsageDescription" = "Verify your identity to save or use your Mac login password to unlock remote desktop.";
+"NSCameraUsageDescription" = "Scan the QR code in Miya on your desktop to view conversations.";
+"NSLocalNetworkUsageDescription" = "Connect to your other Miya devices over an encrypted local network connection for lower latency.";

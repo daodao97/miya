@@ -20,7 +20,7 @@ func TestMobileNewSendStaysVisibleUntilHistoryArrives(t *testing.T) {
 				m.beginNewSend(m.draft, nil)
 				tt := ui.NewTester(m.viewRoot, width, 750)
 				tt.Frame()
-				if !tt.HasText(m.draft) || !tt.HasText("发送中…") || tt.HasText("Let’s build") {
+				if !tt.HasText(m.draft) || !tt.HasText("Sending…") || tt.HasText("Let’s build") {
 					t.Fatalf("first message is not immediately visible: %v", tt.Texts())
 				}
 				if len(m.view.c.current().Messages) != 0 || len(m.msgCache) != 0 {
@@ -28,7 +28,7 @@ func TestMobileNewSendStaysVisibleUntilHistoryArrives(t *testing.T) {
 				}
 				m.sent(3, "")
 				tt.Frame()
-				if !tt.HasText("请修复手机新建对话的空白问题") || !tt.HasText("正在同步对话…") || tt.HasText("Loading conversation…") {
+				if !tt.HasText("请修复手机新建对话的空白问题") || !tt.HasText("Syncing conversation…") || tt.HasText("Loading conversation…") {
 					t.Fatalf("send acknowledgement replaced the prompt with an empty list: %v", tt.Texts())
 				}
 				if len(m.subscribeRequest(3).Have) != 0 {
@@ -42,7 +42,7 @@ func TestMobileNewSendStaysVisibleUntilHistoryArrives(t *testing.T) {
 				m.receiveThread(3, phoneThreadDelta{Thread: Thread{ID: 3, ServerID: "created", Agent: agent, HistoryLoaded: true, Busy: true}, Reset: true,
 					Order: []int{10}, Changed: []Message{{ID: 10, Role: "user", Content: "请修复手机新建对话的空白问题"}}})
 				tt.Frame()
-				if m.newSend != nil || !tt.HasText("请修复手机新建对话的空白问题") || tt.HasText("正在同步对话…") {
+				if m.newSend != nil || !tt.HasText("请修复手机新建对话的空白问题") || tt.HasText("Syncing conversation…") {
 					t.Fatalf("authoritative history did not replace the preview: %v", tt.Texts())
 				}
 				messages := m.view.c.current().Messages
@@ -51,6 +51,54 @@ func TestMobileNewSendStaysVisibleUntilHistoryArrives(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestMobileNewSendKeepsMessageWhenServerIdentityArrives(t *testing.T) {
+	m := testMobileApp()
+	m.newProject, m.newAgent = "/a", agentCodex
+	m.router().Push("/thread")
+	m.sending, m.draft = true, "首条消息应一直可见"
+	m.beginNewSend(m.draft, nil)
+	tt := ui.NewTester(m.viewRoot, 390, 750)
+	tt.Frame()
+	m.sent(3, "")
+	// Codex publishes the local user message before thread/start returns
+	// its durable ID. The phone has already subscribed by the numeric ID.
+	sync := newPhoneThreadSync(nil)
+	thread := Thread{ID: 3, Agent: agentCodex, HistoryLoaded: true, Busy: true,
+		Messages: []Message{{ID: 10, Role: "user", Content: "首条消息应一直可见", ItemID: "pending-user"}}}
+	delta, changed := sync.update(thread)
+	if !changed {
+		t.Fatal("initial user message was not published")
+	}
+	m.receiveThread(3, delta)
+	tt.Frame()
+	if m.newSend != nil || !tt.HasText("首条消息应一直可见") {
+		t.Fatal("initial desktop message did not replace the local preview")
+	}
+	// Only metadata changes next; the desktop correctly omits the user
+	// message because its fingerprint was already sent.
+	thread.ServerID = "created"
+	delta, changed = sync.update(thread)
+	if !changed || len(delta.Changed) != 0 || delta.Reset {
+		t.Fatalf("expected an identity-only delta: %+v", delta)
+	}
+	m.receiveThread(3, delta)
+	tt.Frame()
+	if !tt.HasText("首条消息应一直可见") || len(m.view.c.current().Messages) != 1 {
+		t.Fatalf("assigning the durable ID hid the first message: %v", tt.Texts())
+	}
+	if got := m.subscribeRequest(3); got.ServerID != "created" || len(got.Have) != 1 || got.Have[0].ID != 10 {
+		t.Fatalf("confirmed history was not retained for reconnection: %+v", got)
+	}
+	thread.Messages = append(thread.Messages, Message{ID: 11, Role: "assistant", Content: "正在处理"})
+	delta, _ = sync.update(thread)
+	m.receiveThread(3, delta)
+	tt.Frame()
+	messages := m.view.c.current().Messages
+	if !tt.HasText("首条消息应一直可见") || len(messages) != 2 || messages[1].Content != "正在处理" {
+		t.Fatal("subsequent streaming lost or duplicated the first message")
 	}
 }
 
@@ -64,7 +112,7 @@ func TestMobileNewSendFailureKeepsDraftAndPhotos(t *testing.T) {
 	}
 	m.draft, m.images, m.sending = "保留这条消息", []string{photo}, true
 	m.beginNewSend(m.draft, m.images)
-	m.sent(0, "桌面端还没准备好，请稍后再试")
+	m.sent(0, "Desktop is not ready. Try again shortly.")
 	tt := ui.NewTester(m.viewRoot, 390, 750)
 	tt.Frame()
 	if m.newSend != nil || m.sending || m.draft != "保留这条消息" || len(m.images) != 1 || !tt.HasText(m.sendErr) {

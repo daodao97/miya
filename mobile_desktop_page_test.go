@@ -124,13 +124,13 @@ func TestDesktopPageFrameStatuses(t *testing.T) {
 	m := testMobileApp()
 	p := liveTestDesktopPage(t, m)
 	p.phase, p.polling = "live", true
-	m.receiveDesktopFrame(p, nil, nil, &desktopHTTPError{Status: 403, Message: "请允许屏幕录制"})
-	if p.active || p.phase != "error" || p.title != "需要 Mac 授权" || p.polling {
+	m.receiveDesktopFrame(p, nil, nil, false, &desktopHTTPError{Status: 403, Message: "请允许屏幕录制"})
+	if p.active || p.phase != "error" || p.title != "Permission required on Mac" || p.polling {
 		t.Fatal("permission failure did not stop control", p.phase, p.title)
 	}
 	p.active, p.phase = true, "live"
-	m.receiveDesktopFrame(p, nil, nil, &desktopHTTPError{Status: 410, Message: "远程控制已结束"})
-	if p.active || p.phase != "ended" || p.image != nil || p.detail != "远程控制已结束" {
+	m.receiveDesktopFrame(p, nil, nil, false, &desktopHTTPError{Status: 410, Message: "Remote control ended"})
+	if p.active || p.phase != "ended" || p.image != nil || p.detail != "Remote control ended" {
 		t.Fatal("ended lease kept the page live", p.phase)
 	}
 	if m.desktopPage != p {
@@ -146,37 +146,51 @@ func desktopScroll(x, y float64, dx, dy int) (in desktop.Input) {
 func TestDesktopPageRendersLiveConnectingAndEnded(t *testing.T) {
 	m := testMobileApp()
 	p := liveTestDesktopPage(t, m)
-	p.phase, p.trackpad, p.status = "live", true, "已连接 · 完整桌面"
+	p.phase, p.trackpad, p.status = "live", true, "Connected · Full desktop"
 	tt := ui.NewTester(m.desktopPageView, 390, 750)
 	tt.Frame()
 	tt.Frame()
-	for _, s := range []string{"远程桌面", "触控板", "发送", "回车", "Esc", "更多", "已连接 · 完整桌面"} {
+	if tt.HasText("Send") {
+		t.Fatal("keyboard should start hidden on the full desktop")
+	}
+	if err := tt.Click("Keyboard"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	for _, s := range []string{"Remote desktop", "Trackpad", "Send", "Return", "Esc", "More", "Connected · Full desktop"} {
 		if !tt.HasText(s) {
 			t.Fatal("live page missing", s)
 		}
 	}
-	if err := tt.Click("更多"); err != nil {
+	if err := tt.Click("More"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if !tt.HasText("缩小") || !tt.HasText("⌘") || !tt.HasText("100%") || tt.HasText("移动画面") {
+	if !tt.HasText("⌘") || tt.HasText("Move screen") {
 		t.Fatal("more keys did not open")
 	}
-	if err := tt.Click("触控板"); err != nil {
+	if err := tt.Click("Switch control mode, currently Trackpad"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if p.trackpad || !tt.HasText("移动画面") {
+	if p.trackpad {
+		t.Fatal("still in trackpad mode")
+	}
+	if err := tt.Click("More options"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !tt.HasText("Move screen") {
 		t.Fatal("touch mode choices missing")
 	}
-	m.desktopStage(p, "connecting", "正在连接 Mac", "Mac 休眠时会先唤醒屏幕。", true)
+	m.desktopStage(p, "connecting", "Connecting to Mac", "If your Mac is asleep, its screen will wake first.", true)
 	tt.Frame()
-	if !tt.HasText("Mac 休眠时会先唤醒屏幕。") || tt.HasText("发送") {
+	if !tt.HasText("If your Mac is asleep, its screen will wake first.") || tt.HasText("Send") {
 		t.Fatal("connecting state")
 	}
-	m.desktopFinish(p, "远程控制已结束")
+	m.desktopFinish(p, "Remote control ended")
 	tt.Frame()
-	if !tt.HasText("控制已结束") || !tt.HasText("远程控制已结束") || !tt.HasText("返回会话") {
+	if !tt.HasText("Control session ended") || !tt.HasText("Remote control ended") || !tt.HasText("Back to conversation") {
 		t.Fatal("ended state")
 	}
 }
@@ -187,14 +201,18 @@ func TestDesktopPageTextInputAllowsInputMethodsUnlessPassword(t *testing.T) {
 	p.phase = "live"
 	tt := ui.NewTester(m.desktopPageView, 390, 750)
 	tt.Frame()
-	if p.secret || !tt.HasText("切换为密码输入") || tt.HasText("切换为文字输入") {
-		t.Fatal("full desktop should start with plain text input")
-	}
-	if err := tt.Click("文字"); err != nil {
+	if err := tt.Click("Keyboard"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if !p.secret || !tt.HasText("切换为文字输入") {
+	if p.secret || !tt.HasText("switch to Password input") || tt.HasText("switch to Text input") {
+		t.Fatal("full desktop should start with plain text input")
+	}
+	if err := tt.Click("Current: Text input, switch to Password input"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !p.secret || !tt.HasText("switch to Text input") {
 		t.Fatal("password entry was not selected")
 	}
 }
@@ -204,18 +222,18 @@ func TestDesktopPagePickerOffersFullDesktopAndWindows(t *testing.T) {
 	p := liveTestDesktopPage(t, m)
 	p.active, p.image = false, nil
 	p.pickable, p.windowOnly = true, true
-	m.desktopStage(p, "picker", "选择操作窗口", "", false)
+	m.desktopStage(p, "picker", "Select a window to control", "", false)
 	p.windows = []desktop.Window{{ID: 5, PID: 9, App: "Notes", Title: "Draft"}}
 	tt := ui.NewTester(m.desktopPageView, 390, 750)
 	tt.Frame()
-	for _, s := range []string{"选择窗口", "完整桌面", "Draft", "Notes", "刷新列表"} {
+	for _, s := range []string{"Select window", "Full desktop", "Draft", "Notes", "Refresh list"} {
 		if !tt.HasText(s) {
 			t.Fatal("picker missing", s)
 		}
 	}
 	p.pickable = false
 	tt.Frame()
-	if tt.HasText("完整桌面") {
+	if tt.HasText("Full desktop") {
 		t.Fatal("authorization picker offered the full desktop")
 	}
 }
@@ -226,7 +244,7 @@ func TestDesktopPagePickerCardsShowPreviews(t *testing.T) {
 	thumb := p.image
 	p.active, p.image = false, nil
 	p.pickable, p.windowOnly = true, true
-	m.desktopStage(p, "picker", "选择操作窗口", "", false)
+	m.desktopStage(p, "picker", "Select a window to control", "", false)
 	p.windows = []desktop.Window{{ID: 5, PID: 9, App: "Notes", Title: "Draft"}, {ID: 6, PID: 9, App: "Notes", Title: "Ideas"}, {ID: 7, PID: 3, App: "Mail"}}
 	p.thumbBusy = true // keep tests off the network
 	p.thumbs = map[string]ui.ImageSource{"5-9": thumb, "6-9": nil}
@@ -240,7 +258,7 @@ func TestDesktopPagePickerCardsShowPreviews(t *testing.T) {
 	draft, _ := tt.Find("Draft")
 	ideas, _ := tt.Find("Ideas")
 	mail, _ := tt.Find("Mail")
-	if draft.Y != ideas.Y || ideas.X <= draft.X || mail.Y <= draft.Y {
+	if ideas.Y != mail.Y || mail.X <= ideas.X || ideas.Y <= draft.Y {
 		t.Fatal("windows are not two to a row", draft, ideas, mail)
 	}
 }
@@ -259,7 +277,7 @@ func TestDesktopPageTapOnRenderedImageReachesViewport(t *testing.T) {
 	if !ok {
 		t.Fatal("no image rect")
 	}
-	vp, found := tt.Find("Mac 实时画面，可轻点、滑动或双指缩放")
+	vp, found := tt.Find("Live Mac screen. Tap, swipe, or pinch to zoom.")
 	if !found {
 		t.Fatal("viewport not found")
 	}
@@ -296,4 +314,35 @@ func TestDesktopPageTapRippleMarksQueuedClicks(t *testing.T) {
 	if len(p.activeTaps(time.Now().Add(desktopTapDuration))) != 0 {
 		t.Fatal("ripples did not expire")
 	}
+}
+
+func TestDesktopPageSavedPasswordLivesInMoreOptions(t *testing.T) {
+	m := testMobileApp()
+	p := liveTestDesktopPage(t, m)
+	p.phase, p.unlock.saved, p.unlock.key, p.trackpad = "live", true, "mac", true
+	p.status = "Connected · Full desktop"
+	m.router().Push("/desktop")
+	tt := ui.NewTester(m.viewRoot, 390, 750)
+	tt.Frame()
+	tt.Frame()
+	if tt.HasText("Password saved for this Mac") || tt.HasText("Send") {
+		t.Fatal("the screen should keep the page until a tool opens")
+	}
+	saveMobileNativeSnapshot(t, tt, "desktop-live")
+	if err := tt.Click("More options"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !tt.HasText("Password saved for this Mac") || !tt.HasText("Forget password") {
+		t.Fatal("saved password missing from more options")
+	}
+	saveMobileNativeSnapshot(t, tt, "desktop-live-more")
+	if err := tt.Click("Keyboard"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if p.more || !tt.HasText("Send") {
+		t.Fatal("keyboard did not open")
+	}
+	saveMobileNativeSnapshot(t, tt, "desktop-live-keyboard")
 }

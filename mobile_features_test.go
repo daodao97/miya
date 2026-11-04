@@ -22,16 +22,16 @@ func TestMobileModelSettingsRemainLocalAndKeepDraft(t *testing.T) {
 	}}}
 	tt := ui.NewTester(m.viewRoot, 390, 750)
 	tt.Frame()
-	if err := tt.Click("模型设置"); err != nil {
+	if err := tt.Click("Model settings"); err != nil {
 		t.Fatal(err)
 	}
 	if m.router().Path() != "/options" {
 		t.Fatal("settings page did not open")
 	}
-	if err := tt.Click("模型 Second"); err != nil {
+	if err := tt.Click("Model Second"); err != nil {
 		t.Fatal(err)
 	}
-	if err := tt.Click("强度 HIGH"); err != nil {
+	if err := tt.Click("Effort HIGH"); err != nil {
 		t.Fatal(err)
 	}
 	if got := m.sendOptions(agentCodex); got.Model != "second" || got.Effort != "high" {
@@ -40,7 +40,7 @@ func TestMobileModelSettingsRemainLocalAndKeepDraft(t *testing.T) {
 	if m.state.Agents[0].Current.Model != "first" {
 		t.Fatal("phone changed desktop defaults")
 	}
-	if err := tt.Click("返回"); err != nil {
+	if err := tt.Click("Back"); err != nil {
 		t.Fatal(err)
 	}
 	if m.draft != "未发送的内容" {
@@ -64,17 +64,17 @@ func TestMobileBusyComposerOffersQueueAndSteer(t *testing.T) {
 	m.draft = "下一步"
 	tt := ui.NewTester(m.viewRoot, 390, 750)
 	tt.Frame()
-	for _, label := range []string{"加入队列", "立即引导"} {
+	for _, label := range []string{"Add to queue", "Steer now"} {
 		if _, ok := tt.Find(label); !ok {
 			t.Fatalf("missing %s", label)
 		}
 	}
-	if _, ok := tt.Find("停止"); ok {
+	if _, ok := tt.Find("Stop"); ok {
 		t.Fatal("a draft should be sent instead of stopping the turn")
 	}
 	m.draft = ""
 	tt.Frame()
-	if _, ok := tt.Find("停止"); !ok {
+	if _, ok := tt.Find("Stop"); !ok {
 		t.Fatal("empty composer should still stop a turn")
 	}
 }
@@ -89,13 +89,13 @@ func TestMobileQuestionPageAcceptsOptionsAndKeepsFailedAnswer(t *testing.T) {
 	m.openThread(m.state.Projects[0].Threads[0])
 	tt := ui.NewTester(m.viewRoot, 390, 750)
 	tt.Frame()
-	if err := tt.Click("填写回答"); err != nil {
+	if err := tt.Click("Enter your answer"); err != nil {
 		t.Fatal(err)
 	}
 	if err := tt.Click("方案 A"); err != nil {
 		t.Fatal(err)
 	}
-	if err := tt.Click("提交回答"); err != nil {
+	if err := tt.Click("Submit answer"); err != nil {
 		t.Fatal(err)
 	}
 	if m.fieldsFor(a)["choice"] != "方案 A" || len(m.state.Approvals) != 1 || m.view.formErrors["1"] == "" {

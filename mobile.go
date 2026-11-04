@@ -59,6 +59,7 @@ type mobileApp struct {
 	pushDisabled, pushRequesting bool
 	pushOpen                     int
 	win                          *mygo.Window
+	desktopAuthenticate          func(context.Context) error
 	store                        mobileSecretStore
 	desktops                     mobileDesktops
 	desktopSessions              map[string]mobileDesktopSession
@@ -78,11 +79,13 @@ type mobileApp struct {
 	textScale         float32
 	instantNavigation bool
 
-	loaded     bool
-	link, host string
-	state      phoneState
-	memories   mobileMemory
-	autos      mobileAutomations
+	loaded             bool
+	link, host         string
+	state              phoneState
+	memories           mobileMemory
+	autos              mobileAutomations
+	collaborations     collaborationUI
+	collaborationCalls map[string]*mobileCollaborationCall
 	// selected is the phone's workspace for new conversations.
 	selected           string
 	expandedProject    string
@@ -159,7 +162,7 @@ type mobileApp struct {
 	paste    string
 }
 
-var errIncompatible = errors.New("桌面端版本不兼容，请把手机端和桌面端都更新到最新版")
+var errIncompatible = errors.New(tr("Incompatible desktop version. Update both the mobile and desktop apps."))
 
 // mobilePalette holds the phone's colors for one appearance.
 type mobilePalette struct {
@@ -230,7 +233,7 @@ func newViewerController() *chatController {
 	c.models, c.setModels = createSignal([]codex.Model{})
 	c.permissionPolicy, c.setPermissionPolicy = createSignal("")
 	c.draftPermission, c.setDraftPermission = createSignal("")
-	c.locale, c.setLocale = createSignal("zh")
+	c.locale, c.setLocale = createSignal("en")
 	c.historyStatus, c.setHistoryStatus = createSignal("")
 	c.ctx, c.cancel = context.WithCancel(context.Background())
 	return c
@@ -282,6 +285,7 @@ func newMobileApp() *mobileApp {
 }
 
 func mobileMain() {
+	configureInterfaceLanguage()
 	m := newMobileApp()
 	m.store, _ = mygo.NewSecureStore("desktop-connection", mygo.SecureStoreOptions{})
 	m.pushDisabled = loadSetting("phone-notifications") == "off"
@@ -391,7 +395,7 @@ func (m *mobileApp) onMain(gen int, f func()) {
 
 func (m *mobileApp) connect(link string) {
 	if m.desktopLoadFailed {
-		m.err = "请先重新读取已保存的桌面列表"
+		m.err = tr("Reload the saved desktop list first")
 		return
 	}
 	item, err := m.desktops.remember(link, "")
@@ -415,7 +419,7 @@ func (m *mobileApp) connect(link string) {
 		m.resetDesktopState()
 	}
 	m.desktops.Active = item.ID
-	m.link, m.err, m.status = link, "", "正在连接桌面端…"
+	m.link, m.err, m.status = link, "", tr("Connecting to desktop…")
 	m.openDiskCache(link)
 	if m.host != "" {
 		_, _ = m.desktops.remember(link, m.host)
@@ -455,7 +459,7 @@ func (m *mobileApp) disconnectDesktop(unregister bool) {
 		m.filesCancel = nil
 	}
 	if m.desktopPage != nil {
-		m.desktopFinish(m.desktopPage, "与 Mac 的连接已断开。返回会话后可重新打开。")
+		m.desktopFinish(m.desktopPage, tr("Disconnected from your Mac. Return to the conversation to reopen."))
 	}
 	if m.filesProxy != nil {
 		m.filesProxy.Close()
@@ -490,7 +494,7 @@ func (m *mobileApp) disconnectDesktop(unregister bool) {
 	m.desktopPreviews = nil
 	m.autos.loading = false
 	if m.sending {
-		m.sending, m.sendErr = false, "连接已断开，消息可能没有发出"
+		m.sending, m.sendErr = false, tr("Connection lost. The message may not have been sent.")
 		m.failNewSend()
 	}
 }
@@ -503,7 +507,7 @@ func (m *mobileApp) forget() {
 func (m *mobileApp) run(ctx context.Context, gen int, link string, wake <-chan struct{}) {
 	for attempt := 0; ; attempt++ {
 		if attempt > 0 {
-			m.onMain(gen, func() { m.retryAt, m.retryError = time.Time{}, ""; m.status = "正在重新连接桌面端…" })
+			m.onMain(gen, func() { m.retryAt, m.retryError = time.Time{}, ""; m.status = tr("Reconnecting to desktop…") })
 		}
 		dial := m.dialDesktop
 		if dial == nil {
@@ -529,9 +533,9 @@ func (m *mobileApp) run(ctx context.Context, gen int, link string, wake <-chan s
 		if errors.Is(err, errIncompatible) {
 			delay = 15 * time.Second
 		}
-		message := fmt.Sprintf("连接已断开，%d 秒后重试", int(delay.Seconds()))
+		message := fmt.Sprintf(tr("Disconnected. Retrying in %d seconds."), int(delay.Seconds()))
 		if err != nil {
-			message += "：" + err.Error()
+			message += ": " + err.Error()
 		}
 		retryAt := time.Now().Add(delay)
 		retryError := ""
@@ -548,7 +552,7 @@ func (m *mobileApp) run(ctx context.Context, gen int, link string, wake <-chan s
 				m.filesProxy.setConn(nil)
 			}
 			if m.sending {
-				m.sending, m.sendErr = false, "连接已断开，消息可能没有发出"
+				m.sending, m.sendErr = false, tr("Connection lost. The message may not have been sent.")
 				m.failNewSend()
 			}
 		})
@@ -620,7 +624,7 @@ func (m *mobileApp) read(gen int, conn *remote.Conn) (greeted bool, err error) {
 				if len(p.Data) > 0 && len(p.Data) <= maxPhonePreviewBytes {
 					image, _ = ui.DecodeImage(p.Data)
 					if image == nil {
-						message = "无法解码窗口预览"
+						message = tr("Unable to decode window preview")
 					}
 				}
 				m.onMain(gen, func() { m.receiveWindowPreview(conn, p, image, message) })
@@ -637,9 +641,15 @@ func (m *mobileApp) read(gen int, conn *remote.Conn) (greeted bool, err error) {
 		case "automations":
 			data, message := f.Data, f.Error
 			m.onMain(gen, func() { m.receiveAutomations(data, message) })
+		case "collaboration":
+			data, message := f.Data, f.Error
+			m.onMain(gen, func() { m.receiveCollaboration(data, message) })
 		case "automation-run":
 			data, message := f.Data, f.Error
 			m.onMain(gen, func() { m.receiveAutomationRun(data, message) })
+		case "automation-draft", "automation-create":
+			op, data, message := f.Type, f.Data, f.Error
+			m.onMain(gen, func() { m.receiveAutomationForm(op, data, message) })
 		case "action":
 			message := f.Error
 			m.onMain(gen, func() {
@@ -957,10 +967,14 @@ func (m *mobileApp) sendDraft(steer bool) {
 		m.sendErr = m.disconnectedSendError()
 		return
 	}
+	if hasAgentReferences(m.draft, nil) && (m.state.Collaboration == nil || m.state.Collaboration.Version < 1) {
+		m.sendErr = tr("Update the Miya background service to use Agent tags")
+		return
+	}
 	if m.open == 0 && m.newProject == "" {
 		project := m.selectedProject()
 		if project.Path == "" {
-			m.sendErr = "请先在桌面端添加项目"
+			m.sendErr = tr("Add a project on your desktop first")
 			return
 		}
 		m.newProject, m.newAgent = project.Path, m.composerAgent()
@@ -995,7 +1009,7 @@ func (m *mobileApp) sendDraft(steer bool) {
 		if err != nil {
 			m.onMain(gen, func() {
 				if m.sending {
-					m.sending, m.sendErr = false, "发送失败："+err.Error()
+					m.sending, m.sendErr = false, tr("Failed to send: ")+err.Error()
 					m.failNewSend()
 				}
 			})
@@ -1046,7 +1060,7 @@ func (m *mobileApp) scan() {
 	}
 	m.scanning, m.err = true, ""
 	go func() {
-		raw, err := mygo.Scanner.ScanCode(context.Background(), mygo.ScanOptions{Prompt: "扫描 Miya 桌面端的二维码", CancelLabel: "取消"})
+		raw, err := mygo.Scanner.ScanCode(context.Background(), mygo.ScanOptions{Prompt: tr("Scan the QR code in Miya on your desktop"), CancelLabel: tr("Cancel")})
 		runOnMain(func() {
 			m.scanning = false
 			if err != nil {
@@ -1073,13 +1087,13 @@ func scanError(err error) string {
 	case errors.Is(err, mygo.ErrScanCanceled):
 		return ""
 	case errors.Is(err, mygo.ErrUnsupported):
-		return "请在 iPhone 上扫码，或粘贴桌面端连接码"
+		return tr("Scan on your iPhone, or paste a desktop connection code")
 	case errors.Is(err, mygo.ErrCameraDenied):
-		return "请在系统设置中允许 Miya 使用相机，或粘贴连接码"
+		return tr("Allow Miya to use the camera in Settings, or paste a connection code")
 	case errors.Is(err, mygo.ErrCameraUnavailable):
-		return "相机不可用，请粘贴桌面端连接码"
+		return tr("Camera unavailable. Paste a desktop connection code.")
 	}
-	return "暂时无法打开相机"
+	return tr("Unable to open the camera")
 }
 
 func (m *mobileApp) connectionLine() string {
@@ -1089,12 +1103,13 @@ func (m *mobileApp) connectionLine() string {
 	case m.status != "":
 		return m.status
 	case !m.connected:
-		return "未连接"
+		return tr("Disconnected")
 	}
 	return ""
 }
 
 func (m *mobileApp) viewRoot(c *ui.Context) {
+	useInterfaceLanguage(c)
 	m.updateReconnectCountdown(c)
 	m.textScale = c.Preferences().TextScale
 	// Before SetTheme, the theme is the system's appearance.
@@ -1146,6 +1161,8 @@ func (m *mobileApp) viewRoot(c *ui.Context) {
 				switch page.Path() {
 				case "/automation":
 					m.automationsPage(c, true)
+				case "/automation/new":
+					m.automationCreatePage(c)
 				case "/options":
 					m.optionsView(c)
 				case "/web":
@@ -1185,13 +1202,13 @@ func (m *mobileApp) updateReconnectCountdown(c *ui.Context) {
 	}
 	remaining := m.retryAt.Sub(c.Now())
 	if remaining <= 0 {
-		m.status = "正在重新连接桌面端…"
+		m.status = tr("Reconnecting to desktop…")
 		return
 	}
 	seconds := int((remaining + time.Second - 1) / time.Second)
-	m.status = fmt.Sprintf("连接已断开，%d 秒后重试", seconds)
+	m.status = fmt.Sprintf(tr("Disconnected. Retrying in %d seconds."), seconds)
 	if m.retryError != "" {
-		m.status += "：" + m.retryError
+		m.status += ": " + m.retryError
 	}
 	c.After(remaining - time.Duration(seconds-1)*time.Second)
 }
@@ -1228,26 +1245,26 @@ func (m *mobileApp) pairView(c *ui.Context) {
 		ui.Row(c).Size(64, 64).Radius(18).Background(p.surface).Justify(ui.Center).AlignItems(ui.Center).Children(func() {
 			icon(c, "terminal-2", 30, p.ink)
 		})
-		ui.Text(c, "连接 Miya 桌面端").FontSize(m.font(26)).FontWeight(700).Margin(10, 0, 0, 0)
-		ui.Text(c, "打开 Miya 桌面端，进入「设置 → Phone」开启手机连接，再扫描二维码。").FontSize(m.font(15)).TextColor(p.muted).LineHeight(1.5)
-		scan := m.phoneButton(c.Key("scan")).FillWidth().MinHeight(52).Radius(16).Background(p.ink).Justify(ui.Center).Gap(8).Label("扫码连接")
+		ui.Text(c, tr("Connect to Miya")).FontSize(m.font(26)).FontWeight(700).Margin(10, 0, 0, 0)
+		ui.Text(c, tr("Open Miya on your desktop, enable mobile connections in Settings → Phone, then scan the QR code.")).FontSize(m.font(15)).TextColor(p.muted).LineHeight(1.5)
+		scan := m.phoneButton(c.Key("scan")).FillWidth().MinHeight(52).Radius(16).Background(p.ink).Justify(ui.Center).Gap(8).Label(tr("Scan to connect"))
 		scan.Children(func() {
 			if m.scanning {
 				ui.Spinner(c).TextColor(p.bg)
 			}
-			ui.Text(c, "扫码连接").FontSize(m.font(16)).FontWeight(600).TextColor(p.bg)
+			ui.Text(c, tr("Scan to connect")).FontSize(m.font(16)).FontWeight(600).TextColor(p.bg)
 		})
 		if scan.Clicked() {
 			m.scan()
 		}
 		ui.Row(c).FillWidth().MinHeight(52).Padding(0, 6, 0, 16).Gap(8).AlignItems(ui.Center).Background(p.surface).Radius(16).Children(func() {
-			input := ui.TextInput(c.Key("paste"), &m.paste).Label("桌面端连接码").Placeholder("或粘贴连接码").Grow(1).MinWidth(0).Background(p.surface).Border(0, p.surface).
+			input := ui.TextInput(c.Key("paste"), &m.paste).Label(tr("Desktop connection code")).Placeholder(tr("Or paste a connection code")).Grow(1).MinWidth(0).Background(p.surface).Border(0, p.surface).
 				InputOptions(ui.InputOptions{Keyboard: ui.KeyboardASCII, Correction: ui.CorrectionOff, Capitalization: ui.CapitalizeNone, Return: ui.ReturnGo})
 			m.pairInput.restore(input)
-			if m.pill(c, "paste-code", "粘贴", false).KeepFocus().Clicked() {
+			if m.pill(c, "paste-code", tr("Paste"), false).KeepFocus().Clicked() {
 				m.pairInput.paste(c, input, &m.paste, false)
 			}
-			if m.pill(c, "paste-connect", "连接", false).Background(p.bg).Clicked() {
+			if m.pill(c, "paste-connect", tr("Connect"), false).Background(p.bg).Clicked() {
 				m.pair(m.paste)
 			}
 		})
@@ -1255,7 +1272,7 @@ func (m *mobileApp) pairView(c *ui.Context) {
 			ui.Text(c, m.err).TextColor(danger).FontSize(m.font(14))
 		}
 		if m.desktopLoadFailed {
-			if m.pill(c, "reload-desktops", "重新读取桌面列表", false).Clicked() {
+			if m.pill(c, "reload-desktops", tr("Reload desktops"), false).Clicked() {
 				go m.loadSaved()
 			}
 		}
@@ -1265,7 +1282,7 @@ func (m *mobileApp) pairView(c *ui.Context) {
 func (m *mobileApp) listView(c *ui.Context) {
 	p := m.pal
 	ui.Row(c).FillWidth().MinHeight(52).Padding(0, 12).Gap(12).AlignItems(ui.Center).Children(func() {
-		if m.homeAction(c, "menu", "桌面端连接", "layout-sidebar").Clicked() {
+		if m.homeAction(c, "menu", tr("Desktop connections"), "layout-sidebar").Clicked() {
 			m.menu = !m.drawerVisible
 		}
 		ui.Column(c).Grow(1).MinWidth(0).AlignItems(ui.Center).Gap(3).Children(func() {
@@ -1275,23 +1292,23 @@ func (m *mobileApp) listView(c *ui.Context) {
 				if label == "" {
 					dot, label = p.ok, m.host
 					if label == "" {
-						label = "已连接"
+						label = tr("Connected")
 					}
 				}
 				ui.Box(c.Key("dot")).Size(6, 6).Radius(3).Background(dot)
 				ui.Text(c, strings.TrimSuffix(label, ".local")).FontSize(m.font(11)).TextColor(p.muted).SingleLine().Ellipsis("…")
 			})
 		})
-		if m.homeAction(c, "new-conversation", "新建对话", "edit").Clicked() {
+		if m.homeAction(c, "new-conversation", tr("New thread"), "edit").Clicked() {
 			m.startConversation(m.selectedProject().Path, m.composerAgent())
 		}
-		more := m.homeAction(c, "more", "更多", "dots")
+		more := m.homeAction(c, "more", tr("More"), "dots")
 		m.conversationActions(c, more, m.selectedProject().Path, m.composerAgent())
 	})
 	if len(m.state.Projects) == 0 {
 		ui.Column(c).Grow(1).Justify(ui.Center).AlignItems(ui.Center).Children(func() {
 			if m.connected {
-				ui.Text(c, "桌面端还没有项目").TextColor(p.muted)
+				ui.Text(c, tr("No projects on this desktop yet")).TextColor(p.muted)
 			} else {
 				ui.Spinner(c)
 			}
@@ -1397,7 +1414,7 @@ func (m *mobileApp) listPage(c *ui.Context, path string) {
 				if m.drawerVisible {
 					// The scrim covers the list: a tap on it closes the drawer,
 					// a drag on it moves the drawer.
-					ui.Box(c.Key("scrim")).Label("关闭侧边栏").Absolute().Top(0).Left(0).Right(0).Bottom(0).Background(ui.RGBA(0, 0, 0, 0.45*shown))
+					ui.Box(c.Key("scrim")).Label(tr("Close sidebar")).Absolute().Top(0).Left(0).Right(0).Bottom(0).Background(ui.RGBA(0, 0, 0, 0.45*shown))
 				} else {
 					// Reserve the left edge for pulling out the drawer.
 					ui.Box(c.Key("edge")).Absolute().Top(0).Left(0).Bottom(0).Width(24)
@@ -1444,9 +1461,9 @@ func (m *mobileApp) drawerContent(c *ui.Context) {
 	p := m.pal
 	ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
 		m.drawerDesktopSwitcher(c)
-		label := "搜索对话"
+		label := tr("Search conversations")
 		if m.drawerSearch {
-			label = "关闭搜索"
+			label = tr("Close search")
 		}
 		if m.circle(c, "search", label, func() { icon(c, "search", 22, p.ink) }).Clicked() {
 			m.drawerSearch = !m.drawerSearch
@@ -1454,41 +1471,54 @@ func (m *mobileApp) drawerContent(c *ui.Context) {
 		}
 	})
 	if m.drawerSearch {
-		ui.TextInput(c.Key("drawer-query"), &m.drawerQuery).FillWidth().MinHeight(44).Padding(10, 12).Radius(12).
-			Background(p.surface).Border(0, p.surface).FontSize(m.font(16)).Label("搜索对话").Placeholder("搜索对话标题").AutoFocus()
+		search := ui.TextInput(c.Key("drawer-query"), &m.drawerQuery).FillWidth().MinHeight(44).Padding(10, 12).Radius(12).
+			Background(p.surface).Border(0, p.surface).FontSize(m.font(16)).Label(tr("Search conversations")).Placeholder(tr("Search conversation titles")).AutoFocus().
+			InputOptions(ui.InputOptions{Return: ui.ReturnSearch, Capitalization: ui.CapitalizeNone, Dismiss: ui.KeyboardDismissInteractive})
+		if search.Submitted() {
+			c.Blur()
+		}
 	}
 	if m.err != "" {
 		ui.Text(c, m.err).FontSize(m.font(13)).TextColor(danger).LineHeight(1.4)
 	}
 	m.drawerQuotas(c.Key("drawer-quotas"))
 
-	ui.Scroll(c.Key("drawer-projects")).FillWidth().Grow(1).MinHeight(0).Children(func() {
+	// Reserve touch drags before the conversation buttons take their presses.
+	// TouchScroll replays stationary taps to the buttons and sends swipes as
+	// precise scrolls; vertical scrolls continue to the list normally.
+	ui.Scroll(c.Key("drawer-projects")).FillWidth().Grow(1).MinHeight(0).TouchScroll().HandleInput(func(ev ui.InputEvent) bool {
+		if ev.Kind == ui.InputScroll && ev.Precise && !ev.Momentum && ev.DX > 8 && ev.DX > max(ev.DY, -ev.DY) {
+			m.menu = false
+			return true
+		}
+		return false
+	}).Children(func() {
 		ui.Column(c).FillWidth().Children(func() {
 			if m.drawerSearch {
 				matches := matchingThreadRefs(m.state.Projects, 0, strings.TrimSpace(m.drawerQuery))
 				if len(matches) == 0 {
-					ui.Text(c, "没有匹配的对话").Padding(12, 0).FontSize(m.font(14)).TextColor(p.muted)
+					ui.Text(c, tr("No matching conversations")).Padding(12, 0).FontSize(m.font(14)).TextColor(p.muted)
 				}
 				for _, match := range matches {
 					m.drawerThread(c.Key(match.ID), match.Thread)
 				}
 				return
 			}
-			if m.phoneButton(c.Key("memory")).FillWidth().MinHeight(48).Padding(0).Gap(12).Label("共享记忆").Children(func() { icon(c, "stack-2", 21, p.ink); ui.Text(c, "共享记忆").FontSize(m.font(17)) }).Clicked() {
+			if m.phoneButton(c.Key("memory")).FillWidth().MinHeight(48).Padding(0).Gap(12).Label(tr("Shared memory")).Children(func() { icon(c, "stack-2", 21, p.ink); ui.Text(c, tr("Shared memory")).FontSize(m.font(17)) }).Clicked() {
 				m.memories.requestedAt = time.Time{}
 				m.openDrawerPage("/memory")
 			}
-			automations := m.phoneButton(c.Key("automations")).FillWidth().MinHeight(48).Padding(0).Gap(12).Radius(12).Label("自动化")
+			automations := m.phoneButton(c.Key("automations")).FillWidth().MinHeight(48).Padding(0).Gap(12).Radius(12).Label(tr("Automations"))
 			automations.Children(func() {
 				icon(c, "clock", 21, p.ink)
-				ui.Text(c, "自动化").FontSize(m.font(17)).FontWeight(400)
+				ui.Text(c, tr("Automations")).FontSize(m.font(17)).FontWeight(400)
 			})
 			if automations.Clicked() {
 				m.autos.requestedAt = time.Time{}
 				m.openDrawerPage("/automations")
 			}
 			ui.Box(c.Key("navigation-separator")).FillWidth().Height(1).Margin(16, 0, 12, 0).Background(p.line)
-			ui.Text(c, "项目").FontSize(m.font(13)).TextColor(p.muted).Margin(0, 0, 6, 0)
+			ui.Text(c, tr("Projects")).FontSize(m.font(13)).TextColor(p.muted).Margin(0, 0, 6, 0)
 			if !m.projectsExpanded && len(m.state.Projects) > 0 {
 				m.expandedProject, m.projectsExpanded = m.selectedProject().Path, true
 			}
@@ -1498,16 +1528,21 @@ func (m *mobileApp) drawerContent(c *ui.Context) {
 		})
 	})
 	ui.Row(c).FillWidth().Gap(12).AlignItems(ui.Center).Children(func() {
-		newThread := m.phoneButton(c.Key("new-thread")).MinWidth(0).Shrink(1).MinHeight(48).Padding(0, 20).Gap(10).Radius(24).Background(p.ink).TextColor(p.bg).Label("新建对话")
+		newThread := m.phoneButton(c.Key("new-thread")).MinWidth(0).Shrink(1).MinHeight(48).Padding(0, 20).Gap(10).Radius(24).Background(p.ink).TextColor(p.bg).Label(tr("New thread"))
 		newThread.Children(func() {
 			icon(c, "edit", 21, p.bg)
-			ui.Text(c, "新建对话").FontSize(m.font(16)).FontWeight(600).MinWidth(0).Shrink(1).SingleLine().Ellipsis("…")
+			label := ui.Text(c, tr("New thread")).FontSize(m.font(16)).FontWeight(600).MinWidth(0).Shrink(1).Ellipsis("…")
+			if m.textScale > 1.3 {
+				label.MaxLines(2)
+			} else {
+				label.SingleLine()
+			}
 		})
 		if newThread.Clicked() {
 			m.startConversation(m.selectedProject().Path, m.composerAgent())
 		}
 		ui.Spacer(c)
-		if m.circle(c, "settings", "设置", func() { icon(c, "settings", 22, p.ink) }).Size(48, 48).Radius(24).Clicked() {
+		if m.circle(c, "settings", tr("Settings"), func() { icon(c, "settings", 22, p.ink) }).Size(48, 48).Radius(24).Clicked() {
 			m.openDrawerPage("/settings")
 		}
 	})
@@ -1534,7 +1569,7 @@ func (m *mobileApp) threadStatus(c *ui.Context, t Thread) {
 	case len(m.approvalsFor(t.ServerID)) > 0:
 		ui.Row(c).Gap(5).AlignItems(ui.Center).Children(func() {
 			ui.Box(c.Key("dot")).Size(7, 7).Radius(4).Background(p.warn)
-			ui.Text(c, "待审批").FontSize(m.font(12)).TextColor(p.warn)
+			ui.Text(c, tr("Pending approval")).FontSize(m.font(12)).TextColor(p.warn)
 		})
 	case t.Busy:
 		ui.Spinner(c).FontSize(m.font(13))
@@ -1557,13 +1592,13 @@ func (m *mobileApp) threadView(c *ui.Context) {
 		agent = listed.Agent
 	}
 	if m.open == 0 {
-		title, agent, busy, proj = "新对话", m.newAgent, false, m.project(m.newProject)
+		title, agent, busy, proj = tr("New conversation"), m.newAgent, false, m.project(m.newProject)
 	}
 	if agent == "" {
 		agent = agentCodex
 	}
 	if title == "" {
-		title = "对话"
+		title = tr("Conversations")
 	}
 	ui.Row(c).FillWidth().MinHeight(64).Padding(0, 12).Gap(8).AlignItems(ui.Center).Children(func() {
 		m.navigationBack(c, "/thread")
@@ -1578,7 +1613,7 @@ func (m *mobileApp) threadView(c *ui.Context) {
 			}
 			ui.Text(c, sub).FontSize(m.font(12)).TextColor(p.muted).SingleLine().Ellipsis("…")
 		})
-		more := m.circle(c, "more", "更多", func() { icon(c, "dots", 20, p.ink) })
+		more := m.circle(c, "more", tr("More"), func() { icon(c, "dots", 20, p.ink) })
 		m.conversationActions(c, more, proj.Path, agent)
 	})
 	ui.Column(c).Grow(1).MinHeight(0).FillWidth().Children(func() {
@@ -1603,8 +1638,8 @@ func (m *mobileApp) newConversationView(c *ui.Context, proj phoneProject) {
 	ui.Scroll(c.Key("draft-intro")).Grow(1).FillWidth().MinHeight(0).Children(func() {
 		ui.Column(c).FillWidth().MinHeight(220).AlignItems(ui.Center).Justify(ui.Center).Gap(14).Padding(24).Children(func() {
 			agentIcon(c, agent, 46)
-			ui.Text(c, "Let’s build").FontSize(m.font(28)).FontWeight(600)
-			pick := m.phoneButton(c.Key("pick-project")).MinHeight(44).Gap(8).Label("选择项目")
+			ui.Text(c, tr("Let’s build")).FontSize(m.font(28)).FontWeight(600)
+			pick := m.phoneButton(c.Key("pick-project")).MinHeight(44).Gap(8).Label(tr("Select project"))
 			pick.Children(func() {
 				ui.Text(c, proj.Name).FontSize(m.font(24)).TextColor(p.muted).SingleLine().Ellipsis("…")
 				icon(c, "chevron-down", 16, p.muted)
@@ -1658,13 +1693,14 @@ func (m *mobileApp) composer(c *ui.Context, agent string, busy bool) {
 		m.threadMenu(c, m.composerProject())
 		m.queueView(c)
 		m.taskStatus(c)
+		m.collaborationTasks(c)
 		m.thumbnails(c)
 		if hint := m.inlineInput.commandHint(); hint != "" {
 			ui.Text(c, hint).FontSize(m.font(12)).TextColor(p.muted).FillWidth().Wrap().Padding(0, 10)
 		}
 		ui.Column(c.Key("composer-box")).FillWidth().Padding(6, 6, 6, 10).Background(p.surface).Radius(26).Children(func() {
 			opts := m.sendOptions(agent)
-			effort := strings.ToUpper(firstNonEmpty(opts.Effort, "默认"))
+			effort := strings.ToUpper(firstNonEmpty(opts.Effort, tr("Default")))
 			hasDraft := strings.TrimSpace(m.draft) != "" || len(m.images) > 0
 			steerAvailable := busy && hasDraft
 			showEffort := effort != "" && c.Root().Bounds().W >= 360 && m.textScale <= 1.3 && !steerAvailable
@@ -1705,7 +1741,7 @@ func (m *mobileApp) composer(c *ui.Context, agent string, busy bool) {
 				// Clip in a parent: EditorBase's custom drawing can extend beyond
 				// its own bounds when it scrolls a long paragraph to the caret.
 				ui.Column(c.Key("editor-clip")).FillWidth().Clip().Children(func() {
-					input := m.view.threadInput(c.Key("composer"), &m.inlineInput, m.draft, owner, "消息", placeholder, m.font(16), inputWidth, 1, 6, func(text string) { m.draft = text })
+					input := m.view.threadInput(c.Key("composer"), &m.inlineInput, m.draft, owner, tr("Message"), placeholder, m.font(16), inputWidth, 1, 6, func(text string) { m.draft = text })
 					// EditorBase padding does not inset its text. Center it
 					// using the enclosing column instead.
 					input.MinHeight(0).Padding(0)
@@ -1713,12 +1749,12 @@ func (m *mobileApp) composer(c *ui.Context, agent string, busy bool) {
 			})
 			ui.Row(c.Key("left-tools")).Absolute().Left(4).Bottom(6).Width(88).MinHeight(44).AlignItems(ui.Center).Children(func() {
 				// Bring the icons closer within separate 44-point hit areas.
-				add := m.phoneButton(c.Key("attach")).Size(44, 44).Padding(0, 6, 0, 0).Justify(ui.End).Label("添加图片")
+				add := m.phoneButton(c.Key("attach")).Size(44, 44).Padding(0, 6, 0, 0).Justify(ui.End).Label(tr("Add image"))
 				add.Children(func() { icon(c, "plus", 20, p.muted) })
 				if add.Clicked() {
 					m.addPhotos()
 				}
-				agentButton := m.phoneButton(c.Key("agent")).Size(44, 44).Padding(0, 0, 0, 6).Justify(ui.Start).Label("模型设置")
+				agentButton := m.phoneButton(c.Key("agent")).Size(44, 44).Padding(0, 0, 0, 6).Justify(ui.Start).Label(tr("Model settings"))
 				agentButton.Children(func() { agentIcon(c, agent, 20) })
 				if agentButton.Clicked() {
 					m.openOptions(agent)
@@ -1726,25 +1762,25 @@ func (m *mobileApp) composer(c *ui.Context, agent string, busy bool) {
 			})
 			ui.Row(c.Key("right-tools")).Absolute().Right(6).Bottom(6).Width(right - 8).MinHeight(44).Gap(8).AlignItems(ui.Center).Children(func() {
 				if steerAvailable {
-					b := m.phoneButton(c.Key("steer")).Size(64, 44).Padding(0).Justify(ui.Center).Label("立即引导").Disabled(m.sending)
-					b.Children(func() { ui.Text(c, "引导").FontSize(m.font(12)).TextColor(p.ink) })
+					b := m.phoneButton(c.Key("steer")).Size(64, 44).Padding(0).Justify(ui.Center).Label(tr("Steer now")).Disabled(m.sending)
+					b.Children(func() { ui.Text(c, tr("Steer")).FontSize(m.font(12)).TextColor(p.ink) })
 					if b.Clicked() {
 						m.sendDraft(true)
 					}
 				}
 				if showEffort {
-					b := m.phoneButton(c.Key("effort")).MinHeight(44).Shrink(0).Padding(0).Label("推理强度")
+					b := m.phoneButton(c.Key("effort")).MinHeight(44).Shrink(0).Padding(0).Label(tr("Reasoning effort"))
 					b.Children(func() { ui.Text(c, effort).FontSize(m.font(12)).TextColor(p.muted) })
 					if b.Clicked() {
 						m.openOptions(agent)
 					}
 				}
 				canSend := m.connected && !m.sending && (strings.TrimSpace(m.draft) != "" || len(m.images) > 0)
-				bg, fg, name, label := p.line, p.muted, "arrow-up", "发送"
+				bg, fg, name, label := p.line, p.muted, "arrow-up", tr("Send")
 				if busy && !hasDraft {
-					bg, fg, name, label = p.ink, p.bg, "x", "停止"
+					bg, fg, name, label = p.ink, p.bg, "x", tr("Stop")
 				} else if busy {
-					bg, fg, label = p.ink, p.bg, "加入队列"
+					bg, fg, label = p.ink, p.bg, tr("Add to queue")
 				} else if canSend {
 					bg, fg = p.ink, p.bg
 				}
@@ -1772,7 +1808,7 @@ func (m *mobileApp) composer(c *ui.Context, agent string, busy bool) {
 // needs no access to the whole library.
 func (m *mobileApp) addPhotos() {
 	if len(m.images) >= maxPhoneImages {
-		m.sendErr = fmt.Sprintf("一次最多发送 %d 张图片", maxPhoneImages)
+		m.sendErr = fmt.Sprintf(tr("Send up to %d images at a time"), maxPhoneImages)
 		return
 	}
 	win := m.win
@@ -1781,13 +1817,13 @@ func (m *mobileApp) addPhotos() {
 		runOnMain(func() {
 			switch {
 			case errors.Is(err, mygo.ErrUnsupported):
-				m.sendErr = "这台设备不支持选择图片"
+				m.sendErr = tr("This device does not support image selection")
 			case err != nil:
-				m.sendErr = "无法打开相册：" + err.Error()
+				m.sendErr = tr("Unable to open photos: ") + err.Error()
 			}
 			for _, p := range paths {
 				if len(m.images) >= maxPhoneImages {
-					m.sendErr = fmt.Sprintf("一次最多发送 %d 张图片", maxPhoneImages)
+					m.sendErr = fmt.Sprintf(tr("Send up to %d images at a time"), maxPhoneImages)
 					go os.Remove(p)
 					continue
 				}
@@ -1828,7 +1864,7 @@ func (m *mobileApp) thumbnails(c *ui.Context) {
 				} else {
 					icon(c, "file", 22, p.muted)
 				}
-				rm := m.phoneButton(c.Key("rm")).Absolute().Top(0).Right(0).Size(44, 44).Padding(0).Justify(ui.Center).Label("移除图片")
+				rm := m.phoneButton(c.Key("rm")).Absolute().Top(0).Right(0).Size(44, 44).Padding(0).Justify(ui.Center).Label(tr("Remove image"))
 				rm.Children(func() {
 					ui.Box(c).Size(22, 22).Radius(11).Background(ui.RGBA(0, 0, 0, 0.6)).AlignItems(ui.Center).Justify(ui.Center).Children(func() { icon(c, "x", 12, ui.Hex("#ffffff")) })
 				})
@@ -1873,7 +1909,7 @@ func (m *mobileApp) composerCommands(agent, project string) ([]composerChoice, b
 		return cmds, known
 	}
 	goal := composerCommands[0]
-	goal.Detail = "设置目标 · /goal pause · /goal resume · /goal clear"
+	goal.Detail = tr("Set a goal · /goal pause · /goal resume · /goal clear")
 	return []composerChoice{goal}, true
 }
 
@@ -1900,10 +1936,10 @@ func (m *mobileApp) commandMenu(c *ui.Context, agent, project string) {
 		case !known:
 			ui.Row(c).Gap(8).Padding(10).AlignItems(ui.Center).Children(func() {
 				ui.Spinner(c).FontSize(m.font(12))
-				ui.Text(c, "正在读取 Claude Code 命令…").FontSize(m.font(13)).TextColor(p.muted)
+				ui.Text(c, tr("Loading Claude Code commands…")).FontSize(m.font(13)).TextColor(p.muted)
 			})
 		case len(shown) == 0:
-			ui.Text(c, "没有匹配的命令").FontSize(m.font(13)).TextColor(p.muted).Padding(10)
+			ui.Text(c, tr("No matching commands")).FontSize(m.font(13)).TextColor(p.muted).Padding(10)
 		default:
 			ui.Scroll(c.Key("command-list")).FillWidth().MaxHeight(260).Children(func() {
 				ui.Column(c).FillWidth().Children(func() {
@@ -2008,8 +2044,13 @@ func (m *mobileApp) applyThread(d phoneThreadDelta) {
 	t := d.Thread
 	var base []Message
 	if !d.Reset {
-		if cur := m.view.c.current(); cur.ID == t.ID && cur.ServerID == t.ServerID {
+		boundIdentity := false
+		if cur := m.view.c.current(); cur.ID == t.ID && (cur.ServerID == t.ServerID || cur.ServerID == "" && threadAgent(cur) == threadAgent(t)) {
+			// A new thread's first messages can arrive before its durable ID.
+			// Binding that ID changes metadata, not the history already received
+			// under its numeric ID; the desktop need not resend those messages.
 			base = cur.Messages
+			boundIdentity = cur.ServerID == "" && t.ServerID != ""
 		}
 		if len(base) == 0 {
 			base = m.cachedMessages(t.ServerID)
@@ -2019,6 +2060,9 @@ func (m *mobileApp) applyThread(d phoneThreadDelta) {
 		// regrouping and persisting the entire conversation on each update.
 		if len(d.Changed) == 0 && sameMessageOrder(base, d.Order) {
 			t.Messages = base
+			if boundIdentity {
+				m.remember(t.ServerID, base)
+			}
 			m.updateThreadView(t, false)
 			return
 		}

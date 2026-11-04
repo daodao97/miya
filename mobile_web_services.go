@@ -97,7 +97,7 @@ func (m *mobileApp) requestWebServices(state *mobileWebServices) {
 				state.services, state.runtime = services, result
 			}
 			if err != nil {
-				state.err = "无法读取运行信息，请刷新或手动输入端口。"
+				state.err = tr("Unable to load runtime information. Refresh or enter a port manually.")
 				if state.runtime != nil {
 					runtimeObservationLost(state.runtime)
 				}
@@ -141,12 +141,12 @@ func fetchPhoneWebServices(ctx context.Context, dial func(context.Context) (net.
 func (m *mobileApp) webServicesList(c *ui.Context, state *mobileWebServices) {
 	p := m.pal
 	if !m.connected {
-		ui.Text(c, "连接桌面端后可查看项目 Web 服务。").FontSize(m.font(14)).TextColor(p.muted)
+		ui.Text(c, tr("Connect to your desktop to view project web services.")).FontSize(m.font(14)).TextColor(p.muted)
 		return
 	}
 	if !state.supported {
 		if m.state.WebPorts {
-			ui.Text(c, "更新桌面端后可查看本对话运行信息。").FontSize(m.font(14)).TextColor(p.muted).LineHeight(1.5)
+			ui.Text(c, tr("Update the desktop app to view runtime information for this conversation.")).FontSize(m.font(14)).TextColor(p.muted).LineHeight(1.5)
 		}
 		return
 	}
@@ -156,7 +156,7 @@ func (m *mobileApp) webServicesList(c *ui.Context, state *mobileWebServices) {
 	if state.loading && len(state.services) == 0 && state.runtime == nil {
 		ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
 			ui.Spinner(c)
-			ui.Text(c, "正在查找项目 Web 服务…").FontSize(m.font(15)).TextColor(p.muted)
+			ui.Text(c, tr("Finding project web services…")).FontSize(m.font(15)).TextColor(p.muted)
 		})
 		return
 	}
@@ -165,17 +165,17 @@ func (m *mobileApp) webServicesList(c *ui.Context, state *mobileWebServices) {
 		return
 	}
 	if len(state.services) == 0 {
-		ui.Text(c, map[bool]string{true: "尚未核验到本对话的 HTTP 服务，可刷新或手动输入端口。", false: "未发现项目 HTTP 服务，这些候选不代表由本对话创建。"}[state.ref.SessionID != ""]).FontSize(m.font(15)).TextColor(p.muted).LineHeight(1.5)
+		ui.Text(c, map[bool]string{true: tr("No verified HTTP service for this conversation. Refresh or enter a port manually."), false: tr("No project HTTP services found. These candidates may belong to other conversations.")}[state.ref.SessionID != ""]).FontSize(m.font(15)).TextColor(p.muted).LineHeight(1.5)
 		return
 	}
 	for _, service := range state.services {
 		label := "http://" + net.JoinHostPort(firstNonEmpty(service.Host, "localhost"), strconv.Itoa(service.Port))
 		if m.phoneButton(c.Key(service.Port)).FillWidth().MinHeight(64).Padding(14).Gap(12).Radius(14).Background(p.surface).
-			Label("打开 " + label).Disabled(m.filesCancel != nil).Children(func() {
+			Label(tr("Open ") + label).Disabled(m.filesCancel != nil).Children(func() {
 			icon(c, "globe", 22, p.ink)
 			ui.Column(c).Grow(1).MinWidth(0).Gap(4).Children(func() {
-				ui.Text(c, "端口 "+strconv.Itoa(service.Port)).FontSize(m.font(17)).FontWeight(600)
-				ui.Text(c, firstNonEmpty(service.Process, "Web 服务")+" · HTTP").FontSize(m.font(13)).TextColor(p.muted).SingleLine().Ellipsis("…")
+				ui.Text(c, tr("Port ")+strconv.Itoa(service.Port)).FontSize(m.font(17)).FontWeight(600)
+				ui.Text(c, firstNonEmpty(service.Process, tr("Web services"))+" · HTTP").FontSize(m.font(13)).TextColor(p.muted).SingleLine().Ellipsis("…")
 				if state.ref.SessionID == "" {
 					ui.Text(c, m.runtimeServiceOwner(service)).FontSize(m.font(12)).TextColor(p.muted).SingleLine().Ellipsis("…")
 				}
@@ -207,18 +207,18 @@ func fetchPhoneRuntime(ctx context.Context, dial func(context.Context) (net.Conn
 	}
 	defer response.Body.Close()
 	if response.StatusCode != 200 {
-		return conversationRuntime{}, errors.New("对话运行信息暂时不可用")
+		return conversationRuntime{}, errors.New(tr("Conversation runtime information unavailable"))
 	}
 	var result conversationRuntime
 	if err := json.NewDecoder(io.LimitReader(response.Body, 2<<20)).Decode(&result); err != nil {
 		return result, err
 	}
 	if result.View.Key != runtimeKey(ref) {
-		return conversationRuntime{}, errors.New("对话运行信息标识不匹配")
+		return conversationRuntime{}, errors.New(tr("Conversation runtime identity mismatch"))
 	}
 	for _, service := range result.Services {
 		if service.Host == "" || !validWebServiceHost(service.Host, service.RuntimeToken) || service.Port < 1 || service.Port > 65535 || service.RuntimeToken == "" {
-			return conversationRuntime{}, errors.New("无效的运行态服务端点")
+			return conversationRuntime{}, errors.New(tr("Invalid runtime service endpoint"))
 		}
 	}
 	return result, nil
@@ -226,14 +226,14 @@ func fetchPhoneRuntime(ctx context.Context, dial func(context.Context) (net.Conn
 
 func (m *mobileApp) runtimeServiceOwner(service phoneWebService) string {
 	if service.Owner == nil {
-		return "项目候选 · 未确认对话归属"
+		return tr("Project candidate · Conversation ownership unconfirmed")
 	}
 	for _, project := range m.state.Projects {
 		for _, thread := range project.Threads {
 			if thread.ServerID == service.Owner.SessionID && threadAgent(thread) == service.Owner.Backend {
-				return "来自对话：" + thread.Title
+				return tr("From conversation: ") + thread.Title
 			}
 		}
 	}
-	return "已核验的对话服务"
+	return tr("Verified conversation service")
 }

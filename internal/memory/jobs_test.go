@@ -231,7 +231,7 @@ func TestExtractionBudgetCapacityAndSafeDuplicate(t *testing.T) {
 		t.Fatal("unbounded evidence accepted")
 	}
 	status, err := New(s.root).ExtractionStatus(scope)
-	if err != nil || status.Failed != 1 || !strings.Contains(status.LastError, "输入超过上限") {
+	if err != nil || status.Failed != 1 || !strings.Contains(status.LastError, "input exceeds the limit") {
 		t.Fatalf("oversized round was silently dropped: %+v %v", status, err)
 	}
 	b, _ := os.ReadFile(s.path(scope))
@@ -250,7 +250,7 @@ func TestExtractionBudgetCapacityAndSafeDuplicate(t *testing.T) {
 		t.Fatal("queue exceeded 100 jobs")
 	}
 	status, err = New(s.root).ExtractionStatus(scope)
-	if err != nil || status.Pending != 100 || status.Failed != 2 || !strings.Contains(status.LastError, "队列已满") {
+	if err != nil || status.Pending != 100 || status.Failed != 2 || !strings.Contains(status.LastError, "queue is full") {
 		t.Fatalf("queue capacity skip lost its diagnostic: %+v %v", status, err)
 	}
 }
@@ -400,7 +400,7 @@ func TestExtractionStatusReportsOnlyCurrentProblems(t *testing.T) {
 	if _, err := s.EnqueueExtraction(scope, oversized); err == nil {
 		t.Fatal("oversized round accepted")
 	}
-	if status, _ := s.ExtractionStatus(scope); !strings.Contains(status.LastError, "输入超过上限") {
+	if status, _ := s.ExtractionStatus(scope); !strings.Contains(status.LastError, "input exceeds the limit") {
 		t.Fatalf("current failure hidden: %+v", status)
 	}
 
@@ -409,7 +409,7 @@ func TestExtractionStatusReportsOnlyCurrentProblems(t *testing.T) {
 	if _, err := s.CompleteExtraction(scope, got.Key, nil, time.Second, errors.New("boom"), false); err != nil {
 		t.Fatal(err)
 	}
-	if status, _ := s.ExtractionStatus(scope); !strings.Contains(status.LastError, "等待重试") {
+	if status, _ := s.ExtractionStatus(scope); !strings.Contains(status.LastError, "Waiting to retry") {
 		t.Fatalf("pending retry problem hidden: %+v", status)
 	}
 	_, got, ok, err := s.ClaimExtraction()

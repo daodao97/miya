@@ -12,6 +12,15 @@ import (
 // Connect opens a tunnel to the desktop in raw, a miya:// link or bare
 // Tailcat address. Closing the Conn closes its tunnel.
 func Connect(ctx context.Context, raw string) (*Conn, error) {
+	return connectPort(ctx, raw, Port)
+}
+
+// ConnectService opens the full desktop protocol on a server installation.
+func ConnectService(ctx context.Context, raw string) (*Conn, error) {
+	return connectPort(ctx, raw, ServicePort)
+}
+
+func connectPort(ctx context.Context, raw string, port uint16) (*Conn, error) {
 	addr, err := ParseLink(raw)
 	if err != nil {
 		return nil, err
@@ -28,13 +37,13 @@ func Connect(ctx context.Context, raw string) (*Conn, error) {
 	t := openTunnel(addr, server)
 	dctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	nc, err := t.client.DialTCPPort(dctx, Port)
+	nc, err := t.client.DialTCPPort(dctx, port)
 	if err != nil {
 		t.close()
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
-		return nil, errors.New("无法连接桌面端，请确认 Miya 桌面端已开启手机连接")
+		return nil, errors.New("Unable to connect to Miya. Check that the target is online and remote connections are enabled.")
 	}
 	t.used.Store(true)
 	conn := newConn(nc, t.close)
@@ -49,11 +58,11 @@ func networkError(err error) error {
 	}
 	switch failure.Kind {
 	case "offline":
-		return errors.New("网络不可用")
+		return errors.New("Network unavailable")
 	case "timeout":
-		return errors.New("连接中继超时")
+		return errors.New("Relay connection timed out")
 	case "canceled":
 		return context.Canceled
 	}
-	return errors.New("无法访问中继服务器")
+	return errors.New("Unable to reach the relay server")
 }

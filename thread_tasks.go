@@ -54,33 +54,33 @@ func applyCodexGoal(t *Thread, goal *codex.Goal) {
 func taskStatusLabel(t Thread, task ThreadTask, waitingApproval bool) string {
 	if task.Status == "active" || task.Status == "waiting" || task.Status == "running" {
 		if t.TaskStopping && task.Kind == "loop" {
-			return "正在停止"
+			return tr("Stopping")
 		}
 		if waitingApproval {
-			return "等待确认"
+			return tr("Awaiting confirmation")
 		}
 		if (task.Kind == "goal" && t.Busy && !t.Loading) || task.Status == "running" {
-			return "运行中"
+			return tr("Running")
 		}
-		return "等待执行"
+		return tr("Waiting to run")
 	}
 	switch task.Status {
 	case "starting":
-		return "正在启动"
+		return tr("Starting")
 	case "paused":
-		return "已暂停"
+		return tr("Paused")
 	case "blocked":
-		return "需要处理"
+		return tr("Needs attention")
 	case "usageLimited":
-		return "额度已用尽"
+		return tr("Quota exhausted")
 	case "budgetLimited":
-		return "预算已用尽"
+		return tr("Budget exhausted")
 	case "complete", "completed":
-		return "已完成"
+		return tr("Completed")
 	case "interrupted", "stopped":
-		return "已停止"
+		return tr("Stopped")
 	case "failed":
-		return "执行失败"
+		return tr("Failed")
 	}
 	return task.Status
 }
@@ -91,7 +91,7 @@ func taskDetail(task ThreadTask) string {
 		parts = append(parts, task.Schedule)
 	}
 	if task.NextRunAtMs > time.Now().UnixMilli() && (task.Status == "waiting" || task.Status == "active") {
-		parts = append(parts, "下次 "+time.UnixMilli(task.NextRunAtMs).Format("01-02 15:04:05"))
+		parts = append(parts, tr("Next ")+time.UnixMilli(task.NextRunAtMs).Format("01-02 15:04:05"))
 	}
 	if task.TokenBudget != nil {
 		parts = append(parts, fmt.Sprintf("%d / %d tokens", task.TokensUsed, *task.TokenBudget))

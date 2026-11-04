@@ -26,7 +26,7 @@ func TestErrorCardOffersRetryWithoutEditingDraft(t *testing.T) {
 	var got retryRequest
 	app.onRetry = func(req retryRequest) { got = req }
 	tt.Frame()
-	if err := tt.Click("重试回复"); err != nil {
+	if err := tt.Click("Retry response"); err != nil {
 		t.Fatal(err)
 	}
 	if got != (retryRequest{ThreadID: 1, MessageID: 12}) {
@@ -38,7 +38,7 @@ func TestErrorCardOffersRetryWithoutEditingDraft(t *testing.T) {
 	got = retryRequest{}
 	c.update(1, func(t *Thread) { t.Busy = true })
 	tt.Frame()
-	_ = tt.Click("重试回复")
+	_ = tt.Click("Retry response")
 	if got.ThreadID != 0 {
 		t.Fatal("retry was allowed while the turn was running")
 	}
@@ -47,7 +47,7 @@ func TestErrorCardOffersRetryWithoutEditingDraft(t *testing.T) {
 		t.Messages = append(t.Messages, Message{ID: 13, Role: "user", Content: "新的请求"})
 	})
 	tt.Frame()
-	if _, ok := tt.Find("重试回复"); ok {
+	if _, ok := tt.Find("Retry response"); ok {
 		t.Fatal("an old error still offers retry after a new request")
 	}
 }

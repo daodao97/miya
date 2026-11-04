@@ -75,7 +75,7 @@ func (m *mobileApp) retryNow() bool {
 // once when a desktop is paired: the user wants it now, not after backoff.
 func (m *mobileApp) disconnectedSendError() string {
 	if m.retryNow() {
-		return "未连接桌面端，正在重新连接…"
+		return tr("Not connected to desktop. Reconnecting…")
 	}
-	return "未连接桌面端"
+	return tr("Not connected to desktop")
 }

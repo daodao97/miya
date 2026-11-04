@@ -13,7 +13,7 @@ func TestMobileMessagePasteReplacesSelectionAndKeepsCaret(t *testing.T) {
 	m.draft = "你好👋尾"
 	tt := ui.NewTester(m.viewRoot, 390, 750)
 	tt.Frame()
-	if err := tt.Click("消息"); err != nil {
+	if err := tt.Click("Message"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Key(ui.Cmd, ui.KeyEnd)
@@ -43,7 +43,7 @@ func TestMobilePairCodePaste(t *testing.T) {
 	tt := ui.NewTester(m.viewRoot, 390, 750)
 	tt.Frame()
 	tt.SetClipboard("miya://connect/code")
-	if err := tt.Click("粘贴"); err != nil {
+	if err := tt.Click("Paste"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
@@ -58,21 +58,21 @@ func TestMobileComposerExpandsWithoutLosingFocus(t *testing.T) {
 	m.state.Model, m.state.Effort = "gpt-6.1-sol", "high"
 	tt := ui.NewTester(m.viewRoot, 390, 750)
 	tt.Frame()
-	compact, ok := tt.Find("消息")
+	compact, ok := tt.Find("Message")
 	if !ok {
 		t.Fatal("message input missing")
 	}
-	if err := tt.Click("消息"); err != nil {
+	if err := tt.Click("Message"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Type("这是一段足够长的消息，会自动换行，换行后文字应该铺满整个输入框的宽度。")
 	tt.Frame()
-	expanded, _ := tt.Find("消息")
-	send, _ := tt.Find("发送")
+	expanded, _ := tt.Find("Message")
+	send, _ := tt.Find("Send")
 	if expanded.W <= compact.W+80 || expanded.Y+expanded.H > send.Y {
 		t.Fatalf("multiline input should use full width above its tools: compact=%v expanded=%v send=%v", compact, expanded, send)
 	}
-	if !tt.Focused("消息") {
+	if !tt.Focused("Message") {
 		t.Fatal("wrapping lost keyboard focus")
 	}
 	tt.Type("\n第二行")
@@ -83,8 +83,8 @@ func TestMobileComposerExpandsWithoutLosingFocus(t *testing.T) {
 	tt.Key(ui.Cmd, ui.KeyA)
 	tt.Type("短消息")
 	tt.Frame()
-	shrunk, _ := tt.Find("消息")
-	if m.draft != "短消息" || shrunk.W != compact.W || !tt.Focused("消息") {
+	shrunk, _ := tt.Find("Message")
+	if m.draft != "短消息" || shrunk.W != compact.W || !tt.Focused("Message") {
 		t.Fatalf("short input should return to the capsule without losing focus: draft=%q bounds=%v", m.draft, shrunk)
 	}
 }

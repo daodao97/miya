@@ -31,9 +31,9 @@ func (app *chatApp) approvalView(c *ui.Context, a codex.Approval) {
 			ui.Text(c, app.c.approvalDetail(a)).FontSize(12).LineHeight(1.5).Selectable()
 		})
 		ui.Row(c).Gap(8).Children(func() {
-			allowLabel, declineLabel := "Allow once", "Decline"
+			allowLabel, declineLabel := tr("Allow once"), tr("Decline")
 			if a.Method == "miya/desktopControl" {
-				allowLabel, declineLabel = "已完成，继续", "取消接管"
+				allowLabel, declineLabel = tr("Done, continue"), tr("Cancel takeover")
 			}
 			if ui.PrimaryButton(c.Key("allow"), allowLabel).Clicked() {
 				app.c.respond(a, approvalResult(a, true))
@@ -68,7 +68,7 @@ func (app *chatApp) questionView(c *ui.Context, a codex.Approval) {
 			}
 		}
 		ui.Row(c).Gap(8).Children(func() {
-			if ui.PrimaryButton(c.Key("submit"), "Submit answers").Disabled(!complete).Clicked() {
+			if ui.PrimaryButton(c.Key("submit"), tr("Submit answers")).Disabled(!complete).Clicked() {
 				result := map[string]any{}
 				for qid, value := range answers {
 					result[qid] = map[string]any{"answers": []string{value}}
@@ -76,7 +76,7 @@ func (app *chatApp) questionView(c *ui.Context, a codex.Approval) {
 				delete(app.answers, id)
 				app.c.respond(a, map[string]any{"answers": result})
 			}
-			if ui.Button(c.Key("skip"), "Skip questions").Clicked() {
+			if ui.Button(c.Key("skip"), tr("Skip questions")).Clicked() {
 				delete(app.answers, id)
 				app.c.respond(a, map[string]any{"answers": map[string]any{}})
 			}
@@ -107,7 +107,7 @@ func (app *chatApp) questionField(c *ui.Context, q codex.Question, answers map[s
 			}
 		}
 		value := answers[q.ID]
-		in := ui.TextInput(c.Key("answer"), &value).Placeholder("Type your answer…").Label(firstNonEmpty(q.Header, q.Question))
+		in := ui.TextInput(c.Key("answer"), &value).Placeholder(tr("Type your answer…")).Label(firstNonEmpty(q.Header, q.Question))
 		if q.IsSecret {
 			in.Password()
 		}
@@ -131,16 +131,16 @@ func (app *chatApp) elicitationView(c *ui.Context, a codex.Approval) {
 	}
 	// MCP forms are submitted as structured JSON; never infer consent from defaults.
 	card(c).Children(func() {
-		ui.Text(c, "MCP request · "+a.ServerName).FontWeight(600)
+		ui.Text(c, tr("MCP request · ")+a.ServerName).FontWeight(600)
 		ui.Text(c, a.Message).FontSize(12).LineHeight(1.5).Selectable()
 		if a.Mode == "url" {
-			ui.Text(c, "Complete this request in your browser, then confirm:").FontSize(12)
+			ui.Text(c, tr("Complete this request in your browser, then confirm:")).FontSize(12)
 			ui.Link(c, a.URL, a.URL).FontSize(12)
 		} else if !rememberable {
 			ui.Scroll(c).MaxHeight(100).Children(func() {
 				ui.Text(c, jsonText(a.RequestedSchema)).Font(monoFont).FontSize(11).Selectable()
 			})
-			if ui.TextArea(c.Key("form"), &value).Lines(3, 8).Font(monoFont).FontSize(12).Label("MCP form JSON").Changed() {
+			if ui.TextArea(c.Key("form"), &value).Lines(3, 8).Font(monoFont).FontSize(12).Label(tr("MCP form JSON")).Changed() {
 				app.forms[id] = value
 			}
 		}
@@ -148,14 +148,14 @@ func (app *chatApp) elicitationView(c *ui.Context, a codex.Approval) {
 			ui.Text(c, msg).TextColor(danger).FontSize(11)
 		}
 		if rememberable {
-			ui.Text(c, "只在当前对话里允许。后台服务退出后需要重新允许。").FontSize(12).TextColor(muted)
+			ui.Text(c, tr("Allowed only in the current conversation. Permission must be granted again after the background service exits.")).FontSize(12).TextColor(muted)
 		}
 		ui.Row(c).Wrap().Gap(8).Children(func() {
-			label := "Confirm"
+			label := tr("Confirm")
 			if rememberable {
-				label = "允许一次"
+				label = tr("Allow once")
 			}
-			if rememberable && ui.Button(c.Key("always-allow"), "此对话始终允许").Clicked() {
+			if rememberable && ui.Button(c.Key("always-allow"), tr("Always allow in this conversation")).Clicked() {
 				if err := app.c.respondMCPAlways(a); err != nil {
 					app.formErrors[id] = err.Error()
 				} else {
@@ -171,7 +171,7 @@ func (app *chatApp) elicitationView(c *ui.Context, a codex.Approval) {
 				}
 				var content map[string]any
 				if err := json.Unmarshal([]byte(value), &content); err != nil || content == nil {
-					app.formErrors[id] = "Enter a JSON object matching the requested fields."
+					app.formErrors[id] = tr("Enter a JSON object matching the requested fields.")
 					return
 				}
 				if err := validateForm(a.RequestedSchema, content); err != nil {
@@ -180,10 +180,10 @@ func (app *chatApp) elicitationView(c *ui.Context, a codex.Approval) {
 				}
 				finish(map[string]any{"action": "accept", "content": content})
 			}
-			if ui.Button(c.Key("decline"), "Decline").Clicked() {
+			if ui.Button(c.Key("decline"), tr("Decline")).Clicked() {
 				finish(map[string]any{"action": "decline"})
 			}
-			if ui.Button(c.Key("cancel"), "Cancel").Clicked() {
+			if ui.Button(c.Key("cancel"), tr("Cancel")).Clicked() {
 				finish(map[string]any{"action": "cancel"})
 			}
 		})

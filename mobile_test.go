@@ -22,9 +22,9 @@ func testMobileApp() *mobileApp {
 
 func openMobileDrawer(t *testing.T, tt *ui.Tester) {
 	t.Helper()
-	label := "桌面端连接"
-	if _, ok := tt.Find("打开侧边栏"); ok {
-		label = "打开侧边栏"
+	label := "Desktop connections"
+	if _, ok := tt.Find("Open sidebar"); ok {
+		label = "Open sidebar"
 	}
 	if err := tt.Click(label); err != nil {
 		t.Fatal(err)
@@ -38,7 +38,7 @@ func TestMobileHomeStartsNewConversation(t *testing.T) {
 	m := testMobileApp()
 	tt := ui.NewTester(m.viewRoot, 390, 750)
 	tt.Frame()
-	for _, label := range []string{"Miya", "新建对话", "Let’s build", "消息", "发送", "选择项目"} {
+	for _, label := range []string{"Miya", "New thread", "Let’s build", "Message", "Send", "Select project"} {
 		if _, ok := tt.Find(label); !ok {
 			t.Fatalf("the new-conversation page should show %q", label)
 		}
@@ -49,7 +49,7 @@ func TestMobileHomeStartsNewConversation(t *testing.T) {
 		}
 	}
 	m.draft = "未发送的消息"
-	if err := tt.Click("新建对话"); err != nil {
+	if err := tt.Click("New thread"); err != nil {
 		t.Fatal(err)
 	}
 	if m.router().Path() != "/" || m.composerProject() != "/a" || m.draft != "" || !tt.HasText("Let’s build") {
@@ -73,16 +73,16 @@ func TestMobileOpensConversationAndDrawer(t *testing.T) {
 	if _, ok := tt.Find("Codex · proj-a"); !ok {
 		t.Error("the header should name the agent and the project")
 	}
-	if _, ok := tt.Find("发送"); !ok {
+	if _, ok := tt.Find("Send"); !ok {
 		t.Error("the conversation page should have a send button")
 	}
-	if _, ok := tt.Find("项目文件"); ok {
+	if _, ok := tt.Find("Project files"); ok {
 		t.Fatal("project files should be inside the conversation's more menu")
 	}
-	if err := tt.Click("更多"); err != nil {
+	if err := tt.Click("More"); err != nil {
 		t.Fatal(err)
 	}
-	if !tt.HasText("项目文件") || !tt.HasText("新对话") {
+	if !tt.HasText("Project files") || !tt.HasText("New conversation") {
 		t.Fatal("the conversation's more menu should offer files and a new conversation")
 	}
 	tt.Key(0, ui.KeyEscape)
@@ -90,7 +90,7 @@ func TestMobileOpensConversationAndDrawer(t *testing.T) {
 	if m.open != 1 || m.router().Path() != "/thread" || !m.menu {
 		t.Fatalf("opening the drawer left the conversation: open = %d, path = %q", m.open, m.router().Path())
 	}
-	if err := tt.Click("新建对话"); err != nil {
+	if err := tt.Click("New thread"); err != nil {
 		t.Fatal(err)
 	}
 	if m.open != 0 || m.router().Path() != "/" {
@@ -117,7 +117,7 @@ func TestMobileDrawer(t *testing.T) {
 	m := testMobileApp()
 	tt := ui.NewTester(m.viewRoot, 390, 750)
 	tt.Frame()
-	if err := tt.Click("桌面端连接"); err != nil {
+	if err := tt.Click("Desktop connections"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
@@ -127,16 +127,16 @@ func TestMobileDrawer(t *testing.T) {
 	// Let it slide in before tapping inside it.
 	tt.Advance(time.Second)
 	tt.Frame()
-	if r, ok := tt.Find("设置"); !ok || r.X < 0 {
+	if r, ok := tt.Find("Settings"); !ok || r.X < 0 {
 		t.Fatalf("the drawer should have slid in: %v, %v", r, ok)
 	}
-	if _, ok := tt.Find("设置"); !ok {
+	if _, ok := tt.Find("Settings"); !ok {
 		t.Error("the drawer should offer settings")
 	}
 	if !tt.HasText("thread-one") || tt.HasText("thread-two") {
 		t.Fatal("only the expanded project's conversations should appear in the drawer")
 	}
-	if err := tt.Click("项目 proj-b"); err != nil {
+	if err := tt.Click("Project proj-b"); err != nil {
 		t.Fatal(err)
 	}
 	if !m.menu || m.selected != "/b" || m.expandedProject != "/b" {
@@ -145,13 +145,13 @@ func TestMobileDrawer(t *testing.T) {
 	if !tt.HasText("thread-two") || tt.HasText("thread-one") {
 		t.Fatal("switching projects did not replace the expanded conversation list")
 	}
-	if err := tt.Click("项目 proj-b"); err != nil {
+	if err := tt.Click("Project proj-b"); err != nil {
 		t.Fatal(err)
 	}
 	if m.expandedProject != "" || tt.HasText("thread-two") {
 		t.Fatal("tapping the open project should collapse its conversations")
 	}
-	if err := tt.Click("新建对话"); err != nil {
+	if err := tt.Click("New thread"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Advance(time.Second)
@@ -188,7 +188,7 @@ func TestMobileDrawerFollowsDrags(t *testing.T) {
 	if !m.menu {
 		t.Fatalf("dragging right should open the drawer (offset %v)", m.drawerOffset)
 	}
-	if r, ok := tt.Find("设置"); !ok || r.X < 0 {
+	if r, ok := tt.Find("Settings"); !ok || r.X < 0 {
 		t.Fatalf("the drawer should show: %v, %v", r, ok)
 	}
 	drag(tt, 370, 60, 400)

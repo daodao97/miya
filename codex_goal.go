@@ -31,7 +31,7 @@ func parseGoalCommand(text string) (goalCommand, bool, error) {
 		value, objective, _ := strings.Cut(strings.TrimSpace(strings.TrimPrefix(args, "--budget ")), " ")
 		n, err := strconv.ParseInt(value, 10, 64)
 		if err != nil || n <= 0 || strings.TrimSpace(objective) == "" {
-			return g, true, fmt.Errorf("用法：/goal --budget <正整数> <目标>")
+			return g, true, fmt.Errorf("Usage: /goal --budget <positive integer> <goal>")
 		}
 		g.budget, g.objective = &n, strings.TrimSpace(objective)
 	}
@@ -45,19 +45,19 @@ func (c *chatController) codexGoalCommand(req sendRequest) (int, string) {
 	}
 	t := c.threadWithID(req.ThreadID)
 	if req.ThreadID != 0 && t.ID == 0 {
-		return 0, "对话已不存在。"
+		return 0, "This conversation no longer exists."
 	}
 	if t.ReadOnly || t.Loading || t.TaskPending {
-		return 0, "请等当前操作完成后再管理目标。"
+		return 0, "Wait for the current operation to finish before managing goals."
 	}
 	if c.client == nil || !c.ready() {
-		return 0, "请先连接 Codex。"
+		return 0, "Connect to Codex first."
 	}
 	if t.ID == 0 && g.action != "set" {
-		return 0, "当前对话没有目标。使用 /goal <目标> 创建。"
+		return 0, "This conversation has no goal. Use /goal <goal> to create one."
 	}
 	if len(req.Attachments) > 0 {
-		return 0, "请先单独发送附件，再设置目标。"
+		return 0, "Send attachments separately before setting a goal."
 	}
 	policy := req.Policy
 	if policy == "" {
@@ -91,7 +91,7 @@ func (c *chatController) codexGoalCommand(req sendRequest) (int, string) {
 			if err == nil {
 				serverID = response.Thread.ID
 				if serverID == "" {
-					err = fmt.Errorf("Codex 返回了空的对话 ID")
+					err = fmt.Errorf("Codex returned an empty conversation ID")
 				} else {
 					sid := serverID
 					c.dispatch(func() { c.update(id, func(t *Thread) { t.ServerID, t.Resumed = sid, true }) })
@@ -129,7 +129,7 @@ func (c *chatController) codexGoalCommand(req sendRequest) (int, string) {
 			c.update(id, func(t *Thread) {
 				t.TaskPending = false
 				if err != nil {
-					t.Status = "目标操作失败：" + err.Error()
+					t.Status = "Goal operation failed: " + err.Error()
 					t.Messages = append(t.Messages, Message{ID: c.nextID(), Role: "error", Content: t.Status})
 					return
 				}

@@ -4,13 +4,13 @@ import "miya/internal/remote"
 
 func (m *mobileApp) handoffToNewThread() {
 	if m.sending {
-		m.sendErr = "消息正在发送，请稍后再转交"
+		m.sendErr = tr("A message is being sent. Wait before handing off.")
 		return
 	}
 	source := m.view.c.current()
 	ref := ThreadRef{Source: m.state.ReferenceSource, Backend: threadAgent(source), SessionID: source.ServerID}
 	if source.ID == 0 || !ref.valid() {
-		m.sendErr = "会话创建后可引用"
+		m.sendErr = tr("Available once the session is created")
 		return
 	}
 	project := ""
@@ -26,7 +26,7 @@ func (m *mobileApp) handoffToNewThread() {
 		}
 	}
 	if project == "" {
-		m.sendErr = "找不到来源项目，请重新打开会话"
+		m.sendErr = tr("Source project not found. Reopen the conversation.")
 		return
 	}
 	// Carry an already-written task and its photos into the new draft. Detach

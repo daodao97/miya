@@ -25,7 +25,7 @@ func TestPhoneQuotasOnlyAccountUsage(t *testing.T) {
 		t.Fatalf("unexpected quotas: %+v", quotas)
 	}
 	windows := quotas[0].Windows
-	if windows[0].UsedPercent != 0 || windows[0].Label != "5 小时" || windows[1].UsedPercent != 81 || windows[1].ResetsAt != reset {
+	if windows[0].UsedPercent != 0 || windows[0].Label != "5-hour quota" || windows[1].UsedPercent != 81 || windows[1].ResetsAt != reset {
 		t.Fatalf("zero usage, ordering or reset lost: %+v", windows)
 	}
 	b, err := json.Marshal(quotas)
@@ -43,7 +43,7 @@ func TestPhoneQuotasOnlyAccountUsage(t *testing.T) {
 func TestMobileDrawerQuotaInspection(t *testing.T) {
 	m := testMobileApp()
 	m.state.Agent = agentClaude
-	m.state.Quotas = []phoneAgentQuota{{Agent: agentCodex, Windows: []phoneQuotaWindow{{Label: "每周", UsedPercent: 81}}}}
+	m.state.Quotas = []phoneAgentQuota{{Agent: agentCodex, Windows: []phoneQuotaWindow{{Label: "Weekly: ", UsedPercent: 81}}}}
 	tt := ui.NewTester(m.viewRoot, 390, 844)
 	tt.Frame()
 	openMobileDrawer(t, tt)
@@ -51,14 +51,14 @@ func TestMobileDrawerQuotaInspection(t *testing.T) {
 		t.Fatal("quota ring should show the remaining percentage")
 	}
 	saveMobileNativeSnapshot(t, tt, "drawer-quota-remaining")
-	if _, ok := tt.Find("Claude 额度"); ok {
+	if _, ok := tt.Find("Claude quota"); ok {
 		t.Fatal("missing agent quota must be hidden")
 	}
-	if err := tt.Click("Codex 额度"); err != nil {
+	if err := tt.Click("Codex quota"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if !tt.HasText("每周") || !tt.HasText("已用 81%") {
+	if !tt.HasText("Weekly: ") || !tt.HasText("81% used") {
 		t.Fatal("tap should show quota details")
 	}
 	if m.state.Agent != agentClaude || !m.menu {
@@ -66,10 +66,10 @@ func TestMobileDrawerQuotaInspection(t *testing.T) {
 	}
 	m.state.Quotas = nil
 	tt.Frame()
-	if _, ok := tt.Find("Codex 额度"); ok {
+	if _, ok := tt.Find("Codex quota"); ok {
 		t.Fatal("unavailable quota must be hidden")
 	}
-	if m.quotaOpen || tt.HasText("已用 81%") {
+	if m.quotaOpen || tt.HasText("81% used") {
 		t.Fatal("removed quota left its popover open")
 	}
 }

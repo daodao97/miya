@@ -12,7 +12,7 @@ func TestAccountQuotaResponse(t *testing.T) {
 		t.Fatal(err)
 	}
 	q := data.ByID["codex"]
-	if q.Primary.UsedPercent != 25 || quotaLabel(q.Primary, 0) != "5 小时额度" || quotaLabel(q.Secondary, 1) != "每周额度" || *q.Credits.Balance != "12.5" {
+	if q.Primary.UsedPercent != 25 || quotaLabel(q.Primary, 0) != "5-hour quota" || quotaLabel(q.Secondary, 1) != "Weekly quota" || *q.Credits.Balance != "12.5" {
 		t.Fatalf("incorrect quota mapping: %+v", q)
 	}
 	states := []accountDisplay{
@@ -25,7 +25,7 @@ func TestAccountQuotaResponse(t *testing.T) {
 	_ = states
 }
 func TestUnknownQuotaWindowIsNotInvented(t *testing.T) {
-	if quotaLabel(&quotaWindow{}, 0) != "主要额度" {
+	if quotaLabel(&quotaWindow{}, 0) != "Primary quota" {
 		t.Fatal("unknown duration presented as a known window")
 	}
 }

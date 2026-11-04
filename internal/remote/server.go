@@ -14,6 +14,10 @@ import (
 
 // Options configures the desktop side.
 type Options struct {
+	// Service and Terminal are optional desktop-client streams. They are
+	// private Tailcat ports, protected by the same pairing capability.
+	Service  func(context.Context, *Conn)
+	Terminal func(context.Context, *Conn)
 	// Files serves ordinary HTTP over the same private overlay on FilesPort.
 	Files http.Handler
 	// StateDir persists the identity and relay, keeping the QR code stable
@@ -31,6 +35,7 @@ type Bridge struct {
 	attachments attachmentHub
 	server      *tailcat.Server
 	listener    net.Listener
+	listeners   []net.Listener
 	files       *http.Server
 	lock        *os.File
 	ctx         context.Context
@@ -60,6 +65,21 @@ func Start(ctx context.Context, options Options) (*Bridge, error) {
 	}
 	b.listener = ln
 	b.ctx, b.cancel = context.WithCancel(context.Background())
+	for _, stream := range []struct {
+		port  uint16
+		serve func(context.Context, *Conn)
+	}{{ServicePort, options.Service}, {TerminalPort, options.Terminal}} {
+		if stream.serve == nil {
+			continue
+		}
+		listener, err := b.server.Listen(ctx, "tcp", fmt.Sprintf(":%d", stream.port))
+		if err != nil {
+			b.Close()
+			return nil, err
+		}
+		b.listeners = append(b.listeners, listener)
+		go b.acceptStream(listener, stream.serve, false)
+	}
 	if options.StateDir != "" {
 		if err := saveIdentity(options.StateDir, b.server); err != nil {
 			b.Close()
@@ -76,26 +96,28 @@ func Start(ctx context.Context, options Options) (*Bridge, error) {
 		go b.files.Serve(files)
 	}
 	go b.attachments.reap(b.ctx)
-	go b.accept()
+	go b.acceptStream(b.listener, b.options.Serve, true)
 	return b, nil
 }
 
 // Link is the miya:// link the QR code shows.
 func (b *Bridge) Link() string { return Link(b.server.TailcatAddr()) }
 
-func (b *Bridge) accept() {
+func (b *Bridge) acceptStream(listener net.Listener, serve func(context.Context, *Conn), attachments bool) {
 	for {
-		nc, err := b.listener.Accept()
+		nc, err := listener.Accept()
 		if err != nil {
 			return
 		}
 		conn := newConn(nc, nil)
-		session, err := b.attachments.newSession()
-		if err != nil {
-			conn.Close()
-			continue
+		if attachments {
+			session, err := b.attachments.newSession()
+			if err != nil {
+				conn.Close()
+				continue
+			}
+			conn.localAttachments = session
 		}
-		conn.localAttachments = session
 		b.mu.Lock()
 		if b.closed {
 			b.mu.Unlock()
@@ -118,8 +140,8 @@ func (b *Bridge) accept() {
 					b.peers(n)
 				}
 			}()
-			if b.options.Serve != nil {
-				b.options.Serve(b.ctx, conn)
+			if serve != nil {
+				serve(b.ctx, conn)
 			}
 		}()
 	}
@@ -150,6 +172,9 @@ func (b *Bridge) Close() {
 		b.files.Close()
 	}
 	b.listener.Close()
+	for _, listener := range b.listeners {
+		listener.Close()
+	}
 	// Keep the overlay alive long enough to deliver TCP FINs.
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()

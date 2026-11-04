@@ -29,11 +29,11 @@ func TestMobileRuntimeIsConversationScopedAndHasBackgroundDetails(t *testing.T) 
 		tt := ui.NewTester(m.viewRoot, width, 844)
 		tt.SetSafeArea(ui.SafeArea{Top: 59, Bottom: 34})
 		tt.Frame()
-		if err := tt.Click("更多"); err != nil {
+		if err := tt.Click("More"); err != nil {
 			t.Fatal(err)
 		}
 		tt.Advance(time.Second)
-		if err := tt.Click("后台运行"); err != nil {
+		if err := tt.Click("Background tasks"); err != nil {
 			t.Fatal(err)
 		}
 		tt.Advance(time.Second)
@@ -44,13 +44,13 @@ func TestMobileRuntimeIsConversationScopedAndHasBackgroundDetails(t *testing.T) 
 		m.webServices.runtime = &sample
 		m.webServices.services = sample.Services
 		tt.Frame()
-		for _, label := range []string{"后台任务", "Start app", "系统进程", "PID 42", "端口 5173"} {
+		for _, label := range []string{"Background tasks", "Start app", "System process", "PID 42", "Port 5173"} {
 			if !tt.HasText(label) {
 				t.Fatalf("missing runtime detail %q in %v", label, tt.Texts())
 			}
 		}
 		saveMobileNativeSnapshot(t, tt, "runtime-mobile-"+strconv.Itoa(width))
-		if err := tt.Click("返回"); err != nil {
+		if err := tt.Click("Back"); err != nil {
 			t.Fatal(err)
 		}
 		tt.Advance(time.Second)
@@ -69,14 +69,14 @@ func TestDesktopRuntimeSurfaceUsesSameView(t *testing.T) {
 	s := &panelSurface{id: 1, kind: surfaceRuntime, runtimeRef: ref, runtimeData: &sample, runtimeAt: time.Now()}
 	p.visible, p.active, p.surfaces = true, 0, []*panelSurface{s}
 	tt.Frame()
-	for _, label := range []string{"本对话后台运行", "Start app", "PID 42", "打开端口 5173"} {
+	for _, label := range []string{"Background activity", "Start app", "PID 42", "Open port 5173"} {
 		if !tt.HasText(label) {
 			t.Fatalf("desktop missing shared runtime view %s", label)
 		}
 	}
 	runtimeObservationLost(s.runtimeData)
 	tt.Frame()
-	if tt.HasText("打开端口 5173") || !tt.HasText("上次核验结果") || !tt.HasText("待核验") {
+	if tt.HasText("Open port 5173") || !tt.HasText("last verified result") || !tt.HasText("Awaiting verification") {
 		t.Fatal("lost observation still displayed live endpoints")
 	}
 }

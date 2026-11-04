@@ -118,7 +118,7 @@ func completionNoticeBody(old, next Thread) string {
 	if task := noticeTask(next); task != "" {
 		return task
 	}
-	return "任务已完成，打开会话查看结果。"
+	return tr("Task completed. Open the conversation to view the result.")
 }
 
 // Compute before messages are stripped from service snapshots. Windows can
@@ -126,7 +126,7 @@ func completionNoticeBody(old, next Thread) string {
 func updateCompletionNoticeBody(old Thread, next *Thread) {
 	if next.Busy {
 		next.CompletionNoticeBody = ""
-	} else if old.Busy && next.CompletedAtMs != 0 && next.Status != "Stopped" {
+	} else if old.Busy && next.CompletedAtMs != 0 && next.Status != tr("Stopped") {
 		next.CompletionNoticeBody = ""
 		next.CompletionNoticeBody = completionNoticeBody(old, *next)
 	}
@@ -143,7 +143,7 @@ func noticeTask(t Thread) string {
 		case "", "继续", "继续吧", "实现吧", "干吧", "好的", "好", "可以", "嗯", "ok", "yes", "continue", "go ahead":
 			continue
 		}
-		return noticePlainText("任务：" + text)
+		return noticePlainText(tr("Task: ") + text)
 	}
 	title := noticePlainText(t.Title)
 	switch strings.ToLower(title) {
@@ -153,21 +153,21 @@ func noticeTask(t Thread) string {
 	if strings.HasPrefix(title, "/") || strings.HasPrefix(title, "~/") || len(title) >= 3 && title[1] == ':' && (title[2] == '\\' || title[2] == '/') {
 		return ""
 	}
-	return noticePlainText("任务：" + title)
+	return noticePlainText(tr("Task: ") + title)
 }
 
 func approvalNotice(t Thread, a codex.Approval) taskNotice {
-	n := taskNotice{Thread: strconv.Itoa(t.ID), Title: "Miya · 需要你的确认"}
+	n := taskNotice{Thread: strconv.Itoa(t.ID), Title: tr("Miya · Confirmation needed")}
 	switch a.Method {
 	case "item/tool/requestUserInput":
-		n.Title = "Miya · 需要你的回答"
+		n.Title = tr("Miya · Answer needed")
 		for _, q := range a.Questions {
 			if n.Body = noticePlainText(q.Question); n.Body != "" {
 				break
 			}
 		}
 		if n.Body == "" {
-			n.Body = "需要你回答一个问题，回答后继续任务。"
+			n.Body = tr("Answer a question to continue the task.")
 		}
 	case "mcpServer/elicitation/request":
 		n.Body = noticePlainText(a.Message)
@@ -178,27 +178,27 @@ func approvalNotice(t Thread, a codex.Approval) taskNotice {
 		}
 		_ = json.Unmarshal(a.Payload, &input)
 		if input.Command != "" {
-			n.Body = noticePlainText("是否允许执行 " + input.Command + "？")
+			n.Body = noticePlainText(tr("Allow execution of ") + input.Command + "?")
 		} else if a.Command != "" {
-			n.Body = noticePlainText("需要允许使用 " + a.Command + "，才能继续任务。")
+			n.Body = noticePlainText(tr("Permission is required to use ") + a.Command + tr(" to continue the task."))
 		}
 	default:
 		n.Body = noticePlainText(a.Reason)
 		if n.Body == "" && a.Command != "" {
-			n.Body = noticePlainText("是否允许执行 " + a.Command + "？")
+			n.Body = noticePlainText(tr("Allow execution of ") + a.Command + "?")
 		}
 		if n.Body == "" && a.Method == "item/fileChange/requestApproval" {
-			n.Body = "需要你确认文件修改，授权后继续任务。"
+			n.Body = tr("Confirm the file changes to continue the task.")
 		}
 		if n.Body == "" && a.Method == "item/permissions/requestApproval" {
-			n.Body = "需要你确认操作权限，授权后继续任务。"
+			n.Body = tr("Confirm operation permissions to continue the task.")
 		}
 	}
 	if n.Body == "" {
 		n.Body = noticeTask(t)
 	}
 	if n.Body == "" {
-		n.Body = "任务正在等待你的确认。"
+		n.Body = tr("The task is waiting for your confirmation.")
 	}
 	return n
 }

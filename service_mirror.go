@@ -17,6 +17,7 @@ import (
 // guarded by c.remote at the top of each such method. Window state (the
 // open conversation, the draft, the attachments) stays in the window.
 type mirrorState struct {
+	remoteHost  bool
 	projectBusy map[string]bool
 	messages    map[int][]Message
 	// Draft edits belong to this window, including explicit clears after a
@@ -35,29 +36,56 @@ type mirrorState struct {
 // Service-backed windows never run agents themselves when a connection fails.
 // Standalone operation is explicit, or used on platforms without the service.
 func newWindowController() *chatController {
-	if os.Getenv("MIYA_SERVICE") != "0" && runtime.GOOS != "windows" {
-		explicit := os.Getenv("QUICKGUI_WORKSPACE")
-		workspace := explicit
-		if workspace == "" {
-			workspace, _ = os.Getwd()
+	store, err := loadDesktopWorkspaces()
+	if err != nil {
+		c := newMirrorController()
+		c.remote = &serviceClient{closed: make(chan struct{}), pending: map[int64]chan svcMessage{}}
+		c.remote.Close()
+		c.setStatus(err.Error())
+		onCleanup(func() { c.cancel(); c.remote.Close() })
+		return c
+	}
+	if link := store.current().Link; link != "" {
+		c := newServiceWindow("", func() (*serviceClient, svcState, error) { return connectRemoteService(link) })
+		c.mirror.remoteHost = true
+		onCleanup(func() { c.cancel(); c.remote.Close() })
+		return c
+	}
+	return newLocalWindowController()
+}
+
+func localWindowWorkspace() (workspace, explicit string) {
+	explicit = os.Getenv("QUICKGUI_WORKSPACE")
+	workspace = explicit
+	if workspace == "" {
+		workspace, _ = os.Getwd()
+	}
+	workspace, _ = filepath.Abs(workspace)
+	return
+}
+
+func localWindowConnection() (*serviceClient, svcState, error) {
+	workspace, explicit := localWindowWorkspace()
+	cl, st, err := connectService(workspace)
+	if err == nil && explicit != "" && st.Cwd != workspace {
+		var result svcWorkspace
+		if err = cl.call("workspace", workspace, &result); err == nil && result.Error != "" {
+			err = errors.New(result.Error)
 		}
-		workspace, _ = filepath.Abs(workspace)
-		c := newServiceWindow(workspace, func() (*serviceClient, svcState, error) {
-			cl, st, err := connectService(workspace)
-			if err == nil && explicit != "" && st.Cwd != workspace {
-				var result svcWorkspace
-				if err = cl.call("workspace", workspace, &result); err == nil && result.Error != "" {
-					err = errors.New(result.Error)
-				}
-				if err == nil {
-					err = cl.call("state", nil, &st)
-				}
-				if err != nil {
-					cl.Close()
-				}
-			}
-			return cl, st, err
-		})
+		if err == nil {
+			err = cl.call("state", nil, &st)
+		}
+		if err != nil {
+			cl.Close()
+		}
+	}
+	return cl, st, err
+}
+
+func newLocalWindowController() *chatController {
+	if os.Getenv("MIYA_SERVICE") != "0" && runtime.GOOS != "windows" {
+		workspace, _ := localWindowWorkspace()
+		c := newServiceWindow(workspace, localWindowConnection)
 		onCleanup(func() { c.cancel(); c.remote.Close() })
 		return c
 	}
@@ -78,7 +106,7 @@ func newServiceWindow(workspace string, connect func() (*serviceClient, svcState
 	// would make a mirror fall through to the local agent implementations.
 	c.remote = &serviceClient{closed: make(chan struct{}), pending: map[int64]chan svcMessage{}}
 	c.remote.Close()
-	c.setStatus("正在等待后台服务：" + err.Error())
+	c.setStatus("Waiting for background service: " + err.Error())
 	c.watchService(c.remote)
 	return c
 }
@@ -110,7 +138,10 @@ func newMirrorController() *chatController {
 	}
 	locale, setLocale := createSignal("en")
 	c.locale = locale
-	c.mirror.setLocale = func(v string) { appLocale.Store(normalizeLocale(v)); setLocale(normalizeLocale(v)) }
+	c.mirror.setLocale = func(v string) {
+		v = normalizeLocale(v)
+		setLocale(v)
+	}
 	c.setLocale = func(v string) { c.mirror.setLocale(v); c.forward("locale", normalizeLocale(v)) }
 	c.models, c.setModels = createSignal([]codex.Model{})
 	c.attachments, c.setAttachments = createSignal([]string{})
@@ -178,9 +209,9 @@ func (c *chatController) watchService(cl *serviceClient) {
 			return
 		}
 		c.dispatch(func() {
-			if c.remote == cl && cl.conn != nil {
+			if c.ctx.Err() == nil && c.remote == cl && (cl.conn != nil || cl.wire != nil) {
 				c.setReady(false)
-				c.setStatus("后台服务已断开，正在重新连接…")
+				c.setStatus("Background service disconnected. Reconnecting…")
 			}
 		})
 		for wait := 200 * time.Millisecond; ; wait = min(wait*2, 5*time.Second) {
@@ -208,6 +239,7 @@ func (c *chatController) watchService(cl *serviceClient) {
 }
 
 func (c *chatController) applyState(s svcState) {
+	c.collaborationRemote = s.Collaboration
 	c.referenceSource = s.ReferenceSource
 	c.memoryRevision = s.MemoryRevision
 	c.fastMode = s.FastMode

@@ -60,7 +60,7 @@ func interruptClaudeAgents(t *Thread, status string) {
 		for j := range t.Messages[i].Agents {
 			a := &t.Messages[i].Agents[j]
 			if subAgentActive(a.Status) {
-				a.Status, a.Detail = status, "进程已结束，未收到子任务完成通知"
+				a.Status, a.Detail = status, "Process exited without a subtask completion notification"
 			}
 		}
 	}
@@ -166,7 +166,7 @@ func claudeFinishSubAgents(m *Message, output string, metadata json.RawMessage) 
 			}
 			// A repeated acknowledgement must not reopen a finished task.
 			if subAgentActive(m.Agents[i].Status) {
-				m.Agents[i].Detail = "已在后台启动，等待完成通知"
+				m.Agents[i].Detail = "Started in the background; waiting for completion"
 			}
 		}
 		return
@@ -235,7 +235,7 @@ func claudeTaskReport(output string) (string, int) {
 func claudeToolOutput(m Message, output string) string {
 	if len(m.Agents) > 0 {
 		if _, async := claude.AsyncAgentResult(nil, output); async {
-			return "子 agent 已在后台启动，等待完成通知。"
+			return "Subagent started in the background. Waiting for completion."
 		}
 		if text, _ := claudeTaskReportText(output); text != "" {
 			return text

@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"mime"
 	"os"
@@ -14,6 +15,7 @@ import (
 
 	"miya/internal/claude"
 	"miya/internal/codex"
+	dg "miya/internal/delegation"
 )
 
 func newClaudeSessionID() string {
@@ -92,7 +94,7 @@ func (c *chatController) loadClaudeHistory(t Thread) {
 				t.Loading = false
 				t.HistoryLoaded = true
 				if err != nil {
-					t.Status = "本地记录不可用。发送消息可继续此对话。"
+					t.Status = "Local history is unavailable. Send a message to continue this conversation."
 					return
 				}
 				t.Messages = stored.Messages
@@ -117,7 +119,7 @@ func claudeInput(text string, paths []string) ([]map[string]any, error) {
 				return nil, err
 			}
 			if len(data) > 20*1024*1024 {
-				return nil, fmt.Errorf("图片过大: %s", filepath.Base(p))
+				return nil, fmt.Errorf("Image is too large: %s", filepath.Base(p))
 			}
 			blocks = append(blocks, map[string]any{"type": "image", "source": map[string]any{"type": "base64", "media_type": typ, "data": base64.StdEncoding.EncodeToString(data)}})
 		} else {
@@ -157,13 +159,17 @@ func (c *chatController) sendClaude(req sendRequest) int {
 	now := time.Now().UnixMilli()
 	c.update(id, func(t *Thread) {
 		resetTurnOutput(t)
+		t.ExecutionID = req.ExecutionID
+		if !req.KeepSessionSettings {
+			t.LaunchModel, t.LaunchEffort = req.Model, req.Effort
+		}
 		t.Busy = true
 		t.StopRequested = false
 		t.StartedAtMs = now
 		t.CompletedAtMs = 0
 		t.LastOutputAtMs = now
 		t.LastActivityAt = now
-		t.Status = "Claude Code 正在运行…"
+		t.Status = "Claude Code is running…"
 		shown, images := attachmentDisplay(text, paths)
 		t.Messages = append(t.Messages, Message{ID: pendingUserID, Role: "user", Content: shown, Images: images, Attachments: append([]string(nil), req.Attachments...), Parts: req.Parts, SentAtMs: now, MemoryTurnID: localTurn, MemoryControl: req.MemoryControl || req.KeepSessionSettings})
 		name, _, _ := strings.Cut(text, " ")
@@ -175,8 +181,25 @@ func (c *chatController) sendClaude(req sendRequest) int {
 		c.claudeRuns = map[int]*claude.Client{}
 	}
 	existing := c.claudeRuns[id]
+	generation := c.threadWithID(id).claudeGeneration
+	if existing == nil {
+		generation++
+		c.update(id, func(t *Thread) { t.claudeGeneration = generation })
+	}
+	var executionEpoch string
+	if execution := c.managedExecutions[req.ExecutionID]; execution != nil {
+		if existing != nil {
+			_, _, _, execution.epoch = existing.Runtime()
+		} else {
+			execution.epoch = "claude:" + newClaudeSessionID()
+		}
+		executionEpoch = execution.epoch
+	}
 	reject := func(err error) {
 		c.dispatch(func() {
+			if c.threadWithID(id).claudeGeneration != generation {
+				return
+			}
 			if existing == nil {
 				c.finishClaude(id, cwd, err)
 				return
@@ -192,12 +215,31 @@ func (c *chatController) sendClaude(req sendRequest) int {
 				}
 				t.Messages = append(t.Messages, Message{ID: c.nextID(), Role: "error", Content: err.Error()})
 			})
-			c.returnDraft(id, text, paths)
+			if req.ExecutionID == "" {
+				c.returnDraft(id, text, paths)
+			}
+			state := dg.NeedsAttention
+			if errors.Is(err, errManagedCancelled) {
+				state = dg.Interrupted
+			}
+			if errors.Is(err, errManagedPaused) && strings.HasPrefix(req.ExecutionID, "delivery-") {
+				s := c.collaboration
+				s.post(func() {
+					if e := s.manager.DeliveryOutcome(req.ExecutionID, "", "not_started", err.Error()); e == nil {
+						s.release(req.ExecutionID)
+					}
+				})
+			} else {
+				c.managedEvent(req.ExecutionID, dg.Event{State: state, Result: dg.Result{Error: err.Error()}})
+			}
 		})
 	}
 	go func() {
+		beforeInput := func(ctx context.Context) error {
+			return c.persistManagedExecutionBinding(ctx, req.ExecutionID, ThreadRef{Source: c.referenceSource, Backend: agentClaude, SessionID: t.ServerID}.URL(), executionEpoch)
+		}
 		mem := c.prepareMemoryInput(t, req, cwd, c.threadRef(t).URL())
-		content, err := claudeInput(mem.text(text), paths)
+		content, err := claudeInput(collaborationTaggedInput(mem.text(text), req.Parts), paths)
 		if err != nil {
 			mem.finish(false)
 			reject(err)
@@ -207,9 +249,12 @@ func (c *chatController) sendClaude(req sendRequest) int {
 			ctx, cancel := context.WithTimeout(c.parentContext(), 10*time.Second)
 			defer cancel()
 			if req.KeepSessionSettings {
-				err = existing.Send(t.ServerID, content)
+				err = beforeInput(ctx)
+				if err == nil {
+					err = existing.Send(t.ServerID, content)
+				}
 			} else {
-				err = existing.SendWithOptions(ctx, claude.Options{SessionID: t.ServerID, Content: content, Model: req.Model, Effort: req.Effort, PermissionMode: claudePermissionMode(policy)})
+				err = existing.SendWithOptions(ctx, claude.Options{SessionID: t.ServerID, Content: content, Model: req.Model, Effort: req.Effort, PermissionMode: claudePermissionMode(policy), BeforeInput: beforeInput})
 			}
 			if err != nil {
 				reject(err)
@@ -217,15 +262,27 @@ func (c *chatController) sendClaude(req sendRequest) int {
 			mem.finish(err == nil)
 			return
 		}
-		run, err := claude.Start(c.ctx, claude.Options{Binary: c.claudeBinary, Args: append(append([]string(nil), c.claudeArgs...), claudeMCPArgs(cwd)...), Env: append(append([]string(nil), c.claudeEnv...), claudeMCPEnv()...), Cwd: cwd, SessionID: t.ServerID, Resume: t.Resumed, PermissionMode: claudePermissionMode(policy), Model: req.Model, Effort: req.Effort, Content: content}, func(f claude.Frame) {
+		run, err := claude.Start(c.ctx, claude.Options{Binary: c.claudeBinary, Args: append(append([]string(nil), c.claudeArgs...), claudeMCPArgs(cwd)...), Env: append(append([]string(nil), c.claudeEnv...), claudeMCPEnv()...), Cwd: cwd, SessionID: t.ServerID, Resume: t.Resumed, PermissionMode: claudePermissionMode(policy), Model: req.Model, Effort: req.Effort, Content: content, BeforeInput: beforeInput}, func(f claude.Frame) {
 			c.dispatch(func() {
-				if c.threadWorkspace(id) == cwd {
+				if c.threadWorkspace(id) == cwd && c.threadWithID(id).claudeGeneration == generation {
 					c.handleClaude(id, f)
 				}
 			})
-		}, func(err error) { c.dispatch(func() { c.finishClaude(id, cwd, err) }) })
+		}, func(err error) {
+			c.dispatch(func() {
+				if c.threadWithID(id).claudeGeneration == generation {
+					c.finishClaude(id, cwd, err)
+				}
+			})
+		})
 		mem.finish(err == nil)
 		c.dispatch(func() {
+			if c.threadWithID(id).claudeGeneration != generation {
+				if run != nil {
+					go run.Stop()
+				}
+				return
+			}
 			if err != nil {
 				c.finishClaude(id, cwd, err)
 				return
@@ -236,10 +293,8 @@ func (c *chatController) sendClaude(req sendRequest) int {
 			}
 			c.claudeRuns[id] = run
 			c.noteRuntime(c.threadWithID(id))
-			for _, t := range c.threads() {
-				if t.ID == id && t.StopRequested {
-					go run.Stop()
-				}
+			if current := c.threadWithID(id); current.ID != 0 && current.StopRequested {
+				go run.Stop()
 			}
 		})
 	}()
@@ -247,6 +302,23 @@ func (c *chatController) sendClaude(req sendRequest) int {
 }
 
 func (c *chatController) finishClaude(id int, cwd string, err error) {
+	defer func() {
+		t := c.threadWithID(id)
+		state := dg.Interrupted
+		if !errors.Is(err, errManagedCancelled) && !t.StopRequested && (err != nil || t.Status != "") {
+			state = dg.Failed
+		}
+		if errors.Is(err, errManagedPaused) && strings.HasPrefix(t.ExecutionID, "delivery-") {
+			s := c.collaboration
+			s.post(func() {
+				if e := s.manager.DeliveryOutcome(t.ExecutionID, "", "not_started", err.Error()); e == nil {
+					s.release(t.ExecutionID)
+				}
+			})
+			return
+		}
+		c.managedClaudeResult(id, state, "")
+	}()
 	// The run's conversation may be in a background project.
 	here := c.threadWorkspace(id) == cwd
 	if here {
@@ -336,11 +408,17 @@ func (c *chatController) finishClaude(id int, cwd string, err error) {
 	c.setApprovals(pending)
 }
 func (c *chatController) handleClaude(id int, f claude.Frame) {
+	if f.ParentToolUseID == "" && (f.Type == "assistant" || f.Type == "stream_event" || f.Type == "control_request") {
+		c.managedClaudeStarted(id)
+	}
 	if f.Type == "assistant" || f.Type == "user" || f.Type == "system" || f.Type == "result" {
 		c.noteRuntime(c.threadWithID(id))
 	}
 	if f.Type == "system" && f.Subtype == "init" {
 		c.noteClaudeModel(f.Model)
+		if f.Model != "" {
+			c.update(id, func(t *Thread) { t.LaunchModel = f.Model })
+		}
 	}
 	if f.Type == "control_cancel_request" {
 		rid, _ := json.Marshal(fmt.Sprintf("claude:%d:%s", id, f.RequestID))
@@ -396,7 +474,7 @@ func (c *chatController) handleClaude(id int, f claude.Frame) {
 			}
 			t.Busy, t.StopRequested = true, false
 			t.CompletedAtMs = 0
-			t.Status = "Claude Code 正在运行…"
+			t.Status = "Claude Code is running…"
 		}
 		if f.SessionID != "" {
 			t.ServerID = f.SessionID
@@ -491,7 +569,7 @@ func (c *chatController) handleClaude(id int, f claude.Frame) {
 				t.Busy = f.WaitingForAgents
 				if f.WaitingForAgents {
 					t.CompletedAtMs = 0
-					t.Status = "等待子 agent 完成…"
+					t.Status = "Waiting for subagents to finish…"
 				} else {
 					t.CompletedAtMs = now
 					t.Status = ""
@@ -503,10 +581,10 @@ func (c *chatController) handleClaude(id int, f claude.Frame) {
 					message = f.Result
 				}
 				if message == "" {
-					message = "Claude Code 执行失败"
+					message = "Claude Code run failed"
 				}
 				if emptyResult {
-					message = "Claude Code 已结束本轮，但没有返回回复。"
+					message = "Claude Code finished the turn without returning a response."
 				}
 				message = claudeErrorMessage(message, hadOutput, c.claudeCommand != "")
 				t.Status = message
@@ -523,6 +601,15 @@ func (c *chatController) handleClaude(id int, f claude.Frame) {
 	})
 	if f.Type == "result" && f.ParentToolUseID == "" && !f.WaitingForAgents && !f.IsError && c.threadWithID(id).Status == "" {
 		c.completedMemoryTurn(id, f.UUID)
+	}
+	if f.Type == "result" && f.ParentToolUseID == "" && !f.WaitingForAgents {
+		state := dg.Completed
+		if c.threadWithID(id).StopRequested {
+			state = dg.Interrupted
+		} else if f.IsError {
+			state = dg.Failed
+		}
+		c.managedClaudeResult(id, state, f.UUID)
 	}
 }
 func (c *chatController) respondClaude(a codex.Approval, result any) bool {
@@ -547,7 +634,7 @@ func (c *chatController) respondClaude(a codex.Approval, result any) bool {
 		} `json:"answers"`
 	}
 	_ = json.Unmarshal(encoded, &r)
-	response := map[string]any{"behavior": "deny", "message": "用户拒绝此操作"}
+	response := map[string]any{"behavior": "deny", "message": "The user denied this operation"}
 	if r.Decision == "accept" || r.Answers != nil {
 		var input map[string]any
 		_ = json.Unmarshal(a.Payload, &input)
@@ -601,11 +688,11 @@ func claudeErrorMessage(message string, hadOutput, customCommand bool) string {
 	if hadOutput && !strings.Contains(message, "ede_diagnostic") {
 		return message
 	}
-	hint := "Claude Code 没有返回回复。请检查网络和登录状态后重试。"
+	hint := "Claude Code returned no response. Check your connection and sign-in status, then try again."
 	if customCommand {
-		hint = "Claude Code 没有返回回复。请在「设置 → 常规」中检查自定义启动命令的代理或 API 设置，或清空启动命令后重试。"
+		hint = "Claude Code returned no response. Check proxy or API settings in the custom launch command under Settings → General, or clear the command and try again."
 	}
-	return hint + "\n\n原始信息：" + message
+	return hint + "\n\nOriginal error: " + message
 }
 
 // claudeStallAfter is how long a run may send nothing before the app says
@@ -625,7 +712,7 @@ func stalledHint(t Thread, waitingForUser bool, now time.Time) string {
 	if quiet < claudeStallAfter {
 		return ""
 	}
-	return fmt.Sprintf("已 %s 未收到回应。可能是网络或代理问题，可停止后重试", formatElapsed(quiet.Milliseconds()))
+	return fmt.Sprintf("No response for %s. Check your network or proxy, or stop and try again.", formatElapsed(quiet.Milliseconds()))
 }
 
 // claudeTextKey is the message a complete text block of a reply fills in.

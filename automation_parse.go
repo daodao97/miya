@@ -40,21 +40,8 @@ const defaultAutomationSchedule = "0 9 * * *"
 
 func automationDraftPrompt(request, project string, now time.Time) string {
 	zone, _ := now.Zone()
-	weekdays := []string{"日", "一", "二", "三", "四", "五", "六"}
-	return fmt.Sprintf(`你在帮 Miya 把一句话整理成定时自动化的设置。只回答符合 schema 的 JSON，不要执行任何操作。
-
-当前时间：%s 周%s（时区 %s）
-项目目录：%s
-项目顶层的文件：%s
-
-规则：
-- name：6 到 14 个字的中文名称，说明做什么。
-- schedule：5 段 cron（分 时 日 月 周），按本地时间。句子没说时间时填 "%s"，并把 time_missing 设为 true。
-- check：句子要求测试通过、构建成功等可以用命令验证的结果时，给出在项目目录执行的一条完整 shell 命令，按项目文件推断，例如有 go.mod 用 go test ./...，有 package.json 用 npm test。命令会在项目目录里执行，不要写 cd。句子没要求验证时留空。
-- rounds：有 check 时最多跑几轮，1 到 5。「多试两次」是 3 轮，没说时是 3。没有 check 时是 1。
-- instructions：每次运行时发给 coding agent 的第一条消息。用中文写清要做什么、做到什么程度算完成、没有事情可做时回复「无事可报」。不要写运行时间，也不要写检查命令和重试规则，这些由 Miya 负责。
-
-句子：%s`,
+	weekdays := []string{"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"}
+	return fmt.Sprintf("Help Miya turn a request into a scheduled automation. Return only JSON that matches the schema. Do not perform any actions.\n\nCurrent time: %s %s (time zone %s)\nProject directory: %s\nTop-level project files: %s\n\nRules:\n- name: a short English name, 3–8 words, describing the task.\n- schedule: a 5-field cron expression (minute hour day month weekday) in local time. If the request specifies no time, use \"%s\" and set time_missing to true.\n- check: if the request requires a verifiable result such as passing tests or a successful build, provide one complete shell command to run in the project directory. Infer it from project files, for example go test ./... for go.mod or npm test for package.json. Do not include cd. Leave blank if no verification was requested.\n- rounds: maximum attempts when check is present, from 1 to 5. \"Try twice more\" means 3 rounds; default to 3. Use 1 when there is no check.\n- instructions: the first message sent to the coding agent for each run. Explain the task and completion criteria in English, and ask it to reply \"Nothing to report\" when there is no work. Do not include the schedule, check command, or retry rules; Miya manages those.\n\nRequest: %s",
 		now.Format("2006-01-02 15:04"), weekdays[now.Weekday()], zone, project, projectTopFiles(project), defaultAutomationSchedule, request)
 }
 
@@ -63,7 +50,7 @@ func automationDraftPrompt(request, project string, now time.Time) string {
 func projectTopFiles(dir string) string {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return "（无法读取）"
+		return "(unable to read)"
 	}
 	var names []string
 	for _, e := range entries {
@@ -81,7 +68,7 @@ func projectTopFiles(dir string) string {
 		names = append(names[:40], "…")
 	}
 	if len(names) == 0 {
-		return "（空）"
+		return "(empty)"
 	}
 	return strings.Join(names, ", ")
 }
@@ -110,7 +97,7 @@ func draftAutomation(ctx context.Context, cfg draftConfig, agent, project, reque
 	}
 	var d automationDraft
 	if err := json.Unmarshal(raw, &d); err != nil {
-		return automationDraft{}, fmt.Errorf("agent 的回答不是预期的格式：%v", err)
+		return automationDraft{}, fmt.Errorf("The agent returned an unexpected format: %v", err)
 	}
 	return d, nil
 }
@@ -131,7 +118,7 @@ func draftWithClaude(ctx context.Context, cfg draftConfig, project, prompt strin
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("Claude Code 整理失败：%v %s", err, clipRunes(strings.TrimSpace(stderr.String()), 300))
+		return nil, fmt.Errorf("Claude Code could not draft the automation: %v %s", err, clipRunes(strings.TrimSpace(stderr.String()), 300))
 	}
 	return claudeStructuredOutput(out)
 }
@@ -144,10 +131,10 @@ func claudeStructuredOutput(out []byte) ([]byte, error) {
 		StructuredOutput json.RawMessage `json:"structured_output"`
 	}
 	if err := json.Unmarshal(out, &r); err != nil {
-		return nil, fmt.Errorf("Claude Code 的输出无法解析：%v", err)
+		return nil, fmt.Errorf("Unable to parse Claude Code output: %v", err)
 	}
 	if r.IsError {
-		return nil, errors.New("Claude Code 整理失败：" + clipRunes(r.Result, 300))
+		return nil, errors.New("Claude Code could not draft the automation: " + clipRunes(r.Result, 300))
 	}
 	if len(r.StructuredOutput) > 0 && string(r.StructuredOutput) != "null" {
 		return r.StructuredOutput, nil
@@ -174,7 +161,7 @@ func draftWithCodex(ctx context.Context, project, prompt string) ([]byte, error)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("Codex 整理失败：%v %s", err, clipRunes(lastLine(stderr.String()), 300))
+		return nil, fmt.Errorf("Codex could not draft the automation: %v %s", err, clipRunes(lastLine(stderr.String()), 300))
 	}
 	return os.ReadFile(last)
 }
@@ -189,7 +176,7 @@ func automationFromDraft(d automationDraft, agent, project, request string) (Aut
 		a.Schedule = defaultAutomationSchedule
 	}
 	if _, err := parseCron(a.Schedule); err != nil {
-		return Automation{}, false, fmt.Errorf("整理出的时间 %q 无效，请写得更具体", a.Schedule)
+		return Automation{}, false, fmt.Errorf("The generated schedule %q is invalid. Describe the time more precisely.", a.Schedule)
 	}
 	if strings.TrimSpace(a.Instructions) == "" {
 		a.Instructions = a.Request

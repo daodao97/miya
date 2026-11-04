@@ -19,13 +19,13 @@ const desktopThumbnailSize = 480
 // windows. The caller holds d.work, so previews never overlap captures.
 func (d *desktopControl) serveThumbnail(w http.ResponseWriter, r *http.Request, l *desktopLease, pick bool) {
 	if !pick {
-		http.Error(w, "此界面不提供窗口预览", 403)
+		http.Error(w, "Window previews are not available in this view", 403)
 		return
 	}
 	id, err1 := strconv.ParseUint(r.URL.Query().Get("id"), 10, 32)
 	pid, err2 := strconv.Atoi(r.URL.Query().Get("pid"))
 	if err1 != nil || err2 != nil || id == 0 {
-		http.Error(w, "无效的窗口", 400)
+		http.Error(w, "Invalid window", 400)
 		return
 	}
 	windows, err := d.windows()
@@ -40,7 +40,7 @@ func (d *desktopControl) serveThumbnail(w http.ResponseWriter, r *http.Request, 
 		d.keepAwake(l, false)
 		data, err := d.captureWindow(candidate)
 		if errors.Is(err, desktop.ErrWindowUnavailable) {
-			http.Error(w, "窗口已关闭，请刷新列表", 404)
+			http.Error(w, "The window closed. Refresh the list.", 404)
 			return
 		}
 		if err == nil {
@@ -54,14 +54,14 @@ func (d *desktopControl) serveThumbnail(w http.ResponseWriter, r *http.Request, 
 		_, _ = w.Write(data)
 		return
 	}
-	http.Error(w, "窗口已关闭，请刷新列表", 404)
+	http.Error(w, "The window closed. Refresh the list.", 404)
 }
 
 // desktopThumbnail shrinks a captured JPEG to at most size pixels per side.
 func desktopThumbnail(data []byte, size int) ([]byte, error) {
 	src, err := jpeg.Decode(bytes.NewReader(data))
 	if err != nil {
-		return nil, errors.New("无法生成窗口预览")
+		return nil, errors.New("Unable to generate a window preview")
 	}
 	b := src.Bounds()
 	w, h := b.Dx(), b.Dy()
@@ -77,7 +77,7 @@ func desktopThumbnail(data []byte, size int) ([]byte, error) {
 	draw.ApproxBiLinear.Scale(dst, dst.Bounds(), src, b, draw.Src, nil)
 	var out bytes.Buffer
 	if err := jpeg.Encode(&out, dst, &jpeg.Options{Quality: 70}); err != nil {
-		return nil, errors.New("无法生成窗口预览")
+		return nil, errors.New("Unable to generate a window preview")
 	}
 	return out.Bytes(), nil
 }

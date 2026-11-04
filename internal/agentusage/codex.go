@@ -59,7 +59,7 @@ func withCodex(ctx context.Context, binary, home string, run func(*codexRPC) err
 		return err
 	}
 	if err = cmd.Start(); err != nil {
-		return errors.New("无法启动 Codex 用量读取")
+		return errors.New("Unable to start the Codex usage reader")
 	}
 	defer func() { in.Close(); cancel(); _ = cmd.Wait() }()
 	scanner := bufio.NewScanner(out)
@@ -77,7 +77,7 @@ func withCodex(ctx context.Context, binary, home string, run func(*codexRPC) err
 func (rpc *codexRPC) call(method string, params any, result any) error {
 	rpc.id++
 	if err := rpc.enc.Encode(map[string]any{"id": rpc.id, "method": method, "params": params}); err != nil {
-		return errors.New("无法连接 Codex 用量读取")
+		return errors.New("Unable to connect to the Codex usage reader")
 	}
 	for rpc.scanner.Scan() {
 		var reply struct {
@@ -89,17 +89,17 @@ func (rpc *codexRPC) call(method string, params any, result any) error {
 			continue
 		}
 		if len(reply.Error) > 0 && string(reply.Error) != "null" {
-			return errors.New("Codex 未返回额度，请检查登录或更新 CLI")
+			return errors.New("Codex returned no quota. Check sign-in or update the CLI.")
 		}
 		if result == nil {
 			return nil
 		}
 		if json.Unmarshal(reply.Result, result) != nil {
-			return errors.New("无法识别 Codex 用量数据")
+			return errors.New("Unrecognized Codex usage data")
 		}
 		return nil
 	}
-	return errors.New("Codex 用量读取已断开")
+	return errors.New("Codex usage connection closed")
 }
 
 func (rpc *codexRPC) read() (Reading, error) {
@@ -111,10 +111,10 @@ func (rpc *codexRPC) read() (Reading, error) {
 		return r, err
 	}
 	if account.Account == nil {
-		return r, errors.New("请先在 Codex CLI 登录")
+		return r, errors.New("Sign in to Codex CLI first")
 	}
 	if account.Account.Type != "chatgpt" {
-		return r, errors.New("当前登录方式不提供订阅额度")
+		return r, errors.New("This sign-in method does not provide subscription quota")
 	}
 	var result struct {
 		Limits    codexLimits            `json:"rateLimits"`
@@ -141,7 +141,7 @@ func (rpc *codexRPC) read() (Reading, error) {
 	}
 	r.At = time.Now()
 	if len(r.Windows) == 0 && r.Resets == nil {
-		return r, errors.New("当前账号未提供订阅额度")
+		return r, errors.New("Subscription quota is unavailable for this account")
 	}
 	return r, nil
 }
@@ -152,15 +152,15 @@ func codexWindows(limits codexLimits) []Window {
 		if w == nil || w.Used == nil {
 			continue
 		}
-		name := []string{"短周期", "长周期"}[i]
+		name := []string{"Short cycle", "Long cycle"}[i]
 		if w.Mins > 0 {
 			switch {
 			case w.Mins%1440 == 0:
-				name = fmt.Sprintf("%d 天", w.Mins/1440)
+				name = fmt.Sprintf("%d days", w.Mins/1440)
 			case w.Mins%60 == 0:
-				name = fmt.Sprintf("%d 小时", w.Mins/60)
+				name = fmt.Sprintf("%d hours", w.Mins/60)
 			default:
-				name = fmt.Sprintf("%d 分钟", w.Mins)
+				name = fmt.Sprintf("%d minutes", w.Mins)
 			}
 		}
 		reset := ""

@@ -131,7 +131,7 @@ func (s *Store) EnqueueExtraction(scope Scope, job ExtractionJob) (bool, error) 
 		return false, nil
 	}
 	if job.Session == "" || job.TurnID == "" || len(job.Evidence) == 0 {
-		return false, errors.New("提炼缺少来源回合")
+		return false, errors.New("Memory extraction is missing its source turn")
 	}
 	sum := sha256.Sum256([]byte(job.Session + "\x00" + job.TurnID))
 	job.Key = hex.EncodeToString(sum[:])
@@ -154,7 +154,7 @@ func (s *Store) EnqueueExtraction(scope Scope, job ExtractionJob) (bool, error) 
 		}
 	}
 	if count >= 100 {
-		return s.skipExtraction(d, job, "记忆提炼队列已满，已跳过此回合")
+		return s.skipExtraction(d, job, "Memory extraction queue is full. Skipped this turn.")
 	}
 	job.Candidates = jobRelated(s, scope, job)
 	for _, e := range job.Candidates {
@@ -177,7 +177,7 @@ func (s *Store) EnqueueExtraction(scope Scope, job ExtractionJob) (bool, error) 
 			}
 		}
 		if tool < 0 {
-			return s.skipExtraction(d, job, "提炼输入超过上限，已跳过此回合")
+			return s.skipExtraction(d, job, "Extraction input exceeds the limit. Skipped this turn.")
 		}
 		job.Evidence = append(append([]Evidence(nil), job.Evidence[:tool]...), job.Evidence[tool+1:]...)
 	}
@@ -234,7 +234,7 @@ func (s *Store) RecoverExtractions() error {
 			if j.State == "running" {
 				changed = true
 				if j.Attempts >= 2 {
-					finishJob(j, "failed", "提炼被中断，重试次数已用完", s.now())
+					finishJob(j, "failed", "Extraction interrupted; no retries remaining", s.now())
 				} else {
 					j.State = "pending"
 				}
@@ -263,7 +263,7 @@ func (s *Store) ClaimExtraction() (Scope, ExtractionJob, bool, error) {
 				continue
 			}
 			if d.Settings.Disabled || !d.Settings.AutoExtract || d.DisabledSessions[j.Session] {
-				finishJob(j, "canceled", "项目已停用自动提炼", s.now())
+				finishJob(j, "canceled", "Automatic extraction is disabled for this project", s.now())
 				if err = s.commit(d); err != nil {
 					return Scope{}, ExtractionJob{}, false, err
 				}
@@ -286,7 +286,7 @@ func (s *Store) ClaimExtraction() (Scope, ExtractionJob, bool, error) {
 			// Retrying cannot shrink the input; report the real reason instead of
 			// spending attempts on a call that is rejected before it starts.
 			if !fits {
-				finishJob(j, "failed", "提炼输入超过上限，已跳过此回合", s.now())
+				finishJob(j, "failed", "Extraction input exceeds the limit. Skipped this turn.", s.now())
 				if err = s.commit(d); err != nil {
 					return Scope{}, ExtractionJob{}, false, err
 				}
@@ -333,7 +333,7 @@ func scrubForgottenJobs(d *document, id string, sources []Source, now time.Time)
 			}
 		}
 		if hit {
-			finishJob(j, "canceled", "引用的记忆已忘记", now)
+			finishJob(j, "canceled", "The referenced memory was forgotten", now)
 		}
 	}
 }
@@ -358,24 +358,24 @@ func validateCandidate(d document, job ExtractionJob, c Candidate) (Mutation, st
 		}
 	}
 	if ev.ID == "" || strings.TrimSpace(c.Quote) == "" || !strings.Contains(ev.Text, c.Quote) {
-		return Mutation{}, "", errors.New("提炼证据不属于本轮")
+		return Mutation{}, "", errors.New("Extraction evidence does not belong to this turn")
 	}
 	if ev.Kind != "user_statement" && ev.Kind != "tool_result" && ev.Kind != "assistant_report" {
-		return Mutation{}, "", errors.New("无效证据类别")
+		return Mutation{}, "", errors.New("Invalid evidence category")
 	}
 	if c.Action != "forget" {
 		if ev.Kind == "assistant_report" || c.Kind == "progress" {
-			return Mutation{}, "", errors.New("自动记忆不保存助手报告和任务流水；需要时请显式记住")
+			return Mutation{}, "", errors.New("Automatic memory does not retain assistant reports or task logs. Save them explicitly if needed.")
 		}
 		if c.Kind == "preference" && c.Retention != "preference" || c.Kind == "fact" && c.Retention != "decision" && c.Retention != "lesson" {
-			return Mutation{}, "", errors.New("自动记忆缺少明确的长期保留类别")
+			return Mutation{}, "", errors.New("Automatic memory requires an explicit long-term retention category")
 		}
 		if c.Retention == "decision" && ev.Kind != "user_statement" {
-			return Mutation{}, "", errors.New("项目决定必须有用户明确确认")
+			return Mutation{}, "", errors.New("Project decisions require explicit user confirmation")
 		}
 	}
 	if c.Kind == "preference" && ev.Kind != "user_statement" {
-		return Mutation{}, "", errors.New("偏好必须来自用户声明")
+		return Mutation{}, "", errors.New("Preferences must come from a user statement")
 	}
 	if c.Action != "add" {
 		offered := false
@@ -385,7 +385,7 @@ func validateCandidate(d document, job ExtractionJob, c Candidate) (Mutation, st
 			}
 		}
 		if !offered {
-			return Mutation{}, "", errors.New("修改目标不在候选列表")
+			return Mutation{}, "", errors.New("The modification target is not in the candidate list")
 		}
 		i, err := target(d, c.ID, c.Version)
 		if err != nil {
@@ -393,24 +393,24 @@ func validateCandidate(d document, job ExtractionJob, c Candidate) (Mutation, st
 		}
 		_ = i
 	} else if c.ID != "" || c.Version != 0 {
-		return Mutation{}, "", errors.New("新增不能指定目标")
+		return Mutation{}, "", errors.New("New entries cannot specify a target")
 	}
 	if c.Action == "forget" && (ev.Kind != "user_statement" || !deletionRequest(c.Quote)) {
-		return Mutation{}, "", errors.New("遗忘需要用户明确要求")
+		return Mutation{}, "", errors.New("Forgetting requires an explicit user request")
 	}
 	source := ev.Source
 	source.Quote, source.EvidenceKind = c.Quote, ev.Kind
 	for _, mark := range d.Tombstones {
 		for _, old := range mark.Sources {
 			if sameSource(source, old) {
-				return Mutation{}, "", errors.New("已忘记的来源不能回灌")
+				return Mutation{}, "", errors.New("Forgotten sources cannot be restored automatically")
 			}
 		}
 		sum := sha256.Sum256([]byte(c.Content))
 		digest := hex.EncodeToString(sum[:])
 		for _, v := range mark.Digests {
 			if v == digest {
-				return Mutation{}, "", errors.New("已忘记的正文不能自动写回")
+				return Mutation{}, "", errors.New("Forgotten content cannot be restored automatically")
 			}
 		}
 	}
@@ -423,7 +423,7 @@ func validateCandidate(d document, job ExtractionJob, c Candidate) (Mutation, st
 		m.ValidUntil = until
 	}
 	if c.Kind == "progress" && (job.TaskKey == "" || c.TaskKey != job.TaskKey) {
-		return Mutation{}, "", errors.New("项目进展任务身份不匹配")
+		return Mutation{}, "", errors.New("Project progress task identity mismatch")
 	}
 	if c.Action != "forget" {
 		if err := validate(m, d.Scope); err != nil {
@@ -460,22 +460,22 @@ func (s *Store) CompleteExtraction(scope Scope, key string, candidates []Candida
 			j.Attempts--
 		} else if j.Attempts < 2 {
 			j.State = "pending"
-			j.Error = "提炼调用失败，等待重试"
+			j.Error = "Extraction failed. Waiting to retry."
 		} else {
-			finishJob(&j, "failed", "提炼调用失败，已停止重试", s.now())
+			finishJob(&j, "failed", "Extraction failed. No further retries.", s.now())
 		}
 		d.Jobs[index] = j
 		return nil, s.commit(d)
 	}
 	if d.Settings.Disabled || !d.Settings.AutoExtract || d.DisabledSessions[j.Session] || j.Fingerprint != knowledgeFingerprint(d) {
-		finishJob(&j, "stale", "记忆或设置已变化，未采用旧结果", s.now())
+		finishJob(&j, "stale", "Memory or settings changed. Discarded the old result.", s.now())
 		d.Jobs[index] = j
 		return nil, s.commit(d)
 	}
 	var accepted []Entry
 	added := false
 	if len(candidates) > 3 {
-		finishJob(&j, "failed", "提炼结果超过三项", s.now())
+		finishJob(&j, "failed", "Extraction returned more than three items", s.now())
 		d.Jobs[index] = j
 		return nil, s.commit(d)
 	}
@@ -633,7 +633,7 @@ func (s *Store) ExtractionStatus(scope Scope) (ExtractionStatus, error) {
 func (j ExtractionJob) InputJSON() ([]byte, error) {
 	b, err := json.Marshal(j)
 	if err == nil && utf8.RuneCount(b) > MaxExtractionInput {
-		return nil, fmt.Errorf("提炼输入超过 %d 字符", MaxExtractionInput)
+		return nil, fmt.Errorf("Extraction input exceeds %d characters", MaxExtractionInput)
 	}
 	return b, err
 }
@@ -653,7 +653,7 @@ func (s *Store) ConfigureSession(scope Scope, session string, disabled bool) err
 		delete(d.Sessions, session)
 		for i := range d.Jobs {
 			if d.Jobs[i].Session == session && (d.Jobs[i].State == "pending" || d.Jobs[i].State == "running") {
-				finishJob(&d.Jobs[i], "canceled", "当前会话已禁用自动记忆", s.now())
+				finishJob(&d.Jobs[i], "canceled", "Automatic memory is disabled for this session", s.now())
 			}
 		}
 	} else {

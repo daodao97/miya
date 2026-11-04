@@ -19,11 +19,11 @@ func (m *mobileApp) openDrawerPage(path string) {
 }
 
 func (m *mobileApp) navigationBack(c *ui.Context, path string) {
-	label := "返回"
+	label, glyph := tr("Back"), "arrow-left"
 	if mobilePageHasDrawer(path) {
-		label = "打开侧边栏"
+		label, glyph = tr("Open sidebar"), "layout-sidebar"
 	}
-	if m.circle(c, "back", label, func() { icon(c, "arrow-left", 20, m.pal.ink) }).Clicked() {
+	if m.circle(c, "back", label, func() { icon(c, glyph, 20, m.pal.ink) }).Expanded(m.drawerVisible).Clicked() {
 		if mobilePageHasDrawer(path) {
 			m.menu = true
 		} else {

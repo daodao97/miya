@@ -47,22 +47,22 @@ func TestCronRejectsBadSpecs(t *testing.T) {
 
 func TestDescribeCron(t *testing.T) {
 	cases := map[string]string{
-		"0 9 * * 1-5":     "工作日 9:00",
-		"30 18 * * *":     "每天 18:30",
-		"0 9 * * 0,6":     "周末 9:00",
-		"0 10 * * 1":      "每周一 10:00",
-		"0 10 * * 1,3":    "每周一、三 10:00",
-		"0 * * * *":       "每小时",
-		"*/10 * * * *":    "每 10 分钟",
-		"0 */2 * * *":     "每 2 小时",
-		"0 9 1 * *":       "每月 1 日 9:00",
+		"0 9 * * 1-5":     "Weekdays 9:00",
+		"30 18 * * *":     "Daily at 18:30",
+		"0 9 * * 0,6":     "Weekends 9:00",
+		"0 10 * * 1":      "Weekly: Mon 10:00",
+		"0 10 * * 1,3":    "Weekly: Mon, Wed 10:00",
+		"0 * * * *":       "Hourly",
+		"*/10 * * * *":    "Every 10 minutes",
+		"0 */2 * * *":     "Every 2 hours",
+		"0 9 1 * *":       "Monthly on day 1 at 9:00",
 		"0 9 1 1 *":       "0 9 1 1 *",
 		"bad":             "bad",
-		"0 9 * * sun":     "每周日 9:00",
-		"15 * * * *":      "每小时第 15 分",
+		"0 9 * * sun":     "Weekly: Sun 9:00",
+		"15 * * * *":      "Every hour at minute 15",
 		"0 8,12 * * *":    "0 8,12 * * *",
-		"0 9 * * 1-5 ":    "工作日 9:00",
-		"0 9 * * mon-fri": "工作日 9:00",
+		"0 9 * * 1-5 ":    "Weekdays 9:00",
+		"0 9 * * mon-fri": "Weekdays 9:00",
 	}
 	for spec, want := range cases {
 		if got := describeCron(spec); got != want {

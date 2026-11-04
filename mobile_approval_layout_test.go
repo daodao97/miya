@@ -25,21 +25,21 @@ func TestMobileToolPermissionKeepsActionsVisibleWithoutUnrelatedPreview(t *testi
 		tt := ui.NewTester(m.viewRoot, width, 700)
 		tt.SetDark(true)
 		tt.Frame()
-		for _, label := range []string{"无关的 Apple 账户", "侧栏内容", "操作授权窗口"} {
+		for _, label := range []string{"无关的 Apple 账户", "侧栏内容", "Control permission window"} {
 			if tt.HasText(label) {
 				t.Fatalf("tool consent showed unrelated window: %s", label)
 			}
 		}
-		if tt.HasText("查看并确认") || m.router().Path() != "/thread" {
+		if tt.HasText("Review and confirm") || m.router().Path() != "/thread" {
 			t.Fatal("simple MCP consent should show its actions directly in the conversation")
 		}
-		for _, label := range []string{"确认", "拒绝", "取消请求"} {
+		for _, label := range []string{"Confirm", "Deny", "Cancel request"} {
 			r, ok := tt.Find(label)
 			if !ok || r.H < 44 || r.Y < 64 || r.Y+r.H > 700 || r.X < 0 || r.X+r.W > float32(width) {
 				t.Fatalf("permission action off-screen at %d: %s %v", width, label, r)
 			}
 		}
-		for _, label := range []string{"无关的 Apple 账户", "侧栏内容", "操作授权窗口"} {
+		for _, label := range []string{"无关的 Apple 账户", "侧栏内容", "Control permission window"} {
 			if tt.HasText(label) {
 				t.Fatalf("permission page showed unrelated window: %s", label)
 			}
@@ -60,20 +60,20 @@ func TestMobileMCPAccessActionsStayInConversation(t *testing.T) {
 				tt := ui.NewTester(m.viewRoot, width, 750)
 				tt.SetDark(dark)
 				tt.Frame()
-				for _, label := range []string{"允许一次", "拒绝", "此对话始终允许"} {
+				for _, label := range []string{"Allow once", "Deny", "Always allow in this conversation"} {
 					r, ok := tt.Find(label)
 					if !ok || r.H < 44 || r.X < 0 || r.X+r.W > float32(width) || r.Y+r.H > 750 {
 						t.Fatalf("inline permission action missing or clipped: %s %v", label, r)
 					}
 				}
-				if tt.HasText("查看并确认") || m.router().Path() != "/thread" || len(m.state.Approvals) != 1 {
+				if tt.HasText("Review and confirm") || m.router().Path() != "/thread" || len(m.state.Approvals) != 1 {
 					t.Fatal("MCP consent navigated away or was accepted before a click")
 				}
 				saveMobileNativeSnapshot(t, tt, fmt.Sprintf("mcp-inline-%v-%d", dark, width))
-				if err := tt.Click("允许一次"); err != nil {
+				if err := tt.Click("Allow once"); err != nil {
 					t.Fatal(err)
 				}
-				if m.router().Path() != "/thread" || len(m.state.Approvals) != 1 || m.view.formErrors[string(a.ID)] != "未连接桌面端" {
+				if m.router().Path() != "/thread" || len(m.state.Approvals) != 1 || m.view.formErrors[string(a.ID)] != "Not connected to desktop" {
 					t.Fatal("failed inline submission navigated away or consumed the approval")
 				}
 			})
@@ -95,10 +95,10 @@ func TestMobileMCPFormsAndURLsKeepTheirInputPage(t *testing.T) {
 		m.openThread(m.state.Projects[0].Threads[0])
 		tt := ui.NewTester(m.viewRoot, 390, 750)
 		tt.Frame()
-		if tt.HasText("允许一次") || tt.HasText("此对话始终允许") {
+		if tt.HasText("Allow once") || tt.HasText("Always allow in this conversation") {
 			t.Fatal("a form or browser authorization was flattened into simple consent")
 		}
-		if err := tt.Click("查看并确认"); err != nil {
+		if err := tt.Click("Review and confirm"); err != nil {
 			t.Fatal(err)
 		}
 		if m.router().Path() != "/approval" {
@@ -164,7 +164,7 @@ func TestMobileAuthorizationOffersInputBeforeAllow(t *testing.T) {
 				tt := ui.NewTester(m.viewRoot, width, 750)
 				tt.SetDark(dark)
 				tt.Frame()
-				r, ok := tt.Find("填写授权信息")
+				r, ok := tt.Find("Enter permission details")
 				if !ok || r.H < 44 || r.X < 0 || r.X+r.W > float32(width) || r.Y+r.H > 750 {
 					t.Fatalf("no visible input action before native allow is enabled: %v", r)
 				}
@@ -179,7 +179,7 @@ func TestMobileAuthorizationOffersInputBeforeAllow(t *testing.T) {
 					t.Fatal("the input entry removed the native deny action")
 				}
 				saveMobileNativeSnapshot(t, tt, fmt.Sprintf("auth-input-entry-%v-%d", dark, width))
-				if err := tt.Click("填写授权信息"); err != nil {
+				if err := tt.Click("Enter permission details"); err != nil {
 					t.Fatal(err)
 				}
 				if p.actionPending || m.approvalPending[string(a.ID)] || len(m.state.Approvals) != 1 {
@@ -188,7 +188,7 @@ func TestMobileAuthorizationOffersInputBeforeAllow(t *testing.T) {
 				// A fresh native state, rather than local typing, enables consent.
 				p.dialog.Actions[0].Enabled = true
 				tt.Frame()
-				if tt.HasText("填写授权信息") {
+				if tt.HasText("Enter permission details") {
 					t.Fatal("input entry remained after the native allow became enabled")
 				}
 				r, ok = tt.Find("允许访问")
@@ -222,7 +222,7 @@ func TestMobileAuthorizationLongCopyDoesNotBuryNativeButtons(t *testing.T) {
 		tt := ui.NewTester(m.viewRoot, width, 750)
 		tt.SetDark(true)
 		tt.Frame()
-		for _, label := range []string{"操作授权窗口", "允许访问", "不允许", "完整说明"} {
+		for _, label := range []string{"Control permission window", "允许访问", "不允许", "Full description"} {
 			r, ok := tt.Find(label)
 			if !ok || r.H < 44 || r.Y < 0 || r.Y+r.H > 750 {
 				t.Fatalf("long copy hid %s at %d: %v", label, width, r)

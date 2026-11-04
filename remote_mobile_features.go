@@ -67,7 +67,7 @@ func (c *chatController) phoneSendRequest(r remote.Request, paths []string, agen
 		agent = agentCodex
 	}
 	if agent != agentCodex && agent != agentClaude {
-		return sendRequest{}, errors.New("不支持的 Agent")
+		return sendRequest{}, errors.New("Unsupported agent")
 	}
 	req := sendRequest{Agent: agent, Text: r.Text, Attachments: paths, Steer: r.Steer}
 	if r.Options == nil {
@@ -85,30 +85,30 @@ func (c *chatController) phoneSendRequest(r remote.Request, paths []string, agen
 			}
 		}
 		if model == nil {
-			return req, fmt.Errorf("模型 %s 当前不可用，请重新选择", r.Options.Model)
+			return req, fmt.Errorf("Model %s is unavailable. Select another model.", r.Options.Model)
 		}
 		if r.Options.Effort != "" && !slices.Contains(model.Efforts, r.Options.Effort) {
-			return req, errors.New("此模型不支持所选推理强度，请重新选择")
+			return req, errors.New("This model does not support the selected reasoning effort. Select another level.")
 		}
 		switch r.Options.Policy {
 		case "", "on-request", "on-failure", "never":
 		default:
-			return req, errors.New("无效的权限模式")
+			return req, errors.New("Invalid permission mode")
 		}
 		req.Model, req.Effort, req.Policy = r.Options.Model, r.Options.Effort, r.Options.Policy
 		req.ExplicitSettings = true
 		return req, nil
 	}
-	return req, errors.New("Agent 设置尚未就绪")
+	return req, errors.New("Agent settings are not ready")
 }
 
 func (c *chatController) phoneQueueAction(r remote.Request) error {
 	target := c.phoneThreadFor(r)
 	if !target.found {
-		return errors.New("对话已不在桌面端")
+		return errors.New("Conversation is no longer on the desktop")
 	}
 	if target.cwd != c.cwd {
-		return errors.New("请先在此项目发送消息，再管理队列")
+		return errors.New("Send a message in this project before managing the queue")
 	}
 	switch r.Op {
 	case "dequeue":
@@ -118,7 +118,7 @@ func (c *chatController) phoneQueueAction(r remote.Request) error {
 	case "drain-queue":
 		c.resumeQueue(target.thread.ID)
 	default:
-		return errors.New("未知队列操作")
+		return errors.New("Unknown queue action")
 	}
 	return nil
 }

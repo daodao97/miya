@@ -45,7 +45,7 @@ func TestThreadRefsExpandIntoContextPackets(t *testing.T) {
 	if err != nil || len(sources) != 1 {
 		t.Fatalf("bad expansion: %v %v", sources, err)
 	}
-	for _, want := range []string{text, "source-session", "修复登录过期的问题", "已修复：token 过期判断用错了时区。", "auth/token.go", "auth/login.go", "跑测试 · 已完成 · 全部通过"} {
+	for _, want := range []string{text, "source-session", "修复登录过期的问题", "已修复：token 过期判断用错了时区。", "auth/token.go", "auth/login.go", "跑测试 · Completed · 全部通过"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("missing %q in %s", want, out)
 		}
@@ -53,7 +53,7 @@ func TestThreadRefsExpandIntoContextPackets(t *testing.T) {
 	if again, more, err := expandThreadRefs(out, ThreadRef{}, resolve); err != nil || again != out || len(more) != 0 {
 		t.Fatal("snapshot was expanded again")
 	}
-	if got := threadContextDisplay(out); strings.Contains(got, "miya-thread-context") || !strings.Contains(got, "〔引用对话：登录修复〕") {
+	if got := threadContextDisplay(out); strings.Contains(got, "miya-thread-context") || !strings.Contains(got, "[Referenced conversation: 登录修复]") {
 		t.Fatal(got)
 	}
 	if got := threadRefTask(text); got != "参考 给登录页加上提示" {
@@ -129,7 +129,7 @@ func TestComposerOffersConversationsAfterAt(t *testing.T) {
 	tt.Frame()
 	tt.Type("参考 @登")
 	tt.Frame()
-	if !tt.HasText("登录修复") || !tt.HasText("对话与项目文件") || !tt.HasText("对话 · Claude Code · demo") || tt.HasText("#1 登录页提示") {
+	if !tt.HasText("登录修复") || !tt.HasText("Conversations and project files") || !tt.HasText("Conversation · Claude Code · demo") || tt.HasText("#1 登录页提示") {
 		t.Fatalf("conversation choices missing or include the open one: %q", tt.Texts())
 	}
 	if dir := os.Getenv("MIYA_HANDOFF_SNAPSHOT"); dir != "" {
@@ -146,7 +146,7 @@ func TestComposerOffersConversationsAfterAt(t *testing.T) {
 		t.Fatalf("choosing a conversation drafted %q", got)
 	}
 	app.handoffToNewThread()
-	if c.active() != 0 || c.draft() != referenceText(testReference(Thread{ServerID: "target", Title: "登录页提示"}), "登录页提示")+" " || !strings.Contains(app.notice, "已引用对话「登录页提示」") {
+	if c.active() != 0 || c.draft() != referenceText(testReference(Thread{ServerID: "target", Title: "登录页提示"}), "登录页提示")+" " || !strings.Contains(app.notice, "Referenced conversation \"登录页提示\"") {
 		t.Fatalf("handoff did not start a new conversation with the reference: active=%d draft=%q notice=%q", c.active(), c.draft(), app.notice)
 	}
 }
@@ -161,20 +161,20 @@ func TestMobileComposerOffersGlobalConversationsAfterAt(t *testing.T) {
 	m.showThread(th)
 	tt := ui.NewTester(m.viewRoot, 390, 750)
 	tt.Frame()
-	if err := tt.Click("消息"); err != nil {
+	if err := tt.Click("Message"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Type("参考 @登")
 	tt.Frame()
-	if !tt.HasText("登录修复") || !tt.HasText("登录测试") || !tt.HasText("Codex · proj-b") || !tt.HasText("引用对话") || tt.HasText("#1 thread-one") {
+	if !tt.HasText("登录修复") || !tt.HasText("登录测试") || !tt.HasText("Codex · proj-b") || !tt.HasText("Referenced conversation") || tt.HasText("#1 thread-one") {
 		t.Fatalf("phone @ menu missing global conversations or including the open conversation: %q", tt.Texts())
 	}
 	if err := tt.Click("登录测试"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if m.draft != "参考 "+referenceText(testRef(agentCodex, "mobile-codex"), "登录测试")+" " || tt.HasText("引用对话") {
-		t.Fatalf("choosing a conversation drafted %q (menu still open: %v)", m.draft, tt.HasText("引用对话"))
+	if m.draft != "参考 "+referenceText(testRef(agentCodex, "mobile-codex"), "登录测试")+" " || tt.HasText("Referenced conversation") {
+		t.Fatalf("choosing a conversation drafted %q (menu still open: %v)", m.draft, tt.HasText("Referenced conversation"))
 	}
 }
 
@@ -184,7 +184,7 @@ func TestThreadRefsResolveInBackgroundProjects(t *testing.T) {
 	c.cwd = "/open"
 	src := handoffSource()
 	src.ID = 7
-	c.setThreads([]Thread{{ID: 1, Agent: agentCodex, Title: "当前"}})
+	c.setThreads([]Thread{{ID: 1, Agent: agentCodex, Title: "Current: "}})
 	c.projectCache = map[string][]Thread{"/open": c.threads(), "/other": {src}}
 	out, sources, err := expandThreadRefs("参考 "+referenceText(testReference(src), src.Title), ThreadRef{}, c.resolveReference)
 	if err != nil || len(sources) != 1 || !strings.Contains(out, "修复登录过期的问题") {

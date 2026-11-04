@@ -25,7 +25,7 @@ func retryableError(t Thread, m Message) bool {
 
 // retryContinuePrompt resumes a turn that failed after it had already produced
 // output, so the agent picks up where it stopped instead of starting over.
-const retryContinuePrompt = "上一轮回复因错误中断。请基于以上已完成的内容和工具结果从中断处继续，不要重复已经完成的步骤。"
+const retryContinuePrompt = "The previous response was interrupted by an error. Continue from the completed work and tool results above. Do not repeat completed steps."
 
 // failedAfterOutput reports whether anything besides errors followed the user
 // message at index user, i.e. the failed turn had already streamed output.
@@ -51,10 +51,10 @@ func (c *chatController) retryResponse(req retryRequest) error {
 	}
 	t := c.threadWithID(req.ThreadID)
 	if t.Busy || t.Loading || t.TaskPending {
-		return fmt.Errorf("对话正在运行，请稍后重试")
+		return fmt.Errorf("This conversation is running. Try again later.")
 	}
 	if len(t.Messages) == 0 || !retryableError(t, t.Messages[len(t.Messages)-1]) || t.Messages[len(t.Messages)-1].ID != req.MessageID {
-		return fmt.Errorf("此错误已过期，请查看最新回复")
+		return fmt.Errorf("This error is no longer current. Check the latest response.")
 	}
 	for i := len(t.Messages) - 2; i >= 0; i-- {
 		m := t.Messages[i]
@@ -63,24 +63,24 @@ func (c *chatController) retryResponse(req retryRequest) error {
 		}
 		if failedAfterOutput(t, i) {
 			if !backendOf(t).Ready(c) {
-				return fmt.Errorf("暂时无法重试，请检查连接或 Agent 设置")
+				return fmt.Errorf("Unable to retry. Check the connection or agent settings.")
 			}
 			if c.submit(sendRequest{ThreadID: t.ID, Text: retryContinuePrompt, KeepSessionSettings: true, MemoryControl: true}) == 0 {
-				return fmt.Errorf("暂时无法重试，请检查连接或 Agent 设置")
+				return fmt.Errorf("Unable to retry. Check the connection or agent settings.")
 			}
 			return nil
 		}
 		if !c.canRewind(t, m) || !backendOf(t).Ready(c) {
-			return fmt.Errorf("暂时无法重试，请检查连接或 Agent 设置")
+			return fmt.Errorf("Unable to retry. Check the connection or agent settings.")
 		}
 		text := messagePrompt(m)
 		if text == "" && len(messageAttachments(m)) == 0 {
-			return fmt.Errorf("找不到可重试的原始消息")
+			return fmt.Errorf("Original message for retry not found")
 		}
 		c.rewind(t.ID, m.ID, text)
 		return nil
 	}
-	return fmt.Errorf("找不到可重试的原始消息")
+	return fmt.Errorf("Original message for retry not found")
 }
 
 func (app *chatApp) retryResponse(m Message) {

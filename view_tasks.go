@@ -19,14 +19,14 @@ func taskStatusBar(c *ui.Context, t Thread, approval bool, p taskPalette, action
 						label := taskStatusLabel(t, task, approval)
 						ui.Column(c).Grow(1).MinWidth(0).Gap(4).Children(func() {
 							ui.Row(c).FillWidth().MinWidth(0).Gap(6).AlignItems(ui.Center).Children(func() {
-								if label == "运行中" || label == "正在启动" {
+								if label == tr("Running") || label == tr("Starting") {
 									ui.Spinner(c).FontSize(12).TextColor(p.ink)
 								} else {
 									icon(c, "clock", 13, p.muted)
 								}
-								kind := "Goal"
+								kind := tr("Goal")
 								if task.Kind == "loop" {
-									kind = "Loop"
+									kind = tr("Loop")
 								}
 								ui.Text(c, kind+" · "+label).FontSize(12).FontWeight(600).TextColor(p.ink).Shrink(0)
 								ui.Text(c, nativeText(task.Title)).FontSize(12).TextColor(p.ink).SingleLine().Ellipsis("…").Tooltip(task.Title).Grow(1).MinWidth(0)
@@ -52,15 +52,15 @@ func taskStatusBar(c *ui.Context, t Thread, approval bool, p taskPalette, action
 						if task.Kind == "goal" {
 							switch task.Status {
 							case "active":
-								button("暂停目标", "pause", "player-pause")
+								button(tr("Pause goal"), "pause", "player-pause")
 							case "paused", "blocked", "usageLimited", "budgetLimited":
-								button("继续目标", "resume", "player-play")
+								button(tr("Resume goal"), "resume", "player-play")
 							}
-							button("清除目标", "clear", "trash-2")
+							button(tr("Clear goal"), "clear", "trash-2")
 						} else if task.Status == "waiting" || task.Status == "running" {
-							name := "停止循环"
+							name := tr("Stop loop")
 							if len(t.Tasks) > 1 {
-								name = "停止全部循环"
+								name = tr("Stop all loops")
 							}
 							button(name, "stop", "")
 						}
@@ -82,7 +82,7 @@ func (m *mobileApp) taskStatus(c *ui.Context) {
 	p := m.pal
 	taskStatusBar(c, t, len(m.approvalsFor(t.ServerID)) > 0, taskPalette{p.surface, p.line, p.ink, p.muted}, func(id, action string) {
 		if m.conn == nil || !m.connected {
-			m.sendErr = "未连接桌面端"
+			m.sendErr = tr("Not connected to desktop")
 			return
 		}
 		r := m.threadRequest("task", t.ID)

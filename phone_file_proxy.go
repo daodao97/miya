@@ -36,7 +36,7 @@ func newPhoneFileProxy(conn *remote.Conn, project string) (*phoneFileProxy, erro
 	err := p.start(project, func(ctx context.Context) (net.Conn, error) {
 		current := p.conn.Load()
 		if current == nil {
-			return nil, errors.New("桌面端连接已断开")
+			return nil, errors.New("Desktop connection lost")
 		}
 		return current.DialFiles(ctx)
 	})
@@ -107,7 +107,7 @@ func (p *phoneFileProxy) startProxy(prefix, webOrigin string, dial func(context.
 			}
 		}
 	}, ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
-		http.Error(w, "无法连接桌面端服务。请确认桌面端在线且服务已启动后重试。", http.StatusBadGateway)
+		http.Error(w, "Unable to connect to the desktop service. Check that your desktop is online and the service is running.", http.StatusBadGateway)
 	}}
 	p.server = &http.Server{ReadHeaderTimeout: 10 * time.Second, IdleTimeout: time.Minute, ConnState: func(conn net.Conn, state http.ConnState) {
 		if state == http.StateNew {
@@ -129,7 +129,11 @@ func (p *phoneFileProxy) startProxy(prefix, webOrigin string, dial func(context.
 		}
 		if r.URL.Path == bootstrapPath {
 			http.SetCookie(w, &http.Cookie{Name: cookieName, Value: token, Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode})
-			http.Redirect(w, r, "/", http.StatusSeeOther)
+			target := "/"
+			if requested := r.URL.Query().Get("path"); webOrigin != "" && strings.HasPrefix(requested, "/") && !strings.HasPrefix(requested, "//") && !strings.ContainsAny(requested, "\\\r\n") {
+				target = requested
+			}
+			http.Redirect(w, r, target, http.StatusSeeOther)
 			return
 		}
 		cookie, err := r.Cookie(cookieName)

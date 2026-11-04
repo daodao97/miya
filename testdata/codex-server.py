@@ -20,6 +20,9 @@ if os.environ.get('QUICKGUI_FIXTURE_SCROLL') == '1':
    turns.append({'id':turn,'status':'completed','items':items})
   threads[tid]={'id':tid,'name':title,'preview':title,'cwd':os.getcwd(),'createdAt':1700000000,'updatedAt':1700000000,'turns':turns}
 
+if os.environ.get('QUICKGUI_FIXTURE_RESUME_RUNNING') == '1' and 'resume-thread' in threads:
+ threads['resume-thread']['turns'][0]['status']='inProgress'
+
 def emit(v):
  print(json.dumps(v,ensure_ascii=False),flush=True)
 def reply(req,result):emit({'id':req['id'],'result':result})

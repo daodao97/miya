@@ -91,7 +91,7 @@ func (m *mobileApp) messageImage(source string) ui.ImageSource {
 
 func storePhonePreview(path string, data []byte) error {
 	if len(data) == 0 || len(data) > maxPhonePreviewBytes {
-		return errors.New("无效的图片预览")
+		return errors.New(tr("Invalid image preview"))
 	}
 	img, err := ui.DecodeImage(data)
 	if err != nil {

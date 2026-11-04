@@ -63,7 +63,7 @@ func discoverProjectWebServices(ctx context.Context, project string) ([]phoneWeb
 func runWebLSOF(ctx context.Context, args ...string) ([]byte, error) {
 	binary, err := exec.LookPath("lsof")
 	if err != nil {
-		return nil, errors.New("电脑端无法查找监听端口，请手动输入端口")
+		return nil, errors.New("Unable to find listening ports on your computer. Enter a port manually.")
 	}
 	output, err := exec.CommandContext(ctx, binary, args...).Output()
 	if ctx.Err() != nil {
@@ -75,7 +75,7 @@ func runWebLSOF(ctx context.Context, args ...string) ([]byte, error) {
 		return output, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("无法读取电脑端监听进程：%w", err)
+		return nil, fmt.Errorf("Unable to read listening processes on your computer: %w", err)
 	}
 	return output, nil
 }

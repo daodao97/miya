@@ -19,14 +19,14 @@ func TestClaudeEmptyResultExplained(t *testing.T) {
 	c.handleClaude(1, f)
 	msgs := c.threads()[0].Messages
 	last := msgs[len(msgs)-1].Content
-	if !strings.Contains(last, "没有返回回复") || !strings.Contains(last, "代理") || !strings.Contains(last, "stop_reason=null") {
+	if !strings.Contains(last, "returned no response") || !strings.Contains(last, "proxy") || !strings.Contains(last, "stop_reason=null") {
 		t.Fatalf("message %q", last)
 	}
 	// A real error after a reply keeps Claude Code's own words.
 	if got := claudeErrorMessage("rate limited", true, true); got != "rate limited" {
 		t.Fatalf("rewrote %q", got)
 	}
-	if got := claudeErrorMessage("x", false, false); strings.Contains(got, "自定义启动命令") {
+	if got := claudeErrorMessage("x", false, false); strings.Contains(got, "custom launch command") {
 		t.Fatalf("custom hint without a custom command: %q", got)
 	}
 }
@@ -88,7 +88,7 @@ func TestClaudeResultSurvivesProcessExit(t *testing.T) {
 		stopped                         bool
 	}{
 		{name: "API failure", frame: `{"type":"result","is_error":true,"errors":["upstream unavailable"]}`, wantRole: "error", wantText: "upstream unavailable"},
-		{name: "empty success", frame: `{"type":"result","subtype":"success","is_error":false,"result":""}`, wantRole: "error", wantText: "没有返回回复"},
+		{name: "empty success", frame: `{"type":"result","subtype":"success","is_error":false,"result":""}`, wantRole: "error", wantText: "returned no response"},
 		{name: "final text only", frame: `{"type":"result","result":"Hello"}`, wantRole: "assistant", wantText: "Hello"},
 		{name: "streamed text", frame: `{"type":"result","result":"Hello"}`, messages: []Message{{Role: "assistant", Content: "Hello"}}, wantRole: "assistant", wantText: "Hello"},
 		{name: "tool output", frame: `{"type":"result"}`, messages: []Message{{Role: "tool", Content: "done"}}, wantRole: "tool", wantText: "done"},
@@ -149,10 +149,10 @@ func TestClaudeErrorVisibleAfterProcessExit(t *testing.T) {
 	if !strings.Contains(texts, "upstream unavailable") {
 		t.Fatalf("error missing from conversation: %q", texts)
 	}
-	if _, ok := tt.Find("重试回复"); !ok {
+	if _, ok := tt.Find("Retry response"); !ok {
 		t.Fatalf("error has no retry action: %q", texts)
 	}
-	if notice, ok := completionNotice(old, c.current()); !ok || notice.Title != "Miya · 执行失败" {
+	if notice, ok := completionNotice(old, c.current()); !ok || notice.Title != "Miya · Failed" {
 		t.Fatalf("error reported as success: %+v, %v", notice, ok)
 	}
 }
@@ -190,7 +190,7 @@ func TestStalledHintShowsInConversation(t *testing.T) {
 	c.setActive(1)
 	tt.Frame()
 	for _, s := range tt.Texts() {
-		if strings.Contains(s, "未收到回应") {
+		if strings.Contains(s, "No response for") {
 			return
 		}
 	}

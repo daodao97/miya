@@ -141,8 +141,7 @@ func windowBackground(app *chatApp) string {
 
 // appearanceSettings chooses light, dark or the system's appearance.
 func (app *chatApp) appearanceSettings(c *ui.Context) {
-	zh := app.c.locale() == "zh"
-	title := zhOr(zh, "外观", "Appearance")
+	title := tr("Appearance")
 	settingRow(c, title, "", func() {
 		ids := []string{"", "light", "dark"}
 		i := 0
@@ -153,7 +152,7 @@ func (app *chatApp) appearanceSettings(c *ui.Context) {
 		}
 		before := i
 		ui.Segmented(c.Key("appearance"), &i,
-			zhOr(zh, "跟随系统", "System"), zhOr(zh, "浅色", "Light"), zhOr(zh, "深色", "Dark")).Label(title)
+			tr("System"), tr("Light"), tr("Dark")).Label(title)
 		if i != before {
 			app.setAppearance(ids[i])
 		}

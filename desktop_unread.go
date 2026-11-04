@@ -122,7 +122,7 @@ func (app *chatApp) markVisibleThreadRead() {
 // describe what the previous frame actually displayed, not an incoming result
 // whose final layout (or scroll-to-end animation) has not happened yet.
 func (app *chatApp) markDisplayedThreadRead() {
-	if app.mobile || app.section != "" || app.projectDialog || app.switcher.open || app.shortcutsOpen {
+	if app.mobile || app.section != "" || app.projectDialog || app.switcher.open || app.shortcutsOpen || app.commandPalette.open {
 		return
 	}
 	t := app.c.current()

@@ -55,7 +55,7 @@ func (c *chatController) respondMCPAlways(a codex.Approval) error {
 			continue
 		}
 		if !rememberableMCPAccess(pending) {
-			return errors.New("此请求不支持对话内始终允许")
+			return errors.New("Always allow in this conversation is not supported for this request")
 		}
 		if c.mcpSessionAccess == nil {
 			c.mcpSessionAccess = map[string]bool{}
@@ -65,5 +65,5 @@ func (c *chatController) respondMCPAlways(a codex.Approval) error {
 		c.respond(pending, mcpAccessAccepted())
 		return nil
 	}
-	return errors.New("请求已处理或已过期")
+	return errors.New("Request already handled or expired")
 }

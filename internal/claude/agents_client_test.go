@@ -122,7 +122,7 @@ func TestAgentSessionEarlyExitAndStop(t *testing.T) {
 						c.Stop()
 					}
 				case err := <-done:
-					if err == nil || !strings.Contains(err.Error(), "子 agent 完成前") {
+					if err == nil || !strings.Contains(err.Error(), "before the subagent finished") {
 						t.Fatalf("incomplete task exit was not reported: %v", err)
 					}
 					return

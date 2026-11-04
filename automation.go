@@ -72,15 +72,15 @@ const (
 func runResultLabel(result string) string {
 	switch result {
 	case runRunning:
-		return "运行中"
+		return "Running"
 	case runPassed:
-		return "通过"
+		return "Passed"
 	case runFailed:
-		return "失败"
+		return "Failed"
 	case runInterrupted:
-		return "已中断"
+		return "Interrupted"
 	case runSkipped:
-		return "已跳过"
+		return "Skipped"
 	}
 	return result
 }
@@ -93,18 +93,18 @@ func (a *Automation) normalize() error {
 	a.Schedule = strings.Join(strings.Fields(a.Schedule), " ")
 	a.Check = strings.TrimSpace(a.Check)
 	if a.Agent = normalizeAgentID(firstNonEmpty(a.Agent, agentCodex)); a.Agent == "" {
-		return errors.New("agent 只能是 codex 或 claude-code")
+		return errors.New("Agent must be codex or claude-code")
 	}
 	switch {
 	case a.Name == "":
-		return errors.New("名称不能为空")
+		return errors.New("Name is required")
 	case a.Project == "":
-		return errors.New("项目不能为空")
+		return errors.New("Project is required")
 	case a.Instructions == "":
-		return errors.New("指令不能为空")
+		return errors.New("Instructions are required")
 	}
 	if _, err := parseCron(a.Schedule); err != nil {
-		return fmt.Errorf("时间 %q 无效：%v", a.Schedule, err)
+		return fmt.Errorf("Invalid schedule %q: %v", a.Schedule, err)
 	}
 	if a.Check == "" {
 		a.Rounds = 1

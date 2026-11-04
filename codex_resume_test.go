@@ -476,7 +476,7 @@ func TestCodexPhoneSendKeepsActiveExternalWriterReadOnly(t *testing.T) {
 	p.send(c)
 	waitCodexResume(t, c, d, func() bool { return !c.threadWithID(1).Loading })
 	for i := 0; i < 2; i++ {
-		if result := p.send(c); result.thread != 0 || !strings.Contains(result.err, "只能查看") {
+		if result := p.send(c); result.thread != 0 || !strings.Contains(result.err, "Read-only") {
 			t.Fatalf("active writer protection bypassed: %+v", result)
 		}
 	}

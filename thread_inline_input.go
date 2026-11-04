@@ -23,7 +23,11 @@ func mentionStyle(c *ui.Context, size float32) threadMentionStyle {
 }
 
 func (s threadMentionStyle) attachment(ref ThreadRef, title string) *richtext.Attachment {
-	label := "@ " + clipRunes(strings.Join(strings.Fields(title), " "), 22)
+	return s.tagAttachment(ref.URL(), title, "@ ")
+}
+
+func (s threadMentionStyle) tagAttachment(uri, title, prefix string) *richtext.Attachment {
+	label := prefix + clipRunes(strings.Join(strings.Fields(title), " "), 22)
 	font := s.font
 	font.Size *= 0.94
 	font.Weight = 500
@@ -32,7 +36,7 @@ func (s threadMentionStyle) attachment(ref ThreadRef, title string) *richtext.At
 	w, h := layout.Size()
 	height := s.font.Size * 1.65
 	return &richtext.Attachment{
-		Name: title, URL: ref.URL(), Width: w + 12, Height: height,
+		Name: title, URL: uri, Width: w + 12, Height: height,
 		Draw: func(p *ui.Painter, r ui.Rect) {
 			p.Fill(r, s.background, 5)
 			p.Clip(r, 5, func() { p.TextLayout(layout, r.X+6, r.Y+(r.H-h)/2, s.ink) })
@@ -43,14 +47,26 @@ func (s threadMentionStyle) attachment(ref ThreadRef, title string) *richtext.At
 func inlineThreadText(raw string, _ bool, style threadMentionStyle, title func(ThreadRef) string) richtext.Text {
 	var runs []richtext.Run
 	end := 0
-	for _, m := range threadMentions(raw) {
-		name := m.Title
-		if name == "" && title != nil {
-			name = title(m.Ref)
+	for _, m := range composerMentions(raw) {
+		name := m.Part.TitleSnapshot
+		var attachment *richtext.Attachment
+		uri := ""
+		if m.Part.Type == "thread_ref" {
+			if name == "" && title != nil {
+				name = title(*m.Part.Ref)
+			}
+			uri = m.Part.Ref.URL()
+			attachment = style.attachment(*m.Part.Ref, name)
+		} else {
+			if name == "" {
+				name = backendFor(m.Part.Agent).Name()
+			}
+			uri = agentURL(m.Part.Agent)
+			attachment = style.tagAttachment(uri, name, "# ")
 		}
 		runs = append(runs, richtext.Run{Text: raw[end:m.Start]}, richtext.Run{
 			Text: string(richtext.ObjectReplacement), Attributes: richtext.Attributes{
-				Tag: m.Ref.URL(), Attachment: style.attachment(m.Ref, name),
+				Tag: uri, Attachment: attachment,
 			},
 		})
 		end = m.End
@@ -69,6 +85,10 @@ func inlineThreadRaw(text richtext.Text) string {
 			}
 			if ref, ok := parseThreadURL(a.URL); ok {
 				out.WriteString(referenceText(ref, a.Name))
+				continue
+			}
+			if agent, ok := parseAgentURL(a.URL); ok {
+				out.WriteString(agentReferenceText(agent, a.Name))
 				continue
 			}
 		}
@@ -214,28 +234,28 @@ func (app *chatApp) threadInput(c *ui.Context, state *inlineThreadInput, raw, ow
 		a, z := state.doc.Selection()
 		selection := state.doc.Text().Slice(min(a, z), max(a, z))
 		mentions := threadMentions(inlineThreadRaw(selection))
-		if menu.Item("复制会话链接").Disabled(len(mentions) != 1).Chosen() && len(mentions) == 1 {
+		if menu.Item(tr("Copy session link")).Disabled(len(mentions) != 1).Chosen() && len(mentions) == 1 {
 			services.WriteClipboard(mentions[0].Ref.URL())
 		}
-		if menu.Item("复制").Disabled(a == z).Chosen() {
+		if menu.Item(tr("Copy")).Disabled(a == z).Chosen() {
 			copySelection(false)
 		}
-		if menu.Item("剪切").Disabled(a == z).Chosen() {
+		if menu.Item(tr("Cut")).Disabled(a == z).Chosen() {
 			copySelection(true)
 		}
-		if menu.Item("粘贴").Chosen() {
+		if menu.Item(tr("Paste")).Chosen() {
 			paste()
 		}
-		if menu.Item("粘贴为会话引用").Chosen() {
+		if menu.Item(tr("Paste as conversation reference")).Chosen() {
 			if data, err := services.ReadClipboardData(transfer.Text).Read(transfer.Text); err == nil {
 				if ref, ok := parseThreadURL(strings.TrimSpace(string(data))); ok {
 					state.insert(referenceText(ref, app.referenceTitle(ref)))
 				} else {
-					app.notice = "剪贴板中没有有效的会话链接"
+					app.notice = tr("No valid session link in the clipboard")
 				}
 			}
 		}
-		if menu.Item("全选").Chosen() {
+		if menu.Item(tr("Select all")).Chosen() {
 			state.doc.SetSelection(0, state.doc.Text().Len())
 		}
 	}

@@ -21,7 +21,7 @@ func openTestDesktopPage(m *mobileApp, closed *int) {
 
 func TestMobileDesktopReturnsOnlyWhenExactApprovalResolves(t *testing.T) {
 	m := testMobileApp()
-	a := codex.Approval{ID: json.RawMessage(`"authorization"`), ThreadID: "s1", Method: "miya/desktopControl", Reason: "填写授权信息"}
+	a := codex.Approval{ID: json.RawMessage(`"authorization"`), ThreadID: "s1", Method: "miya/desktopControl", Reason: "Enter permission details"}
 	m.state.Approvals = []codex.Approval{a}
 	m.desktopApproval = mobileDesktopApproval{ID: a.ID, Version: approvalFingerprint(a)}
 	closed := 0
@@ -86,7 +86,7 @@ func TestDesktopPageCloseRevokesLeaseBeforeReopen(t *testing.T) {
 	conn := new(remote.Conn)
 	m.conn, m.desktopPage.conn = conn, conn
 	p := m.desktopPage
-	m.desktopFinish(p, "远程控制已结束")
+	m.desktopFinish(p, "Remote control ended")
 	m.closeDesktopPage(false)
 	if len(sent) != 1 || sent[0] != "test" || len(m.desktopClosing) != 1 || m.desktopClosing[0] != "test" {
 		t.Fatal("closing did not queue one desktop-close", sent, m.desktopClosing)

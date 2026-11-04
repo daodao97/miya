@@ -46,17 +46,17 @@ func subAgentsActive(agents []SubAgent) bool {
 func subAgentStatusLabel(status string) string {
 	switch status {
 	case subAgentPending:
-		return "等待中"
+		return tr("Waiting")
 	case subAgentRunning:
-		return "运行中"
+		return tr("Running")
 	case subAgentFailed:
-		return "失败"
+		return tr("Failed")
 	case subAgentInterrupted:
-		return "已中断"
+		return tr("Interrupted")
 	case subAgentUnconfirmed:
-		return "未确认完成"
+		return tr("Completion unconfirmed")
 	}
-	return "已完成"
+	return tr("Completed")
 }
 
 // subAgentSummary is the line beside a message's title: the one sub-agent's
@@ -66,7 +66,7 @@ func subAgentSummary(agents []SubAgent) string {
 	if len(agents) == 1 {
 		a := agents[0]
 		if a.Steps > 0 {
-			parts = append(parts, fmt.Sprintf("%d 步", a.Steps))
+			parts = append(parts, fmt.Sprintf(tr("%d steps"), a.Steps))
 		}
 		if subAgentActive(a.Status) && a.Detail != "" {
 			parts = append(parts, firstLine(a.Detail))

@@ -171,6 +171,13 @@ func newServiceFixture(t *testing.T) *serviceFixture {
 				break
 			}
 		}
+		// Cancellation stops new collaboration work, but its writer may still
+		// be finishing a native outcome/index operation. Wait before TempDir
+		// cleanup removes the isolated service data and before its executor
+		// disappears; busy() intentionally ignores a cancelled worker.
+		if collaboration := f.srv.c.collaboration; collaboration != nil {
+			<-collaboration.done
+		}
 		close(stop)
 		setInvalidateHook(oldHook)
 	})
@@ -205,7 +212,7 @@ func TestServiceWindowWaitsInsteadOfStartingLocalAgents(t *testing.T) {
 	go io.Copy(io.Discard, peer)
 	c := newServiceWindow("/workspace", func() (*serviceClient, svcState, error) {
 		if attempts.Add(1) == 1 {
-			return nil, svcState{}, errors.New("后台服务版本不兼容，且有对话正在运行")
+			return nil, svcState{}, errors.New("Incompatible background service version; conversations are running")
 		}
 		close(retrying)
 		<-allow

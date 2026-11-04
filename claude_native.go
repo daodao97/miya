@@ -227,7 +227,7 @@ func summarizeClaudeSession(path string) (claudeSession, bool) {
 		// Sessions without a prompt hold nothing to show.
 		return claudeSession{}, false
 	}
-	s.Title = clippedTitle(firstNonEmpty(custom, claudeReferenceTitle(aiTitle), claudeReferenceTitle(summary), prompt, "Claude Code 对话"))
+	s.Title = clippedTitle(firstNonEmpty(custom, claudeReferenceTitle(aiTitle), claudeReferenceTitle(summary), prompt, "Claude Code conversation"))
 	return s, true
 }
 
@@ -394,7 +394,7 @@ func parseClaudeSession(path string) ([]Message, error) {
 		for j := range out[i].Agents {
 			a := &out[i].Agents[j]
 			if subAgentActive(a.Status) {
-				a.Status, a.Detail = subAgentUnconfirmed, "历史记录中没有子任务完成通知"
+				a.Status, a.Detail = subAgentUnconfirmed, "No subtask completion notification in history"
 			}
 		}
 	}

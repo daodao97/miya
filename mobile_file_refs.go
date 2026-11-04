@@ -38,11 +38,11 @@ func (m *mobileApp) searchFileReferences(project, query string) *mobileFileRefer
 	s := &mobileFileReferences{project: project, query: query, conn: m.conn, supported: m.state.FileReferences}
 	m.fileRefs = s
 	if !m.state.FileReferences {
-		s.err = "更新桌面端后可引用项目文件"
+		s.err = tr("Update the desktop app to reference project files")
 		return s
 	}
 	if !m.connected || m.conn == nil {
-		s.err = "连接桌面端后可搜索项目文件"
+		s.err = tr("Connect to your desktop to search project files")
 		return s
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
@@ -64,7 +64,7 @@ func (m *mobileApp) searchFileReferences(project, query string) *mobileFileRefer
 			}
 			s.loading, s.choices = false, choices
 			if err != nil {
-				s.err = "无法搜索项目文件，请稍后重试"
+				s.err = tr("Unable to search project files. Try again later.")
 			}
 		})
 	}()

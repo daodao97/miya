@@ -17,6 +17,8 @@ const ProtocolVersion = 5
 //	commands Data is a project's Claude Code slash commands
 //	automations Data is the requested automation list and run history
 //	automation-run Data acknowledges RequestID with the updated list; Error says why it failed
+//	automation-draft / automation-create Data acknowledges RequestID with the draft / saved automation
+//	collaboration Data acknowledges RequestID with an on-demand task/API result
 //	image   Data is a requested attachment thumbnail
 //	sent    answers a send: Thread took the message, or Error says why not
 //	ping    keeps an idle connection checked
@@ -44,6 +46,8 @@ type Frame struct {
 //	commands   send the Claude Code commands of Project
 //	automations send the automation list and run history
 //	automation-run run AutomationID now; RequestID correlates the reply
+//	automation-draft turn Text into settings for Project and Agent
+//	automation-create save Automation; RequestID makes creation safe to retry
 //	respond    answer the approval whose ID is Approval, allowing it or not
 //
 // SendOptions are explicit per-message settings chosen on the phone.
@@ -56,8 +60,12 @@ type SendOptions struct {
 }
 
 type Request struct {
-	DesktopAction string `json:"desktopAction,omitempty"`
-	WindowOnly        bool            `json:"windowOnly,omitempty"`
+	// Collaboration is an additive, capability-gated user API. Older peers do
+	// not advertise delegationV1 and must never receive this operation.
+	Collaboration json.RawMessage `json:"collaboration,omitempty"`
+	Automation    json.RawMessage `json:"automation,omitempty"`
+	DesktopAction string          `json:"desktopAction,omitempty"`
+	WindowOnly    bool            `json:"windowOnly,omitempty"`
 	// WindowPick asks for a lease that may choose any window or the full
 	// desktop. Older desktops ignore it and open the full desktop.
 	WindowPick        bool            `json:"windowPick,omitempty"`

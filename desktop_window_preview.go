@@ -116,7 +116,7 @@ func desktopActionWindows(id uint32, pid int, before, after []desktop.Window) (p
 // cannot be mistaken for completion. Failure leaves the original action unsent.
 func (d *desktopControl) actionWindows(window desktop.Window) ([]desktop.Window, error) {
 	if d.windows == nil {
-		return nil, errors.New("无法确认目标窗口状态，请重试")
+		return nil, errors.New("Unable to determine the target window state. Try again.")
 	}
 	windows, err := d.windows()
 	if err != nil {
@@ -132,13 +132,13 @@ func (d *desktopControl) actionWindows(window desktop.Window) ([]desktop.Window,
 
 func (d *desktopControl) performWindowAction(window desktop.Window, id string) (desktop.Action, []desktop.Window, error) {
 	if !d.work.TryLock() {
-		return desktop.Action{}, nil, errors.New("授权窗口正忙，请稍后重试")
+		return desktop.Action{}, nil, errors.New("The permission window is busy. Try again later.")
 	}
 	defer d.work.Unlock()
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.lease != nil && d.valid(d.lease.token) != nil {
-		return desktop.Action{}, nil, errors.New("请先关闭窗口操作界面")
+		return desktop.Action{}, nil, errors.New("Close the window controls first")
 	}
 	before, err := d.actionWindows(window)
 	if err != nil {
@@ -163,7 +163,7 @@ func (d *desktopControl) pressNativeWindowAction(window desktop.Window, id strin
 		}
 	}
 	if count != 1 || !match.Enabled {
-		return desktop.Action{}, errors.New("授权按钮不可用，请先填写密码或刷新预览")
+		return desktop.Action{}, errors.New("The permission button is unavailable. Enter your password or refresh the preview.")
 	}
 	if err := d.pressAction(window, match.ID); err != nil {
 		return desktop.Action{}, err
@@ -182,7 +182,7 @@ func (c *chatController) sendPhoneDesktopAction(ctx context.Context, r remote.Re
 		}
 	}
 	if !allowed {
-		err = errors.New("授权请求已处理或不属于此会话")
+		err = errors.New("This permission request was already handled or belongs to another session")
 	} else {
 		var action desktop.Action
 		var before []desktop.Window
@@ -214,10 +214,10 @@ func chooseDesktopWindow(windows []desktop.Window, hint desktopWindowHint) (desk
 		matches = append(matches, w)
 	}
 	if len(matches) == 0 {
-		return desktop.Window{}, errors.New("目标授权窗口不可用，请选择窗口或在 Mac 上打开它")
+		return desktop.Window{}, errors.New("Permission window unavailable. Select a window or open it on your Mac.")
 	}
 	if len(matches) > 1 && (hint.App != "" || hint.Title != "" || hint.Window != nil) {
-		return desktop.Window{}, errors.New("找到多个匹配窗口，请选择目标授权窗口")
+		return desktop.Window{}, errors.New("Multiple matching windows found. Select the permission window.")
 	}
 	return matches[0], nil
 }
@@ -238,7 +238,7 @@ func (c *chatController) phoneDesktopApproval(r remote.Request) bool {
 
 func (d *desktopControl) previewWindow(hint desktopWindowHint) (desktop.Window, []byte, error) {
 	if !d.work.TryLock() {
-		return desktop.Window{}, nil, errors.New("画面正在刷新，请稍后重试")
+		return desktop.Window{}, nil, errors.New("Refreshing the preview. Try again shortly.")
 	}
 	defer d.work.Unlock()
 	windows, err := d.windows()
@@ -261,7 +261,7 @@ func (c *chatController) sendPhoneDesktopPreview(ctx context.Context, r remote.R
 	p := phoneDesktopPreview{RequestID: r.RequestID, Approval: r.Approval}
 	var err error
 	if !allowed {
-		err = errors.New("授权请求已处理或不属于此会话")
+		err = errors.New("This permission request was already handled or belongs to another session")
 	} else {
 		p.Window, p.Data, err = c.desktopControls().previewWindow(hint)
 		if err == nil {
@@ -277,7 +277,7 @@ func (c *chatController) sendPhoneDesktopPreview(ctx context.Context, r remote.R
 			p.Data = nil
 			p.Dialog = desktop.Dialog{}
 			p.Window = desktop.Window{}
-			err = errors.New("授权请求已处理")
+			err = errors.New("Permission request already handled")
 		}
 	}
 	data, _ := json.Marshal(p)

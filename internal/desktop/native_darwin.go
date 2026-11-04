@@ -30,8 +30,6 @@ func Available() bool { return C.miya_desktop_available() != 0 }
 
 func Authorize() error { return permissionError(int(C.miya_desktop_authorize())) }
 
-// WakeDisplay declares local user activity so a sleeping display shows the
-// desktop or lock screen again before capture.
 // ScreenLocked reports whether the console session shows the lock screen.
 func ScreenLocked() (bool, error) {
 	switch C.miya_desktop_locked() {
@@ -40,9 +38,11 @@ func ScreenLocked() (bool, error) {
 	case 0:
 		return false, nil
 	}
-	return false, errors.New("无法读取 Mac 锁屏状态")
+	return false, errors.New("Unable to read Mac lock status")
 }
 
+// WakeDisplay declares local user activity so a sleeping display shows the
+// desktop or lock screen again before capture.
 func WakeDisplay() error { return permissionError(int(C.miya_desktop_wake())) }
 
 func Capture() ([]byte, error) {

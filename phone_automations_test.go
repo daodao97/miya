@@ -4,6 +4,7 @@ package main
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -41,6 +42,127 @@ func TestPhoneAutomationsReadListAndHistory(t *testing.T) {
 		case <-conn.ctx.Done():
 			t.Fatal("no automation response")
 		}
+	}
+}
+
+func nextPhoneAutomationForm(t *testing.T, conn *testPhoneConnection, op string) (phoneAutomationFormResult, remote.Frame) {
+	t.Helper()
+	for {
+		select {
+		case f := <-conn.frames:
+			if f.Type != op {
+				continue
+			}
+			var result phoneAutomationFormResult
+			if err := json.Unmarshal(f.Data, &result); err != nil {
+				t.Fatal(err)
+			}
+			return result, f
+		case <-conn.ctx.Done():
+			t.Fatal("no automation form response")
+			return phoneAutomationFormResult{}, remote.Frame{}
+		}
+	}
+}
+
+func TestPhoneAutomationDraftCreateAndRetry(t *testing.T) {
+	dir := t.TempDir()
+	gate := filepath.Join(dir, "release")
+	bin := filepath.Join(dir, "draft-agent")
+	script := `#!/bin/sh
+while [ ! -f "$MIYA_DRAFT_GATE" ]; do sleep 0.01; done
+printf '%s\n' '{"structured_output":{"name":"每日检查","schedule":"0 9 * * 1-5","check":"go test ./...","rounds":3,"instructions":"检查新 Issue。","time_missing":false}}'
+`
+	if err := os.WriteFile(bin, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	c := serverController(dir, bin)
+	c.claudeEnv = []string{"MIYA_DRAFT_GATE=" + gate}
+	path := filepath.Join(dir, "automations.json")
+	c.startAutomations(path, false)
+	if !c.phoneSnapshot().AutomationCreate {
+		t.Fatal("creation capability not advertised")
+	}
+	conn, _ := serveTestPhone(t, c)
+	conn.requests <- remote.Request{Op: "automation-draft", RequestID: "draft", Text: "每个工作日 9 点检查 Issue", Project: dir, Agent: agentClaude}
+	conn.requests <- remote.Request{Op: "automations"}
+	// A slow agent must not block list refreshes or the rest of the phone.
+	listReceived := false
+	for !listReceived {
+		select {
+		case f := <-conn.frames:
+			if f.Type == "automation-draft" {
+				t.Fatal("agent ran before its gate was released")
+			}
+			listReceived = f.Type == "automations"
+		case <-conn.ctx.Done():
+			t.Fatal("draft blocked the phone connection")
+		}
+	}
+	if err := os.WriteFile(gate, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	result, frame := nextPhoneAutomationForm(t, conn, "automation-draft")
+	if frame.Error != "" || result.RequestID != "draft" || result.View == nil || result.View.Project != dir || result.View.Agent != agentClaude || result.View.Rounds != 3 {
+		t.Fatalf("bad draft response: %+v %s", result, frame.Error)
+	}
+	if len(loadAutomations(path).Automations) != 0 {
+		t.Fatal("drafting saved an automation before confirmation")
+	}
+	a := result.View.Automation
+	a.Name, a.Enabled, a.NoCarryOver = "手机检查", true, true
+	raw, _ := json.Marshal(a)
+	r := remote.Request{Op: "automation-create", RequestID: "0011223344556677", Automation: raw}
+	conn.requests <- r
+	result, frame = nextPhoneAutomationForm(t, conn, r.Op)
+	if frame.Error != "" || result.View == nil || result.View.Name != a.Name || !result.View.Enabled || !result.View.NoCarryOver || result.View.Next.IsZero() {
+		t.Fatalf("creation failed: %+v %s", result, frame.Error)
+	}
+	saved := result.View.Automation
+	if saved.ID == a.ID || saved.Created.IsZero() || saved.Due.IsZero() {
+		t.Fatal("creation trusted draft identity or lost scheduler metadata")
+	}
+	// The same key is safe after losing a reply, even if a caller sends
+	// another payload. It must never edit the automation it already created.
+	a.Name = "重复请求不能覆盖"
+	r.Automation, _ = json.Marshal(a)
+	conn.requests <- r
+	result, frame = nextPhoneAutomationForm(t, conn, r.Op)
+	if frame.Error != "" || result.View.ID != saved.ID || result.View.Name != saved.Name || len(loadAutomations(path).Automations) != 1 {
+		t.Fatal("retry duplicated or overwrote a saved automation")
+	}
+	// Persistence also carries the retry identity across a service restart.
+	restarted := serverController(dir, "")
+	restarted.startAutomations(path, false)
+	frame = restarted.phoneAutomationCreate(r)
+	if frame.Error != "" || len(restarted.auto.store.Automations) != 1 || restarted.auto.store.Automations[0].Created != saved.Created {
+		t.Fatal("retry after service restart duplicated the automation")
+	}
+	a.Schedule = "invalid"
+	r.Automation, _ = json.Marshal(a)
+	r.RequestID = "aabbccddeeff0011"
+	conn.requests <- r
+	_, frame = nextPhoneAutomationForm(t, conn, r.Op)
+	if frame.Error == "" || len(loadAutomations(path).Automations) != 1 {
+		t.Fatal("invalid schedule was saved")
+	}
+}
+
+func TestPhoneAutomationCreateUnavailable(t *testing.T) {
+	c := serverController(t.TempDir(), "")
+	if c.phoneSnapshot().AutomationCreate {
+		t.Fatal("unavailable creation capability advertised")
+	}
+	conn, _ := serveTestPhone(t, c)
+	conn.requests <- remote.Request{Op: "automation-create", RequestID: "0011223344556677"}
+	result, frame := nextPhoneAutomationForm(t, conn, "automation-create")
+	if frame.Error == "" || result.RequestID != "0011223344556677" {
+		t.Fatal("unavailable creation did not return a correlated error")
+	}
+	conn.requests <- remote.Request{Op: "automation-draft", RequestID: "draft"}
+	result, frame = nextPhoneAutomationForm(t, conn, "automation-draft")
+	if frame.Error == "" || result.RequestID != "draft" {
+		t.Fatal("unavailable draft did not return a correlated error")
 	}
 }
 

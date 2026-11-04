@@ -5,5 +5,5 @@ package runtime
 import "errors"
 
 func SystemProcesses() ([]Process, error) {
-	return nil, errors.New("当前系统尚不支持核验进程身份")
+	return nil, errors.New("Process identity verification is not supported on this system")
 }

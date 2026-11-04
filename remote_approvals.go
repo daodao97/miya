@@ -21,7 +21,7 @@ func (c *chatController) phoneApprovalResponse(r remote.Request) error {
 			continue
 		}
 		if r.ApprovalVersion != "" && r.ApprovalVersion != approvalFingerprint(a) {
-			return errors.New("请求已变化，请重新确认")
+			return errors.New("Request changed. Confirm again.")
 		}
 		if r.Remember {
 			return c.respondMCPAlways(a)
@@ -35,17 +35,17 @@ func (c *chatController) phoneApprovalResponse(r remote.Request) error {
 				} `json:"answers"`
 			}
 			if json.Unmarshal(r.Result, &v) != nil || v.Answers == nil {
-				return errors.New("无效的问题回答")
+				return errors.New("Invalid answer")
 			}
 			// An explicitly empty answer map means Skip, as on desktop.
 			if len(v.Answers) > 0 {
 				if len(v.Answers) != len(a.Questions) {
-					return errors.New("请回答所有问题")
+					return errors.New("Answer all questions")
 				}
 				for _, q := range a.Questions {
 					answer, ok := v.Answers[q.ID]
 					if !ok || len(answer.Answers) != 1 || strings.TrimSpace(answer.Answers[0]) == "" {
-						return errors.New("请回答所有问题")
+						return errors.New("Answer all questions")
 					}
 				}
 			}
@@ -56,13 +56,13 @@ func (c *chatController) phoneApprovalResponse(r remote.Request) error {
 				Content map[string]any `json:"content,omitempty"`
 			}
 			if json.Unmarshal(r.Result, &v) != nil {
-				return errors.New("无效的表单回复")
+				return errors.New("Invalid form response")
 			}
 			switch v.Action {
 			case "accept":
 				if a.Mode != "url" {
 					if v.Content == nil {
-						return errors.New("请填写表单")
+						return errors.New("Complete the form")
 					}
 					if err := validateForm(a.RequestedSchema, v.Content); err != nil {
 						return err
@@ -70,7 +70,7 @@ func (c *chatController) phoneApprovalResponse(r remote.Request) error {
 				}
 			case "decline", "cancel":
 			default:
-				return errors.New("无效的表单操作")
+				return errors.New("Invalid form action")
 			}
 			result = v
 		default:
@@ -79,7 +79,7 @@ func (c *chatController) phoneApprovalResponse(r remote.Request) error {
 		c.respond(a, result)
 		return nil
 	}
-	return fmt.Errorf("请求已处理或已过期")
+	return fmt.Errorf("Request already handled or expired")
 }
 
 // validateMobileForm uses exactly the desktop form contract. The UI renders
@@ -101,7 +101,7 @@ func validateMobileForm(a codex.Approval, fields map[string]string) (map[string]
 		if len(field.Enum) > 0 || field.Type != "string" {
 			var decoded any
 			if err := json.Unmarshal([]byte(value), &decoded); err != nil {
-				return nil, fmt.Errorf("%s 的值无效", firstNonEmpty(field.Title, key))
+				return nil, fmt.Errorf("Invalid value for %s", firstNonEmpty(field.Title, key))
 			}
 			content[key] = decoded
 		} else {

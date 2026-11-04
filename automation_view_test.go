@@ -42,7 +42,7 @@ func TestAutomationsPage(t *testing.T) {
 	app.showAutomations()
 	tt.Frame()
 	tt.Frame()
-	for _, want := range []string{"Automations", "每日 Issue 分拣", "工作日 9:00", "失败 · 3/3 轮", "仓库日报", "已暂停", "新建"} {
+	for _, want := range []string{"Automations", "每日 Issue 分拣", "Weekdays 9:00", "Failed · 3/3 turns", "仓库日报", "Paused", "New"} {
 		if !tt.HasText(want) {
 			t.Fatalf("list lacks %q: %q", want, tt.Texts())
 		}
@@ -51,7 +51,7 @@ func TestAutomationsPage(t *testing.T) {
 
 	app.autos.page, app.autos.detail = "detail", issue.ID
 	tt.Frame()
-	for _, want := range []string{"运行历史", "立即运行", "修复 #142 时区判断，补了测试", "go test ./...", "最近 2 次"} {
+	for _, want := range []string{"Run history", "Run now", "修复 #142 时区判断，补了测试", "go test ./...", "Last 2 runs"} {
 		if !tt.HasText(want) {
 			t.Fatalf("detail lacks %q: %q", want, tt.Texts())
 		}
@@ -64,7 +64,7 @@ func TestAutomationsPage(t *testing.T) {
 	draft.ID = ""
 	app.autos.draft = &draft
 	tt.Frame()
-	for _, want := range []string{"新建自动化", "整理结果", "已整理", "最多 3 轮", "0 9 * * 1-5", "创建"} {
+	for _, want := range []string{"New automation", "Generated settings", "Ready", "Up to 3 turns", "0 9 * * 1-5", "Create"} {
 		if !tt.HasText(want) {
 			t.Fatalf("form lacks %q: %q", want, tt.Texts())
 		}
@@ -73,12 +73,12 @@ func TestAutomationsPage(t *testing.T) {
 
 	app.autos.draft.TimeMissing = true
 	tt.Frame()
-	if !tt.HasText("需要补充时间") {
+	if !tt.HasText("Schedule needed") {
 		t.Fatalf("missing time not shown: %q", tt.Texts())
 	}
 	app.autos.draft, app.autos.drafting = nil, true
 	tt.Frame()
-	if !tt.HasText("正在整理…") {
+	if !tt.HasText("Generating…") {
 		t.Fatalf("drafting not shown: %q", tt.Texts())
 	}
 	automationSnapshot(t, tt, "automations-drafting")

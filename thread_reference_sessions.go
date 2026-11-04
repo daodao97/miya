@@ -60,7 +60,7 @@ func (c *chatController) rememberForkedReference(t Thread, project string) {
 		err = atomicWriteFile(filepath.Join(c.referenceDir, "reference-sessions.json"), data)
 	}
 	if err != nil && c.setStatus != nil {
-		c.setStatus("无法保存原会话引用：" + err.Error())
+		c.setStatus("Unable to save original conversation reference: " + err.Error())
 	}
 }
 

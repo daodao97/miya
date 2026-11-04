@@ -94,7 +94,7 @@ func loadIdentity(ctx context.Context, dir string) (savedIdentity, *os.File, err
 	}
 	var identity savedIdentity
 	if len(data) > 65536 || json.Unmarshal(data, &identity) != nil || identity.Version != 1 || identity.Key.IsZero() || identity.PresharedKey.IsZero() || identity.Region == nil || identity.Region.RegionID <= 0 || len(identity.Region.Nodes) == 0 {
-		return savedIdentity{}, nil, errors.New("保存的连接身份无效，请重置手机连接")
+		return savedIdentity{}, nil, errors.New("Saved connection identity is invalid. Reset the mobile connection.")
 	}
 	if err := f.Chmod(0600); err != nil {
 		return savedIdentity{}, nil, err
@@ -108,11 +108,11 @@ func loadIdentity(ctx context.Context, dir string) (savedIdentity, *os.File, err
 func saveIdentity(dir string, server *tailcat.Server) error {
 	ci, err := tailcat.ParseAddr(server.TailcatAddr())
 	if err != nil || len(ci.Region) != 1 {
-		return errors.New("无法保存连接身份")
+		return errors.New("Unable to save connection identity")
 	}
 	data, err := json.Marshal(savedIdentity{Version: 1, Key: server.Key, PresharedKey: ci.PresharedKey, Region: ci.Region[0]})
 	if err != nil {
-		return errors.New("无法保存连接身份")
+		return errors.New("Unable to save connection identity")
 	}
 	return writeFile(identityPath(dir), data)
 }

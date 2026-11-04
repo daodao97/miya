@@ -43,6 +43,18 @@ func fileRequest(t *testing.T, handler http.Handler, method, target string, head
 	handler.ServeHTTP(w, r)
 	return w
 }
+
+func TestDesktopFilesDirectoryLanguageFollowsClient(t *testing.T) {
+	root, handler := fileServerFixture(t)
+	base := "/" + projectFileID(root) + "/"
+	for _, tc := range []struct{ language, tag, download string }{{"zh-CN, en;q=0.8", "zh-Hans", "下载"}, {"en-GB", "en", "Download"}, {"fr", "en", "Download"}} {
+		response := fileRequest(t, handler, "GET", base, map[string]string{"Accept-Language": tc.language})
+		body := response.Body.String()
+		if response.Code != 200 || !strings.Contains(body, `lang="`+tc.tag+`"`) || !strings.Contains(body, tc.download) || !strings.Contains(body, "Project &lt;test&gt;") || !strings.Contains(body, "README.md") {
+			t.Fatalf("directory language or original names changed: %s", tc.language)
+		}
+	}
+}
 func TestDesktopFilesHTTPReadsAndDownloads(t *testing.T) {
 	root, handler := fileServerFixture(t)
 	base := "/" + projectFileID(root) + "/"
@@ -53,7 +65,7 @@ func TestDesktopFilesHTTPReadsAndDownloads(t *testing.T) {
 		}
 	}
 	list := fileRequest(t, handler, "GET", base, nil)
-	if !strings.Contains(list.Body.String(), "Project &lt;test&gt;") || strings.Contains(list.Body.String(), "<script>.txt") || !strings.Contains(list.Body.String(), "下载") {
+	if !strings.Contains(list.Body.String(), "Project &lt;test&gt;") || strings.Contains(list.Body.String(), "<script>.txt") || !strings.Contains(list.Body.String(), "Download") {
 		t.Fatal("directory listing is unsafe or missing download actions")
 	}
 	attachment := fileRequest(t, handler, "GET", base+"index.html?download=1", nil)

@@ -99,7 +99,7 @@ func ListCommands(ctx context.Context, binary string, args, env []string, cwd st
 				if got {
 					return cmds, nil
 				}
-				return nil, errors.New("Claude Code 没有返回命令列表")
+				return nil, errors.New("Claude Code returned no command list")
 			}
 			switch {
 			case f.Type == "control_response" && f.Response.RequestID == "commands":

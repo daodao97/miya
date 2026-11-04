@@ -58,11 +58,11 @@ func init() {
 func (s *mcpServer) automationTool(name string, raw json.RawMessage) (string, error) {
 	var args mcpAutomationArgs
 	if len(raw) > 0 && string(raw) != "null" && json.Unmarshal(raw, &args) != nil {
-		return "", errors.New("参数格式不对")
+		return "", errors.New("Invalid arguments")
 	}
 	op := map[string]string{"list_automations": "mcpAutomationList", "create_automation": "mcpAutomationCreate", "update_automation": "mcpAutomationUpdate"}[name]
 	if op == "" {
-		return "", fmt.Errorf("没有工具 %s", name)
+		return "", fmt.Errorf("Unknown tool %s", name)
 	}
 	var text string
 	err := s.callService(op, mcpRequest{Workspace: s.workspace, Tool: name, Auto: &args}, &text)
@@ -72,7 +72,7 @@ func (s *mcpServer) automationTool(name string, raw json.RawMessage) (string, er
 // mcpAutomation answers an automation tool call in the service.
 func (c *chatController) mcpAutomation(op string, r mcpRequest) (any, error) {
 	if c.auto == nil {
-		return nil, errors.New("自动化需要 Miya 后台服务")
+		return nil, errors.New("Automations require the Miya background service")
 	}
 	var args mcpAutomationArgs
 	if r.Auto != nil {
@@ -95,10 +95,10 @@ func (c *chatController) mcpAutomation(op string, r mcpRequest) (any, error) {
 			return nil, err
 		}
 		a.ID = ""
-		id, ch := c.askUser(caller, "创建自动化「"+a.Name+"」", automationCardDetail(a, c.auto.now()))
+		id, ch := c.askUser(caller, "Create automation \""+a.Name+"\"", automationCardDetail(a, c.auto.now()))
 		return deferred(func() (any, error) {
 			if !c.waitUser(id, ch) {
-				return "用户没有确认，自动化未创建。", nil
+				return "The user did not confirm. No automation was created.", nil
 			}
 			v, err := c.onMain(func() (any, error) {
 				saved, err := c.saveAutomation(a)
@@ -111,7 +111,7 @@ func (c *chatController) mcpAutomation(op string, r mcpRequest) (any, error) {
 				return nil, err
 			}
 			view := v.(automationView)
-			return fmt.Sprintf("已创建自动化「%s」（id %s），%s，下次运行 %s。", view.Name, view.ID, view.ScheduleText, formatAutomationTime(view.Next)), nil
+			return fmt.Sprintf("Created automation %q (ID %s), %s. Next run: %s.", view.Name, view.ID, view.ScheduleText, formatAutomationTime(view.Next)), nil
 		}), nil
 	case "mcpAutomationUpdate":
 		return c.mcpUpdateAutomation(r, args)
@@ -130,7 +130,7 @@ func (c *chatController) mcpUpdateAutomation(r mcpRequest, args mcpAutomationArg
 		}
 	}
 	if !ok {
-		return nil, fmt.Errorf("没有自动化 %q：用 list_automations 查看", args.ID)
+		return nil, fmt.Errorf("Automation %q not found. Use list_automations to see available automations.", args.ID)
 	}
 	old := s.store.Automations[i]
 	next := old
@@ -161,77 +161,77 @@ func (c *chatController) mcpUpdateAutomation(r mcpRequest, args mcpAutomationArg
 	diff := automationDiff(old, next)
 	if diff == "" {
 		if next.Enabled == old.Enabled {
-			return "没有需要修改的内容。", nil
+			return "No changes to apply.", nil
 		}
 		// Turning one on or off needs no card: the person asked for it.
 		if _, err := c.automationOp("automationToggle", automationRequest{ID: old.ID, Enabled: next.Enabled}); err != nil {
 			return nil, err
 		}
 		if next.Enabled {
-			return "已启用「" + old.Name + "」。", nil
+			return "Enabled \"" + old.Name + "\".", nil
 		}
-		return "已暂停「" + old.Name + "」。", nil
+		return "Paused \"" + old.Name + "\".", nil
 	}
 	caller, ok := c.mcpCaller(r.Tool)
 	if !ok {
 		return nil, errors.New(mcpCallerUnknown)
 	}
-	id, ch := c.askUser(caller, "修改自动化「"+old.Name+"」", diff)
+	id, ch := c.askUser(caller, "Update automation \""+old.Name+"\"", diff)
 	return deferred(func() (any, error) {
 		if !c.waitUser(id, ch) {
-			return "用户没有确认，自动化未修改。", nil
+			return "The user did not confirm. The automation was not changed.", nil
 		}
 		if _, err := c.onMain(func() (any, error) { return c.saveAutomation(next) }); err != nil {
 			return nil, err
 		}
-		return "已修改「" + next.Name + "」，" + describeCron(next.Schedule) + "。", nil
+		return "Updated \"" + next.Name + "\", " + describeCron(next.Schedule) + ".", nil
 	}), nil
 }
 
 func (c *chatController) automationListText() string {
 	s := c.auto
 	if len(s.store.Automations) == 0 {
-		return "还没有自动化。"
+		return "No automations yet."
 	}
 	var b strings.Builder
 	for _, a := range s.store.Automations {
-		state := "已暂停"
+		state := "Paused"
 		if a.Enabled {
-			state = "已启用，下次 " + formatAutomationTime(a.Next(s.now()))
+			state = "Enabled; next run: " + formatAutomationTime(a.Next(s.now()))
 		}
-		fmt.Fprintf(&b, "%s「%s」· %s · %s · %s", a.ID, a.Name, filepath.Base(a.Project), describeCron(a.Schedule), state)
+		fmt.Fprintf(&b, "%s\"%s\"· %s · %s · %s", a.ID, a.Name, filepath.Base(a.Project), describeCron(a.Schedule), state)
 		if r, ok := s.store.lastRun(a.ID); ok {
-			fmt.Fprintf(&b, " · 上次%s", runResultLabel(r.Result))
+			fmt.Fprintf(&b, " · Last run: %s", runResultLabel(r.Result))
 		}
 		b.WriteString("\n")
 	}
 	return strings.TrimRight(b.String(), "\n")
 }
 
-var weekdayNames = []string{"日", "一", "二", "三", "四", "五", "六"}
+var weekdayNames = []string{"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"}
 
 func formatAutomationTime(t time.Time) string {
 	if t.IsZero() {
-		return "未安排"
+		return "Not scheduled"
 	}
-	return fmt.Sprintf("%d月%d日 周%s %s", t.Month(), t.Day(), weekdayNames[t.Weekday()], t.Format("15:04"))
+	return fmt.Sprintf("%d/%d (%s) %s", t.Month(), t.Day(), weekdayNames[t.Weekday()], t.Format("15:04"))
 }
 
 func automationCheckText(a Automation) string {
 	if a.Check == "" {
-		return "不检查，跑 1 轮"
+		return "No check; 1 round"
 	}
-	return fmt.Sprintf("%s 通过，最多 %d 轮", a.Check, a.Rounds)
+	return fmt.Sprintf("Check: %s; up to %d rounds", a.Check, a.Rounds)
 }
 
 // automationCardDetail is what the confirmation card shows of a new one.
 func automationCardDetail(a Automation, now time.Time) string {
 	return strings.Join([]string{
-		fmt.Sprintf("时间：%s（%s），下次 %s", describeCron(a.Schedule), a.Schedule, formatAutomationTime(a.Next(now))),
-		"项目：" + a.Project,
-		"Agent：" + backendFor(a.Agent).Name(),
-		"完成标准：" + automationCheckText(a),
-		"指令：" + a.Instructions,
+		fmt.Sprintf("Schedule: %s (%s); next run: %s", describeCron(a.Schedule), a.Schedule, formatAutomationTime(a.Next(now))),
+		"Project: " + a.Project,
+		"Agent: " + backendFor(a.Agent).Name(),
+		"Completion check: " + automationCheckText(a),
+		"Instructions: " + a.Instructions,
 	}, "\n")
 }
 
@@ -240,14 +240,14 @@ func automationDiff(old, next Automation) string {
 	var lines []string
 	add := func(label, from, to string) {
 		if from != to {
-			lines = append(lines, label+"："+from+" → "+to)
+			lines = append(lines, label+": "+from+" → "+to)
 		}
 	}
-	add("名称", old.Name, next.Name)
-	add("时间", describeCron(old.Schedule), describeCron(next.Schedule))
+	add("Name", old.Name, next.Name)
+	add("Schedule", describeCron(old.Schedule), describeCron(next.Schedule))
 	add("Agent", backendFor(old.Agent).Name(), backendFor(next.Agent).Name())
-	add("完成标准", automationCheckText(old), automationCheckText(next))
-	add("指令", old.Instructions, next.Instructions)
+	add("Completion check", automationCheckText(old), automationCheckText(next))
+	add("Instructions", old.Instructions, next.Instructions)
 	return strings.Join(lines, "\n")
 }
 
@@ -318,6 +318,6 @@ func (c *chatController) onMain(f func() (any, error)) (any, error) {
 	case r := <-done:
 		return r.v, r.err
 	case <-time.After(30 * time.Second):
-		return nil, errors.New("Miya 没有响应")
+		return nil, errors.New("Miya is not responding")
 	}
 }

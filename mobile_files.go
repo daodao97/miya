@@ -15,15 +15,15 @@ func (m *mobileApp) openProjectFiles(project string) {
 		return
 	}
 	if !m.state.Files {
-		go mygo.Dialog.Message(mygo.MessageOptions{Parent: m.win, Title: "项目文件", Message: "请先更新桌面端 Miya。后台有任务时，会在空闲后自动更新。"})
+		go mygo.Dialog.Message(mygo.MessageOptions{Parent: m.win, Title: tr("Project files"), Message: tr("Update Miya on your desktop first. If the background service is busy, it will update when idle.")})
 		return
 	}
 	proxy, err := newPhoneFileProxy(m.conn, project)
 	if err != nil {
-		go mygo.Dialog.Message(mygo.MessageOptions{Parent: m.win, Title: "无法打开项目文件", Message: err.Error()})
+		go mygo.Dialog.Message(mygo.MessageOptions{Parent: m.win, Title: tr("Unable to open project files"), Message: err.Error()})
 		return
 	}
-	m.openFileBrowser(proxy, "无法打开项目文件")
+	m.openFileBrowser(proxy, tr("Unable to open project files"))
 }
 
 func (m *mobileApp) openFileBrowser(proxy *phoneFileProxy, errorTitle string) {

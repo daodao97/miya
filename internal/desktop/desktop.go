@@ -8,7 +8,7 @@ import (
 	"unicode/utf8"
 )
 
-var ErrWindowUnavailable = errors.New("目标授权窗口已关闭、被遮挡或无法获得焦点")
+var ErrWindowUnavailable = errors.New("The permission window was closed, obscured, or could not be focused")
 
 // A window identity includes its owner: window numbers may be reused after an
 // app exits. A window session must never silently become a display session.
@@ -71,32 +71,32 @@ type Input struct {
 func (in Input) Validate() error {
 	unit := func(v float64) bool { return !math.IsNaN(v) && !math.IsInf(v, 0) && v >= 0 && v <= 1 }
 	if !unit(in.X) || !unit(in.Y) || !unit(in.ToX) || !unit(in.ToY) {
-		return errors.New("无效的屏幕坐标")
+		return errors.New("Invalid screen coordinates")
 	}
 	if in.Modifier != "" && in.Modifier != "command" && in.Modifier != "control" && in.Modifier != "shift" && in.Modifier != "option" {
-		return errors.New("无效的修饰键")
+		return errors.New("Invalid modifier key")
 	}
 	if in.Modifier != "" && in.Kind != "key" {
-		return errors.New("修饰键仅支持键盘操作")
+		return errors.New("Modifier keys are only supported for keyboard actions")
 	}
 	switch in.Kind {
 	case "click", "doubleClick", "rightClick", "drag", "move":
 	case "scroll":
 		if in.DeltaX < -1000 || in.DeltaX > 1000 || in.DeltaY < -1000 || in.DeltaY > 1000 {
-			return errors.New("滚动幅度过大")
+			return errors.New("Scroll distance is too large")
 		}
 	case "text":
 		if !utf8.ValidString(in.Text) || len(in.Text) == 0 || len(in.Text) > 4096 || in.Modifier != "" {
-			return errors.New("每次输入 1–4096 字节文字")
+			return errors.New("Enter 1–4096 bytes of text at a time")
 		}
 	case "key":
 		switch in.Key {
 		case "enter", "tab", "escape", "backspace", "delete", "left", "right", "up", "down", "a", "c", "v", "z", "l":
 		default:
-			return errors.New("不支持的按键")
+			return errors.New("Unsupported key")
 		}
 	default:
-		return errors.New("不支持的桌面操作")
+		return errors.New("Unsupported desktop action")
 	}
 	return nil
 }

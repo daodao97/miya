@@ -20,7 +20,7 @@ func TestPanelTerminalFocusAfterStartup(t *testing.T) {
 	s := &panelSurface{id: 1, kind: surfaceTerminal, starting: true}
 	p.visible, p.active, p.surfaces = true, 0, []*panelSurface{s}
 	tt.Frame()
-	if !tt.HasText("正在启动终端…") {
+	if !tt.HasText("Starting terminal…") {
 		t.Fatal("terminal must first show its loading state")
 	}
 	s.starting, s.term = false, term

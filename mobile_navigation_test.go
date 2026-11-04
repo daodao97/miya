@@ -12,7 +12,7 @@ import (
 func TestMobileDrawerDestinationsReturnToDrawer(t *testing.T) {
 	for _, fromConversation := range []bool{false, true} {
 		for _, destination := range []struct{ label, path string }{
-			{"thread-one", "/thread"}, {"自动化", "/automations"}, {"设置", "/settings"},
+			{"thread-one", "/thread"}, {"Automations", "/automations"}, {"Settings", "/settings"},
 		} {
 			t.Run(fmt.Sprintf("fromConversation=%v/%s", fromConversation, destination.path), func(t *testing.T) {
 				m := testMobileApp()
@@ -56,8 +56,8 @@ func TestMobileDrawerDestinationsReturnToDrawer(t *testing.T) {
 
 func TestMobileDrawerChildPagesReturnToTheirParent(t *testing.T) {
 	for _, destination := range []struct{ label, path, child, childPath string }{
-		{"设置", "/settings", "模型与权限", "/options"},
-		{"自动化", "/automations", "仓库日报", "/automation"},
+		{"Settings", "/settings", "Model and permissions", "/options"},
+		{"Automations", "/automations", "仓库日报", "/automation"},
 	} {
 		t.Run(destination.path, func(t *testing.T) {
 			m := testMobileApp()
@@ -73,10 +73,10 @@ func TestMobileDrawerChildPagesReturnToTheirParent(t *testing.T) {
 			if err := tt.Click(destination.child); err != nil {
 				t.Fatal(err)
 			}
-			if m.router().Path() != destination.childPath || !m.router().InteractiveBack || tt.HasText("打开侧边栏") {
+			if m.router().Path() != destination.childPath || !m.router().InteractiveBack || tt.HasText("Open sidebar") {
 				t.Fatal("a child page should use ordinary back navigation")
 			}
-			if err := tt.Click("返回"); err != nil {
+			if err := tt.Click("Back"); err != nil {
 				t.Fatal(err)
 			}
 			if m.router().Path() != destination.path || m.menu || m.router().InteractiveBack {

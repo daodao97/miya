@@ -6,7 +6,7 @@
   "macos": {
     "minimumSystemVersion": "13.0",
     "infoPlist": {
-      "NSLocalNetworkUsageDescription": "连接同一 Wi-Fi 下的 Miya 手机端，通过局域网加密直连降低延迟。"
+      "NSLocalNetworkUsageDescription": "Connect to Miya on your phone over the same Wi-Fi using an encrypted local connection for lower latency."
     }
   },
   "urlSchemes": [
@@ -14,12 +14,14 @@
   ],
   "ios": {
     "capabilities": [
-      "camera"
+      "camera",
+      "biometrics"
     ],
     "minimumSystemVersion": "15.0",
     "infoPlist": {
-      "NSCameraUsageDescription": "扫描 Miya 桌面端的二维码以查看会话。",
-      "NSLocalNetworkUsageDescription": "连接同一 Wi-Fi 下的 Miya 桌面端，通过局域网加密直连降低延迟。",
+      "NSFaceIDUsageDescription": "Verify your identity to save or use your Mac login password to unlock remote desktop.",
+      "NSCameraUsageDescription": "Scan the QR code in Miya on your desktop to view conversations.",
+      "NSLocalNetworkUsageDescription": "Connect to Miya on your desktop over the same Wi-Fi using an encrypted local connection for lower latency.",
       "NSAppTransportSecurity": {
         "NSAllowsLocalNetworking": true
       }
@@ -42,5 +44,13 @@
         "QuickLook"
       ]
     }
-  }
+  },
+  "i18n": {
+    "dir": "locales",
+    "source": "en"
+  },
+  "resources": [
+    "resources/languages/en.lproj",
+    "resources/languages/zh-Hans.lproj"
+  ]
 }

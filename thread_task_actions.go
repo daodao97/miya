@@ -12,7 +12,7 @@ func (c *chatController) taskAction(threadID int, taskID, action string) string 
 	}
 	t := c.threadWithID(threadID)
 	if t.ID == 0 || t.ReadOnly {
-		return "此对话无法管理任务。"
+		return "This conversation cannot manage tasks."
 	}
 	for _, task := range t.Tasks {
 		if task.ID != taskID {
@@ -26,12 +26,12 @@ func (c *chatController) taskAction(threadID int, taskID, action string) string 
 			if t.TaskStopping {
 				return ""
 			}
-			if c.submit(sendRequest{ThreadID: threadID, Steer: true, KeepSessionSettings: true, Text: "停止当前会话的所有循环任务。取消所有已安排的定时任务，结束动态循环。"}) == 0 {
-				return "暂时无法停止循环，请稍后重试。"
+			if c.submit(sendRequest{ThreadID: threadID, Steer: true, KeepSessionSettings: true, Text: "Stop all looping tasks in the current session. Cancel all scheduled tasks and end dynamic loops."}) == 0 {
+				return "Unable to stop the loop. Try again later."
 			}
 			c.update(threadID, func(t *Thread) { t.TaskStopping = true })
 			return ""
 		}
 	}
-	return fmt.Sprintf("任务 %s 已不可用。", taskID)
+	return fmt.Sprintf("Task %s is no longer available.", taskID)
 }

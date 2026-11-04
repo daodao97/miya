@@ -53,7 +53,7 @@ func init() {
 func (c *chatController) mcpCallerWithArguments(tool string, raw json.RawMessage) (Thread, Message, error) {
 	var want map[string]any
 	if json.Unmarshal(raw, &want) != nil || want == nil {
-		return Thread{}, Message{}, errors.New("工具参数必须是对象")
+		return Thread{}, Message{}, errors.New("Tool arguments must be an object")
 	}
 	type candidate struct {
 		thread  Thread
@@ -80,7 +80,7 @@ func (c *chatController) mcpCallerWithArguments(tool string, raw json.RawMessage
 		return Thread{}, Message{}, errors.New(mcpCallerUnknown)
 	}
 	if len(matches) != 1 {
-		return Thread{}, Message{}, errors.New("发起记忆调用的对话不唯一，请错开相同参数的调用后重试")
+		return Thread{}, Message{}, errors.New("The calling conversation is ambiguous. Stagger calls with identical arguments and retry.")
 	}
 	return matches[0].thread, matches[0].message, nil
 }
@@ -89,7 +89,7 @@ func (s *mcpServer) memoryTool(name string, raw json.RawMessage) (string, error)
 	dec := json.NewDecoder(strings.NewReader(string(raw)))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&args); err != nil {
-		return "", errors.New("记忆参数格式不对：" + err.Error())
+		return "", errors.New("Invalid memory arguments: " + err.Error())
 	}
 	var text string
 	err := s.callService("mcpMemory", mcpRequest{Tool: name, Arguments: raw}, &text)
@@ -97,7 +97,7 @@ func (s *mcpServer) memoryTool(name string, raw json.RawMessage) (string, error)
 }
 func (c *chatController) mcpMemory(r mcpRequest) (any, error) {
 	if c.memory == nil {
-		return nil, errors.New("记忆需要 Miya 后台服务")
+		return nil, errors.New("Memory requires the Miya background service")
 	}
 	caller, call, err := c.mcpCallerWithArguments(r.Tool, r.Arguments)
 	if err != nil {
@@ -119,7 +119,7 @@ func (c *chatController) mcpMemory(r mcpRequest) (any, error) {
 	case "user":
 		scope = memory.UserScope()
 	default:
-		return nil, errors.New("无效记忆作用域")
+		return nil, errors.New("Invalid memory scope")
 	}
 	var source memory.Source
 	if r.Tool == "remember" {
@@ -136,10 +136,10 @@ func (c *chatController) mcpMemory(r mcpRequest) (any, error) {
 			return nil, err
 		}
 		if settings.Disabled {
-			return nil, errors.New("本项目已停用记忆工具；可在记忆管理中重新启用")
+			return nil, errors.New("Memory tools are disabled for this project. Enable them in memory settings.")
 		}
 		if scope.Kind == "user" && r.Tool == "forget_memory" && !settings.UseUserPreferences {
-			return nil, errors.New("本项目未启用用户偏好，请在管理界面操作")
+			return nil, errors.New("User preferences are not enabled for this project. Enable them in memory settings.")
 		}
 		switch r.Tool {
 		case "search_memory":
@@ -155,7 +155,7 @@ func (c *chatController) mcpMemory(r mcpRequest) (any, error) {
 				return nil, err
 			}
 			if scope.Kind == "user" && a.ID != "" && !settings.UseUserPreferences {
-				return nil, errors.New("本项目未启用用户偏好，请在管理界面操作")
+				return nil, errors.New("User preferences are not enabled for this project. Enable them in memory settings.")
 			}
 			// Existing provenance survives a correction; append its new evidence.
 			sources := []memory.Source{source}
@@ -179,16 +179,16 @@ func (c *chatController) mcpMemory(r mcpRequest) (any, error) {
 			}
 			c.dispatch(func() { c.noteMemory(caller.ID, e) })
 			b, _ := json.Marshal(e)
-			return "已保存 Miya 记忆；会话中可撤销。\n" + string(b), nil
+			return "Miya memory saved. You can undo it in the conversation.\n" + string(b), nil
 		case "forget_memory":
 			e, err := store.Forget(scope, a.ID, a.Version)
 			if err != nil {
 				return nil, err
 			}
 			c.dispatch(func() { c.noteMemory(caller.ID, e) })
-			return "Miya 已移除记忆正文并停止召回；无法删除 Agent 已有历史或备份。", nil
+			return "Miya removed the memory content and stopped recalling it. Existing agent history and backups cannot be deleted.", nil
 		}
-		return nil, errors.New("未知记忆工具")
+		return nil, errors.New("Unknown memory tool")
 	}), nil
 }
 func memoryExpiry(s string) (time.Time, error) {
@@ -197,17 +197,17 @@ func memoryExpiry(s string) (time.Time, error) {
 	}
 	t, err := time.Parse(time.RFC3339, s)
 	if err != nil {
-		return time.Time{}, errors.New("有效期必须为 RFC3339 时间，例如 2026-11-09T23:59:59+08:00")
+		return time.Time{}, errors.New("Expiration must use RFC3339, for example 2026-11-09T23:59:59+08:00")
 	}
 	return t, nil
 }
 func (c *chatController) memorySource(t Thread, call Message, a memoryArgs) (memory.Source, error) {
 	if !c.threadRef(t).valid() {
-		return memory.Source{}, errors.New("会话身份尚未建立，请稍后重试")
+		return memory.Source{}, errors.New("Session identity is not ready. Try again shortly.")
 	}
 	quote := strings.TrimSpace(a.Quote)
 	if quote == "" {
-		return memory.Source{}, errors.New("请提供用户明确要求记住的原文摘录")
+		return memory.Source{}, errors.New("Provide an original excerpt of the user's explicit request to remember")
 	}
 	// Restrict evidence to the current user turn, before this tool call. It
 	// cannot cite attachment/tool prose, assistant output or hidden context.
@@ -239,7 +239,7 @@ func (c *chatController) memorySource(t Thread, call Message, a memoryArgs) (mem
 		}
 	}
 	if len(candidates) != 1 {
-		return memory.Source{}, errors.New("摘录无法唯一定位本轮用户消息，请使用用户原文和 source_message_id")
+		return memory.Source{}, errors.New("The excerpt does not uniquely identify this turn's user message. Use the exact user text and source_message_id.")
 	}
 	m := candidates[0]
 	at := m.SentAtMs

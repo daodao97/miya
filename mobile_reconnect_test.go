@@ -21,10 +21,10 @@ func TestMobileReconnectCountdownUpdatesOnTheFrameClock(t *testing.T) {
 		advance time.Duration
 		label   string
 	}{
-		{0, "连接已断开，15 秒后重试：网络暂时不可用"},
-		{time.Second, "连接已断开，14 秒后重试：网络暂时不可用"},
-		{12 * time.Second, "连接已断开，2 秒后重试：网络暂时不可用"},
-		{2 * time.Second, "正在重新连接桌面端…"},
+		{0, "Disconnected. Retrying in 15 seconds.: 网络暂时不可用"},
+		{time.Second, "Disconnected. Retrying in 14 seconds.: 网络暂时不可用"},
+		{12 * time.Second, "Disconnected. Retrying in 2 seconds.: 网络暂时不可用"},
+		{2 * time.Second, "Reconnecting to desktop…"},
 	} {
 		if tc.advance > 0 {
 			tt.Advance(tc.advance)
@@ -35,7 +35,7 @@ func TestMobileReconnectCountdownUpdatesOnTheFrameClock(t *testing.T) {
 	}
 	m.disconnect()
 	tt.Frame()
-	if !m.retryAt.IsZero() || m.retryError != "" || m.connectionLine() != "未连接" {
+	if !m.retryAt.IsZero() || m.retryError != "" || m.connectionLine() != "Disconnected" {
 		t.Fatal("disconnect retained a stale countdown")
 	}
 }
@@ -115,7 +115,7 @@ func TestMobileReconnectKeepsIdentityBeforeListArrives(t *testing.T) {
 	}
 	// Both old and new desktops can temporarily report a missing thread.
 	for _, sid := range []string{"", "s1"} {
-		m.receiveThread(1, phoneThreadDelta{Thread: Thread{ID: 1, ServerID: sid, Status: "对话已不在桌面端"}, Reset: true})
+		m.receiveThread(1, phoneThreadDelta{Thread: Thread{ID: 1, ServerID: sid, Status: "Conversation is no longer on the desktop"}, Reset: true})
 		if cur := m.view.c.current(); cur.ServerID != "s1" {
 			t.Fatalf("missing-thread frame erased the stable identity: %+v", cur)
 		}

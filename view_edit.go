@@ -31,7 +31,7 @@ func (app *chatApp) userGroupView(c *ui.Context, g messageGroup) {
 			if !hovered {
 				return
 			}
-			b := quiet(c.Key("edit-message")).Size(24, 24).PaddingX(4).Justify(ui.Center).Label("编辑消息").Tooltip("编辑并重新发送")
+			b := quiet(c.Key("edit-message")).Size(24, 24).PaddingX(4).Justify(ui.Center).Label(tr("Edit message")).Tooltip(tr("Edit and resend"))
 			b.Children(func() { icon(c, "edit", 14, muted) })
 			if b.Clicked() {
 				app.startEdit(m)
@@ -64,19 +64,19 @@ func (app *chatApp) submitEdit(m Message) {
 
 func (app *chatApp) editMessageView(c *ui.Context, m Message) {
 	ui.Column(c).AlignSelf(ui.End).FillWidth().MaxWidth(560).Background(bubble).Radius(16).Padding(12).Gap(8).Children(func() {
-		in := app.threadInput(c.Key("input"), &app.editInput, app.editText, strconv.Itoa(m.ID), "编辑消息", "", 13, 536, 1, 12, func(text string) { app.editText = text }).AutoFocus()
+		in := app.threadInput(c.Key("input"), &app.editInput, app.editText, strconv.Itoa(m.ID), tr("Edit message"), "", 13, 536, 1, 12, func(text string) { app.editText = text }).AutoFocus()
 		if in.Shortcut(0, ui.KeyEnter) {
 			app.submitEdit(m)
 		}
 		if in.Shortcut(0, ui.KeyEscape) {
 			app.editing = 0
 		}
-		ui.Text(c, "从这条消息重新开始。之后的消息会删除，Miya 不会撤销已经改动的文件。").FontSize(11).TextColor(muted)
+		ui.Text(c, tr("Restart from this message. Later messages will be deleted. Miya will not undo file changes already made.")).FontSize(11).TextColor(muted)
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
-			if ui.Button(c.Key("cancel"), "取消").Clicked() {
+			if ui.Button(c.Key("cancel"), tr("Cancel")).Clicked() {
 				app.editing = 0
 			}
-			if ui.PrimaryButton(c.Key("send"), "发送").Disabled(strings.TrimSpace(app.editText) == "").Clicked() {
+			if ui.PrimaryButton(c.Key("send"), tr("Send")).Disabled(strings.TrimSpace(app.editText) == "").Clicked() {
 				app.submitEdit(m)
 			}
 		})

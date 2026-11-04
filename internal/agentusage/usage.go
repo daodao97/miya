@@ -50,12 +50,12 @@ func Read(ctx context.Context, agent string) Reading {
 	r := Reading{Agent: agent, At: time.Now()}
 	binary, err := findBinary(agent)
 	if err != nil {
-		r.Error = "未找到 " + agent + " 命令"
+		r.Error = "Could not find " + agent + " command"
 		return r
 	}
 	dir, err := configDir(agent)
 	if err != nil {
-		r.Error = "无法读取本机配置目录"
+		r.Error = "Unable to read the local configuration directory"
 		return r
 	}
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
@@ -66,10 +66,10 @@ func Read(ctx context.Context, agent string) Reading {
 	case "claude":
 		r.Windows, err = readClaude(ctx, binary, dir)
 	default:
-		err = errors.New("不支持的 Agent")
+		err = errors.New("Unsupported agent")
 	}
 	if ctx.Err() != nil {
-		err = errors.New("读取超时，稍后重试")
+		err = errors.New("Read timed out. Try again later.")
 	}
 	if err != nil {
 		r.Error, r.Windows = err.Error(), nil

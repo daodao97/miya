@@ -14,7 +14,7 @@ import (
 
 func (codexBackend) ModelChoices(c *chatController) []string { return c.modelNames() }
 func (codexBackend) ModelLabel(_ *chatController, v string) string {
-	return firstNonEmpty(v, "默认模型")
+	return firstNonEmpty(v, tr("Default model"))
 }
 func (codexBackend) EffortChoices(c *chatController) []string { return c.efforts() }
 func (codexBackend) Model(c *chatController) string {
@@ -52,10 +52,10 @@ var claudeModelNames = map[string]string{
 	"claude-opus-5-5":   "Claude Opus 5.5",
 	"claude-sonnet-5-5": "Claude Sonnet 5.5",
 	"claude-haiku-5-5":  "Claude Haiku 5.5",
-	"fable":             "Fable（最新）",
-	"opus":              "Opus（最新）",
-	"sonnet":            "Sonnet（最新）",
-	"haiku":             "Haiku（最新）",
+	"fable":             tr("Fable (latest)"),
+	"opus":              tr("Opus (latest)"),
+	"sonnet":            tr("Sonnet (latest)"),
+	"haiku":             tr("Haiku (latest)"),
 }
 
 func claudeModelName(v string) string {
@@ -71,9 +71,9 @@ func (claudeBackend) ModelLabel(c *chatController, v string) string {
 		return claudeModelName(v)
 	}
 	if c.claudeDefaultModel != "" {
-		return "默认 · " + claudeModelName(c.claudeDefaultModel)
+		return tr("Default · ") + claudeModelName(c.claudeDefaultModel)
 	}
-	return "默认模型"
+	return tr("Default model")
 }
 
 // noteClaudeModel records the model a run without a chosen one used.

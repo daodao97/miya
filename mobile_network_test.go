@@ -24,9 +24,12 @@ func TestMobileSendSkipsReconnectBackoff(t *testing.T) {
 		return nil, errIncompatible
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	m.cancel, m.wake = cancel, make(chan struct{}, 1)
-	go m.run(ctx, m.generation, m.link, m.wake)
+	done := make(chan struct{})
+	go func() { defer close(done); m.run(ctx, m.generation, m.link, m.wake) }()
+	// The global dispatch hook belongs to this test. Let the dial loop exit
+	// before Cleanup restores it, otherwise the next UI test can inherit a race.
+	defer func() { cancel(); <-done }()
 
 	waitDial := func(d time.Duration) bool {
 		timeout := time.After(d)
@@ -46,7 +49,7 @@ func TestMobileSendSkipsReconnectBackoff(t *testing.T) {
 	}
 	m.draft = "hello"
 	m.send()
-	if m.sendErr != "未连接桌面端，正在重新连接…" {
+	if m.sendErr != "Not connected to desktop. Reconnecting…" {
 		t.Fatalf("send error = %q", m.sendErr)
 	}
 	if !waitDial(2 * time.Second) {

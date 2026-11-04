@@ -84,21 +84,21 @@ func claudeToolTitle(m Message) string {
 	case "Bash":
 		prefix, detail = verb(tr("Ran "), tr("Running ")), firstLine(inputString(input, "command", "description"))
 	case "Read", "NotebookRead":
-		prefix, detail = verb("已读取 ", "正在读取 "), shortPath(inputString(input, "file_path", "notebook_path", "path"))
+		prefix, detail = verb(tr("Read "), tr("Reading ")), shortPath(inputString(input, "file_path", "notebook_path", "path"))
 	case "Edit", "MultiEdit", "Write", "NotebookEdit":
 		prefix, detail = verb(tr("Edited")+" ", tr("Editing")+" "), shortPath(inputString(input, "file_path", "notebook_path"))
 	case "Grep":
-		prefix, detail = verb("已搜索 ", "正在搜索 "), inputString(input, "pattern")
+		prefix, detail = verb(tr("Searched "), tr("Searching ")), inputString(input, "pattern")
 	case "Glob", "LS":
-		prefix, detail = verb("已列出 ", "正在列出 "), inputString(input, "pattern", "path")
+		prefix, detail = verb(tr("Listed "), tr("Listing ")), inputString(input, "pattern", "path")
 	case "WebFetch":
-		prefix, detail = verb("已访问 ", "正在访问 "), inputString(input, "url")
+		prefix, detail = verb(tr("Visited "), tr("Visiting ")), inputString(input, "url")
 	case "WebSearch":
-		prefix, detail = verb("已搜索 ", "正在搜索 "), inputString(input, "query")
+		prefix, detail = verb(tr("Searched "), tr("Searching ")), inputString(input, "query")
 	case "Task", "Agent":
-		prefix, detail = verb("子任务 · ", "正在执行子任务 · "), inputString(input, "description", "prompt")
+		prefix, detail = verb(tr("Subtask · "), tr("Running subtask · ")), inputString(input, "description", "prompt")
 	case "TodoWrite":
-		return verb("已更新待办", "正在更新待办")
+		return verb(tr("Updated tasks"), tr("Updating tasks"))
 	}
 	if detail != "" {
 		return prefix + firstLine(detail)

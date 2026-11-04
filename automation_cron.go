@@ -27,14 +27,14 @@ var cronNames = map[string]int{
 func parseCron(spec string) (cronSchedule, error) {
 	f := strings.Fields(spec)
 	if len(f) != 5 {
-		return cronSchedule{}, errors.New("需要 5 段：分 时 日 月 周")
+		return cronSchedule{}, errors.New(tr("Expected 5 fields: minute hour day month weekday"))
 	}
 	limits := [5][2]int{{0, 59}, {0, 23}, {1, 31}, {1, 12}, {0, 7}}
 	var bits [5]uint64
 	for i, field := range f {
 		b, err := parseCronField(strings.ToLower(field), limits[i][0], limits[i][1])
 		if err != nil {
-			return cronSchedule{}, fmt.Errorf("第 %d 段 %q：%v", i+1, field, err)
+			return cronSchedule{}, fmt.Errorf(tr("Field %d %q: %v"), i+1, field, err)
 		}
 		bits[i] = b
 	}
@@ -59,7 +59,7 @@ func parseCronField(s string, lo, hi int) (uint64, error) {
 		if base, st, ok := strings.Cut(part, "/"); ok {
 			n, err := strconv.Atoi(st)
 			if err != nil || n < 1 {
-				return 0, errors.New("步长无效")
+				return 0, errors.New(tr("Invalid step"))
 			}
 			step, part = n, base
 		}
@@ -77,7 +77,7 @@ func parseCronField(s string, lo, hi int) (uint64, error) {
 					return 0, err
 				}
 				if b < a {
-					return 0, errors.New("范围的起点大于终点")
+					return 0, errors.New(tr("Range start exceeds range end"))
 				}
 			case step > 1:
 				b = hi
@@ -95,12 +95,12 @@ func cronValue(s string, lo, hi int) (int, error) {
 	if err != nil {
 		n, ok := cronNames[s]
 		if !ok {
-			return 0, fmt.Errorf("无法识别 %q", s)
+			return 0, fmt.Errorf(tr("Unrecognized value %q"), s)
 		}
 		v = n
 	}
 	if v < lo || v > hi {
-		return 0, fmt.Errorf("%d 不在 %d 到 %d 之间", v, lo, hi)
+		return 0, fmt.Errorf(tr("%d is outside the range %d–%d"), v, lo, hi)
 	}
 	return v, nil
 }
@@ -149,7 +149,7 @@ func describeCron(spec string) string {
 		return spec
 	}
 	if strings.HasPrefix(minute, "*/") && cronAny(hour) && cronAny(dom) && cronAny(dow) {
-		return "每 " + minute[2:] + " 分钟"
+		return tr("Every ") + minute[2:] + tr(" minutes")
 	}
 	m, err := strconv.Atoi(minute)
 	if err != nil {
@@ -157,12 +157,12 @@ func describeCron(spec string) string {
 	}
 	if cronAny(hour) && cronAny(dom) && cronAny(dow) {
 		if m == 0 {
-			return "每小时"
+			return tr("Hourly")
 		}
-		return fmt.Sprintf("每小时第 %d 分", m)
+		return fmt.Sprintf(tr("Every hour at minute %d"), m)
 	}
 	if strings.HasPrefix(hour, "*/") && cronAny(dom) && cronAny(dow) {
-		return "每 " + hour[2:] + " 小时"
+		return tr("Every ") + hour[2:] + tr(" hours")
 	}
 	h, err := strconv.Atoi(hour)
 	if err != nil {
@@ -171,14 +171,14 @@ func describeCron(spec string) string {
 	at := fmt.Sprintf("%d:%02d", h, m)
 	switch {
 	case cronAny(dom) && cronAny(dow):
-		return "每天 " + at
+		return tr("Daily at ") + at
 	case cronAny(dom):
 		if days := describeCronDays(dow); days != "" {
 			return days + " " + at
 		}
 	case cronAny(dow):
 		if n, err := strconv.Atoi(dom); err == nil {
-			return fmt.Sprintf("每月 %d 日 %s", n, at)
+			return fmt.Sprintf(tr("Monthly on day %d at %s"), n, at)
 		}
 	}
 	return spec
@@ -191,11 +191,11 @@ func describeCronDays(dow string) string {
 	}
 	switch b = sundayAsZero(b); b {
 	case 0b0111110:
-		return "工作日"
+		return tr("Weekdays")
 	case 0b1000001:
-		return "周末"
+		return tr("Weekends")
 	}
-	names := []string{"日", "一", "二", "三", "四", "五", "六"}
+	names := []string{tr("Sun"), tr("Mon"), tr("Tue"), tr("Wed"), tr("Thu"), tr("Fri"), tr("Sat")}
 	var parts []string
 	for d := 1; d <= 7; d++ {
 		if i := d % 7; b&(1<<uint(i)) != 0 {
@@ -205,5 +205,5 @@ func describeCronDays(dow string) string {
 	if len(parts) == 0 {
 		return ""
 	}
-	return "每周" + strings.Join(parts, "、")
+	return tr("Weekly: ") + strings.Join(parts, ", ")
 }

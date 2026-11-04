@@ -20,15 +20,16 @@ type desktopShortcut struct {
 // (copy, paste, undo, save, selection) stay with the focused input/editor.
 func (app *chatApp) desktopShortcuts() []desktopShortcut {
 	return []desktopShortcut{
-		{ui.Cmd, ui.KeyN, "N", "新建对话", app.newThread},
-		{ui.Cmd, ui.KeyK, "K", "搜索 / 切换对话", app.openConversationSwitcher},
-		{ui.Cmd, ui.KeyL, "L", "聚焦消息输入框", func() {
+		{ui.Cmd, ui.KeyN, "N", "New thread", app.newThread},
+		{ui.Cmd, ui.KeyK, "K", "Search / Switch conversations", app.openConversationSwitcher},
+		{ui.Cmd | ui.Shift, ui.KeyP, "P", "Command palette", app.openCommandPalette},
+		{ui.Cmd, ui.KeyL, "L", "Focus message input", func() {
 			app.section = ""
 			app.closeMenus()
 			app.focusComposer = true
 		}},
-		{ui.Cmd, ui.KeyB, "B", "显示 / 隐藏侧边栏", func() { app.sidebar = !app.sidebar }},
-		{ui.Cmd | ui.Alt, ui.KeyB, "B", "显示 / 隐藏右侧面板", func() {
+		{ui.Cmd, ui.KeyB, "B", "Show / Hide sidebar", func() { app.sidebar = !app.sidebar }},
+		{ui.Cmd | ui.Alt, ui.KeyB, "B", "Show / Hide right panel", func() {
 			p := app.panel()
 			if p.visible {
 				app.hidePanel(p)
@@ -36,25 +37,25 @@ func (app *chatApp) desktopShortcuts() []desktopShortcut {
 				app.openPanel(p)
 			}
 		}},
-		{ui.Cmd, ui.KeyComma, ",", "打开设置", func() { app.closeMenus(); app.section = "Settings" }},
-		{ui.Cmd | ui.Shift, ui.KeyT, "T", "打开终端", func() {
+		{ui.Cmd, ui.KeyComma, ",", "Open settings", func() { app.closeMenus(); app.section = "Settings" }},
+		{ui.Cmd | ui.Shift, ui.KeyT, "T", "Open terminal", func() {
 			app.closeMenus()
 			app.section = ""
 			app.openSurface(app.panel(), surfaceTerminal)
 		}},
-		{ui.Cmd | ui.Shift, ui.KeyO, "O", "添加附件", func() {
+		{ui.Cmd | ui.Shift, ui.KeyO, "O", "Add attachment", func() {
 			if app.section == "" && !app.c.current().ReadOnly && !app.c.current().Loading {
 				app.attachFiles()
 			}
 		}},
-		{ui.Ctrl, ui.KeyTab, "Tab", "下一个对话（当前项目）", func() { app.cycleConversation(1) }},
-		{ui.Ctrl | ui.Shift, ui.KeyTab, "Tab", "上一个对话（当前项目）", func() { app.cycleConversation(-1) }},
-		{ui.Cmd, ui.KeyPeriod, ".", "停止当前回复", func() {
+		{ui.Ctrl, ui.KeyTab, "Tab", "Next conversation in project", func() { app.cycleConversation(1) }},
+		{ui.Ctrl | ui.Shift, ui.KeyTab, "Tab", "Previous conversation in project", func() { app.cycleConversation(-1) }},
+		{ui.Cmd, ui.KeyPeriod, ".", "Stop current response", func() {
 			if t := app.c.current(); app.section == "" && t.Busy && !t.StopRequested {
 				app.c.stop()
 			}
 		}},
-		{0, ui.KeyF1, "F1", "查看快捷键", func() { app.closeMenus(); app.shortcutsOpen = true }},
+		{0, ui.KeyF1, "F1", "Show shortcuts", func() { app.closeMenus(); app.shortcutsOpen = true }},
 	}
 }
 
@@ -148,8 +149,8 @@ func (app *chatApp) conversationSwitcherView(c *ui.Context) {
 	ui.DialogBase(c.Key("conversation-switcher"), &s.open, func(backdrop, box ui.Element) {
 		backdrop.Background(ui.RGBA(0, 0, 0, 0.30))
 		box.Column().Width(560).MaxWidthPercent(90).Padding(20).Gap(12).Background(panel).Border(1, border).Radius(14).TextColor(ink)
-		ui.Text(c, "切换对话").FontSize(18).FontWeight(600)
-		input := ui.TextInput(c.Key("query"), &s.query).FillWidth().Label("搜索全部对话").Placeholder("按标题、项目或会话 ID 搜索").AutoFocus()
+		ui.Text(c, tr("Switch conversations")).FontSize(18).FontWeight(600)
+		input := ui.TextInput(c.Key("query"), &s.query).FillWidth().Label(tr("Search all conversations")).Placeholder(tr("Search by title, project, or conversation ID")).AutoFocus()
 		if input.Changed() {
 			s.selected = 0
 			s.list.ScrollTo(0, ui.Start)
@@ -193,9 +194,9 @@ func (app *chatApp) conversationSwitcherView(c *ui.Context) {
 				}
 			}).FillWidth().Height(float32(min(6, len(choices)) * 56))
 		} else {
-			mutedText(c, "没有匹配的对话").Padding(16)
+			mutedText(c, tr("No matching conversations")).Padding(16)
 		}
-		mutedText(c, "↑ ↓ 选择 · Enter 打开 · Esc 取消").FontSize(11)
+		mutedText(c, tr("↑ ↓ Select · Enter Open · Esc Cancel")).FontSize(11)
 	})
 }
 
@@ -204,8 +205,8 @@ func (app *chatApp) shortcutHelpView(c *ui.Context) {
 		backdrop.Background(ui.RGBA(0, 0, 0, 0.30))
 		box.Column().Width(560).MaxWidthPercent(90).MaxHeightPercent(85).Padding(24).Gap(16).Background(panel).Border(1, border).Radius(14).TextColor(ink)
 		ui.Row(c).FillWidth().AlignItems(ui.Center).Children(func() {
-			ui.Text(c, "键盘快捷键").FontSize(18).FontWeight(600).Grow(1)
-			if toolButton(c.Key("close"), "x", "关闭快捷键说明").Clicked() {
+			ui.Text(c, tr("Keyboard shortcuts")).FontSize(18).FontWeight(600).Grow(1)
+			if toolButton(c.Key("close"), "x", tr("Close keyboard shortcuts")).Clicked() {
 				app.shortcutsOpen = false
 			}
 		})
@@ -218,12 +219,12 @@ func (app *chatApp) shortcutHelpView(c *ui.Context) {
 					})
 				}
 				for _, shortcut := range app.desktopShortcuts() {
-					row(shortcut.title, shortcutKeys(shortcut.mods, shortcut.name))
+					row(tr(shortcut.title), shortcutKeys(shortcut.mods, shortcut.name))
 				}
-				row("发送 / 加入队列", "Enter")
-				row("消息换行", "Shift+Enter")
-				row("发送 / 运行中立即引导", shortcutKeys(ui.Cmd, "Enter"))
-				row("关闭弹窗 / 收起补全", "Esc")
+				row(tr("Send / Add to queue"), "Enter")
+				row(tr("Insert a new line"), "Shift+Enter")
+				row(tr("Send / Steer current response"), shortcutKeys(ui.Cmd, "Enter"))
+				row(tr("Close dialog / Dismiss suggestions"), "Esc")
 			})
 		})
 	})

@@ -28,7 +28,7 @@ type Scope struct {
 func UserScope() Scope { return Scope{Kind: "user"} }
 func ProjectScope(path string) (Scope, error) {
 	if !filepath.IsAbs(path) {
-		return Scope{}, errors.New("项目必须使用绝对路径")
+		return Scope{}, errors.New("Project path must be absolute")
 	}
 	path = filepath.Clean(path)
 	resolved, err := filepath.EvalSymlinks(path)
@@ -122,7 +122,7 @@ type Mutation struct {
 type ConflictError struct{ Current Entry }
 
 func (e *ConflictError) Error() string {
-	return fmt.Sprintf("记忆版本已变化：%s 当前版本 %d，请重新查询", e.Current.ID, e.Current.Version)
+	return fmt.Sprintf("Memory version changed: %s is now version %d. Query again.", e.Current.ID, e.Current.Version)
 }
 
 func newID() (string, error) {
@@ -135,38 +135,38 @@ func newID() (string, error) {
 
 func validate(m Mutation, scope Scope) error {
 	if (m.ID == "") != (m.Version == 0) {
-		return errors.New("修改必须同时指定 id 和 version")
+		return errors.New("Modifications require both id and version")
 	}
 	if m.Kind != "preference" && m.Kind != "fact" && m.Kind != "progress" {
-		return errors.New("kind 必须是 preference、fact 或 progress")
+		return errors.New("kind must be preference, fact, or progress")
 	}
 	if scope.Kind == "user" && m.Kind != "preference" {
-		return errors.New("用户级只保存用户明确选择的偏好")
+		return errors.New("User scope only retains preferences explicitly chosen by the user")
 	}
 	if strings.TrimSpace(m.Content) == "" || utf8.RuneCountInString(m.Content) > 2000 {
-		return errors.New("记忆正文须为 1–2000 个字符")
+		return errors.New("Memory content must be 1–2000 characters")
 	}
 	if utf8.RuneCountInString(m.TaskKey) > 200 {
-		return errors.New("任务标识过长")
+		return errors.New("Task identifier is too long")
 	}
 	if m.Kind == "progress" && strings.TrimSpace(m.TaskKey) == "" {
-		return errors.New("进展必须指定 task_key")
+		return errors.New("Progress requires task_key")
 	}
 	if m.ObservedAt.IsZero() || len(m.Sources) == 0 || len(m.Sources) > 8 {
-		return errors.New("记忆必须有时间和来源（最多 8 个）")
+		return errors.New("Memory requires timestamps and sources (up to 8)")
 	}
 	for _, s := range m.Sources {
 		if s.ObservedAt.IsZero() || utf8.RuneCountInString(s.Quote) > 1000 {
-			return errors.New("来源缺少时间或摘录过长")
+			return errors.New("Source timestamp missing or excerpt too long")
 		}
 		switch s.EvidenceKind {
 		case "user_statement", "assistant_report", "tool_result":
 			if s.Thread == "" || (s.MessageID == "" && s.Locator == "" && s.TurnID == "") || strings.TrimSpace(s.Quote) == "" {
-				return errors.New("会话来源缺少身份、定位或原文摘录")
+				return errors.New("Session source is missing its identity, location, or original excerpt")
 			}
 		case "manual": // A direct edit in the user's management interface.
 		default:
-			return errors.New("无效的证据类别")
+			return errors.New("Invalid evidence category")
 		}
 	}
 	return nil

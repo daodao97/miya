@@ -25,7 +25,7 @@ func Binary() (string, error) {
 			return p, nil
 		}
 	}
-	return "", errors.New("未找到 Claude Code，请先安装并登录 Claude Code CLI")
+	return "", errors.New("Claude Code not found. Install and sign in to the Claude Code CLI first.")
 }
 
 type Options struct {
@@ -34,6 +34,9 @@ type Options struct {
 	Tools                                                 *string
 	Content                                               []map[string]any
 	Args, Env                                             []string
+	// BeforeInput checks the owner reservation after potentially slow native
+	// initialization/configuration, immediately before submitting user input.
+	BeforeInput func(context.Context) error
 }
 type NativeBackgroundTask struct {
 	TaskID       string `json:"task_id"`
@@ -165,7 +168,7 @@ func (c *Client) Write(v any) error {
 }
 
 // ErrNotSteerable tells that the turn takes no more messages now.
-var ErrNotSteerable = errors.New("Claude Code 当前回合不接受追加消息")
+var ErrNotSteerable = errors.New("The current Claude Code turn cannot accept additional messages")
 
 func (c *Client) closeInput() {
 	c.mu.Lock()
@@ -198,7 +201,7 @@ func (c *Client) SendWithOptions(ctx context.Context, o Options) error {
 	model, mode, effort := c.model, c.permissionMode, c.effort
 	c.mu.Unlock()
 	if effort != o.Effort {
-		return errors.New("请先停止循环，再更改推理强度并重新启动循环")
+		return errors.New("Stop the loop before changing reasoning effort, then restart it")
 	}
 	if mode != o.PermissionMode {
 		if err := c.control(ctx, map[string]any{"subtype": "set_permission_mode", "mode": o.PermissionMode}); err != nil {
@@ -215,6 +218,11 @@ func (c *Client) SendWithOptions(ctx context.Context, o Options) error {
 		c.mu.Lock()
 		c.model = o.Model
 		c.mu.Unlock()
+	}
+	if o.BeforeInput != nil {
+		if err := o.BeforeInput(ctx); err != nil {
+			return err
+		}
 	}
 	return c.Send(o.SessionID, o.Content)
 }
@@ -239,7 +247,7 @@ func (c *Client) control(ctx context.Context, request map[string]any) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	case <-c.done:
-		return errors.New("Claude Code 会话已退出")
+		return errors.New("The Claude Code session has exited")
 	}
 }
 
@@ -349,7 +357,7 @@ func Start(parent context.Context, o Options, onFrame func(Frame), onDone func(e
 		for scanner.Scan() {
 			var f Frame
 			if e := json.Unmarshal(scanner.Bytes(), &f); e != nil {
-				runErr = fmt.Errorf("Claude Code 协议解析失败: %w", e)
+				runErr = fmt.Errorf("Failed to parse Claude Code protocol: %w", e)
 				cancel()
 				break
 			}
@@ -377,6 +385,13 @@ func Start(parent context.Context, o Options, onFrame func(Frame), onDone func(e
 				}
 				timer.Stop()
 				initialized = true
+				if o.BeforeInput != nil {
+					if e := o.BeforeInput(ctx); e != nil {
+						runErr = e
+						cancel()
+						break
+					}
+				}
 				if e := c.Write(map[string]any{"type": "user", "session_id": o.SessionID, "parent_tool_use_id": nil, "message": map[string]any{"role": "user", "content": o.Content}}); e != nil {
 					runErr = e
 					cancel()
@@ -435,13 +450,13 @@ func Start(parent context.Context, o Options, onFrame func(Frame), onDone func(e
 		e := cmd.Wait()
 		if runErr == nil && (!finished || agents.active() || background.active()) {
 			if !initialized {
-				runErr = errors.New("Claude Code 初始化失败或超时，请检查 CLI 登录状态")
+				runErr = errors.New("Claude Code initialization failed or timed out. Check CLI sign-in.")
 			} else if e != nil {
 				runErr = e
 			} else if agents.active() {
-				runErr = errors.New("Claude Code 在子 agent 完成前退出")
+				runErr = errors.New("Claude Code exited before the subagent finished")
 			} else {
-				runErr = errors.New("Claude Code 在返回结果前退出")
+				runErr = errors.New("Claude Code exited before returning a result")
 			}
 		}
 		onDone(runErr)

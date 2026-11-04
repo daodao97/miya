@@ -337,7 +337,7 @@ func Load(path string) *Store {
 	for _, r := range saved.Records {
 		r.TasksKnown = false
 		r.Endpoints = nil
-		r.Notice = "等待重新核验"
+		r.Notice = "Waiting for verification"
 		for i := range r.Tasks {
 			r.Tasks[i].Status = "unknown"
 		}

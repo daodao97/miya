@@ -13,18 +13,18 @@ func TestCollapsedProjectShowsRunningConversation(t *testing.T) {
 	app.c.setThreads([]Thread{{ID: 1, Busy: true}})
 	tt := ui.NewTester(app.sidebarView, 260, 750)
 	tt.Frame()
-	if _, ok := tt.Find("项目进行中：demo"); !ok {
+	if _, ok := tt.Find("Project activity: demo"); !ok {
 		t.Fatal("a collapsed project with a running conversation should show its spinner")
 	}
 	app.expandedProject = app.workspace
 	tt.Frame()
-	if _, ok := tt.Find("项目进行中：demo"); ok {
+	if _, ok := tt.Find("Project activity: demo"); ok {
 		t.Fatal("expanded projects show status on the individual conversation")
 	}
 	app.expandedProject = ""
 	app.c.setThreads([]Thread{{ID: 1}})
 	tt.Frame()
-	if _, ok := tt.Find("项目进行中：demo"); ok {
+	if _, ok := tt.Find("Project activity: demo"); ok {
 		t.Fatal("a finished conversation should restore the collapse arrow")
 	}
 }

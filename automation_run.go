@@ -56,7 +56,7 @@ func (c *chatController) startAutomations(path string, schedule bool) {
 	for _, a := range s.store.Automations {
 		if r, ok := s.store.lastRun(a.ID); ok && r.Result == runRunning {
 			s.store.updateLastRun(a.ID, func(r *AutomationRun) {
-				r.Result, r.Summary, r.Finished = runInterrupted, "Miya 退出时仍在运行", s.now()
+				r.Result, r.Summary, r.Finished = runInterrupted, "Still running when Miya exited", s.now()
 			})
 		}
 	}
@@ -139,7 +139,7 @@ func (c *chatController) automationTick() {
 		s.store.Automations[i].Due = due
 		changed = true
 		if _, running := s.active[a.ID]; running {
-			s.store.addRun(a.ID, AutomationRun{Started: now, Finished: now, Result: runSkipped, Summary: "上一次运行还没结束"})
+			s.store.addRun(a.ID, AutomationRun{Started: now, Finished: now, Result: runSkipped, Summary: "The previous run has not finished"})
 			continue
 		}
 		_ = c.startAutomationRun(a.ID, now.Sub(due) > 2*time.Minute)
@@ -155,11 +155,11 @@ func (c *chatController) startAutomationRun(id string, catchUp bool) error {
 	s := c.auto
 	i, ok := s.store.find(id)
 	if !ok {
-		return errors.New("没有这个自动化")
+		return errors.New("Automation not found")
 	}
 	a := s.store.Automations[i]
 	if _, running := s.active[id]; running {
-		return errors.New("上一次运行还没结束")
+		return errors.New("The previous run has not finished")
 	}
 	now := s.now()
 	var prev *AutomationRun
@@ -169,12 +169,12 @@ func (c *chatController) startAutomationRun(id string, catchUp bool) error {
 	run := AutomationRun{Started: now, Round: 1, Rounds: a.Rounds, Result: runRunning, CatchUp: catchUp}
 	thread := 0
 	if info, err := os.Stat(a.Project); err != nil || !info.IsDir() {
-		run.Result, run.Summary, run.Finished = runFailed, "项目目录不存在："+a.Project, now
+		run.Result, run.Summary, run.Finished = runFailed, "Project directory does not exist: "+a.Project, now
 	} else if thread = s.submit(sendRequest{Agent: a.Agent, Project: a.Project, Text: automationRunMessage(a, prev), MemoryControl: true}); thread == 0 {
-		run.Result, run.Summary, run.Finished = runFailed, backendFor(a.Agent).Name()+" 还没有就绪", now
+		run.Result, run.Summary, run.Finished = runFailed, backendFor(a.Agent).Name()+" is not ready", now
 	}
 	if thread != 0 {
-		title := a.Name + " · " + now.Format("1月2日 15:04")
+		title := a.Name + " · " + now.Format("Jan 2, 15:04")
 		c.update(thread, func(t *Thread) {
 			t.Title = title
 			t.Automation = a.ID
@@ -205,7 +205,7 @@ func (c *chatController) advanceAutomation(id string, r *activeAutomationRun) {
 	}
 	t := c.threadWithID(r.thread)
 	if t.ID == 0 {
-		c.finishAutomationRun(id, runInterrupted, "对话已关闭")
+		c.finishAutomationRun(id, runInterrupted, "Conversation closed")
 		return
 	}
 	if sid := t.ServerID; sid != "" {
@@ -219,13 +219,13 @@ func (c *chatController) advanceAutomation(id string, r *activeAutomationRun) {
 	status, reply := c.handoffState(t.ID)
 	switch {
 	case t.StopRequested || t.Status == "Stopped":
-		c.finishAutomationRun(id, runInterrupted, "在对话中停止")
+		c.finishAutomationRun(id, runInterrupted, "Stopped in conversation")
 	case !a.Enabled:
-		c.finishAutomationRun(id, runInterrupted, "自动化已暂停")
+		c.finishAutomationRun(id, runInterrupted, "Automation paused")
 	case status == subAgentFailed:
 		c.finishAutomationRun(id, runFailed, reply)
 	case status != subAgentCompleted:
-		c.finishAutomationRun(id, runFailed, firstNonEmpty(t.Status, "没有收到回复"))
+		c.finishAutomationRun(id, runFailed, firstNonEmpty(t.Status, "No response received"))
 	case a.Check == "":
 		c.finishAutomationRun(id, runPassed, reply)
 	default:
@@ -255,26 +255,26 @@ func (c *chatController) afterAutomationCheck(id string, r *activeAutomationRun,
 		c.finishAutomationRun(id, runPassed, reply)
 		return
 	case !a.Enabled:
-		c.finishAutomationRun(id, runInterrupted, "自动化已暂停")
+		c.finishAutomationRun(id, runInterrupted, "Automation paused")
 		return
 	case r.round >= a.Rounds:
-		c.finishAutomationRun(id, runFailed, "检查未通过："+lastLine(output))
+		c.finishAutomationRun(id, runFailed, "Check failed: "+lastLine(output))
 		return
 	}
 	r.round++
 	s.store.updateLastRun(id, func(run *AutomationRun) { run.Round = r.round })
 	s.persist()
 	if s.submit(sendRequest{ThreadID: r.thread, Text: automationCheckMessage(a, r.round-1, output), MemoryControl: true}) == 0 {
-		c.finishAutomationRun(id, runFailed, "无法开始下一轮")
+		c.finishAutomationRun(id, runFailed, "Unable to start the next round")
 	}
 }
 
 // automationCheckMessage asks for the next round, with what the check said.
 func automationCheckMessage(a Automation, round int, output string) string {
 	if strings.TrimSpace(output) == "" {
-		output = "（没有输出）"
+		output = "(no output)"
 	}
-	return fmt.Sprintf("检查未通过（第 %d/%d 轮）：`%s` 的输出如下，请修复后结束这一轮。\n\n```\n%s\n```", round, a.Rounds, a.Check, output)
+	return fmt.Sprintf("Check failed (round %d/%d). Output from `%s` follows. Fix the issue, then finish this round.\n\n```\n%s\n```", round, a.Rounds, a.Check, output)
 }
 
 func (c *chatController) finishAutomationRun(id, result, summary string) {
@@ -307,7 +307,7 @@ func (c *chatController) finishAutomationRun(id, result, summary string) {
 func (c *chatController) automationNotice(a Automation, run AutomationRun) {
 	title := a.Name + " · " + runResultLabel(run.Result)
 	if run.Rounds > 1 {
-		title += fmt.Sprintf("（第 %d/%d 轮）", run.Round, run.Rounds)
+		title += fmt.Sprintf("(round %d/%d)", run.Round, run.Rounds)
 	}
 	c.deliverNotice(taskNotice{ID: fmt.Sprintf("miya-auto-%s-%d", a.ID, run.Started.Unix()), Thread: strconv.Itoa(run.Thread),
 		Title: title, Body: firstNonEmpty(run.Summary, a.Name)}, "completion")
@@ -372,7 +372,7 @@ func runAutomationCheck(dir, command string) (bool, string) {
 	out, err := cmd.CombinedOutput()
 	text := string(out)
 	if ctx.Err() == context.DeadlineExceeded {
-		text += "\n（检查超过 10 分钟，已停止）"
+		text += "\n(Check stopped after exceeding 10 minutes)"
 	}
 	if r := []rune(text); len(r) > 4000 {
 		text = "…" + string(r[len(r)-4000:])
