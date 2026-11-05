@@ -16,6 +16,7 @@ import (
 	"miya/internal/appdir"
 	"miya/internal/codex"
 	dg "miya/internal/delegation"
+	"miya/internal/delegation/coordinator"
 	"miya/internal/subagent"
 )
 
@@ -199,7 +200,7 @@ func TestCollaborationProgressIsBoundedAndStaysInItsExecution(t *testing.T) {
 		{ExecutionID: "task-previous", Role: "assistant", Content: "another execution"},
 		{ExecutionID: "task-current", Role: "tool", Content: "tool output", Agents: []SubAgent{{Status: subagent.Running}}},
 	}}
-	progress, wait := managedProgress(target)
+	progress, wait := coordinator.ThreadProgress(target)
 	if !utf8.ValidString(progress) || len([]rune(progress)) > 1024 || !strings.HasSuffix(progress, " latest") || strings.Contains(progress, "private") || strings.Contains(progress, "another") || wait != "sub_agent" {
 		t.Fatalf("unsafe progress: %q %s", progress, wait)
 	}

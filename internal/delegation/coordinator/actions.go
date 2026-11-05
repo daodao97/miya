@@ -1,25 +1,25 @@
-package main
+package coordinator
 
 import (
+	"miya/internal/async"
+	dg "miya/internal/delegation"
 	"miya/internal/model"
 )
 
-import dg "miya/internal/delegation"
-
 // Native identity may still be pending. Persist cancellation first; startup
 // acknowledgements also consult that intent before allowing execution to run.
-func (s *collaborationState) CancelTask(caller, id string) (any, error) {
+func (s *Coordinator) CancelTask(caller, id string) (any, error) {
 	task, err := s.Manager.Cancel(caller, id)
 	if err != nil {
 		return nil, err
 	}
 	err = s.InterruptTask(task)
-	return taskPublic(task), err
+	return TaskPublic(task), err
 }
 
 // The caller has already committed the cancellation intent (possibly together
 // with an idempotent operation receipt).
-func (s *collaborationState) InterruptTask(task dg.Task) error {
+func (s *Coordinator) InterruptTask(task dg.Task) error {
 	if dg.Terminal(task.State) {
 		return nil
 	}
@@ -35,8 +35,8 @@ func (s *collaborationState) InterruptTask(task dg.Task) error {
 		if !ok || t.ExecutionID != id {
 			return nil, nil
 		}
-		s.host.Update(t.ID, func(t *Thread) { t.StopRequested = true })
-		if t.Busy && (model.ThreadAgent(t) != agentCodex || t.TurnID != "") {
+		s.host.Update(t.ID, func(t *model.Thread) { t.StopRequested = true })
+		if t.Busy && (model.ThreadAgent(t) != model.AgentCodex || t.TurnID != "") {
 			s.host.StopRun(t)
 		}
 		return nil, nil
@@ -46,7 +46,7 @@ func (s *collaborationState) InterruptTask(task dg.Task) error {
 
 // pause holds deliveries to ref on the controller's thread and in the store.
 // Each pause starts a generation, so a resume already in flight cannot undo it.
-func (s *collaborationState) Pause(ref string) {
+func (s *Coordinator) Pause(ref string) {
 	if s.pausedRefs == nil {
 		s.pausedRefs = map[string]bool{}
 	}
@@ -60,11 +60,9 @@ func (s *collaborationState) Pause(ref string) {
 	}
 }
 
-func (c *chatController) resumeCollaboration(ref string) deferred { return c.collaboration.Resume(ref) }
-
 // Runs on the controller executor. A later Stop must win over an in-flight
 // resume, even if it arrives between the durable write and this callback.
-func (s *collaborationState) Resume(ref string) deferred {
+func (s *Coordinator) Resume(ref string) async.Reply {
 	generation := s.pauseGeneration(ref)
 	return func() (any, error) {
 		return s.Call(func() (any, error) {
@@ -81,10 +79,10 @@ func (s *collaborationState) Resume(ref string) deferred {
 	}
 }
 
-func (s *collaborationState) RecheckTask(caller, id string) {
+func (s *Coordinator) RecheckTask(caller, id string) {
 	work, err := s.OnMain(func() (any, error) { return s.host.PrepareRecheck(caller, id) })
 	if err == nil {
-		if run, ok := work.(deferred); ok {
+		if run, ok := work.(async.Reply); ok {
 			_, err = run()
 		}
 	}

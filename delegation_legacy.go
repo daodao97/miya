@@ -5,8 +5,9 @@ import (
 	"errors"
 	"time"
 
-	dg "miya/internal/delegation"
 	"miya/internal/claude"
+	dg "miya/internal/delegation"
+	"miya/internal/delegation/coordinator"
 )
 
 // Older tools keep their default wait and context choices. Their result lookup
@@ -62,7 +63,7 @@ func (c *chatController) legacyTaskRead(r mcpRequest, caller Thread) (any, error
 	if err != nil {
 		return nil, err
 	}
-	return taskPublic(task), nil
+	return coordinator.TaskPublic(task), nil
 }
 
 func (s *mcpServer) legacyTaskStatus(req mcpRequest, wait time.Duration) (string, error) {

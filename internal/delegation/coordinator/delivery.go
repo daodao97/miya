@@ -1,4 +1,4 @@
-package main
+package coordinator
 
 import (
 	"errors"
@@ -9,7 +9,7 @@ import (
 
 // The controller checks eligibility twice, around the durable submission
 // reservation. Only a verified pre-start refusal is retried.
-func (s *collaborationState) deliverPending() {
+func (s *Coordinator) deliverPending() {
 	for _, notify := range s.Manager.PendingReceivers() {
 		value, err := s.OnMain(func() (any, error) {
 			t, ok := s.host.ThreadByRef(notify)
@@ -32,10 +32,10 @@ func (s *collaborationState) deliverPending() {
 			}
 			s.Reservations[t.ID] = d.ID
 			if s.Executions == nil {
-				s.Executions = map[string]*managedExecution{}
+				s.Executions = map[string]*Execution{}
 			}
-			s.Executions[d.ID] = &managedExecution{Thread: t.ID, Pending: map[string]dg.Event{}}
-			id := s.host.Submit(SendRequest{ExecutionID: d.ID, Origin: "delegation_notice", ThreadID: t.ID, Text: s.Manager.NotificationText(d), Model: t.LaunchModel, Effort: t.LaunchEffort, Policy: s.host.Permission(t), ExplicitSettings: true, KeepSessionSettings: true, MemoryControl: true})
+			s.Executions[d.ID] = &Execution{Thread: t.ID, Pending: map[string]dg.Event{}}
+			id := s.host.Submit(model.SendRequest{ExecutionID: d.ID, Origin: "delegation_notice", ThreadID: t.ID, Text: s.Manager.NotificationText(d), Model: t.LaunchModel, Effort: t.LaunchEffort, Policy: s.host.Permission(t), ExplicitSettings: true, KeepSessionSettings: true, MemoryControl: true})
 			if id == 0 {
 				return nil, errors.New("Notification was rejected before native submission")
 			}

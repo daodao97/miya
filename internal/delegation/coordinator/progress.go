@@ -1,4 +1,4 @@
-package main
+package coordinator
 
 import (
 	"strings"
@@ -12,7 +12,7 @@ import (
 
 // Output keeps streaming through the chat path. Persist only changed, bounded
 // progress checkpoints, at most once per two seconds (wait changes are urgent).
-func (s *collaborationState) checkProgress() {
+func (s *Coordinator) checkProgress() {
 	if !s.Manager.HasActiveExecutions() {
 		return
 	}
@@ -27,17 +27,17 @@ func (s *collaborationState) checkProgress() {
 			if !t.Busy || t.ExecutionID != id {
 				continue
 			}
-			if model.ThreadAgent(t) == agentCodex && (run.Turn == "" || run.Turn != t.TurnID || !codexLive || run.Epoch != codexEpoch) {
+			if model.ThreadAgent(t) == model.AgentCodex && (run.Turn == "" || run.Turn != t.TurnID || !codexLive || run.Epoch != codexEpoch) {
 				continue
 			}
-			if model.ThreadAgent(t) == agentClaude && !run.Started {
+			if model.ThreadAgent(t) == model.AgentClaude && !run.Started {
 				continue
 			}
 			task, err := s.Manager.Read(id)
 			if err != nil || task.State != dg.Running {
 				continue
 			}
-			progress, wait := managedProgress(t)
+			progress, wait := ThreadProgress(t)
 			if s.host.AwaitsUser(t) {
 				wait = "approval_or_input"
 			}
@@ -60,7 +60,7 @@ func (s *collaborationState) checkProgress() {
 	_ = s.Manager.ObserveProgress(value.([]dg.Event))
 }
 
-func managedProgress(t Thread) (progress, wait string) {
+func ThreadProgress(t model.Thread) (progress, wait string) {
 	for _, m := range t.Messages {
 		if m.ExecutionID != t.ExecutionID {
 			continue

@@ -542,13 +542,12 @@ P0 与 P1 可以在同一开发阶段完成。只有单独交付 P0 时，才允
 | `internal/delegation/store.go`、`sync_*.go` | 版本化存储、不可变修订和平台同步 |
 | `internal/delegation/delivery.go` | 观察、通知合并与持久化投递状态 |
 | `internal/delegation/outcome.go` | Claude 根结果的有界终态凭据、严格绑定校验与显式核对读取 |
-| `delegation_controller.go`、`delegation_actions.go` | 协作 worker、会话预留、受管提交与取消 |
+| `internal/delegation/coordinator` | 协作 worker、会话预留、受管提交与取消、按执行过滤的有界进度检查点、通知的会话空闲检查与原生提交；经 `Host` 访问控制器 |
+| `delegation_controller.go`、`delegation_host.go` | 委派参数校验与目标预留、原生回调入口，以及把后台服务控制器接成 `coordinator.Host` 的适配器 |
 | `delegation_native.go` | 原生确认、轮次归属与固定结果提取 |
-| `delegation_progress.go` | 按执行过滤的有界进度与等待检查点 |
 | `delegation_mcp.go` | 新工具 schema、校验和桥接 |
 | `delegation_api.go`、`phone_collaboration.go` | 已认证用户 API、手机异步请求与响应关联 |
 | `delegation_legacy.go` | 旧 delegate 的固定任务等待与兼容处理 |
-| `delegation_delivery.go` | 会话空闲检查与通知原生提交 |
 | `delegation_view.go`、`delegation_panel.go` | 两端共用的能力与健康状态、任务缓存和请求重试状态机 |
 | `agent_reference.go`、`thread_inline_input.go`、`composer_search.go` | Agent 标签、与会话引用共用的富文本对象、补全和往返格式 |
 | `view_delegations.go`、`delegation_desktop.go` | 共用任务卡与表单、桌面服务接线和目标会话导航 |

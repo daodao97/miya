@@ -12,6 +12,7 @@ import (
 	"time"
 
 	dg "miya/internal/delegation"
+	"miya/internal/delegation/coordinator"
 	"miya/internal/model"
 	"miya/internal/textutil"
 )
@@ -349,19 +350,8 @@ func (c *chatController) collaborationOperation(from, name string, a collaborati
 	}), nil
 }
 
-func (s *collaborationState) WithHealth(result map[string]any) {
-	if message := s.Manager.StorageError(); message != "" {
-		result["storage_error"] = message
-		result["stale"] = true
-	}
-}
-
-func taskPublic(task dg.Task) map[string]any {
-	return map[string]any{"task_id": task.ID, "state": task.State, "thread": nullableText(task.Target), "from": task.From, "workspace": task.Workspace, "parent_task_id": task.ParentTaskID, "previous_task_id": task.PreviousTaskID, "agent": task.Agent, "title": task.Title, "revision": task.Revision, "wait_cause": task.WaitCause, "cancel_requested": task.CancelRequested, "resolution": task.Resolution, "tracking_stopped": task.Resolution == "abandoned", "progress": task.Progress, "recheck_error": task.RecheckError, "result": task.Result, "created_at": task.CreatedAt, "finished_at": task.FinishedAt}
-}
-
 func (c *chatController) collaborationTaskPublic(task dg.Task, from string) map[string]any {
-	v := taskPublic(task)
+	v := coordinator.TaskPublic(task)
 	w, d, paused := c.collaboration.Manager.Notification(task.ID, from)
 	applyTaskNotification(v, w, d, paused)
 	next := "wait_task"
@@ -371,12 +361,6 @@ func (c *chatController) collaborationTaskPublic(task dg.Task, from string) map[
 		next = "resolve_task"
 	}
 	v["next_action"] = next
-	return v
-}
-func nullableText(v string) any {
-	if v == "" {
-		return nil
-	}
 	return v
 }
 
@@ -429,7 +413,7 @@ func collaborationListFor(manager *dg.Manager, caller string, a collaborationArg
 		tasks = tasks[:limit]
 	}
 	for _, task := range tasks {
-		v := taskPublic(task)
+		v := coordinator.TaskPublic(task)
 		delete(v, "result")
 		if dg.Terminal(task.State) {
 			v["result_summary"] = textutil.ClipRunes(task.Result.Text, 280)
@@ -499,7 +483,7 @@ func (c *chatController) prepareTaskRecheck(caller, id string) (any, error) {
 					s.Tick()
 					current, _ = s.Manager.Read(id)
 				}
-				return taskPublic(current), nil
+				return coordinator.TaskPublic(current), nil
 			})
 		}), nil
 	}
@@ -581,7 +565,7 @@ func (c *chatController) prepareTaskRecheck(caller, id string) (any, error) {
 			if !matched && !dg.Terminal(updated.State) {
 				return nil, errors.New("RECHECK_UNAVAILABLE: Native history does not provide a reliable outcome for the bound execution")
 			}
-			return taskPublic(updated), nil
+			return coordinator.TaskPublic(updated), nil
 		})
 	}), nil
 }
