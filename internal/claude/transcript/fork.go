@@ -1,31 +1,32 @@
-package main
+package transcript
 
 import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"miya/internal/appdir"
-	"miya/internal/claude"
 	"os"
 	"path/filepath"
 	"sync"
+
+	"miya/internal/appdir"
+	"miya/internal/claude"
 )
 
 // forkClaudeSessionBefore writes the active branch of a session before its
 // prompt-th user prompt (from 0) as a new session beside it, with new IDs,
 // and returns the new session's ID.
-func forkClaudeSessionBefore(path string, prompt int) (string, error) {
+func ForkBefore(path string, prompt int) (string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return "", err
 	}
 	type line struct {
-		e   claudeEntry
+		e   Entry
 		raw map[string]any
 	}
 	var entries []line
 	for _, l := range bytes.Split(data, []byte("\n")) {
-		var e claudeEntry
+		var e Entry
 		if json.Unmarshal(l, &e) != nil || e.UUID == "" || e.IsSidechain {
 			continue
 		}
@@ -71,12 +72,12 @@ func forkClaudeSessionBefore(path string, prompt int) (string, error) {
 			Content json.RawMessage `json:"content"`
 		}
 		_ = json.Unmarshal(l.e.Message, &m)
-		blocks := claudeBlocks(m.Content)
+		blocks := Blocks(m.Content)
 		result := false
 		for _, b := range blocks {
 			result = result || b.Type == "tool_result"
 		}
-		if result || claudeVisibleText(blocks) == "" && !hasClaudeImage(blocks) {
+		if result || VisibleText(blocks) == "" && !HasImage(blocks) {
 			continue
 		}
 		if n == prompt {
@@ -124,7 +125,7 @@ func forkClaudeSessionBefore(path string, prompt int) (string, error) {
 // Sessions replaced by a rewind are kept by Claude Code but not listed.
 var supersededMu sync.Mutex
 
-func claudeSupersededPath() string {
+func SupersededPath() string {
 	dir := appdir.File("quickgui-claude")
 	if dir == "" {
 		return ""
@@ -132,18 +133,18 @@ func claudeSupersededPath() string {
 	return filepath.Join(dir, "superseded.json")
 }
 
-func loadClaudeSuperseded() map[string]bool {
+func LoadSuperseded() map[string]bool {
 	supersededMu.Lock()
 	defer supersededMu.Unlock()
 	out := map[string]bool{}
-	if data, err := os.ReadFile(claudeSupersededPath()); err == nil {
+	if data, err := os.ReadFile(SupersededPath()); err == nil {
 		_ = json.Unmarshal(data, &out)
 	}
 	return out
 }
 
-func markClaudeSuperseded(id string) {
-	path := claudeSupersededPath()
+func MarkSuperseded(id string) {
+	path := SupersededPath()
 	if path == "" || id == "" {
 		return
 	}

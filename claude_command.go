@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"miya/internal/claude"
+	"miya/internal/claude/transcript"
 )
 
 func persistClaudeCommand(command string) {
@@ -43,10 +44,10 @@ func (c *chatController) applyClaudeCommand(line string) {
 		c.memories().Engine.Configure(claude.CLI{Binary: c.claudeBinary, Args: append([]string(nil), c.claudeArgs...), Env: append([]string(nil), c.claudeEnv...)})
 	}
 	// Sessions live where the command's Claude Code keeps them.
-	claudeConfigOverride = ""
+	transcript.ConfigOverride = ""
 	for _, kv := range cmd.Env {
 		if v, ok := strings.CutPrefix(kv, "CLAUDE_CONFIG_DIR="); ok {
-			claudeConfigOverride = v
+			transcript.ConfigOverride = v
 		}
 	}
 	invalidate()

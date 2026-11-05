@@ -1,27 +1,28 @@
-package main
+package transcript
 
 import (
-	"miya/internal/model"
-	"miya/internal/textutil"
 	"regexp"
 	"strings"
+
+	"miya/internal/model"
+	"miya/internal/textutil"
 )
 
-var claudeCommandTitleParts = regexp.MustCompile(`(?s)<command-(message|name|args)>(.*?)</command-(?:message|name|args)>`)
+var commandTitleParts = regexp.MustCompile(`(?s)<command-(message|name|args)>(.*?)</command-(?:message|name|args)>`)
 
 // Claude's native transcript wraps slash commands in protocol tags. Use the
 // invocation as the title, without changing the stored prompt.
-func claudePromptTitle(text string) string {
-	return clippedTitle(claudeCommandText(claudeReferenceTitle(text)))
+func PromptTitle(text string) string {
+	return ClippedTitle(CommandText(ReferenceTitle(text)))
 }
 
 // Normalize only a leading native command envelope. Literal XML examples in
 // prose or code remain untouched, and command arguments keep their full length.
-func claudeCommandText(text string) string {
+func CommandText(text string) string {
 	if !strings.HasPrefix(strings.TrimSpace(text), "<command-") {
 		return text
 	}
-	parts := claudeCommandTitleParts.FindAllStringSubmatch(text, -1)
+	parts := commandTitleParts.FindAllStringSubmatch(text, -1)
 	if len(parts) == 0 {
 		return text
 	}
@@ -40,7 +41,7 @@ func claudeCommandText(text string) string {
 	if name != "" && !strings.HasPrefix(name, "/") {
 		name = "/" + name
 	}
-	rest := strings.TrimSpace(claudeCommandTitleParts.ReplaceAllString(text, ""))
+	rest := strings.TrimSpace(commandTitleParts.ReplaceAllString(text, ""))
 	var invocation []string
 	for _, part := range []string{name, args, rest} {
 		if part != "" {
@@ -53,7 +54,7 @@ func claudeCommandText(text string) string {
 // Leading conversation references provide context; the request following
 // them is a better preview. Reference-only requests fall back to their
 // readable labels. Preserve the original prompt and never resolve a link.
-func claudeReferenceTitle(text string) string {
+func ReferenceTitle(text string) string {
 	text, _ = model.SplitReferenceContext(text)
 	mentions := model.ThreadMentions(text)
 	if len(mentions) == 0 {

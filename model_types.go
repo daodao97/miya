@@ -3,6 +3,7 @@ package main
 import (
 	"miya/internal/account"
 	"miya/internal/async"
+	"miya/internal/claude/transcript"
 	"miya/internal/mcpproto"
 	"miya/internal/mcpserver"
 	"miya/internal/model"
@@ -151,3 +152,38 @@ var (
 
 // mcpTools are the MCP tools as registered so far; call it after init.
 func mcpTools() []mcpTool { return mcpserver.Tools() }
+
+// Claude Code transcripts are read by internal/claude/transcript.
+type (
+	claudeBlock = transcript.Block
+)
+
+var (
+	applyClaudeAgentTasks   = transcript.ApplyAgentTasks
+	claudeBlocks            = transcript.Blocks
+	claudeCommandText       = transcript.CommandText
+	claudeConfigDir         = transcript.ConfigDir
+	claudeFinishSubAgents   = transcript.FinishSubAgents
+	claudeProjectDir        = transcript.ProjectDir
+	claudePromptTitle       = transcript.PromptTitle
+	claudeSubAgent          = transcript.SubAgents
+	claudeSubAgentStep      = transcript.SubAgentStep
+	claudeSummaryReadLimit  = transcript.SummaryReadLimit
+	claudeTaskFrame         = transcript.TaskFrame
+	claudeTaskReport        = transcript.TaskReport
+	claudeToolCall          = transcript.ToolCall
+	claudeToolOutput        = transcript.ToolOutput
+	claudeToolTitle         = transcript.ToolTitle
+	claudeVisibleText       = transcript.VisibleText
+	clippedTitle            = transcript.ClippedTitle
+	findClaudeSession       = transcript.Find
+	forkClaudeSessionBefore = transcript.ForkBefore
+	inputString             = transcript.InputString
+	interruptClaudeAgents   = transcript.InterruptAgents
+	listClaudeSessions      = transcript.List
+	localImageDataURI       = transcript.LocalImageURI
+	markClaudeSuperseded    = transcript.MarkSuperseded
+	messageLabel            = transcript.MessageLabel
+	parseClaudeSession      = transcript.Parse
+	summarizeClaudeSession  = transcript.Summarize
+)

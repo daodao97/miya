@@ -1,23 +1,24 @@
-package main
+package transcript
 
 import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"mime"
-	"miya/internal/fsutil"
 	"os"
 	"path/filepath"
+
+	"miya/internal/fsutil"
 )
 
 // claudeImageSource is an image block's source in Claude Code's sessions.
-type claudeImageSource struct {
+type ImageSource struct {
 	Type      string `json:"type"`
 	MediaType string `json:"media_type"`
 	Data      string `json:"data"`
 }
 
-func claudeImageDir() string {
+func ImageDir() string {
 	base, err := os.UserCacheDir()
 	if err != nil || base == "" {
 		base = os.TempDir()
@@ -25,7 +26,7 @@ func claudeImageDir() string {
 	return filepath.Join(base, "Miya", "claude-images")
 }
 
-func hasClaudeImage(blocks []claudeBlock) bool {
+func HasImage(blocks []Block) bool {
 	for _, b := range blocks {
 		if b.Type == "image" && b.Source != nil && b.Source.Data != "" {
 			return true
@@ -37,7 +38,7 @@ func hasClaudeImage(blocks []claudeBlock) bool {
 // claudeImages writes a prompt's images to the cache, once per content, and
 // returns them as file URLs: messages carry paths, never megabytes of base64
 // across the service's socket and into saved histories.
-func claudeImages(blocks []claudeBlock) []string {
+func Images(blocks []Block) []string {
 	var out []string
 	for _, b := range blocks {
 		if b.Type != "image" || b.Source == nil || b.Source.Type != "base64" || b.Source.Data == "" {
@@ -51,7 +52,7 @@ func claudeImages(blocks []claudeBlock) []string {
 		if b.Source.MediaType == "image/jpeg" {
 			ext = ".jpg"
 		}
-		path := filepath.Join(claudeImageDir(), hex.EncodeToString(sum[:16])+ext)
+		path := filepath.Join(ImageDir(), hex.EncodeToString(sum[:16])+ext)
 		if _, err := os.Stat(path); err != nil {
 			data, err := base64.StdEncoding.DecodeString(b.Source.Data)
 			if err != nil {
@@ -61,7 +62,7 @@ func claudeImages(blocks []claudeBlock) []string {
 				continue
 			}
 		}
-		if uri := localImageDataURI(path); uri != "" {
+		if uri := LocalImageURI(path); uri != "" {
 			out = append(out, uri)
 		}
 	}

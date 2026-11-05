@@ -1,11 +1,13 @@
 package main
 
 import (
-	"miya/internal/claude"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"miya/internal/claude"
+	"miya/internal/claude/transcript"
 )
 
 func writeClaudeSession(t *testing.T, cwd, id string, lines ...string) string {
@@ -163,7 +165,7 @@ func (c *chatController) waitClaudeHistory() {
 func TestClaudeCommandSettingPersistsAndResolves(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("CLAUDE_COMMAND", "")
-	t.Cleanup(func() { claudeConfigOverride = "" })
+	t.Cleanup(func() { transcript.ConfigOverride = "" })
 	bin := filepath.Join(t.TempDir(), "claude")
 	if err := os.WriteFile(bin, []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatal(err)

@@ -41,19 +41,6 @@ func attachmentImages(text string) []string {
 	return images
 }
 
-// Images cross the native bridge as file URLs, never large base64 strings.
-func localImageDataURI(path string) string {
-	abs, err := filepath.Abs(path)
-	if err != nil {
-		return ""
-	}
-	info, err := os.Stat(abs)
-	if err != nil || !info.Mode().IsRegular() {
-		return ""
-	}
-	return (&url.URL{Scheme: "file", Path: abs}).String()
-}
-
 // attachmentDisplay renders sent attachments consistently across agents and
 // submission modes: images as previews, other files as a line each.
 func attachmentDisplay(text string, paths []string) (string, []string) {
@@ -176,6 +163,7 @@ func jsonText(raw json.RawMessage) string {
 	b, _ := json.MarshalIndent(v, "", "  ")
 	return textutil.Bounded(string(b))
 }
+
 func itemMessage(item codex.Item) (Message, bool) {
 	m := Message{Kind: item.Type, Status: item.Status, Item: &item}
 	switch strings.ToLower(item.Type) {
@@ -316,14 +304,6 @@ func itemMessage(item codex.Item) (Message, bool) {
 		m.Content = model.CleanUserText(m.Content)
 	}
 	return m, true
-}
-
-func messageLabel(kind string) string {
-	labels := map[string]string{"reasoning": tr("Thinking"), "plan": tr("Plan"), "commandexecution": tr("Command"), "filechange": tr("File changes"), "diff": tr("Changes"), "mcptoolcall": tr("MCP tool"), "dynamictoolcall": tr("Tool"), "collabagenttoolcall": tr("Agent task"), "subagentactivity": tr("Agent activity"), "websearch": tr("Web search"), "imageview": tr("Image"), "imagegeneration": tr("Generated image"), "enteredreviewmode": tr("Review started"), "exitedreviewmode": tr("Review completed"), "contextcompaction": tr("Context compacted"), "sleep": tr("Waiting"), "functioncalloutput": tr("Tool result"), "hookprompt": tr("Hook"), "handoff": tr("Handoff")}
-	if label := labels[strings.ToLower(kind)]; label != "" {
-		return label
-	}
-	return tr("Activity")
 }
 
 func messageIcon(kind string) string {
