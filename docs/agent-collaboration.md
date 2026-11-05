@@ -549,7 +549,7 @@ P0 与 P1 可以在同一开发阶段完成。只有单独交付 P0 时，才允
 | `delegation_api.go`、`phone_collaboration.go` | 已认证用户 API、手机异步请求与响应关联 |
 | `delegation_legacy.go` | 旧 delegate 的固定任务等待与兼容处理 |
 | `delegation_view.go`、`delegation_panel.go` | 两端共用的能力与健康状态、任务缓存和请求重试状态机 |
-| `agent_reference.go`、`thread_inline_input.go`、`composer_search.go` | Agent 标签、与会话引用共用的富文本对象、补全和往返格式 |
+| `internal/composer`、`thread_inline_input.go` | Agent 标签、与会话引用共用的富文本对象、补全和往返格式 |
 | `view_delegations.go`、`delegation_desktop.go` | 共用任务卡与表单、桌面服务接线和目标会话导航 |
 | `mobile_delegations.go` | 手机异步调用、断线清理、任务面板接线和目标会话导航 |
 

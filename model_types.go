@@ -4,6 +4,7 @@ import (
 	"miya/internal/account"
 	"miya/internal/async"
 	"miya/internal/claude/transcript"
+	"miya/internal/composer"
 	"miya/internal/mcpproto"
 	"miya/internal/mcpserver"
 	"miya/internal/model"
@@ -223,4 +224,25 @@ var (
 	threadTokenRateLabel   = msgfmt.ThreadTokenRateLabel
 	threadWorkingLabel     = msgfmt.ThreadWorkingLabel
 	turnElapsedLabel       = msgfmt.TurnElapsedLabel
+)
+
+// Composer parsing lives in internal/composer.
+type (
+	composerToken = composer.ComposerToken
+)
+
+var (
+	agentChoices             = composer.AgentChoices
+	agentReferenceText       = composer.AgentReferenceText
+	collaborationTaggedInput = composer.CollaborationTaggedInput
+	commandChoices           = composer.CommandChoices
+	composerCommands         = composer.ComposerCommands
+	composerEditEnd          = composer.ComposerEditEnd
+	composerTokenAt          = composer.ComposerTokenAt
+	fileChoices              = composer.FileChoices
+	fileMentionInputs        = composer.FileMentionInputs
+	indexProjectFiles        = composer.IndexProjectFiles
+	insertAgentReference     = composer.InsertAgentReference
+	insertFileReference      = composer.InsertFileReference
+	slashCommand             = composer.SlashCommand
 )
