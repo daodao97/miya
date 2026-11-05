@@ -12,11 +12,6 @@ import (
 	"miya/internal/remote"
 )
 
-type phoneAutomationFormResult struct {
-	RequestID string           `json:"requestId"`
-	View      *automation.View `json:"view,omitempty"`
-}
-
 func phoneAutomationFormFrame(r remote.Request, view *automation.View, err error) remote.Frame {
 	data, _ := json.Marshal(phoneAutomationFormResult{RequestID: r.RequestID, View: view})
 	f := remote.Frame{Type: r.Op, Data: data}

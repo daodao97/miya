@@ -12,10 +12,6 @@ import (
 	"miya/internal/textutil"
 )
 
-type phoneApprovalReply struct {
-	ID json.RawMessage `json:"id"`
-}
-
 func (c *chatController) phoneApprovalResponse(r remote.Request) error {
 	for _, a := range c.approvals() {
 		if !sameJSON(a.ID, r.Approval) {
@@ -113,18 +109,6 @@ func validateMobileForm(a codex.Approval, fields map[string]string) (map[string]
 		return nil, err
 	}
 	return content, nil
-}
-
-type phoneFormField struct {
-	Type        string            `json:"type"`
-	Title       string            `json:"title"`
-	Description string            `json:"description"`
-	Enum        []json.RawMessage `json:"enum"`
-}
-type phoneFormSchema struct {
-	Type       string                    `json:"type"`
-	Required   []string                  `json:"required"`
-	Properties map[string]phoneFormField `json:"properties"`
 }
 
 func approvalFingerprint(a codex.Approval) string {

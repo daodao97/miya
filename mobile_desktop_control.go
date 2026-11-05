@@ -15,11 +15,6 @@ import (
 	"miya/internal/textutil"
 )
 
-type phoneDesktopReply struct {
-	RequestID string `json:"requestId"`
-	Token     string `json:"token,omitempty"`
-}
-
 type mobileDesktopApproval struct {
 	ID      json.RawMessage
 	Version string

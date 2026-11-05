@@ -163,12 +163,6 @@ func (app *chatApp) refreshCommandChoices() {
 	}
 }
 
-// phoneCommands is a project's Claude Code commands, for the phone.
-type phoneCommands struct {
-	Project  string           `json:"project"`
-	Commands []composerChoice `json:"commands"`
-}
-
 // commandMenuState is what the command menu says when it lists nothing.
 func (app *chatApp) commandMenuState() string {
 	c := app.c

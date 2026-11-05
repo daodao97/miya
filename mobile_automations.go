@@ -30,11 +30,6 @@ type mobileAutomations struct {
 	runErr           string
 }
 
-type phoneAutomationRunResult struct {
-	RequestID string            `json:"requestId"`
-	List      []automation.View `json:"list"`
-}
-
 func (m *mobileApp) runPhoneAutomation(id string) {
 	a := &m.autos
 	if a.runRequest != "" || !m.connected || m.conn == nil || !m.state.AutomationRun {

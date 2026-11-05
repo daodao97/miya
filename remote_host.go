@@ -37,40 +37,6 @@ const (
 	phonePingInterval = 15 * time.Second
 )
 
-type phoneProject struct {
-	Name    string   `json:"name"`
-	Path    string   `json:"path"`
-	Current bool     `json:"current"`
-	Threads []Thread `json:"threads"`
-}
-
-type phoneState struct {
-	Collaboration    *collaborationStatus    `json:"collaboration,omitempty"`
-	DesktopWindows   bool                    `json:"desktopWindows,omitempty"`
-	DesktopControl   bool                    `json:"desktopControl,omitempty"`
-	MemoryRevision   uint64                  `json:"memoryRevision,omitempty"`
-	Memory           bool                    `json:"memory,omitempty"`
-	ReferenceSource  string                  `json:"referenceSource"`
-	Files            bool                    `json:"files,omitempty"`
-	WebPorts         bool                    `json:"webPorts,omitempty"`
-	Runtime          bool                    `json:"runtime,omitempty"`
-	WebServices      bool                    `json:"webServices,omitempty"`
-	FileReferences   bool                    `json:"fileReferences,omitempty"`
-	Automations      bool                    `json:"automations,omitempty"`
-	AutomationRun    bool                    `json:"automationRun,omitempty"`
-	AutomationCreate bool                    `json:"automationCreate,omitempty"`
-	Projects         []phoneProject          `json:"projects"`
-	Status           string                  `json:"status"`
-	Approvals        []codex.Approval        `json:"approvals"`
-	Agents           []phoneAgentOptions     `json:"agents,omitempty"`
-	Quotas           []phoneAgentQuota       `json:"quotas,omitempty"`
-	Notifications    notification.PhoneState `json:"notifications"`
-	// Agent, Model and Effort are the desktop's defaults for new messages.
-	Agent  string `json:"agent"`
-	Model  string `json:"model"`
-	Effort string `json:"effort"`
-}
-
 // listThread is a conversation as the list shows it: no messages, and never
 // the desktop's unsent draft.
 func listThread(t Thread) Thread {
@@ -1146,16 +1112,6 @@ func sameJSON(a, b json.RawMessage) bool {
 		return string(a) == string(b)
 	}
 	return x.String() == y.String()
-}
-
-// phoneThreadDelta brings the phone's copy of a conversation up to date:
-// its metadata, the order of all its messages, and the messages the phone
-// does not have as they are now. Reset drops what the phone had first.
-type phoneThreadDelta struct {
-	Thread  Thread    `json:"thread"`
-	Order   []int     `json:"order"`
-	Changed []Message `json:"changed,omitempty"`
-	Reset   bool      `json:"reset,omitempty"`
 }
 
 // phoneThreadSync is what one phone holds of the conversation it watches,

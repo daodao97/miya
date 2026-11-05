@@ -9,19 +9,6 @@ import (
 	"strings"
 )
 
-type phoneModelOption struct {
-	Value         string   `json:"value"`
-	Label         string   `json:"label"`
-	Efforts       []string `json:"efforts"`
-	DefaultEffort string   `json:"defaultEffort"`
-}
-
-type phoneAgentOptions struct {
-	Agent   string             `json:"agent"`
-	Current remote.SendOptions `json:"current"`
-	Models  []phoneModelOption `json:"models"`
-}
-
 func (c *chatController) phoneAgentOptions() []phoneAgentOptions {
 	var out []phoneAgentOptions
 	for _, b := range agentBackends {
@@ -122,19 +109,6 @@ func (c *chatController) phoneQueueAction(r remote.Request) error {
 		return errors.New("Unknown queue action")
 	}
 	return nil
-}
-
-// Only subscription usage is shared, never account identity or credentials.
-// Agents without real quota data are omitted entirely.
-type phoneAgentQuota struct {
-	Agent   string             `json:"agent"`
-	Windows []phoneQuotaWindow `json:"windows"`
-}
-
-type phoneQuotaWindow struct {
-	Label       string  `json:"label"`
-	UsedPercent float64 `json:"usedPercent"`
-	ResetsAt    int64   `json:"resetsAt,omitempty"`
 }
 
 func (c *chatController) phoneQuotas() []phoneAgentQuota {

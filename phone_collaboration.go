@@ -11,11 +11,6 @@ import (
 	"miya/internal/remote"
 )
 
-type phoneCollaborationResult struct {
-	RequestID string `json:"request_id"`
-	Result    any    `json:"result,omitempty"`
-}
-
 func collaborationPhoneFrame(requestID string, result any, err error) remote.Frame {
 	frame := remote.Frame{Type: "collaboration"}
 	frame.Data, _ = json.Marshal(phoneCollaborationResult{RequestID: requestID, Result: result})

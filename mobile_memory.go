@@ -10,12 +10,6 @@ import (
 	"miya/internal/remote"
 )
 
-type phoneMemoryResult struct {
-	Revision uint64       `json:"revision,omitempty"`
-	Project  string       `json:"project"`
-	Scope    string       `json:"scope"`
-	List     manager.List `json:"list"`
-}
 type mobileMemory struct {
 	project, scope string
 	list           manager.List
@@ -44,6 +38,7 @@ func (m *mobileApp) loadPhoneMemory() {
 		}
 	}()
 }
+
 func (m *mobileApp) receiveMemory(raw json.RawMessage, message string) {
 	var result phoneMemoryResult
 	if err := json.Unmarshal(raw, &result); err != nil {
@@ -67,6 +62,7 @@ func (m *mobileApp) receiveMemory(raw json.RawMessage, message string) {
 	state.list = result.List
 	state.err = ""
 }
+
 func (m *mobileApp) memoryPage(c *ui.Context) {
 	state := &m.memories
 	project := m.selectedProject().Path
