@@ -16,6 +16,7 @@ int miya_desktop_window_input(unsigned int window, int pid, int kind, double x, 
 int miya_desktop_dialog(unsigned int window, int pid, char **json);
 int miya_desktop_press(unsigned int window, int pid, const char *label);
 int miya_desktop_input(int kind, double x, double y, double tx, double ty, int dx, int dy, const unsigned short *text, int length, int key, int modifier);
+int miya_desktop_display_input(unsigned int display, const char *uuid, int kind, double x, double y, double tx, double ty, int dx, int dy, const unsigned short *text, int length, int key, int modifier);
 */
 import "C"
 
@@ -111,17 +112,17 @@ func CaptureWindow(window Window) ([]byte, error) {
 }
 
 func SendInput(in Input) error {
-	return sendInput(Window{}, in)
+	return sendInput(Window{}, Display{}, in)
 }
 
 func SendWindowInput(window Window, in Input) error {
 	if window.ID == 0 || window.PID <= 0 {
 		return permissionError(4)
 	}
-	return sendInput(window, in)
+	return sendInput(window, Display{}, in)
 }
 
-func sendInput(window Window, in Input) error {
+func sendInput(window Window, display Display, in Input) error {
 	if err := in.Validate(); err != nil {
 		return err
 	}
@@ -135,6 +136,11 @@ func sendInput(window Window, in Input) error {
 	}
 	if window.ID != 0 {
 		return permissionError(int(C.miya_desktop_window_input(C.uint(window.ID), C.int(window.PID), C.int(kinds[in.Kind]), C.double(in.X), C.double(in.Y), C.double(in.ToX), C.double(in.ToY), C.int(in.DeltaX), C.int(in.DeltaY), ptr, C.int(len(units)), C.int(keys[in.Key]), C.int(mods[in.Modifier]))))
+	}
+	if display.ID != 0 {
+		uuid := C.CString(display.UUID)
+		defer C.free(unsafe.Pointer(uuid))
+		return permissionError(int(C.miya_desktop_display_input(C.uint(display.ID), uuid, C.int(kinds[in.Kind]), C.double(in.X), C.double(in.Y), C.double(in.ToX), C.double(in.ToY), C.int(in.DeltaX), C.int(in.DeltaY), ptr, C.int(len(units)), C.int(keys[in.Key]), C.int(mods[in.Modifier]))))
 	}
 	return permissionError(int(C.miya_desktop_input(C.int(kinds[in.Kind]), C.double(in.X), C.double(in.Y), C.double(in.ToX), C.double(in.ToY), C.int(in.DeltaX), C.int(in.DeltaY), ptr, C.int(len(units)), C.int(keys[in.Key]), C.int(mods[in.Modifier]))))
 }

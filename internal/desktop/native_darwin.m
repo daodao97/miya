@@ -91,11 +91,12 @@ static CFDataRef encodeDesktop(CGImageRef image) {
     return data;
 }
 
-static int captureTarget(CGWindowID windowID, pid_t pid, void **bytes, int *size, char **failure) { @autoreleasepool {
+extern BOOL miya_display_matches(CGDirectDisplayID display, NSString *uuid);
+
+static int captureTarget(CGWindowID windowID, pid_t pid, CGDirectDisplayID displayID, NSString *displayUUID, void **bytes, int *size, char **failure) { @autoreleasepool {
     if (!CGPreflightScreenCaptureAccess()) return 1;
     if (@available(macOS 14.0, *)) {
         MiyaDesktopShot *shot = [[MiyaDesktopShot alloc] init];
-        CGDirectDisplayID displayID = CGMainDisplayID();
         [SCShareableContent getShareableContentExcludingDesktopWindows:NO onScreenWindowsOnly:YES completionHandler:^(SCShareableContent *content, NSError *error) {
             if (error || !content) { [shot complete:NULL status:5 error:error]; return; }
             SCContentFilter *filter = nil;
@@ -108,6 +109,7 @@ static int captureTarget(CGWindowID windowID, pid_t pid, void **bytes, int *size
                     break;
                 }
             } else {
+                if (displayUUID && !miya_display_matches(displayID, displayUUID)) { [shot complete:NULL status:14 error:nil]; return; }
                 for (SCDisplay *display in content.displays) {
                     if (display.displayID != displayID) continue;
                     filter = [[SCContentFilter alloc] initWithDisplay:display excludingWindows:@[]];
@@ -149,7 +151,13 @@ static int captureTarget(CGWindowID windowID, pid_t pid, void **bytes, int *size
     return 3;
 } }
 
-int miya_desktop_capture(void **bytes, int *size, char **failure) { return captureTarget(0, 0, bytes, size, failure); }
+int miya_desktop_capture(void **bytes, int *size, char **failure) { return captureTarget(0, 0, CGMainDisplayID(), nil, bytes, size, failure); }
+
+int miya_desktop_capture_display(unsigned int display, const char *uuid, void **bytes, int *size, char **failure) { @autoreleasepool {
+    NSString *identity = [NSString stringWithUTF8String:uuid];
+    if (!miya_display_matches(display, identity)) return 14;
+    return captureTarget(0, 0, display, identity, bytes, size, failure);
+}}
 
 static NSDictionary *windowInfo(CGWindowID windowID, pid_t pid) {
     NSArray *windows = CFBridgingRelease(CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements, kCGNullWindowID));
@@ -161,7 +169,7 @@ static NSDictionary *windowInfo(CGWindowID windowID, pid_t pid) {
 
 int miya_desktop_capture_window(unsigned int windowID, int pid, void **bytes, int *size, char **failure) { @autoreleasepool {
     if (!windowID || !windowInfo(windowID, pid)) return 4;
-    return captureTarget(windowID, pid, bytes, size, failure);
+    return captureTarget(windowID, pid, 0, nil, bytes, size, failure);
 } }
 
 int miya_desktop_windows(char **json) { @autoreleasepool {
@@ -252,6 +260,11 @@ static int inputAtBounds(CGRect bounds, CGWindowID windowID, pid_t pid, int kind
 int miya_desktop_input(int kind, double x, double y, double tx, double ty, int dx, int dy, const unsigned short *text, int length, int key, int modifier) {
     return inputAtBounds(CGDisplayBounds(CGMainDisplayID()), 0, 0, kind, x, y, tx, ty, dx, dy, text, length, key, modifier);
 }
+
+int miya_desktop_display_input(unsigned int display, const char *uuid, int kind, double x, double y, double tx, double ty, int dx, int dy, const unsigned short *text, int length, int key, int modifier) { @autoreleasepool {
+    if (!miya_display_matches(display, [NSString stringWithUTF8String:uuid])) return 14;
+    return inputAtBounds(CGDisplayBounds(display), 0, 0, kind, x, y, tx, ty, dx, dy, text, length, key, modifier);
+}}
 
 // Match AX windows by their public geometry. There is no public AX window-ID
 // accessor. Refuse ambiguity instead of raising a different window of the app.

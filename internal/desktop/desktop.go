@@ -9,6 +9,18 @@ import (
 )
 
 var ErrWindowUnavailable = errors.New("The permission window was closed, obscured, or could not be focused")
+var ErrDisplayUnavailable = errors.New("The selected display is unavailable. Select another desktop.")
+
+// UUID keeps a reconnected/replaced screen from inheriting another display's
+// control session when CoreGraphics reuses a numeric display ID.
+type Display struct {
+	ID     uint32 `json:"id"`
+	UUID   string `json:"uuid"`
+	Name   string `json:"name"`
+	Main   bool   `json:"main"`
+	Width  int    `json:"width"`
+	Height int    `json:"height"`
+}
 
 // A window identity includes its owner: window numbers may be reused after an
 // app exits. A window session must never silently become a display session.

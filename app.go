@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"miya/internal/codex"
+	"miya/internal/desktop"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/transfer"
@@ -151,6 +152,13 @@ func imageSourcePath(src string) string {
 func main() {
 	if runtime.GOOS == "ios" {
 		mobileEntry()
+		return
+	}
+	if len(os.Args) == 2 && os.Args[1] == "-desktop-privacy" {
+		if err := desktop.RunPrivacyHelper(); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
 		return
 	}
 	// Agents Miya runs start it as their MCP server for the conversations.

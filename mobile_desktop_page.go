@@ -78,6 +78,10 @@ type mobileDesktopPage struct {
 	apps                 []desktop.Application
 	appIcons             map[string]ui.ImageSource
 	appSearch, appStatus string
+	displaysAvailable    bool
+	displays             []desktop.Display
+	display              desktop.Display
+	targetRevision       int
 	// thumbs holds picker previews by window; nil marks one that failed.
 	thumbs    map[string]ui.ImageSource
 	thumbBusy bool
@@ -92,7 +96,8 @@ type mobileDesktopPage struct {
 	actionsUnsupported                       bool
 	actionStatus                             string
 
-	unlock desktopUnlockState
+	unlock  desktopUnlockState
+	privacy mobileDesktopPrivacy
 }
 
 func (m *mobileApp) desktopPrefsFile() string {
@@ -203,17 +208,51 @@ func (m *mobileApp) desktopInitialize(p *mobileDesktopPage) {
 		if err != nil {
 			return func() { m.desktopFail(p, tr("Connection incomplete"), err) }
 		}
+		var displays []desktop.Display
+		if s.Pick && s.Displays {
+			displays, err = p.client.displays(ctx)
+			if err != nil {
+				return func() { m.desktopFail(p, tr("Unable to load desktops"), err) }
+			}
+		}
 		if s.Pick && s.WindowOnly && s.Window != nil && s.Window.ID == 0 {
-			return func() { p.pickable, p.windowOnly, p.appsAvailable = true, true, s.Apps; m.desktopChoose(p) }
+			return func() {
+				p.pickable, p.windowOnly, p.appsAvailable = true, true, s.Apps
+				m.desktopInitPrivacy(p, s)
+				p.displaysAvailable, p.displays = s.Displays, displays
+				m.desktopChoose(p)
+			}
 		}
 		if !s.WindowOnly || s.Window == nil {
-			return func() { p.windowOnly, p.pickable, p.appsAvailable = false, s.Pick, s.Apps; m.desktopStart(p) }
+			return func() {
+				p.windowOnly, p.pickable, p.appsAvailable = false, s.Pick, s.Apps
+				m.desktopInitPrivacy(p, s)
+				p.displaysAvailable, p.displays = s.Pick && s.Displays, displays
+				if p.displaysAvailable {
+					if s.Display != nil {
+						for _, display := range displays {
+							if display.ID == s.Display.ID && display.UUID == s.Display.UUID {
+								m.desktopSelectDisplay(p, display)
+								return
+							}
+						}
+					} else if len(displays) == 1 {
+						m.desktopSelectDisplay(p, displays[0])
+						return
+					}
+					m.desktopPresentDisplays(p, displays)
+					return
+				}
+				m.desktopStart(p)
+			}
 		}
 		want := *s.Window
 		windows, err := p.client.windows(ctx)
 		return func() {
 			p.windowOnly, p.secret, p.pickable = true, true, s.Pick
 			p.appsAvailable = s.Apps
+			m.desktopInitPrivacy(p, s)
+			p.displaysAvailable, p.displays = s.Pick && s.Displays, displays
 			p.keyboard = true // authorization windows usually need a password
 			if err != nil {
 				m.desktopFail(p, tr("Connection incomplete"), err)
@@ -233,7 +272,7 @@ func (m *mobileApp) desktopInitialize(p *mobileDesktopPage) {
 
 func (m *mobileApp) desktopChoose(p *mobileDesktopPage) {
 	// Switching revokes input: the next window needs its own frame first.
-	p.active, p.image, p.queue, p.actionsFresh = false, nil, nil, false
+	p.invalidateTarget()
 	p.pickerTab, p.appStatus = 0, ""
 	m.desktopStage(p, "picker", tr("Select a window to control"), "", true)
 	m.desktopDo(p, func(ctx context.Context) func() {
@@ -250,6 +289,7 @@ func (m *mobileApp) desktopChoose(p *mobileDesktopPage) {
 }
 
 func (m *mobileApp) desktopSelect(p *mobileDesktopPage, w desktop.Window) {
+	p.invalidateTarget()
 	m.desktopStage(p, "connecting", tr("Opening window"), tr("Checking the connection and system permissions."), true)
 	m.desktopDo(p, func(ctx context.Context) func() {
 		err := p.client.selectWindow(ctx, w)
@@ -259,6 +299,7 @@ func (m *mobileApp) desktopSelect(p *mobileDesktopPage, w desktop.Window) {
 				return
 			}
 			p.window, p.windowOnly, p.zoom, p.panX, p.panY = w, true, 1, 0, 0
+			p.display = desktop.Display{}
 			m.desktopStart(p)
 		}
 	})
@@ -304,6 +345,9 @@ func (p *mobileDesktopPage) connectedStatus() string {
 	if p.windowOnly {
 		return tr("Connected · ") + firstNonEmpty(p.window.Title, p.window.App, tr("Permission window"))
 	}
+	if p.display.ID != 0 {
+		return tr("Connected · ") + p.displayTitle()
+	}
 	return tr("Connected · Full desktop")
 }
 
@@ -313,6 +357,7 @@ func (m *mobileApp) desktopPoll(p *mobileDesktopPage) {
 		return
 	}
 	p.polling = true
+	revision := p.targetRevision
 	m.desktopDo(p, func(ctx context.Context) func() {
 		data, locked, err := p.client.frame(ctx)
 		var image ui.ImageSource
@@ -321,7 +366,11 @@ func (m *mobileApp) desktopPoll(p *mobileDesktopPage) {
 				err = fmt.Errorf("%s", tr("Unable to decode the screen. Retrying."))
 			}
 		}
-		return func() { m.receiveDesktopFrame(p, data, image, locked, err) }
+		return func() {
+			if revision == p.targetRevision {
+				m.receiveDesktopFrame(p, data, image, locked, err)
+			}
+		}
 	})
 }
 
@@ -345,6 +394,10 @@ func (m *mobileApp) receiveDesktopFrame(p *mobileDesktopPage, data []byte, image
 	case status == 410:
 		m.desktopFinish(p, err.Error())
 		return
+	case status == 409 && !p.windowOnly && p.displaysAvailable:
+		m.desktopChooseDisplays(p)
+		p.appStatus = tr("The display changed or disconnected. Select a desktop.")
+		return
 	case status == 403:
 		m.desktopFail(p, tr("Permission required on Mac"), err)
 		return
@@ -366,9 +419,13 @@ func (m *mobileApp) desktopRefreshActions(p *mobileDesktopPage) {
 		return
 	}
 	p.actionsBusy = true
+	revision := p.targetRevision
 	m.desktopDo(p, func(ctx context.Context) func() {
 		a, err := p.client.actions(ctx)
 		return func() {
+			if revision != p.targetRevision {
+				return
+			}
 			p.actionsBusy = false
 			switch status := desktopStatus(err); {
 			case err == nil:
@@ -447,9 +504,16 @@ func (m *mobileApp) desktopPump(p *mobileDesktopPage) {
 	in := p.queue[0]
 	p.queue = p.queue[1:]
 	p.sending = true
+	revision, display := p.targetRevision, p.display
+	if p.windowOnly {
+		display = desktop.Display{}
+	}
 	m.desktopDo(p, func(ctx context.Context) func() {
-		err := p.client.input(ctx, in)
+		err := p.client.inputForDisplay(ctx, in, display)
 		return func() {
+			if revision != p.targetRevision {
+				return
+			}
 			p.sending = false
 			switch {
 			case desktopStatus(err) == 410:
@@ -687,10 +751,16 @@ func (m *mobileApp) desktopPageView(c *ui.Context) {
 			if p.windowOnly {
 				title = firstNonEmpty(p.window.Title, p.window.App, tr("Permission window"))
 			}
+			if !p.windowOnly && p.display.ID != 0 {
+				title = p.displayTitle()
+			}
 			if p.phase == "picker" {
 				title = tr("Select window")
 				if p.pickerTab == 1 {
 					title = tr("Apps")
+				}
+				if p.pickerTab == 2 {
+					title = tr("Full desktop")
 				}
 			}
 			ui.Column(c).Grow(1).MinWidth(0).AlignItems(ui.Center).Gap(2).Children(func() {
@@ -703,13 +773,23 @@ func (m *mobileApp) desktopPageView(c *ui.Context) {
 				if m.circle(c, "desktop-refresh-windows", tr("Refresh list"), func() { icon(c, "refresh", 20, pal.ink) }).Clicked() {
 					if p.pickerTab == 1 {
 						m.desktopChooseApps(p)
+					} else if p.pickerTab == 2 {
+						m.desktopChooseDisplays(p)
 					} else {
 						m.desktopChoose(p)
 					}
 				}
 			} else if (p.windowOnly || p.pickable) && (p.phase == "live" || p.phase == "error") {
-				if m.circle(c, "desktop-choose", tr("Switch window"), func() { icon(c, "stack-2", 20, pal.ink) }).Clicked() {
-					m.desktopChoose(p)
+				label := tr("Switch window")
+				if !p.windowOnly && p.displaysAvailable {
+					label = tr("Switch desktop")
+				}
+				if m.circle(c, "desktop-choose", label, func() { icon(c, "stack-2", 20, pal.ink) }).Clicked() {
+					if !p.windowOnly && p.displaysAvailable {
+						m.desktopChooseDisplays(p)
+					} else {
+						m.desktopChoose(p)
+					}
 				}
 			} else {
 				// Balance the back button so the title stays centered.
@@ -754,15 +834,22 @@ func (m *mobileApp) desktopPickerView(c *ui.Context, p *mobileDesktopPage) {
 	pal := m.pal
 	ui.Scroll(c).FillWidth().Grow(1).MinHeight(0).Children(func() {
 		ui.Column(c).FillWidth().Padding(16).Gap(10).Children(func() {
-			if p.pickable && p.appsAvailable {
+			if p.pickable && (p.appsAvailable || p.displaysAvailable) {
 				ui.Row(c).FillWidth().Gap(8).Children(func() {
-					if m.pill(c, "desktop-tab-windows", tr("Windows"), p.pickerTab == 0).Grow(1).Disabled(p.busy).Clicked() {
+					if p.displaysAvailable && m.pill(c, "desktop-tab-displays", tr("Desktops"), p.pickerTab == 2).Grow(1).Basis(0).MinWidth(0).Disabled(p.busy).Clicked() {
+						m.desktopChooseDisplays(p)
+					}
+					if m.pill(c, "desktop-tab-windows", tr("Windows"), p.pickerTab == 0).Grow(1).Basis(0).MinWidth(0).Disabled(p.busy).Clicked() {
 						m.desktopChoose(p)
 					}
-					if m.pill(c, "desktop-tab-apps", tr("Apps"), p.pickerTab == 1).Grow(1).Disabled(p.busy).Clicked() {
+					if p.appsAvailable && m.pill(c, "desktop-tab-apps", tr("Apps"), p.pickerTab == 1).Grow(1).Basis(0).MinWidth(0).Disabled(p.busy).Clicked() {
 						m.desktopChooseApps(p)
 					}
 				})
+			}
+			if p.pickerTab == 2 {
+				m.desktopDisplayList(c, p)
+				return
 			}
 			if p.pickerTab == 1 {
 				m.desktopApplicationList(c, p)
@@ -885,7 +972,7 @@ func (m *mobileApp) desktopControls(c *ui.Context, p *mobileDesktopPage) {
 		return
 	}
 	pal := m.pal
-	hasMore := !p.trackpad || (p.canUnlock() && p.unlock.saved)
+	hasMore := !p.trackpad || (p.canUnlock() && p.unlock.saved) || (p.pickable && p.privacy.available)
 	if !hasMore {
 		p.more = false
 	}
@@ -955,23 +1042,28 @@ func (m *mobileApp) desktopMorePanel(c *ui.Context, p *mobileDesktopPage, left, 
 		p.overlays = append(p.overlays, ui.Rect{X: left, Y: p.view.H - bottom - b.H, W: width, H: b.H})
 	}
 	panel.Children(func() {
-		if !p.trackpad {
-			ui.Segmented(c.Key("desktop-touch-mode"), &p.touchMode, tr("Click / Scroll"), tr("Drag"), tr("Move screen")).FillWidth()
-		}
-		if p.canUnlock() && p.unlock.saved {
-			ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
-				icon(c, "shield-check", 18, pal.ok)
-				ui.Text(c, tr("Password saved for this Mac")).Grow(1).MinWidth(0).FontSize(m.font(14)).MaxLines(1)
-				forget := m.phoneButton(c.Key("desktop-forget-saved")).PaddingX(8).Justify(ui.Center).Label(tr("Forget password")).Disabled(p.unlock.busy)
-				forget.Children(func() {
-					ui.Text(c, tr("Forget password")).FontSize(m.font(14)).FontWeight(500).TextColor(pal.warn)
-				})
-				if forget.Clicked() {
-					p.more = false
-					m.desktopForgetUnlock(p)
+		ui.Scroll(c).FillWidth().MaxHeight(max(44, p.view.H-bottom-36)).Children(func() {
+			ui.Column(c).FillWidth().Gap(12).Children(func() {
+				m.desktopPrivacyView(c, p)
+				if !p.trackpad {
+					ui.Segmented(c.Key("desktop-touch-mode"), &p.touchMode, tr("Click / Scroll"), tr("Drag"), tr("Move screen")).FillWidth()
+				}
+				if p.canUnlock() && p.unlock.saved {
+					ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
+						icon(c, "shield-check", 18, pal.ok)
+						ui.Text(c, tr("Password saved for this Mac")).Grow(1).MinWidth(0).FontSize(m.font(14)).MaxLines(1)
+						forget := m.phoneButton(c.Key("desktop-forget-saved")).PaddingX(8).Justify(ui.Center).Label(tr("Forget password")).Disabled(p.unlock.busy)
+						forget.Children(func() {
+							ui.Text(c, tr("Forget password")).FontSize(m.font(14)).FontWeight(500).TextColor(pal.warn)
+						})
+						if forget.Clicked() {
+							p.more = false
+							m.desktopForgetUnlock(p)
+						}
+					})
 				}
 			})
-		}
+		})
 	})
 }
 
@@ -1081,6 +1173,11 @@ func (m *mobileApp) desktopSelectFull(p *mobileDesktopPage) {
 	if !p.pickable {
 		return
 	}
+	if p.displaysAvailable {
+		m.desktopChooseDisplays(p)
+		return
+	}
+	p.invalidateTarget()
 	m.desktopStage(p, "connecting", tr("Connecting to Mac"), tr("Switching to full desktop."), true)
 	m.desktopDo(p, func(ctx context.Context) func() {
 		err := p.client.selectWindow(ctx, desktop.Window{})
@@ -1154,7 +1251,7 @@ func (m *mobileApp) desktopLoadThumbs(p *mobileDesktopPage) {
 // windows as preview cards two to a row.
 func (m *mobileApp) desktopWindowGrid(c *ui.Context, p *mobileDesktopPage) {
 	var cards []func()
-	if p.pickable {
+	if p.pickable && !p.displaysAvailable {
 		cards = append(cards, func() { m.desktopFullCard(c, p) })
 	}
 	for _, w := range p.windows {

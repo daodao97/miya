@@ -14,7 +14,7 @@ func (m *mobileApp) desktopChooseApps(p *mobileDesktopPage) {
 	if !p.pickable || !p.appsAvailable || p.busy {
 		return
 	}
-	p.active, p.image, p.queue, p.actionsFresh, p.more = false, nil, nil, false, false
+	p.invalidateTarget()
 	p.pickerTab, p.appStatus = 1, ""
 	m.desktopStage(p, "picker", tr("Apps"), "", true)
 	m.desktopDo(p, func(ctx context.Context) func() {

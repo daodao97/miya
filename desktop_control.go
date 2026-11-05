@@ -32,28 +32,36 @@ type desktopLease struct {
 	lastWake      time.Time
 	// pick lets a lease opened from the phone menu choose any window or the
 	// full desktop. Authorization leases stay bound to their window.
-	pick      bool
-	unlocking bool
-	launching bool
+	pick                 bool
+	unlocking            bool
+	launching            bool
+	privacy              desktop.Privacy
+	display              *desktop.Display
+	displayInputRequired bool
 }
 
 // One operator at a time. A lease belongs to one live phone control
 // connection and expires even if a client keeps polling forever.
 type desktopControl struct {
-	mu            sync.Mutex
-	work          sync.Mutex
-	lease         *desktopLease
-	authorize     func() error
-	capture       func() ([]byte, error)
-	input         func(desktop.Input) error
-	windows       func() ([]desktop.Window, error)
-	apps          func() ([]desktop.Application, error)
-	openApp       func(context.Context, string) error
-	captureWindow func(desktop.Window) ([]byte, error)
-	inputWindow   func(desktop.Window, desktop.Input) error
-	dialog        func(desktop.Window) (desktop.Dialog, error)
-	pressAction   func(desktop.Window, string) error
-	wake          func() error
+	mu             sync.Mutex
+	work           sync.Mutex
+	privacyWork    sync.Mutex
+	lease          *desktopLease
+	authorize      func() error
+	capture        func() ([]byte, error)
+	input          func(desktop.Input) error
+	windows        func() ([]desktop.Window, error)
+	apps           func() ([]desktop.Application, error)
+	openApp        func(context.Context, string) error
+	privacy        func(context.Context) (desktop.Privacy, error)
+	displays       func() ([]desktop.Display, error)
+	captureDisplay func(desktop.Display) ([]byte, error)
+	inputDisplay   func(desktop.Display, desktop.Input) error
+	captureWindow  func(desktop.Window) ([]byte, error)
+	inputWindow    func(desktop.Window, desktop.Input) error
+	dialog         func(desktop.Window) (desktop.Dialog, error)
+	pressAction    func(desktop.Window, string) error
+	wake           func() error
 	// locked reports the console lock screen; nil disables remote unlock.
 	locked func() (bool, error)
 }
@@ -62,7 +70,8 @@ func (c *chatController) desktopControls() *desktopControl {
 	c.desktopMu.Lock()
 	defer c.desktopMu.Unlock()
 	if c.desktop == nil {
-		c.desktop = &desktopControl{authorize: desktop.Authorize, capture: desktop.Capture, input: desktop.SendInput, windows: desktop.Windows, apps: desktop.Applications, openApp: desktop.OpenApplication, captureWindow: desktop.CaptureWindow, inputWindow: desktop.SendWindowInput, dialog: desktop.WindowDialog, pressAction: desktop.PressWindowAction, wake: desktop.WakeDisplay, locked: desktop.ScreenLocked}
+		c.desktop = &desktopControl{authorize: desktop.Authorize, capture: desktop.Capture, input: desktop.SendInput, windows: desktop.Windows, apps: desktop.Applications, openApp: desktop.OpenApplication, privacy: desktop.StartPrivacy, captureWindow: desktop.CaptureWindow, inputWindow: desktop.SendWindowInput, dialog: desktop.WindowDialog, pressAction: desktop.PressWindowAction, wake: desktop.WakeDisplay, locked: desktop.ScreenLocked}
+		c.desktop.displays, c.desktop.captureDisplay, c.desktop.inputDisplay = desktop.Displays, desktop.CaptureDisplay, desktop.SendDisplayInput
 	}
 	return c.desktop
 }
@@ -148,6 +157,9 @@ func (d *desktopControl) revoke(token string) {
 		l := d.lease
 		d.lease = nil
 		l.stop()
+		if l.privacy != nil {
+			go l.privacy.Close()
+		}
 	}
 }
 
@@ -185,11 +197,14 @@ func (d *desktopControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(struct {
-			WindowOnly bool            `json:"windowOnly"`
-			Window     *desktop.Window `json:"window"`
-			Pick       bool            `json:"pick"`
-			Apps       bool            `json:"apps"`
-		}{l.window != nil, l.window, l.pick, l.pick && d.apps != nil && d.openApp != nil})
+			WindowOnly bool             `json:"windowOnly"`
+			Window     *desktop.Window  `json:"window"`
+			Pick       bool             `json:"pick"`
+			Apps       bool             `json:"apps"`
+			Privacy    bool             `json:"privacy"`
+			Displays   bool             `json:"displays"`
+			Display    *desktop.Display `json:"display,omitempty"`
+		}{l.window != nil, l.window, l.pick, l.pick && d.apps != nil && d.openApp != nil, l.pick && d.privacy != nil, l.pick && d.displaysAvailable(), l.display})
 		return
 	}
 	if path == "/actions" || path == "/action" {
@@ -198,6 +213,14 @@ func (d *desktopControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if path == "/apps" || path == "/launch" {
 		d.serveApplications(w, r, token, l, path == "/launch")
+		return
+	}
+	if path == "/privacy" {
+		d.servePrivacy(w, r, token, l)
+		return
+	}
+	if path == "/displays" || path == "/display" {
+		d.serveDisplays(w, r, token, l, path == "/display")
 		return
 	}
 	if path != "/frame" && path != "/start" && path != "/input" && path != "/windows" && path != "/select" && path != "/thumbnail" && path != "/unlock" {
@@ -226,6 +249,11 @@ func (d *desktopControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	active := l.active
 	pick := l.pick
+	var display *desktop.Display
+	if l.display != nil {
+		copy := *l.display
+		display = &copy
+	}
 	var window *desktop.Window
 	if l.window != nil {
 		copy := *l.window
@@ -269,6 +297,7 @@ func (d *desktopControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			l.window = nil
+			l.display, l.displayInputRequired = nil, false
 			l.active = false
 			l.capturedAt = time.Time{}
 			l.lastFrame = time.Time{}
@@ -290,6 +319,7 @@ func (d *desktopControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			l.window = &candidate
+			l.display, l.displayInputRequired = nil, false
 			l.active = false
 			l.capturedAt = time.Time{}
 			l.lastFrame = time.Time{}
@@ -309,6 +339,14 @@ func (d *desktopControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Select a target window first", 409)
 			return
 		}
+		if window == nil && d.displaysAvailable() {
+			selected, err := d.resolveDisplay(display)
+			if err != nil {
+				http.Error(w, err.Error(), 409)
+				return
+			}
+			display = &selected
+		}
 		d.mu.Lock()
 		if d.valid(token) != l {
 			d.mu.Unlock()
@@ -316,6 +354,7 @@ func (d *desktopControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		l.active = true
+		l.display = display
 		d.mu.Unlock()
 		w.WriteHeader(http.StatusNoContent)
 		return
@@ -349,21 +388,32 @@ func (d *desktopControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		var err error
 		if window != nil {
 			data, err = d.captureWindow(*window)
+		} else if display != nil {
+			data, err = d.captureDisplay(*display)
 		} else {
 			data, err = d.capture()
 		}
 		// A sleeping display drops out of the shareable list. Wake it and
 		// retry once after it reappears instead of reporting a stale state.
-		if err != nil && d.wake != nil && !errors.Is(err, desktop.ErrWindowUnavailable) {
+		if err != nil && d.wake != nil && !errors.Is(err, desktop.ErrWindowUnavailable) && !errors.Is(err, desktop.ErrDisplayUnavailable) {
 			d.keepAwake(l, true)
 			time.Sleep(500 * time.Millisecond)
 			if window != nil {
 				data, err = d.captureWindow(*window)
+			} else if display != nil {
+				data, err = d.captureDisplay(*display)
 			} else {
 				data, err = d.capture()
 			}
 		}
 		if err != nil {
+			if errors.Is(err, desktop.ErrDisplayUnavailable) {
+				d.mu.Lock()
+				l.capturedAt = time.Time{}
+				d.mu.Unlock()
+				http.Error(w, err.Error(), 409)
+				return
+			}
 			if window != nil && errors.Is(err, desktop.ErrWindowUnavailable) {
 				d.revoke(token)
 				http.Error(w, "The authorization window closed. Close this view to return to the conversation.", 410)
@@ -394,14 +444,15 @@ func (d *desktopControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write(data)
 		return
 	}
-	var in desktop.Input
+	var request desktopInputRequest
 	_ = http.NewResponseController(w).SetReadDeadline(time.Now().Add(5 * time.Second))
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 32<<10))
 	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&in); err != nil {
+	if err := decoder.Decode(&request); err != nil {
 		http.Error(w, "Invalid operation", 400)
 		return
 	}
+	in := request.Input
 	if err := in.Validate(); err != nil {
 		http.Error(w, err.Error(), 400)
 		return
@@ -414,6 +465,10 @@ func (d *desktopControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if (window == nil) != (l.window == nil) || window != nil && (window.ID != l.window.ID || window.PID != l.window.PID) {
 		http.Error(w, "The target window changed. Wait for a new frame.", 409)
+		return
+	}
+	if !sameDesktopDisplay(display, l.display) || !desktopInputMatchesDisplay(request, l) {
+		http.Error(w, "The target display changed. Wait for a new frame.", 409)
 		return
 	}
 	if time.Since(l.capturedAt) > 10*time.Second {
@@ -452,10 +507,17 @@ func (d *desktopControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		err = d.inputWindow(*window, in)
+	} else if display != nil {
+		err = d.inputDisplay(*display, in)
 	} else {
 		err = d.input(in)
 	}
 	if err != nil {
+		if errors.Is(err, desktop.ErrDisplayUnavailable) {
+			l.capturedAt = time.Time{}
+			http.Error(w, err.Error(), 409)
+			return
+		}
 		http.Error(w, err.Error(), 403)
 		return
 	}

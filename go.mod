@@ -5,10 +5,12 @@ go 1.27.3
 replace github.com/egoist/mygo => ../mygo
 
 require (
+	github.com/coder/websocket v1.8.15
 	github.com/creack/pty v1.1.24
 	github.com/egoist/mygo v0.7.4
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	github.com/tailscale/tailcat v0.7.0
+	golang.org/x/image v0.46.0
 	golang.org/x/sys v0.48.0
 	golang.org/x/text v0.43.0
 	tailscale.com v1.105.0-pre.0.20261013225543-3c0508fa283f
@@ -19,7 +21,6 @@ require (
 	github.com/Heyana/typesetting-go v0.3.5-heyana.4 // indirect
 	github.com/akutz/memconn v0.1.0 // indirect
 	github.com/anmitsu/go-shlex v0.0.0-20200514113438-38f4b401e2be // indirect
-	github.com/coder/websocket v1.8.15 // indirect
 	github.com/creachadair/msync v0.10.1 // indirect
 	github.com/dblohm7/wingoes v0.0.0-20260526185140-fb298caac7ca // indirect
 	github.com/ebitengine/purego v0.11.1 // indirect
@@ -53,7 +54,6 @@ require (
 	go4.org/netipx v0.0.0-20260823151212-3075585bcbeb // indirect
 	golang.org/x/crypto v0.57.0 // indirect
 	golang.org/x/exp v0.0.0-20260908205506-85c1c2202aba // indirect
-	golang.org/x/image v0.46.0 // indirect
 	golang.org/x/net v0.60.0 // indirect
 	golang.org/x/sync v0.24.0 // indirect
 	golang.org/x/term v0.46.0 // indirect

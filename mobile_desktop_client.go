@@ -102,10 +102,58 @@ func (c *desktopClient) doHeader(ctx context.Context, method, path string, body 
 }
 
 type desktopSession struct {
-	WindowOnly bool            `json:"windowOnly"`
-	Window     *desktop.Window `json:"window"`
-	Pick       bool            `json:"pick"`
-	Apps       bool            `json:"apps"`
+	WindowOnly bool             `json:"windowOnly"`
+	Window     *desktop.Window  `json:"window"`
+	Pick       bool             `json:"pick"`
+	Apps       bool             `json:"apps"`
+	Privacy    bool             `json:"privacy"`
+	Displays   bool             `json:"displays"`
+	Display    *desktop.Display `json:"display,omitempty"`
+}
+
+func (c *desktopClient) displays(ctx context.Context) ([]desktop.Display, error) {
+	var displays []desktop.Display
+	data, err := c.do(ctx, http.MethodGet, "/displays", nil)
+	if err == nil {
+		err = json.Unmarshal(data, &displays)
+	}
+	return displays, err
+}
+
+func (c *desktopClient) selectDisplay(ctx context.Context, display desktop.Display) (desktop.Display, error) {
+	var selected desktop.Display
+	data, err := c.do(ctx, http.MethodPost, "/display", struct {
+		ID   uint32 `json:"id"`
+		UUID string `json:"uuid"`
+	}{display.ID, display.UUID})
+	if err == nil {
+		err = json.Unmarshal(data, &selected)
+	}
+	return selected, err
+}
+
+func (c *desktopClient) inputForDisplay(ctx context.Context, in desktop.Input, display desktop.Display) error {
+	if display.ID == 0 {
+		return c.input(ctx, in)
+	}
+	if err := in.Validate(); err != nil {
+		return err
+	}
+	_, err := c.do(ctx, http.MethodPost, "/input", desktopInputRequest{Input: in, DisplayID: display.ID, DisplayUUID: display.UUID})
+	return err
+}
+
+func (c *desktopClient) privacy(ctx context.Context, enabled *bool) (desktopPrivacyState, error) {
+	method, body := http.MethodGet, any(nil)
+	if enabled != nil {
+		method, body = http.MethodPost, desktopPrivacyState{Enabled: *enabled}
+	}
+	var state desktopPrivacyState
+	data, err := c.do(ctx, method, "/privacy", body)
+	if err == nil {
+		err = json.Unmarshal(data, &state)
+	}
+	return state, err
 }
 
 func (c *desktopClient) applications(ctx context.Context) ([]desktop.Application, error) {

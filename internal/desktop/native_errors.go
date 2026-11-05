@@ -36,6 +36,8 @@ func permissionError(code int) error {
 		return errors.New("Unable to allocate screen image memory. Try again later.")
 	case 13:
 		return errors.New("The Mac screen is unavailable, possibly asleep. Waking it up; try again shortly.")
+	case 14:
+		return ErrDisplayUnavailable
 	case 12:
 		return errors.New("Unable to wake the Mac display. Wake it on your Mac and retry.")
 	default:
