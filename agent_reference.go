@@ -11,7 +11,7 @@ func agentReferenceText(agent, title string) string {
 		return ""
 	}
 	if title == "" {
-		title = backendFor(agent).Name()
+		title = model.AgentName(agent)
 	}
 	title = strings.Join(strings.Fields(title), " ")
 	title = strings.NewReplacer(`\`, `\\`, `[`, `\[`, `]`, `\]`).Replace(title)
@@ -21,11 +21,11 @@ func agentReferenceText(agent, title string) string {
 func agentChoices(query string, allowed []string) []composerChoice {
 	query = strings.ToLower(query)
 	var out []composerChoice
-	for _, b := range agentBackends {
+	for _, id := range model.Backends {
 		if allowed != nil {
 			found := false
-			for _, id := range allowed {
-				if b.ID() == id {
+			for _, allowedID := range allowed {
+				if id == allowedID {
 					found = true
 					break
 				}
@@ -34,17 +34,17 @@ func agentChoices(query string, allowed []string) []composerChoice {
 				continue
 			}
 		}
-		aliases := b.ID() + " " + b.Name()
-		if b.ID() == agentCodex {
+		aliases := id + " " + model.AgentName(id)
+		if id == agentCodex {
 			aliases += " openai"
 		}
-		if b.ID() == agentClaude {
+		if id == agentClaude {
 			aliases += " claude anthropic"
 		}
 		if !strings.Contains(strings.ToLower(aliases), query) {
 			continue
 		}
-		out = append(out, composerChoice{Name: b.Name(), Agent: b.ID(), Detail: tr("Run a task in an independent conversation")})
+		out = append(out, composerChoice{Name: model.AgentName(id), Agent: id, Detail: tr("Run a task in an independent conversation")})
 	}
 	return out
 }
@@ -64,7 +64,7 @@ func insertAgentReference(value string, token composerToken, agent, title string
 func collaborationTaggedInput(text string, parts []MessagePart) string {
 	var mentions []model.AgentMention
 	for _, part := range parts {
-		if part.Type == "agent_ref" && registeredBackend(part.Agent) {
+		if part.Type == "agent_ref" && model.RegisteredBackend(part.Agent) {
 			mentions = append(mentions, model.AgentMention{Agent: part.Agent})
 		}
 	}
