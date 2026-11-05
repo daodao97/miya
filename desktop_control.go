@@ -42,11 +42,9 @@ type desktopLease struct {
 
 // One operator at a time. A lease belongs to one live phone control
 // connection and expires even if a client keeps polling forever.
-type desktopControl struct {
-	mu             sync.Mutex
-	work           sync.Mutex
-	privacyWork    sync.Mutex
-	lease          *desktopLease
+// desktopNative is what remote control needs from the operating system:
+// internal/desktop in the app, fakes in tests.
+type desktopNative struct {
 	authorize      func() error
 	capture        func() ([]byte, error)
 	input          func(desktop.Input) error
@@ -64,6 +62,14 @@ type desktopControl struct {
 	wake           func() error
 	// locked reports the console lock screen; nil disables remote unlock.
 	locked func() (bool, error)
+}
+
+type desktopControl struct {
+	mu          sync.Mutex
+	work        sync.Mutex
+	privacyWork sync.Mutex
+	lease       *desktopLease
+	desktopNative
 }
 
 func (d *desktopControl) open(ctx context.Context) (string, error) {
