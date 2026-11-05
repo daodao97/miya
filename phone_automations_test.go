@@ -29,7 +29,7 @@ func TestPhoneAutomationsReadListAndHistory(t *testing.T) {
 			if f.Type != "automations" {
 				continue
 			}
-			var list []automationView
+			var list []automation.View
 			if err := json.Unmarshal(f.Data, &list); err != nil || f.Error != "" || len(list) != 1 {
 				t.Fatalf("automation list not returned: %v %s %s", err, f.Error, f.Data)
 			}

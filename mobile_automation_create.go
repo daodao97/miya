@@ -12,7 +12,7 @@ import (
 
 type mobileAutomationForm struct {
 	request, project, agent string
-	draft                   *automationView
+	draft                   *automation.View
 	enabled                 bool
 	pending, op             string
 	requestedAt             time.Time

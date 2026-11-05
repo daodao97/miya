@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"miya/internal/appdir"
+	"miya/internal/automation"
 	"miya/internal/memory"
 	"miya/internal/notification"
 	"miya/internal/remote"
@@ -322,7 +323,7 @@ func (s *service) handle(p *svcPeer, req svcRequest) (any, error) {
 		}
 		return c.memoryOp(req.Op, r)
 	case "automationList", "automationDraft", "automationSave", "automationToggle", "automationDelete", "automationRunNow":
-		var r automationRequest
+		var r automation.Request
 		if err := arg(&r); err != nil {
 			return nil, err
 		}

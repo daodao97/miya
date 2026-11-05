@@ -4,9 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"strings"
-	"time"
 
 	"miya/internal/automation"
 	"miya/internal/model"
@@ -82,7 +80,7 @@ func (c *chatController) mcpAutomation(op string, r mcpRequest) (any, error) {
 	}
 	switch op {
 	case "mcpAutomationList":
-		return c.automationListText(), nil
+		return c.auto.ListText(), nil
 	case "mcpAutomationCreate":
 		caller, ok := c.mcpCaller(r.Tool)
 		if !ok {
@@ -97,22 +95,22 @@ func (c *chatController) mcpAutomation(op string, r mcpRequest) (any, error) {
 			return nil, err
 		}
 		a.ID = ""
-		id, ch := c.askUser(caller, "Create automation \""+a.Name+"\"", automationCardDetail(a, c.auto.Now()))
+		id, ch := c.askUser(caller, "Create automation \""+a.Name+"\"", c.auto.CardDetail(a, c.auto.Now()))
 		return deferred(func() (any, error) {
 			if !c.waitUser(id, ch) {
 				return "The user did not confirm. No automation was created.", nil
 			}
 			v, err := c.onMain(func() (any, error) {
-				saved, err := c.saveAutomation(a)
+				saved, err := c.auto.Save(a)
 				if err != nil {
 					return nil, err
 				}
-				return automationViewOf(saved, nil, false, c.auto.Now()), nil
+				return automation.ViewOf(saved, nil, false, c.auto.Now()), nil
 			})
 			if err != nil {
 				return nil, err
 			}
-			view := v.(automationView)
+			view := v.(automation.View)
 			return fmt.Sprintf("Created automation %q (ID %s), %s. Next run: %s.", view.Name, view.ID, view.ScheduleText, automation.FormatTime(view.Next)), nil
 		}), nil
 	case "mcpAutomationUpdate":
@@ -160,13 +158,13 @@ func (c *chatController) mcpUpdateAutomation(r mcpRequest, args mcpAutomationArg
 	if err := next.Normalize(); err != nil {
 		return nil, err
 	}
-	diff := automationDiff(old, next)
+	diff := c.auto.Diff(old, next)
 	if diff == "" {
 		if next.Enabled == old.Enabled {
 			return "No changes to apply.", nil
 		}
 		// Turning one on or off needs no card: the person asked for it.
-		if _, err := c.automationOp("automationToggle", automationRequest{ID: old.ID, Enabled: next.Enabled}); err != nil {
+		if _, err := c.automationOp("automationToggle", automation.Request{ID: old.ID, Enabled: next.Enabled}); err != nil {
 			return nil, err
 		}
 		if next.Enabled {
@@ -183,63 +181,9 @@ func (c *chatController) mcpUpdateAutomation(r mcpRequest, args mcpAutomationArg
 		if !c.waitUser(id, ch) {
 			return "The user did not confirm. The automation was not changed.", nil
 		}
-		if _, err := c.onMain(func() (any, error) { return c.saveAutomation(next) }); err != nil {
+		if _, err := c.onMain(func() (any, error) { return c.auto.Save(next) }); err != nil {
 			return nil, err
 		}
 		return "Updated \"" + next.Name + "\", " + automation.DescribeCron(next.Schedule) + ".", nil
 	}), nil
-}
-
-func (c *chatController) automationListText() string {
-	s := c.auto
-	if len(s.Store.Automations) == 0 {
-		return "No automations yet."
-	}
-	var b strings.Builder
-	for _, a := range s.Store.Automations {
-		state := "Paused"
-		if a.Enabled {
-			state = "Enabled; next run: " + automation.FormatTime(a.Next(s.Now()))
-		}
-		fmt.Fprintf(&b, "%s\"%s\"· %s · %s · %s", a.ID, a.Name, filepath.Base(a.Project), automation.DescribeCron(a.Schedule), state)
-		if r, ok := s.Store.LastRun(a.ID); ok {
-			fmt.Fprintf(&b, " · Last run: %s", automation.ResultLabel(r.Result))
-		}
-		b.WriteString("\n")
-	}
-	return strings.TrimRight(b.String(), "\n")
-}
-
-func automationCheckText(a automation.Automation) string {
-	if a.Check == "" {
-		return "No check; 1 round"
-	}
-	return fmt.Sprintf("Check: %s; up to %d rounds", a.Check, a.Rounds)
-}
-
-// automationCardDetail is what the confirmation card shows of a new one.
-func automationCardDetail(a automation.Automation, now time.Time) string {
-	return strings.Join([]string{
-		fmt.Sprintf("Schedule: %s (%s); next run: %s", automation.DescribeCron(a.Schedule), a.Schedule, automation.FormatTime(a.Next(now))),
-		"Project: " + a.Project,
-		"Agent: " + backendFor(a.Agent).Name(),
-		"Completion check: " + automationCheckText(a),
-		"Instructions: " + a.Instructions,
-	}, "\n")
-}
-
-// automationDiff lists what a change changes, besides turning it on or off.
-func automationDiff(old, next automation.Automation) string {
-	var lines []string
-	add := func(label, from, to string) {
-		if from != to {
-			lines = append(lines, label+": "+from+" → "+to)
-		}
-	}
-	add("Name", old.Name, next.Name)
-	add("Schedule", automation.DescribeCron(old.Schedule), automation.DescribeCron(next.Schedule))
-	add("Agent", backendFor(old.Agent).Name(), backendFor(next.Agent).Name())
-	add("Completion check", automationCheckText(old), automationCheckText(next))
-	add("Instructions", old.Instructions, next.Instructions)
-	return strings.Join(lines, "\n")
 }

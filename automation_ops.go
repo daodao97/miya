@@ -9,57 +9,19 @@ import (
 	"miya/internal/model"
 	"miya/internal/textutil"
 	"strings"
-	"time"
 )
 
 // The Automations page, the phone and the miya MCP tools change automations
 // through these operations, which run in the controller that owns them:
 // windows send them to the background service.
 
-// automationView is an automation as the page shows it.
-type automationView struct {
-	automation.Automation
-	ScheduleText string           `json:"scheduleText"`
-	Next         time.Time        `json:"next,omitzero"`
-	Upcoming     []time.Time      `json:"upcoming,omitempty"`
-	Running      bool             `json:"running,omitempty"`
-	Runs         []automation.Run `json:"runs,omitempty"`
-	// TimeMissing marks a draft whose sentence named no time.
-	TimeMissing bool `json:"timeMissing,omitempty"`
-}
-
-type automationRequest struct {
-	ID         string                 `json:"id,omitempty"`
-	Automation *automation.Automation `json:"automation,omitempty"`
-	Enabled    bool                   `json:"enabled,omitempty"`
-	// Request, Project and Agent ask for a draft.
-	Request string `json:"request,omitempty"`
-	Project string `json:"project,omitempty"`
-	Agent   string `json:"agent,omitempty"`
-}
-
 var automationOps = map[string]bool{"automationList": true, "automationDraft": true, "automationSave": true,
 	"automationToggle": true, "automationDelete": true, "automationRunNow": true}
-
-func automationViewOf(a automation.Automation, runs []automation.Run, running bool, now time.Time) automationView {
-	v := automationView{Automation: a, ScheduleText: automation.DescribeCron(a.Schedule), Running: running, Runs: runs}
-	next := now
-	for i := 0; i < 3; i++ {
-		if next = a.Next(next); next.IsZero() {
-			break
-		}
-		v.Upcoming = append(v.Upcoming, next)
-	}
-	if len(v.Upcoming) > 0 && a.Enabled {
-		v.Next = v.Upcoming[0]
-	}
-	return v
-}
 
 // automationCall runs an operation where the automations are, decoding its
 // reply into out. A window's call waits for the service: make it off the
 // main thread.
-func (c *chatController) automationCall(op string, r automationRequest, out any) error {
+func (c *chatController) automationCall(op string, r automation.Request, out any) error {
 	if c.remote != nil {
 		return c.remote.call(op, r, out)
 	}
@@ -84,7 +46,7 @@ func (c *chatController) automationCall(op string, r automationRequest, out any)
 
 // automationOp runs an operation on the main thread of the controller that
 // owns the automations.
-func (c *chatController) automationOp(op string, r automationRequest) (any, error) {
+func (c *chatController) automationOp(op string, r automation.Request) (any, error) {
 	s := c.auto
 	if s == nil {
 		return nil, errors.New("Automations require the Miya background service")
@@ -92,10 +54,10 @@ func (c *chatController) automationOp(op string, r automationRequest) (any, erro
 	now := s.Now()
 	switch op {
 	case "automationList":
-		views := []automationView{}
+		views := []automation.View{}
 		for _, a := range s.Store.Automations {
 			_, running := s.Active[a.ID]
-			views = append(views, automationViewOf(a, append([]automation.Run(nil), s.Store.Runs[a.ID]...), running, now))
+			views = append(views, automation.ViewOf(a, append([]automation.Run(nil), s.Store.Runs[a.ID]...), running, now))
 		}
 		return views, nil
 	case "automationDraft":
@@ -104,11 +66,11 @@ func (c *chatController) automationOp(op string, r automationRequest) (any, erro
 		if r.Automation == nil {
 			return nil, errors.New("No automation to save")
 		}
-		a, err := c.saveAutomation(*r.Automation)
+		a, err := c.auto.Save(*r.Automation)
 		if err != nil {
 			return nil, err
 		}
-		return automationViewOf(a, s.Store.Runs[a.ID], false, now), nil
+		return automation.ViewOf(a, s.Store.Runs[a.ID], false, now), nil
 	case "automationToggle":
 		i, ok := s.Store.Find(r.ID)
 		if !ok {
@@ -120,7 +82,7 @@ func (c *chatController) automationOp(op string, r automationRequest) (any, erro
 			a.Due = now
 		}
 		a.Enabled = r.Enabled
-		c.automationsChanged()
+		c.auto.Changed()
 		return nil, nil
 	case "automationDelete":
 		i, ok := s.Store.Find(r.ID)
@@ -131,7 +93,7 @@ func (c *chatController) automationOp(op string, r automationRequest) (any, erro
 		delete(s.Store.Runs, r.ID)
 		// A run in progress goes on as an ordinary conversation.
 		delete(s.Active, r.ID)
-		c.automationsChanged()
+		c.auto.Changed()
 		return nil, nil
 	case "automationRunNow":
 		return nil, c.auto.StartRun(r.ID, false)
@@ -140,7 +102,7 @@ func (c *chatController) automationOp(op string, r automationRequest) (any, erro
 }
 
 // Capture configuration on the main thread; run the returned work elsewhere.
-func (c *chatController) prepareAutomationDraft(ctx context.Context, r automationRequest) (deferred, error) {
+func (c *chatController) prepareAutomationDraft(ctx context.Context, r automation.Request) (deferred, error) {
 	if c.auto == nil {
 		return nil, errors.New("Automations require the Miya background service")
 	}
@@ -162,49 +124,8 @@ func (c *chatController) prepareAutomationDraft(ctx context.Context, r automatio
 		if err != nil {
 			return nil, err
 		}
-		v := automationViewOf(a, nil, false, now)
+		v := automation.ViewOf(a, nil, false, now)
 		v.TimeMissing = timeMissing
 		return v, nil
 	}), nil
-}
-
-// saveAutomation creates an automation or changes one, keeping what its
-// runs recorded.
-func (c *chatController) saveAutomation(a automation.Automation) (automation.Automation, error) {
-	return c.saveAutomationWithCreateID(a, "")
-}
-
-// createID lets a phone retry an interrupted creation without adding it twice.
-func (c *chatController) saveAutomationWithCreateID(a automation.Automation, createID string) (automation.Automation, error) {
-	s := c.auto
-	now := s.Now()
-	i, exists := s.Store.Find(a.ID)
-	if !exists {
-		a.ID, a.Created, a.Due = createID, now, now
-	}
-	if err := a.Normalize(); err != nil {
-		return automation.Automation{}, err
-	}
-	if exists {
-		old := s.Store.Automations[i]
-		a.Created, a.Due = old.Created, old.Due
-		if a.Schedule != old.Schedule || a.Enabled && !old.Enabled {
-			a.Due = now
-		}
-		s.Store.Automations[i] = a
-	} else {
-		s.Store.Automations = append(s.Store.Automations, a)
-	}
-	c.automationsChanged()
-	return a, nil
-}
-
-// automationsChanged saves the automations and keeps the login item to
-// whether one is on.
-func (c *chatController) automationsChanged() {
-	c.auto.Persist()
-	syncAutomationLaunchAgent(c.auto.Store.AnyEnabled())
-	if c.revision != nil {
-		c.setRevision(c.revision() + 1)
-	}
 }

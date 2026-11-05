@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"miya/internal/automation"
 )
 
 func TestMobileDrawerDestinationsReturnToDrawer(t *testing.T) {
@@ -62,7 +63,7 @@ func TestMobileDrawerChildPagesReturnToTheirParent(t *testing.T) {
 		t.Run(destination.path, func(t *testing.T) {
 			m := testMobileApp()
 			m.state.Automations = true
-			data, _ := json.Marshal([]automationView{mobileAutomationFixture()})
+			data, _ := json.Marshal([]automation.View{mobileAutomationFixture()})
 			m.receiveAutomations(data, "")
 			tt := ui.NewTester(m.viewRoot, 390, 844)
 			tt.Frame()

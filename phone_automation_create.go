@@ -12,11 +12,11 @@ import (
 )
 
 type phoneAutomationFormResult struct {
-	RequestID string          `json:"requestId"`
-	View      *automationView `json:"view,omitempty"`
+	RequestID string           `json:"requestId"`
+	View      *automation.View `json:"view,omitempty"`
 }
 
-func phoneAutomationFormFrame(r remote.Request, view *automationView, err error) remote.Frame {
+func phoneAutomationFormFrame(r remote.Request, view *automation.View, err error) remote.Frame {
 	data, _ := json.Marshal(phoneAutomationFormResult{RequestID: r.RequestID, View: view})
 	f := remote.Frame{Type: r.Op, Data: data}
 	if err != nil {
@@ -31,7 +31,7 @@ func (c *chatController) phoneAutomationDraft(ctx context.Context, r remote.Requ
 		err  error
 	}
 	pending, ok := onMain(ctx, c.dispatch, func() pendingDraft {
-		work, err := c.prepareAutomationDraft(ctx, automationRequest{Request: r.Text, Project: r.Project, Agent: r.Agent})
+		work, err := c.prepareAutomationDraft(ctx, automation.Request{Request: r.Text, Project: r.Project, Agent: r.Agent})
 		return pendingDraft{work, err}
 	})
 	if !ok {
@@ -41,7 +41,7 @@ func (c *chatController) phoneAutomationDraft(ctx context.Context, r remote.Requ
 		return phoneAutomationFormFrame(r, nil, pending.err)
 	}
 	result, err := pending.work()
-	v, _ := result.(automationView)
+	v, _ := result.(automation.View)
 	return phoneAutomationFormFrame(r, &v, err)
 }
 
@@ -59,7 +59,7 @@ func (c *chatController) phoneAutomationCreate(r remote.Request) remote.Frame {
 	if i, exists := c.auto.Store.Find(id); exists {
 		a := c.auto.Store.Automations[i]
 		_, running := c.auto.Active[id]
-		v := automationViewOf(a, c.auto.Store.Runs[id], running, c.auto.Now())
+		v := automation.ViewOf(a, c.auto.Store.Runs[id], running, c.auto.Now())
 		return phoneAutomationFormFrame(r, &v, nil)
 	}
 	var a automation.Automation
@@ -67,10 +67,10 @@ func (c *chatController) phoneAutomationCreate(r remote.Request) remote.Frame {
 		return phoneAutomationFormFrame(r, nil, errors.New("No automation to save"))
 	}
 	a.ID, a.Created, a.Due = "", time.Time{}, time.Time{}
-	a, err = c.saveAutomationWithCreateID(a, id)
+	a, err = c.auto.SaveWithID(a, id)
 	if err != nil {
 		return phoneAutomationFormFrame(r, nil, err)
 	}
-	v := automationViewOf(a, nil, false, c.auto.Now())
+	v := automation.ViewOf(a, nil, false, c.auto.Now())
 	return phoneAutomationFormFrame(r, &v, nil)
 }

@@ -16,7 +16,7 @@ import (
 
 type mobileAutomations struct {
 	form             mobileAutomationForm
-	list             []automationView
+	list             []automation.View
 	detail           string
 	loaded           bool
 	loading          bool
@@ -31,8 +31,8 @@ type mobileAutomations struct {
 }
 
 type phoneAutomationRunResult struct {
-	RequestID string           `json:"requestId"`
-	List      []automationView `json:"list"`
+	RequestID string            `json:"requestId"`
+	List      []automation.View `json:"list"`
 }
 
 func (m *mobileApp) runPhoneAutomation(id string) {
@@ -104,7 +104,7 @@ func (m *mobileApp) receiveAutomations(data json.RawMessage, message string) {
 		m.autos.err = message
 		return
 	}
-	var list []automationView
+	var list []automation.View
 	if err := json.Unmarshal(data, &list); err != nil {
 		m.autos.err = tr("Failed to load automation data. Try again.")
 		return
@@ -218,7 +218,7 @@ func (m *mobileApp) automationPhoneEmpty(c *ui.Context, title, text string) {
 	})
 }
 
-func (m *mobileApp) automationPhoneRow(c *ui.Context, v automationView) {
+func (m *mobileApp) automationPhoneRow(c *ui.Context, v automation.View) {
 	p := m.pal
 	b := m.phoneButton(c).FillWidth().Padding(16, 0).Gap(12).Radius(0).Background(ui.Transparent).Label(v.Name)
 	b.Children(func() {
@@ -254,7 +254,7 @@ func (m *mobileApp) automationPhoneRow(c *ui.Context, v automationView) {
 	}
 }
 
-func automationPhoneNext(v automationView) string {
+func automationPhoneNext(v automation.View) string {
 	if !v.Enabled {
 		return tr("Paused")
 	}
@@ -264,7 +264,7 @@ func automationPhoneNext(v automationView) string {
 	return tr("Next ") + v.Next.Format("Jan 2, 15:04")
 }
 
-func (m *mobileApp) automationPhoneProject(v automationView) string {
+func (m *mobileApp) automationPhoneProject(v automation.View) string {
 	for _, p := range m.state.Projects {
 		if p.Path == v.Project {
 			return p.Name
@@ -273,7 +273,7 @@ func (m *mobileApp) automationPhoneProject(v automationView) string {
 	return filepath.Base(v.Project)
 }
 
-func (m *mobileApp) automationPhoneDetail(c *ui.Context, v automationView) {
+func (m *mobileApp) automationPhoneDetail(c *ui.Context, v automation.View) {
 	p := m.pal
 	ui.Column(c).FillWidth().Gap(8).Children(func() {
 		ui.Text(c, v.Name).FontSize(m.font(26)).FontWeight(600)
@@ -382,7 +382,7 @@ func (m *mobileApp) automationPhoneRunColor(result string) ui.Color {
 	}
 }
 
-func (m *mobileApp) automationPhoneRun(c *ui.Context, v automationView, r automation.Run, running bool) {
+func (m *mobileApp) automationPhoneRun(c *ui.Context, v automation.View, r automation.Run, running bool) {
 	p := m.pal
 	key := v.ID + ":" + r.Started.Format(time.RFC3339Nano)
 	expanded := m.autos.openRuns[key]
@@ -473,7 +473,7 @@ func (m *mobileApp) automationPhoneRun(c *ui.Context, v automationView, r automa
 	})
 }
 
-func (m *mobileApp) automationRunThread(v automationView, r automation.Run) (Thread, bool) {
+func (m *mobileApp) automationRunThread(v automation.View, r automation.Run) (Thread, bool) {
 	for _, p := range m.state.Projects {
 		if p.Path != v.Project {
 			continue

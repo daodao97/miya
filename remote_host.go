@@ -14,6 +14,7 @@ import (
 
 	"github.com/egoist/mygo/push/apns"
 	"miya/internal/appdir"
+	"miya/internal/automation"
 	"miya/internal/codex"
 	"miya/internal/desktop"
 	"miya/internal/model"
@@ -617,10 +618,10 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 				}
 			case "automation-run":
 				frame, ok := onMain(ctx, c.dispatch, func() remote.Frame {
-					_, err := c.automationOp("automationRunNow", automationRequest{ID: r.AutomationID})
+					_, err := c.automationOp("automationRunNow", automation.Request{ID: r.AutomationID})
 					result := phoneAutomationRunResult{RequestID: r.RequestID}
-					list, _ := c.automationOp("automationList", automationRequest{})
-					result.List, _ = list.([]automationView)
+					list, _ := c.automationOp("automationList", automation.Request{})
+					result.List, _ = list.([]automation.View)
 					data, _ := json.Marshal(result)
 					frame := remote.Frame{Type: "automation-run", Data: data}
 					if err != nil {
@@ -633,7 +634,7 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 				}
 			case "automations":
 				frame, ok := onMain(ctx, c.dispatch, func() remote.Frame {
-					result, err := c.automationOp("automationList", automationRequest{})
+					result, err := c.automationOp("automationList", automation.Request{})
 					frame := remote.Frame{Type: "automations"}
 					if err == nil {
 						frame.Data, err = json.Marshal(result)

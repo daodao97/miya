@@ -40,6 +40,8 @@ type Host interface {
 	// SyncLoginItem keeps the service starting at login while an
 	// automation is on.
 	SyncLoginItem(enabled bool)
+	// Changed tells windows the automations changed.
+	Changed()
 }
 
 // Runner runs the automations of the controller that owns them: the

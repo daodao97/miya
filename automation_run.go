@@ -23,6 +23,12 @@ func (h automationHost) AutoReport(t Thread) *automation.Report { return autoRun
 func (h automationHost) Deliver(n notification.Notice)          { h.c.deliverNotice(n, "completion") }
 func (h automationHost) SyncLoginItem(enabled bool)             { syncAutomationLaunchAgent(enabled) }
 
+func (h automationHost) Changed() {
+	if h.c.revision != nil {
+		h.c.setRevision(h.c.revision() + 1)
+	}
+}
+
 // startAutomations loads the automations and, with schedule, checks them
 // every automation.TickInterval from now on.
 func (c *chatController) startAutomations(path string, schedule bool) {

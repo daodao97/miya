@@ -14,8 +14,8 @@ import (
 	"miya/internal/automation"
 )
 
-func mobileAutomationFixture() automationView {
-	return automationViewOf(automation.Automation{ID: "daily", Name: "仓库日报", Project: "/a", Agent: agentCodex, Instructions: "总结仓库的最新变化。", Schedule: "0 18 * * *", Enabled: true}, []automation.Run{{Started: atLocal("2026-11-01 18:00"), Thread: 99, ServerID: "s1", Result: automation.Passed, Summary: "日报已完成", Report: &automation.Report{Summary: "已完成检查", Findings: []string{"测试全部通过"}}}}, false, atLocal("2026-11-01 19:00"))
+func mobileAutomationFixture() automation.View {
+	return automation.ViewOf(automation.Automation{ID: "daily", Name: "仓库日报", Project: "/a", Agent: agentCodex, Instructions: "总结仓库的最新变化。", Schedule: "0 18 * * *", Enabled: true}, []automation.Run{{Started: atLocal("2026-11-01 18:00"), Thread: 99, ServerID: "s1", Result: automation.Passed, Summary: "日报已完成", Report: &automation.Report{Summary: "已完成检查", Findings: []string{"测试全部通过"}}}}, false, atLocal("2026-11-01 19:00"))
 }
 
 func TestMobileAutomationCreateNavigationAndFeedback(t *testing.T) {
@@ -113,7 +113,7 @@ func TestMobileAutomationsNavigationAndRun(t *testing.T) {
 	m := testMobileApp()
 	m.state.Automations = true
 	v := mobileAutomationFixture()
-	data, _ := json.Marshal([]automationView{v})
+	data, _ := json.Marshal([]automation.View{v})
 	m.receiveAutomations(data, "")
 	tt := ui.NewTester(m.viewRoot, 390, 844)
 	tt.Frame()
@@ -202,7 +202,7 @@ func TestMobileAutomationsUnavailableAndReadErrors(t *testing.T) {
 		t.Fatal("empty automation state missing")
 	}
 	v := mobileAutomationFixture()
-	data, _ := json.Marshal([]automationView{v})
+	data, _ := json.Marshal([]automation.View{v})
 	m.receiveAutomations(data, "")
 	m.receiveAutomations(nil, "Failed to load")
 	m.receiveAutomations(json.RawMessage(`broken`), "")
@@ -248,7 +248,7 @@ func TestMobileAutomationRunFeedbackAndCompatibility(t *testing.T) {
 	m := testMobileApp()
 	m.state.Automations = true
 	v := mobileAutomationFixture()
-	m.autos.list, m.autos.loaded, m.autos.detail = []automationView{v}, true, v.ID
+	m.autos.list, m.autos.loaded, m.autos.detail = []automation.View{v}, true, v.ID
 	m.router().Push("/automation")
 	tt := ui.NewTester(m.viewRoot, 390, 844)
 	tt.Frame()
@@ -268,12 +268,12 @@ func TestMobileAutomationRunFeedbackAndCompatibility(t *testing.T) {
 		t.Fatal("pending run feedback missing")
 	}
 	v.Running = true
-	data, _ := json.Marshal(phoneAutomationRunResult{RequestID: "stale", List: []automationView{v}})
+	data, _ := json.Marshal(phoneAutomationRunResult{RequestID: "stale", List: []automation.View{v}})
 	m.receiveAutomationRun(data, "")
 	if m.autos.runRequest != "request" || m.autos.list[0].Running {
 		t.Fatal("stale acknowledgement changed a pending request")
 	}
-	data, _ = json.Marshal(phoneAutomationRunResult{RequestID: "request", List: []automationView{v}})
+	data, _ = json.Marshal(phoneAutomationRunResult{RequestID: "request", List: []automation.View{v}})
 	m.receiveAutomationRun(data, "")
 	tt.Frame()
 	if m.autos.runRequest != "" || !m.autos.list[0].Running || !tt.HasText("Running") {
@@ -281,7 +281,7 @@ func TestMobileAutomationRunFeedbackAndCompatibility(t *testing.T) {
 	}
 	v.Running = false
 	m.autos.runRequest = "failed"
-	data, _ = json.Marshal(phoneAutomationRunResult{RequestID: "failed", List: []automationView{v}})
+	data, _ = json.Marshal(phoneAutomationRunResult{RequestID: "failed", List: []automation.View{v}})
 	m.receiveAutomationRun(data, "Project directory does not exist")
 	tt.Frame()
 	if !tt.HasText("Project directory does not exist") || m.autos.runRequest != "" {
@@ -328,7 +328,7 @@ func TestMobileAutomationsLongContentAndTextScaling(t *testing.T) {
 			paused.ID, paused.Name, paused.Enabled = "paused", "仓库日报", false
 			running := v
 			running.ID, running.Name, running.Running = "running", "检查部署状态", true
-			m.autos.list, m.autos.loaded = []automationView{v, paused, running}, true
+			m.autos.list, m.autos.loaded = []automation.View{v, paused, running}, true
 			m.router().Push("/automations")
 			tt := ui.NewTester(m.viewRoot, width, 844)
 			tt.SetDark(dark)

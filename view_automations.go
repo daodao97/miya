@@ -18,7 +18,7 @@ import (
 type automationsUI struct {
 	page     string // "", "detail" or "form"
 	detail   string // the automation the detail page shows
-	list     []automationView
+	list     []automation.View
 	loaded   bool
 	loading  bool
 	loadedAt time.Time
@@ -36,7 +36,7 @@ type automationsUI struct {
 	agent       string
 	projectOpen bool
 	enable      bool
-	draft       *automationView
+	draft       *automation.View
 	drafting    bool
 	draftErr    string
 	gen         int
@@ -68,7 +68,7 @@ func agentTint(agent string) ui.Color {
 
 // autoCall runs an automation operation and then done on the main thread,
 // never making the window wait.
-func (app *chatApp) autoCall(op string, r automationRequest, done func(json.RawMessage, error)) {
+func (app *chatApp) autoCall(op string, r automation.Request, done func(json.RawMessage, error)) {
 	c := app.c
 	if c.remote != nil {
 		go func() {
@@ -108,13 +108,13 @@ func (app *chatApp) loadAutomations() {
 		return
 	}
 	a.loading = true
-	app.autoCall("automationList", automationRequest{}, func(raw json.RawMessage, err error) {
+	app.autoCall("automationList", automation.Request{}, func(raw json.RawMessage, err error) {
 		a.loading, a.loadedAt = false, time.Now()
 		if err != nil {
 			a.err = err.Error()
 			return
 		}
-		var list []automationView
+		var list []automation.View
 		_ = json.Unmarshal(raw, &list)
 		a.list, a.loaded, a.err = list, true, ""
 	})
@@ -171,7 +171,7 @@ func runBadge(c *ui.Context, run automation.Run, has, running bool) {
 	})
 }
 
-func lastAutomationRun(v automationView) (automation.Run, bool) {
+func lastAutomationRun(v automation.View) (automation.Run, bool) {
 	for i := len(v.Runs) - 1; i >= 0; i-- {
 		if v.Runs[i].Result != automation.Skipped {
 			return v.Runs[i], true
@@ -180,7 +180,7 @@ func lastAutomationRun(v automationView) (automation.Run, bool) {
 	return automation.Run{}, false
 }
 
-func automationSubline(v automationView) string {
+func automationSubline(v automation.View) string {
 	parts := []string{filepath.Base(v.Project), backendFor(v.Agent).Name()}
 	if v.Check != "" {
 		parts = append(parts, tr("Completion criteria ")+v.Check)
@@ -230,7 +230,7 @@ func (app *chatApp) automationList(c *ui.Context) {
 	})
 }
 
-func (app *chatApp) automationRow(c *ui.Context, v automationView) {
+func (app *chatApp) automationRow(c *ui.Context, v automation.View) {
 	a := &app.autos
 	last, has := lastAutomationRun(v)
 	ui.Row(c).FillWidth().Gap(14).Padding(14, 16, 14, 16).AlignItems(ui.Center).Border(1, line).Radius(12).Children(func() {
@@ -282,7 +282,7 @@ func (app *chatApp) toggleAutomation(id string, on bool) {
 			a.list[i].Enabled = on
 		}
 	}
-	app.autoCall("automationToggle", automationRequest{ID: id, Enabled: on}, func(_ json.RawMessage, err error) {
+	app.autoCall("automationToggle", automation.Request{ID: id, Enabled: on}, func(_ json.RawMessage, err error) {
 		if err != nil {
 			a.err = err.Error()
 		}
@@ -292,7 +292,7 @@ func (app *chatApp) toggleAutomation(id string, on bool) {
 
 func (app *chatApp) runAutomationNow(id string) {
 	a := &app.autos
-	app.autoCall("automationRunNow", automationRequest{ID: id}, func(_ json.RawMessage, err error) {
+	app.autoCall("automationRunNow", automation.Request{ID: id}, func(_ json.RawMessage, err error) {
 		if err != nil {
 			a.err = err.Error()
 		}
@@ -328,7 +328,7 @@ func backLink(c *ui.Context, label string) bool {
 
 func (app *chatApp) automationDetail(c *ui.Context) {
 	a := &app.autos
-	var v automationView
+	var v automation.View
 	found := false
 	for _, x := range a.list {
 		if x.ID == a.detail {
@@ -411,7 +411,7 @@ func (app *chatApp) automationDetail(c *ui.Context) {
 		if ui.Switch(c.Key("carry"), &carry).Label(tr("Include previous result")).Shrink(0).Changed() {
 			next := v.Automation
 			next.NoCarryOver = !carry
-			app.autoCall("automationSave", automationRequest{Automation: &next}, func(_ json.RawMessage, err error) {
+			app.autoCall("automationSave", automation.Request{Automation: &next}, func(_ json.RawMessage, err error) {
 				if err != nil {
 					app.autos.err = err.Error()
 				}
@@ -452,7 +452,7 @@ func settingChip(c *ui.Context, symbol, text string) {
 	})
 }
 
-func (app *chatApp) runRow(c *ui.Context, v automationView, r automation.Run, running bool) {
+func (app *chatApp) runRow(c *ui.Context, v automation.View, r automation.Run, running bool) {
 	color, title := ui.Color(muted), r.Summary
 	switch {
 	case running:
@@ -499,7 +499,7 @@ func (app *chatApp) runRow(c *ui.Context, v automationView, r automation.Run, ru
 
 func (app *chatApp) deleteAutomation(id string) {
 	a := &app.autos
-	app.autoCall("automationDelete", automationRequest{ID: id}, func(_ json.RawMessage, err error) {
+	app.autoCall("automationDelete", automation.Request{ID: id}, func(_ json.RawMessage, err error) {
 		if err != nil {
 			a.err = err.Error()
 		}
@@ -509,7 +509,7 @@ func (app *chatApp) deleteAutomation(id string) {
 }
 
 // openAutomationForm starts a new automation, or edits v.
-func (app *chatApp) openAutomationForm(v *automationView) {
+func (app *chatApp) openAutomationForm(v *automation.View) {
 	a := &app.autos
 	c := app.c
 	a.page, a.editID, a.request, a.draft, a.draftErr, a.drafting, a.editing, a.editErr = "form", "", "", nil, "", false, "", ""
@@ -541,7 +541,7 @@ func (app *chatApp) startDraft() {
 	app.invalidateDraft()
 	g := a.gen
 	a.drafting, a.draftErr = true, ""
-	req := automationRequest{Request: a.request, Project: a.project, Agent: a.agent}
+	req := automation.Request{Request: a.request, Project: a.project, Agent: a.agent}
 	app.autoCall("automationDraft", req, func(raw json.RawMessage, err error) {
 		if g != a.gen {
 			return
@@ -551,7 +551,7 @@ func (app *chatApp) startDraft() {
 			a.draftErr = err.Error()
 			return
 		}
-		var v automationView
+		var v automation.View
 		if json.Unmarshal(raw, &v) != nil {
 			a.draftErr = tr("Unable to read generated settings")
 			return
@@ -716,7 +716,7 @@ func draftSkeleton(c *ui.Context) {
 	})
 }
 
-func (app *chatApp) draftPreview(c *ui.Context, d *automationView) {
+func (app *chatApp) draftPreview(c *ui.Context, d *automation.View) {
 	ui.Column(c).FillWidth().Border(1, line).Radius(14).Clip().Children(func() {
 		app.draftRow(c, "name", "edit", tr("Name"), d.Name, false, func() {
 			ui.Text(c, d.Name).Grow(1).MinWidth(0)
@@ -867,7 +867,7 @@ func (app *chatApp) applyDraftEdit(key string) {
 		// A new automation's id comes from the service as it is saved.
 		next.ID = d.ID
 	}
-	v := automationViewOf(next, d.Runs, d.Running, time.Now())
+	v := automation.ViewOf(next, d.Runs, d.Running, time.Now())
 	v.TimeMissing = d.TimeMissing && key != "schedule"
 	a.draft, a.editing, a.editErr = &v, "", ""
 }
@@ -880,13 +880,13 @@ func (app *chatApp) saveAutomationForm(runNow bool) {
 	d := a.draft.Automation
 	d.ID, d.Enabled, d.Request, d.Project, d.Agent = a.editID, a.enable, strings.TrimSpace(a.request), a.project, a.agent
 	a.saving = true
-	app.autoCall("automationSave", automationRequest{Automation: &d}, func(raw json.RawMessage, err error) {
+	app.autoCall("automationSave", automation.Request{Automation: &d}, func(raw json.RawMessage, err error) {
 		a.saving = false
 		if err != nil {
 			a.draftErr = err.Error()
 			return
 		}
-		var v automationView
+		var v automation.View
 		_ = json.Unmarshal(raw, &v)
 		a.page, a.detail = "detail", v.ID
 		replaced := false
