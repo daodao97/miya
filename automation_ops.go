@@ -7,6 +7,7 @@ import (
 	"miya/internal/automation"
 	"miya/internal/claude"
 	"miya/internal/model"
+	"miya/internal/notification"
 	"miya/internal/textutil"
 	"strings"
 )
@@ -128,4 +129,47 @@ func (c *chatController) prepareAutomationDraft(ctx context.Context, r automatio
 		v.TimeMissing = timeMissing
 		return v, nil
 	}), nil
+}
+
+// automationHost is the controller as the automation runner sees it.
+type automationHost struct{ c *chatController }
+
+func (h automationHost) Dispatch(f func())                      { h.c.dispatch(f) }
+func (h automationHost) Submit(r SendRequest) int               { return h.c.submit(r) }
+func (h automationHost) Thread(id int) Thread                   { return h.c.threadWithID(id) }
+func (h automationHost) UpdateThread(id int, f func(*Thread))   { h.c.update(id, f) }
+func (h automationHost) AwaitsUser(t Thread) bool               { return h.c.threadAwaitsUser(t) }
+func (h automationHost) Outcome(id int) (string, string)        { return h.c.handoffState(id) }
+func (h automationHost) AgentName(agent string) string          { return backendFor(agent).Name() }
+func (h automationHost) AutoReport(t Thread) *automation.Report { return autoRunReport(t) }
+func (h automationHost) Deliver(n notification.Notice)          { h.c.deliverNotice(n, "completion") }
+func (h automationHost) SyncLoginItem(enabled bool)             { syncAutomationLaunchAgent(enabled) }
+
+func (h automationHost) Changed() {
+	if h.c.revision != nil {
+		h.c.setRevision(h.c.revision() + 1)
+	}
+}
+
+// startAutomations loads the automations and, with schedule, checks them
+// every automation.TickInterval from now on.
+func (c *chatController) startAutomations(path string, schedule bool) {
+	c.auto = automation.NewRunner(automationHost{c}, path)
+	done := make(<-chan struct{})
+	if c.ctx != nil {
+		done = c.ctx.Done()
+	}
+	c.auto.Start(done, schedule)
+}
+
+// autoRunReport is the result of a run whose agent reported none: its last
+// reply and the files it changed.
+func autoRunReport(t Thread) *automation.Report {
+	reply := lastReply(t.Messages)
+	files := changedFiles(t.Messages)
+	if reply == "" && len(files) == 0 {
+		return nil
+	}
+	r := automation.Report{Summary: reply, Artifacts: files, Auto: true}.Cleaned()
+	return &r
 }

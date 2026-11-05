@@ -244,3 +244,51 @@ func (c *chatController) waitUser(id json.RawMessage, ch chan bool) bool {
 		return false
 	}
 }
+
+// approvalThread is the conversation an approval waits in, Codex's by its
+// thread id and Claude Code's by the conversation in its request id.
+func (c *chatController) approvalThread(a codex.Approval) (Thread, bool) {
+	if claudeApproval(a) {
+		var s string
+		_ = json.Unmarshal(a.ID, &s)
+		var id int
+		if _, err := fmt.Sscanf(s, "claude:%d:", &id); err != nil {
+			return Thread{}, false
+		}
+		t := c.threadWithID(id)
+		return t, t.ID != 0
+	}
+	if a.ThreadID == "" {
+		return Thread{}, false
+	}
+	for _, t := range c.threads() {
+		if t.ServerID == a.ThreadID {
+			return t, true
+		}
+	}
+	for path, threads := range c.projectCache {
+		if path == c.cwd {
+			continue
+		}
+		for _, t := range threads {
+			if t.ServerID == a.ThreadID {
+				return t, true
+			}
+		}
+	}
+	return Thread{}, false
+}
+
+// threadAwaitsUser reports whether a conversation waits for an approval or
+// an answer.
+func (c *chatController) threadAwaitsUser(t Thread) bool {
+	if c.approvals == nil {
+		return false
+	}
+	for _, a := range c.approvals() {
+		if at, ok := c.approvalThread(a); ok && at.ID == t.ID {
+			return true
+		}
+	}
+	return false
+}
