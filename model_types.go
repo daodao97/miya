@@ -9,6 +9,7 @@ import (
 	"miya/internal/mcpserver"
 	"miya/internal/model"
 	"miya/internal/msgfmt"
+	"miya/internal/phone"
 	"miya/internal/phoneapi"
 	"miya/internal/svcproto"
 )
@@ -246,4 +247,31 @@ var (
 	insertAgentReference     = composer.InsertAgentReference
 	insertFileReference      = composer.InsertFileReference
 	slashCommand             = composer.SlashCommand
+)
+
+// The phone server's controller-free parts live in internal/phone; the
+// remote terminal client lives in internal/svcproto.
+type (
+	phoneThreadSync = phone.ThreadSync
+	terminalFrame   = svcproto.TerminalFrame
+)
+
+const (
+	maxPhoneImageBytes = phone.MaxImageBytes
+	maxPhoneImageTotal = phone.MaxImageTotal
+	maxPhoneImages     = phone.MaxImages
+)
+
+var (
+	hasHistory          = phone.HasHistory
+	listThread          = phone.ListThread
+	loadPhoneEnabled    = phone.LoadEnabled
+	newPhoneThreadSync  = phone.NewThreadSync
+	openRemoteTerminal  = svcproto.OpenTerminal
+	persistPhoneEnabled = phone.PersistEnabled
+	phoneDir            = phone.Dir
+	pruneOldUploads     = phone.PruneOldUploads
+	readPhoneImages     = phone.ReadImages
+	sameJSON            = phone.SameJSON
+	savePhoneImages     = phone.SaveImages
 )

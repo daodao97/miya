@@ -1,4 +1,4 @@
-package main
+package phone
 
 import (
 	"errors"
@@ -16,29 +16,29 @@ import (
 
 // The same limits apply to binary uploads and legacy inline photos.
 const (
-	maxPhoneImages     = remote.MaxImages
-	maxPhoneImageBytes = remote.MaxImageBytes
-	maxPhoneImageTotal = remote.MaxImageTotal
-	phoneUploadsKept   = 7 * 24 * time.Hour
+	MaxImages     = remote.MaxImages
+	MaxImageBytes = remote.MaxImageBytes
+	MaxImageTotal = remote.MaxImageTotal
+	uploadsKept   = 7 * 24 * time.Hour
 )
 
-var phoneImageExts = map[string]bool{".png": true, ".jpg": true, ".jpeg": true, ".gif": true, ".webp": true, ".heic": true, ".heif": true}
+var imageExts = map[string]bool{".png": true, ".jpg": true, ".jpeg": true, ".gif": true, ".webp": true, ".heic": true, ".heif": true}
 
-func checkPhoneImages(n, size, total int) error {
+func CheckImages(n, size, total int) error {
 	switch {
-	case n > maxPhoneImages:
-		return fmt.Errorf("Send up to %d images at a time", maxPhoneImages)
-	case size > maxPhoneImageBytes:
-		return fmt.Errorf("Each image must be at most %d MB", maxPhoneImageBytes>>20)
-	case total > maxPhoneImageTotal:
-		return fmt.Errorf("Total image size must be at most %d MB", maxPhoneImageTotal>>20)
+	case n > MaxImages:
+		return fmt.Errorf("Send up to %d images at a time", MaxImages)
+	case size > MaxImageBytes:
+		return fmt.Errorf("Each image must be at most %d MB", MaxImageBytes>>20)
+	case total > MaxImageTotal:
+		return fmt.Errorf("Total image size must be at most %d MB", MaxImageTotal>>20)
 	}
 	return nil
 }
 
 // readPhoneImages reads the photos a phone attaches to a message.
-func readPhoneImages(paths []string) ([]remote.Image, error) {
-	if err := checkPhoneImages(len(paths), 0, 0); err != nil {
+func ReadImages(paths []string) ([]remote.Image, error) {
+	if err := CheckImages(len(paths), 0, 0); err != nil {
 		return nil, err
 	}
 	var out []remote.Image
@@ -49,7 +49,7 @@ func readPhoneImages(paths []string) ([]remote.Image, error) {
 			return nil, errors.New("Unable to read image. Select it again.")
 		}
 		total += len(data)
-		if err := checkPhoneImages(len(paths), len(data), total); err != nil {
+		if err := CheckImages(len(paths), len(data), total); err != nil {
 			return nil, err
 		}
 		out = append(out, remote.Image{Name: filepath.Base(p), Data: data})
@@ -60,21 +60,21 @@ func readPhoneImages(paths []string) ([]remote.Image, error) {
 // savePhoneImages keeps a phone's photos as files the agents can read, as
 // attachments chosen on the desktop are. HEIC becomes JPEG, which every
 // agent reads.
-func savePhoneImages(images []remote.Image) (paths []string, err error) {
+func SaveImages(images []remote.Image) (paths []string, err error) {
 	if len(images) == 0 {
 		return nil, nil
 	}
-	if err := checkPhoneImages(len(images), 0, 0); err != nil {
+	if err := CheckImages(len(images), 0, 0); err != nil {
 		return nil, err
 	}
 	dir := filepath.Join(os.TempDir(), "miya-phone-uploads")
-	if base := phoneDir(); base != "" {
+	if base := Dir(); base != "" {
 		dir = filepath.Join(base, "uploads")
 	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, errors.New("Unable to save image")
 	}
-	pruneOldUploads(dir)
+	PruneOldUploads(dir)
 	defer func() {
 		if err != nil {
 			for _, p := range paths {
@@ -86,11 +86,11 @@ func savePhoneImages(images []remote.Image) (paths []string, err error) {
 	total := 0
 	for _, img := range images {
 		total += len(img.Data)
-		if err := checkPhoneImages(len(images), len(img.Data), total); err != nil {
+		if err := CheckImages(len(images), len(img.Data), total); err != nil {
 			return paths, err
 		}
 		ext := strings.ToLower(filepath.Ext(filepath.Base(img.Name)))
-		if !phoneImageExts[ext] {
+		if !imageExts[ext] {
 			switch http.DetectContentType(img.Data) {
 			case "image/png":
 				ext = ".png"
@@ -131,13 +131,13 @@ func savePhoneImages(images []remote.Image) (paths []string, err error) {
 
 // pruneOldUploads removes photos sent long ago; the conversations keep
 // their own copies.
-func pruneOldUploads(dir string) {
+func PruneOldUploads(dir string) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return
 	}
 	for _, e := range entries {
-		if info, err := e.Info(); err == nil && info.Mode().IsRegular() && time.Since(info.ModTime()) > phoneUploadsKept {
+		if info, err := e.Info(); err == nil && info.Mode().IsRegular() && time.Since(info.ModTime()) > uploadsKept {
 			os.Remove(filepath.Join(dir, e.Name()))
 		}
 	}

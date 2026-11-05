@@ -1,4 +1,4 @@
-package main
+package svcproto
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"miya/internal/remote"
 )
 
-type terminalFrame struct {
+type TerminalFrame struct {
 	Op                        string `json:"op"`
 	Project                   string `json:"project,omitempty"`
 	Data                      []byte `json:"data,omitempty"`
@@ -22,9 +22,9 @@ type remoteTerminal struct {
 	pending []byte
 }
 
-func openRemoteTerminal(cl *serviceClient, project string) (io.ReadWriteCloser, error) {
+func OpenTerminal(cl *Client, project string) (io.ReadWriteCloser, error) {
 	if cl == nil || cl.Wire() == nil {
-		return nil, errServiceClosed
+		return nil, ErrClosed
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
@@ -33,8 +33,8 @@ func openRemoteTerminal(cl *serviceClient, project string) (io.ReadWriteCloser, 
 		return nil, err
 	}
 	_ = wire.SetReadDeadline(time.Now().Add(20 * time.Second))
-	err = wire.Send(terminalFrame{Op: "open", Project: project, Cols: 80, Rows: 24})
-	var reply terminalFrame
+	err = wire.Send(TerminalFrame{Op: "open", Project: project, Cols: 80, Rows: 24})
+	var reply TerminalFrame
 	if err == nil {
 		err = wire.Receive(&reply)
 	}
@@ -63,7 +63,7 @@ func openRemoteTerminal(cl *serviceClient, project string) (io.ReadWriteCloser, 
 			case <-wire.Context().Done():
 				return
 			case <-ticker.C:
-				if wire.Send(terminalFrame{Op: "ping"}) != nil {
+				if wire.Send(TerminalFrame{Op: "ping"}) != nil {
 					t.Close()
 					return
 				}
@@ -75,7 +75,7 @@ func openRemoteTerminal(cl *serviceClient, project string) (io.ReadWriteCloser, 
 
 func (t *remoteTerminal) Read(p []byte) (int, error) {
 	for len(t.pending) == 0 {
-		var frame terminalFrame
+		var frame TerminalFrame
 		_ = t.wire.SetReadDeadline(time.Now().Add(time.Minute))
 		if err := t.wire.Receive(&frame); err != nil {
 			return 0, err
@@ -99,7 +99,7 @@ func (t *remoteTerminal) Write(p []byte) (int, error) {
 	written := 0
 	for len(p) > 0 {
 		n := min(len(p), 32<<10)
-		if err := t.wire.Send(terminalFrame{Op: "input", Data: p[:n]}); err != nil {
+		if err := t.wire.Send(TerminalFrame{Op: "input", Data: p[:n]}); err != nil {
 			return written, err
 		}
 		written += n
@@ -107,8 +107,11 @@ func (t *remoteTerminal) Write(p []byte) (int, error) {
 	}
 	return written, nil
 }
+
 func (t *remoteTerminal) Resize(cols, rows int) error { return t.ResizePixels(cols, rows, 0, 0) }
+
 func (t *remoteTerminal) ResizePixels(cols, rows, width, height int) error {
-	return t.wire.Send(terminalFrame{Op: "resize", Cols: cols, Rows: rows, Width: width, Height: height})
+	return t.wire.Send(TerminalFrame{Op: "resize", Cols: cols, Rows: rows, Width: width, Height: height})
 }
+
 func (t *remoteTerminal) Close() error { return t.wire.Close() }
