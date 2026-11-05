@@ -1,4 +1,6 @@
-package main
+// Package worktree reads a workspace for the review panel: Git diffs
+// between review sources and the text or images of its files.
+package worktree
 
 import (
 	"bytes"
@@ -12,40 +14,38 @@ import (
 	"strconv"
 	"strings"
 	"unicode/utf8"
-)
 
-// goAsync runs work that touches the disk or git off the UI thread. Tests
-// replace it to run the work in place.
-var goAsync = func(f func()) { go f() }
+	"miya/locales"
+)
 
 // emptyTree is git's tree of no files, the base of a repository without commits.
 const emptyTree = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 
-// diffSource is what the review compares, as Waku's review sources: the
+// DiffSource is what the review compares, as Waku's review sources: the
 // working tree, the index, or the branch since it left the default branch.
-type diffSource int
+type DiffSource int
 
 const (
-	sourceUncommitted diffSource = iota // HEAD → working tree
-	sourceUnstaged                      // index → working tree
-	sourceStaged                        // HEAD → index
-	sourceBranch                        // merge base with the default branch → working tree
+	SourceUncommitted DiffSource = iota // HEAD → working tree
+	SourceUnstaged                      // index → working tree
+	SourceStaged                        // HEAD → index
+	SourceBranch                        // merge base with the default branch → working tree
 )
 
-var diffSourceNames = []string{tr("Uncommitted changes"), tr("Unstaged changes"), tr("Staged changes"), tr("Against default branch")}
+var DiffSourceNames = []string{tr("Uncommitted changes"), tr("Unstaged changes"), tr("Staged changes"), tr("Against default branch")}
 
-type changedFile struct {
+type ChangedFile struct {
 	Path           string
 	Added, Deleted int
 	Binary         bool
 	Untracked      bool
 }
 
-type diffSnapshot struct {
-	Source diffSource
+type DiffSnapshot struct {
+	Source DiffSource
 	// Base is the old side's commit or tree; empty means the index.
 	Base           string
-	Files          []changedFile
+	Files          []ChangedFile
 	Added, Deleted int
 }
 
@@ -105,40 +105,40 @@ func branchBase(ctx context.Context, cwd, head string) string {
 	return head
 }
 
-// collectDiff lists the files a source changes, relative to cwd, with the
+// CollectDiff lists the files a source changes, relative to cwd, with the
 // lines each adds and deletes.
-func collectDiff(ctx context.Context, cwd string, src diffSource) (diffSnapshot, error) {
+func CollectDiff(ctx context.Context, cwd string, src DiffSource) (DiffSnapshot, error) {
 	if _, err := git(ctx, cwd, "rev-parse", "--show-toplevel"); err != nil {
-		return diffSnapshot{}, errors.New(tr("This workspace is not a Git repository"))
+		return DiffSnapshot{}, errors.New(tr("This workspace is not a Git repository"))
 	}
 	head := gitHead(ctx, cwd)
-	snap := diffSnapshot{Source: src}
+	snap := DiffSnapshot{Source: src}
 	args := []string{"diff", "--no-ext-diff", "--no-color", "--numstat", "--relative", "--no-renames"}
 	untracked := true
 	switch src {
-	case sourceUncommitted:
+	case SourceUncommitted:
 		snap.Base = head
 		args = append(args, head)
-	case sourceUnstaged:
+	case SourceUnstaged:
 		// The index against the working tree.
-	case sourceStaged:
+	case SourceStaged:
 		snap.Base = head
 		args = append(args, "--cached", head)
 		untracked = false
-	case sourceBranch:
+	case SourceBranch:
 		snap.Base = branchBase(ctx, cwd, head)
 		args = append(args, snap.Base)
 	}
 	out, err := git(ctx, cwd, append(args, "--", ".")...)
 	if err != nil {
-		return diffSnapshot{}, err
+		return DiffSnapshot{}, err
 	}
 	for _, row := range strings.Split(out, "\n") {
 		fields := strings.SplitN(row, "\t", 3)
 		if len(fields) != 3 {
 			continue
 		}
-		f := changedFile{Path: fields[2]}
+		f := ChangedFile{Path: fields[2]}
 		if fields[0] == "-" || fields[1] == "-" {
 			f.Binary = true
 		} else {
@@ -153,9 +153,9 @@ func collectDiff(ctx context.Context, cwd string, src diffSource) (diffSnapshot,
 				if path == "" {
 					continue
 				}
-				f := changedFile{Path: path, Untracked: true}
+				f := ChangedFile{Path: path, Untracked: true}
 				if data, err := os.ReadFile(filepath.Join(cwd, path)); err == nil {
-					if isBinary(data) {
+					if IsBinary(data) {
 						f.Binary = true
 					} else {
 						f.Added = bytes.Count(data, []byte{'\n'})
@@ -197,13 +197,13 @@ func worktreeFile(cwd, path string) string {
 	return string(data)
 }
 
-// fileSides returns the old and new text of a changed file.
-func fileSides(ctx context.Context, cwd string, snap diffSnapshot, f changedFile) (string, string) {
+// FileSides returns the old and new text of a changed file.
+func FileSides(ctx context.Context, cwd string, snap DiffSnapshot, f ChangedFile) (string, string) {
 	var old, new string
 	switch snap.Source {
-	case sourceStaged:
+	case SourceStaged:
 		old, new = showFile(ctx, cwd, snap.Base, f.Path), showFile(ctx, cwd, "", f.Path)
-	case sourceUnstaged:
+	case SourceUnstaged:
 		old, new = showFile(ctx, cwd, "", f.Path), worktreeFile(cwd, f.Path)
 	default:
 		old, new = showFile(ctx, cwd, snap.Base, f.Path), worktreeFile(cwd, f.Path)
@@ -214,18 +214,18 @@ func fileSides(ctx context.Context, cwd string, snap diffSnapshot, f changedFile
 	return old, new
 }
 
-type fileEntry struct {
-	name, rel string
-	dir       bool
+type FileEntry struct {
+	Name, Rel string
+	Dir       bool
 }
 
-// readDirEntries lists a directory of the workspace, folders first.
-func readDirEntries(root, rel string) ([]fileEntry, error) {
+// ReadDirEntries lists a directory of the workspace, folders first.
+func ReadDirEntries(root, rel string) ([]FileEntry, error) {
 	entries, err := os.ReadDir(filepath.Join(root, rel))
 	if err != nil {
 		return nil, err
 	}
-	out := make([]fileEntry, 0, len(entries))
+	out := make([]FileEntry, 0, len(entries))
 	for _, e := range entries {
 		name := e.Name()
 		if name == ".git" || name == ".DS_Store" {
@@ -237,37 +237,37 @@ func readDirEntries(root, rel string) ([]fileEntry, error) {
 				dir = info.IsDir()
 			}
 		}
-		out = append(out, fileEntry{name: name, rel: filepath.ToSlash(filepath.Join(rel, name)), dir: dir})
+		out = append(out, FileEntry{Name: name, Rel: filepath.ToSlash(filepath.Join(rel, name)), Dir: dir})
 	}
 	sort.Slice(out, func(i, j int) bool {
-		if out[i].dir != out[j].dir {
-			return out[i].dir
+		if out[i].Dir != out[j].Dir {
+			return out[i].Dir
 		}
-		return strings.ToLower(out[i].name) < strings.ToLower(out[j].name)
+		return strings.ToLower(out[i].Name) < strings.ToLower(out[j].Name)
 	})
 	return out, nil
 }
 
-const maxEditableFile = 4 << 20
+const MaxEditableFile = 4 << 20
 
-func isBinary(data []byte) bool {
+func IsBinary(data []byte) bool {
 	return bytes.IndexByte(data, 0) >= 0 || !utf8.Valid(data)
 }
 
-// readTextFile reads a file the editor can show.
-func readTextFile(path string) (string, error) {
+// ReadTextFile reads a file the editor can show.
+func ReadTextFile(path string) (string, error) {
 	info, err := os.Stat(path)
 	if err != nil {
 		return "", err
 	}
-	if info.Size() > maxEditableFile {
+	if info.Size() > MaxEditableFile {
 		return "", fmt.Errorf(tr("File too large (%.1f MB) to open here"), float64(info.Size())/(1<<20))
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return "", err
 	}
-	if isBinary(data) {
+	if IsBinary(data) {
 		return "", errors.New(tr("Cannot display binary files"))
 	}
 	return string(data), nil
@@ -275,10 +275,10 @@ func readTextFile(path string) (string, error) {
 
 const maxPreviewImage = 16 << 20
 
-// imageFileKind says how the panel shows a picture: "svg" for an SVG,
+// ImageFileKind says how the panel shows a picture: "svg" for an SVG,
 // which is text too and can be edited, "bitmap" for the formats
 // ui.DecodeBitmap reads, and "" for any other file.
-func imageFileKind(rel string) string {
+func ImageFileKind(rel string) string {
 	switch strings.ToLower(filepath.Ext(rel)) {
 	case ".svg":
 		return "svg"
@@ -288,8 +288,8 @@ func imageFileKind(rel string) string {
 	return ""
 }
 
-// readImageFile reads a bitmap for the panel to preview.
-func readImageFile(path string) ([]byte, error) {
+// ReadImageFile reads a bitmap for the panel to preview.
+func ReadImageFile(path string) ([]byte, error) {
 	info, err := os.Stat(path)
 	if err != nil {
 		return nil, err
@@ -300,23 +300,4 @@ func readImageFile(path string) ([]byte, error) {
 	return os.ReadFile(path)
 }
 
-// browserURL turns what is typed in the address bar into a URL: a port is a
-// local server, a host without a scheme is https, local hosts http.
-func browserURL(input string) string {
-	s := strings.TrimSpace(input)
-	if s == "" {
-		return ""
-	}
-	if _, err := strconv.Atoi(s); err == nil {
-		return "http://localhost:" + s
-	}
-	if strings.Contains(s, "://") || strings.HasPrefix(s, "about:") {
-		return s
-	}
-	for _, local := range []string{"localhost", "127.", "0.0.0.0", "[::1]"} {
-		if strings.HasPrefix(s, local) {
-			return "http://" + s
-		}
-	}
-	return "https://" + s
-}
+func tr(s string) string { return locales.T(s) }

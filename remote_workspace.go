@@ -13,13 +13,14 @@ import (
 	"miya/internal/agentusage"
 	"miya/internal/fsutil"
 	"miya/internal/remote"
+	"miya/internal/worktree"
 )
 
 type hostRequest struct {
 	Action, Project, Path, Text string
-	Source                      diffSource
-	Snapshot                    diffSnapshot
-	File                        changedFile
+	Source                      worktree.DiffSource
+	Snapshot                    worktree.DiffSnapshot
+	File                        worktree.ChangedFile
 	Images                      []remote.Image
 	Reset                       *agentusage.ResetAttempt
 }
@@ -91,16 +92,16 @@ func (c *chatController) prepareHost(r hostRequest) (deferred, error) {
 		case "index":
 			return indexProjectFiles(ctx, r.Project)
 		case "diff":
-			if r.Source < sourceUncommitted || r.Source > sourceBranch {
+			if r.Source < worktree.SourceUncommitted || r.Source > worktree.SourceBranch {
 				return nil, errors.New("Invalid diff source")
 			}
-			return collectDiff(ctx, r.Project, r.Source)
+			return worktree.CollectDiff(ctx, r.Project, r.Source)
 		case "sides":
 			if _, err := hostProjectPath(r.Project, r.File.Path); err != nil {
 				return nil, err
 			}
-			old, new := fileSides(ctx, r.Project, r.Snapshot, r.File)
-			if len(old)+len(new) > 2*maxEditableFile {
+			old, new := worktree.FileSides(ctx, r.Project, r.Snapshot, r.File)
+			if len(old)+len(new) > 2*worktree.MaxEditableFile {
 				return nil, errors.New("Diff is too large")
 			}
 			return hostSides{old, new}, nil
@@ -111,21 +112,21 @@ func (c *chatController) prepareHost(r hostRequest) (deferred, error) {
 		}
 		switch r.Action {
 		case "dir":
-			entries, err := readDirEntries(r.Project, r.Path)
+			entries, err := worktree.ReadDirEntries(r.Project, r.Path)
 			out := make([]hostEntry, 0, len(entries))
 			for _, e := range entries {
-				out = append(out, hostEntry{e.name, e.rel, e.dir})
+				out = append(out, hostEntry{e.Name, e.Rel, e.Dir})
 			}
 			return out, err
 		case "read":
-			return readTextFile(path)
+			return worktree.ReadTextFile(path)
 		case "image":
-			if imageFileKind(r.Path) != "bitmap" {
+			if worktree.ImageFileKind(r.Path) != "bitmap" {
 				return nil, errors.New("Not a previewable image")
 			}
-			return readImageFile(path)
+			return worktree.ReadImageFile(path)
 		case "write":
-			if len(r.Text) > maxEditableFile || isBinary([]byte(r.Text)) {
+			if len(r.Text) > worktree.MaxEditableFile || worktree.IsBinary([]byte(r.Text)) {
 				return nil, errors.New("Unable to save this file")
 			}
 			return nil, fsutil.WriteFileAtomic(path, func(f *os.File) error { _, err := io.WriteString(f, r.Text); return err })

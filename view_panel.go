@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/egoist/mygo/ui/editor"
 	"github.com/egoist/mygo/ui/markdown"
 	"miya/internal/fsutil"
+	"miya/internal/worktree"
 )
 
 // The right panel follows Waku's: each conversation keeps its own tabs of
@@ -107,15 +109,15 @@ type panelState struct {
 
 	selected string
 	expanded map[string]bool
-	dirs     map[string][]fileEntry
+	dirs     map[string][]worktree.FileEntry
 	dirErr   map[string]string
 	loading  map[string]bool
 	editors  map[string]*fileEditor
 	tree     ui.ListState
 
-	source       diffSource
+	source       worktree.DiffSource
 	sourceName   string
-	diff         *diffSnapshot
+	diff         *worktree.DiffSnapshot
 	diffErr      string
 	diffBusy     bool
 	diffGen      int
@@ -126,7 +128,7 @@ type panelState struct {
 }
 
 func newPanelState(cwd string, visible bool) *panelState {
-	p := &panelState{visible: visible, active: -1, sourceName: diffSourceNames[0]}
+	p := &panelState{visible: visible, active: -1, sourceName: worktree.DiffSourceNames[0]}
 	p.resetWorkspace(cwd)
 	return p
 }
@@ -137,7 +139,7 @@ func (p *panelState) resetWorkspace(cwd string) {
 	p.cwd = cwd
 	p.selected = ""
 	p.expanded = map[string]bool{}
-	p.dirs = map[string][]fileEntry{}
+	p.dirs = map[string][]worktree.FileEntry{}
 	p.dirErr = map[string]string{}
 	p.loading = map[string]bool{}
 	p.editors = map[string]*fileEditor{}
@@ -603,7 +605,7 @@ func (app *chatApp) terminalView(c *ui.Context, p *panelState, s *panelSurface) 
 // Files
 
 type treeRow struct {
-	entry fileEntry
+	entry worktree.FileEntry
 	depth int
 }
 
@@ -613,8 +615,8 @@ func (p *panelState) treeRows() []treeRow {
 	visit = func(rel string, depth int) {
 		for _, e := range p.dirs[rel] {
 			rows = append(rows, treeRow{entry: e, depth: depth})
-			if e.dir && p.expanded[e.rel] {
-				visit(e.rel, depth+1)
+			if e.Dir && p.expanded[e.Rel] {
+				visit(e.Rel, depth+1)
 			}
 		}
 	}
@@ -633,15 +635,15 @@ func (app *chatApp) loadDir(p *panelState, rel string) {
 		cl = app.c.remote
 	}
 	goAsync(func() {
-		var entries []fileEntry
+		var entries []worktree.FileEntry
 		var err error
 		if cl == nil {
-			entries, err = readDirEntries(root, rel)
+			entries, err = worktree.ReadDirEntries(root, rel)
 		} else {
 			var rows []hostEntry
 			err = cl.call("host", hostRequest{Action: "dir", Project: root, Path: rel}, &rows)
 			for _, e := range rows {
-				entries = append(entries, fileEntry{e.Name, e.Path, e.Dir})
+				entries = append(entries, worktree.FileEntry{Name: e.Name, Rel: e.Path, Dir: e.Dir})
 			}
 		}
 		app.c.dispatch(func() {
@@ -666,7 +668,7 @@ func (app *chatApp) openFile(p *panelState, rel string) {
 	if ed := p.editors[rel]; ed != nil && ed.err == "" {
 		return
 	}
-	kind := imageFileKind(rel)
+	kind := worktree.ImageFileKind(rel)
 	ed := &fileEditor{loading: true, preview: strings.EqualFold(path.Ext(rel), ".md") || kind != ""}
 	p.editors[rel] = ed
 	root := p.cwd
@@ -681,7 +683,7 @@ func (app *chatApp) openFile(p *panelState, rel string) {
 		if kind == "bitmap" {
 			var data []byte
 			if cl == nil {
-				data, err = readImageFile(filepath.Join(root, rel))
+				data, err = worktree.ReadImageFile(filepath.Join(root, rel))
 			} else {
 				err = cl.call("host", hostRequest{Action: "image", Project: root, Path: rel}, &data)
 			}
@@ -692,7 +694,7 @@ func (app *chatApp) openFile(p *panelState, rel string) {
 			}
 		} else {
 			if cl == nil {
-				text, err = readTextFile(filepath.Join(root, rel))
+				text, err = worktree.ReadTextFile(filepath.Join(root, rel))
 			} else {
 				err = cl.call("host", hostRequest{Action: "read", Project: root, Path: rel}, &text)
 			}
@@ -768,8 +770,8 @@ func (app *chatApp) filesView(c *ui.Context, p *panelState) {
 		return
 	}
 	rows := p.treeRows()
-	p.tree.Key = func(i int) any { return rows[i].entry.rel }
-	p.tree.Label = func(i int) string { return rows[i].entry.name }
+	p.tree.Key = func(i int) any { return rows[i].entry.Rel }
+	p.tree.Label = func(i int) string { return rows[i].entry.Name }
 	ui.List(c.Key("tree"), &p.tree, len(rows), func(i int) {
 		app.treeRowView(c, p, rows[i])
 	}).Grow(1).MinHeight(0).Padding(4, 8).Children(func() {
@@ -789,31 +791,31 @@ func (app *chatApp) filesView(c *ui.Context, p *panelState) {
 
 func (app *chatApp) treeRowView(c *ui.Context, p *panelState, r treeRow) {
 	e := r.entry
-	row := quiet(c).FillWidth().Height(26).Gap(6).PaddingX(0).PaddingStart(6 + float32(r.depth)*14).Label(e.name)
+	row := quiet(c).FillWidth().Height(26).Gap(6).PaddingX(0).PaddingStart(6 + float32(r.depth)*14).Label(e.Name)
 	row.Children(func() {
-		if e.dir {
+		if e.Dir {
 			ch := icon(c, "chevron-right", 12, muted)
-			ch.Rotate(ch.Animate("open", map[bool]float32{false: 0, true: 90}[p.expanded[e.rel]], 120*time.Millisecond))
+			ch.Rotate(ch.Animate("open", map[bool]float32{false: 0, true: 90}[p.expanded[e.Rel]], 120*time.Millisecond))
 			icon(c, "folder", 14, faint)
 		} else {
 			ui.Box(c).Width(12).Shrink(0)
 			icon(c, "file", 14, muted)
 		}
-		ui.Text(c, e.name).Grow(1).MinWidth(0).SingleLine().Ellipsis("…").FontSize(12)
-		if e.dir && p.loading[e.rel] {
+		ui.Text(c, e.Name).Grow(1).MinWidth(0).SingleLine().Ellipsis("…").FontSize(12)
+		if e.Dir && p.loading[e.Rel] {
 			ui.Spinner(c).FontSize(11)
 		}
 	})
 	if !row.Clicked() {
 		return
 	}
-	if !e.dir {
-		app.openFile(p, e.rel)
+	if !e.Dir {
+		app.openFile(p, e.Rel)
 		return
 	}
-	p.expanded[e.rel] = !p.expanded[e.rel]
-	if p.expanded[e.rel] {
-		app.loadDir(p, e.rel)
+	p.expanded[e.Rel] = !p.expanded[e.Rel]
+	if p.expanded[e.Rel] {
+		app.loadDir(p, e.Rel)
 	}
 }
 
@@ -824,7 +826,7 @@ func (app *chatApp) fileEditorView(c *ui.Context, p *panelState, rel string) {
 		return
 	}
 	markdownFile := strings.EqualFold(path.Ext(rel), ".md")
-	imageKind := imageFileKind(rel)
+	imageKind := worktree.ImageFileKind(rel)
 	ui.Column(c).Grow(1).MinHeight(0).Children(func() {
 		panelBar(c, func() {
 			if toolButton(c.Key("back"), "arrow-left", tr("Back to file list")).Clicked() {
@@ -904,10 +906,10 @@ func (app *chatApp) refreshDiff(p *panelState) {
 	goAsync(func() {
 		ctx, cancel := context.WithTimeout(parent, 20*time.Second)
 		defer cancel()
-		var snap diffSnapshot
+		var snap worktree.DiffSnapshot
 		var err error
 		if cl == nil {
-			snap, err = collectDiff(ctx, root, src)
+			snap, err = worktree.CollectDiff(ctx, root, src)
 		} else {
 			err = cl.call("host", hostRequest{Action: "diff", Project: root, Source: src}, &snap)
 		}
@@ -966,7 +968,7 @@ func (app *chatApp) loadDiffFile(p *panelState, i int) {
 		var old, new string
 		var err error
 		if cl == nil {
-			old, new = fileSides(ctx, root, snap, f)
+			old, new = worktree.FileSides(ctx, root, snap, f)
 		} else {
 			var sides hostSides
 			err = cl.call("host", hostRequest{Action: "sides", Project: root, Snapshot: snap, File: f}, &sides)
@@ -992,10 +994,10 @@ func (app *chatApp) loadDiffFile(p *panelState, i int) {
 func (app *chatApp) diffSurface(c *ui.Context, p *panelState) {
 	ui.Column(c).Grow(1).MinHeight(0).Children(func() {
 		panelBar(c, func() {
-			if ui.Select(c.Key("source"), &p.sourceName, diffSourceNames).Label(tr("Review source")).FontSize(12).Changed() {
-				for i, name := range diffSourceNames {
+			if ui.Select(c.Key("source"), &p.sourceName, worktree.DiffSourceNames).Label(tr("Review source")).FontSize(12).Changed() {
+				for i, name := range worktree.DiffSourceNames {
 					if name == p.sourceName {
-						p.source = diffSource(i)
+						p.source = worktree.DiffSource(i)
 					}
 				}
 				p.diff, p.diffView, p.diffViewPath, p.diffErr = nil, nil, "", ""
@@ -1028,7 +1030,7 @@ func (app *chatApp) diffSurface(c *ui.Context, p *panelState) {
 			})
 			return
 		case len(p.diff.Files) == 0:
-			panelMessage(c, tr("No changes"), diffSourceNames[p.diff.Source]+tr(" is empty"))
+			panelMessage(c, tr("No changes"), worktree.DiffSourceNames[p.diff.Source]+tr(" is empty"))
 			return
 		}
 		ui.Scroll(c.Key("changed-files")).MaxHeight(180).Shrink(0).Children(func() {
@@ -1050,7 +1052,7 @@ func (app *chatApp) diffSurface(c *ui.Context, p *panelState) {
 	})
 }
 
-func (app *chatApp) changedFileRow(c *ui.Context, p *panelState, i int, f changedFile) {
+func (app *chatApp) changedFileRow(c *ui.Context, p *panelState, i int, f worktree.ChangedFile) {
 	row := quiet(c).FillWidth().Height(26).Gap(6).PaddingX(6).Label(f.Path)
 	if i == p.diffFile {
 		row.Background(chosen)
@@ -1074,4 +1076,29 @@ func (app *chatApp) changedFileRow(c *ui.Context, p *panelState, i int, f change
 	if row.Clicked() && i != p.diffFile {
 		app.loadDiffFile(p, i)
 	}
+}
+
+// goAsync runs work that touches the disk or git off the UI thread. Tests
+// replace it to run the work in place.
+var goAsync = func(f func()) { go f() }
+
+// browserURL turns what is typed in the address bar into a URL: a port is a
+// local server, a host without a scheme is https, local hosts http.
+func browserURL(input string) string {
+	s := strings.TrimSpace(input)
+	if s == "" {
+		return ""
+	}
+	if _, err := strconv.Atoi(s); err == nil {
+		return "http://localhost:" + s
+	}
+	if strings.Contains(s, "://") || strings.HasPrefix(s, "about:") {
+		return s
+	}
+	for _, local := range []string{"localhost", "127.", "0.0.0.0", "[::1]"} {
+		if strings.HasPrefix(s, local) {
+			return "http://" + s
+		}
+	}
+	return "https://" + s
 }

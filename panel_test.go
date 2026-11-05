@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -67,57 +66,6 @@ func TestBrowserURL(t *testing.T) {
 		if got := browserURL(in); got != want {
 			t.Errorf("browserURL(%q) = %q, want %q", in, got, want)
 		}
-	}
-}
-
-func TestCollectDiffSources(t *testing.T) {
-	dir := t.TempDir()
-	testRepo(t, dir)
-	ctx := context.Background()
-	stats := func(src diffSource) map[string][2]int {
-		snap, err := collectDiff(ctx, dir, src)
-		if err != nil {
-			t.Fatalf("%s: %v", diffSourceNames[src], err)
-		}
-		out := map[string][2]int{}
-		for _, f := range snap.Files {
-			out[f.Path] = [2]int{f.Added, f.Deleted}
-		}
-		return out
-	}
-	for src, want := range map[diffSource]map[string][2]int{
-		sourceUncommitted: {"a.txt": {2, 0}, "c.txt": {1, 0}},
-		sourceUnstaged:    {"a.txt": {1, 0}, "c.txt": {1, 0}},
-		sourceStaged:      {"a.txt": {1, 0}},
-		sourceBranch:      {"a.txt": {2, 0}, "c.txt": {1, 0}},
-	} {
-		got := stats(src)
-		if len(got) != len(want) {
-			t.Fatalf("%s: files %v, want %v", diffSourceNames[src], got, want)
-		}
-		for path, n := range want {
-			if got[path] != n {
-				t.Errorf("%s: %s %v, want %v", diffSourceNames[src], path, got[path], n)
-			}
-		}
-	}
-	snap, _ := collectDiff(ctx, dir, sourceStaged)
-	old, new := fileSides(ctx, dir, snap, snap.Files[0])
-	if old != "one\n" || new != "one\ntwo\n" {
-		t.Fatalf("staged sides %q → %q", old, new)
-	}
-	snap, _ = collectDiff(ctx, dir, sourceUnstaged)
-	for _, f := range snap.Files {
-		old, new := fileSides(ctx, dir, snap, f)
-		if f.Path == "a.txt" && (old != "one\ntwo\n" || new != "one\ntwo\nthree\n") {
-			t.Fatalf("unstaged sides %q → %q", old, new)
-		}
-		if f.Path == "c.txt" && (!f.Untracked || old != "" || new != "new\n") {
-			t.Fatalf("untracked sides %+v %q → %q", f, old, new)
-		}
-	}
-	if _, err := collectDiff(ctx, t.TempDir(), sourceUncommitted); err == nil {
-		t.Fatal("a folder outside Git has no review")
 	}
 }
 

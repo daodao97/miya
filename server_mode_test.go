@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"miya/internal/remote"
+	"miya/internal/worktree"
 )
 
 func TestServerPersistentIdleAndTerminalRestart(t *testing.T) {
@@ -115,7 +116,7 @@ func TestRemoteHostWorkspaceRPC(t *testing.T) {
 	for _, r := range []hostRequest{
 		{Action: "read", Project: root, Path: "../secret"},
 		{Action: "read", Project: "/unregistered", Path: "hello.txt"},
-		{Action: "write", Project: root, Path: "hello.txt", Text: strings.Repeat("x", maxEditableFile+1)},
+		{Action: "write", Project: root, Path: "hello.txt", Text: strings.Repeat("x", worktree.MaxEditableFile+1)},
 	} {
 		if err := cl.call("host", r, nil); err == nil {
 			t.Fatalf("invalid host request accepted: %s", r.Action)
@@ -194,7 +195,7 @@ func TestRemoteHostDeletedGitFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := serverController(root, "")
-	snap, err := collectDiff(context.Background(), root, sourceUncommitted)
+	snap, err := worktree.CollectDiff(context.Background(), root, worktree.SourceUncommitted)
 	if err != nil || len(snap.Files) != 1 {
 		t.Fatal(snap, err)
 	}
