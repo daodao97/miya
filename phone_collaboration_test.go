@@ -23,9 +23,9 @@ func TestCollaborationPhoneRequestsDoNotBlockStateStreaming(t *testing.T) {
 		from = c.threadRef(c.threads()[0]).URL()
 	})
 	s := c.collaboration
-	t.Cleanup(func() { s.cancel(); <-s.done })
-	value, err := s.call(func() (any, error) {
-		return s.manager.Create(dg.StartInput{From: from, RequestID: "fixture", Agent: agentCodex, Workspace: c.cwd, Prompt: "test"})
+	t.Cleanup(func() { s.Stop(); <-s.Done() })
+	value, err := s.Call(func() (any, error) {
+		return s.Manager.Create(dg.StartInput{From: from, RequestID: "fixture", Agent: agentCodex, Workspace: c.cwd, Prompt: "test"})
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -35,13 +35,13 @@ func TestCollaborationPhoneRequestsDoNotBlockStateStreaming(t *testing.T) {
 	var once sync.Once
 	release := func() { once.Do(func() { close(gate) }) }
 	defer release()
-	s.post(func() { close(entered); <-gate })
+	s.Post(func() { close(entered); <-gate })
 	<-entered
 	args, _ := json.Marshal(map[string]any{"request_id": "cancel", "task_id": task.ID})
 	raw, _ := json.Marshal(collaborationRequest{Operation: "cancel_task", From: from, Arguments: args})
 	conn.requests <- remote.Request{Op: "collaboration", RequestID: "correlation", Collaboration: raw}
 	deadline := time.Now().Add(time.Second)
-	for s.busy.Load() < 2 && time.Now().Before(deadline) {
+	for s.Pending() < 2 && time.Now().Before(deadline) {
 		time.Sleep(time.Millisecond)
 	}
 	ex.Do(func() { c.setStatus("State stream remains responsive") })
@@ -76,7 +76,7 @@ func TestCollaborationPhoneRequestsDoNotBlockStateStreaming(t *testing.T) {
 			if json.Unmarshal(f.Data, &response) != nil || f.Error != "" || response.RequestID != "correlation" {
 				t.Fatalf("phone response: %+v", f)
 			}
-			if got, _ := s.manager.Read(task.ID); !got.CancelRequested {
+			if got, _ := s.Manager.Read(task.ID); !got.CancelRequested {
 				t.Fatal("phone did not use the shared mutation transaction")
 			}
 			return

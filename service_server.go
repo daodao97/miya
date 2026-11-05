@@ -109,7 +109,7 @@ func (s *service) markDirty() {
 func (s *service) stop() {
 	s.quitOnce.Do(func() {
 		if s.c.collaboration != nil {
-			s.c.collaboration.cancel()
+			s.c.collaboration.Stop()
 		}
 		if s.c.memories().Engine != nil {
 			s.c.memories().Engine.Stop()
@@ -499,7 +499,7 @@ func (s *service) handle(p *svcPeer, req svcRequest) (any, error) {
 
 // busy reports a turn running or starting, which quitting would end.
 func (s *service) busy() bool {
-	if s.c.collaboration != nil && s.c.collaboration.ctx.Err() == nil && s.c.collaboration.busy.Load() > 0 {
+	if s.c.collaboration != nil && s.c.collaboration.Context().Err() == nil && s.c.collaboration.Pending() > 0 {
 		return true
 	}
 	if s.c.remoteTerminals.Load() > 0 {

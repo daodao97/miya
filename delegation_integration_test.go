@@ -63,13 +63,13 @@ func waitCollaborationTask(t *testing.T, f *serviceFixture, id string) dg.Task {
 	t.Helper()
 	deadline := time.Now().Add(15 * time.Second)
 	for time.Now().Before(deadline) {
-		task, err := f.srv.c.collaboration.manager.Read(id)
+		task, err := f.srv.c.collaboration.Manager.Read(id)
 		if err == nil && dg.Terminal(task.State) {
 			return task
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	task, err := f.srv.c.collaboration.manager.Read(id)
+	task, err := f.srv.c.collaboration.Manager.Read(id)
 	t.Fatalf("task did not terminate: %+v, %v", task, err)
 	return dg.Task{}
 }
@@ -115,7 +115,7 @@ func TestCollaborationClaudeTasksRunIndependentlyAndFreezeResults(t *testing.T) 
 		ready := false
 		f.serv.Do(func() {
 			target, ok := f.srv.c.threadByReference(a.Target)
-			ready = ok && !target.Busy && f.srv.c.collaboration.reservations[target.ID] == ""
+			ready = ok && !target.Busy && f.srv.c.collaboration.Reservations[target.ID] == ""
 		})
 		if ready {
 			break
@@ -203,7 +203,7 @@ func TestCollaborationMCPRejectsAmbiguousCallerBeforeCreatingTasks(t *testing.T)
 	if err := client.call("mcpCollaboration", mcpRequest{Tool: "start_task", Arguments: raw}, &out); err == nil || !strings.Contains(err.Error(), "ambiguous") {
 		t.Fatalf("ambiguous call accepted: %v", err)
 	}
-	if len(f.srv.c.collaboration.manager.View().Tasks) != 0 {
+	if len(f.srv.c.collaboration.Manager.View().Tasks) != 0 {
 		t.Fatal("ambiguous caller produced a side effect")
 	}
 }
@@ -228,7 +228,7 @@ func TestCollaborationCompletionNotificationWaitsForIdleAndStartsOneTurn(t *test
 		t.Fatal(err)
 	}
 	waitCollaborationTask(t, f, result["task_id"].(string))
-	if len(f.srv.c.collaboration.manager.View().Deliveries) != 1 {
+	if len(f.srv.c.collaboration.Manager.View().Deliveries) != 1 {
 		t.Fatal("no durable completion notification")
 	}
 	var notices int
@@ -245,7 +245,7 @@ func TestCollaborationCompletionNotificationWaitsForIdleAndStartsOneTurn(t *test
 	f.serv.Do(func() { f.srv.c.update(caller, func(th *Thread) { th.Busy = false }) })
 	for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); {
 		delivered := false
-		for _, d := range f.srv.c.collaboration.manager.View().Deliveries {
+		for _, d := range f.srv.c.collaboration.Manager.View().Deliveries {
 			delivered = d.State == "delivered"
 		}
 		if delivered {
@@ -253,7 +253,7 @@ func TestCollaborationCompletionNotificationWaitsForIdleAndStartsOneTurn(t *test
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	for _, d := range f.srv.c.collaboration.manager.View().Deliveries {
+	for _, d := range f.srv.c.collaboration.Manager.View().Deliveries {
 		if d.State != "delivered" {
 			t.Fatalf("notification not delivered: %+v", d)
 		}

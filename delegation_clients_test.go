@@ -96,21 +96,21 @@ func TestCollaborationPhoneAndDesktopCanResolveUnknownNotification(t *testing.T)
 			f.serv.Do(func() { f.srv.c.update(caller, func(th *Thread) { th.Busy = true }) })
 			q := collaborationStoredFixtureTask(t, f, caller)
 			s := f.srv.c.collaboration
-			value, err := s.call(func() (any, error) {
-				if _, err := s.manager.Watch(q.From, q.ID); err != nil {
+			value, err := s.Call(func() (any, error) {
+				if _, err := s.Manager.Watch(q.From, q.ID); err != nil {
 					return nil, err
 				}
-				if err := s.manager.Observe(dg.Event{TaskID: q.ID, State: dg.Completed, Result: dg.Result{Text: "saved fixed result"}}); err != nil {
+				if err := s.Manager.Observe(dg.Event{TaskID: q.ID, State: dg.Completed, Result: dg.Result{Text: "saved fixed result"}}); err != nil {
 					return nil, err
 				}
-				d, err := s.manager.ClaimDelivery(q.From)
+				d, err := s.Manager.ClaimDelivery(q.From)
 				if err != nil {
 					return nil, err
 				}
-				if err = s.manager.BeginDeliveryInput(d.ID); err != nil {
+				if err = s.Manager.BeginDeliveryInput(d.ID); err != nil {
 					return nil, err
 				}
-				return d, s.manager.Recover()
+				return d, s.Manager.Recover()
 			})
 			if err != nil {
 				t.Fatal(err)
@@ -146,7 +146,7 @@ func TestCollaborationPhoneAndDesktopCanResolveUnknownNotification(t *testing.T)
 			if p.pending != nil || p.err != "" || !tt.HasText("Notification tracking stopped") {
 				t.Fatal("resolution failed", p.err, tt.Texts())
 			}
-			old, _ := s.manager.Delivery(d.ID)
+			old, _ := s.Manager.Delivery(d.ID)
 			if old.State != "needsAttention" || old.Resolution != "abandoned" {
 				t.Fatal("native outcome fabricated", old)
 			}

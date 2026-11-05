@@ -30,7 +30,7 @@ func TestManagedCodexResumeFailuresNeverReturnSystemInputAsDraft(t *testing.T) {
 				t.Cleanup(func() { oldClient.Close() })
 				c.collaboration = newCollaboration(c, t.TempDir())
 				s := c.collaboration
-				t.Cleanup(func() { s.cancel(); <-s.done })
+				t.Cleanup(func() { s.Stop(); <-s.Done() })
 				c.update(1, func(th *Thread) { th.Resumed = false; th.HistoryLoaded = true; th.Draft = "user draft" })
 				c.addThread(c.cwd, Thread{ID: c.nextID(), Agent: agentCodex, ServerID: "source", HistoryLoaded: true})
 				from := ThreadRef{Source: c.referenceSource, Backend: agentCodex, SessionID: "source"}.URL()
@@ -41,23 +41,23 @@ func TestManagedCodexResumeFailuresNeverReturnSystemInputAsDraft(t *testing.T) {
 					in.Target = ""
 					in.Notify = true
 				}
-				task, err := s.manager.Create(in)
+				task, err := s.Manager.Create(in)
 				if err != nil {
 					t.Fatal(err)
 				}
 				id := task.ID
 				if delivery {
-					if err = s.manager.Observe(dg.Event{TaskID: id, State: dg.Completed}); err != nil {
+					if err = s.Manager.Observe(dg.Event{TaskID: id, State: dg.Completed}); err != nil {
 						t.Fatal(err)
 					}
-					d, err := s.manager.ClaimDelivery(target)
+					d, err := s.Manager.ClaimDelivery(target)
 					if err != nil {
 						t.Fatal(err)
 					}
 					id = d.ID
 				}
-				c.collaboration.executions = map[string]*managedExecution{id: {thread: 1}}
-				c.collaboration.reservations = map[int]string{1: id}
+				c.collaboration.Executions = map[string]*managedExecution{id: {Thread: 1}}
+				c.collaboration.Reservations = map[int]string{1: id}
 				if failure == "unavailable" {
 					c.client = nil
 				}
@@ -77,14 +77,14 @@ func TestManagedCodexResumeFailuresNeverReturnSystemInputAsDraft(t *testing.T) {
 					c.client = nil
 				}
 				waitCodexResume(t, c, dispatch, func() bool {
-					if c.collaboration.reservations[1] != "" {
+					if c.collaboration.Reservations[1] != "" {
 						return false
 					}
 					if delivery {
-						d, _ := s.manager.Delivery(id)
+						d, _ := s.Manager.Delivery(id)
 						return d.State == "pending"
 					}
-					q, _ := s.manager.Read(id)
+					q, _ := s.Manager.Read(id)
 					return q.State == dg.Failed
 				})
 				if c.threadWithID(1).Draft != "user draft" {
@@ -158,18 +158,18 @@ func TestClaudeFailedRootReplyStillConfirmsNotificationAcceptedInput(t *testing.
 	f.serv.Do(func() { f.srv.c.update(caller, func(th *Thread) { th.Busy = true }) })
 	q := collaborationStoredFixtureTask(t, f, caller)
 	s := f.srv.c.collaboration
-	value, err := s.call(func() (any, error) {
-		if _, err := s.manager.Watch(q.From, q.ID); err != nil {
+	value, err := s.Call(func() (any, error) {
+		if _, err := s.Manager.Watch(q.From, q.ID); err != nil {
 			return nil, err
 		}
-		if err := s.manager.Observe(dg.Event{TaskID: q.ID, State: dg.Completed}); err != nil {
+		if err := s.Manager.Observe(dg.Event{TaskID: q.ID, State: dg.Completed}); err != nil {
 			return nil, err
 		}
-		d, err := s.manager.ClaimDelivery(q.From)
+		d, err := s.Manager.ClaimDelivery(q.From)
 		if err != nil {
 			return nil, err
 		}
-		return d, s.manager.BeginDeliveryInput(d.ID)
+		return d, s.Manager.BeginDeliveryInput(d.ID)
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -178,10 +178,10 @@ func TestClaudeFailedRootReplyStillConfirmsNotificationAcceptedInput(t *testing.
 	f.serv.Do(func() {
 		f.srv.c.managedEvent(d.ID, dg.Event{State: dg.Failed, NativeResultID: "bound-root-result", Result: dg.Result{Error: "model reply failed"}})
 	})
-	if _, err := s.call(func() (any, error) { return nil, nil }); err != nil {
+	if _, err := s.Call(func() (any, error) { return nil, nil }); err != nil {
 		t.Fatal(err)
 	}
-	got, _ := s.manager.Delivery(d.ID)
+	got, _ := s.Manager.Delivery(d.ID)
 	if got.State != "delivered" {
 		t.Fatal("accepted input was confused with successful reply", got)
 	}

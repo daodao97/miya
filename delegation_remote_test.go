@@ -41,17 +41,17 @@ func TestCollaborationWorkspaceSwitchKeepsPendingRequestAtOriginalService(t *tes
 	var once sync.Once
 	release := func() { once.Do(func() { close(gate) }) }
 	defer release()
-	s.post(func() { close(entered); <-gate })
+	s.Post(func() { close(entered); <-gate })
 	<-entered
 	first.win.Do(func() {
 		p := app.collaborations.pane(from)
 		p.submit("start_task", map[string]any{"agent": agentClaude, "task": "original service only", "context": "none", "notify": "none"}, app.collaborationCall)
 	})
 	deadline := time.Now().Add(5 * time.Second)
-	for s.busy.Load() < 2 && time.Now().Before(deadline) {
+	for s.Pending() < 2 && time.Now().Before(deadline) {
 		time.Sleep(time.Millisecond)
 	}
-	if s.busy.Load() < 2 {
+	if s.Pending() < 2 {
 		t.Fatal("original service did not receive the pending request")
 	}
 	first.win.Do(func() { app.c.remote, app.c.referenceSource = clientB, secondSource })
@@ -60,7 +60,7 @@ func TestCollaborationWorkspaceSwitchKeepsPendingRequestAtOriginalService(t *tes
 		p := app.collaborations.pane(from)
 		return !p.busy && p.pending != nil && strings.Contains(p.err, "workspace changed")
 	})
-	if len(second.srv.c.collaboration.manager.View().Tasks) != 0 {
+	if len(second.srv.c.collaboration.Manager.View().Tasks) != 0 {
 		t.Fatal("switching services moved the accepted task to another service")
 	}
 	first.win.Do(func() {
@@ -71,11 +71,11 @@ func TestCollaborationWorkspaceSwitchKeepsPendingRequestAtOriginalService(t *tes
 		p := app.collaborations.pane(from)
 		return !p.busy && p.pending == nil && p.err == ""
 	})
-	tasks := first.srv.c.collaboration.manager.View().Tasks
+	tasks := first.srv.c.collaboration.Manager.View().Tasks
 	if len(tasks) != 1 {
 		t.Fatalf("same request retry created %d tasks at the original service", len(tasks))
 	}
-	if len(second.srv.c.collaboration.manager.View().Tasks) != 0 {
+	if len(second.srv.c.collaboration.Manager.View().Tasks) != 0 {
 		t.Fatal("retry crossed the source boundary")
 	}
 	// Both fixtures share process environment. Finish native history writes
@@ -86,7 +86,7 @@ func TestCollaborationWorkspaceSwitchKeepsPendingRequestAtOriginalService(t *tes
 			idle := false
 			first.serv.Do(func() {
 				thread, found := first.srv.c.threadByReference(task.Target)
-				idle = found && !thread.Busy && first.srv.c.collaboration.reservations[thread.ID] == ""
+				idle = found && !thread.Busy && first.srv.c.collaboration.Reservations[thread.ID] == ""
 			})
 			if idle {
 				break

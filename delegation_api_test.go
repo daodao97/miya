@@ -39,8 +39,8 @@ func collaborationStoredFixtureTask(t *testing.T, f *serviceFixture, caller int)
 	t.Helper()
 	var from string
 	f.serv.Do(func() { from = f.srv.c.threadRef(f.srv.c.threadWithID(caller)).URL() })
-	value, err := f.srv.c.collaboration.call(func() (any, error) {
-		return f.srv.c.collaboration.manager.Create(dg.StartInput{From: from, RequestID: "fixture", Agent: agentClaude, Workspace: f.srv.c.cwd, Prompt: "fixture task"})
+	value, err := f.srv.c.collaboration.Call(func() (any, error) {
+		return f.srv.c.collaboration.Manager.Create(dg.StartInput{From: from, RequestID: "fixture", Agent: agentClaude, Workspace: f.srv.c.cwd, Prompt: "fixture task"})
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -67,12 +67,12 @@ func TestCollaborationMCPOperationRetriesKeepOriginalReceipt(t *testing.T) {
 	if _, err := collaborationMCPCall(t, f, caller, "cancel_task", watch); err == nil || !strings.Contains(err.Error(), "REQUEST_CONFLICT") {
 		t.Fatal(err)
 	}
-	for _, w := range f.srv.c.collaboration.manager.View().Watches {
+	for _, w := range f.srv.c.collaboration.Manager.View().Watches {
 		if w.State != "cancelled" {
 			t.Fatal("old watch revived observation")
 		}
 	}
-	if task, _ := f.srv.c.collaboration.manager.Read(task.ID); task.CancelRequested {
+	if task, _ := f.srv.c.collaboration.Manager.Read(task.ID); task.CancelRequested {
 		t.Fatal("conflicting cancel produced a side effect")
 	}
 }
@@ -95,14 +95,14 @@ func TestCollaborationStopPausesAndExplicitResumeIgnoresOldStopFlag(t *testing.T
 		f.srv.c.stopThread(caller)
 		f.srv.c.update(caller, func(th *Thread) { th.Busy = false; th.StopRequested = true })
 	})
-	if _, err := f.srv.c.collaboration.call(func() (any, error) { f.srv.c.collaboration.tick(); return nil, nil }); err != nil {
+	if _, err := f.srv.c.collaboration.Call(func() (any, error) { f.srv.c.collaboration.Tick(); return nil, nil }); err != nil {
 		t.Fatal(err)
 	}
 	list, err := collaborationUserCall(t, f, "list_tasks", from, map[string]any{})
 	if err != nil || list["paused"] != true {
 		t.Fatalf("Stop pause not visible: %v %v", list, err)
 	}
-	for _, d := range f.srv.c.collaboration.manager.View().Deliveries {
+	for _, d := range f.srv.c.collaboration.Manager.View().Deliveries {
 		if d.State != "pending" {
 			t.Fatal("Stop allowed a new native turn")
 		}
@@ -113,7 +113,7 @@ func TestCollaborationStopPausesAndExplicitResumeIgnoresOldStopFlag(t *testing.T
 	}
 	deadline := time.Now().Add(8 * time.Second)
 	for time.Now().Before(deadline) {
-		for _, d := range f.srv.c.collaboration.manager.View().Deliveries {
+		for _, d := range f.srv.c.collaboration.Manager.View().Deliveries {
 			if d.State == "delivered" {
 				return
 			}
@@ -216,7 +216,7 @@ func TestCollaborationCorruptStoreDoesNotPanicStopOrLegacyTools(t *testing.T) {
 	var capability *collaborationStatus
 	f.serv.Do(func() {
 		c := f.srv.c
-		c.collaboration.cancel()
+		c.collaboration.Stop()
 		c.collaboration = newCollaboration(c, dir)
 		caller := c.threadWithID(callerID)
 		c.stopThread(callerID)
@@ -238,8 +238,8 @@ func TestCollaborationUnboundTurnBufferIsBoundedAndRequiresRecheck(t *testing.T)
 	var from string
 	f.serv.Do(func() { from = f.srv.c.threadRef(f.srv.c.threadWithID(callerID)).URL() })
 	s := f.srv.c.collaboration
-	value, err := s.call(func() (any, error) {
-		return s.manager.Create(dg.StartInput{From: from, RequestID: "early", Agent: agentCodex, Workspace: f.srv.c.cwd, Prompt: "test"})
+	value, err := s.Call(func() (any, error) {
+		return s.Manager.Create(dg.StartInput{From: from, RequestID: "early", Agent: agentCodex, Workspace: f.srv.c.cwd, Prompt: "test"})
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -251,18 +251,18 @@ func TestCollaborationUnboundTurnBufferIsBoundedAndRequiresRecheck(t *testing.T)
 		targetID = c.nextID()
 		worker := Thread{ID: targetID, Agent: agentCodex, ServerID: "worker", ExecutionID: task.ID, Busy: true, HistoryLoaded: true}
 		c.addThread(c.cwd, worker)
-		c.collaboration.executions = map[string]*managedExecution{task.ID: {thread: targetID}}
-		c.collaboration.reservations = map[int]string{targetID: task.ID}
+		c.collaboration.Executions = map[string]*managedExecution{task.ID: {Thread: targetID}}
+		c.collaboration.Reservations = map[int]string{targetID: task.ID}
 		for i := 0; i < 9; i++ {
 			c.managedCodexOutput(worker, "turn/completed", codex.Event{Turn: codex.Turn{ID: fmt.Sprint(i), Status: "completed"}})
 		}
 		c.managedCodexAccepted(task.ID, "intended-turn", "live-epoch", nil, true)
-		if run := c.collaboration.executions[task.ID]; !run.pendingOverflow || len(run.pending) != 0 {
+		if run := c.collaboration.Executions[task.ID]; !run.PendingOverflow || len(run.Pending) != 0 {
 			t.Error("unbound event buffer grew without limit")
 		}
 	})
 	t.Cleanup(func() { f.serv.Do(func() { f.srv.c.update(targetID, func(th *Thread) { th.Busy = false }) }) })
-	value, err = s.call(func() (any, error) { return s.manager.Read(task.ID) })
+	value, err = s.Call(func() (any, error) { return s.Manager.Read(task.ID) })
 	if err != nil {
 		t.Fatal(err)
 	}

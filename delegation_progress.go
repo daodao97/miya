@@ -13,27 +13,27 @@ import (
 // Output keeps streaming through the chat path. Persist only changed, bounded
 // progress checkpoints, at most once per two seconds (wait changes are urgent).
 func (s *collaborationState) checkProgress() {
-	if !s.manager.HasActiveExecutions() {
+	if !s.Manager.HasActiveExecutions() {
 		return
 	}
-	value, err := s.onMain(func() (any, error) {
+	value, err := s.OnMain(func() (any, error) {
 		var events []dg.Event
 		codexEpoch, codexLive := s.host.CodexEpoch()
-		for id, run := range s.executions {
+		for id, run := range s.Executions {
 			if !strings.HasPrefix(id, "task-") {
 				continue
 			}
-			t := s.host.Thread(run.thread)
+			t := s.host.Thread(run.Thread)
 			if !t.Busy || t.ExecutionID != id {
 				continue
 			}
-			if model.ThreadAgent(t) == agentCodex && (run.turn == "" || run.turn != t.TurnID || !codexLive || run.epoch != codexEpoch) {
+			if model.ThreadAgent(t) == agentCodex && (run.Turn == "" || run.Turn != t.TurnID || !codexLive || run.Epoch != codexEpoch) {
 				continue
 			}
-			if model.ThreadAgent(t) == agentClaude && !run.started {
+			if model.ThreadAgent(t) == agentClaude && !run.Started {
 				continue
 			}
-			task, err := s.manager.Read(id)
+			task, err := s.Manager.Read(id)
 			if err != nil || task.State != dg.Running {
 				continue
 			}
@@ -49,15 +49,15 @@ func (s *collaborationState) checkProgress() {
 				continue
 			}
 			run.progress, run.waitCause, run.progressAt = progress, wait, now
-			run.sequence++
-			events = append(events, dg.Event{TaskID: id, Target: task.Target, NativeTurnID: run.turn, SessionEpoch: run.epoch, State: dg.Running, Progress: progress, WaitCause: wait, Sequence: run.sequence, ExpectedRevision: task.Revision})
+			run.Sequence++
+			events = append(events, dg.Event{TaskID: id, Target: task.Target, NativeTurnID: run.Turn, SessionEpoch: run.Epoch, State: dg.Running, Progress: progress, WaitCause: wait, Sequence: run.Sequence, ExpectedRevision: task.Revision})
 		}
 		return events, nil
 	})
 	if err != nil {
 		return
 	}
-	_ = s.manager.ObserveProgress(value.([]dg.Event))
+	_ = s.Manager.ObserveProgress(value.([]dg.Event))
 }
 
 func managedProgress(t Thread) (progress, wait string) {

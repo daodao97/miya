@@ -232,7 +232,7 @@ func newServiceFixture(t *testing.T) *serviceFixture {
 		// cleanup removes the isolated service data and before its executor
 		// disappears; busy() intentionally ignores a cancelled worker.
 		if collaboration := f.srv.c.collaboration; collaboration != nil {
-			<-collaboration.done
+			<-collaboration.Done()
 		}
 		close(stop)
 		setInvalidateHook(oldHook)

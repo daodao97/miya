@@ -102,13 +102,13 @@ func TestInstalledAgentsCollaboration(t *testing.T) {
 		t.Fatal("two independent native task sessions did not overlap")
 	}
 	for _, id := range ids {
-		wait(func() bool { task, _ := f.srv.c.collaboration.manager.Read(id); return dg.Terminal(task.State) }, "native task "+id)
-		task, _ := f.srv.c.collaboration.manager.Read(id)
+		wait(func() bool { task, _ := f.srv.c.collaboration.Manager.Read(id); return dg.Terminal(task.State) }, "native task "+id)
+		task, _ := f.srv.c.collaboration.Manager.Read(id)
 		if task.State != dg.Completed || !strings.Contains(task.Result.Text, "MIYA_TASK_OK") || task.SessionEpoch == "" {
 			t.Fatalf("live %s result: %+v", task.Agent, task)
 		}
 		if task.Agent == agentClaude {
-			if proof, err := f.srv.c.collaboration.manager.NativeOutcome(id); err != nil || proof.NativeResultID == "" {
+			if proof, err := f.srv.c.collaboration.Manager.NativeOutcome(id); err != nil || proof.NativeResultID == "" {
 				t.Fatal("live Claude root result did not yield recheck evidence", proof, err)
 			}
 		}
@@ -118,7 +118,7 @@ func TestInstalledAgentsCollaboration(t *testing.T) {
 	// barrier should submit exactly one real native notification turn.
 	f.serv.Do(func() { f.srv.c.update(caller, func(t *Thread) { t.Busy = false }) })
 	wait(func() bool {
-		deliveries := f.srv.c.collaboration.manager.View().Deliveries
+		deliveries := f.srv.c.collaboration.Manager.View().Deliveries
 		if len(deliveries) != 1 {
 			return false
 		}
@@ -270,7 +270,7 @@ func TestInstalledAgentCollaborationMCP(t *testing.T) {
 	if !strings.Contains(managedResult(parent.Messages, false).Text, "MIYA_MCP_PARENT_OK") {
 		t.Fatal("native parent did not verify its MCP task result", parent.Status, managedResult(parent.Messages, false))
 	}
-	tasks := f.srv.c.collaboration.manager.View().Tasks
+	tasks := f.srv.c.collaboration.Manager.View().Tasks
 	if len(tasks) != 1 {
 		t.Fatalf("native MCP workflow created %d tasks", len(tasks))
 	}

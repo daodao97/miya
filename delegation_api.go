@@ -24,8 +24,8 @@ func (c *chatController) collaborationUserOp(r collaborationRequest) (any, error
 	if s == nil {
 		return nil, errors.New("Collaboration requires an updated Miya background service")
 	}
-	if s.loadError != nil {
-		return nil, fmt.Errorf("STORAGE_UNAVAILABLE: %w", s.loadError)
+	if s.LoadError != nil {
+		return nil, fmt.Errorf("STORAGE_UNAVAILABLE: %w", s.LoadError)
 	}
 	caller, found := c.threadByReference(r.From)
 	if r.Operation == "resolve_delivery" {
@@ -47,14 +47,14 @@ func (c *chatController) collaborationUserOp(r collaborationRequest) (any, error
 			return nil, errors.New("INVALID_ARGUMENT: Unexpected notification resolution arguments")
 		}
 		return deferred(func() (any, error) {
-			return s.call(func() (any, error) {
-				receipt, fresh, err := s.manager.Mutate(dg.Operation{Caller: r.From, RequestID: a.RequestID, Name: "abandon_delivery", TaskID: a.TaskID, DeliveryID: a.DeliveryID, Reason: a.Reason})
+			return s.Call(func() (any, error) {
+				receipt, fresh, err := s.Manager.Mutate(dg.Operation{Caller: r.From, RequestID: a.RequestID, Name: "abandon_delivery", TaskID: a.TaskID, DeliveryID: a.DeliveryID, Reason: a.Reason})
 				if err != nil {
 					return nil, err
 				}
 				if fresh {
-					s.release(a.DeliveryID)
-					s.tick()
+					s.Release(a.DeliveryID)
+					s.Tick()
 				}
 				return map[string]any{"accepted": receipt.Accepted, "task_id": receipt.TaskID, "notification": receipt.Notification}, nil
 			})
@@ -79,15 +79,15 @@ func (c *chatController) collaborationUserOp(r collaborationRequest) (any, error
 			return nil, errors.New("INVALID_ARGUMENT: request_id is required")
 		}
 		return deferred(func() (any, error) {
-			return s.call(func() (any, error) {
-				receipt, fresh, err := s.manager.Mutate(dg.Operation{Caller: r.From, RequestID: a.RequestID, Name: "cancel_all"})
+			return s.Call(func() (any, error) {
+				receipt, fresh, err := s.Manager.Mutate(dg.Operation{Caller: r.From, RequestID: a.RequestID, Name: "cancel_all"})
 				if err != nil {
 					return nil, err
 				}
 				if fresh {
 					for _, id := range receipt.TaskIDs {
-						if task, err := s.manager.Read(id); err == nil {
-							if err := s.interruptTask(task); err != nil {
+						if task, err := s.Manager.Read(id); err == nil {
+							if err := s.InterruptTask(task); err != nil {
 								return nil, err
 							}
 						}
@@ -121,20 +121,20 @@ func (c *chatController) collaborationUserOp(r collaborationRequest) (any, error
 		if r.From != "" && !found {
 			return nil, errors.New("THREAD_NOT_FOUND: Initiating conversation is unavailable")
 		}
-		result, err := collaborationListFor(s.manager, r.From, a, r.From == "")
+		result, err := collaborationListFor(s.Manager, r.From, a, r.From == "")
 		if values, ok := result.(map[string]any); ok {
-			s.withHealth(values)
-			values["paused"] = c.collaboration.isPaused(r.From) || s.manager.Paused(r.From)
-			values["revision"] = s.manager.Revision()
+			s.WithHealth(values)
+			values["paused"] = c.collaboration.IsPaused(r.From) || s.Manager.Paused(r.From)
+			values["revision"] = s.Manager.Revision()
 		}
 		return result, err
 	case "read_task", "wait_task":
-		task, err := s.manager.Read(a.TaskID)
+		task, err := s.Manager.Read(a.TaskID)
 		if err != nil {
 			return nil, err
 		}
 		result := c.collaborationTaskPublic(task, r.From)
-		s.withHealth(result)
+		s.WithHealth(result)
 		return result, nil
 	case "start_task", "send_thread":
 		if !found || caller.ReadOnly {
@@ -142,7 +142,7 @@ func (c *chatController) collaborationUserOp(r collaborationRequest) (any, error
 		}
 		return c.startCollaboration(caller, r.Operation, a)
 	case "cancel_task", "resolve_task", "watch_task", "unwatch_task":
-		task, err := s.manager.Read(a.TaskID)
+		task, err := s.Manager.Read(a.TaskID)
 		if err != nil {
 			return nil, err
 		}

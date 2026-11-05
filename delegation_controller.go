@@ -21,12 +21,12 @@ var errManagedCancelled = errors.New("Cancelled before native input was submitte
 var errManagedPaused = errors.New("Collaboration delivery paused before native input was submitted")
 
 type managedExecution struct {
-	thread              int
-	turn, epoch         string
-	sequence            uint64
-	started             bool
-	pending             map[string]dg.Event
-	pendingOverflow     bool
+	Thread              int
+	Turn, Epoch         string
+	Sequence            uint64
+	Started             bool
+	Pending             map[string]dg.Event
+	PendingOverflow     bool
 	progressAt          time.Time
 	progress, waitCause string
 }
@@ -35,8 +35,8 @@ type managedExecution struct {
 // executor. Native callbacks only enqueue immutable events on this worker.
 type collaborationState struct {
 	host           collaborationHost
-	manager        *dg.Manager
-	loadError      error
+	Manager        *dg.Manager
+	LoadError      error
 	worker         *async.Executor
 	ctx            context.Context
 	cancel         context.CancelFunc
@@ -47,30 +47,57 @@ type collaborationState struct {
 	cleanupError   atomic.Pointer[string]
 	// Main-thread owned: the conversation each execution reserved, the
 	// executions in progress, and the receivers whose delivery is paused.
-	reservations map[int]string
-	executions   map[string]*managedExecution
+	Reservations map[int]string
+	Executions   map[string]*managedExecution
 	pausedRefs   map[string]bool
 	pauseGen     map[string]uint64
 }
 
 // A window has no collaboration, so these read nothing on a nil state.
 
-func (s *collaborationState) reservation(thread int) string {
+func (s *collaborationState) Reservation(thread int) string {
 	if s == nil {
 		return ""
 	}
-	return s.reservations[thread]
+	return s.Reservations[thread]
 }
 
-func (s *collaborationState) execution(id string) *managedExecution {
+func (s *collaborationState) Execution(id string) *managedExecution {
 	if s == nil {
 		return nil
 	}
-	return s.executions[id]
+	return s.Executions[id]
 }
 
-func (s *collaborationState) isPaused(ref string) bool {
+func (s *collaborationState) IsPaused(ref string) bool {
 	return s != nil && s.pausedRefs[ref]
+}
+
+// Context ends when the collaboration stops.
+func (s *collaborationState) Context() context.Context { return s.ctx }
+
+// Stop ends the collaboration's work; Done is closed once its worker
+// returned.
+func (s *collaborationState) Stop()                 { s.cancel() }
+func (s *collaborationState) Done() <-chan struct{} { return s.done }
+
+// Pending is how much collaboration work is queued or running.
+func (s *collaborationState) Pending() int64 { return s.busy.Load() }
+
+// CleanupError is why the last cleanup of finished tasks failed, "" when
+// it did not.
+func (s *collaborationState) CleanupError() string {
+	if message := s.cleanupError.Load(); message != nil {
+		return *message
+	}
+	return ""
+}
+
+// StartRecheck rechecks a task's native outcome in the background, as
+// pending work.
+func (s *collaborationState) StartRecheck(caller, id string) {
+	s.busy.Add(1)
+	go func() { defer s.busy.Add(-1); s.RecheckTask(caller, id) }()
 }
 
 func (s *collaborationState) pauseGeneration(ref string) uint64 {
@@ -83,10 +110,10 @@ func (s *collaborationState) pauseGeneration(ref string) uint64 {
 func newCollaboration(c *chatController, dir string) *collaborationState {
 	ctx, cancel := context.WithCancel(c.parentContext())
 	s := &collaborationState{host: collaborationHostOf{c}, worker: async.NewExecutor(), ctx: ctx, cancel: cancel, done: make(chan struct{}), dispatched: map[string]bool{}}
-	s.manager, s.loadError = dg.Open(dg.NewStore(dir), dg.Options{})
-	if s.loadError == nil {
-		s.loadError = s.manager.Recover()
-		s.pausedRefs = s.manager.View().Paused
+	s.Manager, s.LoadError = dg.Open(dg.NewStore(dir), dg.Options{})
+	if s.LoadError == nil {
+		s.LoadError = s.Manager.Recover()
+		s.pausedRefs = s.Manager.View().Paused
 	}
 	go func() { defer close(s.done); s.worker.Loop(ctx.Done()) }()
 	go func() {
@@ -97,14 +124,14 @@ func newCollaboration(c *chatController, dir string) *collaborationState {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				s.post(s.tick)
+				s.Post(s.Tick)
 			}
 		}
 	}()
 	return s
 }
 
-func (s *collaborationState) post(f func()) {
+func (s *collaborationState) Post(f func()) {
 	if s == nil {
 		return
 	}
@@ -119,11 +146,11 @@ func (s *collaborationState) post(f func()) {
 		var revision uint64
 		var health string
 		cleanup := s.cleanupError.Load()
-		if s.manager != nil {
-			revision, health = s.manager.Revision(), s.manager.StorageError()
+		if s.Manager != nil {
+			revision, health = s.Manager.Revision(), s.Manager.StorageError()
 		}
 		f()
-		if s.manager != nil && (revision != s.manager.Revision() || health != s.manager.StorageError() || cleanup != s.cleanupError.Load()) {
+		if s.Manager != nil && (revision != s.Manager.Revision() || health != s.Manager.StorageError() || cleanup != s.cleanupError.Load()) {
 			s.host.Dispatch(func() {
 				if s.ctx.Err() == nil {
 					s.host.Invalidate()
@@ -132,16 +159,16 @@ func (s *collaborationState) post(f func()) {
 		}
 	})
 }
-func (s *collaborationState) call(f func() (any, error)) (any, error) {
-	if s.loadError != nil {
-		return nil, fmt.Errorf("STORAGE_UNAVAILABLE: %w", s.loadError)
+func (s *collaborationState) Call(f func() (any, error)) (any, error) {
+	if s.LoadError != nil {
+		return nil, fmt.Errorf("STORAGE_UNAVAILABLE: %w", s.LoadError)
 	}
 	type reply struct {
 		v   any
 		err error
 	}
 	done := make(chan reply, 1)
-	s.post(func() { v, err := f(); done <- reply{v, err} })
+	s.Post(func() { v, err := f(); done <- reply{v, err} })
 	select {
 	case r := <-done:
 		return r.v, r.err
@@ -149,7 +176,7 @@ func (s *collaborationState) call(f func() (any, error)) (any, error) {
 		return nil, errors.New("Collaboration service stopped")
 	}
 }
-func (s *collaborationState) onMain(f func() (any, error)) (any, error) {
+func (s *collaborationState) OnMain(f func() (any, error)) (any, error) {
 	type reply struct {
 		v   any
 		err error
@@ -258,46 +285,46 @@ func (c *chatController) prepareDelegation(caller Thread, a collaborationArgs) (
 	}
 	if target.ID != 0 {
 		key := from + "\n" + a.RequestID
-		if reserved := c.collaboration.reservation(target.ID); reserved != "" && reserved != key {
+		if reserved := c.collaboration.Reservation(target.ID); reserved != "" && reserved != key {
 			return dg.StartInput{}, errors.New("THREAD_BUSY: Target is reserved")
 		}
-		if c.collaboration.reservations == nil {
-			c.collaboration.reservations = map[int]string{}
+		if c.collaboration.Reservations == nil {
+			c.collaboration.Reservations = map[int]string{}
 		}
-		c.collaboration.reservations[target.ID] = key
+		c.collaboration.Reservations[target.ID] = key
 	}
 	return in, nil
 }
 
-func (s *collaborationState) create(in dg.StartInput) (dg.Task, error) {
-	task, err := s.manager.Create(in)
+func (s *collaborationState) Create(in dg.StartInput) (dg.Task, error) {
+	task, err := s.Manager.Create(in)
 	if err != nil {
-		_, _ = s.onMain(func() (any, error) {
-			if t, ok := s.host.ThreadByRef(in.Target); ok && s.reservation(t.ID) == in.From+"\n"+in.RequestID {
-				delete(s.reservations, t.ID)
+		_, _ = s.OnMain(func() (any, error) {
+			if t, ok := s.host.ThreadByRef(in.Target); ok && s.Reservation(t.ID) == in.From+"\n"+in.RequestID {
+				delete(s.Reservations, t.ID)
 				s.host.DrainQueue(t.ID)
 			}
 			return nil, nil
 		})
 		return dg.Task{}, err
 	}
-	if task.State == dg.Starting && !s.dispatched[task.ID] && s.manager.StorageError() == "" {
+	if task.State == dg.Starting && !s.dispatched[task.ID] && s.Manager.StorageError() == "" {
 		s.start(task)
 	}
-	return s.manager.Read(task.ID)
+	return s.Manager.Read(task.ID)
 }
 
 func (s *collaborationState) start(task dg.Task) {
 	if s.dispatched[task.ID] || s.ctx.Err() != nil {
 		return
 	}
-	if latest, err := s.manager.Read(task.ID); err == nil && latest.CancelRequested {
-		_ = s.manager.Observe(dg.Event{TaskID: task.ID, State: dg.Interrupted, Result: dg.Result{Error: "Cancelled before native submission"}})
-		s.release(task.ID)
+	if latest, err := s.Manager.Read(task.ID); err == nil && latest.CancelRequested {
+		_ = s.Manager.Observe(dg.Event{TaskID: task.ID, State: dg.Interrupted, Result: dg.Result{Error: "Cancelled before native submission"}})
+		s.Release(task.ID)
 		return
 	}
 	s.dispatched[task.ID] = true
-	prepared, err := s.onMain(func() (any, error) {
+	prepared, err := s.OnMain(func() (any, error) {
 		t := Thread{}
 		if task.Target != "" {
 			var ok bool
@@ -308,7 +335,7 @@ func (s *collaborationState) start(task dg.Task) {
 			if t.Busy || t.Loading || t.ReadOnly || t.TaskPending || s.host.TargetUnavailable(t) {
 				return nil, errors.New("Target session is busy or read-only")
 			}
-			reserved := s.reservation(t.ID)
+			reserved := s.Reservation(t.ID)
 			if reserved != "" && reserved != task.ID && reserved != task.From+"\n"+task.RequestID {
 				return nil, errors.New("Target session is reserved by another submission")
 			}
@@ -328,14 +355,14 @@ func (s *collaborationState) start(task dg.Task) {
 		if !s.host.Agent(task.Agent).Ready {
 			return nil, errors.New("Target agent is not ready")
 		}
-		if s.reservations == nil {
-			s.reservations = map[int]string{}
+		if s.Reservations == nil {
+			s.Reservations = map[int]string{}
 		}
-		s.reservations[t.ID] = task.ID
-		if s.executions == nil {
-			s.executions = map[string]*managedExecution{}
+		s.Reservations[t.ID] = task.ID
+		if s.Executions == nil {
+			s.Executions = map[string]*managedExecution{}
 		}
-		s.executions[task.ID] = &managedExecution{thread: t.ID, pending: map[string]dg.Event{}}
+		s.Executions[task.ID] = &managedExecution{Thread: t.ID, Pending: map[string]dg.Event{}}
 		return t, nil
 	})
 	if err != nil {
@@ -344,12 +371,12 @@ func (s *collaborationState) start(task dg.Task) {
 	}
 	t := prepared.(Thread)
 	if t.ServerID != "" {
-		if err := s.manager.Observe(dg.Event{TaskID: task.ID, Target: ThreadRef{Source: referenceSourceOf(task.From), Backend: task.Agent, SessionID: t.ServerID}.URL()}); err != nil {
-			s.release(task.ID)
+		if err := s.Manager.Observe(dg.Event{TaskID: task.ID, Target: ThreadRef{Source: referenceSourceOf(task.From), Backend: task.Agent, SessionID: t.ServerID}.URL()}); err != nil {
+			s.Release(task.ID)
 			return
 		}
 	}
-	_, err = s.onMain(func() (any, error) {
+	_, err = s.OnMain(func() (any, error) {
 		current := s.host.Thread(t.ID)
 		if current.Busy || current.Loading || current.ReadOnly || s.host.TargetUnavailable(current) {
 			return nil, errors.New("Target changed before submission")
@@ -371,47 +398,47 @@ func (s *collaborationState) start(task dg.Task) {
 
 func referenceSourceOf(raw string) string { ref, _ := model.ParseThreadURL(raw); return ref.Source }
 func (s *collaborationState) failBeforeStart(task dg.Task, err error) {
-	if saveErr := s.manager.Observe(dg.Event{TaskID: task.ID, State: dg.Failed, Result: dg.Result{Error: err.Error()}}); saveErr != nil {
+	if saveErr := s.Manager.Observe(dg.Event{TaskID: task.ID, State: dg.Failed, Result: dg.Result{Error: err.Error()}}); saveErr != nil {
 		return
 	}
-	s.release(task.ID)
+	s.Release(task.ID)
 }
-func (s *collaborationState) release(id string) {
-	_, _ = s.onMain(func() (any, error) {
-		execution := s.execution(id)
+func (s *collaborationState) Release(id string) {
+	_, _ = s.OnMain(func() (any, error) {
+		execution := s.Execution(id)
 		if execution == nil {
-			if task, err := s.manager.Read(id); err == nil {
-				if t, ok := s.host.ThreadByRef(task.Target); ok && s.reservation(t.ID) == task.From+"\n"+task.RequestID {
-					delete(s.reservations, t.ID)
+			if task, err := s.Manager.Read(id); err == nil {
+				if t, ok := s.host.ThreadByRef(task.Target); ok && s.Reservation(t.ID) == task.From+"\n"+task.RequestID {
+					delete(s.Reservations, t.ID)
 					s.host.DrainQueue(t.ID)
 				}
 			}
 		}
 		if execution != nil {
-			if s.reservation(execution.thread) == id {
-				delete(s.reservations, execution.thread)
+			if s.Reservation(execution.Thread) == id {
+				delete(s.Reservations, execution.Thread)
 			}
-			s.host.Update(execution.thread, func(t *Thread) {
+			s.host.Update(execution.Thread, func(t *Thread) {
 				if t.ExecutionID == id {
 					t.ExecutionID = ""
 				}
 			})
-			delete(s.executions, id)
-			s.host.DrainQueue(execution.thread)
+			delete(s.Executions, id)
+			s.host.DrainQueue(execution.Thread)
 		}
 		return nil, nil
 	})
 }
-func (s *collaborationState) tick() {
-	if s.loadError != nil || s.ctx.Err() != nil {
+func (s *collaborationState) Tick() {
+	if s.LoadError != nil || s.ctx.Err() != nil {
 		return
 	}
 	s.checkProgress()
-	if err := s.manager.ExpireDeliveries(); err != nil {
+	if err := s.Manager.ExpireDeliveries(); err != nil {
 		return
 	}
 	if now := time.Now(); !now.Before(s.nextCollection) {
-		if err := s.manager.Collect(); err != nil {
+		if err := s.Manager.Collect(); err != nil {
 			message := err.Error()
 			s.cleanupError.Store(&message)
 		} else {
@@ -419,7 +446,7 @@ func (s *collaborationState) tick() {
 		}
 		s.nextCollection = now.Add(time.Hour)
 	}
-	tasks, err := s.manager.ClaimQueued()
+	tasks, err := s.Manager.ClaimQueued()
 	if err != nil {
 		return
 	}
@@ -436,27 +463,27 @@ func (c *chatController) persistManagedBinding(ctx context.Context, id, target s
 }
 
 func (c *chatController) persistManagedExecutionBinding(ctx context.Context, id, target, epoch string) error {
-	return c.collaboration.bindExecution(ctx, id, target, epoch)
+	return c.collaboration.BindExecution(ctx, id, target, epoch)
 }
 
 // bindExecution records the native session an execution is about to send
 // its input to, before the input is sent.
-func (s *collaborationState) bindExecution(ctx context.Context, id, target, epoch string) error {
+func (s *collaborationState) BindExecution(ctx context.Context, id, target, epoch string) error {
 	if id == "" || s == nil {
 		return nil
 	}
 	if strings.HasPrefix(id, "delivery-") {
-		if err := s.manager.StorageError(); err != "" {
+		if err := s.Manager.StorageError(); err != "" {
 			return fmt.Errorf("STORAGE_UNAVAILABLE: %s", err)
 		}
-		d, ok := s.manager.Delivery(id)
+		d, ok := s.Manager.Delivery(id)
 		if !ok || d.Notify != target || d.State != "submitting" {
 			return errors.New("Notification target does not match its persisted receiver")
 		}
 		var allowed bool
-		_, err := s.onMain(func() (any, error) {
+		_, err := s.OnMain(func() (any, error) {
 			t, found := s.host.ThreadByRef(target)
-			allowed = found && !s.isPaused(target) && s.reservation(t.ID) == id && t.ExecutionID == id && !t.StopRequested
+			allowed = found && !s.IsPaused(target) && s.Reservation(t.ID) == id && t.ExecutionID == id && !t.StopRequested
 			return nil, nil
 		})
 		if err != nil {
@@ -465,14 +492,14 @@ func (s *collaborationState) bindExecution(ctx context.Context, id, target, epoc
 		if !allowed {
 			return errManagedPaused
 		}
-		_, err = s.call(func() (any, error) { return nil, s.manager.BeginDeliveryInput(id) })
+		_, err = s.Call(func() (any, error) { return nil, s.Manager.BeginDeliveryInput(id) })
 		if err != nil {
 			return err
 		}
 		// Stop may have arrived while the input intent was syncing.
-		_, err = s.onMain(func() (any, error) {
+		_, err = s.OnMain(func() (any, error) {
 			t, found := s.host.ThreadByRef(target)
-			allowed = found && !s.isPaused(target) && s.reservation(t.ID) == id && t.ExecutionID == id && !t.StopRequested
+			allowed = found && !s.IsPaused(target) && s.Reservation(t.ID) == id && t.ExecutionID == id && !t.StopRequested
 			return nil, nil
 		})
 		if err == nil && !allowed {
@@ -481,13 +508,13 @@ func (s *collaborationState) bindExecution(ctx context.Context, id, target, epoc
 		return err
 	}
 	done := make(chan error, 1)
-	s.post(func() {
-		task, err := s.manager.Read(id)
+	s.Post(func() {
+		task, err := s.Manager.Read(id)
 		if err == nil && task.CancelRequested {
 			err = errManagedCancelled
 		}
 		if err == nil {
-			err = s.manager.Observe(dg.Event{TaskID: id, Target: target, SessionEpoch: epoch, SubmissionPhase: "submitting"})
+			err = s.Manager.Observe(dg.Event{TaskID: id, Target: target, SessionEpoch: epoch, SubmissionPhase: "submitting"})
 		}
 		done <- err
 	})
@@ -506,11 +533,11 @@ func (c *chatController) managedEvent(id string, event dg.Event) {
 }
 
 func (c *chatController) managedEventWithOutcome(id string, event dg.Event, saveOutcome bool) {
-	c.collaboration.observe(id, event, saveOutcome)
+	c.collaboration.Observe(id, event, saveOutcome)
 }
 
 // observe records what an execution's agent reported.
-func (s *collaborationState) observe(id string, event dg.Event, saveOutcome bool) {
+func (s *collaborationState) Observe(id string, event dg.Event, saveOutcome bool) {
 	if id == "" || s == nil {
 		return
 	}
@@ -519,37 +546,37 @@ func (s *collaborationState) observe(id string, event dg.Event, saveOutcome bool
 		if event.State == dg.Running || event.State == dg.Completed {
 			outcome = "accepted"
 		}
-		s.post(func() {
-			if d, ok := s.manager.Delivery(id); ok && d.SubmissionPhase == "prepared" && outcome == "unknown" {
+		s.Post(func() {
+			if d, ok := s.Manager.Delivery(id); ok && d.SubmissionPhase == "prepared" && outcome == "unknown" {
 				outcome = "not_started"
 			} else if ok && d.SubmissionPhase == "submitting" && event.NativeResultID != "" {
 				// A root result (including a failed reply) proves the bound
 				// Claude process accepted input; delivery is not reply success.
 				outcome = "accepted"
 			}
-			if err := s.manager.DeliveryOutcome(id, event.NativeTurnID, outcome, event.Result.Error); err == nil {
-				s.release(id)
+			if err := s.Manager.DeliveryOutcome(id, event.NativeTurnID, outcome, event.Result.Error); err == nil {
+				s.Release(id)
 			}
 		})
 		return
 	}
-	if run := s.execution(id); run != nil {
-		run.sequence++
-		event.Sequence = run.sequence
+	if run := s.Execution(id); run != nil {
+		run.Sequence++
+		event.Sequence = run.Sequence
 	}
 	event.TaskID = id
-	s.post(func() {
+	s.Post(func() {
 		if saveOutcome {
-			if err := s.manager.RecordNativeOutcome(event); err != nil {
+			if err := s.Manager.RecordNativeOutcome(event); err != nil {
 				return
 			}
 		}
-		if err := s.manager.Observe(event); err != nil {
+		if err := s.Manager.Observe(event); err != nil {
 			return
 		}
 		if dg.Terminal(event.State) {
-			s.release(id)
+			s.Release(id)
 		}
-		s.tick()
+		s.Tick()
 	})
 }

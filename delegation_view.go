@@ -17,15 +17,15 @@ func (c *chatController) collaborationCapabilities() *collaborationStatus {
 		return c.collaborationRemote
 	}
 	status := &collaborationStatus{Version: 1, Operations: []string{"list_agents", "start_task", "read_task", "wait_task", "send_thread", "cancel_task", "watch_task", "unwatch_task", "resolve_task", "list_tasks", "resume", "cancel_all", "resolve_delivery"}}
-	if s.manager != nil {
-		status.Revision, status.StorageError = s.manager.Revision(), s.manager.StorageError()
+	if s.Manager != nil {
+		status.Revision, status.StorageError = s.Manager.Revision(), s.Manager.StorageError()
 	}
-	if s.loadError != nil {
-		status.StorageError = s.loadError.Error()
+	if s.LoadError != nil {
+		status.StorageError = s.LoadError.Error()
 	}
 	status.Stale = status.StorageError != ""
-	if message := s.cleanupError.Load(); message != nil {
-		status.CleanupError = *message
+	if message := s.CleanupError(); message != "" {
+		status.CleanupError = message
 	}
 	return status
 }

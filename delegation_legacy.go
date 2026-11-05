@@ -12,7 +12,7 @@ import (
 // Older tools keep their default wait and context choices. Their result lookup
 // is still pinned to the accepted TaskID, never the target's latest turn.
 func (c *chatController) legacyDelegate(r mcpRequest, caller Thread) (any, error) {
-	if c.collaboration == nil || c.collaboration.loadError != nil || c.collaboration.manager == nil {
+	if c.collaboration == nil || c.collaboration.LoadError != nil || c.collaboration.Manager == nil {
 		return nil, errors.New("STORAGE_UNAVAILABLE: Collaboration storage is unavailable")
 	}
 	var raw struct {
@@ -34,8 +34,8 @@ func (c *chatController) legacyDelegate(r mcpRequest, caller Thread) (any, error
 	}
 	s := c.collaboration
 	return deferred(func() (any, error) {
-		return s.call(func() (any, error) {
-			task, err := s.create(in)
+		return s.Call(func() (any, error) {
+			task, err := s.Create(in)
 			if err != nil {
 				return nil, err
 			}
@@ -48,10 +48,10 @@ func (c *chatController) legacyTaskRead(r mcpRequest, caller Thread) (any, error
 	if c.collaboration == nil {
 		return nil, errors.New("EXECUTION_ASSOCIATION_LOST: Original task identity cannot be recovered")
 	}
-	if c.collaboration.loadError != nil || c.collaboration.manager == nil {
+	if c.collaboration.LoadError != nil || c.collaboration.Manager == nil {
 		return nil, errors.New("STORAGE_UNAVAILABLE: Original task storage is unavailable")
 	}
-	m := c.collaboration.manager
+	m := c.collaboration.Manager
 	if _, err := m.Read(r.TaskID); err != nil {
 		return nil, errors.New("EXECUTION_ASSOCIATION_LOST: The original execution is unavailable; inspect the target manually")
 	}

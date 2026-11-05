@@ -182,13 +182,13 @@ func (c *chatController) sendClaude(req SendRequest) int {
 		c.update(id, func(t *Thread) { t.ClaudeGeneration = generation })
 	}
 	var executionEpoch string
-	if execution := c.collaboration.execution(req.ExecutionID); execution != nil {
+	if execution := c.collaboration.Execution(req.ExecutionID); execution != nil {
 		if existing != nil {
-			_, _, _, execution.epoch = existing.Runtime()
+			_, _, _, execution.Epoch = existing.Runtime()
 		} else {
-			execution.epoch = "claude:" + claude.NewSessionID()
+			execution.Epoch = "claude:" + claude.NewSessionID()
 		}
-		executionEpoch = execution.epoch
+		executionEpoch = execution.Epoch
 	}
 	reject := func(err error) {
 		c.dispatch(func() {
@@ -219,9 +219,9 @@ func (c *chatController) sendClaude(req SendRequest) int {
 			}
 			if errors.Is(err, errManagedPaused) && strings.HasPrefix(req.ExecutionID, "delivery-") {
 				s := c.collaboration
-				s.post(func() {
-					if e := s.manager.DeliveryOutcome(req.ExecutionID, "", "not_started", err.Error()); e == nil {
-						s.release(req.ExecutionID)
+				s.Post(func() {
+					if e := s.Manager.DeliveryOutcome(req.ExecutionID, "", "not_started", err.Error()); e == nil {
+						s.Release(req.ExecutionID)
 					}
 				})
 			} else {
@@ -305,9 +305,9 @@ func (c *chatController) finishClaude(id int, cwd string, err error) {
 		}
 		if errors.Is(err, errManagedPaused) && strings.HasPrefix(t.ExecutionID, "delivery-") {
 			s := c.collaboration
-			s.post(func() {
-				if e := s.manager.DeliveryOutcome(t.ExecutionID, "", "not_started", err.Error()); e == nil {
-					s.release(t.ExecutionID)
+			s.Post(func() {
+				if e := s.Manager.DeliveryOutcome(t.ExecutionID, "", "not_started", err.Error()); e == nil {
+					s.Release(t.ExecutionID)
 				}
 			})
 			return

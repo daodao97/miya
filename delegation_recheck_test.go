@@ -24,12 +24,12 @@ func TestCollaborationClaudeRootResultCanBeRecheckedAfterRestart(t *testing.T) {
 		targetID = c.nextID()
 		c.addThread(c.cwd, Thread{ID: targetID, Agent: agentClaude, ServerID: "target", HistoryLoaded: true, Busy: true, ExecutionID: task.ID,
 			Messages: []Message{{Role: "user", Content: task.Prompt}, {Role: "assistant", Content: "fixed result", ExecutionID: task.ID}}})
-		c.collaboration.executions = map[string]*managedExecution{task.ID: {thread: targetID, epoch: "claude:original"}}
-		c.collaboration.reservations = map[int]string{targetID: task.ID}
+		c.collaboration.Executions = map[string]*managedExecution{task.ID: {Thread: targetID, Epoch: "claude:original"}}
+		c.collaboration.Reservations = map[int]string{targetID: task.ID}
 	})
 	s := f.srv.c.collaboration
-	if _, err := s.call(func() (any, error) {
-		return nil, s.manager.Observe(dg.Event{TaskID: task.ID, Target: target, SessionEpoch: "claude:original", State: dg.Running})
+	if _, err := s.Call(func() (any, error) {
+		return nil, s.Manager.Observe(dg.Event{TaskID: task.ID, Target: target, SessionEpoch: "claude:original", State: dg.Running})
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -45,10 +45,10 @@ func TestCollaborationClaudeRootResultCanBeRecheckedAfterRestart(t *testing.T) {
 		// A child's result must never create parent completion evidence.
 		c.handleClaude(targetID, claude.Frame{Type: "result", UUID: "child-result", ParentToolUseID: "child-call", Result: "wrong result"})
 	})
-	if _, err := s.call(func() (any, error) { return nil, nil }); err != nil {
+	if _, err := s.Call(func() (any, error) { return nil, nil }); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.manager.NativeOutcome(task.ID); err == nil {
+	if _, err := s.Manager.NativeOutcome(task.ID); err == nil {
 		t.Fatal("child result created parent terminal evidence")
 	}
 	f.serv.Do(func() {
@@ -56,19 +56,19 @@ func TestCollaborationClaudeRootResultCanBeRecheckedAfterRestart(t *testing.T) {
 		c.handleClaude(targetID, claude.Frame{Type: "result", UUID: "root-result", Result: "fixed result"})
 		c.update(targetID, func(t *Thread) { t.Busy = false })
 	})
-	if _, err := s.call(func() (any, error) { return nil, nil }); err != nil {
+	if _, err := s.Call(func() (any, error) { return nil, nil }); err != nil {
 		t.Fatal(err)
 	}
-	if s.manager.StorageError() == "" {
+	if s.Manager.StorageError() == "" {
 		t.Fatal("result index failure was not reported")
 	}
-	proof, err := s.manager.NativeOutcome(task.ID)
+	proof, err := s.Manager.NativeOutcome(task.ID)
 	if err != nil || proof.Result.Text != "fixed result" || proof.NativeResultID != "root-result" {
 		t.Fatal("adapter did not preserve exact root outcome", proof, err)
 	}
 	// Repair storage, then restart only this test's collaboration service.
-	s.cancel()
-	<-s.done
+	s.Stop()
+	<-s.Done()
 	if err := os.Remove(index); err != nil {
 		t.Fatal(err)
 	}
@@ -78,13 +78,13 @@ func TestCollaborationClaudeRootResultCanBeRecheckedAfterRestart(t *testing.T) {
 	f.serv.Do(func() {
 		c := f.srv.c
 		c.collaboration = newCollaboration(c, filepath.Dir(index))
-		c.collaboration.executions, c.collaboration.reservations = nil, nil
+		c.collaboration.Executions, c.collaboration.Reservations = nil, nil
 		c.update(targetID, func(t *Thread) {
 			t.ExecutionID = ""
 			t.Messages = append(t.Messages, Message{Role: "assistant", Content: "later unrelated result"})
 		})
 	})
-	current, _ := f.srv.c.collaboration.manager.Read(task.ID)
+	current, _ := f.srv.c.collaboration.Manager.Read(task.ID)
 	if current.State != dg.NeedsAttention {
 		t.Fatal("restart guessed an uncommitted outcome", current)
 	}
@@ -117,7 +117,7 @@ func TestCollaborationClaudeLiveBindingIsSavedBeforeInput(t *testing.T) {
 		t.Fatal(err)
 	}
 	task := waitCollaborationTask(t, f, result["task_id"].(string))
-	proof, err := f.srv.c.collaboration.manager.NativeOutcome(task.ID)
+	proof, err := f.srv.c.collaboration.Manager.NativeOutcome(task.ID)
 	if err != nil || task.State != dg.Completed || proof.Target != task.Target || proof.SessionEpoch != task.SessionEpoch || proof.NativeResultID != "root-result" {
 		t.Fatal("native result was not bound to its persisted process/session", task, proof, err)
 	}

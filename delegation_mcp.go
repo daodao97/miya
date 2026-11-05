@@ -229,8 +229,8 @@ func (c *chatController) collaborationMCP(r mcpRequest) (any, error) {
 	}
 	from := c.threadRef(caller).URL()
 	s := c.collaboration
-	if s.loadError != nil {
-		return nil, fmt.Errorf("STORAGE_UNAVAILABLE: %w", s.loadError)
+	if s.LoadError != nil {
+		return nil, fmt.Errorf("STORAGE_UNAVAILABLE: %w", s.LoadError)
 	}
 	if r.Tool == "list_agents" {
 		var agents []map[string]any
@@ -244,23 +244,23 @@ func (c *chatController) collaborationMCP(r mcpRequest) (any, error) {
 	}
 
 	if r.Tool == "list_tasks" {
-		result, err := collaborationList(s.manager, from, a)
+		result, err := collaborationList(s.Manager, from, a)
 		if values, ok := result.(map[string]any); ok {
-			s.withHealth(values)
+			s.WithHealth(values)
 		}
 		return result, err
 	}
-	if !s.manager.CanAccess(from, a.TaskID) {
+	if !s.Manager.CanAccess(from, a.TaskID) {
 		return nil, errors.New("ACCESS_DENIED: Task is not visible to this conversation")
 	}
 	switch r.Tool {
 	case "read_task", "wait_task":
-		task, err := s.manager.Read(a.TaskID)
+		task, err := s.Manager.Read(a.TaskID)
 		if err != nil {
 			return nil, err
 		}
 		result := c.collaborationTaskPublic(task, from)
-		s.withHealth(result)
+		s.WithHealth(result)
 		return result, nil
 	case "cancel_task", "watch_task", "unwatch_task", "resolve_task":
 		return c.collaborationOperation(from, r.Tool, a)
@@ -271,12 +271,12 @@ func (c *chatController) collaborationMCP(r mcpRequest) (any, error) {
 func (c *chatController) startCollaboration(caller Thread, name string, a collaborationArgs) (any, error) {
 	s := c.collaboration
 	from := c.threadRef(caller).URL()
-	if err := s.manager.CheckCreateRequest(from, a.RequestID); err != nil {
+	if err := s.Manager.CheckCreateRequest(from, a.RequestID); err != nil {
 		return nil, err
 	}
 	// Retry lookup precedes mutable admission checks: the original target may
 	// now be busy, gone, or use a different global default configuration.
-	if previous, ok := s.manager.FindRequest(from, a.RequestID); ok {
+	if previous, ok := s.Manager.FindRequest(from, a.RequestID); ok {
 		agent := a.Agent
 		if agent == "" {
 			agent = model.ThreadAgent(caller)
@@ -288,11 +288,11 @@ func (c *chatController) startCollaboration(caller Thread, name string, a collab
 		// An omitted default belongs to the first acceptance, including tasks
 		// accepted before automatic completion became the default.
 		if a.Notify == "" {
-			in.Notify = s.manager.RequestNotifies(in)
+			in.Notify = s.Manager.RequestNotifies(in)
 		}
 		return deferred(func() (any, error) {
-			return s.call(func() (any, error) {
-				task, err := s.create(in)
+			return s.Call(func() (any, error) {
+				task, err := s.Create(in)
 				if err != nil {
 					return nil, err
 				}
@@ -305,8 +305,8 @@ func (c *chatController) startCollaboration(caller Thread, name string, a collab
 		return nil, err
 	}
 	return deferred(func() (any, error) {
-		return s.call(func() (any, error) {
-			task, err := s.create(in)
+		return s.Call(func() (any, error) {
+			task, err := s.Create(in)
 			if err != nil {
 				return nil, err
 			}
@@ -328,30 +328,29 @@ func (c *chatController) collaborationOperation(from, name string, a collaborati
 	}
 	return deferred(func() (any, error) {
 		var fresh bool
-		result, err := s.call(func() (any, error) {
-			receipt, first, err := s.manager.Mutate(op)
+		result, err := s.Call(func() (any, error) {
+			receipt, first, err := s.Manager.Mutate(op)
 			fresh = first
 			if err != nil {
 				return nil, err
 			}
 			if first && name == "cancel_task" {
-				task, _ := s.manager.Read(a.TaskID)
-				if err := s.interruptTask(task); err != nil {
+				task, _ := s.Manager.Read(a.TaskID)
+				if err := s.InterruptTask(task); err != nil {
 					return nil, err
 				}
 			}
 			return map[string]any{"task_id": receipt.TaskID, "operation": receipt.Name, "accepted": receipt.Accepted, "accepted_at": receipt.AcceptedAt, "notification": receipt.Notification}, nil
 		})
 		if err == nil && fresh && op.Name == "recheck" {
-			s.busy.Add(1)
-			go func() { defer s.busy.Add(-1); s.recheckTask(from, a.TaskID) }()
+			s.StartRecheck(from, a.TaskID)
 		}
 		return result, err
 	}), nil
 }
 
-func (s *collaborationState) withHealth(result map[string]any) {
-	if message := s.manager.StorageError(); message != "" {
+func (s *collaborationState) WithHealth(result map[string]any) {
+	if message := s.Manager.StorageError(); message != "" {
 		result["storage_error"] = message
 		result["stale"] = true
 	}
@@ -363,7 +362,7 @@ func taskPublic(task dg.Task) map[string]any {
 
 func (c *chatController) collaborationTaskPublic(task dg.Task, from string) map[string]any {
 	v := taskPublic(task)
-	w, d, paused := c.collaboration.manager.Notification(task.ID, from)
+	w, d, paused := c.collaboration.Manager.Notification(task.ID, from)
 	applyTaskNotification(v, w, d, paused)
 	next := "wait_task"
 	if dg.Terminal(task.State) {
@@ -473,7 +472,7 @@ func applyTaskNotification(v map[string]any, w dg.Watch, d dg.Delivery, paused b
 }
 
 func (c *chatController) prepareTaskRecheck(caller, id string) (any, error) {
-	task, err := c.collaboration.manager.Read(id)
+	task, err := c.collaboration.Manager.Read(id)
 	if err != nil {
 		return nil, err
 	}
@@ -483,22 +482,22 @@ func (c *chatController) prepareTaskRecheck(caller, id string) (any, error) {
 	if task.Agent == agentClaude {
 		s := c.collaboration
 		return deferred(func() (any, error) {
-			return s.call(func() (any, error) {
-				current, err := s.manager.Read(id)
+			return s.Call(func() (any, error) {
+				current, err := s.Manager.Read(id)
 				if err != nil {
 					return nil, err
 				}
 				if !dg.Terminal(current.State) {
-					event, err := s.manager.NativeOutcome(id)
+					event, err := s.Manager.NativeOutcome(id)
 					if err != nil {
 						return nil, err
 					}
-					if err := s.manager.Observe(event); err != nil {
+					if err := s.Manager.Observe(event); err != nil {
 						return nil, err
 					}
-					s.release(id)
-					s.tick()
-					current, _ = s.manager.Read(id)
+					s.Release(id)
+					s.Tick()
+					current, _ = s.Manager.Read(id)
 				}
 				return taskPublic(current), nil
 			})
@@ -524,12 +523,12 @@ func (c *chatController) prepareTaskRecheck(caller, id string) (any, error) {
 				}
 			}
 		}
-		ctx, cancel := context.WithTimeout(s.ctx, 10*time.Second)
+		ctx, cancel := context.WithTimeout(s.Context(), 10*time.Second)
 		defer cancel()
 		if err := client.Call(ctx, "thread/read", map[string]any{"threadId": ref.SessionID, "includeTurns": true}, &result); err != nil {
 			return nil, err
 		}
-		live, liveErr := s.onMain(func() (any, error) {
+		live, liveErr := s.OnMain(func() (any, error) {
 			target, ok := c.threadByReference(task.Target)
 			return ok && c.client == client && target.ExecutionID == task.ID && target.TurnID == task.NativeTurnID && target.Busy && task.SessionEpoch == client.RuntimeEpoch(), nil
 		})
@@ -537,7 +536,7 @@ func (c *chatController) prepareTaskRecheck(caller, id string) (any, error) {
 			return nil, liveErr
 		}
 		liveBinding := live.(bool)
-		return s.call(func() (any, error) {
+		return s.Call(func() (any, error) {
 			matched := false
 			for _, turn := range result.Thread.Turns {
 				if turn.ID != task.NativeTurnID {
@@ -566,7 +565,7 @@ func (c *chatController) prepareTaskRecheck(caller, id string) (any, error) {
 				if state == dg.Running {
 					event.ExpectedRevision = task.Revision
 				}
-				if err := s.manager.Observe(event); err != nil {
+				if err := s.Manager.Observe(event); err != nil {
 					if dg.IsCode(err, "STALE_EVENT") {
 						continue
 					}
@@ -574,11 +573,11 @@ func (c *chatController) prepareTaskRecheck(caller, id string) (any, error) {
 				}
 				matched = true
 				if dg.Terminal(state) {
-					s.release(id)
-					s.tick()
+					s.Release(id)
+					s.Tick()
 				}
 			}
-			updated, _ := s.manager.Read(id)
+			updated, _ := s.Manager.Read(id)
 			if !matched && !dg.Terminal(updated.State) {
 				return nil, errors.New("RECHECK_UNAVAILABLE: Native history does not provide a reliable outcome for the bound execution")
 			}

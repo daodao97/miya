@@ -13,7 +13,7 @@ func (c *chatController) managedCodexAccepted(id, turn, epoch string, err error,
 	if id == "" || c.collaboration == nil {
 		return
 	}
-	run := c.collaboration.execution(id)
+	run := c.collaboration.Execution(id)
 	if run == nil {
 		return
 	}
@@ -32,9 +32,9 @@ func (c *chatController) managedCodexAccepted(id, turn, epoch string, err error,
 			}
 		}
 		s := c.collaboration
-		s.post(func() {
-			if saveErr := s.manager.DeliveryOutcome(id, turn, outcome, reason); saveErr == nil {
-				s.release(id)
+		s.Post(func() {
+			if saveErr := s.Manager.DeliveryOutcome(id, turn, outcome, reason); saveErr == nil {
+				s.Release(id)
 			}
 		})
 		return
@@ -50,19 +50,19 @@ func (c *chatController) managedCodexAccepted(id, turn, epoch string, err error,
 		c.managedEvent(id, dg.Event{State: state, SessionEpoch: epoch, Result: dg.Result{Error: err.Error()}})
 		return
 	}
-	run.turn, run.epoch = turn, epoch
-	if task, readErr := c.collaboration.manager.Read(id); readErr == nil && task.CancelRequested {
-		c.update(run.thread, func(t *Thread) { t.StopRequested = true })
+	run.Turn, run.Epoch = turn, epoch
+	if task, readErr := c.collaboration.Manager.Read(id); readErr == nil && task.CancelRequested {
+		c.update(run.Thread, func(t *Thread) { t.StopRequested = true })
 	}
 	state := dg.Running
-	if run.pendingOverflow {
+	if run.PendingOverflow {
 		state = dg.NeedsAttention
 	}
-	c.managedEvent(id, dg.Event{Target: c.threadRef(c.threadWithID(run.thread)).URL(), NativeTurnID: turn, SessionEpoch: epoch, State: state})
-	if event, ok := run.pending[turn]; ok {
+	c.managedEvent(id, dg.Event{Target: c.threadRef(c.threadWithID(run.Thread)).URL(), NativeTurnID: turn, SessionEpoch: epoch, State: state})
+	if event, ok := run.Pending[turn]; ok {
 		c.managedEvent(id, event)
 	}
-	run.pending = nil
+	run.Pending = nil
 }
 
 // Generic native/internal errors can occur after side effects. Only protocol
@@ -77,7 +77,7 @@ func (c *chatController) managedCodexOutput(before Thread, method string, e code
 	if id == "" || c.collaboration == nil {
 		return
 	}
-	run := c.collaboration.execution(id)
+	run := c.collaboration.Execution(id)
 	if run == nil {
 		return
 	}
@@ -88,10 +88,10 @@ func (c *chatController) managedCodexOutput(before Thread, method string, e code
 	if turn == "" {
 		return
 	}
-	if run.turn != "" && run.turn != turn {
+	if run.Turn != "" && run.Turn != turn {
 		return
 	}
-	event := dg.Event{NativeTurnID: turn, SessionEpoch: run.epoch, Target: c.threadRef(c.threadWithID(before.ID)).URL()}
+	event := dg.Event{NativeTurnID: turn, SessionEpoch: run.Epoch, Target: c.threadRef(c.threadWithID(before.ID)).URL()}
 	if method == "turn/completed" {
 		switch e.Turn.Status {
 		case "completed":
@@ -116,20 +116,20 @@ func (c *chatController) managedCodexOutput(before Thread, method string, e code
 	} else {
 		return
 	}
-	if run.turn == "" {
-		if run.pendingOverflow {
+	if run.Turn == "" {
+		if run.PendingOverflow {
 			return
 		}
-		if _, exists := run.pending[turn]; !exists && len(run.pending) >= 8 {
-			run.pendingOverflow = true
-			run.pending = nil
+		if _, exists := run.Pending[turn]; !exists && len(run.Pending) >= 8 {
+			run.PendingOverflow = true
+			run.Pending = nil
 			c.managedEvent(id, dg.Event{State: dg.NeedsAttention, Result: dg.Result{Error: "Too many unbound native turns arrived before submission acknowledgement; recheck the exact execution"}})
 			return
 		}
-		if run.pending == nil {
-			run.pending = map[string]dg.Event{}
+		if run.Pending == nil {
+			run.Pending = map[string]dg.Event{}
 		}
-		run.pending[turn] = event
+		run.Pending[turn] = event
 		return
 	}
 	c.managedEvent(id, event)
@@ -159,9 +159,9 @@ func codexFinalPhase(phase string) bool { return phase == "" || phase == "final_
 func (c *chatController) managedBeforeInputFailed(id, reason string) {
 	if strings.HasPrefix(id, "delivery-") && c.collaboration != nil {
 		s := c.collaboration
-		s.post(func() {
-			if err := s.manager.DeliveryOutcome(id, "", "not_started", reason); err == nil {
-				s.release(id)
+		s.Post(func() {
+			if err := s.Manager.DeliveryOutcome(id, "", "not_started", reason); err == nil {
+				s.Release(id)
 			}
 		})
 		return
@@ -185,26 +185,26 @@ func (c *chatController) managedClaudeResult(id int, state dg.State, nativeResul
 		state = dg.Failed
 	}
 	epoch := ""
-	if run := c.collaboration.execution(t.ExecutionID); run != nil {
-		epoch = run.epoch
+	if run := c.collaboration.Execution(t.ExecutionID); run != nil {
+		epoch = run.Epoch
 	}
 	c.managedEventWithOutcome(t.ExecutionID, dg.Event{Target: c.threadRef(t).URL(), SessionEpoch: epoch, NativeResultID: nativeResultID, State: state, Result: result}, nativeResultID != "")
 }
 
 func (c *chatController) managedClaudeStarted(id int) {
 	t := c.threadWithID(id)
-	run := c.collaboration.execution(t.ExecutionID)
-	if run == nil || run.started {
+	run := c.collaboration.Execution(t.ExecutionID)
+	if run == nil || run.Started {
 		return
 	}
-	if task, err := c.collaboration.manager.Read(t.ExecutionID); err == nil && task.CancelRequested {
+	if task, err := c.collaboration.Manager.Read(t.ExecutionID); err == nil && task.CancelRequested {
 		c.update(id, func(t *Thread) { t.StopRequested = true })
 		if c.claudeRuns[id] != nil {
 			c.stopAgentRun(t)
 		}
 	}
-	run.started = true
-	c.managedEvent(t.ExecutionID, dg.Event{Target: c.threadRef(t).URL(), SessionEpoch: run.epoch, State: dg.Running})
+	run.Started = true
+	c.managedEvent(t.ExecutionID, dg.Event{Target: c.threadRef(t).URL(), SessionEpoch: run.Epoch, State: dg.Running})
 }
 
 func managedLongRunning(t Thread) bool {

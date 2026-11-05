@@ -1583,7 +1583,7 @@ func (c *chatController) stopThread(id int) {
 	if c.collaboration != nil {
 		ref := c.threadRef(t).URL()
 		if ref != "" {
-			c.collaboration.pause(ref)
+			c.collaboration.Pause(ref)
 		}
 	}
 	if !t.Busy && c.claudeRuns[t.ID] == nil {
