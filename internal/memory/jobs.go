@@ -49,6 +49,7 @@ type ExtractionJob struct {
 	CompletedAt    time.Time  `json:"completedAt,omitzero"`
 	DurationMs     int64      `json:"durationMs,omitempty"`
 	Error          string     `json:"error,omitempty"`
+	Detail         string     `json:"detail,omitempty"`
 	Accepted       int        `json:"accepted,omitempty"`
 	Rejected       int        `json:"rejected,omitempty"`
 }
@@ -140,6 +141,9 @@ func (s *Store) EnqueueExtraction(scope Scope, job ExtractionJob) (bool, error) 
 			return false, nil
 		}
 	}
+	if _, paused := extractionPausedUntil(d, d.Settings.ExtractionAgent(), s.now()); paused {
+		return false, nil
+	}
 	job.State, job.CreatedAt = "pending", s.now()
 	count := 0
 	for _, sc := range s.scopesOnDisk() {
@@ -182,6 +186,47 @@ func (s *Store) EnqueueExtraction(scope Scope, job ExtractionJob) (bool, error) 
 		job.Evidence = append(append([]Evidence(nil), job.Evidence[:tool]...), job.Evidence[tool+1:]...)
 	}
 	return true, s.appendExtraction(d, job)
+}
+
+// Repeated failures of the same extractor usually share one cause, such as an
+// invalid CLI configuration. After extractionFailureStreak consecutive run
+// failures, stop queueing new rounds for extractionFailurePause; the first
+// round after the pause probes whether the cause is gone. Skips recorded before
+// any run (full queue, oversized input) have no attempts and do not count.
+const (
+	extractionFailureStreak = 3
+	extractionFailurePause  = 30 * time.Minute
+)
+
+func extractionPausedUntil(d document, agent string, now time.Time) (time.Time, bool) {
+	var recent []ExtractionJob
+	for _, j := range d.Jobs {
+		if j.State == "pending" || j.State == "running" || j.Attempts == 0 || j.ExtractorAgent != agent {
+			continue
+		}
+		recent = append(recent, j)
+	}
+	sort.SliceStable(recent, func(a, b int) bool { return recent[a].CompletedAt.After(recent[b].CompletedAt) })
+	if len(recent) < extractionFailureStreak {
+		return time.Time{}, false
+	}
+	for _, j := range recent[:extractionFailureStreak] {
+		if j.State != "failed" {
+			return time.Time{}, false
+		}
+	}
+	until := recent[0].CompletedAt.Add(extractionFailurePause)
+	return until, now.Before(until)
+}
+
+// jobErrorDetail bounds an adapter error for local diagnostics. Adapter errors
+// carry CLI startup or configuration messages, not the extraction input.
+func jobErrorDetail(err error) string {
+	detail := strings.Join(strings.Fields(err.Error()), " ")
+	if runes := []rune(detail); len(runes) > 400 {
+		detail = string(runes[:400]) + "…"
+	}
+	return detail
 }
 
 // Skipped rounds retain only bounded diagnostic metadata, never their input.
@@ -461,12 +506,15 @@ func (s *Store) CompleteExtraction(scope Scope, key string, candidates []Candida
 		} else if j.Attempts < 2 {
 			j.State = "pending"
 			j.Error = "Extraction failed. Waiting to retry."
+			j.Detail = jobErrorDetail(runError)
 		} else {
 			finishJob(&j, "failed", "Extraction failed. No further retries.", s.now())
+			j.Detail = jobErrorDetail(runError)
 		}
 		d.Jobs[index] = j
 		return nil, s.commit(d)
 	}
+	j.Detail = ""
 	if d.Settings.Disabled || !d.Settings.AutoExtract || d.DisabledSessions[j.Session] || j.Fingerprint != knowledgeFingerprint(d) {
 		finishJob(&j, "stale", "Memory or settings changed. Discarded the old result.", s.now())
 		d.Jobs[index] = j
@@ -585,6 +633,10 @@ type ExtractionStatus struct {
 	Accepted       int    `json:"accepted"`
 	LastDurationMs int64  `json:"lastDurationMs"`
 	LastError      string `json:"lastError,omitempty"`
+	// LastDetail is the untranslated adapter diagnosis for LastError.
+	LastDetail string `json:"lastDetail,omitempty"`
+	// PausedUntil is set while repeated failures stop new rounds from queueing.
+	PausedUntil time.Time `json:"pausedUntil,omitzero"`
 }
 
 func (s *Store) ExtractionStatus(scope Scope) (ExtractionStatus, error) {
@@ -598,7 +650,7 @@ func (s *Store) ExtractionStatus(scope Scope) (ExtractionStatus, error) {
 	// Only a current problem is reported: a job waiting to retry, or a most
 	// recent terminal job that failed. Later successes clear older failures, and
 	// user cancellation or stale results are normal outcomes, not problems.
-	var retryError string
+	var retryError, retryDetail string
 	var last *ExtractionJob
 	for i := range d.Jobs {
 		j := &d.Jobs[i]
@@ -606,7 +658,7 @@ func (s *Store) ExtractionStatus(scope Scope) (ExtractionStatus, error) {
 		case "pending", "running":
 			out.Pending++
 			if j.Error != "" {
-				retryError = j.Error
+				retryError, retryDetail = j.Error, j.Detail
 			}
 		case "completed":
 			out.Completed++
@@ -623,9 +675,12 @@ func (s *Store) ExtractionStatus(scope Scope) (ExtractionStatus, error) {
 		}
 	}
 	if retryError != "" {
-		out.LastError = retryError
+		out.LastError, out.LastDetail = retryError, retryDetail
 	} else if last != nil && last.State == "failed" {
-		out.LastError = last.Error
+		out.LastError, out.LastDetail = last.Error, last.Detail
+	}
+	if until, paused := extractionPausedUntil(d, d.Settings.ExtractionAgent(), s.now()); paused {
+		out.PausedUntil = until
 	}
 	return out, nil
 }

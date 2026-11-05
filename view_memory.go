@@ -111,7 +111,8 @@ func (app *chatApp) memoryView(c *ui.Context) {
 	if m.project != app.c.cwd {
 		*m = memoryUI{project: app.c.cwd, scope: "project", kind: "fact"}
 	}
-	if !m.loading && time.Since(m.loadedAt) > 5*time.Second {
+	rootProject := m.scope != "user" && memoryRootProject(app.c.cwd)
+	if !rootProject && !m.loading && time.Since(m.loadedAt) > 5*time.Second {
 		app.loadMemory()
 	}
 	c.After(time.Second)
@@ -133,6 +134,12 @@ func (app *chatApp) memoryView(c *ui.Context) {
 				app.loadMemory()
 			}
 		})
+		if rootProject {
+			settingsCard(c.Key("no-project")).Children(func() {
+				mutedText(c, tr("Open a project first. Project memory and its automatic settings belong to a project folder, not the filesystem root.")).LineHeight(1.5)
+			})
+			return
+		}
 		// While editing, the form follows the header instead of the switches.
 		if m.scope != "user" && !m.editing {
 			app.memorySettings(c)
@@ -274,7 +281,13 @@ func (app *chatApp) memorySettings(c *ui.Context) {
 	if status := m.list.Extraction; status.Pending+status.Completed+status.Failed > 0 {
 		footnote = fmt.Sprintf(tr("Extraction: %d waiting · %d completed · %d skipped or failed · %d saved · %d rejected"), status.Pending, status.Completed, status.Failed, status.Accepted, status.Rejected)
 		if status.LastError != "" {
-			footnote += tr("\nLatest extraction issue: ") + status.LastError
+			footnote += tr("\nLatest extraction issue: ") + tr(status.LastError)
+			if status.LastDetail != "" {
+				footnote += " (" + status.LastDetail + ")"
+			}
+		}
+		if !status.PausedUntil.IsZero() {
+			footnote += fmt.Sprintf(tr("\nAutomatic extraction is paused after repeated failures and resumes after %s."), status.PausedUntil.Local().Format("15:04"))
 		}
 	}
 	settingsGroup(c, tr("Project settings"), footnote, rows...)

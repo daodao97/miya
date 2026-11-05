@@ -436,3 +436,85 @@ func TestExtractionStatusReportsOnlyCurrentProblems(t *testing.T) {
 		t.Fatalf("user cancellation reported as a problem: %+v", status)
 	}
 }
+
+func failExtraction(t *testing.T, s *Store, scope Scope, j ExtractionJob, cause error) {
+	t.Helper()
+	j = claim(t, s, scope, j)
+	for attempt := 0; attempt < 2; attempt++ {
+		if attempt > 0 {
+			var ok bool
+			var err error
+			if _, j, ok, err = s.ClaimExtraction(); err != nil || !ok {
+				t.Fatalf("retry claim: %v %v", ok, err)
+			}
+		}
+		if _, err := s.CompleteExtraction(scope, j.Key, nil, time.Millisecond, cause, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestExtractionRepeatedFailuresPauseQueueAndKeepDiagnosis(t *testing.T) {
+	s, scope, j := extractionFixture(t)
+	base := time.Date(2026, 11, 5, 12, 0, 0, 0, time.UTC)
+	s.now = func() time.Time { return base }
+	cause := errors.New("Codex extraction failed: exit status 1: Error: failed to load bootstrap configuration url is not supported for stdio in `mcp_servers.box`")
+	for i := 0; i < extractionFailureStreak; i++ {
+		next := j
+		next.TurnID = fmt.Sprintf("failed-%d", i)
+		failExtraction(t, s, scope, next, cause)
+	}
+	status, err := s.ExtractionStatus(scope)
+	if err != nil || status.LastError != "Extraction failed. No further retries." || !strings.Contains(status.LastDetail, "url is not supported for stdio") {
+		t.Fatalf("diagnosis lost: %+v %v", status, err)
+	}
+	if !status.PausedUntil.Equal(base.Add(extractionFailurePause)) {
+		t.Fatalf("pause not reported: %+v", status)
+	}
+	paused := j
+	paused.TurnID = "while-paused"
+	if ok, err := s.EnqueueExtraction(scope, paused); err != nil || ok {
+		t.Fatalf("queued during pause: %v %v", ok, err)
+	}
+	// The paused round leaves no record, so it cannot extend the failure streak.
+	if got, _ := s.ExtractionStatus(scope); got.Failed != extractionFailureStreak {
+		t.Fatalf("paused round recorded: %+v", got)
+	}
+
+	s.now = func() time.Time { return base.Add(extractionFailurePause + time.Minute) }
+	probe := j
+	probe.TurnID = "probe"
+	probe = claim(t, s, scope, probe)
+	if _, err := s.CompleteExtraction(scope, probe.Key, nil, time.Millisecond, nil, false); err != nil {
+		t.Fatal(err)
+	}
+	status, _ = s.ExtractionStatus(scope)
+	if !status.PausedUntil.IsZero() || status.LastError != "" || status.LastDetail != "" {
+		t.Fatalf("success did not clear the pause: %+v", status)
+	}
+	after := j
+	after.TurnID = "after-recovery"
+	if ok, err := s.EnqueueExtraction(scope, after); err != nil || !ok {
+		t.Fatalf("recovered queue rejected a round: %v %v", ok, err)
+	}
+}
+
+func TestExtractionPauseIsPerExtractorAgent(t *testing.T) {
+	s, scope, j := extractionFixture(t)
+	if err := s.Configure(scope, Settings{AutoExtract: true, ExtractorAgent: "codex"}); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < extractionFailureStreak; i++ {
+		next := j
+		next.TurnID = fmt.Sprintf("codex-failed-%d", i)
+		failExtraction(t, s, scope, next, errors.New("Codex extraction failed"))
+	}
+	if err := s.Configure(scope, Settings{AutoExtract: true, ExtractorAgent: "claude-code"}); err != nil {
+		t.Fatal(err)
+	}
+	switched := j
+	switched.TurnID = "after-switch"
+	if ok, err := s.EnqueueExtraction(scope, switched); err != nil || !ok {
+		t.Fatalf("another extractor inherited the pause: %v %v", ok, err)
+	}
+}

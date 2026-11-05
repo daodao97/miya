@@ -78,3 +78,21 @@ func TestMemoryAutomaticSettingsAndSessionDisableThroughService(t *testing.T) {
 		t.Fatalf("session state not visible: %+v %v", state.Threads, err)
 	}
 }
+
+func TestMemoryScopeRejectsFilesystemRoot(t *testing.T) {
+	for _, root := range []string{"/", "", "  ", "//"} {
+		if !memoryRootProject(root) {
+			t.Fatalf("%q accepted as a project", root)
+		}
+	}
+	if memoryRootProject("/Users/someone/project") {
+		t.Fatal("a project folder was rejected")
+	}
+	c := &chatController{cwd: "/"}
+	if _, err := c.memoryScope(memoryRequest{}); err == nil {
+		t.Fatal("memory settings were scoped to the filesystem root")
+	}
+	if scope, err := c.memoryScope(memoryRequest{Scope: "user"}); err != nil || scope.Kind != "user" {
+		t.Fatalf("user preferences must stay available without a project: %v %v", scope, err)
+	}
+}

@@ -32,6 +32,11 @@ func TestMemoryInstalledCodexExposesNoOperationalTools(t *testing.T) {
 	marker := filepath.Join(root, "mcp-started")
 	requests := make(chan []string, 8)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/mcp") {
+			t.Errorf("configured HTTP MCP server was contacted: %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
 		if r.Method == "POST" {
 			var body struct {
 				Tools []struct{ Name, Type string } `json:"tools"`
@@ -63,7 +68,11 @@ stream_max_retries = 0
 [mcp_servers."trap.with.dot"]
 command = "/bin/sh"
 args = ["-c", %q]
-`, server.URL+"/v1", "touch "+marker)
+# A URL server must be disabled without receiving a stdio command, which
+# would make the CLI reject the whole configuration before any model call.
+[mcp_servers."remote.trap"]
+url = %q
+`, server.URL+"/v1", "touch "+marker, server.URL+"/mcp")
 	if err := os.WriteFile(filepath.Join(root, "config.toml"), []byte(config), 0600); err != nil {
 		t.Fatal(err)
 	}

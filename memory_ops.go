@@ -66,6 +66,18 @@ func (c *chatController) noteMemory(thread int, e memory.Entry) {
 		t.Messages = append(t.Messages, Message{ID: c.nextID(), Role: "memory", Kind: "memory", SentAtMs: time.Now().UnixMilli(), Memory: &memoryNotice{Explicit: true, Scope: e.Scope.Kind, Project: e.Scope.ProjectPath, ID: e.ID, Version: e.Version}})
 	})
 }
+
+// memoryRootProject reports a filesystem root. An app opened from Finder
+// without a workspace starts in "/", which is not a project: settings saved
+// there never apply to the conversations the user is actually running.
+func memoryRootProject(path string) bool {
+	if strings.TrimSpace(path) == "" {
+		return true
+	}
+	clean := filepath.Clean(path)
+	return filepath.Dir(clean) == clean
+}
+
 func (c *chatController) memoryScope(r memoryRequest) (memory.Scope, error) {
 	if r.Scope == "user" {
 		return memory.UserScope(), nil
@@ -76,6 +88,9 @@ func (c *chatController) memoryScope(r memoryRequest) (memory.Scope, error) {
 	project := r.Project
 	if project == "" {
 		project = c.cwd
+	}
+	if memoryRootProject(project) {
+		return memory.Scope{}, errors.New("Open a project before using project memory")
 	}
 	known := project == c.cwd
 	if c.projects != nil {

@@ -24,8 +24,11 @@ a=sys.argv[1:]
 if a[:2]==['features','list']:
  print('shell_tool stable true\nhooks stable true\nmulti_agent stable true\napps stable true')
 elif a[:2]==['mcp','list']:
- print(json.dumps([{'name':'configured-server'}]))
+ print(json.dumps([{'name':'configured-server'},{'name':'local.tool','transport':{'type':'stdio'}},{'name':'remote','transport':{'type':'streamable_http'}}]))
 elif a[0]=='exec':
+ if os.environ.get('MIYA_CODEX_TEST_FAIL'):
+  sys.stderr.write('Error: failed to load bootstrap configuration\n\nCaused by:\n    url is not supported for stdio\n    in mcp_servers.remote\n')
+  sys.exit(1)
  data=json.loads(sys.stdin.read())
  with open(os.environ['MIYA_CODEX_TEST_LOG'],'w') as f:json.dump({'args':a,'cwd':os.getcwd(),'input':data},f)
  result=a[a.index('--output-last-message')+1]
@@ -59,7 +62,7 @@ func TestMemoryCodexSelectionUsesIsolatedConfiguredCLI(t *testing.T) {
 		t.Fatal(err)
 	}
 	joined := strings.Join(call.Args, "|")
-	for _, required := range []string{"--ephemeral", "--ignore-rules", "--sandbox|read-only", "features.shell_tool=false", "features.hooks=false", "features.multi_agent=false", `mcp_servers={"configured-server"={enabled=false,command="miya-disabled-extractor-mcp"}}`, "tools.view_image=false", "web_search=\"disabled\""} {
+	for _, required := range []string{"--ephemeral", "--ignore-rules", "--sandbox|read-only", "features.shell_tool=false", "features.hooks=false", "features.multi_agent=false", `mcp_servers={"configured-server"={enabled=false,command="miya-disabled-extractor-mcp"},"local.tool"={enabled=false,command="miya-disabled-extractor-mcp"},"remote"={enabled=false,url="http://127.0.0.1:9/miya-disabled-extractor-mcp"}}`, "tools.view_image=false", "web_search=\"disabled\""} {
 		if !strings.Contains(joined, required) {
 			t.Fatalf("missing boundary %s: %v", required, call.Args)
 		}
@@ -80,5 +83,42 @@ func TestMemoryCodexRejectsUnexpectedToolEvents(t *testing.T) {
 	}
 	if _, err := extractMemory(context.Background(), draftConfig{}, memory.ExtractionJob{ExtractorAgent: "unknown-agent"}); err == nil {
 		t.Fatal("unknown agent silently fell back")
+	}
+}
+
+func TestMemoryCodexStartupFailureKeepsCLIDiagnosis(t *testing.T) {
+	fakeMemoryCodex(t)
+	t.Setenv("MIYA_CODEX_TEST_FAIL", "1")
+	job := memory.ExtractionJob{ExtractorAgent: agentCodex, Session: "source-session", TurnID: "turn", Evidence: []memory.Evidence{{ID: "user", Kind: "user_statement", Text: "secret evidence text"}}}
+	_, err := extractMemoryWithCodex(context.Background(), job)
+	if err == nil {
+		t.Fatal("failed CLI reported success")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "url is not supported for stdio in mcp_servers.remote") || strings.Contains(msg, "Caused by:") || strings.Contains(msg, "\n") {
+		t.Fatalf("diagnosis not kept as one bounded line: %q", msg)
+	}
+	if strings.Contains(msg, "secret evidence text") {
+		t.Fatalf("extraction input leaked into the error: %q", msg)
+	}
+}
+
+func TestMemoryCodexStderrSummaryIsBounded(t *testing.T) {
+	summary := codexStderrSummary([]byte(strings.Repeat("错误 ", 400)))
+	if n := len([]rune(summary)); n > 301 {
+		t.Fatalf("summary has %d runes", n)
+	}
+}
+
+func TestMemoryCodexOfflineEnvReplacesProxySettings(t *testing.T) {
+	env := codexOfflineEnv([]string{"PATH=/bin", "https_proxy=http://corp:8080", "NO_PROXY=127.0.0.1,relay.example", "HOME=/h"})
+	joined := "\n" + strings.Join(env, "\n") + "\n"
+	for _, want := range []string{"\nPATH=/bin\n", "\nHOME=/h\n", "\nHTTPS_PROXY=http://127.0.0.1:9\n", "\nhttps_proxy=http://127.0.0.1:9\n", "\nALL_PROXY=http://127.0.0.1:9\n"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("missing %q in %v", want, env)
+		}
+	}
+	if strings.Contains(joined, "corp:8080") || strings.Contains(joined, "NO_PROXY") {
+		t.Fatalf("inherited proxy settings kept: %v", env)
 	}
 }

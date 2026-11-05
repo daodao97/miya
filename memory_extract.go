@@ -313,6 +313,10 @@ func (e *memoryEngine) loop() {
 				ctx, cancel := context.WithTimeout(e.ctx, 90*time.Second)
 				candidates, runErr := e.extract(ctx, cfg, job)
 				cancel()
+				if runErr != nil && e.ctx.Err() == nil {
+					// Adapter errors carry CLI startup diagnostics, never extraction input.
+					log.Printf("memory extraction failed (agent %s, attempt %d): %s", job.ExtractorAgent, job.Attempts, clipRunes(strings.Join(strings.Fields(runErr.Error()), " "), 400))
+				}
 				entries, commitErr := e.store.CompleteExtraction(scope, job.Key, candidates, time.Since(started), runErr, e.ctx.Err() != nil)
 				if commitErr != nil {
 					entries, commitErr = e.store.CompleteExtraction(scope, job.Key, candidates, time.Since(started), runErr, e.ctx.Err() != nil)
