@@ -38,7 +38,7 @@ func (s *collaborationState) interruptTask(task dg.Task) error {
 		}
 		c.update(t.ID, func(t *Thread) { t.StopRequested = true })
 		if t.Busy && (model.ThreadAgent(t) != agentCodex || t.TurnID != "") {
-			backendOf(t).Stop(c, t)
+			c.stopAgentRun(t)
 		}
 		return nil, nil
 	})

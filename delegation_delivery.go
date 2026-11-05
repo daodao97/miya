@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	dg "miya/internal/delegation"
+	"miya/internal/model"
 )
 
 // The controller checks eligibility twice, around the durable submission
@@ -13,7 +14,7 @@ func (s *collaborationState) deliverPending() {
 		value, err := s.onMain(func() (any, error) {
 			c := s.c
 			t, ok := c.threadByReference(notify)
-			return ok && !c.collaborationPaused[notify] && !t.Busy && !t.Loading && !t.ReadOnly && !t.TaskPending && !c.managedTargetUnavailable(t) && len(t.Queue) == 0 && c.managedReservations[t.ID] == "" && !c.threadAwaitsUser(t) && backendOf(t).Ready(c), nil
+			return ok && !c.collaborationPaused[notify] && !t.Busy && !t.Loading && !t.ReadOnly && !t.TaskPending && !c.managedTargetUnavailable(t) && len(t.Queue) == 0 && c.managedReservations[t.ID] == "" && !c.threadAwaitsUser(t) && c.agentStatus(model.ThreadAgent(t)).Ready, nil
 		})
 		if err != nil || !value.(bool) {
 			continue
@@ -25,7 +26,7 @@ func (s *collaborationState) deliverPending() {
 		_, err = s.onMain(func() (any, error) {
 			c := s.c
 			t, ok := c.threadByReference(notify)
-			if !ok || c.collaborationPaused[notify] || t.Busy || t.Loading || t.ReadOnly || t.TaskPending || c.managedTargetUnavailable(t) || len(t.Queue) > 0 || c.managedReservations[t.ID] != "" || c.threadAwaitsUser(t) || !backendOf(t).Ready(c) {
+			if !ok || c.collaborationPaused[notify] || t.Busy || t.Loading || t.ReadOnly || t.TaskPending || c.managedTargetUnavailable(t) || len(t.Queue) > 0 || c.managedReservations[t.ID] != "" || c.threadAwaitsUser(t) || !c.agentStatus(model.ThreadAgent(t)).Ready {
 				return nil, errors.New("Receiving conversation is not idle")
 			}
 			if c.managedReservations == nil {

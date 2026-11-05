@@ -181,14 +181,14 @@ func (c *chatController) prepareDelegation(caller Thread, a collaborationArgs) (
 			return dg.StartInput{}, errors.New("CONTEXT_LOADING: Target history is not loaded")
 		}
 	}
-	b := backendFor(agent)
-	if !b.Ready(c) {
-		return dg.StartInput{}, fmt.Errorf("AGENT_UNAVAILABLE: %s is not connected", b.Name())
+	b := c.agentStatus(agent)
+	if !b.Ready {
+		return dg.StartInput{}, fmt.Errorf("AGENT_UNAVAILABLE: %s is not connected", b.Name)
 	}
-	if a.Model != "" && !slices.Contains(b.ModelChoices(c), a.Model) {
+	if a.Model != "" && !slices.Contains(b.ModelChoices, a.Model) {
 		return dg.StartInput{}, errors.New("INVALID_ARGUMENT: Model is unavailable")
 	}
-	if a.Effort != "" && !slices.Contains(b.EffortChoices(c), a.Effort) {
+	if a.Effort != "" && !slices.Contains(b.EffortChoices, a.Effort) {
 		return dg.StartInput{}, errors.New("INVALID_ARGUMENT: Thinking option is unavailable")
 	}
 	if a.Context != "" && a.Context != "none" && a.Context != "caller_summary" {
@@ -210,10 +210,10 @@ func (c *chatController) prepareDelegation(caller Thread, a collaborationArgs) (
 	}
 	model, effort := a.Model, a.Effort
 	if model == "" {
-		model = b.Model(c)
+		model = b.Model
 	}
 	if effort == "" {
-		effort = b.Effort(c)
+		effort = b.Effort
 	}
 	workspace := c.threadWorkspace(caller.ID)
 	if target.ID != 0 {
@@ -293,7 +293,7 @@ func (s *collaborationState) start(task dg.Task) {
 			}
 			c.addThread(task.Workspace, t)
 		}
-		if !backendFor(task.Agent).Ready(c) {
+		if !c.agentStatus(task.Agent).Ready {
 			return nil, errors.New("Target agent is not ready")
 		}
 		if c.managedReservations == nil {

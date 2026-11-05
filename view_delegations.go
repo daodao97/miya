@@ -8,6 +8,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	dg "miya/internal/delegation"
+	"miya/internal/model"
 	"miya/internal/textutil"
 )
 
@@ -100,7 +101,7 @@ func (p *collaborationPanel) drawContent(c *ui.Context, v collaborationPanelView
 					b.Children(func() {
 						ui.Column(c).FillWidth().MinWidth(0).Gap(4).Children(func() {
 							ui.Text(c, nativeText(task.Title)).FontSize(13).FontWeight(600).TextColor(pals.ink).SingleLine().Ellipsis("…").FillWidth()
-							ui.Text(c, backendFor(task.Agent).Name()+" · "+collaborationStateLabel(task.State)).FontSize(11).TextColor(pals.muted)
+							ui.Text(c, model.AgentName(task.Agent)+" · "+collaborationStateLabel(task.State)).FontSize(11).TextColor(pals.muted)
 							if text := textutil.FirstNonEmpty(task.ResultSummary, task.Progress); text != "" {
 								ui.Text(c, nativeText(text)).FontSize(12).TextColor(pals.muted).FillWidth().SingleLine().Ellipsis("…")
 							}
@@ -200,7 +201,7 @@ func (p *collaborationPanel) drawDetail(c *ui.Context, v collaborationPanelView,
 		return
 	}
 	ui.Text(c, nativeText(task.Title)).FontSize(13).FontWeight(600).TextColor(pals.ink).SingleLine().Ellipsis("…").FillWidth()
-	ui.Text(c, backendFor(task.Agent).Name()+" · "+collaborationStateLabel(task.State)).FontSize(12).TextColor(pals.muted)
+	ui.Text(c, model.AgentName(task.Agent)+" · "+collaborationStateLabel(task.State)).FontSize(12).TextColor(pals.muted)
 	ui.Text(c, tr("Shared workspace: ")+task.Workspace).FontSize(11).TextColor(pals.muted).SingleLine().Ellipsis("…").FillWidth().Tooltip(task.Workspace)
 	if task.Resolution == "abandoned" {
 		ui.Text(c, tr("Tracking stopped · Native execution is still unverified")).FontSize(12).TextColor(pals.muted).FillWidth().Wrap()

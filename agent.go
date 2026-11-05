@@ -115,6 +115,25 @@ func backendFor(id string) agentBackend {
 
 func backendOf(t Thread) agentBackend { return backendFor(model.ThreadAgent(t)) }
 
+// agentStatus is an agent's state now, for features outside the controller.
+func (c *chatController) agentStatus(id string) model.AgentStatus {
+	b := backendFor(id)
+	return model.AgentStatus{ID: b.ID(), Name: b.Name(), Ready: b.Ready(c), Model: b.Model(c), Effort: b.Effort(c),
+		ModelChoices: b.ModelChoices(c), EffortChoices: b.EffortChoices(c)}
+}
+
+// agentStatuses are every agent's states now, in agentBackends' order.
+func (c *chatController) agentStatuses() []model.AgentStatus {
+	var out []model.AgentStatus
+	for _, b := range agentBackends {
+		out = append(out, c.agentStatus(b.ID()))
+	}
+	return out
+}
+
+// stopAgentRun asks a conversation's agent to stop its turn.
+func (c *chatController) stopAgentRun(t Thread) { backendOf(t).Stop(c, t) }
+
 func approvalOwner(a codex.Approval) agentBackend {
 	for _, b := range agentBackends {
 		if b.Owns(a) {

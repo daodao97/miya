@@ -234,8 +234,8 @@ func (c *chatController) collaborationMCP(r mcpRequest) (any, error) {
 	}
 	if r.Tool == "list_agents" {
 		var agents []map[string]any
-		for _, b := range agentBackends {
-			agents = append(agents, map[string]any{"id": b.ID(), "name": b.Name(), "ready": b.Ready(c), "models": b.ModelChoices(c), "efforts": b.EffortChoices(c)})
+		for _, st := range c.agentStatuses() {
+			agents = append(agents, map[string]any{"id": st.ID, "name": st.Name, "ready": st.Ready, "models": st.ModelChoices, "efforts": st.EffortChoices})
 		}
 		return map[string]any{"agents": agents}, nil
 	}

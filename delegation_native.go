@@ -200,7 +200,7 @@ func (c *chatController) managedClaudeStarted(id int) {
 	if task, err := c.collaboration.manager.Read(t.ExecutionID); err == nil && task.CancelRequested {
 		c.update(id, func(t *Thread) { t.StopRequested = true })
 		if c.claudeRuns[id] != nil {
-			backendOf(t).Stop(c, t)
+			c.stopAgentRun(t)
 		}
 	}
 	run.started = true
