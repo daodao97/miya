@@ -53,11 +53,7 @@ func (c *chatController) collaborationUserOp(r collaborationRequest) (any, error
 	}
 	switch r.Operation {
 	case "list_agents":
-		var agents []map[string]any
-		for _, st := range c.agentStatuses() {
-			agents = append(agents, map[string]any{"id": st.ID, "name": st.Name, "ready": st.Ready, "models": st.ModelChoices, "efforts": st.EffortChoices})
-		}
-		return map[string]any{"agents": agents}, nil
+		return c.agentList(), nil
 	case "list_tasks":
 		if r.From != "" && !found {
 			return nil, errors.New("THREAD_NOT_FOUND: Initiating conversation is unavailable")

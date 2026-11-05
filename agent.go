@@ -131,6 +131,16 @@ func (c *chatController) agentStatuses() []model.AgentStatus {
 	return out
 }
 
+// agentList is list_agents' result: each agent, whether it is ready, and its
+// model and thinking choices.
+func (c *chatController) agentList() map[string]any {
+	var agents []map[string]any
+	for _, st := range c.agentStatuses() {
+		agents = append(agents, map[string]any{"id": st.ID, "name": st.Name, "ready": st.Ready, "models": st.ModelChoices, "efforts": st.EffortChoices})
+	}
+	return map[string]any{"agents": agents}
+}
+
 // stopAgentRun asks a conversation's agent to stop its turn.
 func (c *chatController) stopAgentRun(t Thread) { backendOf(t).Stop(c, t) }
 

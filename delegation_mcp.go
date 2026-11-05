@@ -89,11 +89,7 @@ func (c *chatController) collaborationMCP(r mcpRequest) (any, error) {
 		return nil, fmt.Errorf("STORAGE_UNAVAILABLE: %w", s.LoadError)
 	}
 	if r.Tool == "list_agents" {
-		var agents []map[string]any
-		for _, st := range c.agentStatuses() {
-			agents = append(agents, map[string]any{"id": st.ID, "name": st.Name, "ready": st.Ready, "models": st.ModelChoices, "efforts": st.EffortChoices})
-		}
-		return map[string]any{"agents": agents}, nil
+		return c.agentList(), nil
 	}
 	if r.Tool == "start_task" || r.Tool == "send_thread" {
 		return c.startCollaboration(caller, r.Tool, a)
