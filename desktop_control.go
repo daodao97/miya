@@ -66,28 +66,6 @@ type desktopControl struct {
 	locked func() (bool, error)
 }
 
-func (c *chatController) desktopControls() *desktopControl {
-	c.desktopMu.Lock()
-	defer c.desktopMu.Unlock()
-	if c.desktop == nil {
-		c.desktop = &desktopControl{authorize: desktop.Authorize, capture: desktop.Capture, input: desktop.SendInput, windows: desktop.Windows, apps: desktop.Applications, openApp: desktop.OpenApplication, privacy: desktop.StartPrivacy, captureWindow: desktop.CaptureWindow, inputWindow: desktop.SendWindowInput, dialog: desktop.WindowDialog, pressAction: desktop.PressWindowAction, wake: desktop.WakeDisplay, locked: desktop.ScreenLocked}
-		c.desktop.displays, c.desktop.captureDisplay, c.desktop.inputDisplay = desktop.Displays, desktop.CaptureDisplay, desktop.SendDisplayInput
-	}
-	return c.desktop
-}
-
-func (c *chatController) desktopBusy() bool {
-	c.desktopMu.Lock()
-	d := c.desktop
-	c.desktopMu.Unlock()
-	if d == nil {
-		return false
-	}
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	return d.lease != nil && d.valid(d.lease.token) != nil
-}
-
 func (d *desktopControl) open(ctx context.Context) (string, error) {
 	return d.openWindow(ctx, nil)
 }
