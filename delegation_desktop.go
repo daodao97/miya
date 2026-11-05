@@ -14,7 +14,7 @@ func (app *chatApp) collaborationCall(request collaborationRequest, done func(js
 		client, source := c.remote, c.referenceSource
 		go func() {
 			var raw json.RawMessage
-			err := client.call("collaboration", request, &raw)
+			err := client.Call("collaboration", request, &raw)
 			c.dispatch(func() {
 				if c.referenceSource != source {
 					done(nil, errors.New(tr("The connected workspace changed; retry from the original workspace")))

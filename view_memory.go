@@ -46,7 +46,7 @@ func (app *chatApp) memoryCall(op string, r manager.Request, done func(json.RawM
 	if cc.remote != nil {
 		go func() {
 			var raw json.RawMessage
-			err := cc.remote.call(op, r, &raw)
+			err := cc.remote.Call(op, r, &raw)
 			cc.dispatch(func() { done(raw, err) })
 		}()
 		return

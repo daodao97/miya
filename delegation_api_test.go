@@ -32,7 +32,7 @@ func collaborationUserCall(t *testing.T, f *serviceFixture, operation, from stri
 	}
 	defer client.Close()
 	var result map[string]any
-	err = client.call("collaboration", collaborationRequest{Operation: operation, From: from, Arguments: raw}, &result)
+	err = client.Call("collaboration", collaborationRequest{Operation: operation, From: from, Arguments: raw}, &result)
 	return result, err
 }
 

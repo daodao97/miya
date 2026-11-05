@@ -66,12 +66,12 @@ func connectRemoteServiceContext(parent context.Context, link string) (*serviceC
 	stopCancel := context.AfterFunc(ctx, cl.Close)
 	defer stopCancel()
 	var hello svcHello
-	if err = cl.call("hello", nil, &hello); err == nil && hello.Version != serviceVersion {
+	if err = cl.Call("hello", nil, &hello); err == nil && hello.Version != serviceVersion {
 		err = errors.New("Server protocol version is incompatible. Update both the Miya desktop client and server.")
 	}
 	var state svcState
 	if err == nil {
-		err = cl.call("state", nil, &state)
+		err = cl.Call("state", nil, &state)
 	}
 	if err == nil {
 		err = ctx.Err()
@@ -90,7 +90,7 @@ func connectRemoteServiceContext(parent context.Context, link string) (*serviceC
 			case <-cl.Done():
 				return
 			case <-ticker.C:
-				if cl.call("hello", nil, nil) != nil {
+				if cl.Call("hello", nil, nil) != nil {
 					cl.Close()
 					return
 				}
@@ -144,7 +144,7 @@ func (app *chatApp) browseServerProject(path string) {
 	cl := app.c.remote
 	go func() {
 		var dirs []hostEntry
-		err := cl.call("host", hostRequest{Action: "browse", Path: path}, &dirs)
+		err := cl.Call("host", hostRequest{Action: "browse", Path: path}, &dirs)
 		app.c.dispatch(func() {
 			app.projectBrowseLoading = false
 			if err != nil {

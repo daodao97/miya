@@ -115,7 +115,7 @@ func (c *chatController) startNotificationPresence(cl *serviceClient) <-chan str
 				}
 				w := currentWindow()
 				if w != nil && (c.workspaceVisible == nil || c.workspaceVisible()) {
-					cl.notify("notification-presence", mygo.Power.IdleTime() < 5*time.Minute)
+					cl.Notify("notification-presence", mygo.Power.IdleTime() < 5*time.Minute)
 				}
 			})
 		}

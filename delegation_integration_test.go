@@ -47,7 +47,7 @@ func collaborationMCPCall(t *testing.T, f *serviceFixture, caller int, name stri
 	}
 	defer client.Close()
 	var result map[string]any
-	err = client.call("mcpCollaboration", mcpRequest{Tool: name, Arguments: raw}, &result)
+	err = client.Call("mcpCollaboration", mcpRequest{Tool: name, Arguments: raw}, &result)
 	f.serv.Do(func() {
 		f.srv.c.update(caller, func(t *Thread) {
 			for i := range t.Messages {
@@ -201,7 +201,7 @@ func TestCollaborationMCPRejectsAmbiguousCallerBeforeCreatingTasks(t *testing.T)
 	}
 	defer client.Close()
 	var out any
-	if err := client.call("mcpCollaboration", mcpRequest{Tool: "start_task", Arguments: raw}, &out); err == nil || !strings.Contains(err.Error(), "ambiguous") {
+	if err := client.Call("mcpCollaboration", mcpRequest{Tool: "start_task", Arguments: raw}, &out); err == nil || !strings.Contains(err.Error(), "ambiguous") {
 		t.Fatalf("ambiguous call accepted: %v", err)
 	}
 	if len(f.srv.c.collaboration.Manager.View().Tasks) != 0 {

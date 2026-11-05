@@ -642,7 +642,7 @@ func (app *chatApp) loadDir(p *panelState, rel string) {
 			entries, err = worktree.ReadDirEntries(root, rel)
 		} else {
 			var rows []hostEntry
-			err = cl.call("host", hostRequest{Action: "dir", Project: root, Path: rel}, &rows)
+			err = cl.Call("host", hostRequest{Action: "dir", Project: root, Path: rel}, &rows)
 			for _, e := range rows {
 				entries = append(entries, worktree.FileEntry{Name: e.Name, Rel: e.Path, Dir: e.Dir})
 			}
@@ -686,7 +686,7 @@ func (app *chatApp) openFile(p *panelState, rel string) {
 			if cl == nil {
 				data, err = worktree.ReadImageFile(filepath.Join(root, rel))
 			} else {
-				err = cl.call("host", hostRequest{Action: "image", Project: root, Path: rel}, &data)
+				err = cl.Call("host", hostRequest{Action: "image", Project: root, Path: rel}, &data)
 			}
 			if err == nil {
 				if img, err = ui.DecodeImage(data); err != nil {
@@ -697,7 +697,7 @@ func (app *chatApp) openFile(p *panelState, rel string) {
 			if cl == nil {
 				text, err = worktree.ReadTextFile(filepath.Join(root, rel))
 			} else {
-				err = cl.call("host", hostRequest{Action: "read", Project: root, Path: rel}, &text)
+				err = cl.Call("host", hostRequest{Action: "read", Project: root, Path: rel}, &text)
 			}
 			if err == nil && kind == "svg" {
 				img = svgPreview(text)
@@ -729,7 +729,7 @@ func (app *chatApp) saveFile(p *panelState, rel string, ed *fileEditor) {
 		text, root, cl := buf.String(), p.cwd, app.c.remote
 		ed.saving, ed.saveErr = true, ""
 		goAsync(func() {
-			err := cl.call("host", hostRequest{Action: "write", Project: root, Path: rel, Text: text}, nil)
+			err := cl.Call("host", hostRequest{Action: "write", Project: root, Path: rel, Text: text}, nil)
 			app.c.dispatch(func() {
 				ed.saving = false
 				if p.cwd != root {
@@ -912,7 +912,7 @@ func (app *chatApp) refreshDiff(p *panelState) {
 		if cl == nil {
 			snap, err = worktree.CollectDiff(ctx, root, src)
 		} else {
-			err = cl.call("host", hostRequest{Action: "diff", Project: root, Source: src}, &snap)
+			err = cl.Call("host", hostRequest{Action: "diff", Project: root, Source: src}, &snap)
 		}
 		app.c.dispatch(func() {
 			if p.diffGen != gen || p.cwd != root {
@@ -972,7 +972,7 @@ func (app *chatApp) loadDiffFile(p *panelState, i int) {
 			old, new = worktree.FileSides(ctx, root, snap, f)
 		} else {
 			var sides hostSides
-			err = cl.call("host", hostRequest{Action: "sides", Project: root, Snapshot: snap, File: f}, &sides)
+			err = cl.Call("host", hostRequest{Action: "sides", Project: root, Snapshot: snap, File: f}, &sides)
 			old, new = sides.Old, sides.New
 		}
 		app.c.dispatch(func() {

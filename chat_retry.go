@@ -47,7 +47,7 @@ func failedAfterOutput(t Thread, user int) bool {
 // composer's unsent draft alone.
 func (c *chatController) retryResponse(req retryRequest) error {
 	if c.remote != nil {
-		return c.remote.call("retry", req, nil)
+		return c.remote.Call("retry", req, nil)
 	}
 	t := c.threadWithID(req.ThreadID)
 	if t.Busy || t.Loading || t.TaskPending {

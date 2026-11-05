@@ -169,7 +169,7 @@ func (a *chatApp) consumeUsageReset() {
 		if cl == nil {
 			result, err = agentusage.UseCodexReset(ctx, attempt)
 		} else {
-			err = cl.call("host", hostRequest{Action: "usage-reset", Reset: &attempt}, &result)
+			err = cl.Call("host", hostRequest{Action: "usage-reset", Reset: &attempt}, &result)
 		}
 		mygo.RunOnMain(func() {
 			if d.closed {

@@ -159,7 +159,7 @@ func runMCP() error {
 		}
 		c := cl
 		mu.Unlock()
-		err := c.call(op, args, out)
+		err := c.Call(op, args, out)
 		if errors.Is(err, errServiceClosed) {
 			mu.Lock()
 			cl = nil

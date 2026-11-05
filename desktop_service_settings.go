@@ -27,7 +27,7 @@ func (app *chatApp) checkServiceRestart() {
 	app.serviceRestart = serviceRestartUI{client: cl, checking: true}
 	go func() {
 		var h svcHello
-		err := cl.call("hello", nil, &h)
+		err := cl.Call("hello", nil, &h)
 		app.c.dispatch(func() {
 			s := &app.serviceRestart
 			s.checking = false
@@ -65,7 +65,7 @@ func (app *chatApp) sendServiceRestart(waitIdle bool) {
 		op = "quitWhenIdle"
 	}
 	go func() {
-		err := cl.call(op, nil, nil)
+		err := cl.Call(op, nil, nil)
 		app.c.dispatch(func() {
 			s := &app.serviceRestart
 			s.checking = false
@@ -89,7 +89,7 @@ func (app *chatApp) updateServiceRestart() {
 	s.checking = true
 	go func() {
 		var h svcHello
-		err := cl.call("hello", nil, &h)
+		err := cl.Call("hello", nil, &h)
 		app.c.dispatch(func() {
 			s := &app.serviceRestart
 			s.checking = false

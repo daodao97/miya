@@ -605,7 +605,7 @@ P0 与 P1 可以在同一开发阶段完成。只有单独交付 P0 时，才允
 - [handoff.go](../handoff.go)：上下文摘要、内存 handoff 和会话最新轮次状态。
 - [chat_events.go](../chat_events.go)、[chat_claude.go](../chat_claude.go)：原生轮次、消息与进程生命周期。
 - [queue.go](../queue.go)：普通排队消息合并与 Stop 后暂停。
-- [service_server.go](../service_server.go)、[service_client.go](../service_client.go)：executor、deferred、busy 与调用超时。
+- [service_server.go](../service_server.go)、[internal/svcproto/client.go](../internal/svcproto/client.go)：executor、deferred、busy 与调用超时。
 - [会话引用](thread-references.md)、[原生任务](native-tasks.md)、[会话运行态](conversation-runtime.md)、[服务器版](server.md)：稳定身份、原生长期执行与远程归属约定。
 - codex-host 参考实现：`harness-delegation-coordinator.ts` 的独立会话创建、`delegation-snapshot.ts` 的执行结果投影、`delegation-watch.ts` 的一次性通知。Miya 复用其任务与通知分离的思路，具体传输与生命周期沿用本项目现有后台架构。
 

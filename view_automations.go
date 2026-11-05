@@ -73,7 +73,7 @@ func (app *chatApp) autoCall(op string, r automation.Request, done func(json.Raw
 	if c.remote != nil {
 		go func() {
 			var out json.RawMessage
-			err := c.remote.call(op, r, &out)
+			err := c.remote.Call(op, r, &out)
 			c.dispatch(func() { done(out, err) })
 		}()
 		return

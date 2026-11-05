@@ -311,7 +311,7 @@ func (c *chatController) submit(req SendRequest) int {
 			}
 			req.Attachments = paths
 		}
-		if err := c.remote.call("submit", req, &id); err != nil {
+		if err := c.remote.Call("submit", req, &id); err != nil {
 			c.lastSubmitError = err.Error()
 			c.setStatus(err.Error())
 		}

@@ -94,5 +94,23 @@ var (
 	messageFingerprint = svcproto.MessageFingerprint
 )
 
+// A window's connection to the service lives in internal/svcproto too.
+type (
+	serviceClient = svcproto.Client
+	serviceInbox  = svcproto.Inbox
+)
+
+const miyaRequestTimeout = svcproto.CardTimeout
+
+var (
+	newServiceClient         = svcproto.NewClient
+	newWireServiceClient     = svcproto.NewWireClient
+	newDetachedServiceClient = svcproto.NewDetachedClient
+	newClosedServiceClient   = svcproto.NewClosedClient
+	dialService              = svcproto.Dial
+	errServiceClosed         = svcproto.ErrClosed
+	serviceCallTimeout       = svcproto.CallTimeout
+)
+
 // deferred is a reply worked out off the main thread; see async.Reply.
 type deferred = async.Reply

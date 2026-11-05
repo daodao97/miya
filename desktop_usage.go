@@ -101,7 +101,7 @@ func (app *chatApp) refreshUsage() {
 		defer cancel()
 		readings := make([]agentusage.Reading, 2)
 		if cl != nil {
-			if err := cl.call("host", hostRequest{Action: "usage"}, &readings); err != nil {
+			if err := cl.Call("host", hostRequest{Action: "usage"}, &readings); err != nil {
 				readings = []agentusage.Reading{{Agent: "codex", Error: err.Error()}, {Agent: "claude", Error: err.Error()}}
 			}
 		} else {

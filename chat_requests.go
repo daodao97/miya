@@ -17,6 +17,7 @@ func (c *chatController) removeRequest(id json.RawMessage) {
 	}
 	c.setApprovals(out)
 }
+
 func (c *chatController) serverRequest(f codex.Frame) {
 	switch f.Method {
 	case "item/commandExecution/requestApproval", "item/fileChange/requestApproval", "item/permissions/requestApproval", "item/tool/requestUserInput", "mcpServer/elicitation/request":
@@ -49,6 +50,7 @@ func (c *chatController) serverRequest(f codex.Frame) {
 		c.setStatus("Unsupported server request: " + f.Method)
 	}
 }
+
 func (c *chatController) respond(a codex.Approval, result any) {
 	if c.remote != nil {
 		c.removeRequest(a.ID)
@@ -71,6 +73,7 @@ func (c *chatController) respond(a codex.Approval, result any) {
 	}
 	approvalOwner(a).Respond(c, a, result)
 }
+
 func approvalResult(a codex.Approval, allow bool) any {
 	if a.Method == "item/permissions/requestApproval" {
 		var permissions any = map[string]any{}
@@ -85,6 +88,7 @@ func approvalResult(a codex.Approval, allow bool) any {
 	}
 	return map[string]string{"decision": decision}
 }
+
 func (c *chatController) approvalDetail(a codex.Approval) string {
 	text := a.Reason + "\n" + a.Command
 	if a.Cwd != "" {
@@ -227,9 +231,6 @@ func (c *chatController) respondMiya(a codex.Approval, result any) {
 	_ = json.Unmarshal(data, &r)
 	ch <- r.Decision == "accept"
 }
-
-// miyaRequestTimeout is how long a card waits; then it counts as declined.
-const miyaRequestTimeout = 10 * time.Minute
 
 // waitUser waits off the main thread for the answer to a card.
 func (c *chatController) waitUser(id json.RawMessage, ch chan bool) bool {

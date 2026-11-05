@@ -33,7 +33,7 @@ func remoteImageFor(cl *serviceClient, source, src string) *remoteImageResult {
 	if !loaded {
 		go func() {
 			var data []byte
-			entry.err = cl.call("host", hostRequest{Action: "preview", Path: src}, &data)
+			entry.err = cl.Call("host", hostRequest{Action: "preview", Path: src}, &data)
 			if entry.err == nil {
 				entry.image, entry.err = ui.DecodeImage(data)
 			}

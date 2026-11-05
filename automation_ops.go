@@ -24,7 +24,7 @@ var automationOps = map[string]bool{"automationList": true, "automationDraft": t
 // main thread.
 func (c *chatController) automationCall(op string, r automation.Request, out any) error {
 	if c.remote != nil {
-		return c.remote.call(op, r, out)
+		return c.remote.Call(op, r, out)
 	}
 	res, err := c.automationOp(op, r)
 	if err != nil {

@@ -69,7 +69,7 @@ func requestServerRestart() error {
 	defer cl.Close()
 	// A no-reply request avoids mistaking a quick, idle shutdown for a
 	// failed RPC. The supervising service manager starts the replacement.
-	return cl.send(svcRequest{Op: "quitWhenIdle"})
+	return cl.Send(svcRequest{Op: "quitWhenIdle"})
 }
 
 func saveServerConnection(link string) error {

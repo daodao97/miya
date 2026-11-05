@@ -7,15 +7,15 @@ func TestServiceInboxSchedulesOnceAndKeepsLatestState(t *testing.T) {
 	st := func(status string) svcMessage { return svcMessage{State: &svcState{Status: status}} }
 	msgs := func(thread int) svcMessage { return svcMessage{Messages: &svcMessages{Thread: thread}} }
 
-	if !b.push(st("a")) {
+	if !b.Push(st("a")) {
 		t.Fatal("first push must schedule a drain")
 	}
 	for _, m := range []svcMessage{msgs(1), st("b"), msgs(2), st("c")} {
-		if b.push(m) {
+		if b.Push(m) {
 			t.Fatal("pushes before a take must not schedule again")
 		}
 	}
-	got := b.take()
+	got := b.Take()
 	if len(got) != 3 {
 		t.Fatalf("take returned %d events, want 3 (two messages, latest state)", len(got))
 	}
@@ -25,7 +25,7 @@ func TestServiceInboxSchedulesOnceAndKeepsLatestState(t *testing.T) {
 	if got[2].State == nil || got[2].State.Status != "c" {
 		t.Fatalf("want only the latest state last, got %+v", got[2])
 	}
-	if !b.push(st("d")) {
+	if !b.Push(st("d")) {
 		t.Fatal("a push after take must schedule again")
 	}
 }

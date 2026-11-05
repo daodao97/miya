@@ -68,11 +68,11 @@ func localWindowConnection() (*serviceClient, svcState, error) {
 	cl, st, err := connectService(workspace)
 	if err == nil && explicit != "" && st.Cwd != workspace {
 		var result svcWorkspace
-		if err = cl.call("workspace", workspace, &result); err == nil && result.Error != "" {
+		if err = cl.Call("workspace", workspace, &result); err == nil && result.Error != "" {
 			err = errors.New(result.Error)
 		}
 		if err == nil {
-			err = cl.call("state", nil, &st)
+			err = cl.Call("state", nil, &st)
 		}
 		if err != nil {
 			cl.Close()
@@ -153,7 +153,7 @@ func newMirrorController() *chatController {
 	return c
 }
 
-func (c *chatController) forward(op string, args any) { c.remote.notify(op, args) }
+func (c *chatController) forward(op string, args any) { c.remote.Notify(op, args) }
 
 // attachService starts mirroring a connected service.
 func (c *chatController) attachService(cl *serviceClient, st svcState) {
@@ -165,10 +165,10 @@ func (c *chatController) attachService(cl *serviceClient, st svcState) {
 	// milliseconds; events that arrive before the main thread runs are
 	// applied together, in one dispatch.
 	inbox := &serviceInbox{}
-	cl.setEvents(func(m svcMessage) {
-		if inbox.push(m) {
+	cl.SetEvents(func(m svcMessage) {
+		if inbox.Push(m) {
 			c.dispatch(func() {
-				for _, m := range inbox.take() {
+				for _, m := range inbox.Take() {
 					c.serviceEvent(cl, m)
 				}
 			})
@@ -330,7 +330,7 @@ func (c *chatController) applyMessages(m svcMessages) {
 
 func (c *chatController) remoteWorkspace(path string) error {
 	var res svcWorkspace
-	if err := c.remote.call("workspace", path, &res); err != nil {
+	if err := c.remote.Call("workspace", path, &res); err != nil {
 		return err
 	}
 	if res.Error != "" {

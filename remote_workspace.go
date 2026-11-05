@@ -171,7 +171,7 @@ func (c *chatController) hostCall(r hostRequest, out any) error {
 	if !c.remoteHost() {
 		return errors.New("Server disconnected")
 	}
-	return c.remote.call("host", r, out)
+	return c.remote.Call("host", r, out)
 }
 
 // Read local attachments before crossing the machine boundary. Server-side

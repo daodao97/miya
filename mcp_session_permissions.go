@@ -43,7 +43,7 @@ func mcpAccessAccepted() map[string]any {
 
 func (c *chatController) respondMCPAlways(a codex.Approval) error {
 	if c.remote != nil {
-		if err := c.remote.call("respond", svcRespond{ID: a.ID, Remember: true}, nil); err != nil {
+		if err := c.remote.Call("respond", svcRespond{ID: a.ID, Remember: true}, nil); err != nil {
 			return err
 		}
 		c.removeRequest(a.ID)

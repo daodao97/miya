@@ -61,7 +61,7 @@ func (c *chatController) loadClaudeCommands(cwd string) {
 		cl := c.remote
 		go func() {
 			var list hostCommands
-			err := cl.call("commands", cwd, &list)
+			err := cl.Call("commands", cwd, &list)
 			c.dispatch(func() {
 				delete(c.claudeCmdLoading, cwd)
 				if err == nil && list.Known {

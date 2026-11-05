@@ -27,7 +27,7 @@ func (c *chatController) runThreadCommand(command string) string {
 func (c *chatController) threadCommand(threadID int, agent, command, policy string) (int, string) {
 	if c.remote != nil {
 		var r svcCommandResult
-		if err := c.remote.call("command", svcCommand{Thread: threadID, Agent: agent, Command: command, Policy: policy}, &r); err != nil {
+		if err := c.remote.Call("command", svcCommand{Thread: threadID, Agent: agent, Command: command, Policy: policy}, &r); err != nil {
 			return 0, err.Error()
 		}
 		c.fastMode = r.FastMode

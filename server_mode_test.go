@@ -92,14 +92,14 @@ func TestRemoteHostWorkspaceRPC(t *testing.T) {
 		t.Fatal(err)
 	}
 	var entries []hostEntry
-	if err := cl.call("host", hostRequest{Action: "dir", Project: root}, &entries); err != nil || len(entries) < 1 {
+	if err := cl.Call("host", hostRequest{Action: "dir", Project: root}, &entries); err != nil || len(entries) < 1 {
 		t.Fatal(entries, err)
 	}
 	var text string
-	if err := cl.call("host", hostRequest{Action: "read", Project: root, Path: "hello.txt"}, &text); err != nil || text != "server text" {
+	if err := cl.Call("host", hostRequest{Action: "read", Project: root, Path: "hello.txt"}, &text); err != nil || text != "server text" {
 		t.Fatal(text, err)
 	}
-	if err := cl.call("host", hostRequest{Action: "write", Project: root, Path: "hello.txt", Text: "saved remotely"}, nil); err != nil {
+	if err := cl.Call("host", hostRequest{Action: "write", Project: root, Path: "hello.txt", Text: "saved remotely"}, nil); err != nil {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(file)
@@ -111,7 +111,7 @@ func TestRemoteHostWorkspaceRPC(t *testing.T) {
 		t.Fatal("remote save lost permissions")
 	}
 	var files []string
-	if err := cl.call("host", hostRequest{Action: "index", Project: root}, &files); err != nil || !strings.Contains(strings.Join(files, "\n"), "hello.txt") {
+	if err := cl.Call("host", hostRequest{Action: "index", Project: root}, &files); err != nil || !strings.Contains(strings.Join(files, "\n"), "hello.txt") {
 		t.Fatal(files, err)
 	}
 	for _, r := range []hostRequest{
@@ -119,7 +119,7 @@ func TestRemoteHostWorkspaceRPC(t *testing.T) {
 		{Action: "read", Project: "/unregistered", Path: "hello.txt"},
 		{Action: "write", Project: root, Path: "hello.txt", Text: strings.Repeat("x", worktree.MaxEditableFile+1)},
 	} {
-		if err := cl.call("host", r, nil); err == nil {
+		if err := cl.Call("host", r, nil); err == nil {
 			t.Fatalf("invalid host request accepted: %s", r.Action)
 		}
 	}
@@ -130,7 +130,7 @@ func TestRemoteHostWorkspaceRPC(t *testing.T) {
 	if err := os.Symlink(outside, filepath.Join(root, "escape")); err != nil {
 		t.Fatal(err)
 	}
-	if err := cl.call("host", hostRequest{Action: "read", Project: root, Path: "escape"}, nil); err == nil {
+	if err := cl.Call("host", hostRequest{Action: "read", Project: root, Path: "escape"}, nil); err == nil {
 		t.Fatal("project traversal through symlink accepted")
 	}
 }
@@ -147,12 +147,12 @@ func TestRemoteHostAttachmentsAndPreview(t *testing.T) {
 		t.Fatal(err)
 	}
 	var paths []string
-	if err := cl.call("host", hostRequest{Action: "upload", Images: []remote.Image{{Name: "photo.png", Data: buf.Bytes()}}}, &paths); err != nil || len(paths) != 1 {
+	if err := cl.Call("host", hostRequest{Action: "upload", Images: []remote.Image{{Name: "photo.png", Data: buf.Bytes()}}}, &paths); err != nil || len(paths) != 1 {
 		t.Fatal(paths, err)
 	}
 	var preview []byte
 	source := (&url.URL{Scheme: "file", Path: paths[0]}).String()
-	if err := cl.call("host", hostRequest{Action: "preview", Path: source}, &preview); err != nil || len(preview) == 0 {
+	if err := cl.Call("host", hostRequest{Action: "preview", Path: source}, &preview); err != nil || len(preview) == 0 {
 		t.Fatal("preview unavailable", err)
 	}
 	c := newMirrorController()
@@ -255,7 +255,7 @@ func TestServerTailcatEndToEnd(t *testing.T) {
 		t.Fatal("desktop received another workspace")
 	}
 	var text string
-	if err := cl.call("host", hostRequest{Action: "read", Project: root, Path: "remote.txt"}, &text); err != nil || text != "tailcat server file" {
+	if err := cl.Call("host", hostRequest{Action: "read", Project: root, Path: "remote.txt"}, &text); err != nil || text != "tailcat server file" {
 		t.Fatal("desktop remote read", text, err)
 	}
 	// A deferred disk read must not prevent heartbeats/stop/approvals on
@@ -270,7 +270,7 @@ func TestServerTailcatEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	heartbeat := make(chan error, 1)
-	go func() { heartbeat <- cl.call("hello", nil, nil) }()
+	go func() { heartbeat <- cl.Call("hello", nil, nil) }()
 	select {
 	case err := <-heartbeat:
 		if err != nil {
@@ -351,16 +351,16 @@ func TestServerLinuxDeployment(t *testing.T) {
 	}
 	defer cl.Close()
 	var hello svcHello
-	if err := cl.call("hello", nil, &hello); err != nil || !hello.Remote {
+	if err := cl.Call("hello", nil, &hello); err != nil || !hello.Remote {
 		t.Fatal("not a permanent Linux server", err)
 	}
 	request := hostRequest{Action: "write", Project: state.Cwd, Path: "miya-linux-qa.txt", Text: "linux server round trip"}
-	if err := cl.call("host", request, nil); err != nil {
+	if err := cl.Call("host", request, nil); err != nil {
 		t.Fatal("Linux remote save", err)
 	}
 	var text string
 	request.Action = "read"
-	if err := cl.call("host", request, &text); err != nil || text != request.Text {
+	if err := cl.Call("host", request, &text); err != nil || text != request.Text {
 		t.Fatal("Linux remote read", text, err)
 	}
 	transport := &http.Transport{DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) { return cl.Wire().DialFiles(ctx) }}

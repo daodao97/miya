@@ -270,7 +270,7 @@ func (m *completion) editAt(app *chatApp, value string, end int) {
 		if host == nil {
 			files, err = indexProjectFiles(ctx, root)
 		} else {
-			err = host.call("host", hostRequest{Action: "index", Project: root}, &files)
+			err = host.Call("host", hostRequest{Action: "index", Project: root}, &files)
 		}
 		results := fileChoices(files, query)
 		c.dispatch(func() {

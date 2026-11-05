@@ -254,7 +254,7 @@ func TestInstalledAgentCollaborationMCP(t *testing.T) {
 			default:
 				t.Fatal("refusing unexpected native tool", approval.Command)
 			}
-			if err := observer.call("respond", map[string]any{"id": approval.ID, "result": map[string]any{"decision": "accept"}}, nil); err != nil {
+			if err := observer.Call("respond", map[string]any{"id": approval.ID, "result": map[string]any{"decision": "accept"}}, nil); err != nil {
 				t.Fatal(err)
 			}
 			approved = true

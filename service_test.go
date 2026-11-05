@@ -224,7 +224,7 @@ func (f *serviceFixture) window() *chatController {
 		f.t.Fatal(err)
 	}
 	var st svcState
-	if err := cl.call("state", nil, &st); err != nil {
+	if err := cl.Call("state", nil, &st); err != nil {
 		f.t.Fatal(err)
 	}
 	var c *chatController
@@ -464,7 +464,7 @@ func TestServiceDraftSurvivesStaleSnapshotsAndQuickSwitches(t *testing.T) {
 		a.rememberDraft("已经发送的消息")
 		a.send()
 		var confirmed svcState
-		if err := a.remote.call("state", nil, &confirmed); err != nil {
+		if err := a.remote.Call("state", nil, &confirmed); err != nil {
 			t.Error(err)
 		} else if confirmed.Threads[0].Draft != "" {
 			t.Errorf("the service kept a sent draft: %q", confirmed.Threads[0].Draft)
@@ -489,7 +489,7 @@ func TestServiceDraftSurvivesStaleSnapshotsAndQuickSwitches(t *testing.T) {
 		}
 	})
 	var confirmed svcState
-	if err := a.remote.call("state", nil, &confirmed); err != nil {
+	if err := a.remote.Call("state", nil, &confirmed); err != nil {
 		t.Fatal(err)
 	}
 	if confirmed.Threads[0].Draft != "对话一尚未发送" || confirmed.Threads[1].Draft != "对话二尚未发送" {

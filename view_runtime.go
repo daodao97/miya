@@ -117,7 +117,7 @@ func (app *chatApp) openRuntimeService(p *panelState, s *panelSurface, ref Threa
 	go func() {
 		var err error
 		if cl != nil {
-			err = cl.call("runtimeValidate", service, nil)
+			err = cl.Call("runtimeValidate", service, nil)
 		} else {
 			err = app.c.runtimes().validateToken(context.Background(), service.RuntimeToken, service.Host, service.Port)
 		}

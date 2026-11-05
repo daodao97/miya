@@ -149,7 +149,7 @@ func (c *chatController) readRuntime(ctx context.Context, ref ThreadRef, project
 	}
 	if cl != nil {
 		var result conversationRuntime
-		err := cl.call("runtime", runtimeRequest{Ref: ref, Project: project}, &result)
+		err := cl.Call("runtime", runtimeRequest{Ref: ref, Project: project}, &result)
 		return result, err
 	}
 	type prepared struct {
