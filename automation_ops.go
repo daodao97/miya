@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"miya/internal/automation"
 	"miya/internal/claude"
 	"miya/internal/model"
 	"miya/internal/textutil"
@@ -21,20 +22,20 @@ type deferred func() (any, error)
 
 // automationView is an automation as the page shows it.
 type automationView struct {
-	Automation
-	ScheduleText string          `json:"scheduleText"`
-	Next         time.Time       `json:"next,omitzero"`
-	Upcoming     []time.Time     `json:"upcoming,omitempty"`
-	Running      bool            `json:"running,omitempty"`
-	Runs         []AutomationRun `json:"runs,omitempty"`
+	automation.Automation
+	ScheduleText string           `json:"scheduleText"`
+	Next         time.Time        `json:"next,omitzero"`
+	Upcoming     []time.Time      `json:"upcoming,omitempty"`
+	Running      bool             `json:"running,omitempty"`
+	Runs         []automation.Run `json:"runs,omitempty"`
 	// TimeMissing marks a draft whose sentence named no time.
 	TimeMissing bool `json:"timeMissing,omitempty"`
 }
 
 type automationRequest struct {
-	ID         string      `json:"id,omitempty"`
-	Automation *Automation `json:"automation,omitempty"`
-	Enabled    bool        `json:"enabled,omitempty"`
+	ID         string                 `json:"id,omitempty"`
+	Automation *automation.Automation `json:"automation,omitempty"`
+	Enabled    bool                   `json:"enabled,omitempty"`
 	// Request, Project and Agent ask for a draft.
 	Request string `json:"request,omitempty"`
 	Project string `json:"project,omitempty"`
@@ -44,8 +45,8 @@ type automationRequest struct {
 var automationOps = map[string]bool{"automationList": true, "automationDraft": true, "automationSave": true,
 	"automationToggle": true, "automationDelete": true, "automationRunNow": true}
 
-func automationViewOf(a Automation, runs []AutomationRun, running bool, now time.Time) automationView {
-	v := automationView{Automation: a, ScheduleText: describeCron(a.Schedule), Running: running, Runs: runs}
+func automationViewOf(a automation.Automation, runs []automation.Run, running bool, now time.Time) automationView {
+	v := automationView{Automation: a, ScheduleText: automation.DescribeCron(a.Schedule), Running: running, Runs: runs}
 	next := now
 	for i := 0; i < 3; i++ {
 		if next = a.Next(next); next.IsZero() {
@@ -98,7 +99,7 @@ func (c *chatController) automationOp(op string, r automationRequest) (any, erro
 		views := []automationView{}
 		for _, a := range s.store.Automations {
 			_, running := s.active[a.ID]
-			views = append(views, automationViewOf(a, append([]AutomationRun(nil), s.store.Runs[a.ID]...), running, now))
+			views = append(views, automationViewOf(a, append([]automation.Run(nil), s.store.Runs[a.ID]...), running, now))
 		}
 		return views, nil
 	case "automationDraft":
@@ -113,7 +114,7 @@ func (c *chatController) automationOp(op string, r automationRequest) (any, erro
 		}
 		return automationViewOf(a, s.store.Runs[a.ID], false, now), nil
 	case "automationToggle":
-		i, ok := s.store.find(r.ID)
+		i, ok := s.store.Find(r.ID)
 		if !ok {
 			return nil, errors.New("Automation not found")
 		}
@@ -126,7 +127,7 @@ func (c *chatController) automationOp(op string, r automationRequest) (any, erro
 		c.automationsChanged()
 		return nil, nil
 	case "automationDelete":
-		i, ok := s.store.find(r.ID)
+		i, ok := s.store.Find(r.ID)
 		if !ok {
 			return nil, nil
 		}
@@ -157,11 +158,11 @@ func (c *chatController) prepareAutomationDraft(ctx context.Context, r automatio
 	}
 	cfg, now := claude.CLI{Binary: c.claudeBinary, Args: c.claudeArgs, Env: c.claudeEnv}, c.auto.now()
 	return deferred(func() (any, error) {
-		d, err := draftAutomation(ctx, cfg, agent, project, request, now)
+		d, err := automation.DraftFor(ctx, cfg, agent, project, request, now)
 		if err != nil {
 			return nil, err
 		}
-		a, timeMissing, err := automationFromDraft(d, agent, project, request)
+		a, timeMissing, err := automation.FromDraft(d, agent, project, request)
 		if err != nil {
 			return nil, err
 		}
@@ -173,20 +174,20 @@ func (c *chatController) prepareAutomationDraft(ctx context.Context, r automatio
 
 // saveAutomation creates an automation or changes one, keeping what its
 // runs recorded.
-func (c *chatController) saveAutomation(a Automation) (Automation, error) {
+func (c *chatController) saveAutomation(a automation.Automation) (automation.Automation, error) {
 	return c.saveAutomationWithCreateID(a, "")
 }
 
 // createID lets a phone retry an interrupted creation without adding it twice.
-func (c *chatController) saveAutomationWithCreateID(a Automation, createID string) (Automation, error) {
+func (c *chatController) saveAutomationWithCreateID(a automation.Automation, createID string) (automation.Automation, error) {
 	s := c.auto
 	now := s.now()
-	i, exists := s.store.find(a.ID)
+	i, exists := s.store.Find(a.ID)
 	if !exists {
 		a.ID, a.Created, a.Due = createID, now, now
 	}
-	if err := a.normalize(); err != nil {
-		return Automation{}, err
+	if err := a.Normalize(); err != nil {
+		return automation.Automation{}, err
 	}
 	if exists {
 		old := s.store.Automations[i]
@@ -206,7 +207,7 @@ func (c *chatController) saveAutomationWithCreateID(a Automation, createID strin
 // whether one is on.
 func (c *chatController) automationsChanged() {
 	c.auto.persist()
-	syncAutomationLaunchAgent(c.auto.store.anyEnabled())
+	syncAutomationLaunchAgent(c.auto.store.AnyEnabled())
 	if c.revision != nil {
 		c.setRevision(c.revision() + 1)
 	}

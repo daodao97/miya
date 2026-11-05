@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"miya/internal/automation"
 	"miya/internal/codex"
 	"miya/internal/subagent"
 	"miya/internal/textutil"
@@ -21,7 +22,7 @@ import (
 // background service's. Windows reach it through the service.
 type automationState struct {
 	path   string
-	store  automationStore
+	store  automation.Store
 	active map[string]*activeAutomationRun
 	// now, submit, check and background are replaced in tests.
 	now    func() time.Time
@@ -45,7 +46,7 @@ const automationTick = 15 * time.Second
 // startAutomations loads the automations and, with schedule, checks them
 // every automationTick from now on.
 func (c *chatController) startAutomations(path string, schedule bool) {
-	s := &automationState{path: path, store: loadAutomations(path), active: map[string]*activeAutomationRun{},
+	s := &automationState{path: path, store: automation.Load(path), active: map[string]*activeAutomationRun{},
 		now: time.Now, submit: c.submit, check: runAutomationCheck}
 	s.background = func(work func() func()) {
 		go func() {
@@ -56,14 +57,14 @@ func (c *chatController) startAutomations(path string, schedule bool) {
 	c.auto = s
 	// A run in progress when the service stopped ended with it.
 	for _, a := range s.store.Automations {
-		if r, ok := s.store.lastRun(a.ID); ok && r.Result == runRunning {
-			s.store.updateLastRun(a.ID, func(r *AutomationRun) {
-				r.Result, r.Summary, r.Finished = runInterrupted, "Still running when Miya exited", s.now()
+		if r, ok := s.store.LastRun(a.ID); ok && r.Result == automation.Running {
+			s.store.UpdateLastRun(a.ID, func(r *automation.Run) {
+				r.Result, r.Summary, r.Finished = automation.Interrupted, "Still running when Miya exited", s.now()
 			})
 		}
 	}
 	s.persist()
-	syncAutomationLaunchAgent(s.store.anyEnabled())
+	syncAutomationLaunchAgent(s.store.AnyEnabled())
 	if !schedule {
 		return
 	}
@@ -87,7 +88,7 @@ func (c *chatController) startAutomations(path string, schedule bool) {
 }
 
 func (s *automationState) persist() {
-	if err := s.store.save(s.path); err != nil {
+	if err := s.store.Save(s.path); err != nil {
 		log.Printf("miya: saving automations: %v", err)
 	}
 }
@@ -95,12 +96,12 @@ func (s *automationState) persist() {
 // automationsEnabled reports whether some automation is on: the service
 // stays up for it.
 func (c *chatController) automationsEnabled() bool {
-	return c.auto != nil && c.auto.store.anyEnabled()
+	return c.auto != nil && c.auto.store.AnyEnabled()
 }
 
 // automationDue is the latest scheduled time of a that has come and has no
 // run yet, zero when none has. Times missed while asleep make one run.
-func automationDue(a Automation, now time.Time) time.Time {
+func automationDue(a automation.Automation, now time.Time) time.Time {
 	base := a.Due
 	if base.IsZero() {
 		base = a.Created
@@ -141,7 +142,7 @@ func (c *chatController) automationTick() {
 		s.store.Automations[i].Due = due
 		changed = true
 		if _, running := s.active[a.ID]; running {
-			s.store.addRun(a.ID, AutomationRun{Started: now, Finished: now, Result: runSkipped, Summary: "The previous run has not finished"})
+			s.store.AddRun(a.ID, automation.Run{Started: now, Finished: now, Result: automation.Skipped, Summary: "The previous run has not finished"})
 			continue
 		}
 		_ = c.startAutomationRun(a.ID, now.Sub(due) > 2*time.Minute)
@@ -155,7 +156,7 @@ func (c *chatController) automationTick() {
 // automation's project, sent its instructions.
 func (c *chatController) startAutomationRun(id string, catchUp bool) error {
 	s := c.auto
-	i, ok := s.store.find(id)
+	i, ok := s.store.Find(id)
 	if !ok {
 		return errors.New("Automation not found")
 	}
@@ -164,16 +165,16 @@ func (c *chatController) startAutomationRun(id string, catchUp bool) error {
 		return errors.New("The previous run has not finished")
 	}
 	now := s.now()
-	var prev *AutomationRun
-	if last, ok := s.store.lastReport(id); ok && !a.NoCarryOver {
+	var prev *automation.Run
+	if last, ok := s.store.LastReport(id); ok && !a.NoCarryOver {
 		prev = &last
 	}
-	run := AutomationRun{Started: now, Round: 1, Rounds: a.Rounds, Result: runRunning, CatchUp: catchUp}
+	run := automation.Run{Started: now, Round: 1, Rounds: a.Rounds, Result: automation.Running, CatchUp: catchUp}
 	thread := 0
 	if info, err := os.Stat(a.Project); err != nil || !info.IsDir() {
-		run.Result, run.Summary, run.Finished = runFailed, "Project directory does not exist: "+a.Project, now
+		run.Result, run.Summary, run.Finished = automation.Failed, "Project directory does not exist: "+a.Project, now
 	} else if thread = s.submit(SendRequest{Agent: a.Agent, Project: a.Project, Text: automationRunMessage(a, prev), MemoryControl: true}); thread == 0 {
-		run.Result, run.Summary, run.Finished = runFailed, backendFor(a.Agent).Name()+" is not ready", now
+		run.Result, run.Summary, run.Finished = automation.Failed, backendFor(a.Agent).Name()+" is not ready", now
 	}
 	if thread != 0 {
 		title := a.Name + " · " + now.Format("Jan 2, 15:04")
@@ -184,9 +185,9 @@ func (c *chatController) startAutomationRun(id string, catchUp bool) error {
 		run.Thread, run.ServerID = thread, c.threadWithID(thread).ServerID
 		s.active[id] = &activeAutomationRun{thread: thread, round: 1}
 	}
-	s.store.addRun(id, run)
+	s.store.AddRun(id, run)
 	s.persist()
-	if run.Result == runFailed {
+	if run.Result == automation.Failed {
 		c.automationNotice(a, run)
 		return errors.New(run.Summary)
 	}
@@ -200,18 +201,18 @@ func (c *chatController) advanceAutomation(id string, r *activeAutomationRun) {
 	if r.checking {
 		return
 	}
-	i, ok := s.store.find(id)
+	i, ok := s.store.Find(id)
 	if !ok {
 		delete(s.active, id)
 		return
 	}
 	t := c.threadWithID(r.thread)
 	if t.ID == 0 {
-		c.finishAutomationRun(id, runInterrupted, "Conversation closed")
+		c.finishAutomationRun(id, automation.Interrupted, "Conversation closed")
 		return
 	}
 	if sid := t.ServerID; sid != "" {
-		s.store.updateLastRun(id, func(run *AutomationRun) { run.ServerID = sid })
+		s.store.UpdateLastRun(id, func(run *automation.Run) { run.ServerID = sid })
 	}
 	// A round waiting for an approval or an answer has not ended.
 	if t.Busy || t.Loading || len(t.Queue) > 0 || c.threadAwaitsUser(t) {
@@ -221,15 +222,15 @@ func (c *chatController) advanceAutomation(id string, r *activeAutomationRun) {
 	status, reply := c.handoffState(t.ID)
 	switch {
 	case t.StopRequested || t.Status == "Stopped":
-		c.finishAutomationRun(id, runInterrupted, "Stopped in conversation")
+		c.finishAutomationRun(id, automation.Interrupted, "Stopped in conversation")
 	case !a.Enabled:
-		c.finishAutomationRun(id, runInterrupted, "Automation paused")
+		c.finishAutomationRun(id, automation.Interrupted, "Automation paused")
 	case status == subagent.Failed:
-		c.finishAutomationRun(id, runFailed, reply)
+		c.finishAutomationRun(id, automation.Failed, reply)
 	case status != subagent.Completed:
-		c.finishAutomationRun(id, runFailed, textutil.FirstNonEmpty(t.Status, "No response received"))
+		c.finishAutomationRun(id, automation.Failed, textutil.FirstNonEmpty(t.Status, "No response received"))
 	case a.Check == "":
-		c.finishAutomationRun(id, runPassed, reply)
+		c.finishAutomationRun(id, automation.Passed, reply)
 	default:
 		r.checking = true
 		dir, command, check := a.Project, a.Check, s.check
@@ -246,7 +247,7 @@ func (c *chatController) afterAutomationCheck(id string, r *activeAutomationRun,
 	if s.active[id] != r {
 		return
 	}
-	i, ok := s.store.find(id)
+	i, ok := s.store.Find(id)
 	if !ok {
 		delete(s.active, id)
 		return
@@ -254,25 +255,25 @@ func (c *chatController) afterAutomationCheck(id string, r *activeAutomationRun,
 	a := s.store.Automations[i]
 	switch {
 	case passed:
-		c.finishAutomationRun(id, runPassed, reply)
+		c.finishAutomationRun(id, automation.Passed, reply)
 		return
 	case !a.Enabled:
-		c.finishAutomationRun(id, runInterrupted, "Automation paused")
+		c.finishAutomationRun(id, automation.Interrupted, "Automation paused")
 		return
 	case r.round >= a.Rounds:
-		c.finishAutomationRun(id, runFailed, "Check failed: "+textutil.LastLine(output))
+		c.finishAutomationRun(id, automation.Failed, "Check failed: "+textutil.LastLine(output))
 		return
 	}
 	r.round++
-	s.store.updateLastRun(id, func(run *AutomationRun) { run.Round = r.round })
+	s.store.UpdateLastRun(id, func(run *automation.Run) { run.Round = r.round })
 	s.persist()
 	if s.submit(SendRequest{ThreadID: r.thread, Text: automationCheckMessage(a, r.round-1, output), MemoryControl: true}) == 0 {
-		c.finishAutomationRun(id, runFailed, "Unable to start the next round")
+		c.finishAutomationRun(id, automation.Failed, "Unable to start the next round")
 	}
 }
 
 // automationCheckMessage asks for the next round, with what the check said.
-func automationCheckMessage(a Automation, round int, output string) string {
+func automationCheckMessage(a automation.Automation, round int, output string) string {
 	if strings.TrimSpace(output) == "" {
 		output = "(no output)"
 	}
@@ -284,8 +285,8 @@ func (c *chatController) finishAutomationRun(id, result, summary string) {
 	r := s.active[id]
 	delete(s.active, id)
 	now := s.now()
-	var run AutomationRun
-	s.store.updateLastRun(id, func(x *AutomationRun) {
+	var run automation.Run
+	s.store.UpdateLastRun(id, func(x *automation.Run) {
 		x.Result, x.Summary, x.Finished = result, textutil.ClipRunes(textutil.FirstLine(summary), 200), now
 		if r != nil {
 			x.Round = r.round
@@ -293,21 +294,21 @@ func (c *chatController) finishAutomationRun(id, result, summary string) {
 		if x.Report == nil && x.Thread != 0 {
 			x.Report = autoRunReport(c.threadWithID(x.Thread))
 		}
-		if result == runPassed && x.Report != nil && !x.Report.Auto {
+		if result == automation.Passed && x.Report != nil && !x.Report.Auto {
 			x.Summary = textutil.ClipRunes(textutil.FirstLine(x.Report.Summary), 200)
 		}
 		run = *x
 	})
 	s.persist()
-	if i, ok := s.store.find(id); ok {
+	if i, ok := s.store.Find(id); ok {
 		c.automationNotice(s.store.Automations[i], run)
 	}
 }
 
 // automationNotice tells the phone how a run ended, once per run; the
 // conversation's own completion notices stay quiet for automations.
-func (c *chatController) automationNotice(a Automation, run AutomationRun) {
-	title := a.Name + " · " + runResultLabel(run.Result)
+func (c *chatController) automationNotice(a automation.Automation, run automation.Run) {
+	title := a.Name + " · " + automation.ResultLabel(run.Result)
 	if run.Rounds > 1 {
 		title += fmt.Sprintf("(round %d/%d)", run.Round, run.Rounds)
 	}

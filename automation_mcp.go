@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"miya/internal/automation"
 	"miya/internal/codex"
 	"miya/internal/textutil"
 )
@@ -87,12 +88,12 @@ func (c *chatController) mcpAutomation(op string, r mcpRequest) (any, error) {
 		if !ok {
 			return nil, errors.New(mcpCallerUnknown)
 		}
-		a := Automation{Name: args.Name, Project: c.threadWorkspace(caller.ID), Agent: textutil.FirstNonEmpty(args.Agent, threadAgent(caller)),
+		a := automation.Automation{Name: args.Name, Project: c.threadWorkspace(caller.ID), Agent: textutil.FirstNonEmpty(args.Agent, threadAgent(caller)),
 			Instructions: args.Instructions, Schedule: args.Schedule, Check: args.Check, Rounds: args.Rounds, Enabled: true}
 		if a.Rounds == 0 {
 			a.Rounds = 3
 		}
-		if err := a.normalize(); err != nil {
+		if err := a.Normalize(); err != nil {
 			return nil, err
 		}
 		a.ID = ""
@@ -122,7 +123,7 @@ func (c *chatController) mcpAutomation(op string, r mcpRequest) (any, error) {
 
 func (c *chatController) mcpUpdateAutomation(r mcpRequest, args mcpAutomationArgs) (any, error) {
 	s := c.auto
-	i, ok := s.store.find(strings.TrimSpace(args.ID))
+	i, ok := s.store.Find(strings.TrimSpace(args.ID))
 	if !ok {
 		for j, a := range s.store.Automations {
 			if a.Name == strings.TrimSpace(args.ID) {
@@ -156,7 +157,7 @@ func (c *chatController) mcpUpdateAutomation(r mcpRequest, args mcpAutomationArg
 	if args.Enabled != nil {
 		next.Enabled = *args.Enabled
 	}
-	if err := next.normalize(); err != nil {
+	if err := next.Normalize(); err != nil {
 		return nil, err
 	}
 	diff := automationDiff(old, next)
@@ -185,7 +186,7 @@ func (c *chatController) mcpUpdateAutomation(r mcpRequest, args mcpAutomationArg
 		if _, err := c.onMain(func() (any, error) { return c.saveAutomation(next) }); err != nil {
 			return nil, err
 		}
-		return "Updated \"" + next.Name + "\", " + describeCron(next.Schedule) + ".", nil
+		return "Updated \"" + next.Name + "\", " + automation.DescribeCron(next.Schedule) + ".", nil
 	}), nil
 }
 
@@ -200,9 +201,9 @@ func (c *chatController) automationListText() string {
 		if a.Enabled {
 			state = "Enabled; next run: " + formatAutomationTime(a.Next(s.now()))
 		}
-		fmt.Fprintf(&b, "%s\"%s\"· %s · %s · %s", a.ID, a.Name, filepath.Base(a.Project), describeCron(a.Schedule), state)
-		if r, ok := s.store.lastRun(a.ID); ok {
-			fmt.Fprintf(&b, " · Last run: %s", runResultLabel(r.Result))
+		fmt.Fprintf(&b, "%s\"%s\"· %s · %s · %s", a.ID, a.Name, filepath.Base(a.Project), automation.DescribeCron(a.Schedule), state)
+		if r, ok := s.store.LastRun(a.ID); ok {
+			fmt.Fprintf(&b, " · Last run: %s", automation.ResultLabel(r.Result))
 		}
 		b.WriteString("\n")
 	}
@@ -218,7 +219,7 @@ func formatAutomationTime(t time.Time) string {
 	return fmt.Sprintf("%d/%d (%s) %s", t.Month(), t.Day(), weekdayNames[t.Weekday()], t.Format("15:04"))
 }
 
-func automationCheckText(a Automation) string {
+func automationCheckText(a automation.Automation) string {
 	if a.Check == "" {
 		return "No check; 1 round"
 	}
@@ -226,9 +227,9 @@ func automationCheckText(a Automation) string {
 }
 
 // automationCardDetail is what the confirmation card shows of a new one.
-func automationCardDetail(a Automation, now time.Time) string {
+func automationCardDetail(a automation.Automation, now time.Time) string {
 	return strings.Join([]string{
-		fmt.Sprintf("Schedule: %s (%s); next run: %s", describeCron(a.Schedule), a.Schedule, formatAutomationTime(a.Next(now))),
+		fmt.Sprintf("Schedule: %s (%s); next run: %s", automation.DescribeCron(a.Schedule), a.Schedule, formatAutomationTime(a.Next(now))),
 		"Project: " + a.Project,
 		"Agent: " + backendFor(a.Agent).Name(),
 		"Completion check: " + automationCheckText(a),
@@ -237,7 +238,7 @@ func automationCardDetail(a Automation, now time.Time) string {
 }
 
 // automationDiff lists what a change changes, besides turning it on or off.
-func automationDiff(old, next Automation) string {
+func automationDiff(old, next automation.Automation) string {
 	var lines []string
 	add := func(label, from, to string) {
 		if from != to {
@@ -245,7 +246,7 @@ func automationDiff(old, next Automation) string {
 		}
 	}
 	add("Name", old.Name, next.Name)
-	add("Schedule", describeCron(old.Schedule), describeCron(next.Schedule))
+	add("Schedule", automation.DescribeCron(old.Schedule), automation.DescribeCron(next.Schedule))
 	add("Agent", backendFor(old.Agent).Name(), backendFor(next.Agent).Name())
 	add("Completion check", automationCheckText(old), automationCheckText(next))
 	add("Instructions", old.Instructions, next.Instructions)

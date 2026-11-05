@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log"
 	"miya/internal/appdir"
+	"miya/internal/automation"
 	"net"
 	"os"
 	"os/exec"
@@ -52,7 +53,7 @@ func runServiceWithOptions(options serverOptions) error {
 		c := newChatController()
 		s = newService(c, ex)
 		s.persistent = options.Persistent
-		c.startAutomations(automationsPath(), true)
+		c.startAutomations(automation.Path(), true)
 		s.exe, s.exeTime = executableInfo()
 		setInvalidateHook(s.markDirty)
 		// Phones read the service's controller, which holds every project.

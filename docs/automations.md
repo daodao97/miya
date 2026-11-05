@@ -8,15 +8,15 @@
 
 以下方式都只需要一句话，例如「每个工作日早上 9 点看一下新 Issue，能修的修掉并保证 go test 通过，修不过就多试两次」。
 
-- **Automations 页面**：写一句话，选项目和 agent。点击「整理设置」后，所选 agent 做一次不带工具的调用，按 JSON schema 回答名称、cron、检查命令、轮数和发给 agent 的指令（`automation_parse.go`）。Claude Code 用 `-p --json-schema --output-format json --tools ''`，Codex 用 `exec --output-schema -o --sandbox read-only --ephemeral`。提示词里带上当前时间和项目顶层文件，用来推断检查命令。结果显示在「整理结果」里，每一项都能单独改。修改原话、项目或 agent 后，需要再次点击「整理设置」，新结果生成后才能保存。
+- **Automations 页面**：写一句话，选项目和 agent。点击「整理设置」后，所选 agent 做一次不带工具的调用，按 JSON schema 回答名称、cron、检查命令、轮数和发给 agent 的指令（`internal/automation/draft.go`）。Claude Code 用 `-p --json-schema --output-format json --tools ''`，Codex 用 `exec --output-schema -o --sandbox read-only --ephemeral`。提示词里带上当前时间和项目顶层文件，用来推断检查命令。结果显示在「整理结果」里，每一项都能单独改。修改原话、项目或 agent 后，需要再次点击「整理设置」，新结果生成后才能保存。
 - **手机端自动化页面**：点右上角「新建自动化」，选桌面项目和 agent，写一句话后点「整理设置」。桌面后台生成草稿，手机上可修改名称、运行时间、指令、检查命令、轮数、启用状态和是否带上上次结果。点「创建」后保存到同一个桌面后台，进入详情页；保存不会立即运行。运行时间按桌面端本地时区解释。整理期间仍可正常刷新自动化列表和使用其他手机功能。断线后保留表单；创建请求超时或断线时可以重试，同一请求即使已经保存或后台重启也不会重复创建。
 - **对话里**：miya MCP 的 `create_automation` 由对话里的 agent 填好结构化字段。Miya 在这个对话里显示确认卡片，用户点「允许」才创建；10 分钟没处理按取消算。`update_automation` 改开关时直接生效，改其他内容同样要确认，卡片显示改前和改后。`list_automations` 只读，Claude Code 不用确认就能调用。
 
-Miya 用确定性代码校验 agent 的结果：cron 由 `automation_cron.go` 解析，非法时报错；轮数限制在 1 到 5，没有检查命令时为 1；句子没写时间时暂定每天 9:00，并在界面上标黄；检查命令开头的 `cd <项目> &&` 会被去掉。
+Miya 用确定性代码校验 agent 的结果：cron 由 `internal/automation/cron.go` 解析，非法时报错；轮数限制在 1 到 5，没有检查命令时为 1；句子没写时间时暂定每天 9:00，并在界面上标黄；检查命令开头的 `cd <项目> &&` 会被去掉。
 
 ## 数据
 
-一个自动化有名称、项目、agent、原话、指令、cron、检查命令、最多轮数和启用开关（`automation.go`）。全部存在服务数据目录的 `automations.json`，每个自动化保留最近 20 次运行：开始和结束时间、对话、第几轮、结果（运行中、通过、失败、已中断、已跳过）和一句话总结。
+一个自动化有名称、项目、agent、原话、指令、cron、检查命令、最多轮数和启用开关（`internal/automation/automation.go`）。全部存在服务数据目录的 `automations.json`，每个自动化保留最近 20 次运行：开始和结束时间、对话、第几轮、结果（运行中、通过、失败、已中断、已跳过）和一句话总结。
 
 cron 是标准 5 段写法（分 时 日 月 周），按本地时间，支持 `*`、范围、列表、步长和英文缩写；日和星期同时指定时任一匹配即运行。常见写法会显示成中文，例如「工作日 9:00」「每周一、三 10:00」。
 

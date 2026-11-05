@@ -1,4 +1,7 @@
-package main
+// Package automation holds scheduled automations: their settings, cron
+// schedules, run history and structured results, and drafting one from a
+// request with an agent.
+package automation
 
 import (
 	"crypto/rand"
@@ -9,6 +12,7 @@ import (
 	"miya/internal/appdir"
 	"miya/internal/model"
 	"miya/internal/textutil"
+	"miya/locales"
 	"os"
 	"path/filepath"
 	"strings"
@@ -40,8 +44,8 @@ type Automation struct {
 	NoCarryOver bool `json:"noCarryOver,omitempty"`
 }
 
-// AutomationRun is one run of an automation.
-type AutomationRun struct {
+// Run is one run of an automation.
+type Run struct {
 	Started  time.Time `json:"started"`
 	Finished time.Time `json:"finished,omitzero"`
 	Thread   int       `json:"thread,omitempty"`
@@ -55,47 +59,47 @@ type AutomationRun struct {
 	// CatchUp marks a run started for a time missed while asleep.
 	CatchUp bool `json:"catchUp,omitempty"`
 	// Report is the run\'s structured result.
-	Report *RunReport `json:"report,omitempty"`
+	Report *Report `json:"report,omitempty"`
 }
 
 // A run's result is one of these.
 const (
-	runRunning     = "running"
-	runPassed      = "passed"
-	runFailed      = "failed"
-	runInterrupted = "interrupted"
-	runSkipped     = "skipped"
+	Running     = "running"
+	Passed      = "passed"
+	Failed      = "failed"
+	Interrupted = "interrupted"
+	Skipped     = "skipped"
 )
 
 const (
-	maxAutomationRounds  = 5
-	automationRunHistory = 20
+	maxAutomationRounds = 5
+	RunHistory          = 20
 )
 
-func runResultLabel(result string) string {
+func ResultLabel(result string) string {
 	switch result {
-	case runRunning:
+	case Running:
 		return "Running"
-	case runPassed:
+	case Passed:
 		return "Passed"
-	case runFailed:
+	case Failed:
 		return "Failed"
-	case runInterrupted:
+	case Interrupted:
 		return "Interrupted"
-	case runSkipped:
+	case Skipped:
 		return "Skipped"
 	}
 	return result
 }
 
-// normalize checks an automation and fills its defaults.
-func (a *Automation) normalize() error {
+// Normalize checks an automation and fills its defaults.
+func (a *Automation) Normalize() error {
 	a.Name = strings.TrimSpace(a.Name)
 	a.Project = strings.TrimSpace(a.Project)
 	a.Instructions = strings.TrimSpace(a.Instructions)
 	a.Schedule = strings.Join(strings.Fields(a.Schedule), " ")
 	a.Check = strings.TrimSpace(a.Check)
-	if a.Agent = model.NormalizeAgentID(textutil.FirstNonEmpty(a.Agent, agentCodex)); a.Agent == "" {
+	if a.Agent = model.NormalizeAgentID(textutil.FirstNonEmpty(a.Agent, model.AgentCodex)); a.Agent == "" {
 		return errors.New("Agent must be codex or claude-code")
 	}
 	switch {
@@ -106,7 +110,7 @@ func (a *Automation) normalize() error {
 	case a.Instructions == "":
 		return errors.New("Instructions are required")
 	}
-	if _, err := parseCron(a.Schedule); err != nil {
+	if _, err := ParseCron(a.Schedule); err != nil {
 		return fmt.Errorf("Invalid schedule %q: %v", a.Schedule, err)
 	}
 	if a.Check == "" {
@@ -115,12 +119,12 @@ func (a *Automation) normalize() error {
 		a.Rounds = min(max(a.Rounds, 1), maxAutomationRounds)
 	}
 	if a.ID == "" {
-		a.ID = newAutomationID()
+		a.ID = NewID()
 	}
 	return nil
 }
 
-func newAutomationID() string {
+func NewID() string {
 	b := make([]byte, 4)
 	_, _ = rand.Read(b)
 	return hex.EncodeToString(b)
@@ -128,43 +132,43 @@ func newAutomationID() string {
 
 // Next is the automation's next scheduled time after after.
 func (a Automation) Next(after time.Time) time.Time {
-	s, err := parseCron(a.Schedule)
+	s, err := ParseCron(a.Schedule)
 	if err != nil {
 		return time.Time{}
 	}
 	return s.Next(after)
 }
 
-// automationStore is everything automations keep: what people set up and
+// Store is everything automations keep: what people set up and
 // what their runs did.
-type automationStore struct {
-	Automations []Automation               `json:"automations"`
-	Runs        map[string][]AutomationRun `json:"runs,omitempty"`
+type Store struct {
+	Automations []Automation     `json:"automations"`
+	Runs        map[string][]Run `json:"runs,omitempty"`
 }
 
-func automationsPath() string { return filepath.Join(appdir.Dir(), "automations.json") }
+func Path() string { return filepath.Join(appdir.Dir(), "automations.json") }
 
-// loadAutomations reads the store; a missing or damaged file is an empty
+// Load reads the store; a missing or damaged file is an empty
 // store, with damaged entries left out rather than stopping the others.
-func loadAutomations(path string) automationStore {
-	var s automationStore
+func Load(path string) Store {
+	var s Store
 	if data, err := os.ReadFile(path); err == nil {
 		_ = json.Unmarshal(data, &s)
 	}
 	valid := s.Automations[:0]
 	for _, a := range s.Automations {
-		if a.normalize() == nil {
+		if a.Normalize() == nil {
 			valid = append(valid, a)
 		}
 	}
 	s.Automations = valid
 	if s.Runs == nil {
-		s.Runs = map[string][]AutomationRun{}
+		s.Runs = map[string][]Run{}
 	}
 	return s
 }
 
-func (s automationStore) save(path string) error {
+func (s Store) Save(path string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
@@ -179,7 +183,7 @@ func (s automationStore) save(path string) error {
 	return os.Rename(tmp, path)
 }
 
-func (s *automationStore) find(id string) (int, bool) {
+func (s *Store) Find(id string) (int, bool) {
 	for i, a := range s.Automations {
 		if a.ID == id {
 			return i, true
@@ -188,37 +192,37 @@ func (s *automationStore) find(id string) (int, bool) {
 	return -1, false
 }
 
-// lastRun is an automation's latest run, if it has one.
-func (s automationStore) lastRun(id string) (AutomationRun, bool) {
+// LastRun is an automation's latest run, if it has one.
+func (s Store) LastRun(id string) (Run, bool) {
 	runs := s.Runs[id]
 	if len(runs) == 0 {
-		return AutomationRun{}, false
+		return Run{}, false
 	}
 	return runs[len(runs)-1], true
 }
 
-// addRun records a run, keeping the latest automationRunHistory.
-func (s *automationStore) addRun(id string, r AutomationRun) {
+// AddRun records a run, keeping the latest RunHistory.
+func (s *Store) AddRun(id string, r Run) {
 	if s.Runs == nil {
-		s.Runs = map[string][]AutomationRun{}
+		s.Runs = map[string][]Run{}
 	}
 	runs := append(s.Runs[id], r)
-	if len(runs) > automationRunHistory {
-		runs = runs[len(runs)-automationRunHistory:]
+	if len(runs) > RunHistory {
+		runs = runs[len(runs)-RunHistory:]
 	}
 	s.Runs[id] = runs
 }
 
-// updateLastRun changes an automation's latest run.
-func (s *automationStore) updateLastRun(id string, change func(*AutomationRun)) {
+// UpdateLastRun changes an automation's latest run.
+func (s *Store) UpdateLastRun(id string, change func(*Run)) {
 	if runs := s.Runs[id]; len(runs) > 0 {
 		change(&runs[len(runs)-1])
 	}
 }
 
-// anyEnabled reports whether some automation is on, which keeps the
+// AnyEnabled reports whether some automation is on, which keeps the
 // service up and starts it at login.
-func (s automationStore) anyEnabled() bool {
+func (s Store) AnyEnabled() bool {
 	for _, a := range s.Automations {
 		if a.Enabled {
 			return true
@@ -226,3 +230,5 @@ func (s automationStore) anyEnabled() bool {
 	}
 	return false
 }
+
+func tr(s string) string { return locales.T(s) }

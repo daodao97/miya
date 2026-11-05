@@ -11,10 +11,11 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"miya/internal/automation"
 )
 
 func mobileAutomationFixture() automationView {
-	return automationViewOf(Automation{ID: "daily", Name: "仓库日报", Project: "/a", Agent: agentCodex, Instructions: "总结仓库的最新变化。", Schedule: "0 18 * * *", Enabled: true}, []AutomationRun{{Started: atLocal("2026-11-01 18:00"), Thread: 99, ServerID: "s1", Result: runPassed, Summary: "日报已完成", Report: &RunReport{Summary: "已完成检查", Findings: []string{"测试全部通过"}}}}, false, atLocal("2026-11-01 19:00"))
+	return automationViewOf(automation.Automation{ID: "daily", Name: "仓库日报", Project: "/a", Agent: agentCodex, Instructions: "总结仓库的最新变化。", Schedule: "0 18 * * *", Enabled: true}, []automation.Run{{Started: atLocal("2026-11-01 18:00"), Thread: 99, ServerID: "s1", Result: automation.Passed, Summary: "日报已完成", Report: &automation.Report{Summary: "已完成检查", Findings: []string{"测试全部通过"}}}}, false, atLocal("2026-11-01 19:00"))
 }
 
 func TestMobileAutomationCreateNavigationAndFeedback(t *testing.T) {

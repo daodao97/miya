@@ -7,6 +7,7 @@ import (
 	"errors"
 	"time"
 
+	"miya/internal/automation"
 	"miya/internal/remote"
 )
 
@@ -55,13 +56,13 @@ func (c *chatController) phoneAutomationCreate(r remote.Request) remote.Frame {
 		return phoneAutomationFormFrame(r, nil, errors.New("Invalid creation request. Start again."))
 	}
 	id := "phone-" + hex.EncodeToString(key)
-	if i, exists := c.auto.store.find(id); exists {
+	if i, exists := c.auto.store.Find(id); exists {
 		a := c.auto.store.Automations[i]
 		_, running := c.auto.active[id]
 		v := automationViewOf(a, c.auto.store.Runs[id], running, c.auto.now())
 		return phoneAutomationFormFrame(r, &v, nil)
 	}
-	var a Automation
+	var a automation.Automation
 	if json.Unmarshal(r.Automation, &a) != nil {
 		return phoneAutomationFormFrame(r, nil, errors.New("No automation to save"))
 	}

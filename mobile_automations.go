@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"miya/internal/automation"
 	"miya/internal/remote"
 	"miya/internal/textutil"
 )
@@ -226,7 +227,7 @@ func (m *mobileApp) automationPhoneRow(c *ui.Context, v automationView) {
 		ui.Column(c).Grow(1).MinWidth(0).Gap(5).Children(func() {
 			ui.Text(c, v.Name).FontSize(m.font(17)).FontWeight(600).MaxLines(2)
 			ui.Text(c, m.automationPhoneProject(v)+" · "+agentName(v.Agent)).FontSize(m.font(12)).TextColor(p.muted).MaxLines(2)
-			ui.Text(c, describeCron(v.Schedule)).FontSize(m.font(13)).TextColor(p.muted)
+			ui.Text(c, automation.DescribeCron(v.Schedule)).FontSize(m.font(13)).TextColor(p.muted)
 			ui.Row(c).FillWidth().Wrap().Gap(8).AlignItems(ui.Center).Children(func() {
 				if v.Enabled {
 					ui.Text(c, automationPhoneNext(v)).FontSize(m.font(13)).TextColor(p.muted)
@@ -239,7 +240,7 @@ func (m *mobileApp) automationPhoneRow(c *ui.Context, v automationView) {
 				case !v.Enabled:
 					label = tr("Paused")
 				case has:
-					label, color = tr("Last run")+runResultLabel(last.Result), m.automationPhoneRunColor(last.Result)
+					label, color = tr("Last run")+automation.ResultLabel(last.Result), m.automationPhoneRunColor(last.Result)
 				}
 				ui.Text(c, label).FontSize(m.font(12)).TextColor(color)
 			})
@@ -301,7 +302,7 @@ func (m *mobileApp) automationPhoneDetail(c *ui.Context, v automationView) {
 		}
 		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 			icon(c, "clock", 14, p.muted)
-			ui.Text(c, describeCron(v.Schedule)).FontSize(m.font(14)).TextColor(p.muted)
+			ui.Text(c, automation.DescribeCron(v.Schedule)).FontSize(m.font(14)).TextColor(p.muted)
 		})
 		label := tr("Run now")
 		if v.Running {
@@ -371,16 +372,16 @@ func (m *mobileApp) automationPhoneDetail(c *ui.Context, v automationView) {
 
 func (m *mobileApp) automationPhoneRunColor(result string) ui.Color {
 	switch result {
-	case runPassed:
+	case automation.Passed:
 		return m.pal.ok
-	case runFailed, runInterrupted:
+	case automation.Failed, automation.Interrupted:
 		return m.pal.warn
 	default:
 		return m.pal.muted
 	}
 }
 
-func (m *mobileApp) automationPhoneRun(c *ui.Context, v automationView, r AutomationRun, running bool) {
+func (m *mobileApp) automationPhoneRun(c *ui.Context, v automationView, r automation.Run, running bool) {
 	p := m.pal
 	key := v.ID + ":" + r.Started.Format(time.RFC3339Nano)
 	expanded := m.autos.openRuns[key]
@@ -401,7 +402,7 @@ func (m *mobileApp) automationPhoneRun(c *ui.Context, v automationView, r Automa
 				meta += fmt.Sprintf(tr(" · Turn %d/%d"), max(r.Round, 1), r.Rounds)
 			}
 			ui.Text(c, meta).Grow(1).MinWidth(0).FontSize(m.font(13)).TextColor(p.muted)
-			label := runResultLabel(r.Result)
+			label := automation.ResultLabel(r.Result)
 			if running {
 				label = tr("Running")
 				ui.Spinner(c).FontSize(m.font(12))
@@ -428,7 +429,7 @@ func (m *mobileApp) automationPhoneRun(c *ui.Context, v automationView, r Automa
 				})
 			}
 			for _, metric := range report.Metrics {
-				ui.Text(c, nativeText(metric.text())).FontSize(m.font(14)).Selectable()
+				ui.Text(c, nativeText(metric.Text())).FontSize(m.font(14)).Selectable()
 			}
 			for _, artifact := range report.Artifacts {
 				ui.Text(c, nativeText(artifact)).FontSize(m.font(14)).TextColor(p.muted).Selectable()
@@ -471,7 +472,7 @@ func (m *mobileApp) automationPhoneRun(c *ui.Context, v automationView, r Automa
 	})
 }
 
-func (m *mobileApp) automationRunThread(v automationView, r AutomationRun) (Thread, bool) {
+func (m *mobileApp) automationRunThread(v automationView, r automation.Run) (Thread, bool) {
 	for _, p := range m.state.Projects {
 		if p.Path != v.Project {
 			continue

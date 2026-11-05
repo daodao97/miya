@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"miya/internal/automation"
 	"miya/internal/codex"
 )
 
@@ -108,7 +109,7 @@ func TestMCPCreateAutomationAsksFirst(t *testing.T) {
 func TestMCPUpdateAndListAutomations(t *testing.T) {
 	h := newAutomationHarness(t)
 	h.c.run = func(f func()) { f() }
-	a := h.add(t, Automation{Name: "每日分拣", Instructions: "看 Issue", Schedule: "0 9 * * 1-5"})
+	a := h.add(t, automation.Automation{Name: "每日分拣", Instructions: "看 Issue", Schedule: "0 9 * * 1-5"})
 	off := false
 	res, err := h.c.mcpHandle("mcpAutomationUpdate", mcpRequest{Tool: "update_automation", Auto: &mcpAutomationArgs{ID: a.ID, Enabled: &off}})
 	if err != nil || !strings.Contains(res.(string), "Paused") || h.s.store.Automations[0].Enabled || len(h.c.approvals()) != 0 {

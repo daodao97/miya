@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"miya/internal/automation"
 	"miya/internal/remote"
 )
 
@@ -35,7 +36,7 @@ func (m *mobileApp) sendAutomationForm(op string) {
 	if f.pending != "" || !m.connected || m.conn == nil || !m.state.AutomationCreate {
 		return
 	}
-	r := remote.Request{Op: op, RequestID: newAutomationID() + newAutomationID(), Text: f.request, Project: f.project, Agent: f.agent}
+	r := remote.Request{Op: op, RequestID: automation.NewID() + automation.NewID(), Text: f.request, Project: f.project, Agent: f.agent}
 	switch op {
 	case "automation-draft":
 		if strings.TrimSpace(f.request) == "" || f.createKey != "" {
@@ -49,7 +50,7 @@ func (m *mobileApp) sendAutomationForm(op string) {
 		if f.createKey == "" {
 			a := f.draft.Automation
 			a.ID, a.Project, a.Agent, a.Request, a.Enabled = "", f.project, f.agent, strings.TrimSpace(f.request), f.enabled
-			if err := a.normalize(); err != nil {
+			if err := a.Normalize(); err != nil {
 				f.err = err.Error()
 				return
 			}
@@ -187,7 +188,7 @@ func (m *mobileApp) automationCreatePage(c *ui.Context) {
 				m.automationCreateField(c, "name", tr("Name"), &f.draft.Name, false, locked)
 				m.automationCreateField(c, "schedule", tr("Schedule"), &f.draft.Schedule, false, locked)
 				ui.Text(c, tr("Format: minute hour day month weekday. For example, 0 9 * * 1-5 runs at 9 AM on weekdays.")).FontSize(m.font(12)).TextColor(p.muted).LineHeight(1.5)
-				ui.Text(c, describeCron(f.draft.Schedule)+tr(" · Desktop local time")).FontSize(m.font(13)).TextColor(p.muted)
+				ui.Text(c, automation.DescribeCron(f.draft.Schedule)+tr(" · Desktop local time")).FontSize(m.font(13)).TextColor(p.muted)
 				m.automationCreateField(c, "instructions", tr("Task instructions"), &f.draft.Instructions, true, locked)
 				m.automationCreateField(c, "check", tr("Check command (optional)"), &f.draft.Check, false, locked)
 				ui.Text(c, tr("Maximum turns")).FontSize(m.font(13)).TextColor(p.muted)

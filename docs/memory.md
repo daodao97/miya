@@ -33,7 +33,7 @@
 - [agent.go](../agent.go) 的 `submit` / `submitExpanded` 统一路由、排队和发送请求，两个后端通过 `agentBackend` 适配；`sendRequest` 已有 `Text` 与结构化 `Parts`。
 - [handoff.go](../handoff.go) 已能从规范化消息生成有界上下文；[会话引用设计](thread-references.md) 已定义来源、后端、会话身份和发送快照，`ThreadRef` 位于 [thread_reference.go](../thread_reference.go)。
 - [mcp_host.go](../mcp_host.go) 已能把 MCP 调用解析到发起会话及其项目（见「MCP 调用者身份」）。
-- [automation_parse.go](../automation_parse.go) 已通过独立 Agent 调用获取结构化结果：Claude 使用 `--tools ""` 禁用工具；Codex 使用 `exec --sandbox read-only`，仍可执行命令和读取磁盘，不等于禁用工具。
+- [internal/automation/draft.go](../internal/automation/draft.go) 已通过独立 Agent 调用获取结构化结果：Claude 使用 `--tools ""` 禁用工具；Codex 使用 `exec --sandbox read-only`，仍可执行命令和读取磁盘，不等于禁用工具。
 
 这些能力尚不构成记忆系统。我们还需要定义哪些信息可以保存、怎样纠正、什么时候注入，以及如何避免后台旧任务把删除的信息写回来。
 
@@ -180,7 +180,7 @@ Go 代码逐项检查：作用域是否允许、来源是否属于本轮、引�
 
 自动写入的记忆只在记忆管理页显示，可编辑和忘记，不生成聊天卡片。助手报告和 `progress` 不再自动保存，安装、测试、界面微调、快捷键现状以及可直接查代码或文档得知的信息也不应自动记忆。显式记忆仍允许用户主动保留进展。此策略只约束新的自动写入，不批量删除已有记忆。
 
-**提取后端。** 复用 `automation_parse.go` 的进程管理和结构化结果解析，另外提供 memory 提取 schema、提示词、超时与受限运行目录。提取调用只接收服务给定的数据，不连接 Miya MCP，不续接主会话，不写工作区。
+**提取后端。** 复用 `internal/automation/draft.go` 的进程管理和结构化结果解析，另外提供 memory 提取 schema、提示词、超时与受限运行目录。提取调用只接收服务给定的数据，不连接 Miya MCP，不续接主会话，不写工作区。
 
 - Claude：`-p` 加 `--tools ""` 可以满足数据访问边界，需要适配器测试确认 MCP 也未加载。
 - Codex：只使用 `exec --sandbox read-only` 仍可执行命令、读取磁盘，不满足边界。现已增加专用受限 CLI 适配器：关闭已安装 CLI 注册的可选能力、操作工具、MCP、技能和 hooks，在临时空目录运行并校验事件及结构化结果。
@@ -293,7 +293,7 @@ Go 代码逐项检查：作用域是否允许、来源是否属于本轮、引�
 | [chat_controller.go](../chat_controller.go)、[agent_codex.go](../agent_codex.go)、[chat_claude.go](../chat_claude.go) | 组合实际后端输入；覆盖 Codex steer、Claude 保活发送和后台项目 | 1b |
 | `memory_extract.go`（新增） | 规范化完成事件、来源消息快照、提取队列和结构化输出校验 | 2 |
 | [chat_events.go](../chat_events.go)、[chat_claude.go](../chat_claude.go) | 后端原始完成信号、持久回合标识、去重，不依赖界面通知 | 2 |
-| [automation_parse.go](../automation_parse.go) | 抽取可复用的结构化调用基础；不直接复用自动化的提示词、权限或 schema | 2 |
+| [internal/automation/draft.go](../internal/automation/draft.go) | 抽取可复用的结构化调用基础；不直接复用自动化的提示词、权限或 schema | 2 |
 
 阶段 1a 的存储、MCP、服务接口与管理界面已实现。来源保存现有 `ThreadRef.URL()`，复用其来源实例、后端与持久会话身份。阶段 1b 与 2 已接入普通发送、引导、队列和两种 Agent 的顶层回合完成事件；阶段 3 的向量与混合检索仍未实现。
 

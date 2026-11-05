@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"miya/internal/automation"
 	"miya/internal/remote"
 )
 
@@ -15,7 +16,7 @@ func TestPhoneAutomationsReadListAndHistory(t *testing.T) {
 	c := serverController(t.TempDir(), "")
 	c.startAutomations(filepath.Join(t.TempDir(), "automations.json"), false)
 	v := mobileAutomationFixture()
-	c.auto.store.Automations = []Automation{v.Automation}
+	c.auto.store.Automations = []automation.Automation{v.Automation}
 	c.auto.store.Runs[v.ID] = v.Runs
 	if !c.phoneSnapshot().Automations {
 		t.Fatal("automation capability not advertised")
@@ -106,7 +107,7 @@ printf '%s\n' '{"structured_output":{"name":"每日检查","schedule":"0 9 * * 1
 	if frame.Error != "" || result.RequestID != "draft" || result.View == nil || result.View.Project != dir || result.View.Agent != agentClaude || result.View.Rounds != 3 {
 		t.Fatalf("bad draft response: %+v %s", result, frame.Error)
 	}
-	if len(loadAutomations(path).Automations) != 0 {
+	if len(automation.Load(path).Automations) != 0 {
 		t.Fatal("drafting saved an automation before confirmation")
 	}
 	a := result.View.Automation
@@ -128,7 +129,7 @@ printf '%s\n' '{"structured_output":{"name":"每日检查","schedule":"0 9 * * 1
 	r.Automation, _ = json.Marshal(a)
 	conn.requests <- r
 	result, frame = nextPhoneAutomationForm(t, conn, r.Op)
-	if frame.Error != "" || result.View.ID != saved.ID || result.View.Name != saved.Name || len(loadAutomations(path).Automations) != 1 {
+	if frame.Error != "" || result.View.ID != saved.ID || result.View.Name != saved.Name || len(automation.Load(path).Automations) != 1 {
 		t.Fatal("retry duplicated or overwrote a saved automation")
 	}
 	// Persistence also carries the retry identity across a service restart.
@@ -143,7 +144,7 @@ printf '%s\n' '{"structured_output":{"name":"每日检查","schedule":"0 9 * * 1
 	r.RequestID = "aabbccddeeff0011"
 	conn.requests <- r
 	_, frame = nextPhoneAutomationForm(t, conn, r.Op)
-	if frame.Error == "" || len(loadAutomations(path).Automations) != 1 {
+	if frame.Error == "" || len(automation.Load(path).Automations) != 1 {
 		t.Fatal("invalid schedule was saved")
 	}
 }
@@ -193,7 +194,7 @@ func TestPhoneAutomationRunStartsInItsProjectAndRejectsOverlap(t *testing.T) {
 	c.startAutomations(filepath.Join(t.TempDir(), "automations.json"), false)
 	v := mobileAutomationFixture()
 	v.Project, v.Enabled = t.TempDir(), false
-	c.auto.store.Automations = []Automation{v.Automation}
+	c.auto.store.Automations = []automation.Automation{v.Automation}
 	c.auto.submit = func(r SendRequest) int {
 		if r.Project != v.Project || r.Agent != v.Agent || !r.MemoryControl {
 			t.Errorf("wrong automation submission: %+v", r)
@@ -230,7 +231,7 @@ func TestPhoneAutomationRunStartsInItsProjectAndRejectsOverlap(t *testing.T) {
 		if len(result.List) != 1 || !result.List[0].Running || len(result.List[0].Runs) != 1 || result.List[0].Enabled {
 			t.Fatalf("run not returned or schedule changed: %+v", result.List)
 		}
-		if result.List[0].Runs[0].Result != runRunning || result.List[0].Runs[0].Thread == 0 || c.cwd == v.Project {
+		if result.List[0].Runs[0].Result != automation.Running || result.List[0].Runs[0].Thread == 0 || c.cwd == v.Project {
 			t.Fatal("manual run did not start a background conversation")
 		}
 	}

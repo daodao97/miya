@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"miya/internal/automation"
 	"miya/internal/subagent"
 	"miya/internal/textutil"
 	"os"
@@ -89,7 +90,7 @@ type mcpRequest struct {
 	// Auto is an automation tool's arguments.
 	Auto *mcpAutomationArgs `json:"auto,omitempty"`
 	// Report is report_result\'s result.
-	Report *RunReport `json:"report,omitempty"`
+	Report *automation.Report `json:"report,omitempty"`
 }
 
 type mcpThreadInfo struct {
@@ -354,7 +355,7 @@ func (s *mcpServer) callTool(name string, raw json.RawMessage) (string, error) {
 		err := s.callService("mcpRuntime", req, &result)
 		return string(result), err
 	case "report_result":
-		var rep RunReport
+		var rep automation.Report
 		if len(raw) > 0 && string(raw) != "null" && json.Unmarshal(raw, &rep) != nil {
 			return "", errors.New("Invalid arguments")
 		}

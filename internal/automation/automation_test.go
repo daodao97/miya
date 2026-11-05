@@ -1,6 +1,7 @@
-package main
+package automation
 
 import (
+	"miya/internal/model"
 	"path/filepath"
 	"testing"
 	"time"
@@ -27,7 +28,7 @@ func TestCronNext(t *testing.T) {
 		{"0 12 13 * 5", "2026-11-01 00:00", "2026-11-06 12:00"}, // the 13th or a Friday
 	}
 	for _, c := range cases {
-		s, err := parseCron(c.spec)
+		s, err := ParseCron(c.spec)
 		if err != nil {
 			t.Fatalf("%s: %v", c.spec, err)
 		}
@@ -39,7 +40,7 @@ func TestCronNext(t *testing.T) {
 
 func TestCronRejectsBadSpecs(t *testing.T) {
 	for _, spec := range []string{"", "* * * *", "60 * * * *", "* 24 * * *", "* * 0 * *", "* * * 13 *", "5-1 * * * *", "*/0 * * * *", "x * * * *"} {
-		if _, err := parseCron(spec); err == nil {
+		if _, err := ParseCron(spec); err == nil {
 			t.Errorf("%q accepted", spec)
 		}
 	}
@@ -65,7 +66,7 @@ func TestDescribeCron(t *testing.T) {
 		"0 9 * * mon-fri": "Weekdays 9:00",
 	}
 	for spec, want := range cases {
-		if got := describeCron(spec); got != want {
+		if got := DescribeCron(spec); got != want {
 			t.Errorf("%q: got %q, want %q", spec, got, want)
 		}
 	}
@@ -73,41 +74,41 @@ func TestDescribeCron(t *testing.T) {
 
 func TestAutomationStoreRoundTrip(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "automations.json")
-	s := loadAutomations(path)
+	s := Load(path)
 	a := Automation{Name: " 每日 Issue 分拣 ", Project: "/ws", Agent: "claude", Instructions: "看 Issue", Schedule: "0  9 * * 1-5", Check: "go test ./...", Rounds: 9, Enabled: true}
-	if err := a.normalize(); err != nil {
+	if err := a.Normalize(); err != nil {
 		t.Fatal(err)
 	}
-	if a.Agent != agentClaude || a.Rounds != maxAutomationRounds || a.Schedule != "0 9 * * 1-5" || a.Name != "每日 Issue 分拣" || a.ID == "" {
+	if a.Agent != model.AgentClaude || a.Rounds != maxAutomationRounds || a.Schedule != "0 9 * * 1-5" || a.Name != "每日 Issue 分拣" || a.ID == "" {
 		t.Fatalf("not normalized: %+v", a)
 	}
 	noCheck := Automation{Name: "日报", Project: "/ws", Instructions: "写日报", Schedule: "0 18 * * *", Rounds: 3}
-	if err := noCheck.normalize(); err != nil || noCheck.Rounds != 1 || noCheck.Agent != agentCodex {
+	if err := noCheck.Normalize(); err != nil || noCheck.Rounds != 1 || noCheck.Agent != model.AgentCodex {
 		t.Fatalf("no-check automation: %+v %v", noCheck, err)
 	}
-	if bad := (Automation{Name: "x", Project: "/ws", Instructions: "y", Schedule: "0 25 * * *"}); bad.normalize() == nil {
+	if bad := (Automation{Name: "x", Project: "/ws", Instructions: "y", Schedule: "0 25 * * *"}); bad.Normalize() == nil {
 		t.Fatal("bad schedule accepted")
 	}
 	s.Automations = append(s.Automations, a, noCheck)
-	for i := 0; i < automationRunHistory+5; i++ {
-		s.addRun(a.ID, AutomationRun{Result: runPassed, Round: i})
+	for i := 0; i < RunHistory+5; i++ {
+		s.AddRun(a.ID, Run{Result: Passed, Round: i})
 	}
-	s.updateLastRun(a.ID, func(r *AutomationRun) { r.Summary = "最后一次" })
-	if err := s.save(path); err != nil {
+	s.UpdateLastRun(a.ID, func(r *Run) { r.Summary = "最后一次" })
+	if err := s.Save(path); err != nil {
 		t.Fatal(err)
 	}
-	got := loadAutomations(path)
-	if len(got.Automations) != 2 || !got.anyEnabled() {
+	got := Load(path)
+	if len(got.Automations) != 2 || !got.AnyEnabled() {
 		t.Fatalf("automations lost: %+v", got.Automations)
 	}
 	runs := got.Runs[a.ID]
-	if len(runs) != automationRunHistory || runs[0].Round != 5 {
+	if len(runs) != RunHistory || runs[0].Round != 5 {
 		t.Fatalf("history not bounded: %d runs, first round %d", len(runs), runs[0].Round)
 	}
-	if last, ok := got.lastRun(a.ID); !ok || last.Summary != "最后一次" {
+	if last, ok := got.LastRun(a.ID); !ok || last.Summary != "最后一次" {
 		t.Fatalf("last run: %+v", last)
 	}
-	if i, ok := got.find(noCheck.ID); !ok || i != 1 {
+	if i, ok := got.Find(noCheck.ID); !ok || i != 1 {
 		t.Fatal("find failed")
 	}
 }

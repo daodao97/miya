@@ -1,4 +1,4 @@
-package main
+package automation
 
 import (
 	"bytes"
@@ -14,6 +14,7 @@ import (
 
 	"miya/internal/claude"
 	"miya/internal/codex"
+	"miya/internal/model"
 	"miya/internal/textutil"
 )
 
@@ -21,7 +22,7 @@ import (
 // settings in one call with no tools and a JSON schema for its answer, then
 // Miya checks what it made.
 
-type automationDraft struct {
+type Draft struct {
 	Name         string `json:"name"`
 	Schedule     string `json:"schedule"`
 	Check        string `json:"check"`
@@ -73,25 +74,25 @@ func projectTopFiles(dir string) string {
 	return strings.Join(names, ", ")
 }
 
-// draftAutomation asks agent to turn request into settings. It runs
+// DraftFor asks agent to turn request into settings. It runs
 // programs and waits for them: call it off the main thread.
-func draftAutomation(ctx context.Context, cfg claude.CLI, agent, project, request string, now time.Time) (automationDraft, error) {
+func DraftFor(ctx context.Context, cfg claude.CLI, agent, project, request string, now time.Time) (Draft, error) {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 	prompt := automationDraftPrompt(request, project, now)
 	var raw []byte
 	var err error
-	if agent == agentClaude {
+	if agent == model.AgentClaude {
 		raw, err = draftWithClaude(ctx, cfg, project, prompt)
 	} else {
 		raw, err = draftWithCodex(ctx, project, prompt)
 	}
 	if err != nil {
-		return automationDraft{}, err
+		return Draft{}, err
 	}
-	var d automationDraft
+	var d Draft
 	if err := json.Unmarshal(raw, &d); err != nil {
-		return automationDraft{}, fmt.Errorf("The agent returned an unexpected format: %v", err)
+		return Draft{}, fmt.Errorf("The agent returned an unexpected format: %v", err)
 	}
 	return d, nil
 }
@@ -141,8 +142,8 @@ func draftWithCodex(ctx context.Context, project, prompt string) ([]byte, error)
 	return os.ReadFile(last)
 }
 
-// automationFromDraft checks what the agent made and fills the rest.
-func automationFromDraft(d automationDraft, agent, project, request string) (Automation, bool, error) {
+// FromDraft checks what the agent made and fills the rest.
+func FromDraft(d Draft, agent, project, request string) (Automation, bool, error) {
 	a := Automation{Name: d.Name, Project: project, Agent: agent, Request: strings.TrimSpace(request),
 		Instructions: d.Instructions, Schedule: d.Schedule, Check: d.Check, Rounds: d.Rounds}
 	a.Check = stripProjectCd(a.Check, project)
@@ -150,7 +151,7 @@ func automationFromDraft(d automationDraft, agent, project, request string) (Aut
 	if timeMissing {
 		a.Schedule = defaultAutomationSchedule
 	}
-	if _, err := parseCron(a.Schedule); err != nil {
+	if _, err := ParseCron(a.Schedule); err != nil {
 		return Automation{}, false, fmt.Errorf("The generated schedule %q is invalid. Describe the time more precisely.", a.Schedule)
 	}
 	if strings.TrimSpace(a.Instructions) == "" {
@@ -159,7 +160,7 @@ func automationFromDraft(d automationDraft, agent, project, request string) (Aut
 	if strings.TrimSpace(a.Name) == "" {
 		a.Name = textutil.ClipRunes(textutil.FirstLine(a.Request), 14)
 	}
-	if err := a.normalize(); err != nil {
+	if err := a.Normalize(); err != nil {
 		return Automation{}, false, err
 	}
 	return a, timeMissing, nil

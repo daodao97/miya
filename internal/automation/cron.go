@@ -1,4 +1,4 @@
-package main
+package automation
 
 import (
 	"errors"
@@ -8,10 +8,10 @@ import (
 	"time"
 )
 
-// cronSchedule is a standard five-field cron expression, in local time:
+// Cron is a standard five-field cron expression, in local time:
 // minute, hour, day of month, month, day of week. Each field is a set of
 // allowed values as bits.
-type cronSchedule struct {
+type Cron struct {
 	minute, hour, dom, month, dow uint64
 	// A field written * places no limit; when day of month and day of week
 	// are both limited, a day matching either is due, as cron has it.
@@ -24,21 +24,21 @@ var cronNames = map[string]int{
 	"jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
 }
 
-func parseCron(spec string) (cronSchedule, error) {
+func ParseCron(spec string) (Cron, error) {
 	f := strings.Fields(spec)
 	if len(f) != 5 {
-		return cronSchedule{}, errors.New(tr("Expected 5 fields: minute hour day month weekday"))
+		return Cron{}, errors.New(tr("Expected 5 fields: minute hour day month weekday"))
 	}
 	limits := [5][2]int{{0, 59}, {0, 23}, {1, 31}, {1, 12}, {0, 7}}
 	var bits [5]uint64
 	for i, field := range f {
 		b, err := parseCronField(strings.ToLower(field), limits[i][0], limits[i][1])
 		if err != nil {
-			return cronSchedule{}, fmt.Errorf(tr("Field %d %q: %v"), i+1, field, err)
+			return Cron{}, fmt.Errorf(tr("Field %d %q: %v"), i+1, field, err)
 		}
 		bits[i] = b
 	}
-	return cronSchedule{minute: bits[0], hour: bits[1], dom: bits[2], month: bits[3], dow: sundayAsZero(bits[4]),
+	return Cron{minute: bits[0], hour: bits[1], dom: bits[2], month: bits[3], dow: sundayAsZero(bits[4]),
 		domAny: cronAny(f[2]), dowAny: cronAny(f[4])}, nil
 }
 
@@ -107,7 +107,7 @@ func cronValue(s string, lo, hi int) (int, error) {
 
 // Next is the first due minute after after, or zero when none comes within
 // five years.
-func (s cronSchedule) Next(after time.Time) time.Time {
+func (s Cron) Next(after time.Time) time.Time {
 	t := after.Truncate(time.Minute).Add(time.Minute)
 	loc := t.Location()
 	limit := after.AddDate(5, 0, 0)
@@ -128,7 +128,7 @@ func (s cronSchedule) Next(after time.Time) time.Time {
 	return time.Time{}
 }
 
-func (s cronSchedule) dayMatches(t time.Time) bool {
+func (s Cron) dayMatches(t time.Time) bool {
 	dom := s.dom&(1<<uint(t.Day())) != 0
 	dow := s.dow&(1<<uint(t.Weekday())) != 0
 	if s.domAny || s.dowAny {
@@ -137,11 +137,11 @@ func (s cronSchedule) dayMatches(t time.Time) bool {
 	return dom || dow
 }
 
-// describeCron says a schedule in Chinese, as the list and the cards show
+// DescribeCron says a schedule in Chinese, as the list and the cards show
 // it; a schedule it has no words for is shown as written.
-func describeCron(spec string) string {
+func DescribeCron(spec string) string {
 	f := strings.Fields(spec)
-	if _, err := parseCron(spec); err != nil {
+	if _, err := ParseCron(spec); err != nil {
 		return spec
 	}
 	minute, hour, dom, month, dow := f[0], f[1], f[2], f[3], f[4]

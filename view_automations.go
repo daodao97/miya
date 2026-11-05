@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"miya/internal/automation"
 	"miya/internal/textutil"
 )
 
@@ -143,24 +144,24 @@ func autoTile(c *ui.Context, agent string, size float32) {
 }
 
 // runBadge says how a run went, or that it runs.
-func runBadge(c *ui.Context, run AutomationRun, has, running bool) {
+func runBadge(c *ui.Context, run automation.Run, has, running bool) {
 	label, fg, bg := tr("Not run yet"), muted, autoGrayBg
 	switch {
 	case running:
 		label, fg, bg = fmt.Sprintf(tr("Running · Turn %d/%d"), max(run.Round, 1), max(run.Rounds, 1)), autoRun, autoRunBg
 	case !has:
-	case run.Result == runPassed:
+	case run.Result == automation.Passed:
 		label, fg, bg = tr("Passed"), autoOK, autoOKBg
 		if run.Rounds > 1 {
 			label += fmt.Sprintf(tr(" · Turn %d"), run.Round)
 		}
-	case run.Result == runFailed:
+	case run.Result == automation.Failed:
 		label, fg, bg = tr("Failed"), autoBad, autoBadBg
 		if run.Rounds > 1 {
 			label += fmt.Sprintf(tr(" · %d/%d turns"), run.Round, run.Rounds)
 		}
 	default:
-		label = runResultLabel(run.Result)
+		label = automation.ResultLabel(run.Result)
 	}
 	ui.Row(c).Height(22).PaddingX(9).Gap(5).Radius(11).AlignItems(ui.Center).AlignSelf(ui.Start).Background(bg).Children(func() {
 		if running {
@@ -170,13 +171,13 @@ func runBadge(c *ui.Context, run AutomationRun, has, running bool) {
 	})
 }
 
-func lastAutomationRun(v automationView) (AutomationRun, bool) {
+func lastAutomationRun(v automationView) (automation.Run, bool) {
 	for i := len(v.Runs) - 1; i >= 0; i-- {
-		if v.Runs[i].Result != runSkipped {
+		if v.Runs[i].Result != automation.Skipped {
 			return v.Runs[i], true
 		}
 	}
-	return AutomationRun{}, false
+	return automation.Run{}, false
 }
 
 func automationSubline(v automationView) string {
@@ -246,7 +247,7 @@ func (app *chatApp) automationRow(c *ui.Context, v automationView) {
 			a.page, a.detail, a.confirmDelete = "detail", v.ID, ""
 		}
 		ui.Column(c).Width(150).Shrink(0).Gap(1).Children(func() {
-			ui.Text(c, describeCron(v.Schedule)).FontWeight(500).SingleLine().Ellipsis("…")
+			ui.Text(c, automation.DescribeCron(v.Schedule)).FontWeight(500).SingleLine().Ellipsis("…")
 			next := tr("Paused")
 			if v.Enabled {
 				next = tr("Next ") + formatAutomationTime(v.Next)
@@ -345,7 +346,7 @@ func (app *chatApp) automationDetail(c *ui.Context) {
 		autoTile(c, v.Agent, 48)
 		ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
 			ui.Text(c, v.Name).FontSize(24).FontWeight(600).SingleLine().Ellipsis("…")
-			ui.Text(c, filepath.Base(v.Project)+" · "+backendFor(v.Agent).Name()+" · "+describeCron(v.Schedule)).TextColor(muted).SingleLine().Ellipsis("…")
+			ui.Text(c, filepath.Base(v.Project)+" · "+backendFor(v.Agent).Name()+" · "+automation.DescribeCron(v.Schedule)).TextColor(muted).SingleLine().Ellipsis("…")
 		})
 		on := v.Enabled
 		if ui.Switch(c.Key("on"), &on).Shrink(0).Changed() {
@@ -367,12 +368,12 @@ func (app *chatApp) automationDetail(c *ui.Context) {
 	})
 	passed, total, rounds := 0, 0, 0
 	for _, r := range v.Runs {
-		if r.Result == runSkipped || r.Result == runRunning {
+		if r.Result == automation.Skipped || r.Result == automation.Running {
 			continue
 		}
 		total++
 		rounds += max(r.Round, 1)
-		if r.Result == runPassed {
+		if r.Result == automation.Passed {
 			passed++
 		}
 	}
@@ -421,7 +422,7 @@ func (app *chatApp) automationDetail(c *ui.Context) {
 	})
 	ui.Row(c).FillWidth().AlignItems(ui.End).Margin(8, 0, 0, 0).Children(func() {
 		ui.Text(c, tr("Run history")).FontWeight(600).Grow(1)
-		ui.Text(c, fmt.Sprintf(tr("Last %d runs"), automationRunHistory)).FontSize(12).TextColor(muted)
+		ui.Text(c, fmt.Sprintf(tr("Last %d runs"), automation.RunHistory)).FontSize(12).TextColor(muted)
 	})
 	if len(v.Runs) == 0 {
 		ui.Text(c, tr("No runs yet.")).TextColor(muted)
@@ -451,26 +452,26 @@ func settingChip(c *ui.Context, symbol, text string) {
 	})
 }
 
-func (app *chatApp) runRow(c *ui.Context, v automationView, r AutomationRun, running bool) {
+func (app *chatApp) runRow(c *ui.Context, v automationView, r automation.Run, running bool) {
 	color, title := ui.Color(muted), r.Summary
 	switch {
 	case running:
 		color, title = autoRun, fmt.Sprintf(tr("Running · Turn %d/%d"), max(r.Round, 1), max(r.Rounds, 1))
-	case r.Result == runPassed:
+	case r.Result == automation.Passed:
 		color = autoOK
-	case r.Result == runFailed:
+	case r.Result == automation.Failed:
 		color = autoBad
 	}
-	title = textutil.FirstNonEmpty(title, runResultLabel(r.Result))
-	if r.Result == runSkipped {
+	title = textutil.FirstNonEmpty(title, automation.ResultLabel(r.Result))
+	if r.Result == automation.Skipped {
 		title = tr("Skipped, ") + r.Summary
 	}
 	meta := r.Started.Format("Jan 2 ") + tr(weekdayNames[r.Started.Weekday()]) + r.Started.Format(" 15:04")
 	if r.CatchUp {
 		meta += tr(" · Catch-up run")
 	}
-	if r.Result != runSkipped {
-		meta += fmt.Sprintf(tr(" · %s · Turn %d/%d"), runResultLabel(r.Result), max(r.Round, 1), max(r.Rounds, 1))
+	if r.Result != automation.Skipped {
+		meta += fmt.Sprintf(tr(" · %s · Turn %d/%d"), automation.ResultLabel(r.Result), max(r.Round, 1), max(r.Rounds, 1))
 		if !r.Finished.IsZero() {
 			meta += fmt.Sprintf(tr(" · %d minutes"), max(int(r.Finished.Sub(r.Started).Minutes()+0.5), 1))
 		}
@@ -481,7 +482,7 @@ func (app *chatApp) runRow(c *ui.Context, v automationView, r AutomationRun, run
 		ui.Box(c).Size(9, 9).Radius(4.5).Shrink(0).Background(color)
 		ui.Column(c).Grow(1).MinWidth(0).Gap(1).Children(func() {
 			t := ui.Text(c, title).FontWeight(500).SingleLine().Ellipsis("…")
-			if r.Result == runSkipped {
+			if r.Result == automation.Skipped {
 				t.TextColor(muted)
 			}
 			ui.Text(c, meta).FontSize(12).TextColor(muted).SingleLine().Ellipsis("…")
@@ -724,9 +725,9 @@ func (app *chatApp) draftPreview(c *ui.Context, d *automationView) {
 			ui.Column(c).Grow(1).MinWidth(0).Gap(6).Children(func() {
 				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 					if d.TimeMissing {
-						ui.Text(c, tr("No time specified. Using ")+describeCron(d.Schedule)).TextColor(autoWarn)
+						ui.Text(c, tr("No time specified. Using ")+automation.DescribeCron(d.Schedule)).TextColor(autoWarn)
 					} else {
-						ui.Text(c, describeCron(d.Schedule)).FontWeight(500)
+						ui.Text(c, automation.DescribeCron(d.Schedule)).FontWeight(500)
 					}
 					codeChip(c, d.Schedule)
 				})
@@ -808,8 +809,8 @@ func (app *chatApp) draftRow(c *ui.Context, key, symbol, label, raw string, warn
 			if key == "schedule" {
 				hint := tr("5-field cron: minute hour day month weekday")
 				if s := strings.TrimSpace(a.editText); s != "" {
-					if _, err := parseCron(s); err == nil {
-						hint = describeCron(s)
+					if _, err := automation.ParseCron(s); err == nil {
+						hint = automation.DescribeCron(s)
 					}
 				}
 				ui.Text(c, hint).FontSize(12).TextColor(muted)
@@ -858,7 +859,7 @@ func (app *chatApp) applyDraftEdit(key string) {
 	case "instructions":
 		next.Instructions = text
 	}
-	if err := next.normalize(); err != nil {
+	if err := next.Normalize(); err != nil {
 		a.editErr = err.Error()
 		return
 	}
@@ -906,7 +907,7 @@ func (app *chatApp) saveAutomationForm(runNow bool) {
 }
 
 // latestReportIndex is the newest run with a result, shown open.
-func latestReportIndex(runs []AutomationRun) int {
+func latestReportIndex(runs []automation.Run) int {
 	for i := len(runs) - 1; i >= 0; i-- {
 		if runs[i].Report != nil {
 			return i
@@ -917,7 +918,7 @@ func latestReportIndex(runs []AutomationRun) int {
 
 // reportView shows a run's structured result under its row; older ones
 // open on a click.
-func (app *chatApp) reportView(c *ui.Context, r AutomationRun, latest bool) {
+func (app *chatApp) reportView(c *ui.Context, r automation.Run, latest bool) {
 	a := &app.autos
 	if a.openReports == nil {
 		a.openReports = map[int64]bool{}
