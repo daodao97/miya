@@ -125,25 +125,17 @@ func TestDesktopPhoneOpenRequiresStableConversation(t *testing.T) {
 	if json.Unmarshal(f.Data, &reply) != nil || f.Error != "" || reply.RequestID != "open" || reply.Token == "" {
 		t.Fatal("no desktop lease", f.Error)
 	}
-	c.desktop.mu.Lock()
-	active := c.desktop.lease.active
-	c.desktop.mu.Unlock()
-	if active {
+	if c.desktop.Capturing() {
 		t.Fatal("opening popup granted capture")
 	}
-	c.desktop.mu.Lock()
-	leaseCtx := c.desktop.lease.ctx
-	c.desktop.mu.Unlock()
+	leaseDone := c.desktop.LeaseDone()
 	close(conn.requests)
 	select {
-	case <-leaseCtx.Done():
+	case <-leaseDone:
 	case <-time.After(time.Second):
 		t.Fatal("disconnect did not cancel lease")
 	}
-	c.desktop.mu.Lock()
-	lease := c.desktop.valid(reply.Token)
-	c.desktop.mu.Unlock()
-	if lease != nil {
+	if c.desktop.Holds(reply.Token) {
 		t.Fatal("lease survived control disconnection")
 	}
 }

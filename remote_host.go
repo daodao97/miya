@@ -17,11 +17,11 @@ import (
 	"miya/internal/automation"
 	"miya/internal/codex"
 	"miya/internal/desktop"
+	"miya/internal/memory/manager"
 	"miya/internal/model"
 	"miya/internal/notification"
 	"miya/internal/remote"
 	"miya/internal/thumbnail"
-	"miya/internal/memory/manager"
 
 	qrcode "github.com/skip2/go-qrcode"
 )
@@ -534,16 +534,11 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 							c.desktopControls().allowPick(reply.Token)
 						}
 						if err == nil && r.WindowOnly {
-							d := c.desktopControls()
-							d.mu.Lock()
-							if l := d.valid(reply.Token); l != nil {
-								l.onAction = func(window desktop.Window, action desktop.Action, before []desktop.Window) {
-									actionRequest := r
-									actionRequest.WindowID, actionRequest.WindowPID = window.ID, window.PID
-									c.confirmDesktopAction(ctx, actionRequest, action, before)
-								}
-							}
-							d.mu.Unlock()
+							c.desktopControls().SetOnAction(reply.Token, func(window desktop.Window, action desktop.Action, before []desktop.Window) {
+								actionRequest := r
+								actionRequest.WindowID, actionRequest.WindowPID = window.ID, window.PID
+								c.confirmDesktopAction(ctx, actionRequest, action, before)
+							})
 						}
 					}
 				}

@@ -29,9 +29,7 @@ func (c *chatController) desktopBusy() bool {
 	if d == nil {
 		return false
 	}
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	return d.lease != nil && d.valid(d.lease.token) != nil
+	return d.Busy()
 }
 
 // Button titles are display data, never outcome classifiers. An observed native

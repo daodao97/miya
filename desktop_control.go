@@ -504,3 +504,44 @@ func (d *desktopControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// Busy reports whether a phone holds a live lease.
+func (d *desktopControl) Busy() bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.lease != nil && d.valid(d.lease.token) != nil
+}
+
+// SetOnAction sends the window actions of token's lease to f, if the lease
+// is live.
+func (d *desktopControl) SetOnAction(token string, f func(desktop.Window, desktop.Action, []desktop.Window)) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if l := d.valid(token); l != nil {
+		l.onAction = f
+	}
+}
+
+// Holds reports whether token names a live lease.
+func (d *desktopControl) Holds(token string) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.valid(token) != nil
+}
+
+// Capturing reports whether the current lease streams the screen.
+func (d *desktopControl) Capturing() bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.lease != nil && d.lease.active
+}
+
+// LeaseDone is closed when the current lease ends; nil without one.
+func (d *desktopControl) LeaseDone() <-chan struct{} {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.lease == nil {
+		return nil
+	}
+	return d.lease.ctx.Done()
+}
