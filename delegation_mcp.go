@@ -15,11 +15,11 @@ import (
 
 func init() {
 	for _, t := range coordinator.Tools() {
-		registerMCPTools((*mcpServer).collaborationTool, true, mcpTool(t))
+		registerMCPTools(collaborationTool, true, mcpTool(t))
 	}
 }
 
-func (s *mcpServer) collaborationTool(name string, raw json.RawMessage) (string, error) {
+func collaborationTool(s *mcpServer, name string, raw json.RawMessage) (string, error) {
 	a, err := coordinator.Decode(name, raw)
 	if err != nil {
 		return "", err
@@ -37,12 +37,12 @@ func (s *mcpServer) collaborationTool(name string, raw json.RawMessage) (string,
 	}
 	for {
 		if name == "wait_task" {
-			if err := s.observerError(); err != nil {
+			if err := s.ObserverError(); err != nil {
 				return "", err
 			}
 		}
 		var result json.RawMessage
-		if err := s.callService("mcpCollaboration", mcpRequest{Workspace: s.workspace, Tool: name, Arguments: raw}, &result); err != nil {
+		if err := s.CallService("mcpCollaboration", mcpRequest{Workspace: s.Workspace(), Tool: name, Arguments: raw}, &result); err != nil {
 			return "", err
 		}
 		if name != "wait_task" {
@@ -65,7 +65,7 @@ func (s *mcpServer) collaborationTool(name string, raw json.RawMessage) (string,
 			data, _ := json.Marshal(object)
 			return string(data), nil
 		}
-		if err := s.observerPause(500 * time.Millisecond); err != nil {
+		if err := s.ObserverPause(500 * time.Millisecond); err != nil {
 			return "", err
 		}
 	}

@@ -30,7 +30,7 @@ func init() {
 	for k, v := range automationToolProps {
 		update[k] = v
 	}
-	registerMCPTools((*mcpServer).automationTool, false,
+	registerMCPTools(automationTool, false,
 		mcpTool{Name: "list_automations", Description: "List the scheduled automations in Miya: id, name, project, schedule, whether on, and the last run.",
 			InputSchema: map[string]any{"type": "object", "properties": map[string]any{}}, Annotations: mcpReadOnly},
 		mcpTool{Name: "create_automation", Description: "Create a scheduled automation in this project: on its schedule Miya starts a new conversation with the instructions. " +
@@ -44,7 +44,7 @@ func init() {
 }
 
 // automationTool calls an automation tool in the service.
-func (s *mcpServer) automationTool(name string, raw json.RawMessage) (string, error) {
+func automationTool(s *mcpServer, name string, raw json.RawMessage) (string, error) {
 	var args mcpAutomationArgs
 	if len(raw) > 0 && string(raw) != "null" && json.Unmarshal(raw, &args) != nil {
 		return "", errors.New("Invalid arguments")
@@ -54,7 +54,7 @@ func (s *mcpServer) automationTool(name string, raw json.RawMessage) (string, er
 		return "", fmt.Errorf("Unknown tool %s", name)
 	}
 	var text string
-	err := s.callService(op, mcpRequest{Workspace: s.workspace, Tool: name, Auto: &args}, &text)
+	err := s.CallService(op, mcpRequest{Workspace: s.Workspace(), Tool: name, Auto: &args}, &text)
 	return text, err
 }
 

@@ -66,14 +66,14 @@ func (c *chatController) legacyTaskRead(r mcpRequest, caller Thread) (any, error
 	return coordinator.TaskPublic(task), nil
 }
 
-func (s *mcpServer) legacyTaskStatus(req mcpRequest, wait time.Duration) (string, error) {
+func legacyTaskStatus(s *mcpServer, req mcpRequest, wait time.Duration) (string, error) {
 	deadline := time.Now().Add(wait)
 	for {
-		if err := s.observerError(); err != nil {
+		if err := s.ObserverError(); err != nil {
 			return "", err
 		}
 		var result json.RawMessage
-		if err := s.callService("mcpLegacyTask", req, &result); err != nil {
+		if err := s.CallService("mcpLegacyTask", req, &result); err != nil {
 			return "", err
 		}
 		var v struct {
@@ -93,7 +93,7 @@ func (s *mcpServer) legacyTaskStatus(req mcpRequest, wait time.Duration) (string
 			data, _ := json.Marshal(value)
 			return string(data), nil
 		}
-		if err := s.observerPause(500 * time.Millisecond); err != nil {
+		if err := s.ObserverPause(500 * time.Millisecond); err != nil {
 			return "", err
 		}
 	}

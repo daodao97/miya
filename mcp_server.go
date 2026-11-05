@@ -183,14 +183,17 @@ func serveMCP(r io.Reader, w io.Writer, workspace string, call func(op string, a
 	return sc.Err()
 }
 
-func (s *mcpServer) observerError() error {
+// Workspace is the project the -mcp process serves.
+func (s *mcpServer) Workspace() string { return s.workspace }
+
+func (s *mcpServer) ObserverError() error {
 	if s.ctx != nil {
 		return s.ctx.Err()
 	}
 	return nil
 }
 
-func (s *mcpServer) observerPause(delay time.Duration) error {
+func (s *mcpServer) ObserverPause(delay time.Duration) error {
 	if s.ctx == nil {
 		s.sleep(delay)
 		return nil
@@ -299,11 +302,11 @@ func (s *mcpServer) callTool(name string, raw json.RawMessage) (string, error) {
 		req.Task = a.Reason
 		req.WindowApp, req.WindowTitle = a.WindowApp, a.WindowTitle
 		var result string
-		err := s.callService("mcpDesktopControl", req, &result)
+		err := s.CallService("mcpDesktopControl", req, &result)
 		return result, err
 	case "runtime_info":
 		var result json.RawMessage
-		err := s.callService("mcpRuntime", req, &result)
+		err := s.CallService("mcpRuntime", req, &result)
 		return string(result), err
 	case "report_result":
 		var rep automation.Report
@@ -312,11 +315,11 @@ func (s *mcpServer) callTool(name string, raw json.RawMessage) (string, error) {
 		}
 		req.Report = &rep
 		var text string
-		err := s.callService("mcpReportResult", req, &text)
+		err := s.CallService("mcpReportResult", req, &text)
 		return text, err
 	case "list_threads":
 		var res mcpThreadsResult
-		if err := s.callService("mcpThreads", req, &res); err != nil {
+		if err := s.CallService("mcpThreads", req, &res); err != nil {
 			return "", err
 		}
 		return formatMCPThreads(res), nil
@@ -327,7 +330,7 @@ func (s *mcpServer) callTool(name string, raw json.RawMessage) (string, error) {
 		}
 		for i := 0; ; i++ {
 			var res mcpReadResult
-			if err := s.callService("mcpRead", req, &res); err != nil {
+			if err := s.CallService("mcpRead", req, &res); err != nil {
 				return "", err
 			}
 			// An unloaded conversation loads in the service meanwhile.
@@ -354,12 +357,12 @@ func (s *mcpServer) callTool(name string, raw json.RawMessage) (string, error) {
 		}
 		req.NoContext = a.IncludeContext != nil && !*a.IncludeContext
 		var res mcpDelegateResult
-		if err := s.callService("mcpDelegate", req, &res); err != nil {
+		if err := s.CallService("mcpDelegate", req, &res); err != nil {
 			return "", err
 		}
 		if res.TaskID != "" {
 			req.TaskID = res.TaskID
-			return s.legacyTaskStatus(req, mcpWait(a.WaitSeconds, 300))
+			return legacyTaskStatus(s, req, mcpWait(a.WaitSeconds, 300))
 		}
 		out, err := s.status(mcpRequest{Workspace: s.workspace, Tool: name, Thread: res.Thread, Reference: res.Reference}, mcpWait(a.WaitSeconds, 300))
 		return fmt.Sprintf("Handed off to session %s (%s).\n", textutil.FirstNonEmpty(res.Reference, "Creating"), model.AgentName(res.Agent)) + out, err
@@ -369,7 +372,7 @@ func (s *mcpServer) callTool(name string, raw json.RawMessage) (string, error) {
 
 // callService calls the service, again while it does not see the caller's
 // tool call yet: the agent may report it just after making it.
-func (s *mcpServer) callService(op string, args, out any) error {
+func (s *mcpServer) CallService(op string, args, out any) error {
 	for i := 0; ; i++ {
 		err := s.call(op, args, out)
 		if err == nil || !strings.Contains(err.Error(), mcpCallerUnknown) || i >= 10 {
@@ -385,7 +388,7 @@ func (s *mcpServer) status(req mcpRequest, wait time.Duration) (string, error) {
 	var res mcpStatusResult
 	for waited := time.Duration(0); ; waited += step {
 		res = mcpStatusResult{}
-		if err := s.callService("mcpStatus", req, &res); err != nil {
+		if err := s.CallService("mcpStatus", req, &res); err != nil {
 			return "", err
 		}
 		if res.Reference != "" {
