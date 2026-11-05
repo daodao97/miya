@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"miya/locales"
 )
 
 func writeFile(t *testing.T, path, text string) {
@@ -51,7 +53,7 @@ func TestCollectDiffSources(t *testing.T) {
 	stats := func(src DiffSource) map[string][2]int {
 		snap, err := CollectDiff(ctx, dir, src)
 		if err != nil {
-			t.Fatalf("%s: %v", DiffSourceNames[src], err)
+			t.Fatalf("%s: %v", DiffSourceNames()[src], err)
 		}
 		out := map[string][2]int{}
 		for _, f := range snap.Files {
@@ -67,11 +69,11 @@ func TestCollectDiffSources(t *testing.T) {
 	} {
 		got := stats(src)
 		if len(got) != len(want) {
-			t.Fatalf("%s: files %v, want %v", DiffSourceNames[src], got, want)
+			t.Fatalf("%s: files %v, want %v", DiffSourceNames()[src], got, want)
 		}
 		for path, n := range want {
 			if got[path] != n {
-				t.Errorf("%s: %s %v, want %v", DiffSourceNames[src], path, got[path], n)
+				t.Errorf("%s: %s %v, want %v", DiffSourceNames()[src], path, got[path], n)
 			}
 		}
 	}
@@ -92,5 +94,18 @@ func TestCollectDiffSources(t *testing.T) {
 	}
 	if _, err := CollectDiff(ctx, t.TempDir(), SourceUncommitted); err == nil {
 		t.Fatal("a folder outside Git has no review")
+	}
+}
+
+func TestDiffSourceNamesFollowTheInterfaceLanguage(t *testing.T) {
+	previous := locales.Current()
+	defer locales.SetCurrent(previous)
+	locales.SetCurrent("zh-Hans")
+	if got := DiffSourceNames()[SourceUncommitted]; got != "未提交的更改" {
+		t.Fatalf("Chinese name: %q", got)
+	}
+	locales.SetCurrent("en")
+	if got := DiffSourceNames()[SourceUncommitted]; got != "Uncommitted changes" {
+		t.Fatalf("English name: %q", got)
 	}
 }

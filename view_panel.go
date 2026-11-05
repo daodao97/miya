@@ -129,7 +129,7 @@ type panelState struct {
 }
 
 func newPanelState(cwd string, visible bool) *panelState {
-	p := &panelState{visible: visible, active: -1, sourceName: worktree.DiffSourceNames[0]}
+	p := &panelState{visible: visible, active: -1, sourceName: worktree.DiffSourceNames()[0]}
 	p.resetWorkspace(cwd)
 	return p
 }
@@ -995,8 +995,12 @@ func (app *chatApp) loadDiffFile(p *panelState, i int) {
 func (app *chatApp) diffSurface(c *ui.Context, p *panelState) {
 	ui.Column(c).Grow(1).MinHeight(0).Children(func() {
 		panelBar(c, func() {
-			if ui.Select(c.Key("source"), &p.sourceName, worktree.DiffSourceNames).Label(tr("Review source")).FontSize(12).Changed() {
-				for i, name := range worktree.DiffSourceNames {
+			// The source, not its name, is the selection: names change with the
+			// interface language.
+			names := worktree.DiffSourceNames()
+			p.sourceName = names[p.source]
+			if ui.Select(c.Key("source"), &p.sourceName, names).Label(tr("Review source")).FontSize(12).Changed() {
+				for i, name := range names {
 					if name == p.sourceName {
 						p.source = worktree.DiffSource(i)
 					}
@@ -1031,7 +1035,7 @@ func (app *chatApp) diffSurface(c *ui.Context, p *panelState) {
 			})
 			return
 		case len(p.diff.Files) == 0:
-			panelMessage(c, tr("No changes"), worktree.DiffSourceNames[p.diff.Source]+tr(" is empty"))
+			panelMessage(c, tr("No changes"), worktree.DiffSourceNames()[p.diff.Source]+tr(" is empty"))
 			return
 		}
 		ui.Scroll(c.Key("changed-files")).MaxHeight(180).Shrink(0).Children(func() {

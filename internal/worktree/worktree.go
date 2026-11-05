@@ -32,7 +32,11 @@ const (
 	SourceBranch                        // merge base with the default branch → working tree
 )
 
-var DiffSourceNames = []string{tr("Uncommitted changes"), tr("Unstaged changes"), tr("Staged changes"), tr("Against default branch")}
+// DiffSourceNames are the sources' names in DiffSource order, in the current
+// interface language.
+func DiffSourceNames() []string {
+	return []string{tr("Uncommitted changes"), tr("Unstaged changes"), tr("Staged changes"), tr("Against default branch")}
+}
 
 type ChangedFile struct {
 	Path           string
