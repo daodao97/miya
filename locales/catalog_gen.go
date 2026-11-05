@@ -3858,6 +3858,26 @@ func (msgs Messages) CopyResponseFab0fa() string {
 	return Catalog.Format(msgs.locale, "copyResponse_fab0fa", nil)
 }
 
+// CopyPath says "Copy path"
+// in the language the app shows.
+func CopyPath() string { return In(i18n.Locale()).CopyPath() }
+
+// CopyPath says "Copy path"
+// in the language of msgs.
+func (msgs Messages) CopyPath() string {
+	return Catalog.Format(msgs.locale, "copyPath", nil)
+}
+
+// CopyLink says "Copy link"
+// in the language the app shows.
+func CopyLink() string { return In(i18n.Locale()).CopyLink() }
+
+// CopyLink says "Copy link"
+// in the language of msgs.
+func (msgs Messages) CopyLink() string {
+	return Catalog.Format(msgs.locale, "copyLink", nil)
+}
+
 // CopySessionLinkA68631 says "Copy session link"
 // in the language the app shows.
 func CopySessionLinkA68631() string { return In(i18n.Locale()).CopySessionLinkA68631() }
@@ -4218,16 +4238,16 @@ func (msgs Messages) DescribeTheActionRequiredFromTheUserD78765() string {
 	return Catalog.Format(msgs.locale, "describeTheActionRequiredFromTheUser_d78765", nil)
 }
 
-// DescribeWhatToDoAndWhenThe43f5df says "Describe what to do and when. The agent will generate a schedule, completion criteria, and turn limit."
+// DescribeAutomationThenGenerate says "Describe what to do and when, then click Generate settings to organize the schedule, completion criteria, and turn li…"
 // in the language the app shows.
-func DescribeWhatToDoAndWhenThe43f5df() string {
-	return In(i18n.Locale()).DescribeWhatToDoAndWhenThe43f5df()
+func DescribeAutomationThenGenerate() string {
+	return In(i18n.Locale()).DescribeAutomationThenGenerate()
 }
 
-// DescribeWhatToDoAndWhenThe43f5df says "Describe what to do and when. The agent will generate a schedule, completion criteria, and turn limit."
+// DescribeAutomationThenGenerate says "Describe what to do and when, then click Generate settings to organize the schedule, completion criteria, and turn li…"
 // in the language of msgs.
-func (msgs Messages) DescribeWhatToDoAndWhenThe43f5df() string {
-	return Catalog.Format(msgs.locale, "describeWhatToDoAndWhenThe_43f5df", nil)
+func (msgs Messages) DescribeAutomationThenGenerate() string {
+	return Catalog.Format(msgs.locale, "describeAutomationThenGenerate", nil)
 }
 
 // DescribeWhatToDoAndWhenYour9526cb says "Describe what to do and when. Your desktop will run it on schedule after saving."
@@ -11998,16 +12018,16 @@ func (msgs Messages) SettingsC7f73b() string {
 	return Catalog.Format(msgs.locale, "settings_c7f73b", nil)
 }
 
-// SettingsGenerateAutomaticallyAsYouTypeD9a90f says "Settings generate automatically as you type"
+// ClickGenerateSettingsWhenReady says "Click Generate settings when you are ready"
 // in the language the app shows.
-func SettingsGenerateAutomaticallyAsYouTypeD9a90f() string {
-	return In(i18n.Locale()).SettingsGenerateAutomaticallyAsYouTypeD9a90f()
+func ClickGenerateSettingsWhenReady() string {
+	return In(i18n.Locale()).ClickGenerateSettingsWhenReady()
 }
 
-// SettingsGenerateAutomaticallyAsYouTypeD9a90f says "Settings generate automatically as you type"
+// ClickGenerateSettingsWhenReady says "Click Generate settings when you are ready"
 // in the language of msgs.
-func (msgs Messages) SettingsGenerateAutomaticallyAsYouTypeD9a90f() string {
-	return Catalog.Format(msgs.locale, "settingsGenerateAutomaticallyAsYouType_d9a90f", nil)
+func (msgs Messages) ClickGenerateSettingsWhenReady() string {
+	return Catalog.Format(msgs.locale, "clickGenerateSettingsWhenReady", nil)
 }
 
 // SharedMemory122ae2 says "Shared memory"
@@ -18024,4 +18044,198 @@ func OpenS200e35() string { return In(i18n.Locale()).OpenS200e35() }
 // in the language of msgs.
 func (msgs Messages) OpenS200e35() string {
 	return Catalog.Format(msgs.locale, "openS_200e35", nil)
+}
+
+// PrivacyModeC25404 says "Privacy mode"
+// in the language the app shows.
+func PrivacyModeC25404() string { return In(i18n.Locale()).PrivacyModeC25404() }
+
+// PrivacyModeC25404 says "Privacy mode"
+// in the language of msgs.
+func (msgs Messages) PrivacyModeC25404() string {
+	return Catalog.Format(msgs.locale, "privacyMode_c25404", nil)
+}
+
+// OffE3de5a says "Off"
+// in the language the app shows.
+func OffE3de5a() string { return In(i18n.Locale()).OffE3de5a() }
+
+// OffE3de5a says "Off"
+// in the language of msgs.
+func (msgs Messages) OffE3de5a() string {
+	return Catalog.Format(msgs.locale, "off_e3de5a", nil)
+}
+
+// OnE0049a says "On"
+// in the language the app shows.
+func OnE0049a() string { return In(i18n.Locale()).OnE0049a() }
+
+// OnE0049a says "On"
+// in the language of msgs.
+func (msgs Messages) OnE0049a() string {
+	return Catalog.Format(msgs.locale, "on_e0049a", nil)
+}
+
+// Checking820d60 says "Checking…"
+// in the language the app shows.
+func Checking820d60() string { return In(i18n.Locale()).Checking820d60() }
+
+// Checking820d60 says "Checking…"
+// in the language of msgs.
+func (msgs Messages) Checking820d60() string {
+	return Catalog.Format(msgs.locale, "checking_820d60", nil)
+}
+
+// PrivacyModeStatusIsUnconfirmedCheckTheConnectionDaa07d says "Privacy mode status is unconfirmed. Check the connection."
+// in the language the app shows.
+func PrivacyModeStatusIsUnconfirmedCheckTheConnectionDaa07d() string {
+	return In(i18n.Locale()).PrivacyModeStatusIsUnconfirmedCheckTheConnectionDaa07d()
+}
+
+// PrivacyModeStatusIsUnconfirmedCheckTheConnectionDaa07d says "Privacy mode status is unconfirmed. Check the connection."
+// in the language of msgs.
+func (msgs Messages) PrivacyModeStatusIsUnconfirmedCheckTheConnectionDaa07d() string {
+	return Catalog.Format(msgs.locale, "privacyModeStatusIsUnconfirmedCheckTheConnection_daa07d", nil)
+}
+
+// UnableToChangePrivacyModeE290ed says "Unable to change privacy mode"
+// in the language the app shows.
+func UnableToChangePrivacyModeE290ed() string {
+	return In(i18n.Locale()).UnableToChangePrivacyModeE290ed()
+}
+
+// UnableToChangePrivacyModeE290ed says "Unable to change privacy mode"
+// in the language of msgs.
+func (msgs Messages) UnableToChangePrivacyModeE290ed() string {
+	return Catalog.Format(msgs.locale, "unableToChangePrivacyMode_e290ed", nil)
+}
+
+// BlackOutYourMacDisplaysWhileYouKeepWorkingHerePressControlOptionCommandPOnTheMacToRestoreThem9fd662 says "Black out your Mac displays while you keep working here. Press Control–Option–Command–P on the Mac to restore t…"
+// in the language the app shows.
+func BlackOutYourMacDisplaysWhileYouKeepWorkingHerePressControlOptionCommandPOnTheMacToRestoreThem9fd662() string {
+	return In(i18n.Locale()).BlackOutYourMacDisplaysWhileYouKeepWorkingHerePressControlOptionCommandPOnTheMacToRestoreThem9fd662()
+}
+
+// BlackOutYourMacDisplaysWhileYouKeepWorkingHerePressControlOptionCommandPOnTheMacToRestoreThem9fd662 says "Black out your Mac displays while you keep working here. Press Control–Option–Command–P on the Mac to restore t…"
+// in the language of msgs.
+func (msgs Messages) BlackOutYourMacDisplaysWhileYouKeepWorkingHerePressControlOptionCommandPOnTheMacToRestoreThem9fd662() string {
+	return Catalog.Format(msgs.locale, "blackOutYourMacDisplaysWhileYouKeepWorkingHerePressControlOptionCommandPOnTheMacToRestoreThem_9fd662", nil)
+}
+
+// EnablePrivacyModeC48715 says "Enable privacy mode"
+// in the language the app shows.
+func EnablePrivacyModeC48715() string { return In(i18n.Locale()).EnablePrivacyModeC48715() }
+
+// EnablePrivacyModeC48715 says "Enable privacy mode"
+// in the language of msgs.
+func (msgs Messages) EnablePrivacyModeC48715() string {
+	return Catalog.Format(msgs.locale, "enablePrivacyMode_c48715", nil)
+}
+
+// RestoreMacDisplays1d8321 says "Restore Mac displays"
+// in the language the app shows.
+func RestoreMacDisplays1d8321() string { return In(i18n.Locale()).RestoreMacDisplays1d8321() }
+
+// RestoreMacDisplays1d8321 says "Restore Mac displays"
+// in the language of msgs.
+func (msgs Messages) RestoreMacDisplays1d8321() string {
+	return Catalog.Format(msgs.locale, "restoreMacDisplays_1d8321", nil)
+}
+
+// DesktopsC8f6ff says "Desktops"
+// in the language the app shows.
+func DesktopsC8f6ff() string { return In(i18n.Locale()).DesktopsC8f6ff() }
+
+// DesktopsC8f6ff says "Desktops"
+// in the language of msgs.
+func (msgs Messages) DesktopsC8f6ff() string {
+	return Catalog.Format(msgs.locale, "desktops_c8f6ff", nil)
+}
+
+// OpeningDesktopAe8abe says "Opening desktop"
+// in the language the app shows.
+func OpeningDesktopAe8abe() string { return In(i18n.Locale()).OpeningDesktopAe8abe() }
+
+// OpeningDesktopAe8abe says "Opening desktop"
+// in the language of msgs.
+func (msgs Messages) OpeningDesktopAe8abe() string {
+	return Catalog.Format(msgs.locale, "openingDesktop_ae8abe", nil)
+}
+
+// UnableToLoadDesktopsE2a2c5 says "Unable to load desktops"
+// in the language the app shows.
+func UnableToLoadDesktopsE2a2c5() string { return In(i18n.Locale()).UnableToLoadDesktopsE2a2c5() }
+
+// UnableToLoadDesktopsE2a2c5 says "Unable to load desktops"
+// in the language of msgs.
+func (msgs Messages) UnableToLoadDesktopsE2a2c5() string {
+	return Catalog.Format(msgs.locale, "unableToLoadDesktops_e2a2c5", nil)
+}
+
+// TheDisplayChangedOrDisconnectedSelectADesktopAf2bb1 says "The display changed or disconnected. Select a desktop."
+// in the language the app shows.
+func TheDisplayChangedOrDisconnectedSelectADesktopAf2bb1() string {
+	return In(i18n.Locale()).TheDisplayChangedOrDisconnectedSelectADesktopAf2bb1()
+}
+
+// TheDisplayChangedOrDisconnectedSelectADesktopAf2bb1 says "The display changed or disconnected. Select a desktop."
+// in the language of msgs.
+func (msgs Messages) TheDisplayChangedOrDisconnectedSelectADesktopAf2bb1() string {
+	return Catalog.Format(msgs.locale, "theDisplayChangedOrDisconnectedSelectADesktop_af2bb1", nil)
+}
+
+// NoDisplaysAvailableWakeYourMacAndRefreshTheListEb35a4 says "No displays available. Wake your Mac and refresh the list."
+// in the language the app shows.
+func NoDisplaysAvailableWakeYourMacAndRefreshTheListEb35a4() string {
+	return In(i18n.Locale()).NoDisplaysAvailableWakeYourMacAndRefreshTheListEb35a4()
+}
+
+// NoDisplaysAvailableWakeYourMacAndRefreshTheListEb35a4 says "No displays available. Wake your Mac and refresh the list."
+// in the language of msgs.
+func (msgs Messages) NoDisplaysAvailableWakeYourMacAndRefreshTheListEb35a4() string {
+	return Catalog.Format(msgs.locale, "noDisplaysAvailableWakeYourMacAndRefreshTheList_eb35a4", nil)
+}
+
+// MainDisplayDd2f4f says "Main display"
+// in the language the app shows.
+func MainDisplayDd2f4f() string { return In(i18n.Locale()).MainDisplayDd2f4f() }
+
+// MainDisplayDd2f4f says "Main display"
+// in the language of msgs.
+func (msgs Messages) MainDisplayDd2f4f() string {
+	return Catalog.Format(msgs.locale, "mainDisplay_dd2f4f", nil)
+}
+
+// UnnamedDisplay says "Unnamed display"
+// in the language the app shows.
+func UnnamedDisplay() string { return In(i18n.Locale()).UnnamedDisplay() }
+
+// UnnamedDisplay says "Unnamed display"
+// in the language of msgs.
+func (msgs Messages) UnnamedDisplay() string {
+	return Catalog.Format(msgs.locale, "unnamedDisplay", nil)
+}
+
+// OpenAProjectFirstProjectMemoryAndItsAutomaticSettingsD785f7 says "Open a project first. Project memory and its automatic settings belong to a project folder, not the filesystem root."
+// in the language the app shows.
+func OpenAProjectFirstProjectMemoryAndItsAutomaticSettingsD785f7() string {
+	return In(i18n.Locale()).OpenAProjectFirstProjectMemoryAndItsAutomaticSettingsD785f7()
+}
+
+// OpenAProjectFirstProjectMemoryAndItsAutomaticSettingsD785f7 says "Open a project first. Project memory and its automatic settings belong to a project folder, not the filesystem root."
+// in the language of msgs.
+func (msgs Messages) OpenAProjectFirstProjectMemoryAndItsAutomaticSettingsD785f7() string {
+	return Catalog.Format(msgs.locale, "openAProjectFirstProjectMemoryAndItsAutomaticSettings_d785f7", nil)
+}
+
+// AutomaticExtractionIsPausedAfterRepeatedFailuresB5908b says "\nAutomatic extraction is paused after repeated failures and resumes after %s."
+// in the language the app shows.
+func AutomaticExtractionIsPausedAfterRepeatedFailuresB5908b() string {
+	return In(i18n.Locale()).AutomaticExtractionIsPausedAfterRepeatedFailuresB5908b()
+}
+
+// AutomaticExtractionIsPausedAfterRepeatedFailuresB5908b says "\nAutomatic extraction is paused after repeated failures and resumes after %s."
+// in the language of msgs.
+func (msgs Messages) AutomaticExtractionIsPausedAfterRepeatedFailuresB5908b() string {
+	return Catalog.Format(msgs.locale, "automaticExtractionIsPausedAfterRepeatedFailures_b5908b", nil)
 }
