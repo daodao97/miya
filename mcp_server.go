@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"miya/internal/automation"
+	"miya/internal/delegation/coordinator"
 	"miya/internal/model"
 	"miya/internal/subagent"
 	"miya/internal/textutil"
@@ -317,7 +318,7 @@ func mcpToolResult(text string, isError bool) map[string]any {
 }
 
 func (s *mcpServer) callTool(name string, raw json.RawMessage) (string, error) {
-	if collaborationTools[name] {
+	if coordinator.IsTool(name) {
 		return s.collaborationTool(name, raw)
 	}
 	var a struct {

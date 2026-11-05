@@ -25,7 +25,7 @@ func (c *chatController) legacyDelegate(r mcpRequest, caller Thread) (any, error
 	if err := json.Unmarshal(r.Arguments, &raw); err != nil {
 		return nil, err
 	}
-	a := collaborationArgs{RequestID: claude.NewSessionID(), Agent: raw.Agent, Thread: raw.Thread, Task: raw.Task, Context: "caller_summary", Notify: "none"}
+	a := coordinator.Args{RequestID: claude.NewSessionID(), Agent: raw.Agent, Thread: raw.Thread, Task: raw.Task, Context: "caller_summary", Notify: "none"}
 	if raw.IncludeContext != nil && !*raw.IncludeContext {
 		a.Context = "none"
 	}

@@ -13,6 +13,7 @@ import (
 	"miya/internal/claude"
 	"miya/internal/codex"
 	dg "miya/internal/delegation"
+	"miya/internal/delegation/coordinator"
 )
 
 // Opt-in real CLI verification. Only marker prompts in empty temporary
@@ -245,7 +246,7 @@ func TestInstalledAgentCollaborationMCP(t *testing.T) {
 			}
 			switch approval.Command {
 			case "mcp__miya__start_task":
-				var args collaborationArgs
+				var args coordinator.Args
 				if json.Unmarshal(approval.Payload, &args) != nil || args.Agent != agentCodex || args.RequestID != "miya-live-mcp-1" || args.Task != "Reply only MIYA_MCP_TASK_OK. Do not use tools or read files." || args.Notify == "none" {
 					t.Fatal("refusing unexpected live task parameters", string(approval.Payload))
 				}

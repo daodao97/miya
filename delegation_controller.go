@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	dg "miya/internal/delegation"
+	"miya/internal/delegation/coordinator"
 	"miya/internal/model"
 )
 
@@ -24,7 +25,7 @@ func (c *chatController) threadByReference(raw string) (Thread, bool) {
 	return Thread{}, false
 }
 
-func (c *chatController) prepareDelegation(caller Thread, a collaborationArgs) (dg.StartInput, error) {
+func (c *chatController) prepareDelegation(caller Thread, a coordinator.Args) (dg.StartInput, error) {
 	from := c.threadRef(caller).URL()
 	if from == "" {
 		return dg.StartInput{}, errors.New("CALLER_UNAVAILABLE: The initiating session is not created yet")

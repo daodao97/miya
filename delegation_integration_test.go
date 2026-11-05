@@ -13,6 +13,7 @@ import (
 	"miya/internal/appdir"
 	"miya/internal/codex"
 	dg "miya/internal/delegation"
+	"miya/internal/delegation/coordinator"
 )
 
 func collaborationCaller(t *testing.T, f *serviceFixture, agent, serverID string) int {
@@ -210,11 +211,11 @@ func TestCollaborationMCPRejectsAmbiguousCallerBeforeCreatingTasks(t *testing.T)
 
 func TestCollaborationNewToolsValidateArgumentsAndBoundWait(t *testing.T) {
 	for _, raw := range []string{`{"request_id":"x","task":"hi","surprise":true}`, `{"request_id":"x"}`, `[]`, `{"request_id":null,"task":"hi"}`} {
-		if _, err := decodeCollaboration("start_task", json.RawMessage(raw)); err == nil {
+		if _, err := coordinator.Decode("start_task", json.RawMessage(raw)); err == nil {
 			t.Fatalf("invalid arguments accepted: %s", raw)
 		}
 	}
-	if _, err := decodeCollaboration("wait_task", json.RawMessage(`{"task_id":"x","wait_seconds":121}`)); err == nil {
+	if _, err := coordinator.Decode("wait_task", json.RawMessage(`{"task_id":"x","wait_seconds":121}`)); err == nil {
 		t.Fatal("unbounded wait accepted")
 	}
 }

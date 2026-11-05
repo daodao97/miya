@@ -9,6 +9,7 @@ import (
 	"time"
 
 	dg "miya/internal/delegation"
+	"miya/internal/delegation/coordinator"
 )
 
 func TestManagedCodexResumeFailuresNeverReturnSystemInputAsDraft(t *testing.T) {
@@ -113,7 +114,7 @@ func TestManagedCodexResumeFailuresNeverReturnSystemInputAsDraft(t *testing.T) {
 func TestCollaborationInvalidArgumentsReleasePendingRequest(t *testing.T) {
 	p := (&collaborationUI{}).pane("source")
 	p.submit("send_thread", map[string]any{"thread": "wrong field", "task": "follow up"}, func(r collaborationRequest, done func(json.RawMessage, error)) {
-		_, err := decodeCollaboration(r.Operation, r.Arguments)
+		_, err := coordinator.Decode(r.Operation, r.Arguments)
 		done(nil, err)
 	})
 	if p.pending != nil || p.busy || !strings.Contains(p.err, "INVALID_ARGUMENT:") {

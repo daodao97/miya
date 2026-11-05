@@ -1,13 +1,11 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 
-	dg "miya/internal/delegation"
+	"miya/internal/delegation/coordinator"
 )
 
 // The authenticated desktop/phone API shares task admission and mutation with
@@ -32,70 +30,13 @@ func (c *chatController) collaborationUserOp(r collaborationRequest) (any, error
 		if !found {
 			return nil, errors.New("THREAD_NOT_FOUND: Receiving conversation is unavailable")
 		}
-		var a struct {
-			RequestID  string `json:"request_id"`
-			TaskID     string `json:"task_id"`
-			DeliveryID string `json:"delivery_id"`
-			Reason     string `json:"reason"`
-		}
-		d := json.NewDecoder(bytes.NewReader(r.Arguments))
-		d.DisallowUnknownFields()
-		if err := d.Decode(&a); err != nil {
-			return nil, fmt.Errorf("INVALID_ARGUMENT: %w", err)
-		}
-		if d.Decode(new(any)) != io.EOF {
-			return nil, errors.New("INVALID_ARGUMENT: Unexpected notification resolution arguments")
-		}
-		return deferred(func() (any, error) {
-			return s.Call(func() (any, error) {
-				receipt, fresh, err := s.Manager.Mutate(dg.Operation{Caller: r.From, RequestID: a.RequestID, Name: "abandon_delivery", TaskID: a.TaskID, DeliveryID: a.DeliveryID, Reason: a.Reason})
-				if err != nil {
-					return nil, err
-				}
-				if fresh {
-					s.Release(a.DeliveryID)
-					s.Tick()
-				}
-				return map[string]any{"accepted": receipt.Accepted, "task_id": receipt.TaskID, "notification": receipt.Notification}, nil
-			})
-		}), nil
+		return s.ResolveDelivery(r.From, r.Arguments)
 	}
 	if r.Operation == "cancel_all" {
 		if !found {
 			return nil, errors.New("THREAD_NOT_FOUND: Initiating conversation is unavailable")
 		}
-		var a struct {
-			RequestID string `json:"request_id"`
-		}
-		d := json.NewDecoder(bytes.NewReader(r.Arguments))
-		d.DisallowUnknownFields()
-		if err := d.Decode(&a); err != nil {
-			return nil, fmt.Errorf("INVALID_ARGUMENT: %w", err)
-		}
-		if d.Decode(new(any)) != io.EOF {
-			return nil, errors.New("INVALID_ARGUMENT: Unexpected cancellation arguments")
-		}
-		if a.RequestID == "" {
-			return nil, errors.New("INVALID_ARGUMENT: request_id is required")
-		}
-		return deferred(func() (any, error) {
-			return s.Call(func() (any, error) {
-				receipt, fresh, err := s.Manager.Mutate(dg.Operation{Caller: r.From, RequestID: a.RequestID, Name: "cancel_all"})
-				if err != nil {
-					return nil, err
-				}
-				if fresh {
-					for _, id := range receipt.TaskIDs {
-						if task, err := s.Manager.Read(id); err == nil {
-							if err := s.InterruptTask(task); err != nil {
-								return nil, err
-							}
-						}
-					}
-				}
-				return map[string]any{"accepted": true, "task_ids": receipt.TaskIDs}, nil
-			})
-		}), nil
+		return s.CancelAll(r.From, r.Arguments)
 	}
 	if r.Operation == "resume" {
 		if !found || caller.ReadOnly {
@@ -106,7 +47,7 @@ func (c *chatController) collaborationUserOp(r collaborationRequest) (any, error
 	if len(r.Arguments) == 0 {
 		r.Arguments = json.RawMessage(`{}`)
 	}
-	a, err := decodeCollaboration(r.Operation, r.Arguments)
+	a, err := coordinator.Decode(r.Operation, r.Arguments)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +62,7 @@ func (c *chatController) collaborationUserOp(r collaborationRequest) (any, error
 		if r.From != "" && !found {
 			return nil, errors.New("THREAD_NOT_FOUND: Initiating conversation is unavailable")
 		}
-		result, err := collaborationListFor(s.Manager, r.From, a, r.From == "")
+		result, err := coordinator.List(s.Manager, r.From, a, r.From == "")
 		if values, ok := result.(map[string]any); ok {
 			s.WithHealth(values)
 			values["paused"] = c.collaboration.IsPaused(r.From) || s.Manager.Paused(r.From)
@@ -133,7 +74,7 @@ func (c *chatController) collaborationUserOp(r collaborationRequest) (any, error
 		if err != nil {
 			return nil, err
 		}
-		result := c.collaborationTaskPublic(task, r.From)
+		result := c.collaboration.TaskView(task, r.From)
 		s.WithHealth(result)
 		return result, nil
 	case "start_task", "send_thread":
@@ -153,7 +94,7 @@ func (c *chatController) collaborationUserOp(r collaborationRequest) (any, error
 			}
 			from = r.From
 		}
-		return c.collaborationOperation(from, r.Operation, a)
+		return c.collaboration.Operation(from, r.Operation, a)
 	}
 	return nil, errors.New("INVALID_ARGUMENT: Unknown collaboration operation")
 }
