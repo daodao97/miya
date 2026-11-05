@@ -83,3 +83,67 @@ func TestAutomationsPage(t *testing.T) {
 	}
 	automationSnapshot(t, tt, "automations-drafting")
 }
+
+func TestAutomationDraftRequiresButton(t *testing.T) {
+	app, tt := testApp(t)
+	app.showAutomations()
+	app.openAutomationForm(nil)
+	tt.Frame()
+	if err := tt.Click("Generate settings"); err != nil {
+		t.Fatal(err)
+	}
+	if app.autos.draftErr != "" || app.autos.drafting {
+		t.Fatal("empty input started generation")
+	}
+	if err := tt.Click("What to do"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Type("每天 14 点清理存储空间")
+	tt.Frame()
+	if app.autos.request == "" {
+		t.Fatal("request input was not updated")
+	}
+	// Wait past the former debounce interval to catch accidental auto-generation.
+	time.Sleep(1100 * time.Millisecond)
+	tt.Frame()
+	if app.autos.drafting || app.autos.draft != nil || app.autos.draftErr != "" {
+		t.Fatal("typing started generation")
+	}
+	if err := tt.Click("Claude Code"); err != nil {
+		t.Fatal(err)
+	}
+	if app.autos.agent != agentClaude || app.autos.drafting || app.autos.draftErr != "" {
+		t.Fatal("agent selection started generation")
+	}
+	if err := tt.Click("Generate settings"); err != nil {
+		t.Fatal(err)
+	}
+	// This controller has no service. Its error proves the button sent a request
+	// without launching a real agent in the test.
+	if app.autos.draftErr != "Automations require the Miya background service" {
+		t.Fatalf("button did not request generation: %q", app.autos.draftErr)
+	}
+}
+
+func TestAutomationInputDiscardsOldDraft(t *testing.T) {
+	app, tt := testApp(t)
+	app.showAutomations()
+	app.openAutomationForm(nil)
+	app.autos.request = "每天 9 点运行测试"
+	app.autos.draft = &automationView{Automation: Automation{Name: "Old settings"}}
+	tt.Frame()
+	if err := tt.Click("What to do"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Type("，报告失败原因")
+	tt.Frame()
+	if app.autos.draft != nil || app.autos.drafting || tt.HasText("Ready") {
+		t.Fatal("edited request kept old settings ready to save")
+	}
+	if err := tt.Click("Create"); err != nil {
+		t.Fatal(err)
+	}
+	if app.autos.saving || app.autos.draftErr != "" {
+		t.Fatal("edited request allowed saving old settings")
+	}
+}

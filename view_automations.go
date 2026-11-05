@@ -523,27 +523,21 @@ func (app *chatApp) openAutomationForm(v *automationView) {
 	}
 }
 
-// scheduleDraft asks for a draft once the person stops typing for a second.
-func (app *chatApp) scheduleDraft() {
+// invalidateDraft discards settings and in-flight results after an input changes.
+// Only the explicit generate button starts another request.
+func (app *chatApp) invalidateDraft() {
 	a := &app.autos
 	a.gen++
-	g := a.gen
-	if strings.TrimSpace(a.request) == "" {
-		a.drafting = false
-		return
-	}
-	go func() {
-		time.Sleep(time.Second)
-		app.c.dispatch(func() {
-			if g == a.gen {
-				app.startDraft(g)
-			}
-		})
-	}()
+	a.draft, a.drafting, a.draftErr, a.editing, a.editErr = nil, false, "", "", ""
 }
 
-func (app *chatApp) startDraft(g int) {
+func (app *chatApp) startDraft() {
 	a := &app.autos
+	if strings.TrimSpace(a.request) == "" || a.drafting || a.saving {
+		return
+	}
+	app.invalidateDraft()
+	g := a.gen
 	a.drafting, a.draftErr = true, ""
 	req := automationRequest{Request: a.request, Project: a.project, Agent: a.agent}
 	app.autoCall("automationDraft", req, func(raw json.RawMessage, err error) {
@@ -580,7 +574,7 @@ func (app *chatApp) automationForm(c *ui.Context) {
 		}
 		ui.Column(c).Gap(4).Children(func() {
 			ui.Text(c, title).FontSize(24).FontWeight(600)
-			ui.Text(c, tr("Describe what to do and when. The agent will generate a schedule, completion criteria, and turn limit.")).TextColor(muted)
+			ui.Text(c, tr("Describe what to do and when, then click Generate settings to organize the schedule, completion criteria, and turn limit.")).TextColor(muted)
 		})
 		app.automationComposer(c)
 		app.draftStatus(c)
@@ -622,7 +616,7 @@ func (app *chatApp) automationComposer(c *ui.Context) {
 			Placeholder(tr("For example: Check new issues every weekday at 9 AM, fix what you can and pass go test, then list anything unresolved")).
 			Lines(3, 8).FillWidth().Padding(16, 18, 6, 18).FontSize(15).LineHeight(1.6)
 		if in.Changed() {
-			app.scheduleDraft()
+			app.invalidateDraft()
 		}
 		ui.Row(c).FillWidth().Gap(4).Padding(4, 10, 10, 10).AlignItems(ui.Center).Children(func() {
 			pb := quiet(c.Key("project")).Height(28).Gap(6).PaddingX(9).Label(tr("Projects"))
@@ -646,8 +640,11 @@ func (app *chatApp) automationComposer(c *ui.Context) {
 						ui.Text(c, filepath.Base(p.Path)).Grow(1).SingleLine().Ellipsis("…")
 					})
 					if row.Clicked() {
+						changed := a.project != p.Path
 						a.project, a.projectOpen = p.Path, false
-						app.scheduleDraft()
+						if changed {
+							app.invalidateDraft()
+						}
 					}
 				}
 			})
@@ -663,7 +660,7 @@ func (app *chatApp) automationComposer(c *ui.Context) {
 				})
 				if b.Clicked() && a.agent != ag {
 					a.agent = ag
-					app.scheduleDraft()
+					app.invalidateDraft()
 				}
 			}
 			ui.Spacer(c)
@@ -681,17 +678,19 @@ func (app *chatApp) draftStatus(c *ui.Context) {
 		case a.drafting:
 			ui.Spinner(c).FontSize(11)
 			ui.Text(c, tr("Generating…")).FontSize(12).TextColor(muted)
-		case a.draftErr != "":
-			if ui.Button(c.Key("retry"), tr("Retry")).Clicked() {
-				a.gen++
-				app.startDraft(a.gen)
-			}
 		case a.draft != nil && a.draft.TimeMissing:
 			ui.Text(c, tr("Schedule needed")).FontSize(12).TextColor(autoWarn)
 		case a.draft != nil:
 			ui.Text(c, tr("Ready")).FontSize(12).TextColor(autoOK)
 		default:
-			ui.Text(c, tr("Settings generate automatically as you type")).FontSize(12).TextColor(muted)
+			ui.Text(c, tr("Click Generate settings when you are ready")).FontSize(12).TextColor(muted)
+		}
+		label := tr("Generate settings")
+		if a.draftErr != "" {
+			label = tr("Retry")
+		}
+		if ui.Button(c.Key("generate"), label).Disabled(strings.TrimSpace(a.request) == "" || a.drafting || a.saving).Clicked() {
+			app.startDraft()
 		}
 	})
 	if a.draftErr != "" {
@@ -873,7 +872,7 @@ func (app *chatApp) applyDraftEdit(key string) {
 
 func (app *chatApp) saveAutomationForm(runNow bool) {
 	a := &app.autos
-	if a.draft == nil {
+	if a.draft == nil || a.drafting || a.saving || a.editing != "" {
 		return
 	}
 	d := a.draft.Automation
