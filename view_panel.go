@@ -515,10 +515,7 @@ func (app *chatApp) browserView(c *ui.Context, s *panelSurface) {
 
 func (app *chatApp) startTerminal(s *panelSurface, dir string) {
 	s.starting, s.termErr = true, ""
-	var cl *serviceClient
-	if app.c.remoteHost() {
-		cl = app.c.remote
-	}
+	files := app.c.workspaceFiles()
 	goAsync(func() {
 		opts := terminal.Options{
 			Dir:                     dir,
@@ -528,9 +525,7 @@ func (app *chatApp) startTerminal(s *panelSurface, dir string) {
 			SelectOnDragInAltScreen: true,
 		}
 		var err error
-		if cl != nil {
-			opts.Conn, err = openRemoteTerminal(cl, dir)
-		}
+		opts.Conn, err = files.Terminal(dir)
 		var t *terminal.Terminal
 		if err == nil {
 			t, err = terminal.New(opts)
@@ -631,22 +626,11 @@ func (app *chatApp) loadDir(p *panelState, rel string) {
 	}
 	p.loading[rel] = true
 	root := p.cwd
-	var cl *serviceClient
-	if app.c.remoteHost() {
-		cl = app.c.remote
-	}
+	files := app.c.workspaceFiles()
 	goAsync(func() {
 		var entries []worktree.FileEntry
 		var err error
-		if cl == nil {
-			entries, err = worktree.ReadDirEntries(root, rel)
-		} else {
-			var rows []hostEntry
-			err = cl.Call("host", hostRequest{Action: "dir", Project: root, Path: rel}, &rows)
-			for _, e := range rows {
-				entries = append(entries, worktree.FileEntry{Name: e.Name, Rel: e.Path, Dir: e.Dir})
-			}
-		}
+		entries, err = files.ReadDir(root, rel)
 		app.c.dispatch(func() {
 			if p.cwd != root {
 				return
@@ -673,32 +657,21 @@ func (app *chatApp) openFile(p *panelState, rel string) {
 	ed := &fileEditor{loading: true, preview: strings.EqualFold(path.Ext(rel), ".md") || kind != ""}
 	p.editors[rel] = ed
 	root := p.cwd
-	var cl *serviceClient
-	if app.c.remoteHost() {
-		cl = app.c.remote
-	}
+	files := app.c.workspaceFiles()
 	goAsync(func() {
 		var text string
 		var img ui.ImageSource
 		var err error
 		if kind == "bitmap" {
 			var data []byte
-			if cl == nil {
-				data, err = worktree.ReadImageFile(filepath.Join(root, rel))
-			} else {
-				err = cl.Call("host", hostRequest{Action: "image", Project: root, Path: rel}, &data)
-			}
+			data, err = files.ReadImage(root, rel)
 			if err == nil {
 				if img, err = ui.DecodeImage(data); err != nil {
 					err = fmt.Errorf(tr("Unable to decode image: %w"), err)
 				}
 			}
 		} else {
-			if cl == nil {
-				text, err = worktree.ReadTextFile(filepath.Join(root, rel))
-			} else {
-				err = cl.Call("host", hostRequest{Action: "read", Project: root, Path: rel}, &text)
-			}
+			text, err = files.ReadText(root, rel)
 			if err == nil && kind == "svg" {
 				img = svgPreview(text)
 			}
@@ -900,20 +873,13 @@ func (app *chatApp) refreshDiff(p *panelState) {
 	if parent == nil {
 		parent = context.Background()
 	}
-	var cl *serviceClient
-	if app.c.remoteHost() {
-		cl = app.c.remote
-	}
+	files := app.c.workspaceFiles()
 	goAsync(func() {
 		ctx, cancel := context.WithTimeout(parent, 20*time.Second)
 		defer cancel()
 		var snap worktree.DiffSnapshot
 		var err error
-		if cl == nil {
-			snap, err = worktree.CollectDiff(ctx, root, src)
-		} else {
-			err = cl.Call("host", hostRequest{Action: "diff", Project: root, Source: src}, &snap)
-		}
+		snap, err = files.Diff(ctx, root, src)
 		app.c.dispatch(func() {
 			if p.diffGen != gen || p.cwd != root {
 				return
@@ -959,22 +925,13 @@ func (app *chatApp) loadDiffFile(p *panelState, i int) {
 	if parent == nil {
 		parent = context.Background()
 	}
-	var cl *serviceClient
-	if app.c.remoteHost() {
-		cl = app.c.remote
-	}
+	files := app.c.workspaceFiles()
 	goAsync(func() {
 		ctx, cancel := context.WithTimeout(parent, 20*time.Second)
 		defer cancel()
 		var old, new string
 		var err error
-		if cl == nil {
-			old, new = worktree.FileSides(ctx, root, snap, f)
-		} else {
-			var sides hostSides
-			err = cl.Call("host", hostRequest{Action: "sides", Project: root, Snapshot: snap, File: f}, &sides)
-			old, new = sides.Old, sides.New
-		}
+		old, new, err = files.Sides(ctx, root, snap, f)
 		app.c.dispatch(func() {
 			if p.diffGen != gen || p.diffViewPath != f.Path {
 				return
