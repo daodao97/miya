@@ -1,4 +1,4 @@
-package main
+package control
 
 import (
 	"context"
@@ -11,8 +11,8 @@ import (
 	"miya/internal/desktop"
 )
 
-func desktopHTTP(d *desktopControl, token, method, path, body string) *httptest.ResponseRecorder {
-	r := httptest.NewRequest(method, desktopControlPrefix+path, strings.NewReader(body))
+func desktopHTTP(d *Server, token, method, path, body string) *httptest.ResponseRecorder {
+	r := httptest.NewRequest(method, Prefix+path, strings.NewReader(body))
 	if token != "" {
 		r.Header.Set("Authorization", "Bearer "+token)
 	}
@@ -20,15 +20,15 @@ func desktopHTTP(d *desktopControl, token, method, path, body string) *httptest.
 	d.ServeHTTP(w, r)
 	return w
 }
-func mockDesktop(t *testing.T) (*desktopControl, string, *atomic.Int32) {
+func mockDesktop(t *testing.T) (*Server, string, *atomic.Int32) {
 	t.Helper()
 	calls := new(atomic.Int32)
-	d := &desktopControl{authorize: func() error { return nil }, capture: func() ([]byte, error) { return []byte("jpeg"), nil }, input: func(desktop.Input) error { calls.Add(1); return nil }}
-	token, err := d.open(context.Background())
+	d := &Server{Authorize: func() error { return nil }, Capture: func() ([]byte, error) { return []byte("jpeg"), nil }, Input: func(desktop.Input) error { calls.Add(1); return nil }}
+	token, err := d.Open(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { d.revoke(token) })
+	t.Cleanup(func() { d.Revoke(token) })
 	return d, token, calls
 }
 func TestDesktopConsentRevocationAndValidation(t *testing.T) {
@@ -73,16 +73,16 @@ func TestDesktopConsentRevocationAndValidation(t *testing.T) {
 }
 func TestDesktopLeaseIsolationDisconnectAndExpiry(t *testing.T) {
 	d, token, _ := mockDesktop(t)
-	if _, err := d.open(context.Background()); err == nil {
+	if _, err := d.Open(context.Background()); err == nil {
 		t.Fatal("concurrent operator accepted")
 	}
-	d.revoke("wrong")
+	d.Revoke("wrong")
 	if w := desktopHTTP(d, token, "POST", "/start", `{}`); w.Code != 204 {
 		t.Fatal("wrong token revoked lease")
 	}
-	d.revoke(token)
+	d.Revoke(token)
 	ctx, cancel := context.WithCancel(context.Background())
-	next, err := d.open(ctx)
+	next, err := d.Open(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,11 +90,11 @@ func TestDesktopLeaseIsolationDisconnectAndExpiry(t *testing.T) {
 	if w := desktopHTTP(d, next, "POST", "/start", `{}`); w.Code != 410 {
 		t.Fatal("lease survived disconnect")
 	}
-	last, err := d.open(context.Background())
+	last, err := d.Open(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer d.revoke(last)
+	defer d.Revoke(last)
 	if w := desktopHTTP(d, token, "POST", "/start", `{}`); w.Code != 410 {
 		t.Fatal("old token reached new lease")
 	}

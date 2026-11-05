@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"miya/internal/codex"
+	"miya/internal/desktop/control"
 	"miya/internal/remote"
 )
 
@@ -16,7 +17,7 @@ import (
 func openTestDesktopPage(m *mobileApp, closed *int) {
 	offline := func(context.Context) (net.Conn, error) { return nil, errors.New("offline") }
 	ctx, cancel := context.WithCancel(context.Background())
-	m.desktopPage = &mobileDesktopPage{phase: "live", client: newDesktopClient(offline, "test"), ctx: ctx, cancel: func() { *closed++; cancel() }}
+	m.desktopPage = &mobileDesktopPage{phase: "live", client: control.NewClient(offline, "test"), ctx: ctx, cancel: func() { *closed++; cancel() }}
 }
 
 func TestMobileDesktopReturnsOnlyWhenExactApprovalResolves(t *testing.T) {

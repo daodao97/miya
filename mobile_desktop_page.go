@@ -12,6 +12,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"miya/internal/desktop"
+	"miya/internal/desktop/control"
 	"miya/internal/remote"
 	"miya/internal/textutil"
 )
@@ -31,7 +32,7 @@ type desktopPointer struct {
 }
 
 type mobileDesktopPage struct {
-	client   *desktopClient
+	client   *control.Client
 	conn     *remote.Conn
 	released bool
 	ctx      context.Context
@@ -92,7 +93,7 @@ type mobileDesktopPage struct {
 	queue   []desktop.Input
 	sending bool
 
-	actions                                  desktopActions
+	actions                                  control.Actions
 	actionsFresh, actionsBusy, actionPending bool
 	actionsUnsupported                       bool
 	actionStatus                             string
@@ -112,8 +113,8 @@ func (m *mobileApp) desktopUIOpen() bool { return m.filesCancel != nil || m.desk
 
 func (m *mobileApp) openDesktopPage(conn *remote.Conn, token string) {
 	ctx, cancel := context.WithCancel(context.Background())
-	p := &mobileDesktopPage{client: newDesktopClient(conn.DialFiles, token), conn: conn, ctx: ctx, cancel: cancel, gen: m.generation,
-		zoom: 1, cursor: desktopPoint{.5, .5}, trackpad: readDesktopPrefs(m.desktopPrefsFile()).PointerMode != "touch"}
+	p := &mobileDesktopPage{client: control.NewClient(conn.DialFiles, token), conn: conn, ctx: ctx, cancel: cancel, gen: m.generation,
+		zoom: 1, cursor: desktopPoint{.5, .5}, trackpad: control.ReadPrefs(m.desktopPrefsFile()).PointerMode != "touch"}
 	p.unlock.key = desktopUnlockKey(m.currentDesktopID())
 	m.desktopPage = p
 	m.router().Push("/desktop")
@@ -131,7 +132,7 @@ func (m *mobileApp) closeDesktopPage(back bool) {
 	m.desktopApproval = mobileDesktopApproval{}
 	m.desktopRelease(p)
 	if p.phase != "ended" {
-		go p.client.stop()
+		go p.client.Stop()
 	}
 	p.cancel()
 	p.image, p.queue, p.text, p.unlock.text = nil, nil, "", ""
@@ -180,7 +181,7 @@ func (m *mobileApp) desktopStage(p *mobileDesktopPage, phase, title, detail stri
 }
 
 func (m *mobileApp) desktopFail(p *mobileDesktopPage, title string, err error) {
-	if desktopStatus(err) == 410 {
+	if control.Status(err) == 410 {
 		m.desktopFinish(p, err.Error())
 		return
 	}
@@ -197,7 +198,7 @@ func (m *mobileApp) desktopFinish(p *mobileDesktopPage, message string) {
 	p.active, p.image, p.queue, p.text, p.unlock.text = false, nil, nil, "", ""
 	m.desktopStage(p, "ended", tr("Control session ended"), message, false)
 	p.cancel()
-	go p.client.stop()
+	go p.client.Stop()
 	m.desktopRelease(p)
 	invalidate()
 }
@@ -205,13 +206,13 @@ func (m *mobileApp) desktopFinish(p *mobileDesktopPage, message string) {
 func (m *mobileApp) desktopInitialize(p *mobileDesktopPage) {
 	m.desktopStage(p, "connecting", tr("Connecting to Mac"), tr("If your Mac is asleep, its screen will wake first."), true)
 	m.desktopDo(p, func(ctx context.Context) func() {
-		s, err := p.client.session(ctx)
+		s, err := p.client.Session(ctx)
 		if err != nil {
 			return func() { m.desktopFail(p, tr("Connection incomplete"), err) }
 		}
 		var displays []desktop.Display
 		if s.Pick && s.Displays {
-			displays, err = p.client.displays(ctx)
+			displays, err = p.client.Displays(ctx)
 			if err != nil {
 				return func() { m.desktopFail(p, tr("Unable to load desktops"), err) }
 			}
@@ -248,7 +249,7 @@ func (m *mobileApp) desktopInitialize(p *mobileDesktopPage) {
 			}
 		}
 		want := *s.Window
-		windows, err := p.client.windows(ctx)
+		windows, err := p.client.Windows(ctx)
 		return func() {
 			p.windowOnly, p.secret, p.pickable = true, true, s.Pick
 			p.appsAvailable = s.Apps
@@ -277,7 +278,7 @@ func (m *mobileApp) desktopChoose(p *mobileDesktopPage) {
 	p.pickerTab, p.appStatus = 0, ""
 	m.desktopStage(p, "picker", tr("Select a window to control"), "", true)
 	m.desktopDo(p, func(ctx context.Context) func() {
-		windows, err := p.client.windows(ctx)
+		windows, err := p.client.Windows(ctx)
 		return func() {
 			if err != nil {
 				m.desktopFail(p, tr("Unable to load windows"), err)
@@ -293,7 +294,7 @@ func (m *mobileApp) desktopSelect(p *mobileDesktopPage, w desktop.Window) {
 	p.invalidateTarget()
 	m.desktopStage(p, "connecting", tr("Opening window"), tr("Checking the connection and system permissions."), true)
 	m.desktopDo(p, func(ctx context.Context) func() {
-		err := p.client.selectWindow(ctx, w)
+		err := p.client.SelectWindow(ctx, w)
 		return func() {
 			if err != nil {
 				m.desktopFail(p, tr("Unable to open window"), err)
@@ -316,7 +317,7 @@ func (m *mobileApp) desktopStart(p *mobileDesktopPage) {
 	}
 	m.desktopStage(p, "connecting", title, tr("If your Mac is asleep, its screen will wake first."), true)
 	m.desktopDo(p, func(ctx context.Context) func() {
-		err := p.client.start(ctx)
+		err := p.client.Start(ctx)
 		return func() {
 			if err != nil {
 				m.desktopFail(p, tr("Controls unavailable"), err)
@@ -360,7 +361,7 @@ func (m *mobileApp) desktopPoll(p *mobileDesktopPage) {
 	p.polling = true
 	revision := p.targetRevision
 	m.desktopDo(p, func(ctx context.Context) func() {
-		data, locked, err := p.client.frame(ctx)
+		data, locked, err := p.client.Frame(ctx)
 		var image ui.ImageSource
 		if err == nil {
 			if image, _ = ui.DecodeImage(data); image == nil {
@@ -384,7 +385,7 @@ func (m *mobileApp) receiveDesktopFrame(p *mobileDesktopPage, data []byte, image
 		m.desktopLockChanged(p, true)
 	}
 	delay := 300 * time.Millisecond
-	switch status := desktopStatus(err); {
+	switch status := control.Status(err); {
 	case err == nil:
 		hash := sha256.Sum256(data)
 		if p.image == nil || hash != p.imageHash {
@@ -422,13 +423,13 @@ func (m *mobileApp) desktopRefreshActions(p *mobileDesktopPage) {
 	p.actionsBusy = true
 	revision := p.targetRevision
 	m.desktopDo(p, func(ctx context.Context) func() {
-		a, err := p.client.actions(ctx)
+		a, err := p.client.Actions(ctx)
 		return func() {
 			if revision != p.targetRevision {
 				return
 			}
 			p.actionsBusy = false
-			switch status := desktopStatus(err); {
+			switch status := control.Status(err); {
 			case err == nil:
 				p.actions, p.actionsFresh = a, true
 			case status == 410:
@@ -453,10 +454,10 @@ func (m *mobileApp) desktopPressAction(p *mobileDesktopPage, a desktop.Action) {
 	p.actionPending, p.actionStatus = true, tr("Checking permission result…")
 	w := p.actions.Window
 	m.desktopDo(p, func(ctx context.Context) func() {
-		err := p.client.pressAction(ctx, a.ID, w)
+		err := p.client.PressAction(ctx, a.ID, w)
 		return func() {
 			p.actionPending, p.actionsFresh = false, false
-			if desktopStatus(err) == 410 {
+			if control.Status(err) == 410 {
 				m.desktopFinish(p, err.Error())
 				return
 			}
@@ -510,14 +511,14 @@ func (m *mobileApp) desktopPump(p *mobileDesktopPage) {
 		display = desktop.Display{}
 	}
 	m.desktopDo(p, func(ctx context.Context) func() {
-		err := p.client.inputForDisplay(ctx, in, display)
+		err := p.client.InputForDisplay(ctx, in, display)
 		return func() {
 			if revision != p.targetRevision {
 				return
 			}
 			p.sending = false
 			switch {
-			case desktopStatus(err) == 410:
+			case control.Status(err) == 410:
 				m.desktopFinish(p, err.Error())
 				return
 			case err != nil && in.Kind != "move" && in.Kind != "scroll":
@@ -1013,7 +1014,7 @@ func (m *mobileApp) desktopControls(c *ui.Context, p *mobileDesktopPage) {
 			p.trackpad, p.pointer = !p.trackpad, desktopPointer{}
 			prefs := map[bool]string{true: "trackpad", false: "touch"}[p.trackpad]
 			path := m.desktopPrefsFile()
-			go func() { _ = writeDesktopPrefs(path, prefs) }()
+			go func() { _ = control.WritePrefs(path, prefs) }()
 		}
 		if hasMore && m.desktopControl(c, "desktop-more-options", "dots", tr("More options"), p.more).Clicked() {
 			p.more = !p.more
@@ -1181,14 +1182,14 @@ func (m *mobileApp) desktopSelectFull(p *mobileDesktopPage) {
 	p.invalidateTarget()
 	m.desktopStage(p, "connecting", tr("Connecting to Mac"), tr("Switching to full desktop."), true)
 	m.desktopDo(p, func(ctx context.Context) func() {
-		err := p.client.selectWindow(ctx, desktop.Window{})
+		err := p.client.SelectWindow(ctx, desktop.Window{})
 		return func() {
 			if err != nil {
 				m.desktopFail(p, tr("Unable to switch"), err)
 				return
 			}
 			p.window, p.windowOnly, p.zoom, p.panX, p.panY = desktop.Window{}, false, 1, 0, 0
-			p.actions, p.actionsFresh = desktopActions{}, false
+			p.actions, p.actionsFresh = control.Actions{}, false
 			m.desktopStart(p)
 		}
 	})
@@ -1226,14 +1227,14 @@ func (m *mobileApp) desktopLoadThumbs(p *mobileDesktopPage) {
 		}
 		p.thumbBusy = true
 		m.desktopDo(p, func(ctx context.Context) func() {
-			data, err := p.client.thumbnail(ctx, w)
+			data, err := p.client.Thumbnail(ctx, w)
 			var img ui.ImageSource
 			if err == nil {
 				img, _ = ui.DecodeImage(data)
 			}
 			return func() {
 				p.thumbBusy = false
-				if desktopStatus(err) == 410 {
+				if control.Status(err) == 410 {
 					m.desktopFinish(p, err.Error())
 					return
 				}

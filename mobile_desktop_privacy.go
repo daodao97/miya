@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"miya/internal/desktop/control"
 )
 
 type mobileDesktopPrivacy struct {
@@ -14,7 +15,7 @@ type mobileDesktopPrivacy struct {
 	message                       string
 }
 
-func (m *mobileApp) desktopInitPrivacy(p *mobileDesktopPage, s desktopSession) {
+func (m *mobileApp) desktopInitPrivacy(p *mobileDesktopPage, s control.Session) {
 	p.privacy.available = s.Pick && s.Privacy
 	if p.privacy.available && !p.privacy.started {
 		p.privacy.started = true
@@ -33,11 +34,11 @@ func (m *mobileApp) desktopPollPrivacy(p *mobileDesktopPage) {
 	p.privacy.polling = true
 	revision := p.privacy.revision
 	m.desktopDo(p, func(ctx context.Context) func() {
-		state, err := p.client.privacy(ctx, nil)
+		state, err := p.client.Privacy(ctx, nil)
 		return func() {
 			p.privacy.polling = false
 			if revision == p.privacy.revision {
-				if desktopStatus(err) == 410 {
+				if control.Status(err) == 410 {
 					m.desktopFinish(p, err.Error())
 					return
 				}
@@ -65,10 +66,10 @@ func (m *mobileApp) desktopSetPrivacy(p *mobileDesktopPage) {
 	p.privacy.busy, p.privacy.message = true, ""
 	p.privacy.revision++
 	m.desktopDo(p, func(ctx context.Context) func() {
-		state, err := p.client.privacy(ctx, &enabled)
+		state, err := p.client.Privacy(ctx, &enabled)
 		return func() {
 			p.privacy.busy = false
-			if desktopStatus(err) == 410 {
+			if control.Status(err) == 410 {
 				m.desktopFinish(p, err.Error())
 				return
 			}

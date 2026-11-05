@@ -1,4 +1,4 @@
-package main
+package control
 
 import (
 	"path/filepath"
@@ -18,13 +18,13 @@ func TestDesktopInputAcceptsCursorMove(t *testing.T) {
 
 func TestDesktopPrefsRememberPointerModeOnPhone(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "prefs", "desktop-control.json")
-	if readDesktopPrefs(path).PointerMode != "trackpad" {
+	if ReadPrefs(path).PointerMode != "trackpad" {
 		t.Fatal("default pointer mode")
 	}
-	if err := writeDesktopPrefs(path, "touch"); err != nil || readDesktopPrefs(path).PointerMode != "touch" {
+	if err := WritePrefs(path, "touch"); err != nil || ReadPrefs(path).PointerMode != "touch" {
 		t.Fatal("touch mode not remembered", err)
 	}
-	if err := writeDesktopPrefs(path, "bogus"); err != nil || readDesktopPrefs(path).PointerMode != "touch" {
+	if err := WritePrefs(path, "bogus"); err != nil || ReadPrefs(path).PointerMode != "touch" {
 		t.Fatal("invalid mode overwrote the preference", err)
 	}
 }

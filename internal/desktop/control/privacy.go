@@ -1,4 +1,4 @@
-package main
+package control
 
 import (
 	"context"
@@ -12,7 +12,7 @@ type desktopPrivacyState struct {
 	Enabled bool `json:"enabled"`
 }
 
-func (d *desktopControl) privacyState(l *desktopLease) desktopPrivacyState {
+func (d *Server) privacyState(l *desktopLease) desktopPrivacyState {
 	state := desktopPrivacyState{Enabled: l.privacy != nil}
 	if l.privacy != nil {
 		select {
@@ -25,7 +25,7 @@ func (d *desktopControl) privacyState(l *desktopLease) desktopPrivacyState {
 	return state
 }
 
-func (d *desktopControl) servePrivacy(w http.ResponseWriter, r *http.Request, token string, l *desktopLease) {
+func (d *Server) servePrivacy(w http.ResponseWriter, r *http.Request, token string, l *desktopLease) {
 	if r.Method != http.MethodGet && r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", 405)
 		return
@@ -37,7 +37,7 @@ func (d *desktopControl) servePrivacy(w http.ResponseWriter, r *http.Request, to
 		http.Error(w, "Privacy mode is not available in this view", 403)
 		return
 	}
-	if d.privacy == nil {
+	if d.Privacy == nil {
 		http.Error(w, "Update Miya on your Mac to use privacy mode", 501)
 		return
 	}
@@ -99,8 +99,8 @@ func (d *desktopControl) servePrivacy(w http.ResponseWriter, r *http.Request, to
 		return
 	}
 	d.mu.Unlock()
-	if d.locked != nil {
-		locked, err := d.locked()
+	if d.Locked != nil {
+		locked, err := d.Locked()
 		if err != nil {
 			http.Error(w, "Unable to read Mac lock status", 503)
 			return
@@ -114,7 +114,7 @@ func (d *desktopControl) servePrivacy(w http.ResponseWriter, r *http.Request, to
 	// Request cancellation cancels startup only. Once enabled, the lease owns
 	// the helper and its cancellation; an HTTP response ending must not unblank.
 	stopRequest := context.AfterFunc(r.Context(), cancel)
-	privacy, err := d.privacy(ctx)
+	privacy, err := d.Privacy(ctx)
 	stopRequest()
 	if err != nil {
 		cancel()

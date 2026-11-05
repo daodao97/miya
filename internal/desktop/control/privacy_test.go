@@ -1,4 +1,4 @@
-package main
+package control
 
 import (
 	"context"
@@ -20,12 +20,12 @@ type testDesktopPrivacy struct {
 func (p *testDesktopPrivacy) Done() <-chan struct{} { return p.done }
 func (p *testDesktopPrivacy) Close() error          { p.once.Do(func() { close(p.done) }); return nil }
 
-func privacyTestDesktop(t *testing.T) (*desktopControl, string, *atomic.Int32, **testDesktopPrivacy) {
+func privacyTestDesktop(t *testing.T) (*Server, string, *atomic.Int32, **testDesktopPrivacy) {
 	t.Helper()
 	d, token := pickTestDesktop(t, true)
 	var current *testDesktopPrivacy
 	calls := new(atomic.Int32)
-	d.privacy = func(ctx context.Context) (desktop.Privacy, error) {
+	d.Privacy = func(ctx context.Context) (desktop.Privacy, error) {
 		calls.Add(1)
 		p := &testDesktopPrivacy{done: make(chan struct{})}
 		current = p
@@ -41,7 +41,7 @@ func privacyTestDesktop(t *testing.T) (*desktopControl, string, *atomic.Int32, *
 	return d, token, calls, &current
 }
 
-func readyPrivacyDesktop(t *testing.T, d *desktopControl, token string) {
+func readyPrivacyDesktop(t *testing.T, d *Server, token string) {
 	t.Helper()
 	// Select the full display and receive a real frame before allowing blackout.
 	if w := desktopHTTP(d, token, "POST", "/select", `{"id":0,"pid":0}`); w.Code != 204 {
@@ -90,7 +90,7 @@ func TestDesktopPrivacyPersistsUntilDisabledOrRevoked(t *testing.T) {
 			readyPrivacyDesktop(t, d, token)
 			client := testDesktopClient(t, d, token)
 			on, off := true, false
-			state, err := client.privacy(context.Background(), &on)
+			state, err := client.Privacy(context.Background(), &on)
 			if err != nil || !state.Enabled {
 				t.Fatal(state, err)
 			}
@@ -99,18 +99,18 @@ func TestDesktopPrivacyPersistsUntilDisabledOrRevoked(t *testing.T) {
 				t.Fatal("HTTP response ending restored the displays")
 			default:
 			}
-			state, err = client.privacy(context.Background(), &on)
+			state, err = client.Privacy(context.Background(), &on)
 			if err != nil || !state.Enabled || calls.Load() != 1 {
 				t.Fatal("enable not idempotent", state, err, calls.Load())
 			}
 			switch end {
 			case "disable":
-				state, err = client.privacy(context.Background(), &off)
+				state, err = client.Privacy(context.Background(), &off)
 				if err != nil || state.Enabled {
 					t.Fatal(state, err)
 				}
 			case "revoke":
-				d.revoke(token)
+				d.Revoke(token)
 			case "local shortcut":
 				_ = (*current).Close()
 			}
@@ -119,9 +119,9 @@ func TestDesktopPrivacyPersistsUntilDisabledOrRevoked(t *testing.T) {
 			case <-time.After(time.Second):
 				t.Fatal("display restore not requested")
 			}
-			state, err = client.privacy(context.Background(), nil)
+			state, err = client.Privacy(context.Background(), nil)
 			if end == "revoke" {
-				if desktopStatus(err) != 410 {
+				if Status(err) != 410 {
 					t.Fatal(err)
 				}
 			} else if err != nil || state.Enabled {
@@ -139,10 +139,10 @@ func TestDesktopPrivacyUnavailableAndLockedDoNotEnable(t *testing.T) {
 			want := 503
 			switch condition {
 			case "locked":
-				d.locked = func() (bool, error) { return true, nil }
+				d.Locked = func() (bool, error) { return true, nil }
 				want = 423
 			case "unknown lock":
-				d.locked = func() (bool, error) { return false, errors.New("unknown") }
+				d.Locked = func() (bool, error) { return false, errors.New("unknown") }
 			case "busy":
 				d.lease.unlocking = true
 				want = 409
@@ -150,9 +150,9 @@ func TestDesktopPrivacyUnavailableAndLockedDoNotEnable(t *testing.T) {
 				d.lease.capturedAt = time.Now().Add(-11 * time.Second)
 				want = 409
 			case "unsupported":
-				d.privacy = func(context.Context) (desktop.Privacy, error) { return nil, errors.New("unsupported") }
+				d.Privacy = func(context.Context) (desktop.Privacy, error) { return nil, errors.New("unsupported") }
 			case "helper ended":
-				d.privacy = func(context.Context) (desktop.Privacy, error) {
+				d.Privacy = func(context.Context) (desktop.Privacy, error) {
 					p := &testDesktopPrivacy{done: make(chan struct{})}
 					_ = p.Close()
 					return p, nil
@@ -172,7 +172,7 @@ func TestDesktopPrivacyRevokeCancelsStartupWithoutBlockingStop(t *testing.T) {
 	d, token, _, _ := privacyTestDesktop(t)
 	readyPrivacyDesktop(t, d, token)
 	started, result := make(chan struct{}), make(chan int, 1)
-	d.privacy = func(ctx context.Context) (desktop.Privacy, error) {
+	d.Privacy = func(ctx context.Context) (desktop.Privacy, error) {
 		close(started)
 		<-ctx.Done()
 		return nil, ctx.Err()

@@ -7,6 +7,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"miya/internal/desktop"
+	"miya/internal/desktop/control"
 	"miya/internal/textutil"
 )
 
@@ -48,10 +49,10 @@ func (m *mobileApp) desktopChooseDisplays(p *mobileDesktopPage) {
 	p.pickerTab, p.appStatus = 2, ""
 	m.desktopStage(p, "picker", tr("Full desktop"), "", true)
 	m.desktopDo(p, func(ctx context.Context) func() {
-		displays, err := p.client.displays(ctx)
+		displays, err := p.client.Displays(ctx)
 		return func() {
 			p.busy = false
-			if desktopStatus(err) == 410 {
+			if control.Status(err) == 410 {
 				m.desktopFinish(p, err.Error())
 				return
 			}
@@ -75,14 +76,14 @@ func (m *mobileApp) desktopSelectDisplay(p *mobileDesktopPage, display desktop.D
 		var selected desktop.Display
 		var err error
 		for deadline := time.Now().Add(6 * time.Second); ; {
-			selected, err = p.client.selectDisplay(ctx, display)
-			if desktopStatus(err) != 429 || !time.Now().Before(deadline) || !desktopWait(ctx, 250*time.Millisecond) {
+			selected, err = p.client.SelectDisplay(ctx, display)
+			if control.Status(err) != 429 || !time.Now().Before(deadline) || !control.Wait(ctx, 250*time.Millisecond) {
 				break
 			}
 		}
 		return func() {
 			if err != nil {
-				if desktopStatus(err) == 410 {
+				if control.Status(err) == 410 {
 					m.desktopFinish(p, err.Error())
 					return
 				}
@@ -92,7 +93,7 @@ func (m *mobileApp) desktopSelectDisplay(p *mobileDesktopPage, display desktop.D
 			}
 			p.display, p.window, p.windowOnly = selected, desktop.Window{}, false
 			p.zoom, p.panX, p.panY = 1, 0, 0
-			p.actions, p.actionsFresh = desktopActions{}, false
+			p.actions, p.actionsFresh = control.Actions{}, false
 			m.desktopStart(p)
 		}
 	})

@@ -1,4 +1,4 @@
-package main
+package control
 
 import (
 	"encoding/json"
@@ -10,7 +10,7 @@ import (
 
 // These controls belong to the selected approval window, not the foreground
 // desktop. No editable values are included in the returned dialog metadata.
-func (d *desktopControl) serveWindowActions(w http.ResponseWriter, r *http.Request, token string, lease *desktopLease, press bool) {
+func (d *Server) serveWindowActions(w http.ResponseWriter, r *http.Request, token string, lease *desktopLease, press bool) {
 	method := http.MethodGet
 	if press {
 		method = http.MethodPost
@@ -38,16 +38,16 @@ func (d *desktopControl) serveWindowActions(w http.ResponseWriter, r *http.Reque
 		http.Error(w, "Remote control ended", 410)
 		return
 	}
-	if !lease.active || lease.window == nil || lease.onAction == nil || d.dialog == nil {
+	if !lease.active || lease.window == nil || lease.onAction == nil || d.Dialog == nil {
 		http.Error(w, "No authorization actions are available in this view", 403)
 		return
 	}
-	if press && (request.WindowID != lease.window.ID || request.WindowPID != lease.window.PID || d.pressAction == nil) {
+	if press && (request.WindowID != lease.window.ID || request.WindowPID != lease.window.PID || d.PressAction == nil) {
 		http.Error(w, "The authorization window changed. Refresh the action buttons.", 409)
 		return
 	}
 	if !press {
-		dialog, err := d.dialog(*lease.window)
+		dialog, err := d.Dialog(*lease.window)
 		if err != nil {
 			http.Error(w, err.Error(), 409)
 			return
@@ -91,7 +91,7 @@ func (d *desktopControl) serveWindowActions(w http.ResponseWriter, r *http.Reque
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (d *desktopControl) trackWindowActionLocked(lease *desktopLease, action desktop.Action, before []desktop.Window) {
+func (d *Server) trackWindowActionLocked(lease *desktopLease, action desktop.Action, before []desktop.Window) {
 	if lease.onAction == nil {
 		return
 	}

@@ -1,4 +1,4 @@
-package main
+package control
 
 import (
 	"context"
@@ -12,10 +12,10 @@ import (
 	"miya/internal/desktop"
 )
 
-func startUnlockDesktop(t *testing.T) (*desktopControl, string, *atomic.Int32) {
+func startUnlockDesktop(t *testing.T) (*Server, string, *atomic.Int32) {
 	t.Helper()
 	d, token, calls := mockDesktop(t)
-	d.locked = func() (bool, error) { return true, nil }
+	d.Locked = func() (bool, error) { return true, nil }
 	if w := desktopHTTP(d, token, "POST", "/start", "{}"); w.Code != 204 {
 		t.Fatal(w.Code)
 	}
@@ -24,7 +24,7 @@ func startUnlockDesktop(t *testing.T) (*desktopControl, string, *atomic.Int32) {
 
 func TestDesktopUnlockGatesAndValidation(t *testing.T) {
 	d, token, calls := mockDesktop(t)
-	d.locked = func() (bool, error) { return true, nil }
+	d.Locked = func() (bool, error) { return true, nil }
 	if w := desktopHTTP(d, token, "POST", "/unlock", `{"password":"secret"}`); w.Code != 403 {
 		t.Fatal("unlock before start", w.Code)
 	}
@@ -37,15 +37,15 @@ func TestDesktopUnlockGatesAndValidation(t *testing.T) {
 	if w := desktopHTTP(d, token, "GET", "/unlock", ""); w.Code != 405 {
 		t.Fatal("GET unlock", w.Code)
 	}
-	d.locked = nil
+	d.Locked = nil
 	if w := desktopHTTP(d, token, "POST", "/unlock", `{"password":"secret"}`); w.Code != 403 {
 		t.Fatal("unlock without lock detector", w.Code)
 	}
-	d.locked = func() (bool, error) { return false, nil }
+	d.Locked = func() (bool, error) { return false, nil }
 	if w := desktopHTTP(d, token, "POST", "/unlock", `{"password":"secret"}`); w.Code != 409 {
 		t.Fatal("already unlocked", w.Code)
 	}
-	d.locked = func() (bool, error) { return false, errors.New("private details") }
+	d.Locked = func() (bool, error) { return false, errors.New("private details") }
 	if w := desktopHTTP(d, token, "POST", "/unlock", `{"password":"secret"}`); w.Code != 503 || strings.Contains(w.Body.String(), "private") {
 		t.Fatal("unknown lock state", w.Code)
 	}
@@ -70,8 +70,8 @@ func TestDesktopUnlockSuccessAndIncorrectPassword(t *testing.T) {
 			d, token, _ := startUnlockDesktop(t)
 			locked := true
 			var inputs []desktop.Input
-			d.locked = func() (bool, error) { return locked, nil }
-			d.input = func(in desktop.Input) error {
+			d.Locked = func() (bool, error) { return locked, nil }
+			d.Input = func(in desktop.Input) error {
 				if err := in.Validate(); err != nil {
 					t.Fatal(err)
 				}
@@ -101,14 +101,14 @@ func TestDesktopUnlockRechecksAfterWakeAndInput(t *testing.T) {
 		t.Run(unlockAt, func(t *testing.T) {
 			d, token, _ := startUnlockDesktop(t)
 			locked, calls := true, 0
-			d.locked = func() (bool, error) { return locked, nil }
-			d.wake = func() error {
+			d.Locked = func() (bool, error) { return locked, nil }
+			d.Wake = func() error {
 				if unlockAt == "wake" {
 					locked = false
 				}
 				return nil
 			}
-			d.input = func(in desktop.Input) error {
+			d.Input = func(in desktop.Input) error {
 				calls++
 				if unlockAt == "select" || unlockAt == "text" && in.Kind == "text" {
 					locked = false
@@ -127,7 +127,7 @@ func TestDesktopUnlockRechecksAfterWakeAndInput(t *testing.T) {
 func TestDesktopUnlockRevocationAndConcurrentInput(t *testing.T) {
 	d, token, calls := startUnlockDesktop(t)
 	waking := make(chan struct{}, 1)
-	d.wake = func() error { waking <- struct{}{}; return nil }
+	d.Wake = func() error { waking <- struct{}{}; return nil }
 	result := make(chan int, 1)
 	go func() { result <- desktopHTTP(d, token, "POST", "/unlock", `{"password":"secret"}`).Code }()
 	select {
@@ -157,7 +157,7 @@ func TestDesktopUnlockRevocationAndConcurrentInput(t *testing.T) {
 
 func TestDesktopUnlockInputErrorIsRedacted(t *testing.T) {
 	d, token, _ := startUnlockDesktop(t)
-	d.input = func(desktop.Input) error { return errors.New("native secret") }
+	d.Input = func(desktop.Input) error { return errors.New("native secret") }
 	w := desktopHTTP(d, token, "POST", "/unlock", `{"password":"secret"}`)
 	if w.Code != 403 || strings.Contains(w.Body.String(), "secret") {
 		t.Fatal("native input error exposed", w.Code)
@@ -167,15 +167,15 @@ func TestDesktopUnlockInputErrorIsRedacted(t *testing.T) {
 func TestDesktopUnlockLockStateWithoutCapture(t *testing.T) {
 	for _, window := range []bool{false, true} {
 		d, token, _ := startUnlockDesktop(t)
-		d.capture = func() ([]byte, error) { t.Error("captured while locked"); return nil, nil }
-		d.captureWindow = func(desktop.Window) ([]byte, error) { t.Error("captured locked window"); return nil, nil }
+		d.Capture = func() ([]byte, error) { t.Error("captured while locked"); return nil, nil }
+		d.CaptureWindow = func(desktop.Window) ([]byte, error) { t.Error("captured locked window"); return nil, nil }
 		if window {
 			d.lease.window = &desktop.Window{ID: 1, PID: 2}
 			d.lease.pick = true
 		}
 		client := testDesktopClient(t, d, token)
-		_, locked, err := client.frame(context.Background())
-		if !locked || desktopStatus(err) != 423 {
+		_, locked, err := client.Frame(context.Background())
+		if !locked || Status(err) != 423 {
 			t.Fatal("lost lock state without a frame", locked, err)
 		}
 	}

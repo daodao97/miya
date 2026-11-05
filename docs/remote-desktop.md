@@ -115,4 +115,4 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer ./scripts/build-ios.sh 
 - Apple 服务端认证失败后不发送 RFB 3.8 的失败原因直接断开，noVNC 只报告断开而不触发 `securityfailure`。
 - noVNC-ARD 在服务端提供类型 33 时总是选择 33，不调用 `_isSupportedSecurityType`。
 
-2026-11-04 原生化：删除 `desktop-control.html`、手机回环代理的桌面分支、`/.miya-desktop-prefs` 及 iOS WebView 容器中的桌面代码，改为 `mobile_desktop_page.go` 的 MyGo 页面和 `mobile_desktop_client.go` 的直连客户端；Mac 后台接口不变。自动测试覆盖客户端授权前拒绝采集、开始后采集与输入、停止后 410、错误令牌、输入排队合并与上限、触控与触控板手势映射、403/410 状态、授权完成后自动返回，以及实时、连接中、已结束三种状态的渲染。上文较早的验收记录描述的是网页版，仅作历史保留。尚待真机验证手势手感、键盘弹出时的布局及弱网表现。
+2026-11-04 原生化：删除 `desktop-control.html`、手机回环代理的桌面分支、`/.miya-desktop-prefs` 及 iOS WebView 容器中的桌面代码，改为 `mobile_desktop_page.go` 的 MyGo 页面和 `mobile_desktop_client.go`（现为 `internal/desktop/control/client.go`）的直连客户端；Mac 后台接口不变。自动测试覆盖客户端授权前拒绝采集、开始后采集与输入、停止后 410、错误令牌、输入排队合并与上限、触控与触控板手势映射、403/410 状态、授权完成后自动返回，以及实时、连接中、已结束三种状态的渲染。上文较早的验收记录描述的是网页版，仅作历史保留。尚待真机验证手势手感、键盘弹出时的布局及弱网表现。

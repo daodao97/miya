@@ -1,4 +1,4 @@
-package main
+package control
 
 import (
 	"encoding/json"
@@ -9,7 +9,7 @@ import (
 	"miya/internal/thumbnail"
 )
 
-type phoneDesktopPreview struct {
+type Preview struct {
 	RequestID string          `json:"requestId"`
 	Approval  json.RawMessage `json:"approval"`
 	Window    desktop.Window  `json:"window"`
@@ -17,13 +17,13 @@ type phoneDesktopPreview struct {
 	Data      []byte          `json:"data,omitempty"`
 }
 
-type desktopWindowHint struct {
+type WindowHint struct {
 	App    string          `json:"app,omitempty"`
 	Title  string          `json:"title,omitempty"`
 	Window *desktop.Window `json:"window,omitempty"`
 }
 
-func desktopActionWindows(id uint32, pid int, before, after []desktop.Window) (present, successor bool) {
+func ActionWindows(id uint32, pid int, before, after []desktop.Window) (present, successor bool) {
 	var target desktop.Window
 	known := make(map[[2]int]bool, len(before))
 	for _, w := range before {
@@ -45,11 +45,11 @@ func desktopActionWindows(id uint32, pid int, before, after []desktop.Window) (p
 
 // Capture the owner/window set before dispatch, so a transition to a new dialog
 // cannot be mistaken for completion. Failure leaves the original action unsent.
-func (d *desktopControl) actionWindows(window desktop.Window) ([]desktop.Window, error) {
-	if d.windows == nil {
+func (d *Server) actionWindows(window desktop.Window) ([]desktop.Window, error) {
+	if d.Windows == nil {
 		return nil, errors.New("Unable to determine the target window state. Try again.")
 	}
-	windows, err := d.windows()
+	windows, err := d.Windows()
 	if err != nil {
 		return nil, err
 	}
@@ -61,7 +61,7 @@ func (d *desktopControl) actionWindows(window desktop.Window) ([]desktop.Window,
 	return nil, desktop.ErrWindowUnavailable
 }
 
-func (d *desktopControl) performWindowAction(window desktop.Window, id string) (desktop.Action, []desktop.Window, error) {
+func (d *Server) PerformWindowAction(window desktop.Window, id string) (desktop.Action, []desktop.Window, error) {
 	if !d.work.TryLock() {
 		return desktop.Action{}, nil, errors.New("The permission window is busy. Try again later.")
 	}
@@ -80,8 +80,8 @@ func (d *desktopControl) performWindowAction(window desktop.Window, id string) (
 }
 
 // The caller serializes dispatch with revocation and reads current native state.
-func (d *desktopControl) pressNativeWindowAction(window desktop.Window, id string) (desktop.Action, error) {
-	dialog, err := d.dialog(window)
+func (d *Server) pressNativeWindowAction(window desktop.Window, id string) (desktop.Action, error) {
+	dialog, err := d.Dialog(window)
 	if err != nil {
 		return desktop.Action{}, err
 	}
@@ -96,13 +96,13 @@ func (d *desktopControl) pressNativeWindowAction(window desktop.Window, id strin
 	if count != 1 || !match.Enabled {
 		return desktop.Action{}, errors.New("The permission button is unavailable. Enter your password or refresh the preview.")
 	}
-	if err := d.pressAction(window, match.ID); err != nil {
+	if err := d.PressAction(window, match.ID); err != nil {
 		return desktop.Action{}, err
 	}
 	return match, nil
 }
 
-func chooseDesktopWindow(windows []desktop.Window, hint desktopWindowHint) (desktop.Window, error) {
+func ChooseWindow(windows []desktop.Window, hint WindowHint) (desktop.Window, error) {
 	var matches []desktop.Window
 	for _, w := range windows {
 		if hint.Window != nil && (w.ID != hint.Window.ID || w.PID != hint.Window.PID) {
@@ -125,20 +125,20 @@ func chooseDesktopWindow(windows []desktop.Window, hint desktopWindowHint) (desk
 	return matches[0], nil
 }
 
-func (d *desktopControl) previewWindow(hint desktopWindowHint) (desktop.Window, []byte, error) {
+func (d *Server) PreviewWindow(hint WindowHint) (desktop.Window, []byte, error) {
 	if !d.work.TryLock() {
 		return desktop.Window{}, nil, errors.New("Refreshing the preview. Try again shortly.")
 	}
 	defer d.work.Unlock()
-	windows, err := d.windows()
+	windows, err := d.Windows()
 	if err != nil {
 		return desktop.Window{}, nil, err
 	}
-	w, err := chooseDesktopWindow(windows, hint)
+	w, err := ChooseWindow(windows, hint)
 	if err != nil {
 		return w, nil, err
 	}
-	data, err := d.captureWindow(w)
+	data, err := d.CaptureWindow(w)
 	if err != nil {
 		return w, nil, err
 	}

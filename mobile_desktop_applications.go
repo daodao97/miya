@@ -8,6 +8,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"miya/internal/desktop"
+	"miya/internal/desktop/control"
 )
 
 func (m *mobileApp) desktopChooseApps(p *mobileDesktopPage) {
@@ -18,7 +19,7 @@ func (m *mobileApp) desktopChooseApps(p *mobileDesktopPage) {
 	p.pickerTab, p.appStatus = 1, ""
 	m.desktopStage(p, "picker", tr("Apps"), "", true)
 	m.desktopDo(p, func(ctx context.Context) func() {
-		apps, err := p.client.applications(ctx)
+		apps, err := p.client.Applications(ctx)
 		icons := map[string]ui.ImageSource{}
 		if err == nil {
 			for i := range apps {
@@ -30,7 +31,7 @@ func (m *mobileApp) desktopChooseApps(p *mobileDesktopPage) {
 		}
 		return func() {
 			p.busy = false
-			if desktopStatus(err) == 410 {
+			if control.Status(err) == 410 {
 				m.desktopFinish(p, err.Error())
 				return
 			}
@@ -83,17 +84,17 @@ func (m *mobileApp) desktopLaunchApp(p *mobileDesktopPage, app desktop.Applicati
 		before, err := desktopAppWindows(ctx, p.client)
 		var opened desktop.Application
 		if err == nil {
-			opened, err = p.client.launchApplication(ctx, app.ID)
+			opened, err = p.client.LaunchApplication(ctx, app.ID)
 		}
 		if err != nil {
 			return func() {
-				if desktopStatus(err) == 410 {
+				if control.Status(err) == 410 {
 					m.desktopFinish(p, err.Error())
 					return
 				}
 				m.desktopStage(p, "picker", tr("Apps"), "", false)
 				p.appStatus = tr("Unable to open app") + ": " + err.Error()
-				if desktopStatus(err) == 423 {
+				if control.Status(err) == 423 {
 					m.desktopSelectFull(p)
 				}
 			}
@@ -101,11 +102,11 @@ func (m *mobileApp) desktopLaunchApp(p *mobileDesktopPage, app desktop.Applicati
 		var windows []desktop.Window
 		for deadline := time.Now().Add(9 * time.Second); time.Now().Before(deadline); {
 			// Give cold launches a moment to create their first window.
-			if !desktopWait(ctx, 750*time.Millisecond) {
+			if !control.Wait(ctx, 750*time.Millisecond) {
 				return func() {}
 			}
-			windows, err = p.client.windows(ctx)
-			if desktopStatus(err) == 429 {
+			windows, err = p.client.Windows(ctx)
+			if control.Status(err) == 429 {
 				continue
 			}
 			if err != nil {
@@ -116,7 +117,7 @@ func (m *mobileApp) desktopLaunchApp(p *mobileDesktopPage, app desktop.Applicati
 			}
 		}
 		return func() {
-			if desktopStatus(err) == 410 {
+			if control.Status(err) == 410 {
 				m.desktopFinish(p, err.Error())
 				return
 			}
@@ -131,14 +132,14 @@ func (m *mobileApp) desktopLaunchApp(p *mobileDesktopPage, app desktop.Applicati
 	})
 }
 
-func desktopAppWindows(ctx context.Context, client *desktopClient) ([]desktop.Window, error) {
+func desktopAppWindows(ctx context.Context, client *control.Client) ([]desktop.Window, error) {
 	deadline := time.Now().Add(6 * time.Second)
 	for {
-		windows, err := client.windows(ctx)
-		if desktopStatus(err) != 429 || !time.Now().Before(deadline) {
+		windows, err := client.Windows(ctx)
+		if control.Status(err) != 429 || !time.Now().Before(deadline) {
 			return windows, err
 		}
-		if !desktopWait(ctx, 250*time.Millisecond) {
+		if !control.Wait(ctx, 250*time.Millisecond) {
 			return nil, ctx.Err()
 		}
 	}

@@ -1,4 +1,4 @@
-package main
+package control
 
 import (
 	"encoding/json"
@@ -26,12 +26,12 @@ func desktopInputMatchesDisplay(in desktopInputRequest, l *desktopLease) bool {
 	return l.window == nil && l.display != nil && in.DisplayID == l.display.ID && in.DisplayUUID == l.display.UUID
 }
 
-func (d *desktopControl) displaysAvailable() bool {
-	return d.displays != nil && d.captureDisplay != nil && d.inputDisplay != nil
+func (d *Server) displaysAvailable() bool {
+	return d.Displays != nil && d.CaptureDisplay != nil && d.InputDisplay != nil
 }
 
-func (d *desktopControl) resolveDisplay(want *desktop.Display) (desktop.Display, error) {
-	displays, err := d.displays()
+func (d *Server) resolveDisplay(want *desktop.Display) (desktop.Display, error) {
+	displays, err := d.Displays()
 	if err != nil {
 		return desktop.Display{}, err
 	}
@@ -46,7 +46,7 @@ func (d *desktopControl) resolveDisplay(want *desktop.Display) (desktop.Display,
 	return desktop.Display{}, desktop.ErrDisplayUnavailable
 }
 
-func (d *desktopControl) serveDisplays(w http.ResponseWriter, r *http.Request, token string, l *desktopLease, selectDisplay bool) {
+func (d *Server) serveDisplays(w http.ResponseWriter, r *http.Request, token string, l *desktopLease, selectDisplay bool) {
 	if selectDisplay && r.Method != http.MethodPost || !selectDisplay && r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", 405)
 		return
@@ -82,7 +82,7 @@ func (d *desktopControl) serveDisplays(w http.ResponseWriter, r *http.Request, t
 		defer d.work.Unlock()
 	}
 	d.keepAwake(l, false)
-	displays, err := d.displays()
+	displays, err := d.Displays()
 	if err != nil {
 		http.Error(w, err.Error(), 503)
 		return

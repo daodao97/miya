@@ -6,16 +6,18 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+	"miya/internal/desktop/control"
+	"miya/internal/desktop/control/controltest"
 )
 
 func TestDesktopPrivacyPageToggleAndServerState(t *testing.T) {
 	_, wait := unlockUI(t)
-	d, token, _, current := privacyTestDesktop(t)
-	readyPrivacyDesktop(t, d, token)
+	d, token, _, current := controltest.Privacy(t)
+	controltest.ReadyPrivacy(t, d, token)
 	m := testMobileApp()
 	p := liveTestDesktopPage(t, m)
-	p.client, p.pickable, p.phase = testDesktopClient(t, d, token), true, "live"
-	m.desktopInitPrivacy(p, desktopSession{Pick: true, Privacy: true})
+	p.client, p.pickable, p.phase = controltest.Client(t, d, token), true, "live"
+	m.desktopInitPrivacy(p, control.Session{Pick: true, Privacy: true})
 	wait(func() bool { return p.privacy.known })
 	if p.privacy.enabled {
 		t.Fatal("privacy must start off")
@@ -85,10 +87,10 @@ func TestDesktopPrivacyPanelLayoutAndCapability(t *testing.T) {
 
 func TestDesktopPrivacyUncertainStateCanStillRestore(t *testing.T) {
 	_, wait := unlockUI(t)
-	d, token, _, _ := privacyTestDesktop(t)
+	d, token, _, _ := controltest.Privacy(t)
 	m := testMobileApp()
 	p := liveTestDesktopPage(t, m)
-	p.client, p.pickable, p.privacy.available, p.privacy.known = testDesktopClient(t, d, token), true, true, false
+	p.client, p.pickable, p.privacy.available, p.privacy.known = controltest.Client(t, d, token), true, true, false
 	m.desktopSetPrivacy(p)
 	wait(func() bool { return !p.privacy.busy })
 	if !p.privacy.known || p.privacy.enabled {
@@ -101,5 +103,5 @@ func TestDesktopPrivacyUncertainStateCanStillRestore(t *testing.T) {
 		t.Fatal("enabled before a frame")
 	}
 	p.cancel()
-	_, _ = p.client.privacy(context.Background(), nil)
+	_, _ = p.client.Privacy(context.Background(), nil)
 }

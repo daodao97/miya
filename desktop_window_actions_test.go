@@ -9,6 +9,7 @@ import (
 
 	"miya/internal/codex"
 	"miya/internal/desktop"
+	"miya/internal/desktop/control"
 	"miya/internal/remote"
 )
 
@@ -16,15 +17,15 @@ func TestDesktopAuthorizationButtonsUseCurrentNativeState(t *testing.T) {
 	window := desktop.Window{ID: 81, PID: 120}
 	enabled := false
 	presses := 0
-	d := &desktopControl{
-		windows: func() ([]desktop.Window, error) { return []desktop.Window{window}, nil },
-		dialog: func(w desktop.Window) (desktop.Dialog, error) {
+	d := &control.Server{
+		Windows: func() ([]desktop.Window, error) { return []desktop.Window{window}, nil },
+		Dialog: func(w desktop.Window) (desktop.Dialog, error) {
 			if w != window {
 				t.Fatal("wrong target")
 			}
 			return desktop.Dialog{Actions: []desktop.Action{{ID: "允许访问", Label: "允许访问", Enabled: enabled}}}, nil
 		},
-		pressAction: func(w desktop.Window, id string) error {
+		PressAction: func(w desktop.Window, id string) error {
 			if w != window || id != "允许访问" {
 				t.Fatal("wrong action")
 			}
@@ -32,14 +33,14 @@ func TestDesktopAuthorizationButtonsUseCurrentNativeState(t *testing.T) {
 			return nil
 		},
 	}
-	if _, _, err := d.performWindowAction(window, "允许访问"); err == nil || presses != 0 {
+	if _, _, err := d.PerformWindowAction(window, "允许访问"); err == nil || presses != 0 {
 		t.Fatal("disabled password action pressed")
 	}
 	enabled = true
-	if _, _, err := d.performWindowAction(window, "unknown"); err == nil || presses != 0 {
+	if _, _, err := d.PerformWindowAction(window, "unknown"); err == nil || presses != 0 {
 		t.Fatal("unadvertised action pressed")
 	}
-	a, _, err := d.performWindowAction(window, "允许访问")
+	a, _, err := d.PerformWindowAction(window, "允许访问")
 	if err != nil || presses != 1 {
 		t.Fatal(err, presses)
 	}
@@ -57,7 +58,7 @@ func TestDesktopAuthorizationRejectedPasswordKeepsTakeoverPending(t *testing.T) 
 	list[0].Method = "miya/desktopControl"
 	c.setApprovals(list)
 	r := remote.Request{ServerID: "s", Approval: id, ApprovalVersion: approvalFingerprint(list[0]), WindowID: 81, WindowPID: 120}
-	c.desktop = &desktopControl{windows: func() ([]desktop.Window, error) { return []desktop.Window{{ID: 81, PID: 120}}, nil }}
+	c.desktop = &control.Server{Windows: func() ([]desktop.Window, error) { return []desktop.Window{{ID: 81, PID: 120}}, nil }}
 	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
 	defer cancel()
 	c.confirmDesktopAction(ctx, r, desktop.Action{Label: "任意文字"}, []desktop.Window{{ID: 81, PID: 120}})
@@ -128,7 +129,7 @@ func TestDesktopAuthorizationCompletionDoesNotDependOnButtonText(t *testing.T) {
 			c.setApprovals(list)
 			r := remote.Request{ServerID: "s", Approval: id, ApprovalVersion: approvalFingerprint(list[0]), WindowID: 81, WindowPID: 120}
 			reads := 0
-			c.desktop = &desktopControl{windows: func() ([]desktop.Window, error) {
+			c.desktop = &control.Server{Windows: func() ([]desktop.Window, error) {
 				reads++
 				if reads == 1 {
 					return nil, errors.New("temporary window read failure")
@@ -160,7 +161,7 @@ func TestDesktopAuthorizationTransitionKeepsTakeoverPending(t *testing.T) {
 	c.setApprovals(list)
 	r := remote.Request{ServerID: "s", Approval: id, ApprovalVersion: approvalFingerprint(list[0]), WindowID: 81, WindowPID: 120}
 	reads := 0
-	c.desktop = &desktopControl{windows: func() ([]desktop.Window, error) {
+	c.desktop = &control.Server{Windows: func() ([]desktop.Window, error) {
 		reads++
 		if reads == 1 {
 			return nil, nil
@@ -194,7 +195,7 @@ func TestDesktopActionWindowIdentityAndSuccessors(t *testing.T) {
 		{"reused window number other owner", []desktop.Window{{ID: 81, PID: 999}}, false, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			present, successor := desktopActionWindows(target.ID, target.PID, before, tc.after)
+			present, successor := control.ActionWindows(target.ID, target.PID, before, tc.after)
 			if present != tc.present || successor != tc.successor {
 				t.Fatal(present, successor)
 			}

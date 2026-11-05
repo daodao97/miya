@@ -7,6 +7,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"miya/internal/desktop/control"
 )
 
 // Only the Keychain holds a saved password. The page retains flags and its
@@ -78,7 +79,7 @@ func (m *mobileApp) desktopUnlock(p *mobileDesktopPage) {
 }
 
 func (m *mobileApp) desktopBeginUnlock(p *mobileDesktopPage, saved bool) {
-	if !p.active || !p.canUnlock() || !p.unlock.locked || p.unlock.busy || (!saved && !validDesktopUnlockPassword(p.unlock.text)) {
+	if !p.active || !p.canUnlock() || !p.unlock.locked || p.unlock.busy || (!saved && !control.ValidUnlockPassword(p.unlock.text)) {
 		return
 	}
 	password, remember := p.unlock.text, p.unlock.remember
@@ -97,7 +98,7 @@ func (m *mobileApp) desktopBeginUnlock(p *mobileDesktopPage, saved bool) {
 				p.unlock.revision++
 				p.unlock.saved = result.saved
 			}
-			switch status := desktopStatus(result.err); {
+			switch status := control.Status(result.err); {
 			case result.err == nil, status == 409:
 				p.unlock.locked, p.unlock.status = false, ""
 			case status == 410:
@@ -158,7 +159,7 @@ func desktopUnlockAuthenticationError(err error) error {
 // Called off the UI thread. Fresh device authentication gates every saved
 // password use and every opt-in save. Only a confirmed successful unlock is
 // saved. Cancellation never submits the password or creates a new saved item.
-func (m *mobileApp) desktopPerformUnlock(ctx context.Context, client *desktopClient, store mobileSecretStore, key, password string, saved, remember bool) (result desktopUnlockResult) {
+func (m *mobileApp) desktopPerformUnlock(ctx context.Context, client *control.Client, store mobileSecretStore, key, password string, saved, remember bool) (result desktopUnlockResult) {
 	defer func() { password = "" }()
 	if saved || remember {
 		if store == nil || key == "" {
@@ -179,7 +180,7 @@ func (m *mobileApp) desktopPerformUnlock(ctx context.Context, client *desktopCli
 	}
 	if saved {
 		data, err := store.Get(key)
-		if err != nil || !validDesktopUnlockPassword(string(data)) {
+		if err != nil || !control.ValidUnlockPassword(string(data)) {
 			clear(data)
 			result.err = errors.New(tr("Unable to read the saved password. Enter it manually."))
 			return
@@ -189,7 +190,7 @@ func (m *mobileApp) desktopPerformUnlock(ctx context.Context, client *desktopCli
 	}
 	requestCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
-	result.err = client.unlock(requestCtx, password)
+	result.err = client.Unlock(requestCtx, password)
 	if result.err == nil && remember && !saved {
 		// Serialize writes with forgetting a password and removing a pairing.
 		m.desktopWrites.mu.Lock()
@@ -201,7 +202,7 @@ func (m *mobileApp) desktopPerformUnlock(ctx context.Context, client *desktopCli
 		}
 		m.desktopWrites.mu.Unlock()
 	}
-	if saved && desktopStatus(result.err) == 401 {
+	if saved && control.Status(result.err) == 401 {
 		m.desktopWrites.mu.Lock()
 		err := store.Delete(key)
 		m.desktopWrites.mu.Unlock()
@@ -254,7 +255,7 @@ func (m *mobileApp) desktopUnlockView(c *ui.Context, p *mobileDesktopPage) {
 				field := ui.TextInput(c.Key("desktop-unlock-text"), &p.unlock.text).Grow(1).MinWidth(0).MinHeight(44).Padding(10, 16).Background(pal.bg).Radius(22).
 					InputOptions(ui.InputOptions{Correction: ui.CorrectionOff, Capitalization: ui.CapitalizeNone, Return: ui.ReturnGo})
 				field.Password().Label(tr("Mac login password")).Placeholder(tr("Enter Mac login password")).Disabled(p.unlock.busy)
-				if m.pill(c, "desktop-unlock", tr("Unlock"), true).Disabled(p.unlock.busy || !validDesktopUnlockPassword(p.unlock.text)).Clicked() {
+				if m.pill(c, "desktop-unlock", tr("Unlock"), true).Disabled(p.unlock.busy || !control.ValidUnlockPassword(p.unlock.text)).Clicked() {
 					m.desktopUnlock(p)
 				}
 			})

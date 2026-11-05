@@ -1,4 +1,4 @@
-package main
+package control
 
 import (
 	"bytes"
@@ -10,18 +10,18 @@ import (
 	"miya/internal/desktop"
 )
 
-func pickTestDesktop(t *testing.T, pick bool) (*desktopControl, string) {
+func pickTestDesktop(t *testing.T, pick bool) (*Server, string) {
 	t.Helper()
 	d, token, _ := mockDesktop(t)
-	d.windows = func() ([]desktop.Window, error) {
+	d.Windows = func() ([]desktop.Window, error) {
 		return []desktop.Window{{ID: 5, PID: 9, App: "Notes", Title: "Draft"}}, nil
 	}
-	d.captureWindow = func(desktop.Window) ([]byte, error) { return []byte("window"), nil }
+	d.CaptureWindow = func(desktop.Window) ([]byte, error) { return []byte("window"), nil }
 	d.mu.Lock()
 	d.lease.window = &desktop.Window{}
 	d.mu.Unlock()
 	if pick {
-		d.allowPick(token)
+		d.AllowPick(token)
 	}
 	return d, token
 }
@@ -52,7 +52,7 @@ func TestDesktopMenuLeaseChoosesWindowOrFullDesktop(t *testing.T) {
 	if w := desktopHTTP(d, token, "GET", "/frame", ""); w.Code != 403 {
 		t.Fatal("switching kept the previous consent", w.Code)
 	}
-	var session desktopSession
+	var session Session
 	w := desktopHTTP(d, token, "GET", "/session", "")
 	if json.Unmarshal(w.Body.Bytes(), &session) != nil || session.WindowOnly || !session.Pick {
 		t.Fatal("session after full desktop", w.Body.String())
@@ -73,7 +73,7 @@ func TestDesktopAuthorizationLeaseCannotWidenToFullDesktop(t *testing.T) {
 	if w := desktopHTTP(d, token, "POST", "/select", `{"id":0,"pid":0}`); w.Code != 404 {
 		t.Fatal("authorization lease widened to the full desktop", w.Code)
 	}
-	var session desktopSession
+	var session Session
 	w := desktopHTTP(d, token, "GET", "/session", "")
 	if json.Unmarshal(w.Body.Bytes(), &session) != nil || !session.WindowOnly || session.Pick {
 		t.Fatal("authorization session", w.Body.String())
@@ -87,7 +87,7 @@ func TestDesktopMenuLeasePreviewsListedWindowsOnly(t *testing.T) {
 	if err := jpeg.Encode(&buf, large, nil); err != nil {
 		t.Fatal(err)
 	}
-	d.captureWindow = func(desktop.Window) ([]byte, error) { return buf.Bytes(), nil }
+	d.CaptureWindow = func(desktop.Window) ([]byte, error) { return buf.Bytes(), nil }
 	w := desktopHTTP(d, token, "GET", "/thumbnail?id=5&pid=9", "")
 	if w.Code != 200 || w.Header().Get("Content-Type") != "image/jpeg" {
 		t.Fatal(w.Code, w.Body.String())

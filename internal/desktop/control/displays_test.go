@@ -1,4 +1,4 @@
-package main
+package control
 
 import (
 	"context"
@@ -10,14 +10,14 @@ import (
 	"miya/internal/desktop"
 )
 
-func displayTestDesktop(t *testing.T) (*desktopControl, string, []desktop.Display, *atomic.Uint32) {
+func displayTestDesktop(t *testing.T) (*Server, string, []desktop.Display, *atomic.Uint32) {
 	t.Helper()
 	d, token := pickTestDesktop(t, true)
 	displays := []desktop.Display{{ID: 1, UUID: "built-in", Name: "Built-in Retina Display", Main: true, Width: 1512, Height: 982}, {ID: 3, UUID: "external", Name: "DELL P2725QE", Width: 2560, Height: 1440}}
 	input := new(atomic.Uint32)
-	d.displays = func() ([]desktop.Display, error) { return displays, nil }
-	d.captureDisplay = func(display desktop.Display) ([]byte, error) { return []byte(display.Name), nil }
-	d.inputDisplay = func(display desktop.Display, in desktop.Input) error { input.Store(display.ID); return nil }
+	d.Displays = func() ([]desktop.Display, error) { return displays, nil }
+	d.CaptureDisplay = func(display desktop.Display) ([]byte, error) { return []byte(display.Name), nil }
+	d.InputDisplay = func(display desktop.Display, in desktop.Input) error { input.Store(display.ID); return nil }
 	return d, token, displays, input
 }
 
@@ -25,50 +25,50 @@ func TestDesktopDisplaysListSelectionCaptureAndInput(t *testing.T) {
 	d, token, displays, input := displayTestDesktop(t)
 	c := testDesktopClient(t, d, token)
 	ctx := context.Background()
-	s, err := c.session(ctx)
+	s, err := c.Session(ctx)
 	if err != nil || !s.Displays {
 		t.Fatal(s, err)
 	}
-	listed, err := c.displays(ctx)
+	listed, err := c.Displays(ctx)
 	if err != nil || len(listed) != 2 || listed[1].Name != displays[1].Name {
 		t.Fatal(listed, err)
 	}
-	selected, err := c.selectDisplay(ctx, displays[1])
+	selected, err := c.SelectDisplay(ctx, displays[1])
 	if err != nil || selected != displays[1] {
 		t.Fatal(selected, err)
 	}
-	if _, _, err := c.frame(ctx); desktopStatus(err) != 403 {
+	if _, _, err := c.Frame(ctx); Status(err) != 403 {
 		t.Fatal("capture before start", err)
 	}
-	if err := c.start(ctx); err != nil {
+	if err := c.Start(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if err := c.inputForDisplay(ctx, desktop.Input{Kind: "click", X: .5, Y: .5}, displays[1]); desktopStatus(err) != 409 {
+	if err := c.InputForDisplay(ctx, desktop.Input{Kind: "click", X: .5, Y: .5}, displays[1]); Status(err) != 409 {
 		t.Fatal("input before fresh frame", err)
 	}
-	data, _, err := c.frame(ctx)
+	data, _, err := c.Frame(ctx)
 	if err != nil || string(data) != displays[1].Name {
 		t.Fatal("wrong display captured", string(data), err)
 	}
-	if err := c.input(ctx, desktop.Input{Kind: "click"}); desktopStatus(err) != 409 {
+	if err := c.input(ctx, desktop.Input{Kind: "click"}); Status(err) != 409 {
 		t.Fatal("untargeted input accepted after explicit selection", err)
 	}
-	if err := c.inputForDisplay(ctx, desktop.Input{Kind: "click"}, displays[0]); desktopStatus(err) != 409 {
+	if err := c.InputForDisplay(ctx, desktop.Input{Kind: "click"}, displays[0]); Status(err) != 409 {
 		t.Fatal("old display input accepted", err)
 	}
-	if err := c.inputForDisplay(ctx, desktop.Input{Kind: "click", X: .3, Y: .7}, displays[1]); err != nil || input.Load() != displays[1].ID {
+	if err := c.InputForDisplay(ctx, desktop.Input{Kind: "click", X: .3, Y: .7}, displays[1]); err != nil || input.Load() != displays[1].ID {
 		t.Fatal("wrong input display", input.Load(), err)
 	}
-	if _, err := c.selectDisplay(ctx, displays[0]); err != nil {
+	if _, err := c.SelectDisplay(ctx, displays[0]); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := c.frame(ctx); desktopStatus(err) != 403 {
+	if _, _, err := c.Frame(ctx); Status(err) != 403 {
 		t.Fatal("selection kept old control consent", err)
 	}
-	if err := c.start(ctx); err != nil {
+	if err := c.Start(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if err := c.inputForDisplay(ctx, desktop.Input{Kind: "click"}, displays[0]); desktopStatus(err) != 409 {
+	if err := c.InputForDisplay(ctx, desktop.Input{Kind: "click"}, displays[0]); Status(err) != 409 {
 		t.Fatal("switch did not require fresh frame", err)
 	}
 }
@@ -122,27 +122,27 @@ func TestDesktopDisplayDisconnectNeverFallsBackToMain(t *testing.T) {
 	d, token, displays, input := displayTestDesktop(t)
 	c := testDesktopClient(t, d, token)
 	ctx := context.Background()
-	if _, err := c.selectDisplay(ctx, displays[1]); err != nil {
+	if _, err := c.SelectDisplay(ctx, displays[1]); err != nil {
 		t.Fatal(err)
 	}
-	if err := c.start(ctx); err != nil {
+	if err := c.Start(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := c.frame(ctx); err != nil {
+	if _, _, err := c.Frame(ctx); err != nil {
 		t.Fatal(err)
 	}
-	d.captureDisplay = func(display desktop.Display) ([]byte, error) { return nil, desktop.ErrDisplayUnavailable }
+	d.CaptureDisplay = func(display desktop.Display) ([]byte, error) { return nil, desktop.ErrDisplayUnavailable }
 	d.mu.Lock()
 	d.lease.lastFrame = time.Time{}
 	d.mu.Unlock()
-	if _, _, err := c.frame(ctx); desktopStatus(err) != 409 {
+	if _, _, err := c.Frame(ctx); Status(err) != 409 {
 		t.Fatal(err)
 	}
-	if err := c.inputForDisplay(ctx, desktop.Input{Kind: "click"}, displays[1]); desktopStatus(err) != 409 || input.Load() != 0 {
+	if err := c.InputForDisplay(ctx, desktop.Input{Kind: "click"}, displays[1]); Status(err) != 409 || input.Load() != 0 {
 		t.Fatal("disconnected display accepted input", err)
 	}
-	d.displays = func() ([]desktop.Display, error) { return displays[:1], nil }
-	if err := c.start(ctx); desktopStatus(err) != 409 {
+	d.Displays = func() ([]desktop.Display, error) { return displays[:1], nil }
+	if err := c.Start(ctx); Status(err) != 409 {
 		t.Fatal("start silently fell back to main", err)
 	}
 }
@@ -154,8 +154,8 @@ func TestDesktopDisplaysRecheckLeaseAndBusyState(t *testing.T) {
 		t.Fatal("selection interrupted unlocking", w.Code)
 	}
 	d.lease.unlocking = false
-	read := d.displays
-	d.displays = func() ([]desktop.Display, error) { list, err := read(); d.revoke(token); return list, err }
+	read := d.Displays
+	d.Displays = func() ([]desktop.Display, error) { list, err := read(); d.Revoke(token); return list, err }
 	w := desktopHTTP(d, token, "GET", "/displays", "")
 	if w.Code != 410 {
 		t.Fatal("revoked lease received list", w.Code)
@@ -168,7 +168,7 @@ func TestDesktopDisplaySessionReportsSelectedIdentity(t *testing.T) {
 		t.Fatal(w.Code)
 	}
 	w := desktopHTTP(d, token, "GET", "/session", "")
-	var s desktopSession
+	var s Session
 	if json.Unmarshal(w.Body.Bytes(), &s) != nil || s.Display == nil || *s.Display != displays[1] || s.WindowOnly {
 		t.Fatal(w.Body.String())
 	}
@@ -177,7 +177,7 @@ func TestDesktopDisplaySessionReportsSelectedIdentity(t *testing.T) {
 func TestDesktopDisplaySwitchKeepsPrivacyLease(t *testing.T) {
 	d, token, displays, _ := displayTestDesktop(t)
 	privacy := &testDesktopPrivacy{done: make(chan struct{})}
-	d.privacy = func(ctx context.Context) (desktop.Privacy, error) {
+	d.Privacy = func(ctx context.Context) (desktop.Privacy, error) {
 		go func() {
 			select {
 			case <-ctx.Done():
@@ -190,19 +190,19 @@ func TestDesktopDisplaySwitchKeepsPrivacyLease(t *testing.T) {
 	readyPrivacyDesktop(t, d, token)
 	client := testDesktopClient(t, d, token)
 	on := true
-	if state, err := client.privacy(context.Background(), &on); err != nil || !state.Enabled {
+	if state, err := client.Privacy(context.Background(), &on); err != nil || !state.Enabled {
 		t.Fatal(state, err)
 	}
-	if _, err := client.selectDisplay(context.Background(), displays[1]); err != nil {
+	if _, err := client.SelectDisplay(context.Background(), displays[1]); err != nil {
 		t.Fatal(err)
 	}
-	if err := client.start(context.Background()); err != nil {
+	if err := client.Start(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if state, err := client.privacy(context.Background(), nil); err != nil || !state.Enabled {
+	if state, err := client.Privacy(context.Background(), nil); err != nil || !state.Enabled {
 		t.Fatal("display switch restored physical screens", state, err)
 	}
-	d.revoke(token)
+	d.Revoke(token)
 	select {
 	case <-privacy.Done():
 	case <-time.After(time.Second):

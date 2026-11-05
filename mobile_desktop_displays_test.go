@@ -16,12 +16,14 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"miya/internal/desktop"
+	"miya/internal/desktop/control"
+	"miya/internal/desktop/control/controltest"
 )
 
 func TestDesktopDisplaysPickerNamesAndLayout(t *testing.T) {
 	for _, width := range []int{320, 390} {
 		t.Run(fmt.Sprint(width), func(t *testing.T) {
-			_, _, displays, _ := displayTestDesktop(t)
+			_, _, displays, _ := controltest.Display(t)
 			m := testMobileApp()
 			p := liveTestDesktopPage(t, m)
 			p.pickable, p.displaysAvailable, p.appsAvailable = true, true, true
@@ -54,13 +56,13 @@ func TestDesktopDisplaysPickerNamesAndLayout(t *testing.T) {
 
 func TestDesktopDisplaysInitializeShowsChoiceThenSelectsSecondary(t *testing.T) {
 	_, wait := unlockUI(t)
-	d, token, displays, _ := displayTestDesktop(t)
+	d, token, displays, _ := controltest.Display(t)
 	d.SetLeaseWindow(nil) // the full-desktop menu entry
 	frame := windowJPEG(t)
-	d.captureDisplay = func(display desktop.Display) ([]byte, error) { return frame, nil }
+	d.CaptureDisplay = func(display desktop.Display) ([]byte, error) { return frame, nil }
 	m := testMobileApp()
 	p := liveTestDesktopPage(t, m)
-	p.client = testDesktopClient(t, d, token)
+	p.client = controltest.Client(t, d, token)
 	p.active = false
 	m.desktopInitialize(p)
 	wait(func() bool { return p.phase == "picker" && !p.busy })
@@ -83,12 +85,12 @@ func TestDesktopDisplaysInitializeShowsChoiceThenSelectsSecondary(t *testing.T) 
 
 func TestDesktopDisplaysDisconnectReturnsToPicker(t *testing.T) {
 	_, wait := unlockUI(t)
-	d, token, displays, _ := displayTestDesktop(t)
-	d.displays = func() ([]desktop.Display, error) { return displays[:1], nil }
+	d, token, displays, _ := controltest.Display(t)
+	d.Displays = func() ([]desktop.Display, error) { return displays[:1], nil }
 	m := testMobileApp()
 	p := liveTestDesktopPage(t, m)
-	p.client, p.pickable, p.displaysAvailable, p.display, p.displays = testDesktopClient(t, d, token), true, true, displays[1], displays
-	m.receiveDesktopFrame(p, nil, nil, false, &desktopHTTPError{Status: 409, Message: "display disconnected"})
+	p.client, p.pickable, p.displaysAvailable, p.display, p.displays = controltest.Client(t, d, token), true, true, displays[1], displays
+	m.receiveDesktopFrame(p, nil, nil, false, &control.HTTPError{Status: 409, Message: "display disconnected"})
 	wait(func() bool { return p.phase == "picker" && !p.busy })
 	if p.active || p.image != nil || len(p.queue) != 0 || p.pickerTab != 2 || len(p.displays) != 1 {
 		t.Fatal("disconnected display remained live")
@@ -117,7 +119,7 @@ func (f displayRoundTripFunc) RoundTrip(r *http.Request) (*http.Response, error)
 
 func TestDesktopDisplaysDiscardInFlightFrameAfterSwitch(t *testing.T) {
 	_, wait := unlockUI(t)
-	d, token, displays, _ := displayTestDesktop(t)
+	d, token, displays, _ := controltest.Display(t)
 	frame := func(c color.RGBA) []byte {
 		im := image.NewRGBA(image.Rect(0, 0, 20, 20))
 		for y := 0; y < 20; y++ {
@@ -132,18 +134,18 @@ func TestDesktopDisplaysDiscardInFlightFrameAfterSwitch(t *testing.T) {
 		return b.Bytes()
 	}
 	oldFrame, newFrame := frame(color.RGBA{R: 200, A: 255}), frame(color.RGBA{B: 200, A: 255})
-	d.captureDisplay = func(display desktop.Display) ([]byte, error) {
+	d.CaptureDisplay = func(display desktop.Display) ([]byte, error) {
 		if display.ID == displays[0].ID {
 			return oldFrame, nil
 		}
 		return newFrame, nil
 	}
-	client := testDesktopClient(t, d, token)
+	client := controltest.Client(t, d, token)
 	ctx := context.Background()
-	if _, err := client.selectDisplay(ctx, displays[0]); err != nil {
+	if _, err := client.SelectDisplay(ctx, displays[0]); err != nil {
 		t.Fatal(err)
 	}
-	if err := client.start(ctx); err != nil {
+	if err := client.Start(ctx); err != nil {
 		t.Fatal(err)
 	}
 	started, release := make(chan struct{}), make(chan struct{})

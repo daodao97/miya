@@ -7,6 +7,7 @@ import (
 
 	"miya/internal/codex"
 	"miya/internal/desktop"
+	"miya/internal/desktop/control"
 )
 
 func (c *chatController) mcpDesktopControl(r mcpRequest) (any, error) {
@@ -26,9 +27,9 @@ func (c *chatController) mcpDesktopControl(r mcpRequest) (any, error) {
 	if len(r.WindowApp) > 256 || len(r.WindowTitle) > 1000 {
 		return nil, errors.New("Window name is too long")
 	}
-	hint := desktopWindowHint{App: strings.TrimSpace(r.WindowApp), Title: strings.TrimSpace(r.WindowTitle)}
+	hint := control.WindowHint{App: strings.TrimSpace(r.WindowApp), Title: strings.TrimSpace(r.WindowTitle)}
 	if windows, err := desktop.Windows(); err == nil {
-		if target, err := chooseDesktopWindow(windows, hint); err == nil {
+		if target, err := control.ChooseWindow(windows, hint); err == nil {
 			hint.Window = &target
 		}
 	}

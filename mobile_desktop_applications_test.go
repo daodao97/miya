@@ -8,19 +8,20 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"miya/internal/desktop"
+	"miya/internal/desktop/control/controltest"
 )
 
 func TestDesktopApplicationPickerLaunchesAndShowsWindow(t *testing.T) {
 	_, wait := unlockUI(t)
-	d, token, calls := applicationTestDesktop(t)
-	d.windows = func() ([]desktop.Window, error) {
+	d, token, calls := controltest.Application(t)
+	d.Windows = func() ([]desktop.Window, error) {
 		return []desktop.Window{{ID: 5, PID: 9, App: "Notes", BundleID: "com.apple.Notes", Title: "Draft"}}, nil
 	}
 	jpeg := windowJPEG(t)
-	d.captureWindow = func(desktop.Window) ([]byte, error) { return jpeg, nil }
+	d.CaptureWindow = func(desktop.Window) ([]byte, error) { return jpeg, nil }
 	m := testMobileApp()
 	p := liveTestDesktopPage(t, m)
-	p.client, p.pickable, p.appsAvailable, p.phase, p.sending = testDesktopClient(t, d, token), true, true, "live", false
+	p.client, p.pickable, p.appsAvailable, p.phase, p.sending = controltest.Client(t, d, token), true, true, "live", false
 	m.desktopChooseApps(p)
 	wait(func() bool { return p.phase == "picker" && !p.busy })
 	if len(p.apps) != 1 || p.active || p.image != nil {
@@ -41,7 +42,7 @@ func TestDesktopApplicationPickerLaunchesAndShowsWindow(t *testing.T) {
 	// Complete the in-flight frame before disposing the test UI dispatcher.
 	wait(func() bool { return p.image != nil })
 	p.cancel()
-	if _, err := p.client.session(context.Background()); err != nil {
+	if _, err := p.client.Session(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 }

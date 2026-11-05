@@ -6,6 +6,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"miya/internal/desktop"
+	"miya/internal/desktop/control"
 )
 
 // liveTestDesktopPage is a live page whose queue is held, so tests can read
@@ -124,12 +125,12 @@ func TestDesktopPageFrameStatuses(t *testing.T) {
 	m := testMobileApp()
 	p := liveTestDesktopPage(t, m)
 	p.phase, p.polling = "live", true
-	m.receiveDesktopFrame(p, nil, nil, false, &desktopHTTPError{Status: 403, Message: "请允许屏幕录制"})
+	m.receiveDesktopFrame(p, nil, nil, false, &control.HTTPError{Status: 403, Message: "请允许屏幕录制"})
 	if p.active || p.phase != "error" || p.title != "Permission required on Mac" || p.polling {
 		t.Fatal("permission failure did not stop control", p.phase, p.title)
 	}
 	p.active, p.phase = true, "live"
-	m.receiveDesktopFrame(p, nil, nil, false, &desktopHTTPError{Status: 410, Message: "Remote control ended"})
+	m.receiveDesktopFrame(p, nil, nil, false, &control.HTTPError{Status: 410, Message: "Remote control ended"})
 	if p.active || p.phase != "ended" || p.image != nil || p.detail != "Remote control ended" {
 		t.Fatal("ended lease kept the page live", p.phase)
 	}

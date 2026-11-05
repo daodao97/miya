@@ -1,4 +1,4 @@
-package main
+package control
 
 import (
 	"encoding/json"
@@ -16,7 +16,7 @@ type desktopPrefs struct {
 
 func validPointerMode(mode string) bool { return mode == "trackpad" || mode == "touch" }
 
-func readDesktopPrefs(path string) desktopPrefs {
+func ReadPrefs(path string) desktopPrefs {
 	prefs := desktopPrefs{PointerMode: "trackpad"}
 	if path == "" {
 		return prefs
@@ -31,7 +31,7 @@ func readDesktopPrefs(path string) desktopPrefs {
 	return prefs
 }
 
-func writeDesktopPrefs(path, mode string) error {
+func WritePrefs(path, mode string) error {
 	if path == "" || !validPointerMode(mode) {
 		return nil
 	}

@@ -1,4 +1,4 @@
-package main
+package control
 
 import (
 	"bytes"
@@ -14,12 +14,13 @@ import (
 
 	"miya/internal/desktop"
 	"miya/internal/textutil"
+	"miya/locales"
 )
 
 // desktopClient speaks the Mac's control API over the paired, encrypted
 // files channel. The bearer token stays in this process; nothing is served on
 // a loopback port and no WebView sees it.
-type desktopClient struct {
+type Client struct {
 	token     string
 	transport *http.Transport
 	http      *http.Client
@@ -27,15 +28,15 @@ type desktopClient struct {
 
 // desktopHTTPError keeps the status so the page can tell an ended lease (410),
 // missing permission (403), a busy desktop (409/429) and other failures apart.
-type desktopHTTPError struct {
+type HTTPError struct {
 	Status  int
 	Message string
 }
 
-func (e *desktopHTTPError) Error() string { return e.Message }
+func (e *HTTPError) Error() string { return e.Message }
 
-func desktopStatus(err error) int {
-	var e *desktopHTTPError
+func Status(err error) int {
+	var e *HTTPError
 	if errors.As(err, &e) {
 		return e.Status
 	}
@@ -44,7 +45,7 @@ func desktopStatus(err error) int {
 
 const desktopClientMaxBody = 2 << 20
 
-func newDesktopClient(dial func(context.Context) (net.Conn, error), token string) *desktopClient {
+func NewClient(dial func(context.Context) (net.Conn, error), token string) *Client {
 	transport := &http.Transport{MaxIdleConns: 4, MaxIdleConnsPerHost: 4, IdleConnTimeout: 30 * time.Second, ResponseHeaderTimeout: 20 * time.Second,
 		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 			ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
@@ -52,15 +53,15 @@ func newDesktopClient(dial func(context.Context) (net.Conn, error), token string
 			return dial(ctx)
 		},
 	}
-	return &desktopClient{token: token, transport: transport, http: &http.Client{Transport: transport}}
+	return &Client{token: token, transport: transport, http: &http.Client{Transport: transport}}
 }
 
-func (c *desktopClient) do(ctx context.Context, method, path string, body any) ([]byte, error) {
+func (c *Client) do(ctx context.Context, method, path string, body any) ([]byte, error) {
 	data, _, err := c.doHeader(ctx, method, path, body)
 	return data, err
 }
 
-func (c *desktopClient) doHeader(ctx context.Context, method, path string, body any) ([]byte, http.Header, error) {
+func (c *Client) doHeader(ctx context.Context, method, path string, body any) ([]byte, http.Header, error) {
 	var reader io.Reader
 	if body != nil {
 		data, err := json.Marshal(body)
@@ -69,7 +70,7 @@ func (c *desktopClient) doHeader(ctx context.Context, method, path string, body 
 		}
 		reader = bytes.NewReader(data)
 	}
-	request, err := http.NewRequestWithContext(ctx, method, "http://desktop"+desktopControlPrefix+path, reader)
+	request, err := http.NewRequestWithContext(ctx, method, "http://desktop"+Prefix+path, reader)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -91,7 +92,7 @@ func (c *desktopClient) doHeader(ctx context.Context, method, path string, body 
 		if r := []rune(message); len(r) > 300 {
 			message = string(r[:300])
 		}
-		return nil, response.Header, &desktopHTTPError{Status: response.StatusCode, Message: textutil.FirstNonEmpty(message, fmt.Sprintf(tr("Mac returned an error (%d)"), response.StatusCode))}
+		return nil, response.Header, &HTTPError{Status: response.StatusCode, Message: textutil.FirstNonEmpty(message, fmt.Sprintf(tr("Mac returned an error (%d)"), response.StatusCode))}
 	}
 	if err != nil {
 		return nil, nil, err
@@ -102,7 +103,7 @@ func (c *desktopClient) doHeader(ctx context.Context, method, path string, body 
 	return data, response.Header, nil
 }
 
-type desktopSession struct {
+type Session struct {
 	WindowOnly bool             `json:"windowOnly"`
 	Window     *desktop.Window  `json:"window"`
 	Pick       bool             `json:"pick"`
@@ -112,7 +113,7 @@ type desktopSession struct {
 	Display    *desktop.Display `json:"display,omitempty"`
 }
 
-func (c *desktopClient) displays(ctx context.Context) ([]desktop.Display, error) {
+func (c *Client) Displays(ctx context.Context) ([]desktop.Display, error) {
 	var displays []desktop.Display
 	data, err := c.do(ctx, http.MethodGet, "/displays", nil)
 	if err == nil {
@@ -121,7 +122,7 @@ func (c *desktopClient) displays(ctx context.Context) ([]desktop.Display, error)
 	return displays, err
 }
 
-func (c *desktopClient) selectDisplay(ctx context.Context, display desktop.Display) (desktop.Display, error) {
+func (c *Client) SelectDisplay(ctx context.Context, display desktop.Display) (desktop.Display, error) {
 	var selected desktop.Display
 	data, err := c.do(ctx, http.MethodPost, "/display", struct {
 		ID   uint32 `json:"id"`
@@ -133,7 +134,7 @@ func (c *desktopClient) selectDisplay(ctx context.Context, display desktop.Displ
 	return selected, err
 }
 
-func (c *desktopClient) inputForDisplay(ctx context.Context, in desktop.Input, display desktop.Display) error {
+func (c *Client) InputForDisplay(ctx context.Context, in desktop.Input, display desktop.Display) error {
 	if display.ID == 0 {
 		return c.input(ctx, in)
 	}
@@ -144,7 +145,7 @@ func (c *desktopClient) inputForDisplay(ctx context.Context, in desktop.Input, d
 	return err
 }
 
-func (c *desktopClient) privacy(ctx context.Context, enabled *bool) (desktopPrivacyState, error) {
+func (c *Client) Privacy(ctx context.Context, enabled *bool) (desktopPrivacyState, error) {
 	method, body := http.MethodGet, any(nil)
 	if enabled != nil {
 		method, body = http.MethodPost, desktopPrivacyState{Enabled: *enabled}
@@ -157,7 +158,7 @@ func (c *desktopClient) privacy(ctx context.Context, enabled *bool) (desktopPriv
 	return state, err
 }
 
-func (c *desktopClient) applications(ctx context.Context) ([]desktop.Application, error) {
+func (c *Client) Applications(ctx context.Context) ([]desktop.Application, error) {
 	var apps []desktop.Application
 	data, err := c.do(ctx, http.MethodGet, "/apps", nil)
 	if err == nil {
@@ -166,7 +167,7 @@ func (c *desktopClient) applications(ctx context.Context) ([]desktop.Application
 	return apps, err
 }
 
-func (c *desktopClient) launchApplication(ctx context.Context, id string) (desktop.Application, error) {
+func (c *Client) LaunchApplication(ctx context.Context, id string) (desktop.Application, error) {
 	var app desktop.Application
 	data, err := c.do(ctx, http.MethodPost, "/launch", struct {
 		ID string `json:"id"`
@@ -177,14 +178,14 @@ func (c *desktopClient) launchApplication(ctx context.Context, id string) (deskt
 	return app, err
 }
 
-type desktopActions struct {
+type Actions struct {
 	Window  desktop.Window   `json:"window"`
 	Actions []desktop.Action `json:"actions"`
 	Pending bool             `json:"pending"`
 }
 
-func (c *desktopClient) session(ctx context.Context) (desktopSession, error) {
-	var s desktopSession
+func (c *Client) Session(ctx context.Context) (Session, error) {
+	var s Session
 	data, err := c.do(ctx, http.MethodGet, "/session", nil)
 	if err == nil {
 		err = json.Unmarshal(data, &s)
@@ -192,7 +193,7 @@ func (c *desktopClient) session(ctx context.Context) (desktopSession, error) {
 	return s, err
 }
 
-func (c *desktopClient) windows(ctx context.Context) ([]desktop.Window, error) {
+func (c *Client) Windows(ctx context.Context) ([]desktop.Window, error) {
 	var windows []desktop.Window
 	data, err := c.do(ctx, http.MethodGet, "/windows", nil)
 	if err == nil {
@@ -201,7 +202,7 @@ func (c *desktopClient) windows(ctx context.Context) ([]desktop.Window, error) {
 	return windows, err
 }
 
-func (c *desktopClient) selectWindow(ctx context.Context, w desktop.Window) error {
+func (c *Client) SelectWindow(ctx context.Context, w desktop.Window) error {
 	_, err := c.do(ctx, http.MethodPost, "/select", struct {
 		ID  uint32 `json:"id"`
 		PID int    `json:"pid"`
@@ -210,17 +211,17 @@ func (c *desktopClient) selectWindow(ctx context.Context, w desktop.Window) erro
 }
 
 // thumbnail previews one listed window; only menu leases provide it.
-func (c *desktopClient) thumbnail(ctx context.Context, w desktop.Window) ([]byte, error) {
+func (c *Client) Thumbnail(ctx context.Context, w desktop.Window) ([]byte, error) {
 	return c.do(ctx, http.MethodGet, fmt.Sprintf("/thumbnail?id=%d&pid=%d", w.ID, w.PID), nil)
 }
 
-func (c *desktopClient) start(ctx context.Context) error {
+func (c *Client) Start(ctx context.Context) error {
 	_, err := c.do(ctx, http.MethodPost, "/start", struct{}{})
 	return err
 }
 
 // frame also reports whether the Mac currently shows its lock screen.
-func (c *desktopClient) frame(ctx context.Context) ([]byte, bool, error) {
+func (c *Client) Frame(ctx context.Context) ([]byte, bool, error) {
 	data, header, err := c.doHeader(ctx, http.MethodGet, "/frame", nil)
 	if err == nil && len(data) == 0 {
 		err = errors.New(tr("Invalid or oversized frame"))
@@ -229,14 +230,14 @@ func (c *desktopClient) frame(ctx context.Context) ([]byte, bool, error) {
 }
 
 // unlock types password into the Mac's lock screen and waits for the result.
-func (c *desktopClient) unlock(ctx context.Context, password string) error {
+func (c *Client) Unlock(ctx context.Context, password string) error {
 	_, err := c.do(ctx, http.MethodPost, "/unlock", struct {
 		Password string `json:"password"`
 	}{password})
 	return err
 }
 
-func (c *desktopClient) input(ctx context.Context, in desktop.Input) error {
+func (c *Client) input(ctx context.Context, in desktop.Input) error {
 	if err := in.Validate(); err != nil {
 		return err
 	}
@@ -244,8 +245,8 @@ func (c *desktopClient) input(ctx context.Context, in desktop.Input) error {
 	return err
 }
 
-func (c *desktopClient) actions(ctx context.Context) (desktopActions, error) {
-	var a desktopActions
+func (c *Client) Actions(ctx context.Context) (Actions, error) {
+	var a Actions
 	data, err := c.do(ctx, http.MethodGet, "/actions", nil)
 	if err == nil {
 		err = json.Unmarshal(data, &a)
@@ -253,7 +254,7 @@ func (c *desktopClient) actions(ctx context.Context) (desktopActions, error) {
 	return a, err
 }
 
-func (c *desktopClient) pressAction(ctx context.Context, id string, w desktop.Window) error {
+func (c *Client) PressAction(ctx context.Context, id string, w desktop.Window) error {
 	_, err := c.do(ctx, http.MethodPost, "/action", struct {
 		ID        string `json:"id"`
 		WindowID  uint32 `json:"windowId"`
@@ -264,7 +265,7 @@ func (c *desktopClient) pressAction(ctx context.Context, id string, w desktop.Wi
 
 // stop revokes the lease. It uses its own short deadline so it still runs
 // when the page's context has already been cancelled.
-func (c *desktopClient) stop() {
+func (c *Client) Stop() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_, _ = c.do(ctx, http.MethodPost, "/stop", struct{}{})
@@ -272,12 +273,14 @@ func (c *desktopClient) stop() {
 }
 
 // Token is the lease token the client sends.
-func (c *desktopClient) Token() string { return c.token }
+func (c *Client) Token() string { return c.token }
 
 // Transport is the client's HTTP transport; SetTransport replaces it, as
 // tests do to delay or fail requests.
-func (c *desktopClient) Transport() http.RoundTripper      { return c.http.Transport }
-func (c *desktopClient) SetTransport(rt http.RoundTripper) { c.http.Transport = rt }
+func (c *Client) Transport() http.RoundTripper      { return c.http.Transport }
+func (c *Client) SetTransport(rt http.RoundTripper) { c.http.Transport = rt }
 
 // CloseIdleConnections closes the connections the client keeps open.
-func (c *desktopClient) CloseIdleConnections() { c.transport.CloseIdleConnections() }
+func (c *Client) CloseIdleConnections() { c.transport.CloseIdleConnections() }
+
+func tr(s string) string { return locales.T(s) }

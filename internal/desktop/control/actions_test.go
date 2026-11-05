@@ -1,4 +1,4 @@
-package main
+package control
 
 import (
 	"context"
@@ -15,17 +15,17 @@ func TestDesktopLeaseActionsRecheckNativeStateAndWindow(t *testing.T) {
 	var enabled atomic.Bool
 	var presses atomic.Int32
 	entered, release := make(chan desktop.Window, 1), make(chan struct{})
-	d := &desktopControl{
-		authorize:     func() error { return nil },
-		windows:       func() ([]desktop.Window, error) { return []desktop.Window{window}, nil },
-		captureWindow: func(desktop.Window) ([]byte, error) { return []byte("jpeg"), nil },
-		dialog: func(w desktop.Window) (desktop.Dialog, error) {
+	d := &Server{
+		Authorize:     func() error { return nil },
+		Windows:       func() ([]desktop.Window, error) { return []desktop.Window{window}, nil },
+		CaptureWindow: func(desktop.Window) ([]byte, error) { return []byte("jpeg"), nil },
+		Dialog: func(w desktop.Window) (desktop.Dialog, error) {
 			if w != window {
 				t.Error("dialog escaped the selected window")
 			}
 			return desktop.Dialog{Actions: []desktop.Action{{ID: "allow", Label: "允许访问", Enabled: enabled.Load()}}}, nil
 		},
-		pressAction: func(w desktop.Window, id string) error {
+		PressAction: func(w desktop.Window, id string) error {
 			if w != window || id != "allow" {
 				t.Error("action escaped the selected window")
 			}
@@ -33,11 +33,11 @@ func TestDesktopLeaseActionsRecheckNativeStateAndWindow(t *testing.T) {
 			return nil
 		},
 	}
-	token, err := d.openWindow(context.Background(), &window)
+	token, err := d.OpenWindow(context.Background(), &window)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { close(release); d.revoke(token) })
+	t.Cleanup(func() { close(release); d.Revoke(token) })
 	d.lease.onAction = func(w desktop.Window, _ desktop.Action, before []desktop.Window) {
 		if len(before) != 1 || before[0] != window {
 			t.Error("missing pre-action window snapshot")
@@ -103,7 +103,7 @@ func TestDesktopLeaseActionsRecheckNativeStateAndWindow(t *testing.T) {
 	if json.Unmarshal(w.Body.Bytes(), &state) != nil || !state.Pending {
 		t.Fatal("pending authorization not published")
 	}
-	d.revoke(token)
+	d.Revoke(token)
 	if w := desktopHTTP(d, token, "GET", "/actions", ""); w.Code != 410 {
 		t.Fatal("native metadata survived revocation")
 	}

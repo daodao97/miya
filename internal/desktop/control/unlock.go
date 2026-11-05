@@ -1,4 +1,4 @@
-package main
+package control
 
 import (
 	"context"
@@ -16,19 +16,19 @@ const desktopLockedHeader = "X-Miya-Screen-Locked"
 const desktopUnlockMaxBytes = 256
 
 // Menu leases may unlock; authorization leases stay bound to their window.
-func (d *desktopControl) unlockAllowed(window *desktop.Window, pick bool) bool {
-	return d.locked != nil && (window == nil || pick)
+func (d *Server) unlockAllowed(window *desktop.Window, pick bool) bool {
+	return d.Locked != nil && (window == nil || pick)
 }
 
-func (d *desktopControl) screenLocked() bool {
-	if d.locked == nil {
+func (d *Server) screenLocked() bool {
+	if d.Locked == nil {
 		return false
 	}
-	locked, err := d.locked()
+	locked, err := d.Locked()
 	return err == nil && locked
 }
 
-func desktopWait(ctx context.Context, duration time.Duration) bool {
+func Wait(ctx context.Context, duration time.Duration) bool {
 	t := time.NewTimer(duration)
 	defer t.Stop()
 	select {
@@ -39,14 +39,14 @@ func desktopWait(ctx context.Context, duration time.Duration) bool {
 	}
 }
 
-func validDesktopUnlockPassword(password string) bool {
+func ValidUnlockPassword(password string) bool {
 	return password != "" && len(password) <= desktopUnlockMaxBytes && utf8.ValidString(password) && !strings.ContainsAny(password, "\x00\r\n")
 }
 
 // serveUnlock never logs or echoes credentials or native input errors. All
 // input is serialized with revocation and checked against the current lock
 // state, including after waking the screen. An unlock never retries a password.
-func (d *desktopControl) serveUnlock(w http.ResponseWriter, r *http.Request, token string, l *desktopLease, window *desktop.Window, pick bool) {
+func (d *Server) serveUnlock(w http.ResponseWriter, r *http.Request, token string, l *desktopLease, window *desktop.Window, pick bool) {
 	if !d.unlockAllowed(window, pick) {
 		http.Error(w, "This view cannot unlock the Mac", http.StatusForbidden)
 		return
@@ -57,7 +57,7 @@ func (d *desktopControl) serveUnlock(w http.ResponseWriter, r *http.Request, tok
 	_ = http.NewResponseController(w).SetReadDeadline(time.Now().Add(5 * time.Second))
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096))
 	decoder.DisallowUnknownFields()
-	if decoder.Decode(&body) != nil || !validDesktopUnlockPassword(body.Password) || decoder.Decode(new(any)) != io.EOF {
+	if decoder.Decode(&body) != nil || !ValidUnlockPassword(body.Password) || decoder.Decode(new(any)) != io.EOF {
 		http.Error(w, "Invalid unlock password", http.StatusBadRequest)
 		return
 	}
@@ -83,7 +83,7 @@ func (d *desktopControl) serveUnlock(w http.ResponseWriter, r *http.Request, tok
 	defer stop()
 	// Check before wake, and again immediately before each dispatched event.
 	checkLocked := func() bool {
-		locked, err := d.locked()
+		locked, err := d.Locked()
 		if err != nil {
 			http.Error(w, "Unable to read Mac lock status", http.StatusServiceUnavailable)
 			return false
@@ -98,7 +98,7 @@ func (d *desktopControl) serveUnlock(w http.ResponseWriter, r *http.Request, tok
 		return
 	}
 	d.keepAwake(l, true)
-	if !desktopWait(ctx, 700*time.Millisecond) {
+	if !Wait(ctx, 700*time.Millisecond) {
 		http.Error(w, "Remote control ended", http.StatusGone)
 		return
 	}
@@ -106,7 +106,7 @@ func (d *desktopControl) serveUnlock(w http.ResponseWriter, r *http.Request, tok
 	body.Password = ""
 	defer func() { clear(steps) }()
 	for i := range steps {
-		if i > 0 && !desktopWait(ctx, 150*time.Millisecond) {
+		if i > 0 && !Wait(ctx, 150*time.Millisecond) {
 			http.Error(w, "Remote control ended", http.StatusGone)
 			return
 		}
@@ -121,7 +121,7 @@ func (d *desktopControl) serveUnlock(w http.ResponseWriter, r *http.Request, tok
 			return
 		}
 		l.lastInput = time.Now()
-		err := d.input(steps[i])
+		err := d.Input(steps[i])
 		steps[i].Text = ""
 		d.mu.Unlock()
 		if err != nil {
@@ -130,11 +130,11 @@ func (d *desktopControl) serveUnlock(w http.ResponseWriter, r *http.Request, tok
 		}
 	}
 	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); {
-		if !desktopWait(ctx, 250*time.Millisecond) {
+		if !Wait(ctx, 250*time.Millisecond) {
 			http.Error(w, "Remote control ended", http.StatusGone)
 			return
 		}
-		locked, err := d.locked()
+		locked, err := d.Locked()
 		if err != nil {
 			http.Error(w, "Unable to read Mac lock status", http.StatusServiceUnavailable)
 			return

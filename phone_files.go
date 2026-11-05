@@ -20,6 +20,7 @@ import (
 
 	"github.com/egoist/mygo/i18n"
 	"golang.org/x/text/language"
+	"miya/internal/desktop/control"
 	"miya/internal/webservice"
 	"miya/locales"
 )
@@ -76,7 +77,7 @@ func (c *chatController) fileServer() http.Handler {
 	})
 	controls := c.desktopControls()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, desktopControlPrefix+"/") {
+		if strings.HasPrefix(r.URL.Path, control.Prefix+"/") {
 			controls.ServeHTTP(w, r)
 			return
 		}

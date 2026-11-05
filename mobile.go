@@ -13,12 +13,13 @@ import (
 	"time"
 
 	"miya/internal/codex"
+	"miya/internal/desktop/control"
+	"miya/internal/memory/manager"
 	"miya/internal/model"
 	"miya/internal/notification"
 	"miya/internal/remote"
 	"miya/internal/textutil"
 	"miya/internal/thumbnail"
-	"miya/internal/memory/manager"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -610,7 +611,7 @@ func (m *mobileApp) read(gen int, conn *remote.Conn) (greeted bool, err error) {
 			data, message := f.Data, f.Error
 			m.onMain(gen, func() { m.receiveDesktopControl(conn, data, message) })
 		case "desktop-preview":
-			var p phoneDesktopPreview
+			var p control.Preview
 			if json.Unmarshal(f.Data, &p) == nil {
 				var image ui.ImageSource
 				message := f.Error
@@ -623,7 +624,7 @@ func (m *mobileApp) read(gen int, conn *remote.Conn) (greeted bool, err error) {
 				m.onMain(gen, func() { m.receiveWindowPreview(conn, p, image, message) })
 			}
 		case "desktop-action":
-			var p phoneDesktopPreview
+			var p control.Preview
 			if json.Unmarshal(f.Data, &p) == nil {
 				message := f.Error
 				m.onMain(gen, func() { m.receiveWindowAction(conn, p, message) })

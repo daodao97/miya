@@ -1,4 +1,4 @@
-package main
+package control
 
 import (
 	"context"
@@ -10,12 +10,12 @@ import (
 	"miya/internal/desktop"
 )
 
-func testDesktopClient(t *testing.T, d *desktopControl, token string) *desktopClient {
+func testDesktopClient(t *testing.T, d *Server, token string) *Client {
 	t.Helper()
 	server := httptest.NewServer(d)
 	t.Cleanup(server.Close)
 	addr := server.Listener.Addr().String()
-	return newDesktopClient(func(ctx context.Context) (net.Conn, error) {
+	return NewClient(func(ctx context.Context) (net.Conn, error) {
 		return (&net.Dialer{}).DialContext(ctx, "tcp", addr)
 	}, token)
 }
@@ -25,17 +25,17 @@ func TestDesktopClientConsentCaptureInputAndStop(t *testing.T) {
 	c := testDesktopClient(t, d, token)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	session, err := c.session(ctx)
+	session, err := c.Session(ctx)
 	if err != nil || session.WindowOnly || session.Window != nil {
 		t.Fatal(session, err)
 	}
-	if _, _, err := c.frame(ctx); desktopStatus(err) != 403 {
+	if _, _, err := c.Frame(ctx); Status(err) != 403 {
 		t.Fatal("captured before consent", err)
 	}
-	if err := c.start(ctx); err != nil {
+	if err := c.Start(ctx); err != nil {
 		t.Fatal(err)
 	}
-	data, _, err := c.frame(ctx)
+	data, _, err := c.Frame(ctx)
 	if err != nil || string(data) != "jpeg" {
 		t.Fatal(string(data), err)
 	}
@@ -45,8 +45,8 @@ func TestDesktopClientConsentCaptureInputAndStop(t *testing.T) {
 	if err := c.input(ctx, desktop.Input{Kind: "click", X: 1.5}); err == nil || calls.Load() != 1 {
 		t.Fatal("invalid input was sent")
 	}
-	c.stop()
-	if _, _, err := c.frame(ctx); desktopStatus(err) != 410 {
+	c.Stop()
+	if _, _, err := c.Frame(ctx); Status(err) != 410 {
 		t.Fatal("frame after stop", err)
 	}
 }
@@ -56,7 +56,7 @@ func TestDesktopClientRejectsWrongToken(t *testing.T) {
 	c := testDesktopClient(t, d, "wrong")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if _, err := c.session(ctx); desktopStatus(err) != 410 {
+	if _, err := c.Session(ctx); Status(err) != 410 {
 		t.Fatal("wrong token accepted", err)
 	}
 }

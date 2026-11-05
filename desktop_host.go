@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"miya/internal/desktop"
+	"miya/internal/desktop/control"
 	"miya/internal/remote"
 	"time"
 )
@@ -12,12 +13,12 @@ import (
 // The controller side of remote desktop control: leases for phones, and
 // the approvals and previews of window actions they ask for.
 
-func (c *chatController) desktopControls() *desktopControl {
+func (c *chatController) desktopControls() *control.Server {
 	c.desktopMu.Lock()
 	defer c.desktopMu.Unlock()
 	if c.desktop == nil {
-		c.desktop = &desktopControl{authorize: desktop.Authorize, capture: desktop.Capture, input: desktop.SendInput, windows: desktop.Windows, apps: desktop.Applications, openApp: desktop.OpenApplication, privacy: desktop.StartPrivacy, captureWindow: desktop.CaptureWindow, inputWindow: desktop.SendWindowInput, dialog: desktop.WindowDialog, pressAction: desktop.PressWindowAction, wake: desktop.WakeDisplay, locked: desktop.ScreenLocked}
-		c.desktop.displays, c.desktop.captureDisplay, c.desktop.inputDisplay = desktop.Displays, desktop.CaptureDisplay, desktop.SendDisplayInput
+		c.desktop = &control.Server{Authorize: desktop.Authorize, Capture: desktop.Capture, Input: desktop.SendInput, Windows: desktop.Windows, Apps: desktop.Applications, OpenApp: desktop.OpenApplication, Privacy: desktop.StartPrivacy, CaptureWindow: desktop.CaptureWindow, InputWindow: desktop.SendWindowInput, Dialog: desktop.WindowDialog, PressAction: desktop.PressWindowAction, Wake: desktop.WakeDisplay, Locked: desktop.ScreenLocked}
+		c.desktop.Displays, c.desktop.CaptureDisplay, c.desktop.InputDisplay = desktop.Displays, desktop.CaptureDisplay, desktop.SendDisplayInput
 	}
 	return c.desktop
 }
@@ -45,12 +46,12 @@ func (c *chatController) confirmDesktopAction(ctx context.Context, r remote.Requ
 	defer tick.Stop()
 	var absentSince time.Time
 	for {
-		windows, err := c.desktopControls().windows()
+		windows, err := c.desktopControls().Windows()
 		if err != nil {
 			// A failed read is not evidence that the dialog closed.
 			absentSince = time.Time{}
 		} else {
-			present, successor := desktopActionWindows(r.WindowID, r.WindowPID, before, windows)
+			present, successor := control.ActionWindows(r.WindowID, r.WindowPID, before, windows)
 			if successor {
 				return // Another step needs the user's input; retain the approval.
 			}
@@ -74,7 +75,7 @@ func (c *chatController) confirmDesktopAction(ctx context.Context, r remote.Requ
 }
 
 func (c *chatController) sendPhoneDesktopAction(ctx context.Context, r remote.Request, allowed bool, send func(remote.Frame) bool) {
-	p := phoneDesktopPreview{RequestID: r.RequestID, Approval: r.Approval}
+	p := control.Preview{RequestID: r.RequestID, Approval: r.Approval}
 	var err error
 	if allowed {
 		var alive bool
@@ -88,7 +89,7 @@ func (c *chatController) sendPhoneDesktopAction(ctx context.Context, r remote.Re
 	} else {
 		var action desktop.Action
 		var before []desktop.Window
-		action, before, err = c.desktopControls().performWindowAction(desktop.Window{ID: r.WindowID, PID: r.WindowPID}, r.DesktopAction)
+		action, before, err = c.desktopControls().PerformWindowAction(desktop.Window{ID: r.WindowID, PID: r.WindowPID}, r.DesktopAction)
 		if err == nil {
 			c.confirmDesktopAction(ctx, r, action, before)
 		}
@@ -101,15 +102,15 @@ func (c *chatController) sendPhoneDesktopAction(ctx context.Context, r remote.Re
 	send(f)
 }
 
-func (c *chatController) sendPhoneDesktopPreview(ctx context.Context, r remote.Request, allowed bool, hint desktopWindowHint, send func(remote.Frame) bool) {
-	p := phoneDesktopPreview{RequestID: r.RequestID, Approval: r.Approval}
+func (c *chatController) sendPhoneDesktopPreview(ctx context.Context, r remote.Request, allowed bool, hint control.WindowHint, send func(remote.Frame) bool) {
+	p := control.Preview{RequestID: r.RequestID, Approval: r.Approval}
 	var err error
 	if !allowed {
 		err = errors.New("This permission request was already handled or belongs to another session")
 	} else {
-		p.Window, p.Data, err = c.desktopControls().previewWindow(hint)
+		p.Window, p.Data, err = c.desktopControls().PreviewWindow(hint)
 		if err == nil {
-			p.Dialog, _ = c.desktopControls().dialog(p.Window)
+			p.Dialog, _ = c.desktopControls().Dialog(p.Window)
 		}
 	}
 	if err == nil {
@@ -146,18 +147,18 @@ func (c *chatController) phoneDesktopApproval(r remote.Request) bool {
 	return false
 }
 
-func (c *chatController) phoneDesktopHint(r remote.Request) desktopWindowHint {
+func (c *chatController) phoneDesktopHint(r remote.Request) control.WindowHint {
 	if r.WindowID != 0 && r.WindowPID > 0 {
-		return desktopWindowHint{Window: &desktop.Window{ID: r.WindowID, PID: r.WindowPID}}
+		return control.WindowHint{Window: &desktop.Window{ID: r.WindowID, PID: r.WindowPID}}
 	}
 	for _, a := range c.approvals() {
 		if a.Method == "miya/desktopControl" && sameJSON(a.ID, r.Approval) {
-			var hint desktopWindowHint
+			var hint control.WindowHint
 			_ = json.Unmarshal(a.Payload, &hint)
 			return hint
 		}
 	}
-	return desktopWindowHint{}
+	return control.WindowHint{}
 }
 
 func (c *chatController) completeDesktopAction(r remote.Request, action desktop.Action) {

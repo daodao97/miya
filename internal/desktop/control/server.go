@@ -1,4 +1,7 @@
-package main
+// Package control lets a paired phone see and operate this Mac: the HTTP
+// server that leases the desktop or one window to the phone, and the client
+// the phone uses.
+package control
 
 import (
 	"context"
@@ -14,7 +17,7 @@ import (
 	"miya/internal/desktop"
 )
 
-const desktopControlPrefix = "/.miya-desktop/v1"
+const Prefix = "/.miya-desktop/v1"
 const desktopControlTTL = 10 * time.Minute
 
 type desktopLease struct {
@@ -44,39 +47,39 @@ type desktopLease struct {
 // connection and expires even if a client keeps polling forever.
 // desktopNative is what remote control needs from the operating system:
 // internal/desktop in the app, fakes in tests.
-type desktopNative struct {
-	authorize      func() error
-	capture        func() ([]byte, error)
-	input          func(desktop.Input) error
-	windows        func() ([]desktop.Window, error)
-	apps           func() ([]desktop.Application, error)
-	openApp        func(context.Context, string) error
-	privacy        func(context.Context) (desktop.Privacy, error)
-	displays       func() ([]desktop.Display, error)
-	captureDisplay func(desktop.Display) ([]byte, error)
-	inputDisplay   func(desktop.Display, desktop.Input) error
-	captureWindow  func(desktop.Window) ([]byte, error)
-	inputWindow    func(desktop.Window, desktop.Input) error
-	dialog         func(desktop.Window) (desktop.Dialog, error)
-	pressAction    func(desktop.Window, string) error
-	wake           func() error
+type Native struct {
+	Authorize      func() error
+	Capture        func() ([]byte, error)
+	Input          func(desktop.Input) error
+	Windows        func() ([]desktop.Window, error)
+	Apps           func() ([]desktop.Application, error)
+	OpenApp        func(context.Context, string) error
+	Privacy        func(context.Context) (desktop.Privacy, error)
+	Displays       func() ([]desktop.Display, error)
+	CaptureDisplay func(desktop.Display) ([]byte, error)
+	InputDisplay   func(desktop.Display, desktop.Input) error
+	CaptureWindow  func(desktop.Window) ([]byte, error)
+	InputWindow    func(desktop.Window, desktop.Input) error
+	Dialog         func(desktop.Window) (desktop.Dialog, error)
+	PressAction    func(desktop.Window, string) error
+	Wake           func() error
 	// locked reports the console lock screen; nil disables remote unlock.
-	locked func() (bool, error)
+	Locked func() (bool, error)
 }
 
-type desktopControl struct {
+type Server struct {
 	mu          sync.Mutex
 	work        sync.Mutex
 	privacyWork sync.Mutex
 	lease       *desktopLease
-	desktopNative
+	Native
 }
 
-func (d *desktopControl) open(ctx context.Context) (string, error) {
-	return d.openWindow(ctx, nil)
+func (d *Server) Open(ctx context.Context) (string, error) {
+	return d.OpenWindow(ctx, nil)
 }
 
-func (d *desktopControl) openWindow(ctx context.Context, window *desktop.Window) (string, error) {
+func (d *Server) OpenWindow(ctx context.Context, window *desktop.Window) (string, error) {
 	var raw [32]byte
 	if _, err := rand.Read(raw[:]); err != nil {
 		return "", err
@@ -98,7 +101,7 @@ func (d *desktopControl) openWindow(ctx context.Context, window *desktop.Window)
 		copy := *window
 		l.window = &copy
 	}
-	l.stop = context.AfterFunc(leaseCtx, func() { d.revoke(l.token) })
+	l.stop = context.AfterFunc(leaseCtx, func() { d.Revoke(l.token) })
 	// Release the deadline timer as well as the session when manually closed.
 	stop := l.stop
 	l.stop = func() bool { result := stop(); cancel(); return result }
@@ -109,8 +112,8 @@ func (d *desktopControl) openWindow(ctx context.Context, window *desktop.Window)
 // keepAwake lights a sleeping display before capture and keeps it lit while
 // an operator polls. It only declares user activity; once polling stops the
 // Mac's own idle sleep resumes. A failure surfaces as the capture error.
-func (d *desktopControl) keepAwake(l *desktopLease, force bool) {
-	if d.wake == nil {
+func (d *Server) keepAwake(l *desktopLease, force bool) {
+	if d.Wake == nil {
 		return
 	}
 	d.mu.Lock()
@@ -120,13 +123,13 @@ func (d *desktopControl) keepAwake(l *desktopLease, force bool) {
 	}
 	d.mu.Unlock()
 	if due {
-		_ = d.wake()
+		_ = d.Wake()
 	}
 }
 
 // allowPick lets a lease opened from the phone menu choose any shareable
 // window or the full desktop. Authorization leases never get it.
-func (d *desktopControl) allowPick(token string) {
+func (d *Server) AllowPick(token string) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if l := d.valid(token); l != nil {
@@ -134,7 +137,7 @@ func (d *desktopControl) allowPick(token string) {
 	}
 }
 
-func (d *desktopControl) revoke(token string) {
+func (d *Server) Revoke(token string) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.lease != nil && d.lease.token == token {
@@ -147,7 +150,7 @@ func (d *desktopControl) revoke(token string) {
 	}
 }
 
-func (d *desktopControl) valid(token string) *desktopLease {
+func (d *Server) valid(token string) *desktopLease {
 	l := d.lease
 	if token == "" || l == nil || l.token != token || l.ctx.Err() != nil || !time.Now().Before(l.expires) {
 		return nil
@@ -155,7 +158,7 @@ func (d *desktopControl) valid(token string) *desktopLease {
 	return l
 }
 
-func (d *desktopControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (d *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
@@ -166,9 +169,9 @@ func (d *desktopControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Remote control ended or disconnected. Return to the conversation to reopen it.", http.StatusGone)
 		return
 	}
-	path := strings.TrimPrefix(r.URL.Path, desktopControlPrefix)
+	path := strings.TrimPrefix(r.URL.Path, Prefix)
 	if path == "/stop" && r.Method == http.MethodPost {
-		d.revoke(token)
+		d.Revoke(token)
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
@@ -188,7 +191,7 @@ func (d *desktopControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			Privacy    bool             `json:"privacy"`
 			Displays   bool             `json:"displays"`
 			Display    *desktop.Display `json:"display,omitempty"`
-		}{l.window != nil, l.window, l.pick, l.pick && d.apps != nil && d.openApp != nil, l.pick && d.privacy != nil, l.pick && d.displaysAvailable(), l.display})
+		}{l.window != nil, l.window, l.pick, l.pick && d.Apps != nil && d.OpenApp != nil, l.pick && d.Privacy != nil, l.pick && d.displaysAvailable(), l.display})
 		return
 	}
 	if path == "/actions" || path == "/action" {
@@ -253,7 +256,7 @@ func (d *desktopControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Window control is not enabled in this view", 400)
 			return
 		}
-		windows, err := d.windows()
+		windows, err := d.Windows()
 		if err != nil {
 			http.Error(w, err.Error(), 403)
 			return
@@ -314,7 +317,7 @@ func (d *desktopControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if path == "/start" {
-		if err := d.authorize(); err != nil {
+		if err := d.Authorize(); err != nil {
 			http.Error(w, err.Error(), http.StatusForbidden)
 			return
 		}
@@ -371,23 +374,23 @@ func (d *desktopControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		var data []byte
 		var err error
 		if window != nil {
-			data, err = d.captureWindow(*window)
+			data, err = d.CaptureWindow(*window)
 		} else if display != nil {
-			data, err = d.captureDisplay(*display)
+			data, err = d.CaptureDisplay(*display)
 		} else {
-			data, err = d.capture()
+			data, err = d.Capture()
 		}
 		// A sleeping display drops out of the shareable list. Wake it and
 		// retry once after it reappears instead of reporting a stale state.
-		if err != nil && d.wake != nil && !errors.Is(err, desktop.ErrWindowUnavailable) && !errors.Is(err, desktop.ErrDisplayUnavailable) {
+		if err != nil && d.Wake != nil && !errors.Is(err, desktop.ErrWindowUnavailable) && !errors.Is(err, desktop.ErrDisplayUnavailable) {
 			d.keepAwake(l, true)
 			time.Sleep(500 * time.Millisecond)
 			if window != nil {
-				data, err = d.captureWindow(*window)
+				data, err = d.CaptureWindow(*window)
 			} else if display != nil {
-				data, err = d.captureDisplay(*display)
+				data, err = d.CaptureDisplay(*display)
 			} else {
-				data, err = d.capture()
+				data, err = d.Capture()
 			}
 		}
 		if err != nil {
@@ -399,7 +402,7 @@ func (d *desktopControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if window != nil && errors.Is(err, desktop.ErrWindowUnavailable) {
-				d.revoke(token)
+				d.Revoke(token)
 				http.Error(w, "The authorization window closed. Close this view to return to the conversation.", 410)
 				return
 			}
@@ -478,8 +481,8 @@ func (d *desktopControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var acted bool
 	var before []desktop.Window
 	if window != nil {
-		if d.dialog != nil && l.onAction != nil && (in.Kind == "click" || in.Kind == "key") {
-			if dialog, e := d.dialog(*window); e == nil {
+		if d.Dialog != nil && l.onAction != nil && (in.Kind == "click" || in.Kind == "key") {
+			if dialog, e := d.Dialog(*window); e == nil {
 				action, acted = dialog.InputAction(in)
 			}
 		}
@@ -490,11 +493,11 @@ func (d *desktopControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		err = d.inputWindow(*window, in)
+		err = d.InputWindow(*window, in)
 	} else if display != nil {
-		err = d.inputDisplay(*display, in)
+		err = d.InputDisplay(*display, in)
 	} else {
-		err = d.input(in)
+		err = d.Input(in)
 	}
 	if err != nil {
 		if errors.Is(err, desktop.ErrDisplayUnavailable) {
@@ -512,7 +515,7 @@ func (d *desktopControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // Busy reports whether a phone holds a live lease.
-func (d *desktopControl) Busy() bool {
+func (d *Server) Busy() bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return d.lease != nil && d.valid(d.lease.token) != nil
@@ -520,7 +523,7 @@ func (d *desktopControl) Busy() bool {
 
 // SetOnAction sends the window actions of token's lease to f, if the lease
 // is live.
-func (d *desktopControl) SetOnAction(token string, f func(desktop.Window, desktop.Action, []desktop.Window)) {
+func (d *Server) SetOnAction(token string, f func(desktop.Window, desktop.Action, []desktop.Window)) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if l := d.valid(token); l != nil {
@@ -529,21 +532,21 @@ func (d *desktopControl) SetOnAction(token string, f func(desktop.Window, deskto
 }
 
 // Holds reports whether token names a live lease.
-func (d *desktopControl) Holds(token string) bool {
+func (d *Server) Holds(token string) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return d.valid(token) != nil
 }
 
 // Capturing reports whether the current lease streams the screen.
-func (d *desktopControl) Capturing() bool {
+func (d *Server) Capturing() bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return d.lease != nil && d.lease.active
 }
 
 // LeaseDone is closed when the current lease ends; nil without one.
-func (d *desktopControl) LeaseDone() <-chan struct{} {
+func (d *Server) LeaseDone() <-chan struct{} {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.lease == nil {
@@ -554,7 +557,7 @@ func (d *desktopControl) LeaseDone() <-chan struct{} {
 
 // SetLeaseWindow binds the current lease to window, or to the full desktop
 // when nil, as the phone's menu does. Tests use it to set up a lease.
-func (d *desktopControl) SetLeaseWindow(window *desktop.Window) {
+func (d *Server) SetLeaseWindow(window *desktop.Window) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.lease != nil {
@@ -564,7 +567,7 @@ func (d *desktopControl) SetLeaseWindow(window *desktop.Window) {
 
 // HoldWork takes the lock desktop actions run under until the returned func
 // is called. Tests use it to keep the desktop busy.
-func (d *desktopControl) HoldWork() (release func()) {
+func (d *Server) HoldWork() (release func()) {
 	d.work.Lock()
 	return d.work.Unlock
 }

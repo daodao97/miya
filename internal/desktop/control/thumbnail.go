@@ -1,4 +1,4 @@
-package main
+package control
 
 import (
 	"bytes"
@@ -17,7 +17,7 @@ const desktopThumbnailSize = 480
 // serveThumbnail previews one listed window for the phone's window picker.
 // Only menu leases may preview: an authorization lease must not show other
 // windows. The caller holds d.work, so previews never overlap captures.
-func (d *desktopControl) serveThumbnail(w http.ResponseWriter, r *http.Request, l *desktopLease, pick bool) {
+func (d *Server) serveThumbnail(w http.ResponseWriter, r *http.Request, l *desktopLease, pick bool) {
 	if !pick {
 		http.Error(w, "Window previews are not available in this view", 403)
 		return
@@ -28,7 +28,7 @@ func (d *desktopControl) serveThumbnail(w http.ResponseWriter, r *http.Request, 
 		http.Error(w, "Invalid window", 400)
 		return
 	}
-	windows, err := d.windows()
+	windows, err := d.Windows()
 	if err != nil {
 		http.Error(w, err.Error(), 403)
 		return
@@ -38,7 +38,7 @@ func (d *desktopControl) serveThumbnail(w http.ResponseWriter, r *http.Request, 
 			continue
 		}
 		d.keepAwake(l, false)
-		data, err := d.captureWindow(candidate)
+		data, err := d.CaptureWindow(candidate)
 		if errors.Is(err, desktop.ErrWindowUnavailable) {
 			http.Error(w, "The window closed. Refresh the list.", 404)
 			return

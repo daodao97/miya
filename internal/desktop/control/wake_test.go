@@ -1,4 +1,4 @@
-package main
+package control
 
 import (
 	"errors"
@@ -10,7 +10,7 @@ import (
 func TestDesktopWakesDisplayOnStartAndWhileCapturing(t *testing.T) {
 	d, token, _ := mockDesktop(t)
 	var wakes atomic.Int32
-	d.wake = func() error { wakes.Add(1); return nil }
+	d.Wake = func() error { wakes.Add(1); return nil }
 	if w := desktopHTTP(d, token, "GET", "/frame", ""); w.Code != 403 {
 		t.Fatal(w.Code)
 	}
@@ -39,7 +39,7 @@ func TestDesktopWakesDisplayOnStartAndWhileCapturing(t *testing.T) {
 	if wakes.Load() != 2 {
 		t.Fatal("polling did not keep the display awake", wakes.Load())
 	}
-	d.revoke(token)
+	d.Revoke(token)
 	desktopHTTP(d, token, "GET", "/frame", "")
 	if wakes.Load() != 2 {
 		t.Fatal("woke the display after control ended")
@@ -49,8 +49,8 @@ func TestDesktopWakesDisplayOnStartAndWhileCapturing(t *testing.T) {
 func TestDesktopCaptureFailureWakesDisplayAndRetries(t *testing.T) {
 	d, token, _ := mockDesktop(t)
 	var wakes, captures atomic.Int32
-	d.wake = func() error { wakes.Add(1); return nil }
-	d.capture = func() ([]byte, error) {
+	d.Wake = func() error { wakes.Add(1); return nil }
+	d.Capture = func() ([]byte, error) {
 		if captures.Add(1) == 1 {
 			return nil, errors.New("display asleep")
 		}

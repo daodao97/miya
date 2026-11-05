@@ -1,4 +1,4 @@
-package main
+package control
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 
 // Launching apps belongs to menu leases. An authorization window cannot use
 // this endpoint to change focus or start another application.
-func (d *desktopControl) serveApplications(w http.ResponseWriter, r *http.Request, token string, l *desktopLease, launch bool) {
+func (d *Server) serveApplications(w http.ResponseWriter, r *http.Request, token string, l *desktopLease, launch bool) {
 	if (!launch && r.Method != http.MethodGet) || (launch && r.Method != http.MethodPost) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -22,7 +22,7 @@ func (d *desktopControl) serveApplications(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "App launching is not available in this view", http.StatusForbidden)
 		return
 	}
-	if d.apps == nil || d.openApp == nil {
+	if d.Apps == nil || d.OpenApp == nil {
 		http.Error(w, "Update Miya on your Mac to open apps", http.StatusNotImplemented)
 		return
 	}
@@ -38,7 +38,7 @@ func (d *desktopControl) serveApplications(w http.ResponseWriter, r *http.Reques
 		}
 	}
 	// Keep app listing independent from slow ScreenCaptureKit frames/previews.
-	apps, err := d.apps()
+	apps, err := d.Apps()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		return
@@ -64,7 +64,7 @@ func (d *desktopControl) serveApplications(w http.ResponseWriter, r *http.Reques
 			return
 		}
 		defer d.work.Unlock()
-		if err := d.authorize(); err != nil {
+		if err := d.Authorize(); err != nil {
 			http.Error(w, err.Error(), http.StatusForbidden)
 			return
 		}
@@ -83,8 +83,8 @@ func (d *desktopControl) serveApplications(w http.ResponseWriter, r *http.Reques
 		l.capturedAt = time.Time{}
 		d.mu.Unlock()
 		defer func() { d.mu.Lock(); l.launching = false; d.mu.Unlock() }()
-		if d.locked != nil {
-			locked, err := d.locked()
+		if d.Locked != nil {
+			locked, err := d.Locked()
 			if err != nil {
 				http.Error(w, "Unable to read Mac lock status", http.StatusServiceUnavailable)
 				return
@@ -102,7 +102,7 @@ func (d *desktopControl) serveApplications(w http.ResponseWriter, r *http.Reques
 			http.Error(w, "Remote control ended", http.StatusGone)
 			return
 		}
-		if err := d.openApp(ctx, app.ID); err != nil {
+		if err := d.OpenApp(ctx, app.ID); err != nil {
 			if ctx.Err() != nil || l.ctx.Err() != nil {
 				http.Error(w, "Remote control ended", http.StatusGone)
 				return

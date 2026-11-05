@@ -17,6 +17,7 @@ import (
 	"miya/internal/automation"
 	"miya/internal/codex"
 	"miya/internal/desktop"
+	"miya/internal/desktop/control"
 	"miya/internal/memory/manager"
 	"miya/internal/model"
 	"miya/internal/notification"
@@ -314,7 +315,7 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 	type previewRequest struct {
 		request remote.Request
 		allowed bool
-		hint    desktopWindowHint
+		hint    control.WindowHint
 	}
 	previews := make(chan previewRequest, 8)
 	workersDone := make(chan struct{}, 2)
@@ -489,14 +490,14 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 				if !ok {
 					return
 				}
-				hint, ok := onMain(ctx, c.dispatch, func() desktopWindowHint { return c.phoneDesktopHint(r) })
+				hint, ok := onMain(ctx, c.dispatch, func() control.WindowHint { return c.phoneDesktopHint(r) })
 				if !ok {
 					return
 				}
 				select {
 				case previews <- previewRequest{request: r, allowed: allowed, hint: hint}:
 				default:
-					data, _ := json.Marshal(phoneDesktopPreview{RequestID: r.RequestID, Approval: r.Approval})
+					data, _ := json.Marshal(control.Preview{RequestID: r.RequestID, Approval: r.Approval})
 					if !send(remote.Frame{Type: r.Op, Data: data, Error: "The permission window is busy. Try again later."}) {
 						return
 					}
@@ -529,9 +530,9 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 						window = &desktop.Window{}
 					}
 					if err == nil {
-						reply.Token, err = c.desktopControls().openWindow(ctx, window)
+						reply.Token, err = c.desktopControls().OpenWindow(ctx, window)
 						if err == nil && r.WindowPick && !r.WindowOnly {
-							c.desktopControls().allowPick(reply.Token)
+							c.desktopControls().AllowPick(reply.Token)
 						}
 						if err == nil && r.WindowOnly {
 							c.desktopControls().SetOnAction(reply.Token, func(window desktop.Window, action desktop.Action, before []desktop.Window) {
@@ -551,7 +552,7 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 					return
 				}
 			case "desktop-close":
-				c.desktopControls().revoke(r.DesktopToken)
+				c.desktopControls().Revoke(r.DesktopToken)
 			case "image":
 				allowed := sync != nil && r.Thread == sub && (r.ServerID == "" || r.ServerID == subscription.ServerID) && sync.images[r.ImageSource]
 				select {

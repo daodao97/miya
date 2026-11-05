@@ -20,6 +20,7 @@ import (
 	"miya/internal/claude"
 	"miya/internal/codex"
 	dg "miya/internal/delegation"
+	"miya/internal/desktop/control"
 	"miya/internal/memory/manager"
 	"miya/internal/model"
 	"miya/internal/notification"
@@ -32,7 +33,7 @@ func tr(english string) string { return locales.T(english) }
 
 type chatController struct {
 	desktopMu      sync.Mutex
-	desktop        *desktopControl
+	desktop        *control.Server
 	runtimeMu      sync.Mutex
 	runtimePath    string
 	runtime        *runtimeManager

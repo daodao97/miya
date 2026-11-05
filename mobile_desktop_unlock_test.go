@@ -18,16 +18,17 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 	"miya/internal/desktop"
+	"miya/internal/desktop/control"
 )
 
-func unlockClient(t *testing.T, status int, receive func(string)) *desktopClient {
+func unlockClient(t *testing.T, status int, receive func(string)) *control.Client {
 	t.Helper()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == desktopControlPrefix+"/stop" && r.Method == "POST" {
+		if r.URL.Path == control.Prefix+"/stop" && r.Method == "POST" {
 			w.WriteHeader(204)
 			return
 		}
-		if r.URL.Path != desktopControlPrefix+"/unlock" || r.Method != "POST" || r.Header.Get("Authorization") != "Bearer test" {
+		if r.URL.Path != control.Prefix+"/unlock" || r.Method != "POST" || r.Header.Get("Authorization") != "Bearer test" {
 			t.Error("invalid unlock request")
 		}
 		var body struct {
@@ -42,7 +43,7 @@ func unlockClient(t *testing.T, status int, receive func(string)) *desktopClient
 		w.WriteHeader(status)
 	}))
 	t.Cleanup(server.Close)
-	client := newDesktopClient(func(ctx context.Context) (net.Conn, error) {
+	client := control.NewClient(func(ctx context.Context) (net.Conn, error) {
 		return (&net.Dialer{}).DialContext(ctx, "tcp", server.Listener.Addr().String())
 	}, "test")
 	t.Cleanup(client.CloseIdleConnections)
@@ -129,7 +130,7 @@ func TestDesktopUnlockOnlySuccessfulPasswordSaved(t *testing.T) {
 			m.desktopAuthenticate = func(context.Context) error { return nil }
 			store := newDesktopTestStore()
 			result := m.desktopPerformUnlock(context.Background(), unlockClient(t, status, nil), store, "key", "test", false, true)
-			if desktopStatus(result.err) != status {
+			if control.Status(result.err) != status {
 				t.Fatal(result.err)
 			}
 			if _, err := store.Get("key"); !errors.Is(err, mygo.ErrSecretNotFound) {
@@ -145,7 +146,7 @@ func TestDesktopUnlockIncorrectSavedPasswordForgotten(t *testing.T) {
 	store := newDesktopTestStore()
 	_ = store.Set("key", []byte("incorrect"))
 	result := m.desktopPerformUnlock(context.Background(), unlockClient(t, 401, nil), store, "key", "", true, false)
-	if desktopStatus(result.err) != 401 || !result.savedChanged || result.saved {
+	if control.Status(result.err) != 401 || !result.savedChanged || result.saved {
 		t.Fatal("incorrect password retained")
 	}
 	if _, err := store.Get("key"); !errors.Is(err, mygo.ErrSecretNotFound) {

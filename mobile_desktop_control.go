@@ -10,6 +10,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"miya/internal/codex"
 	"miya/internal/desktop"
+	"miya/internal/desktop/control"
 	"miya/internal/remote"
 	"miya/internal/textutil"
 )
@@ -214,7 +215,7 @@ func (m *mobileApp) failWindowPreview(id string, p *mobileWindowPreview, message
 	invalidate()
 }
 
-func (m *mobileApp) receiveWindowPreview(conn *remote.Conn, p phoneDesktopPreview, image ui.ImageSource, message string) {
+func (m *mobileApp) receiveWindowPreview(conn *remote.Conn, p control.Preview, image ui.ImageSource, message string) {
 	if m.conn != conn {
 		return
 	}
@@ -283,7 +284,7 @@ func (m *mobileApp) pressWindowAction(a codex.Approval, p *mobileWindowPreview, 
 	go func() {
 		if err := conn.Send(r); err != nil {
 			m.onMain(gen, func() {
-				m.receiveWindowAction(conn, phoneDesktopPreview{RequestID: r.RequestID, Approval: a.ID}, err.Error())
+				m.receiveWindowAction(conn, control.Preview{RequestID: r.RequestID, Approval: a.ID}, err.Error())
 			})
 		}
 	}()
@@ -298,7 +299,7 @@ func (m *mobileApp) pressWindowAction(a codex.Approval, p *mobileWindowPreview, 
 	})
 }
 
-func (m *mobileApp) receiveWindowAction(conn *remote.Conn, reply phoneDesktopPreview, message string) {
+func (m *mobileApp) receiveWindowAction(conn *remote.Conn, reply control.Preview, message string) {
 	if m.conn != conn {
 		return
 	}
