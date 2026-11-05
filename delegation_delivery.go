@@ -12,9 +12,8 @@ import (
 func (s *collaborationState) deliverPending() {
 	for _, notify := range s.manager.PendingReceivers() {
 		value, err := s.onMain(func() (any, error) {
-			c := s.c
-			t, ok := c.threadByReference(notify)
-			return ok && !c.collaboration.isPaused(notify) && !t.Busy && !t.Loading && !t.ReadOnly && !t.TaskPending && !c.managedTargetUnavailable(t) && len(t.Queue) == 0 && c.collaboration.reservation(t.ID) == "" && !c.threadAwaitsUser(t) && c.agentStatus(model.ThreadAgent(t)).Ready, nil
+			t, ok := s.host.ThreadByRef(notify)
+			return ok && !s.isPaused(notify) && !t.Busy && !t.Loading && !t.ReadOnly && !t.TaskPending && !s.host.TargetUnavailable(t) && len(t.Queue) == 0 && s.reservation(t.ID) == "" && !s.host.AwaitsUser(t) && s.host.Agent(model.ThreadAgent(t)).Ready, nil
 		})
 		if err != nil || !value.(bool) {
 			continue
@@ -24,20 +23,19 @@ func (s *collaborationState) deliverPending() {
 			continue
 		}
 		_, err = s.onMain(func() (any, error) {
-			c := s.c
-			t, ok := c.threadByReference(notify)
-			if !ok || c.collaboration.isPaused(notify) || t.Busy || t.Loading || t.ReadOnly || t.TaskPending || c.managedTargetUnavailable(t) || len(t.Queue) > 0 || c.collaboration.reservation(t.ID) != "" || c.threadAwaitsUser(t) || !c.agentStatus(model.ThreadAgent(t)).Ready {
+			t, ok := s.host.ThreadByRef(notify)
+			if !ok || s.isPaused(notify) || t.Busy || t.Loading || t.ReadOnly || t.TaskPending || s.host.TargetUnavailable(t) || len(t.Queue) > 0 || s.reservation(t.ID) != "" || s.host.AwaitsUser(t) || !s.host.Agent(model.ThreadAgent(t)).Ready {
 				return nil, errors.New("Receiving conversation is not idle")
 			}
-			if c.collaboration.reservations == nil {
-				c.collaboration.reservations = map[int]string{}
+			if s.reservations == nil {
+				s.reservations = map[int]string{}
 			}
-			c.collaboration.reservations[t.ID] = d.ID
-			if c.collaboration.executions == nil {
-				c.collaboration.executions = map[string]*managedExecution{}
+			s.reservations[t.ID] = d.ID
+			if s.executions == nil {
+				s.executions = map[string]*managedExecution{}
 			}
-			c.collaboration.executions[d.ID] = &managedExecution{thread: t.ID, pending: map[string]dg.Event{}}
-			id := c.submitExpanded(SendRequest{ExecutionID: d.ID, Origin: "delegation_notice", ThreadID: t.ID, Text: s.manager.NotificationText(d), Model: t.LaunchModel, Effort: t.LaunchEffort, Policy: c.permissionForThread(t), ExplicitSettings: true, KeepSessionSettings: true, MemoryControl: true})
+			s.executions[d.ID] = &managedExecution{thread: t.ID, pending: map[string]dg.Event{}}
+			id := s.host.Submit(SendRequest{ExecutionID: d.ID, Origin: "delegation_notice", ThreadID: t.ID, Text: s.manager.NotificationText(d), Model: t.LaunchModel, Effort: t.LaunchEffort, Policy: s.host.Permission(t), ExplicitSettings: true, KeepSessionSettings: true, MemoryControl: true})
 			if id == 0 {
 				return nil, errors.New("Notification was rejected before native submission")
 			}

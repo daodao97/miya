@@ -17,17 +17,17 @@ func (s *collaborationState) checkProgress() {
 		return
 	}
 	value, err := s.onMain(func() (any, error) {
-		c := s.c
 		var events []dg.Event
-		for id, run := range c.collaboration.executions {
+		codexEpoch, codexLive := s.host.CodexEpoch()
+		for id, run := range s.executions {
 			if !strings.HasPrefix(id, "task-") {
 				continue
 			}
-			t := c.threadWithID(run.thread)
+			t := s.host.Thread(run.thread)
 			if !t.Busy || t.ExecutionID != id {
 				continue
 			}
-			if model.ThreadAgent(t) == agentCodex && (run.turn == "" || run.turn != t.TurnID || c.client == nil || run.epoch != c.client.RuntimeEpoch()) {
+			if model.ThreadAgent(t) == agentCodex && (run.turn == "" || run.turn != t.TurnID || !codexLive || run.epoch != codexEpoch) {
 				continue
 			}
 			if model.ThreadAgent(t) == agentClaude && !run.started {
@@ -38,7 +38,7 @@ func (s *collaborationState) checkProgress() {
 				continue
 			}
 			progress, wait := managedProgress(t)
-			if c.threadAwaitsUser(t) {
+			if s.host.AwaitsUser(t) {
 				wait = "approval_or_input"
 			}
 			if progress == run.progress && wait == run.waitCause {

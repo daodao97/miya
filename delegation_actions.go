@@ -25,20 +25,19 @@ func (s *collaborationState) interruptTask(task dg.Task) error {
 	}
 	id := task.ID
 	_, err := s.onMain(func() (any, error) {
-		c := s.c
-		t, ok := c.threadByReference(task.Target)
+		t, ok := s.host.ThreadByRef(task.Target)
 		if !ok {
-			if execution := c.collaboration.execution(id); execution != nil {
-				t = c.threadWithID(execution.thread)
+			if execution := s.execution(id); execution != nil {
+				t = s.host.Thread(execution.thread)
 				ok = t.ID != 0
 			}
 		}
 		if !ok || t.ExecutionID != id {
 			return nil, nil
 		}
-		c.update(t.ID, func(t *Thread) { t.StopRequested = true })
+		s.host.Update(t.ID, func(t *Thread) { t.StopRequested = true })
 		if t.Busy && (model.ThreadAgent(t) != agentCodex || t.TurnID != "") {
-			c.stopAgentRun(t)
+			s.host.StopRun(t)
 		}
 		return nil, nil
 	})
@@ -61,28 +60,29 @@ func (s *collaborationState) pause(ref string) {
 	}
 }
 
+func (c *chatController) resumeCollaboration(ref string) deferred { return c.collaboration.resume(ref) }
+
 // Runs on the controller executor. A later Stop must win over an in-flight
 // resume, even if it arrives between the durable write and this callback.
-func (c *chatController) resumeCollaboration(ref string) deferred {
-	s := c.collaboration
-	generation := c.collaboration.pauseGeneration(ref)
+func (s *collaborationState) resume(ref string) deferred {
+	generation := s.pauseGeneration(ref)
 	return func() (any, error) {
 		return s.call(func() (any, error) {
 			if err := s.manager.Pause(ref, false); err != nil {
 				return nil, err
 			}
 			return s.onMain(func() (any, error) {
-				if c.collaboration.pauseGeneration(ref) == generation {
-					delete(c.collaboration.pausedRefs, ref)
+				if s.pauseGeneration(ref) == generation {
+					delete(s.pausedRefs, ref)
 				}
-				return map[string]any{"paused": c.collaboration.isPaused(ref)}, nil
+				return map[string]any{"paused": s.isPaused(ref)}, nil
 			})
 		})
 	}
 }
 
 func (s *collaborationState) recheckTask(caller, id string) {
-	work, err := s.onMain(func() (any, error) { return s.c.prepareTaskRecheck(caller, id) })
+	work, err := s.onMain(func() (any, error) { return s.host.PrepareRecheck(caller, id) })
 	if err == nil {
 		if run, ok := work.(deferred); ok {
 			_, err = run()

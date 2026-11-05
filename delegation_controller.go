@@ -34,7 +34,7 @@ type managedExecution struct {
 // The worker serializes durable operations without blocking the controller's
 // executor. Native callbacks only enqueue immutable events on this worker.
 type collaborationState struct {
-	c              *chatController
+	host           collaborationHost
 	manager        *dg.Manager
 	loadError      error
 	worker         *async.Executor
@@ -82,7 +82,7 @@ func (s *collaborationState) pauseGeneration(ref string) uint64 {
 
 func newCollaboration(c *chatController, dir string) *collaborationState {
 	ctx, cancel := context.WithCancel(c.parentContext())
-	s := &collaborationState{c: c, worker: async.NewExecutor(), ctx: ctx, cancel: cancel, done: make(chan struct{}), dispatched: map[string]bool{}}
+	s := &collaborationState{host: collaborationHostOf{c}, worker: async.NewExecutor(), ctx: ctx, cancel: cancel, done: make(chan struct{}), dispatched: map[string]bool{}}
 	s.manager, s.loadError = dg.Open(dg.NewStore(dir), dg.Options{})
 	if s.loadError == nil {
 		s.loadError = s.manager.Recover()
@@ -124,9 +124,9 @@ func (s *collaborationState) post(f func()) {
 		}
 		f()
 		if s.manager != nil && (revision != s.manager.Revision() || health != s.manager.StorageError() || cleanup != s.cleanupError.Load()) {
-			s.c.dispatch(func() {
+			s.host.Dispatch(func() {
 				if s.ctx.Err() == nil {
-					invalidate()
+					s.host.Invalidate()
 				}
 			})
 		}
@@ -154,7 +154,7 @@ func (s *collaborationState) onMain(f func() (any, error)) (any, error) {
 		v   any
 		err error
 	}
-	r, ok := async.OnMain(s.ctx, s.c.dispatch, func() reply {
+	r, ok := async.OnMain(s.ctx, s.host.Dispatch, func() reply {
 		if s.ctx.Err() != nil {
 			return reply{err: s.ctx.Err()}
 		}
@@ -273,9 +273,9 @@ func (s *collaborationState) create(in dg.StartInput) (dg.Task, error) {
 	task, err := s.manager.Create(in)
 	if err != nil {
 		_, _ = s.onMain(func() (any, error) {
-			if t, ok := s.c.threadByReference(in.Target); ok && s.c.collaboration.reservation(t.ID) == in.From+"\n"+in.RequestID {
-				delete(s.c.collaboration.reservations, t.ID)
-				s.c.drainQueue(t.ID)
+			if t, ok := s.host.ThreadByRef(in.Target); ok && s.reservation(t.ID) == in.From+"\n"+in.RequestID {
+				delete(s.reservations, t.ID)
+				s.host.DrainQueue(t.ID)
 			}
 			return nil, nil
 		})
@@ -298,18 +298,17 @@ func (s *collaborationState) start(task dg.Task) {
 	}
 	s.dispatched[task.ID] = true
 	prepared, err := s.onMain(func() (any, error) {
-		c := s.c
 		t := Thread{}
 		if task.Target != "" {
 			var ok bool
-			t, ok = c.threadByReference(task.Target)
+			t, ok = s.host.ThreadByRef(task.Target)
 			if !ok {
 				return nil, errors.New("Target session is unavailable")
 			}
-			if t.Busy || t.Loading || t.ReadOnly || t.TaskPending || c.managedTargetUnavailable(t) {
+			if t.Busy || t.Loading || t.ReadOnly || t.TaskPending || s.host.TargetUnavailable(t) {
 				return nil, errors.New("Target session is busy or read-only")
 			}
-			reserved := c.collaboration.reservation(t.ID)
+			reserved := s.reservation(t.ID)
 			if reserved != "" && reserved != task.ID && reserved != task.From+"\n"+task.RequestID {
 				return nil, errors.New("Target session is reserved by another submission")
 			}
@@ -318,25 +317,25 @@ func (s *collaborationState) start(task dg.Task) {
 			if strings.TrimSpace(title) == "" {
 				title = textutil.ClipRunes(textutil.FirstLine(task.Prompt), 120)
 			}
-			parent, _ := c.threadByReference(task.From)
-			title += " · " + threadRefTitle(parent)
-			t = Thread{ID: c.nextID(), Agent: task.Agent, Title: title, Project: filepath.Base(task.Workspace), Loaded: true, HistoryLoaded: true, PermissionPolicy: task.Config.Policy}
+			parent, _ := s.host.ThreadByRef(task.From)
+			title += " · " + s.host.ThreadTitle(parent)
+			t = Thread{ID: s.host.NextID(), Agent: task.Agent, Title: title, Project: filepath.Base(task.Workspace), Loaded: true, HistoryLoaded: true, PermissionPolicy: task.Config.Policy}
 			if task.Agent == agentClaude {
 				t.ServerID = claude.NewSessionID()
 			}
-			c.addThread(task.Workspace, t)
+			s.host.AddThread(task.Workspace, t)
 		}
-		if !c.agentStatus(task.Agent).Ready {
+		if !s.host.Agent(task.Agent).Ready {
 			return nil, errors.New("Target agent is not ready")
 		}
-		if c.collaboration.reservations == nil {
-			c.collaboration.reservations = map[int]string{}
+		if s.reservations == nil {
+			s.reservations = map[int]string{}
 		}
-		c.collaboration.reservations[t.ID] = task.ID
-		if c.collaboration.executions == nil {
-			c.collaboration.executions = map[string]*managedExecution{}
+		s.reservations[t.ID] = task.ID
+		if s.executions == nil {
+			s.executions = map[string]*managedExecution{}
 		}
-		c.collaboration.executions[task.ID] = &managedExecution{thread: t.ID, pending: map[string]dg.Event{}}
+		s.executions[task.ID] = &managedExecution{thread: t.ID, pending: map[string]dg.Event{}}
 		return t, nil
 	})
 	if err != nil {
@@ -351,16 +350,15 @@ func (s *collaborationState) start(task dg.Task) {
 		}
 	}
 	_, err = s.onMain(func() (any, error) {
-		c := s.c
-		current := c.threadWithID(t.ID)
-		if current.Busy || current.Loading || current.ReadOnly || c.managedTargetUnavailable(current) {
+		current := s.host.Thread(t.ID)
+		if current.Busy || current.Loading || current.ReadOnly || s.host.TargetUnavailable(current) {
 			return nil, errors.New("Target changed before submission")
 		}
 		text := task.Snapshot
 		if text == "" {
 			text = task.Prompt
 		}
-		id := c.submitExpanded(SendRequest{ExecutionID: task.ID, Origin: "delegation", ThreadID: t.ID, Agent: task.Agent, Project: task.Workspace, Text: text, Model: task.Config.Model, Effort: task.Config.Effort, Policy: task.Config.Policy, ExplicitSettings: true, MemoryControl: true})
+		id := s.host.Submit(SendRequest{ExecutionID: task.ID, Origin: "delegation", ThreadID: t.ID, Agent: task.Agent, Project: task.Workspace, Text: text, Model: task.Config.Model, Effort: task.Config.Effort, Policy: task.Config.Policy, ExplicitSettings: true, MemoryControl: true})
 		if id == 0 {
 			return nil, errors.New("Native submission was not started")
 		}
@@ -380,27 +378,26 @@ func (s *collaborationState) failBeforeStart(task dg.Task, err error) {
 }
 func (s *collaborationState) release(id string) {
 	_, _ = s.onMain(func() (any, error) {
-		c := s.c
-		execution := c.collaboration.execution(id)
+		execution := s.execution(id)
 		if execution == nil {
 			if task, err := s.manager.Read(id); err == nil {
-				if t, ok := c.threadByReference(task.Target); ok && c.collaboration.reservation(t.ID) == task.From+"\n"+task.RequestID {
-					delete(c.collaboration.reservations, t.ID)
-					c.drainQueue(t.ID)
+				if t, ok := s.host.ThreadByRef(task.Target); ok && s.reservation(t.ID) == task.From+"\n"+task.RequestID {
+					delete(s.reservations, t.ID)
+					s.host.DrainQueue(t.ID)
 				}
 			}
 		}
 		if execution != nil {
-			if c.collaboration.reservation(execution.thread) == id {
-				delete(c.collaboration.reservations, execution.thread)
+			if s.reservation(execution.thread) == id {
+				delete(s.reservations, execution.thread)
 			}
-			c.update(execution.thread, func(t *Thread) {
+			s.host.Update(execution.thread, func(t *Thread) {
 				if t.ExecutionID == id {
 					t.ExecutionID = ""
 				}
 			})
-			delete(c.collaboration.executions, id)
-			c.drainQueue(execution.thread)
+			delete(s.executions, id)
+			s.host.DrainQueue(execution.thread)
 		}
 		return nil, nil
 	})
@@ -439,10 +436,15 @@ func (c *chatController) persistManagedBinding(ctx context.Context, id, target s
 }
 
 func (c *chatController) persistManagedExecutionBinding(ctx context.Context, id, target, epoch string) error {
-	if id == "" || c.collaboration == nil {
+	return c.collaboration.bindExecution(ctx, id, target, epoch)
+}
+
+// bindExecution records the native session an execution is about to send
+// its input to, before the input is sent.
+func (s *collaborationState) bindExecution(ctx context.Context, id, target, epoch string) error {
+	if id == "" || s == nil {
 		return nil
 	}
-	s := c.collaboration
 	if strings.HasPrefix(id, "delivery-") {
 		if err := s.manager.StorageError(); err != "" {
 			return fmt.Errorf("STORAGE_UNAVAILABLE: %s", err)
@@ -453,8 +455,8 @@ func (c *chatController) persistManagedExecutionBinding(ctx context.Context, id,
 		}
 		var allowed bool
 		_, err := s.onMain(func() (any, error) {
-			t, found := c.threadByReference(target)
-			allowed = found && !c.collaboration.isPaused(target) && c.collaboration.reservation(t.ID) == id && t.ExecutionID == id && !t.StopRequested
+			t, found := s.host.ThreadByRef(target)
+			allowed = found && !s.isPaused(target) && s.reservation(t.ID) == id && t.ExecutionID == id && !t.StopRequested
 			return nil, nil
 		})
 		if err != nil {
@@ -469,8 +471,8 @@ func (c *chatController) persistManagedExecutionBinding(ctx context.Context, id,
 		}
 		// Stop may have arrived while the input intent was syncing.
 		_, err = s.onMain(func() (any, error) {
-			t, found := c.threadByReference(target)
-			allowed = found && !c.collaboration.isPaused(target) && c.collaboration.reservation(t.ID) == id && t.ExecutionID == id && !t.StopRequested
+			t, found := s.host.ThreadByRef(target)
+			allowed = found && !s.isPaused(target) && s.reservation(t.ID) == id && t.ExecutionID == id && !t.StopRequested
 			return nil, nil
 		})
 		if err == nil && !allowed {
@@ -504,10 +506,14 @@ func (c *chatController) managedEvent(id string, event dg.Event) {
 }
 
 func (c *chatController) managedEventWithOutcome(id string, event dg.Event, saveOutcome bool) {
-	if id == "" || c.collaboration == nil {
+	c.collaboration.observe(id, event, saveOutcome)
+}
+
+// observe records what an execution's agent reported.
+func (s *collaborationState) observe(id string, event dg.Event, saveOutcome bool) {
+	if id == "" || s == nil {
 		return
 	}
-	s := c.collaboration
 	if strings.HasPrefix(id, "delivery-") {
 		outcome := "unknown"
 		if event.State == dg.Running || event.State == dg.Completed {
@@ -527,7 +533,7 @@ func (c *chatController) managedEventWithOutcome(id string, event dg.Event, save
 		})
 		return
 	}
-	if run := c.collaboration.execution(id); run != nil {
+	if run := s.execution(id); run != nil {
 		run.sequence++
 		event.Sequence = run.sequence
 	}
