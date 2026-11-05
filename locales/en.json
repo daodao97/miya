@@ -1685,5 +1685,6 @@
   "mainDisplay_dd2f4f": "Main display",
   "unnamedDisplay": "Unnamed display",
   "openAProjectFirstProjectMemoryAndItsAutomaticSettings_d785f7": "Open a project first. Project memory and its automatic settings belong to a project folder, not the filesystem root.",
-  "automaticExtractionIsPausedAfterRepeatedFailures_b5908b": "\nAutomatic extraction is paused after repeated failures and resumes after %s."
+  "automaticExtractionIsPausedAfterRepeatedFailures_b5908b": "\nAutomatic extraction is paused after repeated failures and resumes after %s.",
+  "confirmDelete_c9f282": "Confirm delete"
 }

@@ -23,6 +23,7 @@ type memoryUI struct {
 	file                       string
 	promotion                  *memoryPromotion
 	filter                     string
+	confirmDelete              string // entry ID awaiting a second click
 }
 type memoryNoticeUI struct {
 	entry    memory.Entry
@@ -349,7 +350,26 @@ func (app *chatApp) memoryRow(c *ui.Context, e memory.Entry) {
 		for i, src := range e.Sources {
 			app.memorySourceView(c.Key(i), src)
 		}
+		req := memoryRequest{Project: app.c.cwd, Scope: m.scope, ID: e.ID, Version: e.Version, Thread: app.c.active()}
+		// Delete removes the record from this list. Miya keeps the tombstone, so
+		// the old content still cannot be extracted again. Two clicks are needed.
+		deleteButton := func() {
+			if m.confirmDelete == e.ID {
+				if smallButton(c.Key("delete-confirm"), tr("Confirm delete"), m.busy).TextColor(danger).Clicked() {
+					m.confirmDelete = ""
+					app.memoryAction("memoryDelete", req, nil)
+				}
+				if smallButton(c.Key("delete-cancel"), tr("Cancel"), m.busy).Clicked() {
+					m.confirmDelete = ""
+				}
+				return
+			}
+			if smallButton(c.Key("delete"), tr("Delete"), m.busy).TextColor(danger).Clicked() {
+				m.confirmDelete = e.ID
+			}
+		}
 		if e.State == "forgotten" {
+			ui.Row(c).Wrap().Gap(6).Children(deleteButton)
 			return
 		}
 		ui.Row(c).Wrap().Gap(6).Children(func() {
@@ -365,7 +385,6 @@ func (app *chatApp) memoryRow(c *ui.Context, e memory.Entry) {
 					m.until = e.ValidUntil.Format(time.RFC3339)
 				}
 			}
-			req := memoryRequest{Project: app.c.cwd, Scope: m.scope, ID: e.ID, Version: e.Version, Thread: app.c.active()}
 			if e.Scope.Kind == "project" && e.Kind == "preference" && e.State == "active" {
 				if smallButton(c.Key("user"), tr("Promote to user scope"), m.busy).Clicked() {
 					app.memoryAction("memoryPromoteUser", req, nil)
@@ -384,6 +403,7 @@ func (app *chatApp) memoryRow(c *ui.Context, e memory.Entry) {
 			if smallButton(c.Key("forget"), tr("Forget"), m.busy).TextColor(danger).Clicked() {
 				app.memoryAction("memoryForget", req, nil)
 			}
+			deleteButton()
 		})
 		if m.promotion != nil && m.id == e.ID {
 			app.memoryPromotionView(c, e)

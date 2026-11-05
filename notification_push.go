@@ -67,6 +67,21 @@ func (h *pushHub) register(r pushRegistration) error {
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	unreadChanged := false
+	if !r.Disabled {
+		// A phone that lost its device ID registers again under a new one,
+		// with the APNs token it had: its old registration would deliver
+		// every notification twice and keep a badge of its own.
+		for id, old := range h.devices {
+			if id != r.ID && old.Token == r.Token {
+				delete(h.devices, id)
+				if _, ok := h.unread[id]; ok {
+					delete(h.unread, id)
+					unreadChanged = true
+				}
+			}
+		}
+	}
 	if len(h.devices) >= 32 {
 		if _, ok := h.devices[r.ID]; !ok {
 			return errors.New("notification device limit reached")
@@ -78,6 +93,9 @@ func (h *pushHub) register(r pushRegistration) error {
 	if r.Disabled && len(d.Threads) > 0 {
 		d.Threads = map[string]phoneUnread{}
 		d.Revision++
+		unreadChanged = true
+	}
+	if unreadChanged {
 		h.persistUnreadLocked()
 	}
 	b, e := json.Marshal(h.devices)

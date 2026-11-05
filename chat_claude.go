@@ -460,6 +460,10 @@ func (c *chatController) handleClaude(id int, f claude.Frame) {
 		c.setApprovals(append(append([]codex.Approval(nil), c.approvals()...), a))
 		return
 	}
+	// Set only by a successful top-level result. The thread's Status is display
+	// text that stays "running" until the process exits for ordinary turns, so
+	// it cannot decide whether this turn completed.
+	memoryTurnDone := false
 	c.update(id, func(t *Thread) {
 		defer func() { applyClaudeAgentTasks(t, f.AgentTasks) }()
 		now := time.Now().UnixMilli()
@@ -597,9 +601,10 @@ func (c *chatController) handleClaude(id int, f claude.Frame) {
 				completeClaudeTiming(t)
 				saveClaudeHistory(*t)
 			}
+			memoryTurnDone = !f.IsError && !emptyResult && !f.WaitingForAgents
 		}
 	})
-	if f.Type == "result" && f.ParentToolUseID == "" && !f.WaitingForAgents && !f.IsError && c.threadWithID(id).Status == "" {
+	if memoryTurnDone {
 		c.completedMemoryTurn(id, f.UUID)
 	}
 	if f.Type == "result" && f.ParentToolUseID == "" && !f.WaitingForAgents {

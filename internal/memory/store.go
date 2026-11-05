@@ -320,11 +320,24 @@ func (s *Store) Forget(scope Scope, id string, version uint64) (Entry, error) {
 	if err != nil {
 		return Entry{}, err
 	}
-	old := d.Entries[i]
-	if old.State == "forgotten" {
+	if d.Entries[i].State == "forgotten" {
 		return Entry{}, errors.New("Memory forgotten")
 	}
-	mark := tombstone{ID: id, Version: version, Revision: d.Revision + 1}
+	e := s.forgetIn(&d, scope, i)
+	// The tombstone and removal commit atomically. Future derived records must
+	// pass this barrier before reading a forgotten version.
+	if err = s.commit(d); err != nil {
+		return Entry{}, err
+	}
+	return e, nil
+}
+
+// forgetIn records the tombstone for entry i, removes every version's body
+// and sources, and leaves a contentless forgotten record in its place.
+func (s *Store) forgetIn(d *document, scope Scope, i int) Entry {
+	old := d.Entries[i]
+	id := old.ID
+	mark := tombstone{ID: id, Version: old.Version, Revision: d.Revision + 1}
 	keep := d.Entries[:0]
 	for _, e := range d.Entries {
 		if e.ID != id {
@@ -338,16 +351,40 @@ func (s *Store) Forget(scope Scope, id string, version uint64) (Entry, error) {
 			mark.Sources = append(mark.Sources, src)
 		}
 	}
-	e := Entry{ID: id, Version: version + 1, Scope: scope, State: "forgotten", CreatedAt: old.CreatedAt, UpdatedAt: s.now()}
+	e := Entry{ID: id, Version: old.Version + 1, Scope: scope, State: "forgotten", CreatedAt: old.CreatedAt, UpdatedAt: s.now()}
 	d.Entries = append(keep, e)
 	d.Tombstones = append(d.Tombstones, mark)
-	scrubForgottenJobs(&d, id, mark.Sources, s.now())
-	// The tombstone and removal commit atomically. Future derived records must
-	// pass this barrier before reading a forgotten version.
-	if err = s.commit(d); err != nil {
-		return Entry{}, err
+	scrubForgottenJobs(d, id, mark.Sources, s.now())
+	return e
+}
+
+// Delete removes an entry from the list entirely. An entry that is not yet
+// forgotten is forgotten first, so its tombstone still blocks old sources and
+// bodies from being extracted again; only the contentless record is dropped.
+// Sessions that saw it get an "unavailable" invalidation like any missing ID.
+func (s *Store) Delete(scope Scope, id string, version uint64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.searchIndex = nil
+	d, err := s.load(scope)
+	if err != nil {
+		return err
 	}
-	return e, nil
+	i, err := targetVersion(d, id, version)
+	if err != nil {
+		return err
+	}
+	if d.Entries[i].State != "forgotten" {
+		s.forgetIn(&d, scope, i)
+	}
+	keep := d.Entries[:0]
+	for _, e := range d.Entries {
+		if e.ID != id {
+			keep = append(keep, e)
+		}
+	}
+	d.Entries = keep
+	return s.commit(d)
 }
 func (s *Store) Promote(scope Scope, id string, version uint64) (Entry, error) {
 	return s.PromoteWith(scope, id, version, nil)

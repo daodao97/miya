@@ -275,7 +275,7 @@ func newMobileApp() *mobileApp {
 func mobileMain() {
 	configureInterfaceLanguage()
 	m := newMobileApp()
-	m.store, _ = mygo.NewSecureStore("desktop-connection", mygo.SecureStoreOptions{})
+	m.store = mygo.Secrets
 	m.pushDisabled = loadSetting("phone-notifications") == "off"
 	mygo.App.OnOpenURL(func(raw string) {
 		runOnMain(func() {

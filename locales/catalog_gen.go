@@ -18239,3 +18239,13 @@ func AutomaticExtractionIsPausedAfterRepeatedFailuresB5908b() string {
 func (msgs Messages) AutomaticExtractionIsPausedAfterRepeatedFailuresB5908b() string {
 	return Catalog.Format(msgs.locale, "automaticExtractionIsPausedAfterRepeatedFailures_b5908b", nil)
 }
+
+// ConfirmDeleteC9f282 says "Confirm delete"
+// in the language the app shows.
+func ConfirmDeleteC9f282() string { return In(i18n.Locale()).ConfirmDeleteC9f282() }
+
+// ConfirmDeleteC9f282 says "Confirm delete"
+// in the language of msgs.
+func (msgs Messages) ConfirmDeleteC9f282() string {
+	return Catalog.Format(msgs.locale, "confirmDelete_c9f282", nil)
+}

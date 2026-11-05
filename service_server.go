@@ -314,7 +314,7 @@ func (s *service) handle(p *svcPeer, req svcRequest) (any, error) {
 			return nil, err
 		}
 		return c.collaborationUserOp(r)
-	case "memoryList", "memoryGet", "memorySave", "memoryForget", "memoryConfigure", "memorySessionConfigure", "memoryPromoteUser", "memoryPromotionPreview", "memoryPromoteFile":
+	case "memoryList", "memoryGet", "memorySave", "memoryForget", "memoryDelete", "memoryConfigure", "memorySessionConfigure", "memoryPromoteUser", "memoryPromotionPreview", "memoryPromoteFile":
 		var r memoryRequest
 		if err := arg(&r); err != nil {
 			return nil, err

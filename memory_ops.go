@@ -213,6 +213,10 @@ func (c *chatController) memoryOp(op string, r memoryRequest) (any, error) {
 			e, err = store.Save(scope, memory.Mutation{ID: r.ID, Version: r.Version, Kind: r.Kind, Content: strings.TrimSpace(r.Content), TaskKey: r.TaskKey, Sources: sources, ObservedAt: now, ValidUntil: until})
 		case "memoryForget":
 			e, err = store.Forget(scope, r.ID, r.Version)
+		case "memoryDelete":
+			if err = store.Delete(scope, r.ID, r.Version); err == nil {
+				e = memory.Entry{ID: r.ID}
+			}
 		case "memoryPromoteUser":
 			e, err = store.PromotePreference(scope, r.ID, r.Version)
 		case "memoryPromotionPreview", "memoryPromoteFile":
