@@ -113,7 +113,7 @@ flowchart LR
 ### 第一版按作用域保存 JSON，所有修改经过单写者
 
 ```text
-serviceDir()/memory/
+appdir.Dir()/memory/
   user.json
   projects/<project-key>.json
 ```

@@ -6,7 +6,7 @@
 miya://<source-id>/thread/<backend>/<session-id>
 ```
 
-- `source-id` 是 Miya 数据实例的 32 位小写十六进制标识，保存在 `serviceDir()/reference-source`。重启、更新、重置手机配对均不改变它。这个文件损坏时停止生成引用，不自动换身份。
+- `source-id` 是 Miya 数据实例的 32 位小写十六进制标识，保存在 `appdir.Dir()/reference-source`。重启、更新、重置手机配对均不改变它。这个文件损坏时停止生成引用，不自动换身份。
 - `backend` 为 `codex` 或 `claude-code`。
 - `session-id` 是原始 `ServerID`，区分大小写，按单个 URL 路径段编码；解析要求使用完整、规范的链接，不接受前缀、查询参数、片段或认证信息。
 - 另一来源的引用不能在当前桌面解析；链接不包含连接凭证，也不赋予访问权限。
@@ -39,7 +39,7 @@ miya://<source-id>/thread/<backend>/<session-id>
 
 排队消息各自保留提交时的上下文快照；合并发送时合并正文和快照，不重新读取源会话。把排队消息放回输入框编辑时，移除旧快照，下次发送重新取上下文。
 
-编辑历史导致后端创建新会话时，既有引用继续指向原始会话。原会话的定位元数据保存在 `serviceDir()/reference-sessions.json`，重启后可从原后端记录加载；不会把旧 ID 别名到新分支。
+编辑历史导致后端创建新会话时，既有引用继续指向原始会话。原会话的定位元数据保存在 `appdir.Dir()/reference-sessions.json`，重启后可从原后端记录加载；不会把旧 ID 别名到新分支。
 
 ## 工具接口和协议
 
