@@ -4,6 +4,7 @@ import (
 	"miya/internal/account"
 	"miya/internal/async"
 	"miya/internal/mcpproto"
+	"miya/internal/mcpserver"
 	"miya/internal/model"
 	"miya/internal/phoneapi"
 	"miya/internal/svcproto"
@@ -132,3 +133,15 @@ type (
 const mcpCallerUnknown = mcpproto.CallerUnknown
 
 var mcpReadOnly = mcpproto.ReadOnly
+
+// The -mcp process's server lives in internal/mcpserver.
+type mcpServer = mcpserver.Server
+
+var (
+	newMCPServer     = mcpserver.NewServer
+	serveMCP         = mcpserver.Serve
+	registerMCPTools = mcpserver.Register
+)
+
+// mcpTools are the MCP tools as registered so far; call it after init.
+func mcpTools() []mcpTool { return mcpserver.Tools() }

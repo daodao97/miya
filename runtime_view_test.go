@@ -119,9 +119,9 @@ func TestPhoneRuntimeEndpointValidatesStableReferenceAndNeverFallsBack(t *testin
 }
 func TestMCPRuntimeToolIsReadOnlyAndReturnsNoPreviewToken(t *testing.T) {
 	var definition *mcpTool
-	for i := range mcpTools {
-		if mcpTools[i].Name == "runtime_info" {
-			definition = &mcpTools[i]
+	for i := range mcpTools() {
+		if mcpTools()[i].Name == "runtime_info" {
+			definition = &mcpTools()[i]
 		}
 	}
 	if definition == nil || definition.Annotations["readOnlyHint"] != true {

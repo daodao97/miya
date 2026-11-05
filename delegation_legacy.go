@@ -3,10 +3,8 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"time"
 
 	"miya/internal/claude"
-	dg "miya/internal/delegation"
 	"miya/internal/delegation/coordinator"
 )
 
@@ -64,37 +62,4 @@ func (c *chatController) legacyTaskRead(r mcpRequest, caller Thread) (any, error
 		return nil, err
 	}
 	return coordinator.TaskPublic(task), nil
-}
-
-func legacyTaskStatus(s *mcpServer, req mcpRequest, wait time.Duration) (string, error) {
-	deadline := time.Now().Add(wait)
-	for {
-		if err := s.ObserverError(); err != nil {
-			return "", err
-		}
-		var result json.RawMessage
-		if err := s.CallService("mcpLegacyTask", req, &result); err != nil {
-			return "", err
-		}
-		var v struct {
-			State      dg.State `json:"state"`
-			Resolution string   `json:"resolution"`
-		}
-		if err := json.Unmarshal(result, &v); err != nil {
-			return "", err
-		}
-		if dg.Terminal(v.State) || v.Resolution == "abandoned" {
-			return string(result), nil
-		}
-		if !time.Now().Before(deadline) {
-			var value map[string]any
-			_ = json.Unmarshal(result, &value)
-			value["timed_out"] = true
-			data, _ := json.Marshal(value)
-			return string(data), nil
-		}
-		if err := s.ObserverPause(500 * time.Millisecond); err != nil {
-			return "", err
-		}
-	}
 }
