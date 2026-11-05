@@ -262,7 +262,7 @@ func (c *chatController) addThread(project string, t Thread) {
 // the conversation that took it, or 0 when it cannot be sent now.
 func (c *chatController) submit(req SendRequest) int {
 	c.lastSubmitError = ""
-	if hasAgentReferences(req.Text, req.Parts) {
+	if model.HasAgentReferences(req.Text, req.Parts) {
 		capability := c.collaborationCapabilities()
 		if capability == nil || capability.Version < 1 {
 			c.lastSubmitError = tr("Update the Miya background service to use Agent tags")
@@ -288,10 +288,10 @@ func (c *chatController) submit(req SendRequest) int {
 		}
 		return id
 	}
-	_, existingSnapshots := splitReferenceContext(req.Text)
+	_, existingSnapshots := model.SplitReferenceContext(req.Text)
 	if len(req.Parts) > 0 && len(existingSnapshots) == 0 {
 		var err error
-		req.Text, err = partsText(req.Parts)
+		req.Text, err = PartsText(req.Parts)
 		if err != nil {
 			c.lastSubmitError = err.Error()
 			c.setStatus(err.Error())
@@ -307,8 +307,8 @@ func (c *chatController) submit(req SendRequest) int {
 	}
 	// References supply a send-time context snapshot without changing the
 	// conversations they refer to. Delegation records its own handoff.
-	own, _ := splitReferenceContext(req.Text)
-	req.Parts = messageParts(own)
+	own, _ := model.SplitReferenceContext(req.Text)
+	req.Parts = MessageParts(own)
 	var err error
 	req.Text, _, err = expandThreadRefs(req.Text, c.threadRef(c.threadWithID(req.ThreadID)), c.resolveReference)
 	if err != nil {

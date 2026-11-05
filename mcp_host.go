@@ -104,7 +104,7 @@ func (c *chatController) mcpHandle(op string, r mcpRequest) (any, error) {
 		return c.mcpRuntime(r)
 	}
 	if r.Reference != "" {
-		ref, ok := parseThreadURL(r.Reference)
+		ref, ok := model.ParseThreadURL(r.Reference)
 		if !ok || ref.Source != c.referenceSource {
 			return nil, errors.New("Session link is invalid or belongs to another desktop")
 		}
@@ -292,7 +292,7 @@ func (c *chatController) mcpDelegate(r mcpRequest) (mcpDelegateResult, error) {
 		if !ref.Valid() {
 			return mcpDelegateResult{}, errors.New("The session must be created before its context can be handed off")
 		}
-		text += "\n\n" + referenceText(ref, threadRefTitle(caller))
+		text += "\n\n" + model.ReferenceText(ref, threadRefTitle(caller))
 	}
 	id := c.submit(SendRequest{ThreadID: r.Thread, Agent: agent, Project: c.threadWorkspace(caller.ID), Text: text, MemoryControl: true})
 	if id == 0 {

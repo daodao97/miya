@@ -33,10 +33,10 @@ func (app *chatApp) referenceTitle(ref ThreadRef) string {
 
 // Tokens retain their identities; history never reconstructs them from titles.
 func (app *chatApp) threadReferenceContent(text string) (string, []threadTag) {
-	own, _ := splitReferenceContext(text)
+	own, _ := model.SplitReferenceContext(text)
 	seen := map[ThreadRef]bool{}
 	var tags []threadTag
-	for _, m := range threadMentions(own) {
+	for _, m := range model.ThreadMentions(own) {
 		if seen[m.Ref] {
 			continue
 		}

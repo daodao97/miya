@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+	"miya/internal/model"
 )
 
 func TestGlobalThreadChoicesIncludeAllProjectsAndMatches(t *testing.T) {
@@ -62,7 +63,7 @@ func TestComposerCanChooseGlobalConversationBeyondFirstPage(t *testing.T) {
 	}
 	tt.Key(0, ui.KeyEnter)
 	tt.Frame()
-	if c.draft() != "参考 "+referenceText(testRef(agentCodex, "session-3"), "跨项目 3")+" " {
+	if c.draft() != "参考 "+model.ReferenceText(testRef(agentCodex, "session-3"), "跨项目 3")+" " {
 		t.Fatalf("wrong global reference inserted: %q", c.draft())
 	}
 	out, sources, err := expandThreadRefs(c.draft(), ThreadRef{}, c.resolveReference)

@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"miya/internal/model"
 	"os/exec"
 	"strings"
 	"sync"
@@ -83,7 +84,7 @@ func TestQueuedReferencesKeepEachSendTimeSnapshot(t *testing.T) {
 	c, d := queueController(t)
 	src := handoffSource()
 	c.setThreads(append(c.threads(), src))
-	raw := referenceText(testReference(src), src.Title)
+	raw := model.ReferenceText(testReference(src), src.Title)
 	if c.submit(SendRequest{ThreadID: 1, Text: "第一次 " + raw}) != 1 {
 		t.Fatal(c.lastSubmitError)
 	}
@@ -99,7 +100,7 @@ func TestQueuedReferencesKeepEachSendTimeSnapshot(t *testing.T) {
 	if len(texts) != 1 {
 		t.Fatal(texts)
 	}
-	body, snapshots := splitReferenceContext(texts[0])
+	body, snapshots := model.SplitReferenceContext(texts[0])
 	if body != "第一次 "+raw+"\n\n第二次 "+raw || len(snapshots) != 2 {
 		t.Fatalf("queue lost references: %q %+v", body, snapshots)
 	}

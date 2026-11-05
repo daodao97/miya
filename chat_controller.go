@@ -1390,8 +1390,8 @@ func prepareHistoryMessages(remote codex.Thread) []Message {
 				}
 				m.ItemID = item.ID
 				if m.Role == "user" {
-					own, _ := splitReferenceContext(m.Content)
-					m.Parts = messageParts(own)
+					own, _ := model.SplitReferenceContext(m.Content)
+					m.Parts = MessageParts(own)
 				}
 				m.TurnID = turn.ID
 				m.SentAtMs, m.StartedAtMs, m.CompletedAtMs = start, start, end
@@ -1448,7 +1448,7 @@ func (c *chatController) sendCodex(req SendRequest) int {
 		return id
 	}
 	cwd := c.threadWorkspace(id)
-	model, effort, policy := req.Model, req.Effort, req.Policy
+	modelID, effort, policy := req.Model, req.Effort, req.Policy
 	serviceTier := loadSetting("codexServiceTier")
 	sentAt := time.Now().UnixMilli()
 	pendingUserID := c.nextID()
@@ -1477,8 +1477,8 @@ func (c *chatController) sendCodex(req SendRequest) int {
 		if serverID == "" {
 			var r codex.ThreadResponse
 			params := map[string]any{"cwd": cwd, "sandbox": sandboxForPermissionPolicy(policy), "approvalPolicy": approvalForPermissionPolicy(policy), "approvalsReviewer": reviewerForPermissionPolicy(policy)}
-			if model != "" {
-				params["model"] = model
+			if modelID != "" {
+				params["model"] = modelID
 			}
 			err = client.Call(ctx, "thread/start", params, &r)
 			if err == nil {
@@ -1509,12 +1509,12 @@ func (c *chatController) sendCodex(req SendRequest) int {
 		if err == nil {
 			mem := c.memories().PrepareInput(t, req, cwd, c.threadRef(Thread{ServerID: serverID}).URL())
 			input := []map[string]any{{"type": "text", "text": collaborationTaggedInput(mem.Text(text), req.Parts), "text_elements": []any{}}}
-			own, _ := splitReferenceContext(text)
+			own, _ := model.SplitReferenceContext(text)
 			input = append(input, fileMentionInputs(own, cwd)...)
 			input = append(input, c.attachmentInputs(attachments)...)
 			params := map[string]any{"threadId": serverID, "cwd": cwd, "input": input, "approvalPolicy": approvalForPermissionPolicy(policy), "approvalsReviewer": reviewerForPermissionPolicy(policy), "sandboxPolicy": turnSandboxForPermissionPolicy(policy)}
-			if model != "" {
-				params["model"] = model
+			if modelID != "" {
+				params["model"] = modelID
 			}
 			if effort != "" {
 				params["effort"] = effort

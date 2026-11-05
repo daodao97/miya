@@ -20,14 +20,14 @@ func testReference(t Thread) ThreadRef { return testRef(model.ThreadAgent(t), t.
 func TestThreadReferenceURLIsExactAndLossless(t *testing.T) {
 	for _, sid := range []string{"019a-uuid", "CaseSensitive", "中文 空格", "a/b?#%()"} {
 		ref := testRef(agentCodex, sid)
-		got, ok := parseThreadURL(ref.URL())
+		got, ok := model.ParseThreadURL(ref.URL())
 		if !ok || got != ref {
 			t.Fatalf("URL round trip: %q %+v", ref.URL(), got)
 		}
 	}
 	ref := testRef(agentCodex, "id")
 	for _, raw := range []string{ref.URL() + "?secret=x", ref.URL() + "#fragment", ref.URL() + "/more", "miya://user@" + testReferenceSource + "/thread/codex/id", "miya://" + testReferenceSource + "/thread/unknown/id", "miya://desktop/thread/codex/id", "miya://" + testReferenceSource + "/thread/codex/"} {
-		if _, ok := parseThreadURL(raw); ok {
+		if _, ok := model.ParseThreadURL(raw); ok {
 			t.Errorf("accepted %q", raw)
 		}
 	}
@@ -35,13 +35,13 @@ func TestThreadReferenceURLIsExactAndLossless(t *testing.T) {
 
 func TestThreadReferencesRequireExplicitObjectsOutsideCode(t *testing.T) {
 	ref := testRef(agentCodex, "id")
-	mention := referenceText(ref, `同名 [标题] \ " 👋`)
+	mention := model.ReferenceText(ref, `同名 [标题] \ " 👋`)
 	for _, raw := range []string{"@#2", ref.URL(), "`" + mention + "`", "``" + mention + "``", "\\" + mention, "```go\n" + mention + "\n```", "~~~\n" + mention + "\n~~~", "    " + mention, "\t" + mention, "> ~~~\n> " + mention + "\n> ~~~", "- ~~~\n  " + mention + "\n  ~~~"} {
 		if got := threadRefs(raw); len(got) != 0 {
 			t.Errorf("literal became reference: %q %v", raw, got)
 		}
 	}
-	withBacktick := referenceText(ref, "title with `backtick") + referenceText(testRef(agentCodex, "next"), "next")
+	withBacktick := model.ReferenceText(ref, "title with `backtick") + model.ReferenceText(testRef(agentCodex, "next"), "next")
 	if got := threadRefs(withBacktick); len(got) != 2 {
 		t.Fatalf("title changed Markdown state: %v", got)
 	}
@@ -49,8 +49,8 @@ func TestThreadReferencesRequireExplicitObjectsOutsideCode(t *testing.T) {
 	if got := threadRefs(raw); len(got) != 1 || got[0] != ref {
 		t.Fatal(got)
 	}
-	parts := messageParts(raw)
-	if got, err := partsText(parts); err != nil || got != raw {
+	parts := MessageParts(raw)
+	if got, err := PartsText(parts); err != nil || got != raw {
 		t.Fatalf("parts round trip: %q %v", got, err)
 	}
 	data, _ := json.Marshal(parts)
@@ -58,7 +58,7 @@ func TestThreadReferencesRequireExplicitObjectsOutsideCode(t *testing.T) {
 	if err := json.Unmarshal(data, &restored); err != nil {
 		t.Fatal(err)
 	}
-	if got, _ := partsText(restored); got != raw {
+	if got, _ := PartsText(restored); got != raw {
 		t.Fatal(got)
 	}
 }
@@ -137,7 +137,7 @@ func TestSameTitleReferencesKeepTheirIdentitiesWhenEdited(t *testing.T) {
 	b.ID = 3
 	b.ServerID = "another-session"
 	app.c.setThreads([]Thread{a, b})
-	raw := referenceText(testReference(a), a.Title) + " 对比 " + referenceText(testReference(b), b.Title)
+	raw := model.ReferenceText(testReference(a), a.Title) + " 对比 " + model.ReferenceText(testReference(b), b.Title)
 	out, _, err := expandThreadRefs(raw, ThreadRef{}, app.c.resolveReference)
 	if err != nil {
 		t.Fatal(err)
@@ -183,7 +183,7 @@ func TestInvalidReferencePreventsQueueAndPreservesDraft(t *testing.T) {
 	c := app.c
 	c.setThreads([]Thread{{ID: 1, ServerID: "target", Busy: true, HistoryLoaded: true}})
 	c.setActive(1)
-	raw := referenceText(testRef(agentCodex, "missing"), "不存在")
+	raw := model.ReferenceText(testRef(agentCodex, "missing"), "不存在")
 	c.rememberDraft(raw)
 	c.send()
 	if len(c.current().Queue) != 0 || c.draft() != raw || !strings.Contains(c.lastSubmitError, "不存在") {
@@ -193,29 +193,29 @@ func TestInvalidReferencePreventsQueueAndPreservesDraft(t *testing.T) {
 
 func TestReferenceSnapshotDoesNotCutLiteralContextTags(t *testing.T) {
 	raw := "解释 <miya-thread-context 的含义，继续正文"
-	if own, snapshots := splitReferenceContext(raw); own != raw || len(snapshots) != 0 {
+	if own, snapshots := model.SplitReferenceContext(raw); own != raw || len(snapshots) != 0 {
 		t.Fatal(own)
 	}
 	src := handoffSource()
 	ref := testReference(src)
-	raw += " " + referenceText(ref, src.Title)
+	raw += " " + model.ReferenceText(ref, src.Title)
 	out, _, err := expandThreadRefs(raw, ThreadRef{}, func(ThreadRef) (Thread, []Message, error) { return src, src.Messages, nil })
 	if err != nil {
 		t.Fatal(err)
 	}
-	if own, snapshots := splitReferenceContext(out); own != raw || len(snapshots) != 1 {
+	if own, snapshots := model.SplitReferenceContext(out); own != raw || len(snapshots) != 1 {
 		t.Fatal(own)
 	}
 	withAttachment, _ := attachmentDisplay(out, []string{"notes.txt"})
-	if own, snapshots := splitReferenceContext(withAttachment); own != raw+"\n📎 notes.txt" || len(snapshots) != 1 {
+	if own, snapshots := model.SplitReferenceContext(withAttachment); own != raw+"\n📎 notes.txt" || len(snapshots) != 1 {
 		t.Fatalf("attachment exposed or truncated context: %q", own)
 	}
 	quoted := "```\n" + out + "\n```"
-	if own, snapshots := splitReferenceContext(quoted); own != quoted || len(snapshots) != 0 {
+	if own, snapshots := model.SplitReferenceContext(quoted); own != quoted || len(snapshots) != 0 {
 		t.Fatal("code sample was hidden as a snapshot")
 	}
-	joined := joinReferenceMessages([]string{out, "接着做"})
-	if own, snapshots := splitReferenceContext(joined); own != raw+"\n\n接着做" || len(snapshots) != 1 {
+	joined := model.JoinReferenceMessages([]string{out, "接着做"})
+	if own, snapshots := model.SplitReferenceContext(joined); own != raw+"\n\n接着做" || len(snapshots) != 1 {
 		t.Fatal(own)
 	}
 }

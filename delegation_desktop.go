@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/egoist/mygo/ui"
+	"miya/internal/model"
 )
 
 func (app *chatApp) collaborationCall(request collaborationRequest, done func(json.RawMessage, error)) {
@@ -64,7 +65,7 @@ func (app *chatApp) collaborationToggle(c *ui.Context, t Thread) {
 }
 
 func (app *chatApp) openCollaborationThread(raw string) {
-	ref, ok := parseThreadURL(raw)
+	ref, ok := model.ParseThreadURL(raw)
 	if !ok || ref.Source != app.c.referenceSource {
 		app.notice = tr("Conversation unavailable")
 		return

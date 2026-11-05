@@ -5,6 +5,7 @@ import (
 	"miya/internal/memory"
 	"miya/internal/memory/extractor"
 	"miya/internal/memory/manager"
+	"miya/internal/model"
 )
 
 func newMemoryEngine(c *chatController) *extractor.Engine {
@@ -39,7 +40,7 @@ func (h memoryHost) ClaudeBinary() string                 { return h.c.claudeBin
 func (h memoryHost) AgentName(agent string) string        { return backendFor(agent).Name() }
 func (h memoryHost) Changed()                             { h.c.memoryChanged() }
 func (h memoryHost) OwnText(text string) string {
-	own, _ := splitReferenceContext(text)
+	own, _ := model.SplitReferenceContext(text)
 	return own
 }
 func (h memoryHost) Projects() (string, []string) {

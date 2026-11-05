@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"miya/internal/codex"
+	"miya/internal/model"
 	"miya/internal/notification"
 )
 
@@ -409,7 +410,7 @@ func TestServiceRetryRewindsOnlyTheLastUserMessage(t *testing.T) {
 	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
 	persistSetting("notifications-completion", "off")
 	source := handoffSource()
-	prompt, _, err := expandThreadRefs(referenceText(testReference(source), source.Title)+" 再审核一下", ThreadRef{}, func(ThreadRef) (Thread, []Message, error) {
+	prompt, _, err := expandThreadRefs(model.ReferenceText(testReference(source), source.Title)+" 再审核一下", ThreadRef{}, func(ThreadRef) (Thread, []Message, error) {
 		return source, source.Messages, nil
 	})
 	if err != nil {

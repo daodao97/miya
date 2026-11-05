@@ -21,6 +21,7 @@ import (
 	"github.com/egoist/mygo/i18n"
 	"golang.org/x/text/language"
 	"miya/internal/desktop/control"
+	"miya/internal/model"
 	"miya/internal/webservice"
 	"miya/locales"
 )
@@ -137,7 +138,7 @@ func (s desktopFileServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.NotFound(w, r)
 			return
 		}
-		ref, ok := parseThreadURL(r.URL.Query().Get("ref"))
+		ref, ok := model.ParseThreadURL(r.URL.Query().Get("ref"))
 		if !ok {
 			http.Error(w, "Invalid conversation identity", 400)
 			return

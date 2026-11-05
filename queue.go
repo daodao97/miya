@@ -1,6 +1,9 @@
 package main
 
-import "strings"
+import (
+	"miya/internal/model"
+	"strings"
+)
 
 // A conversation that is running queues what is sent to it, for the agent
 // to receive once the turn ends, as the Codex and Claude Code CLIs do. The
@@ -67,9 +70,9 @@ func (c *chatController) drainQueue(id int) {
 		}
 		req.Attachments = append(req.Attachments, q.Attachments...)
 	}
-	req.Text = joinReferenceMessages(texts)
-	own, _ := splitReferenceContext(req.Text)
-	req.Parts = messageParts(own)
+	req.Text = model.JoinReferenceMessages(texts)
+	own, _ := model.SplitReferenceContext(req.Text)
+	req.Parts = MessageParts(own)
 	c.update(id, func(t *Thread) { t.Queue = nil })
 	if c.submit(req) == 0 {
 		c.update(id, func(t *Thread) { t.Queue = append(queue, t.Queue...) })

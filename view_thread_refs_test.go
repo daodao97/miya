@@ -9,13 +9,14 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/richtext"
+	"miya/internal/model"
 )
 
 func TestInlineThreadReferencesKeepTheirPosition(t *testing.T) {
 	app, _ := testApp(t)
 	app.c.setThreads([]Thread{handoffSource(), {ID: 3, ServerID: "api-session", Title: "接口检查"}})
-	r2 := referenceText(testReference(handoffSource()), "登录修复")
-	r3 := referenceText(testRef(agentCodex, "api-session"), "接口检查")
+	r2 := model.ReferenceText(testReference(handoffSource()), "登录修复")
+	r3 := model.ReferenceText(testRef(agentCodex, "api-session"), "接口检查")
 	style := threadMentionStyle{font: ui.Font{Size: 13}}
 	for _, raw := range []string{r2 + " ", "参考 " + r2 + " 然后修复", "对比 " + r2 + " 和 " + r3 + " 👋", r2 + " " + r2 + " 继续", r2 + r3, "看下，" + r2 + "。还有（" + r3 + "）"} {
 		text := inlineThreadText(raw, true, style, app.referenceTitle)
@@ -40,7 +41,7 @@ func TestComposerShowsInlineTagsAndEditsThemAsOneObject(t *testing.T) {
 	tt.Key(0, ui.KeyEnter)
 	tt.Frame()
 	doc := app.complete.input.doc
-	if doc == nil || doc.Text().String() != string(richtext.ObjectReplacement)+" " || c.draft() != referenceText(testReference(handoffSource()), "登录修复")+" " {
+	if doc == nil || doc.Text().String() != string(richtext.ObjectReplacement)+" " || c.draft() != model.ReferenceText(testReference(handoffSource()), "登录修复")+" " {
 		t.Fatalf("reference is not inline: draft=%q text=%q", c.draft(), doc.Text().String())
 	}
 	if att := doc.Text().AttributesAt(0).Attachment; att == nil || att.Name != "登录修复" {
@@ -48,13 +49,13 @@ func TestComposerShowsInlineTagsAndEditsThemAsOneObject(t *testing.T) {
 	}
 	tt.Type("继续修复👋")
 	tt.Frame()
-	if c.draft() != referenceText(testReference(handoffSource()), "登录修复")+" 继续修复👋" {
+	if c.draft() != model.ReferenceText(testReference(handoffSource()), "登录修复")+" 继续修复👋" {
 		t.Fatalf("typing lost tag: %q", c.draft())
 	}
 	tt.Key(ui.Cmd, ui.KeyA)
 	tt.Key(ui.Cmd, ui.KeyC)
 	tt.Frame()
-	if tt.Clipboard() != referenceText(testReference(handoffSource()), "登录修复")+" 继续修复👋" {
+	if tt.Clipboard() != model.ReferenceText(testReference(handoffSource()), "登录修复")+" 继续修复👋" {
 		t.Fatalf("copy lost reference identity: %q", tt.Clipboard())
 	}
 	tt.Key(0, ui.KeyBackspace)
@@ -64,18 +65,18 @@ func TestComposerShowsInlineTagsAndEditsThemAsOneObject(t *testing.T) {
 	}
 	tt.Key(ui.Cmd, ui.KeyZ)
 	tt.Frame()
-	if c.draft() != referenceText(testReference(handoffSource()), "登录修复")+" 继续修复👋" {
+	if c.draft() != model.ReferenceText(testReference(handoffSource()), "登录修复")+" 继续修复👋" {
 		t.Fatalf("undo did not restore inline reference: %q", c.draft())
 	}
 	tt.Key(ui.Cmd, ui.KeyA)
 	tt.Type("参考 ")
 	tt.Frame()
-	tt.SetClipboard(referenceText(testReference(handoffSource()), "登录修复") + " ")
+	tt.SetClipboard(model.ReferenceText(testReference(handoffSource()), "登录修复") + " ")
 	tt.Key(ui.Cmd, ui.KeyV)
 	tt.Frame()
 	tt.Type("继续")
 	tt.Frame()
-	if c.draft() != "参考 "+referenceText(testReference(handoffSource()), "登录修复")+" 继续" {
+	if c.draft() != "参考 "+model.ReferenceText(testReference(handoffSource()), "登录修复")+" 继续" {
 		t.Fatalf("paste moved reference out of its sentence: %q", c.draft())
 	}
 	// The input exposes the same shaped geometry as its inline objects.
@@ -107,7 +108,7 @@ func TestInlineCompletionPreservesMidSentenceCaretAndChineseInput(t *testing.T) 
 	tt.Compose("", 0)
 	tt.Type("继续")
 	tt.Frame()
-	if got := c.draft(); got != "检查 "+referenceText(testReference(handoffSource()), "登录修复")+" 继续 的问题" {
+	if got := c.draft(); got != "检查 "+model.ReferenceText(testReference(handoffSource()), "登录修复")+" 继续 的问题" {
 		t.Fatalf("completion or Chinese input moved the caret: %q", got)
 	}
 	tt.Type(" @登")
@@ -126,7 +127,7 @@ func TestMessagesShowThreadTagsWithoutContextPackets(t *testing.T) {
 	app, _ := testApp(t)
 	source := handoffSource()
 	source.Title = `登录 "修复" <检查>`
-	raw := "参考 " + referenceText(testReference(source), source.Title) + " 继续修复"
+	raw := "参考 " + model.ReferenceText(testReference(source), source.Title) + " 继续修复"
 	text, _, err := expandThreadRefs(raw, ThreadRef{}, func(ref ThreadRef) (Thread, []Message, error) { return source, source.Messages, nil })
 	if err != nil {
 		t.Fatal(err)
@@ -142,10 +143,10 @@ func TestMessagesShowThreadTagsWithoutContextPackets(t *testing.T) {
 		t.Fatalf("message did not hide expanded context behind a named tag: %q", tt.Texts())
 	}
 	app.startEdit(message)
-	if !strings.Contains(app.editText, referenceText(testReference(source), source.Title)) || strings.Contains(app.editText, contextEnvelopeOpen) {
+	if !strings.Contains(app.editText, model.ReferenceText(testReference(source), source.Title)) || strings.Contains(app.editText, model.ContextEnvelopeOpen) {
 		t.Fatalf("editing message exposed context instead of its reference: %q", app.editText)
 	}
-	_, tags = app.threadReferenceContent(referenceText(testRef(agentCodex, "missing"), "已删除会话"))
+	_, tags = app.threadReferenceContent(model.ReferenceText(testRef(agentCodex, "missing"), "已删除会话"))
 	if len(tags) != 1 || tags[0].Title != "已删除会话" {
 		t.Fatalf("unknown reference lost its fallback label: %+v", tags)
 	}
@@ -154,7 +155,7 @@ func TestMessagesShowThreadTagsWithoutContextPackets(t *testing.T) {
 func TestMobileThreadTagRetainsGlobalTitleAndReference(t *testing.T) {
 	m := testMobileApp()
 	m.startConversation("/a", agentCodex)
-	m.draft = referenceText(testRef(agentCodex, "s2"), "thread-two") + " "
+	m.draft = model.ReferenceText(testRef(agentCodex, "s2"), "thread-two") + " "
 	tt := ui.NewTester(m.viewRoot, 390, 750)
 	tt.Frame()
 	doc := m.inlineInput.doc
@@ -166,7 +167,7 @@ func TestMobileThreadTagRetainsGlobalTitleAndReference(t *testing.T) {
 	}
 	tt.Type("你好👋")
 	tt.Frame()
-	if m.draft != referenceText(testRef(agentCodex, "s2"), "thread-two")+" 你好👋" {
+	if m.draft != model.ReferenceText(testRef(agentCodex, "s2"), "thread-two")+" 你好👋" {
 		t.Fatalf("phone typing lost tag: %q", m.draft)
 	}
 	tt.Key(ui.Cmd, ui.KeyA)
@@ -199,7 +200,7 @@ func TestComposerConvertsPastedLinkOnlyWhenRequested(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if app.c.draft() != referenceText(testReference(src), src.Title) || app.complete.open {
+	if app.c.draft() != model.ReferenceText(testReference(src), src.Title) || app.complete.open {
 		t.Fatalf("conversion failed: %q", app.c.draft())
 	}
 	app.complete.input.doc.SetSelection(0, 1)
@@ -224,10 +225,10 @@ func TestThreadTagSnapshot(t *testing.T) {
 	app, tt := testApp(t)
 	c := app.c
 	source := handoffSource()
-	text, _, _ := expandThreadRefs("参考 "+referenceText(testReference(source), source.Title)+" 给登录页加上提示", ThreadRef{}, func(ThreadRef) (Thread, []Message, error) { return source, source.Messages, nil })
+	text, _, _ := expandThreadRefs("参考 "+model.ReferenceText(testReference(source), source.Title)+" 给登录页加上提示", ThreadRef{}, func(ThreadRef) (Thread, []Message, error) { return source, source.Messages, nil })
 	c.setThreads([]Thread{{ID: 1, Title: "登录页提示", HistoryLoaded: true, Messages: []Message{{ID: 50, Role: "user", Content: text}}}, source})
 	c.setActive(1)
-	c.rememberDraft(referenceText(testReference(source), source.Title) + " 请继续检查移动端")
+	c.rememberDraft(model.ReferenceText(testReference(source), source.Title) + " 请继续检查移动端")
 	for _, dark := range []bool{false, true} {
 		app.appearance = map[bool]string{false: "light", true: "dark"}[dark]
 		tt.Frame()
@@ -245,7 +246,7 @@ func TestThreadTagSnapshot(t *testing.T) {
 	m := testMobileApp()
 	m.state.Projects[1].Threads[0].Title = "登录修复与移动端兼容性检查"
 	m.startConversation("/a", agentCodex)
-	m.draft = referenceText(testReference(source), source.Title) + " 请继续检查移动端"
+	m.draft = model.ReferenceText(testReference(source), source.Title) + " 请继续检查移动端"
 	phone := ui.NewTester(m.viewRoot, 390, 750)
 	for _, dark := range []bool{false, true} {
 		phone.SetDark(dark)

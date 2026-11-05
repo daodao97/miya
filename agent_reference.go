@@ -1,31 +1,13 @@
 package main
 
 import (
-	"net/url"
-	"regexp"
+	"miya/internal/model"
 	"sort"
 	"strings"
 )
 
-var agentMentionPattern = regexp.MustCompile(`#\[((?:\\.|[^\]\\\r\n])*)\]\((miya-agent://[^\s<>()\[\]]+)\)`)
-
-func agentURL(agent string) string {
-	if !registeredBackend(agent) {
-		return ""
-	}
-	return "miya-agent://" + agent
-}
-
-func parseAgentURL(raw string) (string, bool) {
-	u, err := url.Parse(raw)
-	if err != nil || u.Scheme != "miya-agent" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" || agentURL(u.Host) != raw {
-		return "", false
-	}
-	return u.Host, true
-}
-
 func agentReferenceText(agent, title string) string {
-	uri := agentURL(agent)
+	uri := model.AgentURL(agent)
 	if uri == "" {
 		return ""
 	}
@@ -37,32 +19,6 @@ func agentReferenceText(agent, title string) string {
 	return "#[" + title + "](" + uri + ")"
 }
 
-type agentMention struct {
-	Start, End   int
-	Agent, Title string
-}
-
-func agentMentions(text string) []agentMention {
-	indices := agentMentionPattern.FindAllStringSubmatchIndex(text, -1)
-	if len(indices) == 0 {
-		return nil
-	}
-	mask := referenceCodeMask(text)
-	var out []agentMention
-	for _, m := range indices {
-		if mask[m[0]] {
-			continue
-		}
-		agent, ok := parseAgentURL(text[m[4]:m[5]])
-		if !ok {
-			continue
-		}
-		title := strings.NewReplacer(`\\`, `\`, `\[`, `[`, `\]`, `]`).Replace(text[m[2]:m[3]])
-		out = append(out, agentMention{m[0], m[1], agent, title})
-	}
-	return out
-}
-
 type composerMention struct {
 	Start, End int
 	Part       MessagePart
@@ -70,11 +26,11 @@ type composerMention struct {
 
 func composerMentions(text string) []composerMention {
 	var out []composerMention
-	for _, m := range threadMentions(text) {
+	for _, m := range model.ThreadMentions(text) {
 		ref := m.Ref
 		out = append(out, composerMention{m.Start, m.End, MessagePart{Type: "thread_ref", Ref: &ref, TitleSnapshot: m.Title}})
 	}
-	for _, m := range agentMentions(text) {
+	for _, m := range model.AgentMentions(text) {
 		out = append(out, composerMention{m.Start, m.End, MessagePart{Type: "agent_ref", Agent: m.Agent, TitleSnapshot: m.Title}})
 	}
 	sort.Slice(out, func(i, j int) bool {
@@ -136,23 +92,13 @@ func insertAgentReference(value string, token composerToken, agent, title string
 	return value
 }
 
-func hasAgentReferences(text string, parts []MessagePart) bool {
-	for _, part := range parts {
-		if part.Type == "agent_ref" {
-			return true
-		}
-	}
-	own, _ := splitReferenceContext(text)
-	return len(agentMentions(own)) > 0
-}
-
 // Instructions are added only to native input. The user's visible message,
 // structured parts, draft and memory evidence retain exactly their own text.
 func collaborationTaggedInput(text string, parts []MessagePart) string {
-	var mentions []agentMention
+	var mentions []model.AgentMention
 	for _, part := range parts {
 		if part.Type == "agent_ref" && registeredBackend(part.Agent) {
-			mentions = append(mentions, agentMention{Agent: part.Agent})
+			mentions = append(mentions, model.AgentMention{Agent: part.Agent})
 		}
 	}
 	if len(mentions) == 0 {

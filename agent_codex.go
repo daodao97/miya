@@ -172,7 +172,7 @@ func (codexBackend) Steer(c *chatController, t Thread, req SendRequest) bool {
 	go func() {
 		mem := c.memories().PrepareInput(t, req, cwd, c.threadRef(t).URL())
 		input := []map[string]any{{"type": "text", "text": mem.Text(req.Text), "text_elements": []any{}}}
-		own, _ := splitReferenceContext(req.Text)
+		own, _ := model.SplitReferenceContext(req.Text)
 		input = append(input, fileMentionInputs(own, cwd)...)
 		input = append(input, c.attachmentInputs(req.Attachments)...)
 		params := map[string]any{"threadId": t.ServerID, "expectedTurnId": t.TurnID, "input": input}

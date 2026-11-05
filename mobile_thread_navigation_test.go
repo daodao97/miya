@@ -99,14 +99,14 @@ func TestMobileMessageLinksOpenConversation(t *testing.T) {
 				body := "[Target conversation](" + ref.URL() + ")"
 				role := "assistant"
 				if strings.Contains(kind, "mention") {
-					body = referenceText(ref, "Target conversation")
+					body = model.ReferenceText(ref, "Target conversation")
 				}
 				if kind == "user-mention" {
 					role = "user"
 				}
 				if kind == "mixed-user-links" {
 					role = "user"
-					body = referenceText(ref, "Reference tag") + " and " + body
+					body = model.ReferenceText(ref, "Reference tag") + " and " + body
 				}
 				source.Messages = []Message{{ID: 1, Role: role, Content: body}}
 				source.HistoryLoaded = true

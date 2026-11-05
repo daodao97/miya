@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/egoist/mygo/ui"
+	"miya/internal/model"
 )
 
 // queueView lists the messages waiting for the running turn to end.
@@ -54,7 +55,7 @@ func (app *chatApp) queueView(c *ui.Context, t Thread) {
 func (app *chatApp) editQueued(threadID int, q QueuedMessage) {
 	cc := app.c
 	cc.removeQueued(threadID, q.ID)
-	text, _ := splitReferenceContext(q.Text)
+	text, _ := model.SplitReferenceContext(q.Text)
 	if draft := strings.TrimSpace(cc.draft()); draft != "" {
 		text += "\n" + draft
 	}

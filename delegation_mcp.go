@@ -507,7 +507,7 @@ func (c *chatController) prepareTaskRecheck(caller, id string) (any, error) {
 	if task.Agent != agentCodex || task.NativeTurnID == "" || c.client == nil {
 		return nil, errors.New("RECHECK_UNAVAILABLE: No verifiable native execution evidence is available")
 	}
-	ref, ok := parseThreadURL(task.Target)
+	ref, ok := model.ParseThreadURL(task.Target)
 	if !ok {
 		return nil, errors.New("Invalid native task identity")
 	}

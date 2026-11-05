@@ -8,6 +8,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"miya/internal/model"
 )
 
 var fileLinkLocation = regexp.MustCompile(`:[0-9]+(?::[0-9]+)?$`)
@@ -32,7 +33,7 @@ func messageLinkMenu(c *ui.Context, cwd string) func(*ui.Menu, string) {
 // Message file links use the conversation's workspace, just as the agent does.
 // Reading them in the files surface also preserves any unsaved editor content.
 func (app *chatApp) openMessageLink(link string) {
-	if _, ok := parseThreadURL(link); ok {
+	if _, ok := model.ParseThreadURL(link); ok {
 		app.openCollaborationThread(link)
 		return
 	}
@@ -76,7 +77,7 @@ func localFileLink(cwd, link string) (string, bool) {
 
 // Conversation links stay inside the connected desktop's namespace on phones.
 func (m *mobileApp) openMessageLink(link string) {
-	if _, ok := parseThreadURL(link); ok {
+	if _, ok := model.ParseThreadURL(link); ok {
 		m.openCollaborationThread(link)
 		return
 	}

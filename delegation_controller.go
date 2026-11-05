@@ -134,7 +134,7 @@ func (s *collaborationState) onMain(f func() (any, error)) (any, error) {
 }
 
 func (c *chatController) threadByReference(raw string) (Thread, bool) {
-	ref, ok := parseThreadURL(raw)
+	ref, ok := model.ParseThreadURL(raw)
 	if !ok || ref.Source != c.referenceSource {
 		return Thread{}, false
 	}
@@ -201,7 +201,7 @@ func (c *chatController) prepareDelegation(caller Thread, a collaborationArgs) (
 		if !caller.HistoryLoaded {
 			return dg.StartInput{}, errors.New("CONTEXT_LOADING: Caller history is not loaded")
 		}
-		text += "\n\n" + referenceText(c.threadRef(caller), threadRefTitle(caller))
+		text += "\n\n" + model.ReferenceText(c.threadRef(caller), threadRefTitle(caller))
 	}
 	expanded, _, err := expandThreadRefs(text, c.threadRef(target), c.resolveReference)
 	if err != nil {
@@ -337,7 +337,7 @@ func (s *collaborationState) start(task dg.Task) {
 	}
 }
 
-func referenceSourceOf(raw string) string { ref, _ := parseThreadURL(raw); return ref.Source }
+func referenceSourceOf(raw string) string { ref, _ := model.ParseThreadURL(raw); return ref.Source }
 func (s *collaborationState) failBeforeStart(task dg.Task, err error) {
 	if saveErr := s.manager.Observe(dg.Event{TaskID: task.ID, State: dg.Failed, Result: dg.Result{Error: err.Error()}}); saveErr != nil {
 		return

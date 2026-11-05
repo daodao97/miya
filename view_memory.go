@@ -9,6 +9,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"miya/internal/memory"
 	"miya/internal/memory/manager"
+	"miya/internal/model"
 )
 
 type memoryUI struct {
@@ -431,7 +432,7 @@ func (app *chatApp) memorySourceView(c *ui.Context, src memory.Source) {
 	})
 }
 func (app *chatApp) openMemorySource(raw string) {
-	ref, ok := parseThreadURL(raw)
+	ref, ok := model.ParseThreadURL(raw)
 	if !ok {
 		return
 	}

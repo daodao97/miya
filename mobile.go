@@ -967,7 +967,7 @@ func (m *mobileApp) sendDraft(steer bool) {
 		m.sendErr = m.disconnectedSendError()
 		return
 	}
-	if hasAgentReferences(m.draft, nil) && (m.state.Collaboration == nil || m.state.Collaboration.Version < 1) {
+	if model.HasAgentReferences(m.draft, nil) && (m.state.Collaboration == nil || m.state.Collaboration.Version < 1) {
 		m.sendErr = tr("Update the Miya background service to use Agent tags")
 		return
 	}

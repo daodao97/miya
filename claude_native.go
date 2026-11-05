@@ -369,8 +369,8 @@ func parseClaudeSession(path string) ([]Message, error) {
 			}
 			if text, images := claudeVisibleText(blocks), claudeImages(blocks); text != "" || len(images) > 0 {
 				turnStart = at
-				own, _ := splitReferenceContext(text)
-				out = append(out, Message{Role: "user", Content: text, Parts: messageParts(own), Images: images, ItemID: e.UUID, SentAtMs: at})
+				own, _ := model.SplitReferenceContext(text)
+				out = append(out, Message{Role: "user", Content: text, Parts: MessageParts(own), Images: images, ItemID: e.UUID, SentAtMs: at})
 			}
 		case "assistant":
 			for i, b := range blocks {

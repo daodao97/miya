@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"miya/internal/codex"
+	"miya/internal/model"
 	"miya/internal/subagent"
 )
 
@@ -143,7 +144,7 @@ func TestMCPDelegateHandsWorkWithTheCallersContext(t *testing.T) {
 		t.Fatalf("delegation failed: %v %v", res, err)
 	}
 	target := c.threadWithID(2)
-	if len(target.Queue) != 1 || !strings.HasPrefix(target.Queue[0].Text, "给登录补测试") || !strings.Contains(target.Queue[0].Text, contextEnvelopeOpen) {
+	if len(target.Queue) != 1 || !strings.HasPrefix(target.Queue[0].Text, "给登录补测试") || !strings.Contains(target.Queue[0].Text, model.ContextEnvelopeOpen) {
 		t.Fatalf("task not sent with the caller's context: %+v", target.Queue)
 	}
 	source := c.threadWithID(1)
@@ -171,7 +172,7 @@ func TestMCPDelegateTracksOnlyTheCallerWithOrWithoutContext(t *testing.T) {
 			other := handoffSource()
 			other.ID, other.ServerID = 3, "reference-only"
 			c.setThreads(append(c.threads(), other))
-			task := "给登录补测试 " + referenceText(testReference(other), other.Title)
+			task := "给登录补测试 " + model.ReferenceText(testReference(other), other.Title)
 			_, err := c.mcpDelegate(mcpRequest{Tool: "delegate", Thread: 2, Task: task, NoContext: noContext})
 			if err != nil {
 				t.Fatal(err)
@@ -187,7 +188,7 @@ func TestMCPDelegateTracksOnlyTheCallerWithOrWithoutContext(t *testing.T) {
 			if last.Kind != "handoff" || len(last.Agents) != 1 || last.Agents[0].Status != subagent.Running || last.Agents[0].Name != "给登录补测试" || activityTitle(last) != "Handed off to conversation \"测试\"" {
 				t.Fatalf("explicit delegation not tracked: %+v", last)
 			}
-			_, snapshots := splitReferenceContext(c.threadWithID(2).Queue[0].Text)
+			_, snapshots := model.SplitReferenceContext(c.threadWithID(2).Queue[0].Text)
 			wantSnapshots := 2
 			if noContext {
 				wantSnapshots = 1

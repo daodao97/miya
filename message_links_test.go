@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"miya/internal/model"
 )
 
 func TestLocalFileLink(t *testing.T) {
@@ -114,7 +115,7 @@ func TestMessageFileLinkMenusAcrossRenderers(t *testing.T) {
 				if kind == "reference-inline" {
 					separator = " "
 				}
-				message.Content += separator + referenceText(testReference(source), source.Title)
+				message.Content += separator + model.ReferenceText(testReference(source), source.Title)
 			}
 			tt := ui.NewTester(func(c *ui.Context) {
 				app.md.LinkMenu = messageLinkMenu(c, app.c.cwd)

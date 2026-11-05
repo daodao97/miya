@@ -37,7 +37,7 @@ func (m *mobileApp) handoffToNewThread() {
 	draft, images := m.draft, m.images
 	m.images = nil
 	m.startConversation(project, ref.Backend)
-	m.draft = referenceText(ref, threadRefTitle(source)) + " " + draft
+	m.draft = model.ReferenceText(ref, threadRefTitle(source)) + " " + draft
 	m.images = images
 	if m.conn != nil {
 		m.sendPhoneAction(remote.Request{Op: "prefetch", Reference: ref.URL()})

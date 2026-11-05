@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"io/fs"
+	"miya/internal/model"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -78,17 +79,17 @@ func composerTokenAt(value string, end int) composerToken {
 	if start < 0 {
 		return composerToken{}
 	}
-	for _, m := range threadMentions(value) {
+	for _, m := range model.ThreadMentions(value) {
 		if start >= m.Start && start < m.End {
 			return composerToken{}
 		}
 	}
-	for _, m := range agentMentions(value) {
+	for _, m := range model.AgentMentions(value) {
 		if start >= m.Start && start < m.End {
 			return composerToken{}
 		}
 	}
-	if referenceCodeMask(value)[start] {
+	if model.ReferenceCodeMask(value)[start] {
 		return composerToken{}
 	}
 	if start > 0 {

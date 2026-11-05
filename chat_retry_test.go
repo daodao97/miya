@@ -1,6 +1,7 @@
 package main
 
 import (
+	"miya/internal/model"
 	"net/url"
 	"path/filepath"
 	"reflect"
@@ -92,7 +93,7 @@ func TestRetryRejectsUnavailableOrStaleResponse(t *testing.T) {
 
 func TestRetryMessageKeepsAttachmentsAndReferenceSnapshot(t *testing.T) {
 	src := handoffSource()
-	raw := referenceText(testReference(src), src.Title) + " 再审核一下"
+	raw := model.ReferenceText(testReference(src), src.Title) + " 再审核一下"
 	prompt, _, err := expandThreadRefs(raw, ThreadRef{}, func(ThreadRef) (Thread, []Message, error) {
 		return src, src.Messages, nil
 	})

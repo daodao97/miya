@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"miya/internal/claude"
 	"miya/internal/model"
 	"miya/internal/remote"
-	"miya/internal/claude"
 )
 
 type mobileCollaborationCall struct {
@@ -112,7 +112,7 @@ func (m *mobileApp) collaborationToggle(c *ui.Context) {
 }
 
 func (m *mobileApp) openCollaborationThread(raw string) {
-	ref, ok := parseThreadURL(raw)
+	ref, ok := model.ParseThreadURL(raw)
 	if !ok || ref.Source != m.state.ReferenceSource {
 		m.sendErr = tr("Conversation unavailable")
 		return

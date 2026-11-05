@@ -722,7 +722,7 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 				}
 			case "prefetch":
 				onMain(ctx, c.dispatch, func() bool {
-					if ref, ok := parseThreadURL(r.Reference); ok {
+					if ref, ok := model.ParseThreadURL(r.Reference); ok {
 						c.prefetchReference(ref)
 					}
 					return true
@@ -829,8 +829,8 @@ func readOnlyHistory(ctx context.Context, t phoneThread) ([]Message, string) {
 	for i := range messages {
 		messages[i].ID = i + 1
 		if messages[i].Role == "user" {
-			own, _ := splitReferenceContext(messages[i].Content)
-			messages[i].Parts = messageParts(own)
+			own, _ := model.SplitReferenceContext(messages[i].Content)
+			messages[i].Parts = MessageParts(own)
 		}
 	}
 	return messages, ""

@@ -10,6 +10,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/richtext"
+	"miya/internal/model"
 )
 
 func TestComposerCommandSelectionStagesChipAndEditableArguments(t *testing.T) {
@@ -70,7 +71,7 @@ func TestComposerCommandSelectionStagesChipAndEditableArguments(t *testing.T) {
 func TestComposerCommandChipKeepsReferencesAndPlainText(t *testing.T) {
 	app, tt := testApp(t)
 	app.c.setThreads([]Thread{handoffSource()})
-	ref := referenceText(testReference(handoffSource()), "登录修复")
+	ref := model.ReferenceText(testReference(handoffSource()), "登录修复")
 	app.c.rememberDraft("/goal 参考 " + ref + " 修复")
 	tt.Frame()
 	doc := app.complete.input.doc

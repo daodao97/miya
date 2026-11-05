@@ -5,15 +5,15 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"miya/internal/memory/manager"
 	"miya/internal/model"
 	"miya/internal/remote"
-	"miya/internal/memory/manager"
 )
 
 type phoneMemoryResult struct {
-	Revision uint64     `json:"revision,omitempty"`
-	Project  string     `json:"project"`
-	Scope    string     `json:"scope"`
+	Revision uint64       `json:"revision,omitempty"`
+	Project  string       `json:"project"`
+	Scope    string       `json:"scope"`
 	List     manager.List `json:"list"`
 }
 type mobileMemory struct {
@@ -137,7 +137,7 @@ func (m *mobileApp) memoryPage(c *ui.Context) {
 							if src.Quote != "" {
 								ui.Text(c, src.Quote).FontSize(m.font(13)).TextColor(p.muted).LineHeight(1.5).Selectable()
 							}
-							ref, ok := parseThreadURL(src.Thread)
+							ref, ok := model.ParseThreadURL(src.Thread)
 							if !ok {
 								return
 							}

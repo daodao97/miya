@@ -7,6 +7,7 @@ import (
 	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/richtext"
+	"miya/internal/model"
 	"miya/internal/textutil"
 )
 
@@ -62,7 +63,7 @@ func inlineThreadText(raw string, _ bool, style threadMentionStyle, title func(T
 			if name == "" {
 				name = backendFor(m.Part.Agent).Name()
 			}
-			uri = agentURL(m.Part.Agent)
+			uri = model.AgentURL(m.Part.Agent)
 			attachment = style.tagAttachment(uri, name, "# ")
 		}
 		runs = append(runs, richtext.Run{Text: raw[end:m.Start]}, richtext.Run{
@@ -84,11 +85,11 @@ func inlineThreadRaw(text richtext.Text) string {
 				out.WriteString(a.Name)
 				continue
 			}
-			if ref, ok := parseThreadURL(a.URL); ok {
-				out.WriteString(referenceText(ref, a.Name))
+			if ref, ok := model.ParseThreadURL(a.URL); ok {
+				out.WriteString(model.ReferenceText(ref, a.Name))
 				continue
 			}
-			if agent, ok := parseAgentURL(a.URL); ok {
+			if agent, ok := model.ParseAgentURL(a.URL); ok {
 				out.WriteString(agentReferenceText(agent, a.Name))
 				continue
 			}
@@ -200,7 +201,7 @@ func (app *chatApp) threadInput(c *ui.Context, state *inlineThreadInput, raw, ow
 				a.Draw, a.Width, a.Height = fresh.Draw, fresh.Width, fresh.Height
 				continue
 			}
-			ref, ok := parseThreadURL(a.URL)
+			ref, ok := model.ParseThreadURL(a.URL)
 			if ok {
 				fresh := state.style.attachment(ref, a.Name)
 				a.Draw, a.Width, a.Height = fresh.Draw, fresh.Width, fresh.Height
@@ -234,7 +235,7 @@ func (app *chatApp) threadInput(c *ui.Context, state *inlineThreadInput, raw, ow
 	contextMenu := func(menu *ui.Menu) {
 		a, z := state.doc.Selection()
 		selection := state.doc.Text().Slice(min(a, z), max(a, z))
-		mentions := threadMentions(inlineThreadRaw(selection))
+		mentions := model.ThreadMentions(inlineThreadRaw(selection))
 		if menu.Item(tr("Copy session link")).Disabled(len(mentions) != 1).Chosen() && len(mentions) == 1 {
 			services.WriteClipboard(mentions[0].Ref.URL())
 		}
@@ -249,8 +250,8 @@ func (app *chatApp) threadInput(c *ui.Context, state *inlineThreadInput, raw, ow
 		}
 		if menu.Item(tr("Paste as conversation reference")).Chosen() {
 			if data, err := services.ReadClipboardData(transfer.Text).Read(transfer.Text); err == nil {
-				if ref, ok := parseThreadURL(strings.TrimSpace(string(data))); ok {
-					state.insert(referenceText(ref, app.referenceTitle(ref)))
+				if ref, ok := model.ParseThreadURL(strings.TrimSpace(string(data))); ok {
+					state.insert(model.ReferenceText(ref, app.referenceTitle(ref)))
 				} else {
 					app.notice = tr("No valid session link in the clipboard")
 				}

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"miya/internal/automation"
+	"miya/internal/model"
 	"miya/internal/subagent"
 	"miya/internal/textutil"
 	"os"
@@ -371,7 +372,7 @@ func (s *mcpServer) callTool(name string, raw json.RawMessage) (string, error) {
 		return formatMCPThreads(res), nil
 	case "read_thread":
 		req.Reference = a.ID
-		if _, ok := parseThreadURL(req.Reference); !ok {
+		if _, ok := model.ParseThreadURL(req.Reference); !ok {
 			return "", errors.New("id must be a full session link")
 		}
 		for i := 0; ; i++ {
@@ -390,14 +391,14 @@ func (s *mcpServer) callTool(name string, raw json.RawMessage) (string, error) {
 		}
 	case "thread_status":
 		req.Reference = a.ID
-		if _, ok := parseThreadURL(req.Reference); !ok {
+		if _, ok := model.ParseThreadURL(req.Reference); !ok {
 			return "", errors.New("id must be a full session link")
 		}
 		return s.status(req, mcpWait(a.WaitSeconds, 0))
 	case "delegate":
 		req.Task, req.Agent, req.Reference = a.Task, a.Agent, a.Thread
 		if a.Thread != "" {
-			if _, ok := parseThreadURL(a.Thread); !ok {
+			if _, ok := model.ParseThreadURL(a.Thread); !ok {
 				return "", errors.New("thread_id must be a full session link")
 			}
 		}

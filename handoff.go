@@ -13,10 +13,10 @@ import (
 
 // threadRefs are stable backend identities in the message's own words.
 func threadRefs(text string) []ThreadRef {
-	own, _ := splitReferenceContext(text)
+	own, _ := model.SplitReferenceContext(text)
 	var refs []ThreadRef
 	seen := map[ThreadRef]bool{}
-	for _, mention := range threadMentions(own) {
+	for _, mention := range model.ThreadMentions(own) {
 		if !seen[mention.Ref] {
 			seen[mention.Ref] = true
 			refs = append(refs, mention.Ref)
@@ -26,10 +26,10 @@ func threadRefs(text string) []ThreadRef {
 }
 
 func threadRefTask(text string) string {
-	own, _ := splitReferenceContext(text)
+	own, _ := model.SplitReferenceContext(text)
 	var b strings.Builder
 	end := 0
-	for _, m := range threadMentions(own) {
+	for _, m := range model.ThreadMentions(own) {
 		b.WriteString(own[end:m.Start])
 		end = m.End
 	}
@@ -44,13 +44,13 @@ func threadRefTitle(t Thread) string {
 // Keep the exact reference tokens. Titles never need to be reversed into IDs.
 // An envelope is a send-time snapshot; replaying a queued request preserves it.
 func expandThreadRefs(text string, self ThreadRef, resolve func(ThreadRef) (Thread, []Message, error)) (string, []Thread, error) {
-	own, snapshots := splitReferenceContext(text)
+	own, snapshots := model.SplitReferenceContext(text)
 	if len(snapshots) > 0 {
 		return text, nil, nil
 	}
 	var sources []Thread
 	titles := map[ThreadRef]string{}
-	for _, m := range threadMentions(own) {
+	for _, m := range model.ThreadMentions(own) {
 		if _, ok := titles[m.Ref]; !ok {
 			titles[m.Ref] = m.Title
 		}
@@ -66,7 +66,7 @@ func expandThreadRefs(text string, self ThreadRef, resolve func(ThreadRef) (Thre
 		if !t.HistoryLoaded {
 			return text, nil, fmt.Errorf(tr("Context for \"%s\" has not loaded. Retry or remove the reference."), titles[ref])
 		}
-		snapshots = append(snapshots, referenceSnapshot{Ref: ref, Title: titles[ref], Context: threadPacket(t, messages)})
+		snapshots = append(snapshots, model.ReferenceSnapshot{Ref: ref, Title: titles[ref], Context: threadPacket(t, messages)})
 		sources = append(sources, t)
 	}
 	if len(snapshots) == 0 {
@@ -76,7 +76,7 @@ func expandThreadRefs(text string, self ThreadRef, resolve func(ThreadRef) (Thre
 	if err != nil {
 		return text, nil, err
 	}
-	return own + contextEnvelopeOpen + string(data) + contextEnvelopeClose, sources, nil
+	return own + model.ContextEnvelopeOpen + string(data) + model.ContextEnvelopeClose, sources, nil
 }
 
 // threadPacket is a conversation's context as another agent reads it: its
@@ -187,10 +187,10 @@ func changedFiles(messages []Message) []string {
 // threadContextDisplay shows the context packets of a message as the
 // conversations they name, not the text the agent read.
 func threadContextDisplay(s string) string {
-	own, _ := splitReferenceContext(s)
+	own, _ := model.SplitReferenceContext(s)
 	var b strings.Builder
 	end := 0
-	for _, m := range threadMentions(own) {
+	for _, m := range model.ThreadMentions(own) {
 		b.WriteString(own[end:m.Start])
 		b.WriteString(tr("[Referenced conversation: ") + m.Title + "]")
 		end = m.End
@@ -456,7 +456,7 @@ func insertThreadReference(value string, token composerToken, ref ThreadRef, tit
 	if token.Kind != '@' || token.Start < 0 || token.End < token.Start || token.End > len(value) || !ref.Valid() {
 		return value
 	}
-	return value[:token.Start] + referenceText(ref, title) + " " + value[token.End:]
+	return value[:token.Start] + model.ReferenceText(ref, title) + " " + value[token.End:]
 }
 
 func (app *chatApp) handoffToNewThread() {
@@ -472,7 +472,7 @@ func (app *chatApp) handoffToNewThread() {
 		return
 	}
 	c.newThread()
-	c.rememberDraft(referenceText(ref, threadRefTitle(t)) + " ")
+	c.rememberDraft(model.ReferenceText(ref, threadRefTitle(t)) + " ")
 	c.prefetchReference(ref)
 	app.notice = tr("Referenced conversation \"") + threadRefTitle(t) + tr("\": choose an agent, describe the task, and send")
 }

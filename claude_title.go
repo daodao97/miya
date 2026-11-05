@@ -1,6 +1,7 @@
 package main
 
 import (
+	"miya/internal/model"
 	"miya/internal/textutil"
 	"regexp"
 	"strings"
@@ -53,8 +54,8 @@ func claudeCommandText(text string) string {
 // them is a better preview. Reference-only requests fall back to their
 // readable labels. Preserve the original prompt and never resolve a link.
 func claudeReferenceTitle(text string) string {
-	text, _ = splitReferenceContext(text)
-	mentions := threadMentions(text)
+	text, _ = model.SplitReferenceContext(text)
+	mentions := model.ThreadMentions(text)
 	if len(mentions) == 0 {
 		return text
 	}
@@ -67,7 +68,7 @@ func claudeReferenceTitle(text string) string {
 	}
 	if request := strings.TrimLeft(text[leadingEnd:], " \t\r\n,，、;；：:"); leadingEnd > 0 && request != "" {
 		text = request
-		mentions = threadMentions(text)
+		mentions = model.ThreadMentions(text)
 	}
 	var title strings.Builder
 	end := 0

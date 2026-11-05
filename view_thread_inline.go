@@ -10,6 +10,7 @@ import (
 	"github.com/egoist/mygo/ui/markdown"
 	"github.com/egoist/mygo/ui/markdown/parser"
 	"github.com/egoist/mygo/ui/richtext"
+	"miya/internal/model"
 	"miya/internal/textutil"
 )
 
@@ -36,7 +37,7 @@ func (app *chatApp) threadMessage(c *ui.Context, message Message) {
 			return false
 		}
 		raw := strings.TrimSuffix(doc.Lines(index), "\n")
-		mentions := threadMentions(raw)
+		mentions := model.ThreadMentions(raw)
 		if len(mentions) == 0 {
 			return false
 		}

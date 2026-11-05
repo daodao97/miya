@@ -7,15 +7,16 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/richtext"
+	"miya/internal/model"
 	"miya/internal/remote"
 )
 
 func TestAgentReferencesRoundTripMixedWithThreadsAndCommands(t *testing.T) {
 	agent := agentReferenceText(agentClaude, "Claude [review] `code` 👋")
-	ref := referenceText(testReference(handoffSource()), "Context")
+	ref := model.ReferenceText(testReference(handoffSource()), "Context")
 	raw := "/goal Use " + agent + " with " + ref + " please"
-	parts := messageParts(raw)
-	got, err := partsText(parts)
+	parts := MessageParts(raw)
+	got, err := PartsText(parts)
 	if err != nil || got != raw {
 		t.Fatalf("parts roundtrip: %q %v", got, err)
 	}
@@ -53,7 +54,7 @@ func TestAgentReferencesRoundTripMixedWithThreadsAndCommands(t *testing.T) {
 func TestAgentReferencesLeaveCodeEscapesHeadingsAndFileHashesLiteral(t *testing.T) {
 	tag := agentReferenceText(agentCodex, "Codex")
 	for _, raw := range []string{"`" + tag + "`", "```\n" + tag + "\n```", `\` + tag} {
-		if len(agentMentions(raw)) != 0 {
+		if len(model.AgentMentions(raw)) != 0 {
 			t.Fatalf("literal became an Agent tag: %q", raw)
 		}
 	}
@@ -70,7 +71,7 @@ func TestAgentReferencesLeaveCodeEscapesHeadingsAndFileHashesLiteral(t *testing.
 	if token := composerTokenAt("@file#part", len("@file#part")); token.Kind != '@' || token.Query != "file#part" {
 		t.Fatal("Agent completion broke a file reference containing #", token)
 	}
-	if _, err := partsText([]MessagePart{{Type: "agent_ref", Agent: "unregistered"}}); err == nil {
+	if _, err := PartsText([]MessagePart{{Type: "agent_ref", Agent: "unregistered"}}); err == nil {
 		t.Fatal("unknown Agent silently fell back")
 	}
 }
@@ -81,12 +82,12 @@ func TestAgentTagControlOnlyUsesExplicitMessageParts(t *testing.T) {
 	if got := collaborationTaggedInput(context, []MessagePart{{Type: "text", Text: "User task"}}); got != context {
 		t.Fatal("a context reference caused delegation instructions")
 	}
-	parts := messageParts("Please " + tag + " review")
+	parts := MessageParts("Please " + tag + " review")
 	got := collaborationTaggedInput("native input", parts)
 	if !strings.Contains(got, "<miya_collaboration_v1>") || !strings.Contains(got, "- claude-code\n") {
 		t.Fatal("missing canonical Agent instruction")
 	}
-	if raw, err := partsText(parts); err != nil || strings.Contains(raw, "miya_collaboration_v1") {
+	if raw, err := PartsText(parts); err != nil || strings.Contains(raw, "miya_collaboration_v1") {
 		t.Fatal("internal control leaked into visible parts")
 	}
 }
@@ -104,7 +105,7 @@ func TestComposerAgentSelectionStagesEditableChipWithoutStartingTask(t *testing.
 		t.Fatalf("agent selection: %q", app.c.draft())
 	}
 	doc := app.complete.input.doc
-	if attr := doc.Text().AttributesAt(0); attr.Attachment == nil || attr.Attachment.URL != agentURL(agentClaude) || doc.Text().String() != string(richtext.ObjectReplacement)+" " {
+	if attr := doc.Text().AttributesAt(0); attr.Attachment == nil || attr.Attachment.URL != model.AgentURL(agentClaude) || doc.Text().String() != string(richtext.ObjectReplacement)+" " {
 		t.Fatal("Agent tag is not an editable object")
 	}
 	saveCommandSnapshot(t, tt, "desktop-agent.png")
@@ -150,7 +151,7 @@ func TestMobileAgentSelectionUsesSameChipAndClipboardFormat(t *testing.T) {
 			if m.draft != agentReferenceText(agentClaude, "Claude Code")+" " {
 				t.Fatal("phone Agent selection lost canonical identity", m.draft)
 			}
-			if a := m.inlineInput.doc.Text().AttributesAt(0).Attachment; a == nil || a.URL != agentURL(agentClaude) {
+			if a := m.inlineInput.doc.Text().AttributesAt(0).Attachment; a == nil || a.URL != model.AgentURL(agentClaude) {
 				t.Fatal("phone did not render a structured Agent chip")
 			}
 			saveCommandSnapshot(t, tt, "mobile-agent-"+strconv.Itoa(width)+".png")
