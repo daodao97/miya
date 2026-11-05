@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"miya/internal/codex"
+	"miya/internal/subagent"
 	"miya/internal/textutil"
 )
 
@@ -223,9 +224,9 @@ func (c *chatController) advanceAutomation(id string, r *activeAutomationRun) {
 		c.finishAutomationRun(id, runInterrupted, "Stopped in conversation")
 	case !a.Enabled:
 		c.finishAutomationRun(id, runInterrupted, "Automation paused")
-	case status == subAgentFailed:
+	case status == subagent.Failed:
 		c.finishAutomationRun(id, runFailed, reply)
-	case status != subAgentCompleted:
+	case status != subagent.Completed:
 		c.finishAutomationRun(id, runFailed, textutil.FirstNonEmpty(t.Status, "No response received"))
 	case a.Check == "":
 		c.finishAutomationRun(id, runPassed, reply)

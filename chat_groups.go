@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"miya/internal/model"
 	"regexp"
 	"sort"
 	"strings"
@@ -108,7 +109,7 @@ func groupMessages(messages []Message) []messageGroup {
 	}
 	for i := range groups {
 		if !groups[i].User {
-			groups[i].DiffStats = turnDiffStats(groups[i].Messages)
+			groups[i].DiffStats = model.TurnDiffStats(groups[i].Messages)
 		}
 		for _, m := range groups[i].Messages {
 			if m.SentAtMs > 0 {

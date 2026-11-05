@@ -15,6 +15,7 @@ import (
 
 	"miya/internal/codex"
 	dg "miya/internal/delegation"
+	"miya/internal/subagent"
 )
 
 func collaborationUserCall(t *testing.T, f *serviceFixture, operation, from string, args map[string]any) (map[string]any, error) {
@@ -195,7 +196,7 @@ func TestCollaborationProgressIsBoundedAndStaysInItsExecution(t *testing.T) {
 		{ExecutionID: "task-current", Role: "assistant", Content: strings.Repeat("中", 4000) + " latest"},
 		{ExecutionID: "task-current", Role: "reasoning", Content: "private reasoning"},
 		{ExecutionID: "task-previous", Role: "assistant", Content: "another execution"},
-		{ExecutionID: "task-current", Role: "tool", Content: "tool output", Agents: []SubAgent{{Status: subAgentRunning}}},
+		{ExecutionID: "task-current", Role: "tool", Content: "tool output", Agents: []SubAgent{{Status: subagent.Running}}},
 	}}
 	progress, wait := managedProgress(target)
 	if !utf8.ValidString(progress) || len([]rune(progress)) > 1024 || !strings.HasSuffix(progress, " latest") || strings.Contains(progress, "private") || strings.Contains(progress, "another") || wait != "sub_agent" {

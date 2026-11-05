@@ -8,6 +8,7 @@ import (
 
 	"miya/internal/claude"
 	"miya/internal/codex"
+	"miya/internal/subagent"
 )
 
 // claudeTestThread is a controller with one Claude conversation, and a
@@ -39,15 +40,15 @@ func TestClaudeSubAgentFramesStayOnTheirTask(t *testing.T) {
 		t.Fatalf("sub-agent frames leaked into the conversation: %+v", messages)
 	}
 	a := messages[0].Agents
-	if len(a) != 1 || a[0].Name != "Find bugs" || a[0].Status != subAgentRunning || a[0].Steps != 1 || !strings.Contains(a[0].Detail, "a.go") {
+	if len(a) != 1 || a[0].Name != "Find bugs" || a[0].Status != subagent.Running || a[0].Steps != 1 || !strings.Contains(a[0].Detail, "a.go") {
 		t.Fatalf("bad running sub-agent: %+v", a)
 	}
-	if got := subAgentSummary(a); !strings.Contains(got, "1 steps") || !strings.Contains(got, "a.go") {
+	if got := subagent.Summary(a); !strings.Contains(got, "1 steps") || !strings.Contains(got, "a.go") {
 		t.Fatalf("summary lost progress: %q", got)
 	}
 	emit(`{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"task1","content":[{"type":"text","text":"Found 2 bugs\nDetails"}]}]}}`)
 	a = c.current().Messages[0].Agents
-	if a[0].Status != subAgentCompleted || a[0].Detail != "Found 2 bugs" || subAgentsActive(a) {
+	if a[0].Status != subagent.Completed || a[0].Detail != "Found 2 bugs" || subagent.AnyActive(a) {
 		t.Fatalf("bad finished sub-agent: %+v", a)
 	}
 }
@@ -88,7 +89,7 @@ func TestClaudeSubAgentRecordedStream(t *testing.T) {
 		t.Fatalf("tool output not unwrapped: %q", out)
 	}
 	a := tools[0].Agents
-	if len(a) != 1 || a[0].ID != "a82a491b71d0fe4c1" || a[0].Name != "List files" || a[0].Status != subAgentCompleted || a[0].Steps != 1 || a[0].Detail != "The directory contains these files:" {
+	if len(a) != 1 || a[0].ID != "a82a491b71d0fe4c1" || a[0].Name != "List files" || a[0].Status != subagent.Completed || a[0].Steps != 1 || a[0].Detail != "The directory contains these files:" {
 		t.Fatalf("bad recorded sub-agent: %+v", a)
 	}
 }
@@ -99,7 +100,7 @@ func TestClaudeBackgroundSubAgentFollowsItsTask(t *testing.T) {
 	emit(`{"type":"system","subtype":"task_started","task_id":"t9","tool_use_id":"bg1","description":"Watch logs"}`)
 	emit(`{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"bg1","content":"Async agent launched"}]}}`)
 	a := c.current().Messages[0].Agents
-	if a[0].Status != subAgentRunning || a[0].ID != "t9" {
+	if a[0].Status != subagent.Running || a[0].ID != "t9" {
 		t.Fatalf("background sub-agent ended with its call: %+v", a)
 	}
 	emit(`{"type":"system","subtype":"task_progress","task_id":"t9","tool_use_id":"bg1","description":"Reading logs","usage":{"tool_uses":2}}`)
@@ -109,7 +110,7 @@ func TestClaudeBackgroundSubAgentFollowsItsTask(t *testing.T) {
 	}
 	emit(`{"type":"system","subtype":"task_updated","task_id":"t9","patch":{"status":"killed"}}`)
 	a = c.current().Messages[0].Agents
-	if a[0].Status != subAgentInterrupted || subAgentsActive(a) {
+	if a[0].Status != subagent.Interrupted || subagent.AnyActive(a) {
 		t.Fatalf("stop lost: %+v", a)
 	}
 }
@@ -119,7 +120,7 @@ func TestCodexCollabAgentStatesNormalize(t *testing.T) {
 	if !ok || len(m.Agents) != 4 {
 		t.Fatalf("collab agents not normalized: %+v", m.Agents)
 	}
-	for i, want := range []string{subAgentFailed, subAgentRunning, subAgentPending, subAgentInterrupted} {
+	for i, want := range []string{subagent.Failed, subagent.Running, subagent.Pending, subagent.Interrupted} {
 		if m.Agents[i].Status != want {
 			t.Fatalf("agent %d: status %q, want %q", i, m.Agents[i].Status, want)
 		}
@@ -127,14 +128,14 @@ func TestCodexCollabAgentStatesNormalize(t *testing.T) {
 	if m.Agents[0].Detail != "boom" {
 		t.Fatalf("agent message lost: %+v", m.Agents[0])
 	}
-	if got := subAgentSummary(m.Agents); got != "1 Running · 1 Waiting · 1 Failed · 1 Interrupted" {
+	if got := subagent.Summary(m.Agents); got != "1 Running · 1 Waiting · 1 Failed · 1 Interrupted" {
 		t.Fatalf("bad summary: %q", got)
 	}
 }
 
 func TestCodexSpawnedAgentWithoutState(t *testing.T) {
 	m, _ := itemMessage(codex.Item{Type: "collabAgentToolCall", Status: "inProgress", Tool: "spawnAgent", ReceiverThreadIDs: []string{"019a7f3c-new"}, Prompt: "Review the parser\nin detail", AgentsStates: json.RawMessage(`{}`)})
-	if len(m.Agents) != 1 || m.Agents[0].Name != "Review the parser" || m.Agents[0].Status != subAgentRunning {
+	if len(m.Agents) != 1 || m.Agents[0].Name != "Review the parser" || m.Agents[0].Status != subagent.Running {
 		t.Fatalf("spawned agent not shown: %+v", m.Agents)
 	}
 	m, _ = itemMessage(codex.Item{Type: "subAgentActivity", Kind: "started", AgentPath: "reviewer"})
@@ -193,17 +194,17 @@ func TestClaudeUnstreamedReplyBlocksKeepEach(t *testing.T) {
 // the other windows must still get it.
 func TestSubAgentProgressReachesPhone(t *testing.T) {
 	th := Thread{ID: 1, Agent: agentClaude, Messages: []Message{{ID: 1, Role: "tool", Kind: "claudeTool", Content: "Agent\n{}", Status: "inProgress",
-		Agents: []SubAgent{{ID: "a", Name: "Watch logs", Status: subAgentRunning}}}}}
+		Agents: []SubAgent{{ID: "a", Name: "Watch logs", Status: subagent.Running}}}}}
 	s := newPhoneThreadSync(nil)
 	if _, ok := s.update(th); !ok {
 		t.Fatal("first update not sent")
 	}
-	th.Messages[0].Agents = []SubAgent{{ID: "a", Name: "Watch logs", Status: subAgentRunning, Steps: 2, Detail: "Reading logs"}}
+	th.Messages[0].Agents = []SubAgent{{ID: "a", Name: "Watch logs", Status: subagent.Running, Steps: 2, Detail: "Reading logs"}}
 	d, ok := s.update(th)
 	if !ok || len(d.Changed) != 1 {
 		t.Fatalf("progress not sent: %+v", d)
 	}
-	th.Messages[0].Agents = []SubAgent{{ID: "a", Name: "Watch logs", Status: subAgentCompleted, Steps: 2, Detail: "Reading logs"}}
+	th.Messages[0].Agents = []SubAgent{{ID: "a", Name: "Watch logs", Status: subagent.Completed, Steps: 2, Detail: "Reading logs"}}
 	d, ok = s.update(th)
 	if !ok || len(d.Changed) != 1 {
 		t.Fatalf("background end not sent: %+v", d)
@@ -216,7 +217,7 @@ func TestSubAgentProgressReachesPhone(t *testing.T) {
 	if err := json.Unmarshal(data, &got); err != nil {
 		t.Fatal(err)
 	}
-	if a := got.Changed[0].Agents; len(a) != 1 || a[0].Status != subAgentCompleted || a[0].Steps != 2 || a[0].Detail != "Reading logs" {
+	if a := got.Changed[0].Agents; len(a) != 1 || a[0].Status != subagent.Completed || a[0].Steps != 2 || a[0].Detail != "Reading logs" {
 		t.Fatalf("sub-agents lost on the wire: %+v", got.Changed[0])
 	}
 	if _, ok := s.update(th); ok {
@@ -241,15 +242,15 @@ func TestCodexCollabContentLeavesStatesToTheList(t *testing.T) {
 
 func TestCollapsedRunSummarizesLatestSubAgents(t *testing.T) {
 	msgs := []Message{
-		{ID: 1, Role: "tool", Agents: []SubAgent{{ID: "r", Status: subAgentRunning}}},
+		{ID: 1, Role: "tool", Agents: []SubAgent{{ID: "r", Status: subagent.Running}}},
 		{ID: 2, Role: "tool", Kind: "commandExecution"},
-		{ID: 3, Role: "tool", Agents: []SubAgent{{ID: "r", Status: subAgentCompleted}, {ID: "d", Status: subAgentFailed}}},
+		{ID: 3, Role: "tool", Agents: []SubAgent{{ID: "r", Status: subagent.Completed}, {ID: "d", Status: subagent.Failed}}},
 	}
-	agents := latestSubAgents(msgs)
-	if len(agents) != 2 || agents[0].Status != subAgentCompleted || subAgentsActive(agents) {
+	agents := subagent.Latest(msgs)
+	if len(agents) != 2 || agents[0].Status != subagent.Completed || subagent.AnyActive(agents) {
 		t.Fatalf("stale or repeated sub-agents: %+v", agents)
 	}
-	if got := subAgentCounts(agents); got != "1 Failed · 1 Completed" {
+	if got := subagent.Counts(agents); got != "1 Failed · 1 Completed" {
 		t.Fatalf("bad counts: %q", got)
 	}
 }

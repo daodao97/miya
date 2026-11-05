@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"miya/internal/subagent"
 	"miya/internal/textutil"
 	"os"
 	"path/filepath"
@@ -218,7 +219,7 @@ func (c *chatController) mcpThreadsFor(caller Thread, project string) mcpThreads
 		}
 		status := "idle"
 		if t.Busy || t.Loading {
-			status = subAgentRunning
+			status = subagent.Running
 		}
 		res.Threads = append(res.Threads, mcpThreadInfo{Reference: c.threadRef(t).URL(), ID: t.ID, Title: threadRefTitle(t), Agent: threadAgent(t), Status: status})
 	}

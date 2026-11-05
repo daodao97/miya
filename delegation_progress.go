@@ -6,6 +6,7 @@ import (
 	"unicode/utf8"
 
 	dg "miya/internal/delegation"
+	"miya/internal/subagent"
 )
 
 // Output keeps streaming through the chat path. Persist only changed, bounded
@@ -78,7 +79,7 @@ func managedProgress(t Thread) (progress, wait string) {
 			progress = string(runes)
 		}
 		for _, agent := range m.Agents {
-			if subAgentActive(agent.Status) {
+			if subagent.Active(agent.Status) {
 				wait = "sub_agent"
 			}
 		}

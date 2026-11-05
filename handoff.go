@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"miya/internal/subagent"
 	"miya/internal/textutil"
 	"strconv"
 	"strings"
@@ -123,10 +124,10 @@ func threadPacket(t Thread, messages []Message) string {
 		}
 		packetSection(&b, tr("Changed files"), "- "+strings.Join(files, "\n- "))
 	}
-	if agents := latestSubAgents(messages); len(agents) > 0 {
+	if agents := subagent.Latest(messages); len(agents) > 0 {
 		var lines []string
 		for _, a := range agents {
-			line := textutil.FirstNonEmpty(a.Name, a.ID) + " · " + subAgentStatusLabel(a.Status)
+			line := textutil.FirstNonEmpty(a.Name, a.ID) + " · " + subagent.StatusLabel(a.Status)
 			if a.Detail != "" {
 				line += " · " + textutil.ClipRunes(a.Detail, 200)
 			}
@@ -358,7 +359,7 @@ func (c *chatController) noteHandoffs(sources []Thread, target int, task string)
 		item := fmt.Sprintf("handoff:%d:%d", target, len(c.handoffs))
 		c.handoffs = append(c.handoffs, handoff{From: src.ID, To: target, Item: item})
 		status, detail := c.handoffState(target)
-		agent := SubAgent{ID: "thread:" + strconv.Itoa(target), Name: textutil.FirstNonEmpty(task, tr("Handoff task")), Status: textutil.FirstNonEmpty(status, subAgentPending), Detail: detail}
+		agent := SubAgent{ID: "thread:" + strconv.Itoa(target), Name: textutil.FirstNonEmpty(task, tr("Handoff task")), Status: textutil.FirstNonEmpty(status, subagent.Pending), Detail: detail}
 		title := threadRefTitle(c.threadWithID(target))
 		c.update(src.ID, func(t *Thread) {
 			// The agents list says it all; the title names the target.
@@ -372,7 +373,7 @@ func (c *chatController) noteHandoffs(sources []Thread, target int, task string)
 func (c *chatController) handoffState(target int) (string, string) {
 	if t, _, ok := c.findThread(target); ok {
 		if t.Busy || t.Loading {
-			return subAgentRunning, ""
+			return subagent.Running, ""
 		}
 		last := -1
 		for i, m := range t.Messages {
@@ -380,15 +381,15 @@ func (c *chatController) handoffState(target int) (string, string) {
 				last = i
 			}
 		}
-		status, detail := subAgentPending, ""
+		status, detail := subagent.Pending, ""
 		for _, m := range t.Messages[last+1:] {
 			switch m.Role {
 			case "assistant":
 				if s := textutil.FirstLine(m.Content); s != "" {
-					status, detail = subAgentCompleted, s
+					status, detail = subagent.Completed, s
 				}
 			case "error":
-				status, detail = subAgentFailed, textutil.FirstLine(m.Content)
+				status, detail = subagent.Failed, textutil.FirstLine(m.Content)
 			}
 		}
 		return status, detail

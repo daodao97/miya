@@ -8,6 +8,7 @@ import (
 	"mime"
 	"miya/internal/codex"
 	"miya/internal/memory"
+	"miya/internal/subagent"
 	"miya/internal/textutil"
 	"net/url"
 	"os"
@@ -282,16 +283,16 @@ func itemMessage(item codex.Item) (Message, bool) {
 		}
 	case "collabagenttoolcall":
 		m.Role = "tool"
-		m.Agents = codexSubAgents(item)
+		m.Agents = subagent.FromCodex(item)
 		if len(m.Agents) > 0 {
 			// The agents list shows their states; what was sent to them stays.
-			m.Content = codexCollabContent(item, m.Agents)
+			m.Content = subagent.CodexCollabContent(item, m.Agents)
 		} else {
 			m.Content = item.Status + " · " + item.Tool + "\n" + jsonText(item.AgentsStates)
 		}
 	case "subagentactivity":
 		m.Role = "activity"
-		m.Content = codexSubAgentActivity(item)
+		m.Content = subagent.CodexActivity(item)
 	case "websearch":
 		m.Role = "tool"
 		m.Content = tr("Web search · ") + item.Query + "\n" + jsonText(item.Result)

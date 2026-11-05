@@ -1,4 +1,4 @@
-package main
+package model
 
 import (
 	"regexp"
@@ -10,7 +10,7 @@ var diffHunkHeader = regexp.MustCompile(`^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@
 
 // Count the full protocol diff before its displayed text is bounded. Hunk
 // lengths distinguish file headers from changed lines beginning with +++/---.
-func countDiffLines(diff string) DiffLineStats {
+func CountDiffLines(diff string) DiffLineStats {
 	var stats DiffLineStats
 	var oldLeft, newLeft int
 	for line := range strings.Lines(diff) {
@@ -50,7 +50,7 @@ func countDiffLines(diff string) DiffLineStats {
 
 // The latest turn diff already includes its fileChange items. Fall back to
 // completed file changes for history, where turn/diff events are unavailable.
-func turnDiffStats(messages []Message) DiffLineStats {
+func TurnDiffStats(messages []Message) DiffLineStats {
 	type turnStats struct {
 		diff, files DiffLineStats
 		hasDiff     bool
@@ -64,14 +64,14 @@ func turnDiffStats(messages []Message) DiffLineStats {
 			if m.DiffStats != nil {
 				s.diff = *m.DiffStats
 			} else {
-				s.diff = countDiffLines(m.Content)
+				s.diff = CountDiffLines(m.Content)
 			}
 		case "filechange":
 			if m.Status != "completed" || m.Item == nil {
 				continue
 			}
 			for _, change := range m.Item.Changes {
-				stats := countDiffLines(change.Diff)
+				stats := CountDiffLines(change.Diff)
 				s.files.Added += stats.Added
 				s.files.Deleted += stats.Deleted
 			}

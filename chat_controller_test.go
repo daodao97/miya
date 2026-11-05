@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"miya/internal/codex"
+	"miya/internal/subagent"
 	"strings"
 	"testing"
 )
@@ -155,7 +156,7 @@ func TestAllProtocolItemTypes(t *testing.T) {
 				t.Fatalf("bad mapping: %+v", m)
 			}
 			// Collab agent states moved from the text to the agents list.
-			if f.kind == "collabAgentToolCall" && (len(m.Agents) != 1 || m.Agents[0].ID != "child" || m.Agents[0].Status != subAgentCompleted) {
+			if f.kind == "collabAgentToolCall" && (len(m.Agents) != 1 || m.Agents[0].ID != "child" || m.Agents[0].Status != subagent.Completed) {
 				t.Fatalf("collab agents lost: %+v", m.Agents)
 			}
 			if strings.Contains(m.Content, "private detail") {

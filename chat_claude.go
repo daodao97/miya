@@ -16,6 +16,7 @@ import (
 	"miya/internal/claude"
 	"miya/internal/codex"
 	dg "miya/internal/delegation"
+	"miya/internal/subagent"
 	"miya/internal/textutil"
 )
 
@@ -372,9 +373,9 @@ func (c *chatController) finishClaude(id int, cwd string, err error) {
 			state = "failed"
 		}
 		stopClaudeTasks(t, state)
-		agentState := subAgentInterrupted
+		agentState := subagent.Interrupted
 		if state == "failed" {
-			agentState = subAgentFailed
+			agentState = subagent.Failed
 		}
 		interruptClaudeAgents(t, agentState)
 		t.Status = ""
@@ -535,7 +536,7 @@ func (c *chatController) handleClaude(id int, f claude.Frame) {
 				}
 				if b.Type == "tool_use" {
 					m := Message{Role: "tool", Kind: "claudeTool", ItemID: b.ID, Content: b.Name + "\n" + string(b.Input), Status: "inProgress", Agents: claudeSubAgent(b.ID, b.Name, b.Input, "inProgress")}
-					keepSubAgents(t, &m)
+					subagent.Keep(t, &m)
 					c.upsert(t, m)
 				}
 			}

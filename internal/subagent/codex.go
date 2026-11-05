@@ -1,4 +1,4 @@
-package main
+package subagent
 
 import (
 	"encoding/json"
@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"miya/internal/codex"
+	"miya/internal/model"
 	"miya/internal/textutil"
 )
 
@@ -13,7 +14,7 @@ import (
 // the agent threads a call targets, and agentsStates, when available, the
 // last known state of each, keyed by thread id.
 
-func codexSubAgents(item codex.Item) []SubAgent {
+func FromCodex(item codex.Item) []model.SubAgent {
 	var states map[string]struct {
 		Status  string `json:"status"`
 		Message string `json:"message"`
@@ -35,9 +36,9 @@ func codexSubAgents(item codex.Item) []SubAgent {
 	if len(ids) == 0 {
 		return nil
 	}
-	agents := make([]SubAgent, 0, len(ids))
+	agents := make([]model.SubAgent, 0, len(ids))
 	for _, id := range ids {
-		a := SubAgent{ID: id, Name: codexSubAgentName(id), Status: codexCallStatus(item.Status)}
+		a := model.SubAgent{ID: id, Name: codexSubAgentName(id), Status: codexCallStatus(item.Status)}
 		if s, ok := states[id]; ok {
 			a.Status, a.Detail = codexSubAgentStatus(s.Status), strings.TrimSpace(s.Message)
 		}
@@ -63,16 +64,16 @@ func codexSubAgentName(id string) string {
 func codexSubAgentStatus(s string) string {
 	switch strings.ToLower(strings.ReplaceAll(s, "_", "")) {
 	case "pendinginit", "pending":
-		return subAgentPending
+		return Pending
 	case "running", "inprogress":
-		return subAgentRunning
+		return Running
 	case "errored", "error", "failed", "notfound":
-		return subAgentFailed
+		return Failed
 	case "interrupted":
-		return subAgentInterrupted
+		return Interrupted
 	}
 	// Completed, shut down, or a state yet unknown: not running any more.
-	return subAgentCompleted
+	return Completed
 }
 
 // codexCallStatus is an agent's state when its call reports none: the
@@ -80,18 +81,18 @@ func codexSubAgentStatus(s string) string {
 func codexCallStatus(s string) string {
 	switch strings.ToLower(s) {
 	case "inprogress", "in_progress":
-		return subAgentRunning
+		return Running
 	case "failed":
-		return subAgentFailed
+		return Failed
 	case "interrupted":
-		return subAgentInterrupted
+		return Interrupted
 	}
-	return subAgentCompleted
+	return Completed
 }
 
-// codexSubAgentActivity titles a sub-agent activity, an event in a
+// CodexActivity titles a sub-agent activity, an event in a
 // sub-agent's life rather than a state to follow.
-func codexSubAgentActivity(item codex.Item) string {
+func CodexActivity(item codex.Item) string {
 	labels := map[string]string{"started": "Subagent started", "interacted": "Subagent input sent", "interrupted": "Subagent interrupted", "completed": "Subagent completed"}
 	s := textutil.FirstNonEmpty(labels[item.Kind], "Sub-agent activity")
 	if who := textutil.FirstNonEmpty(item.AgentPath, item.AgentThreadID); who != "" {
@@ -100,9 +101,9 @@ func codexSubAgentActivity(item codex.Item) string {
 	return s
 }
 
-// codexCollabContent is what a collab call shows below its agents: what was
+// CodexCollabContent is what a collab call shows below its agents: what was
 // sent to them, unless it already names the one agent it spawned.
-func codexCollabContent(item codex.Item, agents []SubAgent) string {
+func CodexCollabContent(item codex.Item, agents []model.SubAgent) string {
 	prompt := strings.TrimSpace(item.Prompt)
 	if len(agents) == 1 && agents[0].Name == prompt {
 		return ""

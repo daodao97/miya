@@ -11,6 +11,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"miya/internal/codex"
+	"miya/internal/subagent"
 )
 
 func handoffSource() Thread {
@@ -24,7 +25,7 @@ func handoffSource() Thread {
 		{ID: 2, Role: "tool", Kind: "claudeTool", Content: "Edit\n{\"file_path\":\"auth/token.go\"}\nok", Status: "completed"},
 		{ID: 3, Role: "tool", Kind: "fileChange", Item: change, Status: "completed"},
 		{ID: 4, Role: "assistant", Content: "已修复：token 过期判断用错了时区。"},
-		{ID: 5, Role: "tool", Kind: "claudeTool", Content: "Agent\n{}", Agents: []SubAgent{{ID: "t", Name: "跑测试", Status: subAgentCompleted, Detail: "全部通过"}}},
+		{ID: 5, Role: "tool", Kind: "claudeTool", Content: "Agent\n{}", Agents: []SubAgent{{ID: "t", Name: "跑测试", Status: subagent.Completed, Detail: "全部通过"}}},
 	}}
 }
 
@@ -190,7 +191,7 @@ func TestThreadRefsResolveInBackgroundProjects(t *testing.T) {
 	if err != nil || len(sources) != 1 || !strings.Contains(out, "修复登录过期的问题") {
 		t.Fatalf("background conversation not referenced: %q", out)
 	}
-	if status, _ := c.handoffState(7); status != subAgentCompleted {
+	if status, _ := c.handoffState(7); status != subagent.Completed {
 		t.Fatalf("background conversation's state not seen: %q", status)
 	}
 }

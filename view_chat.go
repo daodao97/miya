@@ -7,6 +7,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/markdown"
+	"miya/internal/subagent"
 	"miya/internal/textutil"
 )
 
@@ -300,14 +301,14 @@ func (app *chatApp) activityRunView(c *ui.Context, run activityRun, streaming bo
 	ui.Column(c).FillWidth().Gap(4).Children(func() {
 		header := quiet(c.Key("header")).PaddingX(0).AlignSelf(ui.Start)
 		// Sub-agents inside a collapsed run still show that they work.
-		agents := latestSubAgents(run.Messages)
+		agents := subagent.Latest(run.Messages)
 		header.Children(func() {
 			icon(c, "stack-2", 14, muted)
-			if subAgentsActive(agents) {
+			if subagent.AnyActive(agents) {
 				ui.Spinner(c).FontSize(12)
 			}
 			label := fmt.Sprintf("%d activities", len(run.Messages))
-			if s := subAgentCounts(agents); s != "" {
+			if s := subagent.Counts(agents); s != "" {
 				label += " · " + s
 			}
 			mutedText(c, label)
@@ -391,7 +392,7 @@ func (app *chatApp) messageView(c *ui.Context, m Message, streaming bool) {
 	expanded := app.open[m.ID] && !isReasoning
 	ui.Column(c).FillWidth().Gap(6).Children(func() {
 		title := nativeText(activityTitle(m))
-		if s := subAgentSummary(m.Agents); s != "" {
+		if s := subagent.Summary(m.Agents); s != "" {
 			title += " · " + nativeText(s)
 		}
 		header := quiet(c.Key("header")).FillWidth().Height(28).PaddingX(0).Label(title)
@@ -401,7 +402,7 @@ func (app *chatApp) messageView(c *ui.Context, m Message, streaming bool) {
 			if m.Status == "failed" && !isReasoning {
 				color = failed
 			}
-			if m.Status == "inProgress" || m.Status == "in_progress" || subAgentsActive(m.Agents) {
+			if m.Status == "inProgress" || m.Status == "in_progress" || subagent.AnyActive(m.Agents) {
 				ui.Spinner(c).FontSize(12)
 			}
 			ui.Text(c, title).Grow(1).MinWidth(0).SingleLine().Ellipsis("…").FontSize(12).TextColor(color)

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"miya/internal/codex"
+	"miya/internal/subagent"
 )
 
 // mcpExchange runs the MCP server over the given request lines and returns
@@ -79,7 +80,7 @@ func TestMCPServerHandshakeAndTools(t *testing.T) {
 
 func TestMCPDelegateRetriesThenWaitsForTheReply(t *testing.T) {
 	var ops []string
-	unknown, statuses := 1, []string{subAgentRunning, subAgentRunning, subAgentCompleted}
+	unknown, statuses := 1, []string{subagent.Running, subagent.Running, subagent.Completed}
 	call := func(op string, args, out any) error {
 		ops = append(ops, op)
 		r := args.(mcpRequest)
@@ -183,7 +184,7 @@ func TestMCPDelegateTracksOnlyTheCallerWithOrWithoutContext(t *testing.T) {
 			}
 			source := c.threadWithID(1)
 			last := source.Messages[len(source.Messages)-1]
-			if last.Kind != "handoff" || len(last.Agents) != 1 || last.Agents[0].Status != subAgentRunning || last.Agents[0].Name != "给登录补测试" || activityTitle(last) != "Handed off to conversation \"测试\"" {
+			if last.Kind != "handoff" || len(last.Agents) != 1 || last.Agents[0].Status != subagent.Running || last.Agents[0].Name != "给登录补测试" || activityTitle(last) != "Handed off to conversation \"测试\"" {
 				t.Fatalf("explicit delegation not tracked: %+v", last)
 			}
 			_, snapshots := splitReferenceContext(c.threadWithID(2).Queue[0].Text)
@@ -200,7 +201,7 @@ func TestMCPDelegateTracksOnlyTheCallerWithOrWithoutContext(t *testing.T) {
 			})
 			source = c.threadWithID(1)
 			agent := source.Messages[len(source.Messages)-1].Agents[0]
-			if agent.Status != subAgentCompleted || agent.Detail != "测试已补齐" {
+			if agent.Status != subagent.Completed || agent.Detail != "测试已补齐" {
 				t.Fatalf("delegated result not followed: %+v", agent)
 			}
 		})
@@ -220,7 +221,7 @@ func TestMCPDelegateNeedsAVisibleCaller(t *testing.T) {
 func TestMCPListReadAndStatus(t *testing.T) {
 	c := mcpHost(t)
 	list := c.mcpThreads(mcpRequest{Tool: "delegate"})
-	if len(list.Threads) != 1 || list.Threads[0].ID != 2 || list.Threads[0].Status != subAgentRunning {
+	if len(list.Threads) != 1 || list.Threads[0].ID != 2 || list.Threads[0].Status != subagent.Running {
 		t.Fatalf("bad list (the caller must be left out): %+v", list)
 	}
 	read, err := c.mcpRead(mcpRequest{Thread: 1})
@@ -232,7 +233,7 @@ func TestMCPListReadAndStatus(t *testing.T) {
 	}
 	c.update(1, func(th *Thread) { th.Busy = false })
 	st, err := c.mcpStatus(mcpRequest{Thread: 1})
-	if err != nil || st.Status != subAgentCompleted || !strings.Contains(st.Reply, "时区") {
+	if err != nil || st.Status != subagent.Completed || !strings.Contains(st.Reply, "时区") {
 		t.Fatalf("bad status: %+v %v", st, err)
 	}
 	// Codex's shared app-server may pass any workspace, such as /.

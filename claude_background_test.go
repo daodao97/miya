@@ -10,6 +10,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"miya/internal/claude"
+	"miya/internal/subagent"
 )
 
 func TestClaudeAutomaticAsyncAcknowledgementStaysRunning(t *testing.T) {
@@ -19,7 +20,7 @@ func TestClaudeAutomaticAsyncAcknowledgementStaysRunning(t *testing.T) {
 	emit(`{"type":"assistant","message":{"content":[{"type":"tool_use","id":"call1","name":"Agent","input":{"description":"Review diff"}}]}}`)
 	emit(`{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"call1","content":"Launched"}]},"tool_use_result":{"isAsync":true,"agentId":"agent1"}}`)
 	a := c.current().Messages[0].Agents[0]
-	if a.ID != "agent1" || a.Status != subAgentRunning {
+	if a.ID != "agent1" || a.Status != subagent.Running {
 		t.Fatalf("async acknowledgement marked complete: %+v", a)
 	}
 	c.handleClaude(1, claude.Frame{Type: "result", Result: "Review in background", KeepingAlive: true, WaitingForAgents: true})
@@ -32,11 +33,11 @@ func TestClaudeAutomaticAsyncAcknowledgementStaysRunning(t *testing.T) {
 		t.Fatal("background continuation reset turn duration")
 	}
 	emit(`{"type":"system","subtype":"task_notification","task_id":"agent1","status":"completed","summary":"No issues"}`)
-	if a := c.current().Messages[0].Agents[0]; a.Status != subAgentCompleted {
+	if a := c.current().Messages[0].Agents[0]; a.Status != subagent.Completed {
 		t.Fatalf("completion lost: %+v", a)
 	}
 	c.finishClaude(1, c.cwd, nil)
-	if c.current().Busy || c.current().Messages[0].Agents[0].Status != subAgentCompleted {
+	if c.current().Busy || c.current().Messages[0].Agents[0].Status != subagent.Completed {
 		t.Fatal("completion state changed on process exit")
 	}
 }
@@ -46,7 +47,7 @@ func TestClaudePendingAgentsInterruptedOnProcessExit(t *testing.T) {
 	c.cwd = t.TempDir()
 	emit(`{"type":"assistant","message":{"content":[{"type":"tool_use","id":"call1","name":"Agent","input":{"description":"Review"}}]}}`)
 	c.finishClaude(1, c.cwd, nil)
-	if a := c.current().Messages[0].Agents[0]; a.Status != subAgentInterrupted {
+	if a := c.current().Messages[0].Agents[0]; a.Status != subagent.Interrupted {
 		t.Fatalf("exited task still running or falsely completed: %+v", a)
 	}
 }
@@ -74,9 +75,9 @@ func TestClaudeBackgroundHistoryRequiresCompletionEvidence(t *testing.T) {
 			if len(messages) != 2 || len(messages[1].Agents) != 1 {
 				t.Fatalf("notification leaked or task missing: %+v", messages)
 			}
-			want := subAgentCompleted
+			want := subagent.Completed
 			if terminal == "none" {
-				want = subAgentUnconfirmed
+				want = subagent.Unconfirmed
 			}
 			if a := messages[1].Agents[0]; a.ID != "agent1" || a.Status != want {
 				t.Fatalf("history task = %+v, want %s", a, want)

@@ -6,6 +6,7 @@ import (
 
 	"miya/internal/codex"
 	dg "miya/internal/delegation"
+	"miya/internal/subagent"
 )
 
 func (c *chatController) managedCodexAccepted(id, turn, epoch string, err error, mayHaveStarted bool) {
@@ -217,7 +218,7 @@ func managedLongRunning(t Thread) bool {
 	}
 	for _, m := range t.Messages {
 		for _, agent := range m.Agents {
-			if subAgentActive(agent.Status) || agent.Status == subAgentUnconfirmed {
+			if subagent.Active(agent.Status) || agent.Status == subagent.Unconfirmed {
 				return true
 			}
 		}

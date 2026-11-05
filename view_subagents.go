@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/egoist/mygo/ui"
+	"miya/internal/subagent"
 	"miya/internal/textutil"
 )
 
@@ -16,7 +17,7 @@ func subAgentList(c *ui.Context, agents []SubAgent) {
 			ui.Row(c.Key(i)).Gap(8).AlignItems(ui.Start).Children(func() {
 				// Markers and the spinner share one width, so names line up.
 				ui.Box(c).Size(16, 16).Shrink(0).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
-					if a.Status == subAgentRunning {
+					if a.Status == subagent.Running {
 						ui.Spinner(c).FontSize(12)
 					} else {
 						ui.Text(c, marker).FontSize(12).TextColor(color)
@@ -24,7 +25,7 @@ func subAgentList(c *ui.Context, agents []SubAgent) {
 				})
 				ui.Column(c).FillWidth().MinWidth(0).Gap(2).Children(func() {
 					ui.Text(c, nativeText(textutil.FirstNonEmpty(a.Name, a.ID))).FontSize(12).TextColor(ink).SingleLine().Ellipsis("…")
-					line := subAgentStatusLabel(a.Status)
+					line := subagent.StatusLabel(a.Status)
 					if a.Steps > 0 {
 						line += fmt.Sprintf(tr(" · %d steps"), a.Steps)
 					}
@@ -40,13 +41,13 @@ func subAgentList(c *ui.Context, agents []SubAgent) {
 
 func subAgentMarker(status string) (string, ui.Color) {
 	switch status {
-	case subAgentCompleted:
+	case subagent.Completed:
 		return "✓", success
-	case subAgentFailed:
+	case subagent.Failed:
 		return "✕", failed
-	case subAgentRunning:
+	case subagent.Running:
 		return "◉", ink
-	case subAgentInterrupted:
+	case subagent.Interrupted:
 		return "■", muted
 	}
 	return "○", muted

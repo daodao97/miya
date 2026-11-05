@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"miya/internal/subagent"
 	"miya/internal/textutil"
 	"os"
 	"strings"
@@ -438,13 +439,13 @@ func (s *mcpServer) status(req mcpRequest, wait time.Duration) (string, error) {
 		if res.Reference != "" {
 			req.Reference = res.Reference
 		}
-		if !subAgentActive(res.Status) || waited >= wait {
+		if !subagent.Active(res.Status) || waited >= wait {
 			break
 		}
 		s.sleep(step)
 	}
-	out := fmt.Sprintf("Conversation \"%s\" (%s): %s\n%s", res.Title, backendFor(res.Agent).Name(), subAgentStatusLabel(res.Status), res.Reference)
-	if subAgentActive(res.Status) && wait > 0 {
+	out := fmt.Sprintf("Conversation \"%s\" (%s): %s\n%s", res.Title, backendFor(res.Agent).Name(), subagent.StatusLabel(res.Status), res.Reference)
+	if subagent.Active(res.Status) && wait > 0 {
 		out += fmt.Sprintf(". Still running after %d seconds. Use thread_status to check later.", int(wait/time.Second))
 	}
 	if res.Reply != "" {
@@ -468,7 +469,7 @@ func formatMCPThreads(res mcpThreadsResult) string {
 	var b strings.Builder
 	for _, t := range res.Threads {
 		status := "Idle"
-		if t.Status == subAgentRunning {
+		if t.Status == subagent.Running {
 			status = "Running"
 		}
 		fmt.Fprintf(&b, "\"%s\"· %s · %s\n%s\n", t.Title, backendFor(t.Agent).Name(), status, t.Reference)

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"miya/internal/claude"
+	"miya/internal/subagent"
 	"miya/internal/textutil"
 )
 
@@ -27,11 +28,11 @@ func claudeSubAgent(id, name string, input json.RawMessage, status string) []Sub
 func claudeSubAgentStatus(toolStatus string) string {
 	switch toolStatus {
 	case "completed":
-		return subAgentCompleted
+		return subagent.Completed
 	case "failed":
-		return subAgentFailed
+		return subagent.Failed
 	}
-	return subAgentRunning
+	return subagent.Running
 }
 
 // claudeTaskStatus normalizes a task frame's status, "" when it tells none.
@@ -60,7 +61,7 @@ func interruptClaudeAgents(t *Thread, status string) {
 	for i := range t.Messages {
 		for j := range t.Messages[i].Agents {
 			a := &t.Messages[i].Agents[j]
-			if subAgentActive(a.Status) {
+			if subagent.Active(a.Status) {
 				a.Status, a.Detail = status, "Process exited without a subtask completion notification"
 			}
 		}
@@ -89,7 +90,7 @@ func claudeTaskFrame(t *Thread, f claude.Frame) {
 	}
 	switch f.Subtype {
 	case "task_started":
-		a.Status = subAgentRunning
+		a.Status = subagent.Running
 		if a.Name == "" {
 			a.Name = textutil.FirstLine(f.Description)
 		}
@@ -166,7 +167,7 @@ func claudeFinishSubAgents(m *Message, output string, metadata json.RawMessage) 
 				m.Agents[i].ID = id
 			}
 			// A repeated acknowledgement must not reopen a finished task.
-			if subAgentActive(m.Agents[i].Status) {
+			if subagent.Active(m.Agents[i].Status) {
 				m.Agents[i].Detail = "Started in the background; waiting for completion"
 			}
 		}

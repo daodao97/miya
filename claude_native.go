@@ -7,6 +7,7 @@ import (
 	"io"
 	"miya/internal/claude"
 	"miya/internal/memory"
+	"miya/internal/subagent"
 	"miya/internal/textutil"
 	"os"
 	"path/filepath"
@@ -394,8 +395,8 @@ func parseClaudeSession(path string) ([]Message, error) {
 	for i := range out {
 		for j := range out[i].Agents {
 			a := &out[i].Agents[j]
-			if subAgentActive(a.Status) {
-				a.Status, a.Detail = subAgentUnconfirmed, "No subtask completion notification in history"
+			if subagent.Active(a.Status) {
+				a.Status, a.Detail = subagent.Unconfirmed, "No subtask completion notification in history"
 			}
 		}
 	}

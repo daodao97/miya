@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"miya/internal/codex"
+	"miya/internal/model"
 	"miya/internal/textutil"
 	"strings"
 	"time"
@@ -183,7 +184,7 @@ func (c *chatController) handle(f codex.Frame) {
 			}
 			c.upsert(t, Message{Role: "activity", Kind: "plan", Plan: e.Plan, Content: strings.TrimSpace(content), ItemID: "turn-plan", TurnID: e.TurnID})
 		case "turn/diff/updated":
-			stats := countDiffLines(e.Diff)
+			stats := model.CountDiffLines(e.Diff)
 			c.upsert(t, Message{Role: "tool", Kind: "diff", Content: textutil.Bounded(e.Diff), DiffStats: &stats, ItemID: "turn-diff", TurnID: e.TurnID})
 		case "thread/tokenUsage/updated":
 			if e.TokenUsage != nil {

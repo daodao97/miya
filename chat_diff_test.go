@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"miya/internal/codex"
+	"miya/internal/model"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -21,7 +22,7 @@ func TestCountDiffLines(t *testing.T) {
 		{"metadata only", "diff --git a/a b/a\nold mode 100644\nnew mode 100755\nBinary files a/a and b/a differ\n", DiffLineStats{}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := countDiffLines(tc.diff); got != tc.want {
+			if got := model.CountDiffLines(tc.diff); got != tc.want {
 				t.Fatalf("stats = %+v, want %+v", got, tc.want)
 			}
 		})
@@ -41,11 +42,11 @@ func TestTurnDiffStatsPreferLatestFullDiff(t *testing.T) {
 	if len(messages) != 2 || !strings.Contains(messages[1].Content, "[earlier output omitted]") {
 		t.Fatalf("diff was not updated/bounded: %+v", messages)
 	}
-	if got := turnDiffStats(messages); got != (DiffLineStats{Added: 2000, Deleted: 1}) {
+	if got := model.TurnDiffStats(messages); got != (DiffLineStats{Added: 2000, Deleted: 1}) {
 		t.Fatalf("full diff count = %+v", got)
 	}
 	c.handle(event("turn/diff/updated", `{"threadId":"t1","turnId":"turn1","diff":""}`))
-	if got := turnDiffStats(c.threads()[0].Messages); got != (DiffLineStats{}) {
+	if got := model.TurnDiffStats(c.threads()[0].Messages); got != (DiffLineStats{}) {
 		t.Fatalf("reverted diff retained old edits: %+v", got)
 	}
 }
@@ -62,7 +63,7 @@ func TestTurnDiffStatsHistoryAndTurnBoundaries(t *testing.T) {
 	running := m
 	running.Status = "inProgress"
 	messages := []Message{m, failed, running, {Kind: "diff", TurnID: "another", Content: "+next"}}
-	if got := turnDiffStats(messages); got != (DiffLineStats{Added: 3, Deleted: 1}) {
+	if got := model.TurnDiffStats(messages); got != (DiffLineStats{Added: 3, Deleted: 1}) {
 		t.Fatalf("history stats = %+v", got)
 	}
 	groups := groupMessages(append([]Message{{Role: "user"}}, messages...))
