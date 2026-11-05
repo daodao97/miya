@@ -17,17 +17,7 @@ type serviceRestartUI struct {
 	err        string
 }
 
-func serviceConnected(cl *serviceClient) bool {
-	if cl == nil || cl.conn == nil && cl.wire == nil {
-		return false
-	}
-	select {
-	case <-cl.closed:
-		return false
-	default:
-		return true
-	}
-}
+func serviceConnected(cl *serviceClient) bool { return cl.Connected() }
 
 func (app *chatApp) checkServiceRestart() {
 	cl := app.c.remote

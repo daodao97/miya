@@ -39,8 +39,7 @@ func newWindowController() *chatController {
 	store, err := loadDesktopWorkspaces()
 	if err != nil {
 		c := newMirrorController()
-		c.remote = &serviceClient{closed: make(chan struct{}), pending: map[int64]chan svcMessage{}}
-		c.remote.Close()
+		c.remote = newClosedServiceClient()
 		c.setStatus(err.Error())
 		onCleanup(func() { c.cancel(); c.remote.Close() })
 		return c
@@ -104,8 +103,7 @@ func newServiceWindow(workspace string, connect func() (*serviceClient, svcState
 	log.Printf("miya: waiting for background service: %v", err)
 	// A closed transport keeps every action on the remote path. A nil remote
 	// would make a mirror fall through to the local agent implementations.
-	c.remote = &serviceClient{closed: make(chan struct{}), pending: map[int64]chan svcMessage{}}
-	c.remote.Close()
+	c.remote = newClosedServiceClient()
 	c.setStatus("Waiting for background service: " + err.Error())
 	c.watchService(c.remote)
 	return c
@@ -204,12 +202,12 @@ func (c *chatController) watchService(cl *serviceClient) {
 	}
 	go func() {
 		select {
-		case <-cl.closed:
+		case <-cl.Done():
 		case <-c.ctx.Done():
 			return
 		}
 		c.dispatch(func() {
-			if c.ctx.Err() == nil && c.remote == cl && (cl.conn != nil || cl.wire != nil) {
+			if c.ctx.Err() == nil && c.remote == cl && cl.HasTransport() {
 				c.setReady(false)
 				c.setStatus("Background service disconnected. Reconnecting…")
 			}

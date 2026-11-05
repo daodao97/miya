@@ -198,7 +198,7 @@ func TestDesktopWorkspaceCancelDiscardsLateConnection(t *testing.T) {
 		t.Fatal("canceled result changed workspace")
 	}
 	select {
-	case <-cl.closed:
+	case <-cl.Done():
 	default:
 		t.Fatal("canceled connection leaked a transport")
 	}

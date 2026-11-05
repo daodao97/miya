@@ -266,7 +266,7 @@ func TestServerTailcatEndToEnd(t *testing.T) {
 	}
 	defer func() { go func() { _ = os.WriteFile(pipe, []byte("released"), 0600) }() }()
 	args, _ := json.Marshal(hostRequest{Action: "read", Project: root, Path: "slow-read"})
-	if err := cl.wire.Send(svcRequest{ID: 1000000, Op: "host", Args: args}); err != nil {
+	if err := cl.Wire().Send(svcRequest{ID: 1000000, Op: "host", Args: args}); err != nil {
 		t.Fatal(err)
 	}
 	heartbeat := make(chan error, 1)
@@ -328,7 +328,7 @@ func TestServerTailcatEndToEnd(t *testing.T) {
 		t.Fatal("remote shell timed out")
 	}
 	cl.Close()
-	if _, err := cl.wire.DialFiles(ctx); err == nil {
+	if _, err := cl.Wire().DialFiles(ctx); err == nil {
 		t.Fatal("closed desktop still opened file transport")
 	}
 }
@@ -363,7 +363,7 @@ func TestServerLinuxDeployment(t *testing.T) {
 	if err := cl.call("host", request, &text); err != nil || text != request.Text {
 		t.Fatal("Linux remote read", text, err)
 	}
-	transport := &http.Transport{DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) { return cl.wire.DialFiles(ctx) }}
+	transport := &http.Transport{DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) { return cl.Wire().DialFiles(ctx) }}
 	defer transport.CloseIdleConnections()
 	client := &http.Client{Transport: transport, Timeout: 15 * time.Second}
 	response, err := client.Get("http://server/" + projectFileID(state.Cwd) + "/miya-linux-qa.txt")

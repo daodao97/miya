@@ -62,10 +62,9 @@ func connectRemoteServiceContext(parent context.Context, link string) (*serviceC
 	if err != nil {
 		return nil, svcState{}, err
 	}
-	cl := &serviceClient{wire: wire, pending: map[int64]chan svcMessage{}, closed: make(chan struct{})}
+	cl := newWireServiceClient(wire)
 	stopCancel := context.AfterFunc(ctx, cl.Close)
 	defer stopCancel()
-	go cl.read()
 	var hello svcHello
 	if err = cl.call("hello", nil, &hello); err == nil && hello.Version != serviceVersion {
 		err = errors.New("Server protocol version is incompatible. Update both the Miya desktop client and server.")
@@ -88,7 +87,7 @@ func connectRemoteServiceContext(parent context.Context, link string) (*serviceC
 		defer ticker.Stop()
 		for {
 			select {
-			case <-cl.closed:
+			case <-cl.Done():
 				return
 			case <-ticker.C:
 				if cl.call("hello", nil, nil) != nil {
@@ -134,7 +133,7 @@ func prepareDesktopIdentity() error {
 }
 
 func (c *chatController) remoteHost() bool {
-	return c != nil && c.remote != nil && (c.remote.wire != nil || c.mirror != nil && c.mirror.remoteHost)
+	return c != nil && c.remote != nil && (c.remote.Wire() != nil || c.mirror != nil && c.mirror.remoteHost)
 }
 
 func (app *chatApp) browseServerProject(path string) {

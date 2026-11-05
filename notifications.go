@@ -122,7 +122,7 @@ func (c *chatController) startNotificationPresence(cl *serviceClient) <-chan str
 		select {
 		case <-c.ctx.Done():
 			return
-		case <-cl.closed:
+		case <-cl.Done():
 			return
 		default:
 		}
@@ -131,7 +131,7 @@ func (c *chatController) startNotificationPresence(cl *serviceClient) <-chan str
 			select {
 			case <-c.ctx.Done():
 				return
-			case <-cl.closed:
+			case <-cl.Done():
 				return
 			case <-ticker.C:
 				report()

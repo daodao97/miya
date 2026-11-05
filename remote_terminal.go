@@ -23,12 +23,12 @@ type remoteTerminal struct {
 }
 
 func openRemoteTerminal(cl *serviceClient, project string) (io.ReadWriteCloser, error) {
-	if cl == nil || cl.wire == nil {
+	if cl == nil || cl.Wire() == nil {
 		return nil, errServiceClosed
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	wire, err := cl.wire.DialTerminal(ctx)
+	wire, err := cl.Wire().DialTerminal(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -57,7 +57,7 @@ func openRemoteTerminal(cl *serviceClient, project string) (io.ReadWriteCloser, 
 		defer ticker.Stop()
 		for {
 			select {
-			case <-cl.closed:
+			case <-cl.Done():
 				t.Close()
 				return
 			case <-wire.Context().Done():

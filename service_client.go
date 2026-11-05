@@ -32,6 +32,59 @@ func newServiceClient(conn net.Conn) *serviceClient {
 	return cl
 }
 
+// newWireServiceClient is a connection to a remote server's service, over
+// the remote link instead of the local socket.
+func newWireServiceClient(wire *remote.Conn) *serviceClient {
+	cl := &serviceClient{wire: wire, pending: map[int64]chan svcMessage{}, closed: make(chan struct{})}
+	go cl.read()
+	return cl
+}
+
+// newDetachedServiceClient has no connection yet; calls fail once it is
+// closed.
+func newDetachedServiceClient() *serviceClient {
+	return &serviceClient{pending: map[int64]chan svcMessage{}, closed: make(chan struct{})}
+}
+
+// newClosedServiceClient keeps a window on the service path while it waits
+// for one: every call fails at once.
+func newClosedServiceClient() *serviceClient {
+	cl := newDetachedServiceClient()
+	cl.Close()
+	return cl
+}
+
+// Done is closed once the connection ends.
+func (cl *serviceClient) Done() <-chan struct{} { return cl.closed }
+
+// Wire is the remote link of a connection to a remote server, nil for the
+// local socket.
+func (cl *serviceClient) Wire() *remote.Conn {
+	if cl == nil {
+		return nil
+	}
+	return cl.wire
+}
+
+// HasTransport reports whether the connection was made over a socket or a
+// remote link, open or not; a detached placeholder has none.
+func (cl *serviceClient) HasTransport() bool {
+	return cl != nil && (cl.conn != nil || cl.wire != nil)
+}
+
+// Connected reports whether the connection has a transport and is open.
+func (cl *serviceClient) Connected() bool {
+	if !cl.HasTransport() {
+		return false
+	}
+	select {
+	case <-cl.closed:
+		return false
+	default:
+		return true
+	}
+}
+
 func dialService(sock string) (*serviceClient, error) {
 	conn, err := net.DialTimeout("unix", sock, 2*time.Second)
 	if err != nil {

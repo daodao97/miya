@@ -65,12 +65,12 @@ func (app *chatApp) navigateRemoteBrowser(s *panelSurface, target string, servic
 		return
 	}
 	cl := app.c.remote
-	if cl == nil || cl.wire == nil {
+	if cl == nil || cl.Wire() == nil {
 		s.webErr = errServiceClosed.Error()
 		return
 	}
 	go func() {
-		p, err := newPhoneWebProxy(cl.wire, service.Port, service.Host, service.RuntimeToken)
+		p, err := newPhoneWebProxy(cl.Wire(), service.Port, service.Host, service.RuntimeToken)
 		app.c.dispatch(func() {
 			if s.closed || s.webGeneration != gen {
 				if p != nil {

@@ -13,9 +13,9 @@ func TestNotificationPresenceStopsWhenItsServiceConnectionCloses(t *testing.T) {
 	// The dispatcher belongs to this controller; a detached connection must
 	// not keep consulting a window's global dispatch hook every ten seconds.
 	c.run = func(func()) {}
-	cl := &serviceClient{closed: make(chan struct{})}
+	cl := newDetachedServiceClient()
 	done := c.startNotificationPresence(cl)
-	close(cl.closed)
+	cl.Close()
 	select {
 	case <-done:
 	case <-time.After(time.Second):
