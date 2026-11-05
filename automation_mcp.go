@@ -15,17 +15,6 @@ import (
 // into settings and calls create_automation; Miya shows a confirmation card
 // in that conversation and creates the automation only if they accept.
 
-type mcpAutomationArgs struct {
-	ID           string `json:"id,omitempty"`
-	Name         string `json:"name,omitempty"`
-	Schedule     string `json:"schedule,omitempty"`
-	Instructions string `json:"instructions,omitempty"`
-	Check        string `json:"check,omitempty"`
-	Rounds       int    `json:"rounds,omitempty"`
-	Agent        string `json:"agent,omitempty"`
-	Enabled      *bool  `json:"enabled,omitempty"`
-}
-
 var automationToolProps = map[string]any{
 	"name":         map[string]any{"type": "string", "description": "Short name, in the user's language"},
 	"schedule":     map[string]any{"type": "string", "description": "5-field cron in local time, e.g. 0 9 * * 1-5"},

@@ -3,6 +3,7 @@ package main
 import (
 	"miya/internal/account"
 	"miya/internal/async"
+	"miya/internal/mcpproto"
 	"miya/internal/model"
 	"miya/internal/phoneapi"
 	"miya/internal/svcproto"
@@ -114,3 +115,20 @@ var (
 
 // deferred is a reply worked out off the main thread; see async.Reply.
 type deferred = async.Reply
+
+// The MCP tool-call data lives in internal/mcpproto.
+type (
+	mcpTool           = mcpproto.Tool
+	mcpRequest        = mcpproto.Request
+	mcpThreadInfo     = mcpproto.ThreadInfo
+	mcpThreadsResult  = mcpproto.ThreadsResult
+	mcpReadResult     = mcpproto.ReadResult
+	mcpStatusResult   = mcpproto.StatusResult
+	mcpDelegateResult = mcpproto.DelegateResult
+	mcpError          = mcpproto.Error
+	mcpAutomationArgs = mcpproto.AutomationArgs
+)
+
+const mcpCallerUnknown = mcpproto.CallerUnknown
+
+var mcpReadOnly = mcpproto.ReadOnly
