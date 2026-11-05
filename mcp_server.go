@@ -103,10 +103,16 @@ type mcpServer struct {
 	ctx       context.Context // this MCP request; cancellation never cancels its task
 }
 
+// newMCPServer serves workspace, reaching the service through call; sleep
+// waits between polls of requests without a context.
+func newMCPServer(workspace string, call func(op string, args, out any) error, sleep func(time.Duration)) *mcpServer {
+	return &mcpServer{workspace: workspace, call: call, sleep: sleep}
+}
+
 // serveMCP answers newline-delimited JSON-RPC requests from r on w until r
 // ends; requests run concurrently, as a delegation may wait for minutes.
 func serveMCP(r io.Reader, w io.Writer, workspace string, call func(op string, args, out any) error, sleep func(time.Duration)) error {
-	s := &mcpServer{workspace: workspace, call: call, sleep: sleep}
+	s := newMCPServer(workspace, call, sleep)
 	ctx, cancelAll := context.WithCancel(context.Background())
 	defer cancelAll()
 	var pendingMu sync.Mutex
@@ -233,7 +239,7 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *mcpErro
 		if json.Unmarshal(params, &p) != nil {
 			return nil, &mcpError{Code: -32602, Message: "invalid params"}
 		}
-		text, err := s.callTool(p.Name, p.Arguments)
+		text, err := s.CallTool(p.Name, p.Arguments)
 		if err != nil {
 			return mcpToolResult(err.Error(), true), nil
 		}
@@ -272,7 +278,7 @@ func registerMCPTools(h mcpHandler, ownArgs bool, tools ...mcpTool) {
 	}
 }
 
-func (s *mcpServer) callTool(name string, raw json.RawMessage) (string, error) {
+func (s *mcpServer) CallTool(name string, raw json.RawMessage) (string, error) {
 	if h := mcpOwnArgs[name]; h != nil {
 		return h(s, name, raw)
 	}

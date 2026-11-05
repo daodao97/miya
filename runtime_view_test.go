@@ -127,15 +127,15 @@ func TestMCPRuntimeToolIsReadOnlyAndReturnsNoPreviewToken(t *testing.T) {
 	if definition == nil || definition.Annotations["readOnlyHint"] != true {
 		t.Fatal("runtime query is not advertised read-only")
 	}
-	server := mcpServer{workspace: "/untrusted", call: func(op string, args, out any) error {
+	server := newMCPServer("/untrusted", func(op string, args, out any) error {
 		if op != "mcpRuntime" || args.(mcpRequest).Reference != "" {
 			t.Fatal("runtime tool can redirect session")
 		}
 		raw, _ := json.Marshal(sampleConversationRuntime(testRef(agentCodex, "caller")).View)
 		*out.(*json.RawMessage) = raw
 		return nil
-	}}
-	text, err := server.callTool("runtime_info", json.RawMessage(`{"id":"miya://spoofed"}`))
+	}, nil)
+	text, err := server.CallTool("runtime_info", json.RawMessage(`{"id":"miya://spoofed"}`))
 	if err != nil || text == "" {
 		t.Fatal(err)
 	}

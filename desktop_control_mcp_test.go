@@ -78,15 +78,15 @@ func TestDesktopMCPWaitsForExplicitCompletion(t *testing.T) {
 }
 
 func TestDesktopMCPReasonAndToolRouting(t *testing.T) {
-	s := &mcpServer{workspace: "/ws", call: func(op string, args, out any) error {
+	s := newMCPServer("/ws", func(op string, args, out any) error {
 		r := args.(mcpRequest)
 		if op != "mcpDesktopControl" || r.Tool != "request_desktop_control" || r.Task != "登录" {
 			t.Fatalf("bad call: %s %+v", op, r)
 		}
 		assign(out, "done")
 		return nil
-	}}
-	if text, err := s.callTool("request_desktop_control", json.RawMessage(`{"reason":"登录"}`)); err != nil || text != "done" {
+	}, nil)
+	if text, err := s.CallTool("request_desktop_control", json.RawMessage(`{"reason":"登录"}`)); err != nil || text != "done" {
 		t.Fatal(text, err)
 	}
 }

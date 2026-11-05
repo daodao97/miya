@@ -245,22 +245,22 @@ func TestMCPListReadAndStatus(t *testing.T) {
 
 func TestMCPPublicThreadIdentifiersAreSessionLinks(t *testing.T) {
 	c := mcpHost(t)
-	s := &mcpServer{workspace: "/ws", sleep: func(time.Duration) {}, call: func(op string, args, out any) error {
+	s := newMCPServer("/ws", func(op string, args, out any) error {
 		res, err := c.mcpHandle(op, args.(mcpRequest))
 		if err == nil {
 			assign(out, res)
 		}
 		return err
-	}}
-	listing, err := s.callTool("list_threads", json.RawMessage(`{}`))
+	}, func(time.Duration) {})
+	listing, err := s.CallTool("list_threads", json.RawMessage(`{}`))
 	if err != nil || !strings.Contains(listing, testRef(agentCodex, "x").URL()) || strings.Contains(listing, "#2") {
 		t.Fatalf("local number exposed: %q %v", listing, err)
 	}
 	args, _ := json.Marshal(map[string]any{"id": testReference(c.threadWithID(1)).URL()})
-	if packet, err := s.callTool("read_thread", args); err != nil || !strings.Contains(packet, "修复登录过期的问题") {
+	if packet, err := s.CallTool("read_thread", args); err != nil || !strings.Contains(packet, "修复登录过期的问题") {
 		t.Fatalf("session link unreadable: %s %v", packet, err)
 	}
-	if _, err := s.callTool("read_thread", json.RawMessage(`{"id":1}`)); err == nil {
+	if _, err := s.CallTool("read_thread", json.RawMessage(`{"id":1}`)); err == nil {
 		t.Fatal("accepted a legacy numeric tool argument")
 	}
 }
