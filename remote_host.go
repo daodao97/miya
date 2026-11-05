@@ -21,6 +21,7 @@ import (
 	"miya/internal/notification"
 	"miya/internal/remote"
 	"miya/internal/thumbnail"
+	"miya/internal/memory/manager"
 
 	qrcode "github.com/skip2/go-qrcode"
 )
@@ -77,7 +78,7 @@ func listThread(t Thread) Thread {
 }
 
 func (c *chatController) phoneSnapshot() phoneState {
-	s := phoneState{DesktopControl: desktop.Available(), ReferenceSource: c.referenceSource, MemoryRevision: c.memoryRevision, Memory: c.memory != nil, Files: true, WebPorts: true, WebServices: true, Runtime: true, FileReferences: true, Automations: c.auto != nil, Status: c.status(), Approvals: c.approvals(), Agents: c.phoneAgentOptions(), Quotas: c.phoneQuotas()}
+	s := phoneState{DesktopControl: desktop.Available(), ReferenceSource: c.referenceSource, MemoryRevision: c.memoryRevision, Memory: c.memories().Store != nil, Files: true, WebPorts: true, WebServices: true, Runtime: true, FileReferences: true, Automations: c.auto != nil, Status: c.status(), Approvals: c.approvals(), Agents: c.phoneAgentOptions(), Quotas: c.phoneQuotas()}
 	s.Collaboration = c.collaborationCapabilities()
 	s.DesktopWindows = s.DesktopControl
 	s.AutomationRun = c.auto != nil
@@ -574,7 +575,7 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 					err      error
 				}
 				pending, ok := onMain(ctx, c.dispatch, func() pendingMemory {
-					v, err := c.memoryOp("memoryList", memoryRequest{Project: r.Project, Scope: r.MemoryScope})
+					v, err := c.memories().Op("memoryList", manager.Request{Project: r.Project, Scope: r.MemoryScope})
 					return pendingMemory{revision: c.memoryRevision, result: v, err: err}
 				})
 				if !ok {
@@ -588,7 +589,7 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 				frame := remote.Frame{Type: "memory"}
 				if err != nil {
 					frame.Error = err.Error()
-				} else if list, ok := result.(memoryList); ok {
+				} else if list, ok := result.(manager.List); ok {
 					reply.List = list
 				}
 				frame.Data, _ = json.Marshal(reply)

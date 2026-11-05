@@ -284,14 +284,14 @@ Go 代码逐项检查：作用域是否允许、来源是否属于本轮、引�
 | 位置 | 计划职责 | 阶段 |
 | --- | --- | --- |
 | `internal/memory/`（新增） | 数据类型、作用域存储、原子提交、版本合并、删除屏障、检索、派生索引接口 | 1a |
-| `memory_mcp.go`（新增） | 记忆工具、调用者作用域、服务操作和结果 | 1a |
+| `memory_mcp.go`（新增） | 记忆工具、调用者作用域、服务操作和结果；服务端处理现位于 `internal/memory/manager` | 1a |
 | `view_memory.go`（新增） | 记忆管理界面、可撤销提示、提升到项目文件 | 1a |
 | [mcp_host.go](../mcp_host.go) | 写工具的调用者消歧：参数比对、多候选时失败 | 1a |
 | [mcp_server.go](../mcp_server.go)、[service_server.go](../service_server.go) | 注册工具、串行提交，协调服务退出与恢复 | 1a |
-| `memory_context.go`（新增） | 从实际发送请求构造有界记忆块、按会话计算增量、记录注入快照 | 1b |
+| `internal/memory/manager/input.go`（原 `memory_context.go`） | 从实际发送请求构造有界记忆块、按会话计算增量、记录注入快照 | 1b |
 | [agent.go](../agent.go)、[queue.go](../queue.go) | `sendRequest` 原文与上下文分离，普通发送、排队、引导、编辑重发的共同接入 | 1b |
 | [chat_controller.go](../chat_controller.go)、[agent_codex.go](../agent_codex.go)、[chat_claude.go](../chat_claude.go) | 组合实际后端输入；覆盖 Codex steer、Claude 保活发送和后台项目 | 1b |
-| `memory_extract.go`（新增） | 规范化完成事件、来源消息快照、提取队列；提炼调用和结构化输出校验现位于 `internal/memory/extractor` | 2 |
+| `internal/memory/manager/turns.go`（原 `memory_extract.go`） | 规范化完成事件、来源消息快照、提取队列；提炼调用和结构化输出校验现位于 `internal/memory/extractor` | 2 |
 | [chat_events.go](../chat_events.go)、[chat_claude.go](../chat_claude.go) | 后端原始完成信号、持久回合标识、去重，不依赖界面通知 | 2 |
 | [internal/automation/draft.go](../internal/automation/draft.go) | 抽取可复用的结构化调用基础；不直接复用自动化的提示词、权限或 schema | 2 |
 
@@ -313,10 +313,10 @@ Go 代码逐项检查：作用域是否允许、来源是否属于本轮、引�
 
 ### 阶段 1b / 2 实施与验证记录（2026-11-02）
 
-- `memory_context.go` 与 `internal/memory/context.go` 在后端实际执行前准备记忆，覆盖 Codex 普通发送与引导、Claude 新进程、保活发送与引导。队列提交时不固定自动记忆，显式引用仍保留提交时快照。自动上下文只在构造后端输入时附加，不修改 `sendRequest.Text`、结构化 `Parts`、用户气泡或标题；两种后端的历史重载会移除自动记忆块。
+- `internal/memory/manager/input.go` 与 `internal/memory/context.go` 在后端实际执行前准备记忆，覆盖 Codex 普通发送与引导、Claude 新进程、保活发送与引导。队列提交时不固定自动记忆，显式引用仍保留提交时快照。自动上下文只在构造后端输入时附加，不修改 `sendRequest.Text`、结构化 `Parts`、用户气泡或标题；两种后端的历史重载会移除自动记忆块。
 - 按会话增量注入，新版本、遗忘和过期只通知一次；上下文重建或压缩后重放，每 20 次准备保守重放一次。每次最多五项、总量不超过 4000 个 Unicode 字符。重试复用驻内存快照，发送前复查版本、有效期及开关，失效则丢弃旧块，聊天继续。
 - **诊断与原设计的取舍：** 磁盘只记录请求 ID、会话、条目 ID/版本/状态和送达状态，不保存第二份记忆正文。每会话最多 20 条、保留 30 天。因此遗忘不会留下诊断正文副本；代价是旧版本被纠正或忘记后，不能还原当时的完整注入文字，跨进程重试也不恢复旧正文快照。
-- `memory_extract.go` 从 Codex `turn/completed` 与 Claude 顶层成功 `result` 固定本轮真实用户消息、最后回复和能够完整容纳的已完成工具证据，再异步入队。停止、失败、子 Agent、历史加载、自动化、MCP 委派和原生任务控制不触发提炼。无法确定项目任务身份的进展只供来源会话使用；原生目标按会话和目标正文摘要区分。
+- `internal/memory/manager/turns.go` 从 Codex `turn/completed` 与 Claude 顶层成功 `result` 固定本轮真实用户消息、最后回复和能够完整容纳的已完成工具证据，再异步入队。停止、失败、子 Agent、历史加载、自动化、MCP 委派和原生任务控制不触发提炼。无法确定项目任务身份的进展只供来源会话使用；原生目标按会话和目标正文摘要区分。
 - `internal/memory/jobs.go` 持久化有界证据和来源定位，最多 100 个未完成任务，一次只运行一个调用。输入最多 16000 字符、最多三项候选，截止时间 90 秒，失败最多重试一次。终止任务清除证据与候选正文，只留计数、耗时和状态。重启恢复任务；后台收到空闲升级请求后停止领取新任务，当前调用有界结束后允许切换。
 - 入队补充任务身份与时间后重新检查输入预算；超限时移除整条可选工具证据，优先保留用户消息和最终回答。修复了准备阶段允许 16000 字符、入队阶段保留 512 字符余量导致工具较多的正常回合被拒绝的问题（2026-11-03）。
 - 补充审查修复（2026-11-03）：领取提炼任务时先补全指纹、状态和尝试次数，再裁剪可选旧记忆，避免领取后再次超限。超限或队列满的跳过记录清除输入正文，计入失败并在设置页显示原因；入队错误写入服务日志。绝对路径开头的普通消息不再误判为斜杠命令；进展的纠正和失效通知遵守当前任务作用域。

@@ -8,6 +8,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"miya/internal/model"
 	"miya/internal/remote"
+	"miya/internal/claude"
 )
 
 type mobileCollaborationCall struct {
@@ -27,7 +28,7 @@ func (m *mobileApp) collaborationCall(request collaborationRequest, done func(js
 	if m.collaborationCalls == nil {
 		m.collaborationCalls = map[string]*mobileCollaborationCall{}
 	}
-	id := newClaudeSessionID()
+	id := claude.NewSessionID()
 	pending := &mobileCollaborationCall{done: done}
 	m.collaborationCalls[id] = pending
 	raw, _ := json.Marshal(request)

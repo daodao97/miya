@@ -7,17 +7,18 @@ import (
 	"github.com/egoist/mygo/ui"
 	"miya/internal/model"
 	"miya/internal/remote"
+	"miya/internal/memory/manager"
 )
 
 type phoneMemoryResult struct {
 	Revision uint64     `json:"revision,omitempty"`
 	Project  string     `json:"project"`
 	Scope    string     `json:"scope"`
-	List     memoryList `json:"list"`
+	List     manager.List `json:"list"`
 }
 type mobileMemory struct {
 	project, scope string
-	list           memoryList
+	list           manager.List
 	loading        bool
 	requestedAt    time.Time
 	err            string
@@ -103,7 +104,7 @@ func (m *mobileApp) memoryPage(c *ui.Context) {
 					}
 					if m.pill(c, scope, label, state.scope == scope).Role(ui.RoleRadio).Checked(state.scope == scope).Clicked() {
 						state.scope = scope
-						state.list = memoryList{}
+						state.list = manager.List{}
 						state.loading = false
 						state.requestedAt = time.Time{}
 					}

@@ -173,7 +173,7 @@ func TestClaudeLiveBackgroundCompletion(t *testing.T) {
 	args := append(append([]string(nil), command.Args...), "--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`, "--disable-slash-commands", "--setting-sources", "user", "--settings", `{"disableAllHooks":true}`, "--no-chrome")
 	prompt := "Lifecycle verification in an empty disposable workspace. Start exactly ONE background Agent (run_in_background true if available), description Miya lifecycle verification, with this exact prompt: Run Bash with the exact command `sleep 2 && printf MIYA_BG_OK`, then return MIYA_BG_OK. Do not use any other tools or access files/network. After launching immediately reply MIYA_WAITING without waiting or using more tools. When its completion notification arrives, reply MIYA_BG_DONE."
 	frames, done := make(chan claude.Frame, 256), make(chan error, 1)
-	c, err := claude.Start(ctx, claude.Options{Binary: command.Path, Args: args, Env: command.Env, Cwd: t.TempDir(), SessionID: newClaudeSessionID(), PermissionMode: "default", Tools: &tools, Content: []map[string]any{{"type": "text", "text": prompt}}}, func(f claude.Frame) { frames <- f }, func(err error) { done <- err })
+	c, err := claude.Start(ctx, claude.Options{Binary: command.Path, Args: args, Env: command.Env, Cwd: t.TempDir(), SessionID: claude.NewSessionID(), PermissionMode: "default", Tools: &tools, Content: []map[string]any{{"type": "text", "text": prompt}}}, func(f claude.Frame) { frames <- f }, func(err error) { done <- err })
 	if err != nil {
 		t.Fatal(err)
 	}

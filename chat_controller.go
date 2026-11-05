@@ -20,8 +20,7 @@ import (
 	"miya/internal/claude"
 	"miya/internal/codex"
 	dg "miya/internal/delegation"
-	"miya/internal/memory"
-	"miya/internal/memory/extractor"
+	"miya/internal/memory/manager"
 	"miya/internal/model"
 	"miya/internal/notification"
 	"miya/internal/textutil"
@@ -37,12 +36,8 @@ type chatController struct {
 	runtimeMu      sync.Mutex
 	runtimePath    string
 	runtime        *runtimeManager
-	memory         *memory.Store // non-nil only in the background service
-	memoryCalls    int           // executor-owned; pending IO prevents idle service exit
+	mem            manager.Manager // memory state; reach it through memories
 	memoryRevision uint64
-	memoryEngine   *extractor.Engine
-	memoryTurns    map[int]memoryTurn
-	memoryResults  map[string]bool
 
 	// auto is the automations, in the controller that runs them.
 	auto *automation.Runner
@@ -1456,7 +1451,7 @@ func (c *chatController) sendCodex(req SendRequest) int {
 	serviceTier := loadSetting("codexServiceTier")
 	sentAt := time.Now().UnixMilli()
 	pendingUserID := c.nextID()
-	localTurn := c.beginMemoryTurn(t, req, pendingUserID)
+	localTurn := c.memories().BeginTurn(t, req, pendingUserID)
 	c.update(id, func(t *Thread) {
 		resetTurnOutput(t)
 		t.ExecutionID = req.ExecutionID
@@ -1511,8 +1506,8 @@ func (c *chatController) sendCodex(req SendRequest) int {
 			err = c.persistManagedBinding(ctx, req.ExecutionID, ThreadRef{Source: c.referenceSource, Backend: agentCodex, SessionID: serverID}.URL())
 		}
 		if err == nil {
-			mem := c.prepareMemoryInput(t, req, cwd, c.threadRef(Thread{ServerID: serverID}).URL())
-			input := []map[string]any{{"type": "text", "text": collaborationTaggedInput(mem.text(text), req.Parts), "text_elements": []any{}}}
+			mem := c.memories().PrepareInput(t, req, cwd, c.threadRef(Thread{ServerID: serverID}).URL())
+			input := []map[string]any{{"type": "text", "text": collaborationTaggedInput(mem.Text(text), req.Parts), "text_elements": []any{}}}
 			own, _ := splitReferenceContext(text)
 			input = append(input, fileMentionInputs(own, cwd)...)
 			input = append(input, c.attachmentInputs(attachments)...)
@@ -1535,12 +1530,12 @@ func (c *chatController) sendCodex(req SendRequest) int {
 				mayHaveStarted = false
 				err = client.Call(ctx, "thread/resume", map[string]any{"threadId": serverID, "cwd": cwd, "sandbox": sandboxForPermissionPolicy(policy), "approvalPolicy": approvalForPermissionPolicy(policy), "approvalsReviewer": reviewerForPermissionPolicy(policy)}, nil)
 				if err == nil {
-					input[0]["text"] = collaborationTaggedInput(mem.text(text), req.Parts)
+					input[0]["text"] = collaborationTaggedInput(mem.Text(text), req.Parts)
 					mayHaveStarted = true
 					err = client.Call(ctx, "turn/start", params, &result)
 				}
 			}
-			mem.finish(err == nil)
+			mem.Finish(err == nil)
 		}
 		c.dispatch(func() {
 			if c.client != client {

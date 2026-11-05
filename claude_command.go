@@ -39,8 +39,8 @@ func (c *chatController) applyClaudeCommand(line string) {
 	if err != nil {
 		c.claudeBinary, c.claudeError = "", err.Error()
 	}
-	if c.memoryEngine != nil {
-		c.memoryEngine.Configure(claude.CLI{Binary: c.claudeBinary, Args: append([]string(nil), c.claudeArgs...), Env: append([]string(nil), c.claudeEnv...)})
+	if c.memories().Engine != nil {
+		c.memories().Engine.Configure(claude.CLI{Binary: c.claudeBinary, Args: append([]string(nil), c.claudeArgs...), Env: append([]string(nil), c.claudeEnv...)})
 	}
 	// Sessions live where the command's Claude Code keeps them.
 	claudeConfigOverride = ""

@@ -164,14 +164,14 @@ func (codexBackend) Steer(c *chatController, t Thread, req SendRequest) bool {
 	content, images := attachmentDisplay(req.Text, req.Attachments)
 	sentAt := time.Now().UnixMilli()
 	pending := c.nextID()
-	localTurn := c.beginMemoryTurn(t, req, pending)
+	localTurn := c.memories().BeginTurn(t, req, pending)
 	c.update(t.ID, func(t *Thread) {
 		t.LastActivityAt = sentAt
 		t.Messages = append(t.Messages, Message{ID: pending, Role: "user", Content: content, Images: images, Attachments: append([]string(nil), req.Attachments...), Parts: req.Parts, ItemID: "pending-user", SentAtMs: sentAt, MemoryTurnID: localTurn, MemoryControl: req.MemoryControl || req.KeepSessionSettings})
 	})
 	go func() {
-		mem := c.prepareMemoryInput(t, req, cwd, c.threadRef(t).URL())
-		input := []map[string]any{{"type": "text", "text": mem.text(req.Text), "text_elements": []any{}}}
+		mem := c.memories().PrepareInput(t, req, cwd, c.threadRef(t).URL())
+		input := []map[string]any{{"type": "text", "text": mem.Text(req.Text), "text_elements": []any{}}}
 		own, _ := splitReferenceContext(req.Text)
 		input = append(input, fileMentionInputs(own, cwd)...)
 		input = append(input, c.attachmentInputs(req.Attachments)...)
@@ -179,7 +179,7 @@ func (codexBackend) Steer(c *chatController, t Thread, req SendRequest) bool {
 		ctx, cancel := context.WithTimeout(c.parentContext(), 30*time.Second)
 		defer cancel()
 		err := client.Call(ctx, "turn/steer", params, nil)
-		mem.finish(err == nil)
+		mem.Finish(err == nil)
 		if err == nil {
 			return
 		}

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -21,16 +20,6 @@ import (
 	"miya/internal/textutil"
 )
 
-func newClaudeSessionID() string {
-	var b [16]byte
-	_, err := rand.Read(b[:])
-	if err != nil {
-		panic(err)
-	}
-	b[6] = (b[6] & 15) | 64
-	b[8] = (b[8] & 63) | 128
-	return fmt.Sprintf("%x-%x-%x-%x-%x", b[:4], b[4:6], b[6:8], b[8:10], b[10:])
-}
 func claudeHistoryPath(id string) string {
 	if id == "" || filepath.Base(id) != id {
 		return ""
@@ -151,7 +140,7 @@ func (c *chatController) sendClaude(req SendRequest) int {
 		if req.Project != "" {
 			cwd = req.Project
 		}
-		t = Thread{ID: c.nextID(), Agent: agentClaude, PermissionPolicy: policy, ServerID: newClaudeSessionID(), Title: conversationTitle("", claudePromptTitle(text), ""), Project: filepath.Base(cwd), Loaded: true, HistoryLoaded: true}
+		t = Thread{ID: c.nextID(), Agent: agentClaude, PermissionPolicy: policy, ServerID: claude.NewSessionID(), Title: conversationTitle("", claudePromptTitle(text), ""), Project: filepath.Base(cwd), Loaded: true, HistoryLoaded: true}
 		c.addThread(cwd, t)
 	}
 	id := t.ID
@@ -161,7 +150,7 @@ func (c *chatController) sendClaude(req SendRequest) int {
 		c.update(id, func(t *Thread) { t.MemoryEpoch = epoch })
 	}
 	pendingUserID := c.nextID()
-	localTurn := c.beginMemoryTurn(t, req, pendingUserID)
+	localTurn := c.memories().BeginTurn(t, req, pendingUserID)
 	now := time.Now().UnixMilli()
 	c.update(id, func(t *Thread) {
 		resetTurnOutput(t)
@@ -197,7 +186,7 @@ func (c *chatController) sendClaude(req SendRequest) int {
 		if existing != nil {
 			_, _, _, execution.epoch = existing.Runtime()
 		} else {
-			execution.epoch = "claude:" + newClaudeSessionID()
+			execution.epoch = "claude:" + claude.NewSessionID()
 		}
 		executionEpoch = execution.epoch
 	}
@@ -244,10 +233,10 @@ func (c *chatController) sendClaude(req SendRequest) int {
 		beforeInput := func(ctx context.Context) error {
 			return c.persistManagedExecutionBinding(ctx, req.ExecutionID, ThreadRef{Source: c.referenceSource, Backend: agentClaude, SessionID: t.ServerID}.URL(), executionEpoch)
 		}
-		mem := c.prepareMemoryInput(t, req, cwd, c.threadRef(t).URL())
-		content, err := claudeInput(collaborationTaggedInput(mem.text(text), req.Parts), paths)
+		mem := c.memories().PrepareInput(t, req, cwd, c.threadRef(t).URL())
+		content, err := claudeInput(collaborationTaggedInput(mem.Text(text), req.Parts), paths)
 		if err != nil {
-			mem.finish(false)
+			mem.Finish(false)
 			reject(err)
 			return
 		}
@@ -265,7 +254,7 @@ func (c *chatController) sendClaude(req SendRequest) int {
 			if err != nil {
 				reject(err)
 			}
-			mem.finish(err == nil)
+			mem.Finish(err == nil)
 			return
 		}
 		run, err := claude.Start(c.ctx, claude.Options{Binary: c.claudeBinary, Args: append(append([]string(nil), c.claudeArgs...), claudeMCPArgs(cwd)...), Env: append(append([]string(nil), c.claudeEnv...), claudeMCPEnv()...), Cwd: cwd, SessionID: t.ServerID, Resume: t.Resumed, PermissionMode: claudePermissionMode(policy), Model: req.Model, Effort: req.Effort, Content: content, BeforeInput: beforeInput}, func(f claude.Frame) {
@@ -281,7 +270,7 @@ func (c *chatController) sendClaude(req SendRequest) int {
 				}
 			})
 		})
-		mem.finish(err == nil)
+		mem.Finish(err == nil)
 		c.dispatch(func() {
 			if c.threadWithID(id).ClaudeGeneration != generation {
 				if run != nil {
@@ -611,7 +600,7 @@ func (c *chatController) handleClaude(id int, f claude.Frame) {
 		}
 	})
 	if memoryTurnDone {
-		c.completedMemoryTurn(id, f.UUID)
+		c.memories().CompletedTurn(id, f.UUID)
 	}
 	if f.Type == "result" && f.ParentToolUseID == "" && !f.WaitingForAgents {
 		state := dg.Completed

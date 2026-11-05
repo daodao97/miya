@@ -17,11 +17,11 @@ func TestMemoryInjectedIntoCodexWithoutChangingUserTextOrHistory(t *testing.T) {
 	c, d, log := codexResumeFixture(t)
 	attachMemory(t, c)
 	scope, _ := memory.ProjectScope(c.cwd)
-	if err := c.memory.Configure(scope, memory.Settings{AutoInject: true}); err != nil {
+	if err := c.memories().Store.Configure(scope, memory.Settings{AutoInject: true}); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Now()
-	saved, err := c.memory.Save(scope, memory.Mutation{Kind: "fact", Content: "手机构建必须使用 scripts/build-ios.sh", ObservedAt: now, Sources: []memory.Source{{EvidenceKind: "manual", ObservedAt: now}}})
+	saved, err := c.memories().Store.Save(scope, memory.Mutation{Kind: "fact", Content: "手机构建必须使用 scripts/build-ios.sh", ObservedAt: now, Sources: []memory.Source{{EvidenceKind: "manual", ObservedAt: now}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestMemoryInjectedIntoCodexWithoutChangingUserTextOrHistory(t *testing.T) {
 		t.Fatalf("Claude history leaked: %q", got)
 	}
 	req := SendRequest{ThreadID: 1, Text: query, KeepSessionSettings: true}
-	if c.prepareMemoryInput(c.threadWithID(1), req, c.cwd, c.threadRef(c.threadWithID(1)).URL()).text(query) != query {
+	if c.memories().PrepareInput(c.threadWithID(1), req, c.cwd, c.threadRef(c.threadWithID(1)).URL()).Text(query) != query {
 		t.Fatal("native task control injected memory")
 	}
 }
@@ -69,9 +69,9 @@ func TestMemoryQueueRecallsAtExecutionAndFailuresDoNotBlockSend(t *testing.T) {
 	c, d := queueController(t)
 	attachMemory(t, c)
 	scope, _ := memory.ProjectScope(c.cwd)
-	_ = c.memory.Configure(scope, memory.Settings{AutoInject: true})
+	_ = c.memories().Store.Configure(scope, memory.Settings{AutoInject: true})
 	now := time.Now()
-	old, err := c.memory.Save(scope, memory.Mutation{Kind: "fact", Content: "手机构建旧约定", ObservedAt: now, Sources: []memory.Source{{EvidenceKind: "manual", ObservedAt: now}}})
+	old, err := c.memories().Store.Save(scope, memory.Mutation{Kind: "fact", Content: "手机构建旧约定", ObservedAt: now, Sources: []memory.Source{{EvidenceKind: "manual", ObservedAt: now}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,17 +81,17 @@ func TestMemoryQueueRecallsAtExecutionAndFailuresDoNotBlockSend(t *testing.T) {
 	if len(c.threadWithID(1).Queue) != 1 {
 		t.Fatal("missing queue")
 	}
-	_, err = c.memory.Save(scope, memory.Mutation{ID: old.ID, Version: old.Version, Kind: "fact", Content: "手机构建新约定", ObservedAt: now, Sources: []memory.Source{{EvidenceKind: "manual", ObservedAt: now}}})
+	_, err = c.memories().Store.Save(scope, memory.Mutation{ID: old.ID, Version: old.Version, Kind: "fact", Content: "手机构建新约定", ObservedAt: now, Sources: []memory.Source{{EvidenceKind: "manual", ObservedAt: now}}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	req := c.threadWithID(1).Queue[0].SendRequest
-	input := c.prepareMemoryInput(c.threadWithID(1), req, c.cwd, "session")
-	if text := input.text(req.Text); !strings.Contains(text, "手机构建新约定") || strings.Contains(text, "手机构建旧约定") {
+	input := c.memories().PrepareInput(c.threadWithID(1), req, c.cwd, "session")
+	if text := input.Text(req.Text); !strings.Contains(text, "手机构建新约定") || strings.Contains(text, "手机构建旧约定") {
 		t.Fatalf("queued recall frozen too early: %q", text)
 	}
-	_ = c.memory.Configure(scope, memory.Settings{Disabled: true})
-	if got := input.text(req.Text); got != req.Text {
+	_ = c.memories().Store.Configure(scope, memory.Settings{Disabled: true})
+	if got := input.Text(req.Text); got != req.Text {
 		t.Fatal("disabled retry retained memory")
 	}
 	c.update(1, func(t *Thread) { t.Busy = false })
@@ -105,25 +105,25 @@ func TestMemoryAbsolutePathMessagesAreNotSlashCommands(t *testing.T) {
 	c, _ := queueController(t)
 	attachMemory(t, c)
 	scope, _ := memory.ProjectScope(c.cwd)
-	if err := c.memory.Configure(scope, memory.Settings{AutoInject: true}); err != nil {
+	if err := c.memories().Store.Configure(scope, memory.Settings{AutoInject: true}); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Now()
-	_, err := c.memory.Save(scope, memory.Mutation{Kind: "fact", Content: "项目构建使用 build-ios.sh", ObservedAt: now, Sources: []memory.Source{{EvidenceKind: "manual", ObservedAt: now}}})
+	_, err := c.memories().Store.Save(scope, memory.Mutation{Kind: "fact", Content: "项目构建使用 build-ios.sh", ObservedAt: now, Sources: []memory.Source{{EvidenceKind: "manual", ObservedAt: now}}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	th := c.threadWithID(1)
 	text := "/Users/daodao/project 项目构建入口是什么"
-	if c.beginMemoryTurn(th, SendRequest{Text: text}, 10) == "" {
+	if c.memories().BeginTurn(th, SendRequest{Text: text}, 10) == "" {
 		t.Fatal("absolute path incorrectly disabled extraction")
 	}
-	input := c.prepareMemoryInput(th, SendRequest{Text: text}, c.cwd, c.threadRef(th).URL())
-	if !strings.Contains(input.text(text), "build-ios.sh") {
+	input := c.memories().PrepareInput(th, SendRequest{Text: text}, c.cwd, c.threadRef(th).URL())
+	if !strings.Contains(input.Text(text), "build-ios.sh") {
 		t.Fatal("absolute path incorrectly disabled recall")
 	}
 	for _, command := range []string{"/compact", "/review changes", "/goal run", "/loop 5m check", "/custom-skill"} {
-		if c.beginMemoryTurn(th, SendRequest{Text: command}, 20) != "" {
+		if c.memories().BeginTurn(th, SendRequest{Text: command}, 20) != "" {
 			t.Fatalf("command unexpectedly enabled extraction: %s", command)
 		}
 	}

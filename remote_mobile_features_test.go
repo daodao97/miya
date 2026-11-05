@@ -174,7 +174,7 @@ func TestPhoneMemoryIsExplicitReadOnlyAndAdvertised(t *testing.T) {
 	attachMemory(t, c)
 	scope, _ := memory.ProjectScope(c.cwd)
 	now := time.Now()
-	e, err := c.memory.Save(scope, memory.Mutation{Kind: "fact", Content: "暂缓手机协议升级", ObservedAt: now, Sources: []memory.Source{{EvidenceKind: "manual", ObservedAt: now}}})
+	e, err := c.memories().Store.Save(scope, memory.Mutation{Kind: "fact", Content: "暂缓手机协议升级", ObservedAt: now, Sources: []memory.Source{{EvidenceKind: "manual", ObservedAt: now}}})
 	if err != nil {
 		t.Fatal(err)
 	}

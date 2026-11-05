@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"miya/internal/codex"
+	"miya/internal/claude"
 )
 
 // claudeBackend runs the Claude Code CLI over stream-json, one process per
@@ -104,7 +105,7 @@ func (claudeBackend) Rewind(c *chatController, t Thread, m Message, text string)
 				t.HistoryLoaded = true
 				if forked == "" {
 					// The first message: a new session.
-					t.ServerID, t.Resumed = newClaudeSessionID(), false
+					t.ServerID, t.Resumed = claude.NewSessionID(), false
 				} else {
 					t.ServerID, t.Resumed = forked, true
 				}
@@ -123,19 +124,19 @@ func (claudeBackend) Steer(c *chatController, t Thread, req SendRequest) bool {
 	shown, images := attachmentDisplay(req.Text, req.Attachments)
 	now := time.Now().UnixMilli()
 	pending := c.nextID()
-	localTurn := c.beginMemoryTurn(t, req, pending)
+	localTurn := c.memories().BeginTurn(t, req, pending)
 	c.update(t.ID, func(t *Thread) {
 		t.LastOutputAtMs, t.LastActivityAt = now, now
 		t.Messages = append(t.Messages, Message{ID: pending, Role: "user", Content: shown, Images: images, Attachments: append([]string(nil), req.Attachments...), Parts: req.Parts, SentAtMs: now, MemoryTurnID: localTurn, MemoryControl: req.MemoryControl || req.KeepSessionSettings})
 	})
 	project, session := c.threadWorkspace(t.ID), c.threadRef(t).URL()
 	go func() {
-		mem := c.prepareMemoryInput(t, req, project, session)
-		content, err := claudeInput(mem.text(req.Text), req.Attachments)
+		mem := c.memories().PrepareInput(t, req, project, session)
+		content, err := claudeInput(mem.Text(req.Text), req.Attachments)
 		if err == nil {
 			err = run.Steer(t.ServerID, content)
 		}
-		mem.finish(err == nil)
+		mem.Finish(err == nil)
 		if err != nil {
 			c.dispatch(func() {
 				c.update(t.ID, func(t *Thread) {

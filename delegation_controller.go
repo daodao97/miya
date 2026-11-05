@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"miya/internal/claude"
 	dg "miya/internal/delegation"
 	"miya/internal/model"
 	"miya/internal/textutil"
@@ -287,7 +288,7 @@ func (s *collaborationState) start(task dg.Task) {
 			title += " · " + threadRefTitle(parent)
 			t = Thread{ID: c.nextID(), Agent: task.Agent, Title: title, Project: filepath.Base(task.Workspace), Loaded: true, HistoryLoaded: true, PermissionPolicy: task.Config.Policy}
 			if task.Agent == agentClaude {
-				t.ServerID = newClaudeSessionID()
+				t.ServerID = claude.NewSessionID()
 			}
 			c.addThread(task.Workspace, t)
 		}

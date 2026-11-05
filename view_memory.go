@@ -8,11 +8,12 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"miya/internal/memory"
+	"miya/internal/memory/manager"
 )
 
 type memoryUI struct {
 	scope, project             string
-	list                       memoryList
+	list                       manager.List
 	loadedAt                   time.Time
 	loading, busy              bool
 	err                        string
@@ -21,7 +22,7 @@ type memoryUI struct {
 	version                    uint64
 	kind, content, task, until string
 	file                       string
-	promotion                  *memoryPromotion
+	promotion                  *manager.Promotion
 	filter                     string
 	confirmDelete              string // entry ID awaiting a second click
 }
@@ -32,7 +33,7 @@ type memoryNoticeUI struct {
 	err      string
 }
 
-func (app *chatApp) memoryCall(op string, r memoryRequest, done func(json.RawMessage, error)) {
+func (app *chatApp) memoryCall(op string, r manager.Request, done func(json.RawMessage, error)) {
 	cc := app.c
 	finish := func(v any, err error) {
 		var raw json.RawMessage
@@ -49,7 +50,7 @@ func (app *chatApp) memoryCall(op string, r memoryRequest, done func(json.RawMes
 		}()
 		return
 	}
-	v, err := cc.memoryOp(op, r)
+	v, err := cc.memories().Op(op, r)
 	if d, ok := v.(deferred); ok && err == nil {
 		go func() { v, err := d(); cc.dispatch(func() { finish(v, err) }) }()
 		return
@@ -64,7 +65,7 @@ func (app *chatApp) loadMemory() {
 	m.loading = true
 	project, scope := app.c.cwd, m.scope
 	revision := app.c.memoryRevision
-	app.memoryCall("memoryList", memoryRequest{Project: project, Scope: scope}, func(raw json.RawMessage, err error) {
+	app.memoryCall("memoryList", manager.Request{Project: project, Scope: scope}, func(raw json.RawMessage, err error) {
 		// Don't display a previous project's results after navigation.
 		if app.c.cwd != project || m.scope != scope || revision != app.c.memoryRevision {
 			m.loading = false
@@ -73,11 +74,11 @@ func (app *chatApp) loadMemory() {
 		m.loading = false
 		m.loadedAt = time.Now()
 		if err != nil {
-			m.list = memoryList{}
+			m.list = manager.List{}
 			m.err = err.Error()
 			return
 		}
-		var next memoryList
+		var next manager.List
 		if err = json.Unmarshal(raw, &next); err != nil {
 			m.err = err.Error()
 			return
@@ -86,7 +87,7 @@ func (app *chatApp) loadMemory() {
 		m.err = ""
 	})
 }
-func (app *chatApp) memoryAction(op string, r memoryRequest, done func(json.RawMessage)) {
+func (app *chatApp) memoryAction(op string, r manager.Request, done func(json.RawMessage)) {
 	m := &app.memories
 	if m.busy {
 		return
@@ -112,7 +113,7 @@ func (app *chatApp) memoryView(c *ui.Context) {
 	if m.project != app.c.cwd {
 		*m = memoryUI{project: app.c.cwd, scope: "project", kind: "fact"}
 	}
-	rootProject := m.scope != "user" && memoryRootProject(app.c.cwd)
+	rootProject := m.scope != "user" && manager.RootProject(app.c.cwd)
 	if !rootProject && !m.loading && time.Since(m.loadedAt) > 5*time.Second {
 		app.loadMemory()
 	}
@@ -128,7 +129,7 @@ func (app *chatApp) memoryView(c *ui.Context) {
 			ui.Segmented(c.Key("scope"), &i, tr("Current project"), tr("User preferences")).Label(tr("Memory scope")).Disabled(m.busy || m.editing)
 			if i != before && !m.busy && !m.editing {
 				m.scope = scopes[i]
-				m.list = memoryList{}
+				m.list = manager.List{}
 				m.loadedAt = time.Time{}
 			}
 			if smallButton(c.Key("refresh"), tr("Refresh"), m.loading || m.busy).Clicked() {
@@ -215,28 +216,28 @@ func (app *chatApp) memorySettings(c *ui.Context) {
 			toggle("enabled", tr("Use memory tools in this project"), tr("Allow agents to query, save, correct, and forget memories and use the automatic features below. Disabling this preserves existing memories, which you can still manage here."), enabled, busy, func(v bool) {
 				settings := m.list.Settings
 				settings.Disabled = !v
-				app.memoryAction("memoryConfigure", memoryRequest{Project: app.c.cwd, Settings: &settings}, nil)
+				app.memoryAction("memoryConfigure", manager.Request{Project: app.c.cwd, Settings: &settings}, nil)
 			})
 		},
 		func() {
 			toggle("user-preferences", tr("Include user preferences in searches"), tr("Include cross-project preferences saved under User preferences, such as explanation language and personal habits, when searching this project's memory."), m.list.Settings.UseUserPreferences, busy, func(v bool) {
 				settings := m.list.Settings
 				settings.UseUserPreferences = v
-				app.memoryAction("memoryConfigure", memoryRequest{Project: app.c.cwd, Settings: &settings}, nil)
+				app.memoryAction("memoryConfigure", manager.Request{Project: app.c.cwd, Settings: &settings}, nil)
 			})
 		},
 		func() {
 			toggle("auto-inject", tr("Automatically recall relevant memories when sending"), tr("Find relevant memories locally before sending and attach them to the current agent. Search does not call a model; attached content uses conversation context."), m.list.Settings.AutoInject, busy || !enabled, func(v bool) {
 				settings := m.list.Settings
 				settings.AutoInject = v
-				app.memoryAction("memoryConfigure", memoryRequest{Project: app.c.cwd, Settings: &settings}, nil)
+				app.memoryAction("memoryConfigure", manager.Request{Project: app.c.cwd, Settings: &settings}, nil)
 			})
 		},
 		func() {
 			toggle("auto-extract", tr("Automatically extract memories after each turn"), tr("Save stable preferences, explicit decisions, and reusable lessons in the background, adding at most one entry per turn. Task progress is excluded and no chat notice is inserted. Edit or forget entries here. Uses the selected agent's quota."), m.list.Settings.AutoExtract, busy || !enabled || !m.list.ExtractorAvailable && !m.list.Settings.AutoExtract, func(v bool) {
 				settings := m.list.Settings
 				settings.AutoExtract = v
-				app.memoryAction("memoryConfigure", memoryRequest{Project: app.c.cwd, Settings: &settings}, nil)
+				app.memoryAction("memoryConfigure", manager.Request{Project: app.c.cwd, Settings: &settings}, nil)
 			})
 			if len(m.list.Extractors) == 0 {
 				mutedText(c, tr("This background service does not support choosing an extraction agent yet. Upgrade to configure it.")).LineHeight(1.5)
@@ -259,7 +260,7 @@ func (app *chatApp) memorySettings(c *ui.Context) {
 						if button.Clicked() && agent != m.list.Settings.ExtractionAgent() {
 							settings := m.list.Settings
 							settings.ExtractorAgent = agent
-							app.memoryAction("memoryConfigure", memoryRequest{Project: app.c.cwd, Settings: &settings}, nil)
+							app.memoryAction("memoryConfigure", manager.Request{Project: app.c.cwd, Settings: &settings}, nil)
 						}
 					}
 				})
@@ -274,7 +275,7 @@ func (app *chatApp) memorySettings(c *ui.Context) {
 		rows = append(rows, func() {
 			toggle("session-memory", tr("Use automatic memory in this conversation"), tr("Follow the project's automatic recall and extraction settings. Disabling this only stops automatic features for this conversation; manual memory tools remain available."), !cur.MemoryDisabled, busy, func(v bool) {
 				disabled := !v
-				app.memoryAction("memorySessionConfigure", memoryRequest{Project: app.c.cwd, Thread: cur.ID, SessionDisabled: &disabled}, nil)
+				app.memoryAction("memorySessionConfigure", manager.Request{Project: app.c.cwd, Thread: cur.ID, SessionDisabled: &disabled}, nil)
 			})
 		})
 	}
@@ -350,7 +351,7 @@ func (app *chatApp) memoryRow(c *ui.Context, e memory.Entry) {
 		for i, src := range e.Sources {
 			app.memorySourceView(c.Key(i), src)
 		}
-		req := memoryRequest{Project: app.c.cwd, Scope: m.scope, ID: e.ID, Version: e.Version, Thread: app.c.active()}
+		req := manager.Request{Project: app.c.cwd, Scope: m.scope, ID: e.ID, Version: e.Version, Thread: app.c.active()}
 		// Delete removes the record from this list. Miya keeps the tombstone, so
 		// the old content still cannot be extracted again. Two clicks are needed.
 		deleteButton := func() {
@@ -397,7 +398,7 @@ func (app *chatApp) memoryRow(c *ui.Context, e memory.Entry) {
 					m.content = e.Content
 					m.kind = e.Kind
 					m.file = "AGENTS.md"
-					m.promotion = &memoryPromotion{}
+					m.promotion = &manager.Promotion{}
 				}
 			}
 			if smallButton(c.Key("forget"), tr("Forget"), m.busy).TextColor(danger).Clicked() {
@@ -489,7 +490,7 @@ func (app *chatApp) memoryForm(c *ui.Context) {
 				m.editing = false
 			}
 			if ui.PrimaryButton(c.Key("save"), tr("Save memory")).Disabled(m.busy || strings.TrimSpace(m.content) == "").Clicked() {
-				app.memoryAction("memorySave", memoryRequest{Project: app.c.cwd, Scope: m.scope, ID: m.id, Version: m.version, Kind: m.kind, Content: m.content, TaskKey: m.task, ValidUntil: m.until, Thread: app.c.active()}, func(json.RawMessage) { m.editing = false })
+				app.memoryAction("memorySave", manager.Request{Project: app.c.cwd, Scope: m.scope, ID: m.id, Version: m.version, Kind: m.kind, Content: m.content, TaskKey: m.task, ValidUntil: m.until, Thread: app.c.active()}, func(json.RawMessage) { m.editing = false })
 			}
 		})
 	})
@@ -507,16 +508,16 @@ func (app *chatApp) memoryPromotionView(c *ui.Context, e memory.Entry) {
 		ui.Segmented(c.Key("file"), &i, files...).Label(tr("Target file")).Disabled(m.busy).AlignSelf(ui.Start)
 		if i != before && !m.busy {
 			m.file = files[i]
-			m.promotion = &memoryPromotion{}
+			m.promotion = &manager.Promotion{}
 		}
 		if ui.TextArea(c.Key("wording"), &m.content).Lines(2, 6).FillWidth().Label(tr("Suggested wording")).Changed() {
-			m.promotion = &memoryPromotion{}
+			m.promotion = &manager.Promotion{}
 		}
-		req := memoryRequest{Project: app.c.cwd, ID: e.ID, Version: e.Version, File: m.file, Content: m.content, Thread: app.c.active()}
+		req := manager.Request{Project: app.c.cwd, ID: e.ID, Version: e.Version, File: m.file, Content: m.content, Thread: app.c.active()}
 		ui.Row(c).Wrap().Gap(8).Children(func() {
 			if smallButton(c.Key("preview"), tr("Preview file changes"), m.busy || strings.TrimSpace(m.content) == "").Clicked() {
 				app.memoryAction("memoryPromotionPreview", req, func(raw json.RawMessage) {
-					var p memoryPromotion
+					var p manager.Promotion
 					if json.Unmarshal(raw, &p) == nil {
 						m.promotion = &p
 					}
@@ -558,7 +559,7 @@ func (app *chatApp) memoryNoticeView(c *ui.Context, n *MemoryNotice) {
 	}
 	if !state.loading && time.Since(state.loadedAt) > 3*time.Second {
 		state.loading = true
-		app.memoryCall("memoryGet", memoryRequest{Project: n.Project, Scope: n.Scope, ID: n.ID, Version: n.Version}, func(raw json.RawMessage, err error) {
+		app.memoryCall("memoryGet", manager.Request{Project: n.Project, Scope: n.Scope, ID: n.ID, Version: n.Version}, func(raw json.RawMessage, err error) {
 			state.loading = false
 			state.loadedAt = time.Now()
 			state.entry = memory.Entry{}
@@ -597,7 +598,7 @@ func (app *chatApp) memoryNoticeView(c *ui.Context, n *MemoryNotice) {
 			ui.Text(c, memoryStateLabel(e.State)).FontSize(12).TextColor(muted)
 		}
 		if ui.Button(c.Key("undo"), tr("Undo memory change")).Disabled(app.memories.busy).Clicked() {
-			app.memoryAction("memoryForget", memoryRequest{Project: n.Project, Scope: n.Scope, ID: n.ID, Version: n.Version}, nil)
+			app.memoryAction("memoryForget", manager.Request{Project: n.Project, Scope: n.Scope, ID: n.ID, Version: n.Version}, nil)
 		}
 	})
 }

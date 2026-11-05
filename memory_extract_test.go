@@ -10,6 +10,7 @@ import (
 	"miya/internal/claude"
 	"miya/internal/memory"
 	"miya/internal/memory/extractor"
+	"miya/internal/memory/manager"
 )
 
 func TestMemorySuccessfulCompletionCapturedBeforeQueueAndDeduplicated(t *testing.T) {
@@ -18,13 +19,13 @@ func TestMemorySuccessfulCompletionCapturedBeforeQueueAndDeduplicated(t *testing
 			c, d := queueController(t)
 			attachMemory(t, c)
 			scope, _ := memory.ProjectScope(c.cwd)
-			if err := c.memory.Configure(scope, memory.Settings{AutoExtract: true}); err != nil {
+			if err := c.memories().Store.Configure(scope, memory.Settings{AutoExtract: true}); err != nil {
 				t.Fatal(err)
 			}
 			c.referenceSource = testReferenceSource
-			c.memoryEngine = extractor.NewIdleEngine()
+			c.memories().Engine = extractor.NewIdleEngine()
 			c.setThreads([]Thread{{ID: 1, Agent: agent, ServerID: "session", Busy: true, TurnID: "turn-1", Messages: []Message{{ID: 10, Role: "user", Content: "本项目手机构建使用 scripts/build-ios.sh", SentAtMs: time.Now().UnixMilli()}, {ID: 11, Role: "assistant", Content: "已确认。", SentAtMs: time.Now().UnixMilli()}}}})
-			c.memoryTurns = map[int]memoryTurn{1: {LocalID: "local-turn-1", FirstMessage: 10}}
+			c.memories().Turns = map[int]manager.Turn{1: {LocalID: "local-turn-1", FirstMessage: 10}}
 			if agent == agentCodex {
 				c.handle(event("turn/completed", `{"threadId":"session","turn":{"id":"turn-1","status":"completed"}}`))
 				c.handle(event("turn/completed", `{"threadId":"session","turn":{"id":"turn-1","status":"completed"}}`))
@@ -33,12 +34,12 @@ func TestMemorySuccessfulCompletionCapturedBeforeQueueAndDeduplicated(t *testing
 				c.handleClaude(1, f)
 				c.handleClaude(1, f)
 			}
-			waitCodexResume(t, c, d, func() bool { return c.memoryCalls == 0 })
-			status, err := c.memory.ExtractionStatus(scope)
+			waitCodexResume(t, c, d, func() bool { return c.memories().Calls == 0 })
+			status, err := c.memories().Store.ExtractionStatus(scope)
 			if err != nil || status.Pending != 1 {
 				t.Fatalf("completion not captured exactly once: %+v %v", status, err)
 			}
-			_, job, ok, err := c.memory.ClaimExtraction()
+			_, job, ok, err := c.memories().Store.ClaimExtraction()
 			if err != nil || !ok || len(job.Evidence) < 2 || job.Evidence[0].Text != "本项目手机构建使用 scripts/build-ios.sh" {
 				t.Fatalf("invalid captured round: %+v %v", job, err)
 			}
@@ -52,8 +53,8 @@ func TestMemoryFailedStoppedSubAgentAndHistoryDoNotExtract(t *testing.T) {
 			c, d := queueController(t)
 			attachMemory(t, c)
 			scope, _ := memory.ProjectScope(c.cwd)
-			_ = c.memory.Configure(scope, memory.Settings{AutoExtract: true})
-			c.memoryEngine = extractor.NewIdleEngine()
+			_ = c.memories().Store.Configure(scope, memory.Settings{AutoExtract: true})
+			c.memories().Engine = extractor.NewIdleEngine()
 			th := Thread{ID: 1, Agent: agentClaude, ServerID: "session", Busy: true, Messages: []Message{{ID: 10, Role: "user", Content: "Memory"}, {ID: 11, Role: "assistant", Content: "回复"}}}
 			if variant == "stopped" {
 				th.StopRequested = true
@@ -66,7 +67,7 @@ func TestMemoryFailedStoppedSubAgentAndHistoryDoNotExtract(t *testing.T) {
 			}
 			c.setThreads([]Thread{th})
 			if variant != "history" {
-				c.memoryTurns = map[int]memoryTurn{1: {LocalID: "local", FirstMessage: 10}}
+				c.memories().Turns = map[int]manager.Turn{1: {LocalID: "local", FirstMessage: 10}}
 			}
 			f := claude.Frame{Type: "result", UUID: "result", KeepingAlive: true, IsError: variant == "failed"}
 			if variant == "child" {
@@ -74,8 +75,8 @@ func TestMemoryFailedStoppedSubAgentAndHistoryDoNotExtract(t *testing.T) {
 			}
 			c.handleClaude(1, f)
 			d.drain()
-			status, _ := c.memory.ExtractionStatus(scope)
-			if status.Pending != 0 || c.memoryCalls != 0 {
+			status, _ := c.memories().Store.ExtractionStatus(scope)
+			if status.Pending != 0 || c.memories().Calls != 0 {
 				t.Fatal("non-user successful turn entered extraction")
 			}
 		})
@@ -86,18 +87,18 @@ func TestMemoryOversizedCompletedRoundReportsSkippedExtraction(t *testing.T) {
 	c, d := queueController(t)
 	attachMemory(t, c)
 	scope, _ := memory.ProjectScope(c.cwd)
-	if err := c.memory.Configure(scope, memory.Settings{AutoExtract: true}); err != nil {
+	if err := c.memories().Store.Configure(scope, memory.Settings{AutoExtract: true}); err != nil {
 		t.Fatal(err)
 	}
-	c.memoryEngine = extractor.NewIdleEngine()
+	c.memories().Engine = extractor.NewIdleEngine()
 	c.setThreads([]Thread{{ID: 1, ServerID: "session", Messages: []Message{
 		{ID: 10, Role: "user", Content: strings.Repeat("问", memory.MaxExtractionInput), SentAtMs: time.Now().UnixMilli()},
 		{ID: 11, Role: "assistant", Content: "Completed", SentAtMs: time.Now().UnixMilli()},
 	}}})
-	c.memoryTurns = map[int]memoryTurn{1: {LocalID: "local", FirstMessage: 10}}
-	c.completedMemoryTurn(1, "turn")
-	waitCodexResume(t, c, d, func() bool { return c.memoryCalls == 0 })
-	status, err := c.memory.ExtractionStatus(scope)
+	c.memories().Turns = map[int]manager.Turn{1: {LocalID: "local", FirstMessage: 10}}
+	c.memories().CompletedTurn(1, "turn")
+	waitCodexResume(t, c, d, func() bool { return c.memories().Calls == 0 })
+	status, err := c.memories().Store.ExtractionStatus(scope)
 	if err != nil || status.Failed != 1 || !strings.Contains(status.LastError, "input exceeds the limit") {
 		t.Fatalf("skipped round has no visible diagnostic: %+v %v", status, err)
 	}
@@ -110,20 +111,20 @@ func TestMemoryLongFinalAnswerIsShortenedInsteadOfSkippingRound(t *testing.T) {
 	c, d := queueController(t)
 	attachMemory(t, c)
 	scope, _ := memory.ProjectScope(c.cwd)
-	if err := c.memory.Configure(scope, memory.Settings{AutoExtract: true}); err != nil {
+	if err := c.memories().Store.Configure(scope, memory.Settings{AutoExtract: true}); err != nil {
 		t.Fatal(err)
 	}
-	c.memoryEngine = extractor.NewIdleEngine()
+	c.memories().Engine = extractor.NewIdleEngine()
 	answer := "构建入口是 scripts/build-ios.sh。" + strings.Repeat("答", memory.MaxExtractionInput)
 	c.setThreads([]Thread{{ID: 1, ServerID: "session", Messages: []Message{
 		{ID: 10, Role: "user", Content: "手机构建", SentAtMs: time.Now().UnixMilli()},
 		{ID: 11, Role: "tool", Status: "completed", Content: "build succeeded", SentAtMs: time.Now().UnixMilli()},
 		{ID: 12, Role: "assistant", Content: answer, SentAtMs: time.Now().UnixMilli()},
 	}}})
-	c.memoryTurns = map[int]memoryTurn{1: {LocalID: "local", FirstMessage: 10}}
-	c.completedMemoryTurn(1, "turn")
-	waitCodexResume(t, c, d, func() bool { return c.memoryCalls == 0 })
-	_, job, ok, err := c.memory.ClaimExtraction()
+	c.memories().Turns = map[int]manager.Turn{1: {LocalID: "local", FirstMessage: 10}}
+	c.memories().CompletedTurn(1, "turn")
+	waitCodexResume(t, c, d, func() bool { return c.memories().Calls == 0 })
+	_, job, ok, err := c.memories().Store.ClaimExtraction()
 	if err != nil || !ok {
 		t.Fatalf("long final answer dropped the round: %v %v", ok, err)
 	}
@@ -142,16 +143,16 @@ func TestMemoryLongFinalAnswerIsShortenedInsteadOfSkippingRound(t *testing.T) {
 func TestMemorySkippedTurnClearsFailedTurnRecord(t *testing.T) {
 	c, _ := queueController(t)
 	attachMemory(t, c)
-	c.memoryTurns = map[int]memoryTurn{1: {LocalID: "failed", FirstMessage: 10}}
+	c.memories().Turns = map[int]manager.Turn{1: {LocalID: "failed", FirstMessage: 10}}
 	thread := Thread{ID: 1}
-	c.beginMemoryTurn(thread, SendRequest{Text: "/compact", Steer: true}, 20)
-	if c.memoryTurns[1].LocalID != "failed" {
+	c.memories().BeginTurn(thread, SendRequest{Text: "/compact", Steer: true}, 20)
+	if c.memories().Turns[1].LocalID != "failed" {
 		t.Fatal("steer into a running turn must keep its record")
 	}
-	if got := c.beginMemoryTurn(thread, SendRequest{Text: "/compact"}, 20); got != "" {
+	if got := c.memories().BeginTurn(thread, SendRequest{Text: "/compact"}, 20); got != "" {
 		t.Fatalf("command turn joined memory: %q", got)
 	}
-	if _, ok := c.memoryTurns[1]; ok {
+	if _, ok := c.memories().Turns[1]; ok {
 		t.Fatal("failed turn record would be extracted with the command's output")
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"miya/internal/appdir"
+	"miya/internal/claude"
 	"os"
 	"path/filepath"
 	"sync"
@@ -87,14 +88,14 @@ func forkClaudeSessionBefore(path string, prompt int) (string, error) {
 	if cut <= 0 {
 		return "", errors.New("This message was not found in Claude Code conversation history")
 	}
-	id := newClaudeSessionID()
+	id := claude.NewSessionID()
 	var out bytes.Buffer
 	var parent any
 	for _, l := range chain[:cut] {
 		if l.e.Type == "progress" {
 			continue
 		}
-		uuid := newClaudeSessionID()
+		uuid := claude.NewSessionID()
 		raw := l.raw
 		raw["uuid"], raw["parentUuid"], raw["sessionId"], raw["isSidechain"] = uuid, parent, id, false
 		if _, ok := raw["session_id"]; ok {

@@ -5,6 +5,7 @@ package main
 import (
 	"miya/internal/memory"
 	"miya/internal/memory/extractor/extractortest"
+	"miya/internal/memory/manager"
 	"testing"
 )
 
@@ -15,8 +16,8 @@ func TestMemoryCodexExtractorDoesNotRequireClaude(t *testing.T) {
 	attachMemory(t, c)
 	c.claudeBinary = ""
 	settings := memory.Settings{AutoExtract: true, ExtractorAgent: agentCodex}
-	completeMemory(t, c, "memoryConfigure", memoryRequest{Settings: &settings})
-	list := completeMemory(t, c, "memoryList", memoryRequest{}).(memoryList)
+	completeMemory(t, c, "memoryConfigure", manager.Request{Settings: &settings})
+	list := completeMemory(t, c, "memoryList", manager.Request{}).(manager.List)
 	if !list.ExtractorAvailable || list.Settings.ExtractionAgent() != agentCodex || len(list.Extractors) != 2 {
 		t.Fatalf("Codex selection still requires Claude: %+v", list)
 	}
@@ -27,7 +28,7 @@ func TestMemoryCodexExtractorDoesNotRequireClaude(t *testing.T) {
 	}
 	other := t.TempDir()
 	c.setProjects(append(c.projects(), Project{Path: other}))
-	list = completeMemory(t, c, "memoryList", memoryRequest{Project: other}).(memoryList)
+	list = completeMemory(t, c, "memoryList", manager.Request{Project: other}).(manager.List)
 	if list.Settings.ExtractionAgent() != agentClaude || list.Settings.AutoExtract {
 		t.Fatal("extractor selection leaked to another project")
 	}
@@ -40,19 +41,19 @@ func TestMemoryUnavailableExtractorSwitchDoesNotReplaceWorkingAgent(t *testing.T
 	attachMemory(t, c)
 	c.claudeBinary = "configured-claude"
 	settings := memory.Settings{AutoExtract: true, ExtractorAgent: agentClaude}
-	completeMemory(t, c, "memoryConfigure", memoryRequest{Settings: &settings})
+	completeMemory(t, c, "memoryConfigure", manager.Request{Settings: &settings})
 	settings.ExtractorAgent = agentCodex
-	value, err := c.memoryOp("memoryConfigure", memoryRequest{Settings: &settings})
+	value, err := c.memories().Op("memoryConfigure", manager.Request{Settings: &settings})
 	if d, ok := value.(deferred); ok && err == nil {
 		_, err = d()
 	}
 	if err == nil {
 		t.Fatal("active extraction switched to missing Codex")
 	}
-	list := completeMemory(t, c, "memoryList", memoryRequest{}).(memoryList)
+	list := completeMemory(t, c, "memoryList", manager.Request{}).(manager.List)
 	if list.Settings.ExtractionAgent() != agentClaude || !list.Settings.AutoExtract {
 		t.Fatal("failed switch replaced working settings")
 	}
 	settings.AutoExtract = false
-	completeMemory(t, c, "memoryConfigure", memoryRequest{Settings: &settings})
+	completeMemory(t, c, "memoryConfigure", manager.Request{Settings: &settings})
 }

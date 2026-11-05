@@ -65,7 +65,7 @@ func TestServiceRestartWhenIdleChecksAllWork(t *testing.T) {
 			case "background-project":
 				c.projectCache["/other"] = []Thread{{ID: 2, Busy: true}}
 			case "memory":
-				c.memoryCalls = 1
+				c.memories().Calls = 1
 			}
 			if _, err := s.handle(nil, svcRequest{Op: "quitWhenIdle"}); err != nil {
 				t.Fatal(err)
@@ -83,7 +83,7 @@ func TestServiceRestartWhenIdleChecksAllWork(t *testing.T) {
 			}
 			c.setThreads(nil)
 			c.projectCache = nil
-			c.memoryCalls = 0
+			c.memories().Calls = 0
 			if _, err := s.handle(nil, svcRequest{Op: "quitWhenIdle"}); err != nil || !stopped() {
 				t.Fatal("idle service did not stop promptly")
 			}

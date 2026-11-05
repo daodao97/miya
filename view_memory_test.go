@@ -9,6 +9,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"miya/internal/memory"
 	"miya/internal/memory/extractor/extractortest"
+	"miya/internal/memory/manager"
 )
 
 func TestMemoryManagementPageAndPromotionPreview(t *testing.T) {
@@ -22,8 +23,8 @@ func TestMemoryManagementPageAndPromotionPreview(t *testing.T) {
 			} else {
 				app.appearance = "light"
 			}
-			e := completeMemory(t, c, "memorySave", memoryRequest{Kind: "fact", Content: "本周暂缓手机协议升级"}).(memory.Entry)
-			list := completeMemory(t, c, "memoryList", memoryRequest{}).(memoryList)
+			e := completeMemory(t, c, "memorySave", manager.Request{Kind: "fact", Content: "本周暂缓手机协议升级"}).(memory.Entry)
+			list := completeMemory(t, c, "memoryList", manager.Request{}).(manager.List)
 			app.memoryRevisionSeen = c.memoryRevision
 			app.section = "Settings"
 			app.settingsTab = 4
@@ -49,7 +50,7 @@ func TestMemoryManagementPageAndPromotionPreview(t *testing.T) {
 			if err := tt.Click("Cancel"); err != nil {
 				t.Fatal(err)
 			}
-			app.memories.promotion = &memoryPromotion{File: "AGENTS.md", After: "长期约定\n"}
+			app.memories.promotion = &manager.Promotion{File: "AGENTS.md", After: "长期约定\n"}
 			app.memories.id = e.ID
 			app.memories.version = e.Version
 			app.memories.content = e.Content
@@ -71,7 +72,7 @@ func TestMemoryExtractorPickerSavesAgentWithoutEnablingAutomation(t *testing.T) 
 	c.claudeBinary = "configured-claude"
 	d := &testDispatch{}
 	c.run = d.push
-	list := completeMemory(t, c, "memoryList", memoryRequest{}).(memoryList)
+	list := completeMemory(t, c, "memoryList", manager.Request{}).(manager.List)
 	d.drain()
 	app.section = "Settings"
 	app.settingsTab = 4
@@ -83,10 +84,10 @@ func TestMemoryExtractorPickerSavesAgentWithoutEnablingAutomation(t *testing.T) 
 	}
 	scope, _ := memory.ProjectScope(c.cwd)
 	waitCodexResume(t, c, d, func() bool {
-		_, settings, _, err := c.memory.List(scope)
+		_, settings, _, err := c.memories().Store.List(scope)
 		return err == nil && settings.ExtractionAgent() == agentCodex && !app.memories.busy
 	})
-	_, settings, _, _ := c.memory.List(scope)
+	_, settings, _, _ := c.memories().Store.List(scope)
 	if settings.AutoExtract || settings.AutoInject {
 		t.Fatal("choosing extractor unexpectedly enabled automation")
 	}
@@ -98,7 +99,7 @@ func TestMemoryExtractionFailureReasonVisible(t *testing.T) {
 	app, tt := testApp(t)
 	attachMemory(t, app.c)
 	app.section, app.settingsTab = "Settings", 4
-	app.memories = memoryUI{scope: "project", project: app.c.cwd, loadedAt: time.Now(), list: memoryList{
+	app.memories = memoryUI{scope: "project", project: app.c.cwd, loadedAt: time.Now(), list: manager.List{
 		Extraction: memory.ExtractionStatus{Failed: 1, LastError: "Extraction input exceeds the limit. Skipped this turn."},
 	}}
 	tt.Frame()
@@ -110,7 +111,7 @@ func TestMemoryExplicitNoticeContainsScopeAndUndo(t *testing.T) {
 	app, tt := testApp(t)
 	c := app.c
 	attachMemory(t, c)
-	e := completeMemory(t, c, "memorySave", memoryRequest{Scope: "user", Kind: "preference", Content: "偏好中文解释"}).(memory.Entry)
+	e := completeMemory(t, c, "memorySave", manager.Request{Scope: "user", Kind: "preference", Content: "偏好中文解释"}).(memory.Entry)
 	notice := &MemoryNotice{Explicit: true, Scope: "user", ID: e.ID, Version: e.Version}
 	c.setThreads([]Thread{{ID: 1, ServerID: "session", HistoryLoaded: true, Messages: []Message{{ID: 10, Role: "user", Content: "记住"}, {ID: 11, Role: "tool", Kind: "commandExecution"}, {ID: 12, Role: "tool", Kind: "commandExecution"}, {ID: 13, Role: "memory", Memory: notice}}}})
 	c.setActive(1)
@@ -124,7 +125,7 @@ func TestMemoryExplicitNoticeContainsScopeAndUndo(t *testing.T) {
 		}
 	}
 	automationSnapshot(t, tt, "memory-notice")
-	e = completeMemory(t, c, "memoryForget", memoryRequest{Scope: "user", ID: e.ID, Version: e.Version}).(memory.Entry)
+	e = completeMemory(t, c, "memoryForget", manager.Request{Scope: "user", ID: e.ID, Version: e.Version}).(memory.Entry)
 	app.memoryRevisionSeen = c.memoryRevision
 	app.memoryNotes[key] = &memoryNoticeUI{entry: e, loadedAt: time.Now()}
 	tt.Frame()
@@ -158,7 +159,7 @@ func TestMobileMemoryReadOnlyPageAndDesktopIsolation(t *testing.T) {
 	m.state.Memory = true
 	m.memories = mobileMemory{project: "/a", scope: "project", requestedAt: time.Now()}
 	at := time.Date(2026, 11, 2, 8, 0, 0, 0, time.UTC)
-	list := memoryList{Entries: []memory.Entry{{ID: "memory", Version: 1, Content: "本周暂缓手机协议升级", Kind: "fact", State: "active", ObservedAt: at}}}
+	list := manager.List{Entries: []memory.Entry{{ID: "memory", Version: 1, Content: "本周暂缓手机协议升级", Kind: "fact", State: "active", ObservedAt: at}}}
 	data, _ := json.Marshal(phoneMemoryResult{Project: "/a", Scope: "project", List: list})
 	m.receiveMemory(data, "")
 	tt := ui.NewTester(m.viewRoot, 390, 844)
@@ -180,7 +181,7 @@ func TestMobileMemoryReadOnlyPageAndDesktopIsolation(t *testing.T) {
 	}
 	automationSnapshot(t, tt, "memory-mobile")
 	// A delayed response from another project must not populate this page.
-	other, _ := json.Marshal(phoneMemoryResult{Project: "/b", Scope: "project", List: memoryList{}})
+	other, _ := json.Marshal(phoneMemoryResult{Project: "/b", Scope: "project", List: manager.List{}})
 	m.receiveMemory(other, "")
 	if len(m.memories.list.Entries) != 1 {
 		t.Fatal("foreign response changed active page")
@@ -197,9 +198,9 @@ func TestMemoryRefreshReplacesOmittedSettingsAndOldEntries(t *testing.T) {
 	attachMemory(t, c)
 	callbacks := make(chan func(), 4)
 	c.run = func(f func()) { callbacks <- f }
-	app.memories = memoryUI{project: c.cwd, scope: "project", list: memoryList{Entries: []memory.Entry{{ID: "old", Content: "旧正文"}}, Settings: memory.Settings{UseUserPreferences: true}}}
+	app.memories = memoryUI{project: c.cwd, scope: "project", list: manager.List{Entries: []memory.Entry{{ID: "old", Content: "旧正文"}}, Settings: memory.Settings{UseUserPreferences: true}}}
 	app.loadMemory()
-	for app.memories.loading || c.memoryCalls > 0 {
+	for app.memories.loading || c.memories().Calls > 0 {
 		select {
 		case f := <-callbacks:
 			f()

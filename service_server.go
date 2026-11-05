@@ -12,6 +12,7 @@ import (
 	"miya/internal/notification"
 	"miya/internal/remote"
 	"miya/internal/webservice"
+	"miya/internal/memory/manager"
 	"net"
 	"os"
 	"path/filepath"
@@ -87,12 +88,12 @@ func (p *svcPeer) write(data []byte) error {
 
 func newService(c *chatController, ex *executor) *service {
 	c.runtimePath = filepath.Join(appdir.Dir(), "runtime.json")
-	c.memory = memory.New(filepath.Join(appdir.Dir(), "memory"))
+	c.memories().Store = memory.New(filepath.Join(appdir.Dir(), "memory"))
 	s := &service{c: c, exec: ex, peers: map[*svcPeer]bool{}, dirty: make(chan struct{}, 1), quit: make(chan struct{}), idleTimeout: serviceIdleTimeout}
 	c.push = notification.NewHub()
 	c.run = ex.push
 	c.onDraftReturned = s.draftReturned
-	c.memoryEngine = newMemoryEngine(c)
+	c.memories().Engine = newMemoryEngine(c)
 	c.collaboration = newCollaboration(c, filepath.Join(appdir.Dir(), "delegations"))
 	return s
 }
@@ -109,8 +110,8 @@ func (s *service) stop() {
 		if s.c.collaboration != nil {
 			s.c.collaboration.cancel()
 		}
-		if s.c.memoryEngine != nil {
-			s.c.memoryEngine.Stop()
+		if s.c.memories().Engine != nil {
+			s.c.memories().Engine.Stop()
 		}
 		close(s.quit)
 	})
@@ -317,11 +318,11 @@ func (s *service) handle(p *svcPeer, req svcRequest) (any, error) {
 		}
 		return c.collaborationUserOp(r)
 	case "memoryList", "memoryGet", "memorySave", "memoryForget", "memoryDelete", "memoryConfigure", "memorySessionConfigure", "memoryPromoteUser", "memoryPromotionPreview", "memoryPromoteFile":
-		var r memoryRequest
+		var r manager.Request
 		if err := arg(&r); err != nil {
 			return nil, err
 		}
-		return c.memoryOp(req.Op, r)
+		return c.memories().Op(req.Op, r)
 	case "automationList", "automationDraft", "automationSave", "automationToggle", "automationDelete", "automationRunNow":
 		var r automation.Request
 		if err := arg(&r); err != nil {
@@ -483,8 +484,8 @@ func (s *service) handle(p *svcPeer, req svcRequest) (any, error) {
 		s.stop()
 	case "quitWhenIdle":
 		s.quitWhenIdle = true
-		if c.memoryEngine != nil {
-			c.memoryEngine.Pause()
+		if c.memories().Engine != nil {
+			c.memories().Engine.Pause()
 		}
 		if !s.busy() {
 			s.stop()
@@ -509,7 +510,7 @@ func (s *service) busy() bool {
 	if s.c.runtimeBusy() {
 		return true
 	}
-	if s.c.memoryCalls > 0 || s.c.memoryEngine != nil && s.c.memoryEngine.Busy() || len(s.c.claudeRuns) > 0 {
+	if s.c.memories().Calls > 0 || s.c.memories().Engine != nil && s.c.memories().Engine.Busy() || len(s.c.claudeRuns) > 0 {
 		return true
 	}
 	for _, t := range s.c.threads() {

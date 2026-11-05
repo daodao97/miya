@@ -1,25 +1,24 @@
-package main
+package manager
 
 import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"log"
+	"miya/internal/claude"
+	"miya/internal/memory"
+	"miya/internal/model"
 	"strings"
 	"time"
 	"unicode/utf8"
-
-	"miya/internal/claude"
-	"miya/internal/memory"
-	"miya/internal/memory/extractor"
 )
 
-type memoryTurn struct {
+type Turn struct {
 	LocalID      string
 	FirstMessage int
 }
 
-func memoryTaskKey(t Thread, session string) string {
+func TaskKey(t model.Thread, session string) string {
 	for _, task := range t.Tasks {
 		if task.Kind == "goal" && task.ID != "" && (task.Status == "running" || task.Status == "in_progress" || task.Status == "active") {
 			sum := sha256.Sum256([]byte(task.Title))
@@ -29,53 +28,53 @@ func memoryTaskKey(t Thread, session string) string {
 	return "session:" + session
 }
 
-func (c *chatController) beginMemoryTurn(t Thread, req SendRequest, firstMessage int) string {
-	if c.memory == nil || t.MemoryDisabled || t.Automation != "" || req.MemoryControl || req.KeepSessionSettings || memoryCommand(req.Text) {
+func (mg *Manager) BeginTurn(t model.Thread, req model.SendRequest, firstMessage int) string {
+	if mg.Store == nil || t.MemoryDisabled || t.Automation != "" || req.MemoryControl || req.KeepSessionSettings || Command(req.Text) {
 		// A failed turn never completes, so its record would otherwise attach the
 		// next skipped turn's output to the failed turn's messages.
 		if !req.Steer {
-			delete(c.memoryTurns, t.ID)
+			delete(mg.Turns, t.ID)
 		}
 		return ""
 	}
-	if c.memoryTurns == nil {
-		c.memoryTurns = map[int]memoryTurn{}
+	if mg.Turns == nil {
+		mg.Turns = map[int]Turn{}
 	}
 	if req.Steer {
-		return c.memoryTurns[t.ID].LocalID
+		return mg.Turns[t.ID].LocalID
 	}
-	turn := memoryTurn{newClaudeSessionID(), firstMessage}
-	c.memoryTurns[t.ID] = turn
+	turn := Turn{claude.NewSessionID(), firstMessage}
+	mg.Turns[t.ID] = turn
 	return turn.LocalID
 }
 
-func (c *chatController) completedMemoryTurn(id int, backendTurn string) {
-	turn, ok := c.memoryTurns[id]
-	if !ok || c.memoryEngine == nil || backendTurn == "" {
+func (mg *Manager) CompletedTurn(id int, backendTurn string) {
+	turn, ok := mg.Turns[id]
+	if !ok || mg.Engine == nil || backendTurn == "" {
 		return
 	}
-	t := c.threadWithID(id)
-	session := c.threadRef(t).URL()
+	t := mg.Host.Thread(id)
+	session := mg.Host.ThreadRef(t).URL()
 	key := session + ":" + backendTurn
-	if c.memoryResults[key] {
+	if mg.results[key] {
 		return
 	}
-	delete(c.memoryTurns, id)
-	if c.memoryResults == nil {
-		c.memoryResults = map[string]bool{}
+	delete(mg.Turns, id)
+	if mg.results == nil {
+		mg.results = map[string]bool{}
 	}
-	c.memoryResults[key] = true
-	if len(c.memoryResults) > 1000 {
-		c.memoryResults = map[string]bool{key: true}
+	mg.results[key] = true
+	if len(mg.results) > 1000 {
+		mg.results = map[string]bool{key: true}
 	}
 	if t.StopRequested || t.MemoryDisabled || t.Automation != "" {
 		return
 	}
-	scope, err := memory.ProjectScope(c.threadWorkspace(id))
+	scope, err := memory.ProjectScope(mg.Host.Workspace(id))
 	if err != nil {
 		return
 	}
-	job := memory.ExtractionJob{Session: session, TurnID: backendTurn, TaskKey: memoryTaskKey(t, session)}
+	job := memory.ExtractionJob{Session: session, TurnID: backendTurn, TaskKey: TaskKey(t, session)}
 	var tools []memory.Evidence
 	var final *memory.Evidence
 	for _, m := range t.Messages {
@@ -102,7 +101,7 @@ func (c *chatController) completedMemoryTurn(id int, backendTurn string) {
 		text := m.Content
 		if m.Role == "user" {
 			text = memory.StripContext(text)
-			text, _ = splitReferenceContext(text)
+			text = mg.Host.OwnText(text)
 		}
 		if strings.TrimSpace(text) == "" {
 			continue
@@ -153,27 +152,16 @@ func (c *chatController) completedMemoryTurn(id int, backendTurn string) {
 			job = candidate
 		}
 	}
-	c.memoryCalls++
-	engine := c.memoryEngine
+	mg.Calls++
+	engine := mg.Engine
 	go func() {
-		if _, err := c.memory.EnqueueExtraction(scope, job); err != nil {
+		if _, err := mg.Store.EnqueueExtraction(scope, job); err != nil {
 			log.Printf("memory extraction enqueue failed: %v", err)
 		}
-		c.dispatch(func() {
-			c.memoryCalls--
-			c.memoryChanged()
+		mg.Host.Dispatch(func() {
+			mg.Calls--
+			mg.Host.Changed()
 		})
 		engine.Wakeup()
 	}()
-}
-
-func newMemoryEngine(c *chatController) *extractor.Engine {
-	cfg := claude.CLI{Binary: c.claudeBinary, Args: append([]string(nil), c.claudeArgs...), Env: append([]string(nil), c.claudeEnv...)}
-	return extractor.NewEngine(c.parentContext(), c.memory, cfg, c.memorySaved)
-}
-
-// memorySaved hears of the memories the engine saved. Automatic extraction
-// updates the library, never the conversation.
-func (c *chatController) memorySaved(memory.Scope, memory.ExtractionJob, []memory.Entry) {
-	c.dispatch(c.memoryChanged)
 }

@@ -184,7 +184,7 @@ type DelegationTask struct {
 
 共享 Codex app-server 的工作目录和 MCP 进程身份不能唯一确定调用会话。新协作入口不使用 `mcpCaller()` 的时间排序，也不把模型填写的会话 ID 当作调用凭证。
 
-第一阶段从 [mcpCallerWithArguments](../memory_mcp.go) 抽取通用的严格匹配逻辑：
+第一阶段从 [mcpCallerWithArguments](../mcp_host.go) 抽取通用的严格匹配逻辑：
 
 1. MCP 桥接进程保留原始工具参数，服务端严格解析并拒绝未知字段。
 2. 后台按工具名称及完整参数匹配已收到的原生工具调用记录。
@@ -602,7 +602,7 @@ P0 与 P1 可以在同一开发阶段完成。只有单独交付 P0 时，才允
 - [agent.go](../agent.go)：Agent 注册、sendRequest、submit 与 submitExpanded。
 - [mcp_server.go](../mcp_server.go)：既有工具定义、默认等待和 MCP 到服务的桥接。
 - [mcp_host.go](../mcp_host.go)：调用方推断、delegate、现有嵌套限制。
-- [memory_mcp.go](../memory_mcp.go)：按原生工具名称和完整参数识别调用方。
+- [mcp_host.go](../mcp_host.go)：按原生工具名称和完整参数识别调用方。
 - [handoff.go](../handoff.go)：上下文摘要、内存 handoff 和会话最新轮次状态。
 - [chat_events.go](../chat_events.go)、[chat_claude.go](../chat_claude.go)：原生轮次、消息与进程生命周期。
 - [queue.go](../queue.go)：普通排队消息合并与 Stop 后暂停。

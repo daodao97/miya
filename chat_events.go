@@ -263,7 +263,7 @@ func (c *chatController) handle(f codex.Frame) {
 		}
 	})
 	if completedMemory {
-		c.completedMemoryTurn(target.ID, e.Turn.ID)
+		c.memories().CompletedTurn(target.ID, e.Turn.ID)
 	}
 	c.managedCodexOutput(target, f.Method, e)
 }

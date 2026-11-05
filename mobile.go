@@ -18,6 +18,7 @@ import (
 	"miya/internal/remote"
 	"miya/internal/textutil"
 	"miya/internal/thumbnail"
+	"miya/internal/memory/manager"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -729,7 +730,7 @@ func (m *mobileApp) read(gen int, conn *remote.Conn) (greeted bool, err error) {
 func (m *mobileApp) applyPhoneState(s phoneState) {
 	m.closeResolvedDesktopControl(s.Approvals)
 	if m.state.MemoryRevision != s.MemoryRevision {
-		m.memories.list = memoryList{}
+		m.memories.list = manager.List{}
 		m.memories.requestedAt = time.Time{}
 	}
 	for _, old := range m.state.Approvals {

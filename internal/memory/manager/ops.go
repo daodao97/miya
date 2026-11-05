@@ -1,20 +1,21 @@
-package main
+package manager
 
 import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"miya/internal/async"
+	"miya/internal/codex"
+	"miya/internal/memory"
+	"miya/internal/model"
+	"miya/internal/textutil"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
-
-	"miya/internal/codex"
-	"miya/internal/memory"
-	"miya/internal/textutil"
 )
 
-type memoryRequest struct {
+type Request struct {
 	Project         string           `json:"project,omitempty"`
 	Scope           string           `json:"scope,omitempty"`
 	ID              string           `json:"id,omitempty"`
@@ -30,41 +31,43 @@ type memoryRequest struct {
 	// Promotion is a two-step preview/commit, with exact proposed file bytes.
 	Preview string `json:"preview,omitempty"`
 }
-type memoryList struct {
+
+type List struct {
 	Entries            []memory.Entry          `json:"entries"`
 	Settings           memory.Settings         `json:"settings"`
 	Revision           uint64                  `json:"revision"`
 	Extraction         memory.ExtractionStatus `json:"extraction"`
 	ExtractorAvailable bool                    `json:"extractorAvailable"`
-	Extractors         []memoryExtractorOption `json:"extractors,omitempty"`
+	Extractors         []ExtractorOption       `json:"extractors,omitempty"`
 }
 
-type memoryExtractorOption struct {
+type ExtractorOption struct {
 	Agent     string `json:"agent"`
 	Available bool   `json:"available"`
 }
-type memoryPromotion struct {
+
+type Promotion struct {
 	File   string `json:"file"`
 	Before string `json:"before"`
 	After  string `json:"after"`
 }
 
-func (c *chatController) noteMemory(thread int, e memory.Entry) {
-	c.memoryChanged()
+func (mg *Manager) Note(thread int, e memory.Entry) {
+	mg.Host.Changed()
 	if thread == 0 {
 		return
 	}
-	c.update(thread, func(t *Thread) {
+	mg.Host.UpdateThread(thread, func(t *model.Thread) {
 		// The notice contains only identity; its body is read on demand, so
 		// forgetting leaves no extra plaintext in histories or state broadcasts.
-		t.Messages = append(t.Messages, Message{ID: c.nextID(), Role: "memory", Kind: "memory", SentAtMs: time.Now().UnixMilli(), Memory: &MemoryNotice{Explicit: true, Scope: e.Scope.Kind, Project: e.Scope.ProjectPath, ID: e.ID, Version: e.Version}})
+		t.Messages = append(t.Messages, model.Message{ID: mg.Host.NextID(), Role: "memory", Kind: "memory", SentAtMs: time.Now().UnixMilli(), Memory: &model.MemoryNotice{Explicit: true, Scope: e.Scope.Kind, Project: e.Scope.ProjectPath, ID: e.ID, Version: e.Version}})
 	})
 }
 
-// memoryRootProject reports a filesystem root. An app opened from Finder
+// RootProject reports a filesystem root. An app opened from Finder
 // without a workspace starts in "/", which is not a project: settings saved
 // there never apply to the conversations the user is actually running.
-func memoryRootProject(path string) bool {
+func RootProject(path string) bool {
 	if strings.TrimSpace(path) == "" {
 		return true
 	}
@@ -72,26 +75,25 @@ func memoryRootProject(path string) bool {
 	return filepath.Dir(clean) == clean
 }
 
-func (c *chatController) memoryScope(r memoryRequest) (memory.Scope, error) {
+func (mg *Manager) Scope(r Request) (memory.Scope, error) {
 	if r.Scope == "user" {
 		return memory.UserScope(), nil
 	}
 	if r.Scope != "" && r.Scope != "project" {
 		return memory.Scope{}, errors.New("Invalid memory scope")
 	}
+	cwd, paths := mg.Host.Projects()
 	project := r.Project
 	if project == "" {
-		project = c.cwd
+		project = cwd
 	}
-	if memoryRootProject(project) {
+	if RootProject(project) {
 		return memory.Scope{}, errors.New("Open a project before using project memory")
 	}
-	known := project == c.cwd
-	if c.projects != nil {
-		for _, p := range c.projects() {
-			if p.Path == project {
-				known = true
-			}
+	known := project == cwd
+	for _, p := range paths {
+		if p == project {
+			known = true
 		}
 	}
 	if !known {
@@ -99,49 +101,50 @@ func (c *chatController) memoryScope(r memoryRequest) (memory.Scope, error) {
 	}
 	return memory.ProjectScope(project)
 }
-func (c *chatController) memoryOp(op string, r memoryRequest) (any, error) {
-	if c.memory == nil {
+
+func (mg *Manager) Op(op string, r Request) (any, error) {
+	if mg.Store == nil {
 		return nil, errors.New("Memory requires the Miya background service")
 	}
-	scope, err := c.memoryScope(r)
+	scope, err := mg.Scope(r)
 	if err != nil {
 		return nil, err
 	}
-	store := c.memory
+	store := mg.Store
 	if op == "memorySessionConfigure" {
-		t := c.threadWithID(r.Thread)
-		threadScope, _ := memory.ProjectScope(c.threadWorkspace(t.ID))
+		t := mg.Host.Thread(r.Thread)
+		threadScope, _ := memory.ProjectScope(mg.Host.Workspace(t.ID))
 		if t.ID == 0 || r.SessionDisabled == nil || scope.Kind != "project" || threadScope != scope {
 			return nil, errors.New("Session settings missing for the current project")
 		}
 		disabled := *r.SessionDisabled
-		session := c.threadRef(t).URL()
-		return c.memoryDeferred(func() (any, error) {
+		session := mg.Host.ThreadRef(t).URL()
+		return mg.Later(func() (any, error) {
 			if err := store.ConfigureSession(scope, session, disabled); err != nil {
 				return nil, err
 			}
-			c.dispatch(func() {
-				c.update(t.ID, func(t *Thread) { t.MemoryDisabled = disabled })
+			mg.Host.Dispatch(func() {
+				mg.Host.UpdateThread(t.ID, func(t *model.Thread) { t.MemoryDisabled = disabled })
 				if disabled {
-					delete(c.memoryTurns, t.ID)
+					delete(mg.Turns, t.ID)
 				}
-				c.memoryChanged()
+				mg.Host.Changed()
 			})
 			return nil, nil
 		}), nil
 	}
-	claudeAvailable := c.claudeBinary != ""
+	claudeAvailable := mg.Host.ClaudeBinary() != ""
 	// Resolve the target conversation before leaving the scheduler.
-	if r.Thread != 0 && c.threadWithID(r.Thread).ID == 0 {
+	if r.Thread != 0 && mg.Host.Thread(r.Thread).ID == 0 {
 		return nil, errors.New("Session does not exist")
 	}
-	return c.memoryDeferred(func() (any, error) {
+	return mg.Later(func() (any, error) {
 		entries, settings, revision, err := store.List(scope)
 		if err != nil {
 			return nil, err
 		}
 		_, codexErr := codex.Binary()
-		extractors := []memoryExtractorOption{{Agent: agentCodex, Available: codexErr == nil}, {Agent: agentClaude, Available: claudeAvailable}}
+		extractors := []ExtractorOption{{Agent: model.AgentCodex, Available: codexErr == nil}, {Agent: model.AgentClaude, Available: claudeAvailable}}
 		available := func(agent string) bool {
 			for _, option := range extractors {
 				if option.Agent == agent {
@@ -152,7 +155,7 @@ func (c *chatController) memoryOp(op string, r memoryRequest) (any, error) {
 		}
 		if op == "memoryList" {
 			status, _ := store.ExtractionStatus(scope)
-			return memoryList{Entries: entries, Settings: settings, Revision: revision, Extraction: status, ExtractorAvailable: available(settings.ExtractionAgent()), Extractors: extractors}, nil
+			return List{Entries: entries, Settings: settings, Revision: revision, Extraction: status, ExtractorAvailable: available(settings.ExtractionAgent()), Extractors: extractors}, nil
 		}
 		if op == "memoryConfigure" {
 			if r.Settings == nil || scope.Kind != "project" {
@@ -160,11 +163,11 @@ func (c *chatController) memoryOp(op string, r memoryRequest) (any, error) {
 			}
 			selected := r.Settings.ExtractionAgent()
 			if r.Settings.AutoExtract && !r.Settings.Disabled && !available(selected) && !(settings.AutoExtract && settings.ExtractionAgent() == selected) {
-				return nil, fmt.Errorf("Automatic extraction requires a working %s configuration", backendFor(selected).Name())
+				return nil, fmt.Errorf("Automatic extraction requires a working %s configuration", mg.Host.AgentName(selected))
 			}
 			err := store.Configure(scope, *r.Settings)
 			if err == nil {
-				c.dispatch(c.memoryChanged)
+				mg.Host.Dispatch(mg.Host.Changed)
 			}
 			return nil, err
 		}
@@ -194,7 +197,7 @@ func (c *chatController) memoryOp(op string, r memoryRequest) (any, error) {
 		var e memory.Entry
 		switch op {
 		case "memorySave":
-			until, err := memoryExpiry(r.ValidUntil)
+			until, err := Expiry(r.ValidUntil)
 			if err != nil {
 				return nil, err
 			}
@@ -220,58 +223,60 @@ func (c *chatController) memoryOp(op string, r memoryRequest) (any, error) {
 			if r.File != "AGENTS.md" && r.File != "CLAUDE.md" {
 				return nil, errors.New("Select AGENTS.md or CLAUDE.md")
 			}
-			promotion, err := previewMemoryFile(scope.ProjectPath, r.File, textutil.FirstNonEmpty(strings.TrimSpace(r.Content), old.Content))
+			promotion, err := PreviewFile(scope.ProjectPath, r.File, textutil.FirstNonEmpty(strings.TrimSpace(r.Content), old.Content))
 			if err != nil {
 				return nil, err
 			}
 			if op == "memoryPromotionPreview" {
 				return promotion, nil
 			}
-			var approved memoryPromotion
+			var approved Promotion
 			if json.Unmarshal([]byte(r.Preview), &approved) != nil || approved != promotion {
 				return nil, errors.New("Project file or memory changed. Preview and confirm again.")
 			}
 			// Serialize promotion with all memory mutations, validating the version
 			// again immediately before the file write and memory commit.
-			e, err = store.PromoteWith(scope, r.ID, r.Version, func() error { return writeMemoryProjectFile(scope.ProjectPath, promotion) })
+			e, err = store.PromoteWith(scope, r.ID, r.Version, func() error { return WriteProjectFile(scope.ProjectPath, promotion) })
 		default:
 			return nil, errors.New("Unknown memory operation")
 		}
 		if err != nil {
 			if e.ID != "" {
-				c.dispatch(c.memoryChanged)
+				mg.Host.Dispatch(mg.Host.Changed)
 			}
 			return nil, err
 		}
 		if e.ID != "" {
-			c.dispatch(c.memoryChanged)
+			mg.Host.Dispatch(mg.Host.Changed)
 		}
 		return e, nil
 	}), nil
 }
-func previewMemoryFile(project, file, content string) (memoryPromotion, error) {
+
+func PreviewFile(project, file, content string) (Promotion, error) {
 	path := filepath.Join(project, file)
 	// Avoid silently following a link to a different project's instructions.
 	info, err := os.Lstat(path)
 	if err == nil && (!info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0) {
-		return memoryPromotion{}, errors.New("The target must be a regular file within the project, not a symbolic link")
+		return Promotion{}, errors.New("The target must be a regular file within the project, not a symbolic link")
 	}
 	if err != nil && !os.IsNotExist(err) {
-		return memoryPromotion{}, err
+		return Promotion{}, err
 	}
 	b, err := os.ReadFile(path)
 	if err != nil && !os.IsNotExist(err) {
-		return memoryPromotion{}, err
+		return Promotion{}, err
 	}
 	before := string(b)
 	after := strings.TrimRight(before, "\n") + "\n\n" + content + "\n"
 	if before == "" {
 		after = content + "\n"
 	}
-	return memoryPromotion{File: file, Before: before, After: after}, nil
+	return Promotion{File: file, Before: before, After: after}, nil
 }
-func writeMemoryProjectFile(project string, p memoryPromotion) error {
-	now, err := previewMemoryFile(project, p.File, "")
+
+func WriteProjectFile(project string, p Promotion) error {
+	now, err := PreviewFile(project, p.File, "")
 	if err != nil {
 		return err
 	}
@@ -302,7 +307,7 @@ func writeMemoryProjectFile(project string, p memoryPromotion) error {
 		return err
 	}
 	// Recheck after preparing and flushing the replacement, too.
-	latest, err := previewMemoryFile(project, p.File, "")
+	latest, err := PreviewFile(project, p.File, "")
 	if err != nil {
 		return err
 	}
@@ -314,13 +319,7 @@ func writeMemoryProjectFile(project string, p memoryPromotion) error {
 
 // Count the accepted operation before it leaves the scheduler, so an upgrade
 // waits for commits already in flight, including a file promotion.
-func (c *chatController) memoryDeferred(work func() (any, error)) deferred {
-	c.memoryCalls++
-	return func() (any, error) { defer c.dispatch(func() { c.memoryCalls-- }); return work() }
-}
-func (c *chatController) memoryChanged() {
-	c.memoryRevision++
-	if c.revision != nil {
-		c.setRevision(c.revision() + 1)
-	}
+func (mg *Manager) Later(work func() (any, error)) async.Reply {
+	mg.Calls++
+	return func() (any, error) { defer mg.Host.Dispatch(func() { mg.Calls-- }); return work() }
 }
