@@ -42,12 +42,7 @@ func setInterfaceLanguage(tag string) {
 }
 
 func useInterfaceLanguage(c *ui.Context) {
-	appLocale.Store(c.Locale())
-}
-
-func interfaceText(source string) string {
-	tag, _ := appLocale.Load().(string)
-	return locales.TextIn(tag, source)
+	locales.SetCurrent(c.Locale())
 }
 
 func languageSettings(c *ui.Context) {

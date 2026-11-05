@@ -21,7 +21,7 @@ func TestInterfaceLanguageSystemMatching(t *testing.T) {
 		}
 	}
 	app, tt := testApp(t)
-	t.Cleanup(func() { appLocale.Store("en") })
+	t.Cleanup(func() { locales.SetCurrent("en") })
 	if got := loadSetting("interfaceLanguage"); got != "" {
 		t.Fatalf("fresh installation has an override: %q", got)
 	}
@@ -46,7 +46,7 @@ func TestInterfaceLanguageSystemMatching(t *testing.T) {
 
 func TestInterfaceLanguageChoiceAndDeviceIsolation(t *testing.T) {
 	app, tt := testApp(t)
-	t.Cleanup(func() { appLocale.Store("en") })
+	t.Cleanup(func() { locales.SetCurrent("en") })
 	app.c.rememberDraft("Keep my draft")
 	app.section = "Settings"
 	tt.Frame()
@@ -83,7 +83,7 @@ func TestInterfaceLanguageChoiceAndDeviceIsolation(t *testing.T) {
 
 func TestInterfaceLanguagePaletteAndUserContent(t *testing.T) {
 	app, tt := testApp(t)
-	t.Cleanup(func() { appLocale.Store("en") })
+	t.Cleanup(func() { locales.SetCurrent("en") })
 	app.c.setThreads([]Thread{{ID: 1, Title: "Settings", HistoryLoaded: true, Messages: []Message{{ID: 1, Role: "user", Content: "New thread"}}}})
 	app.c.selectThread(app.c.threadWithID(1))
 	tt.SetLocale("zh-Hans")
@@ -106,7 +106,7 @@ func TestMobileLanguageChoiceFitsNarrowScreen(t *testing.T) {
 	for _, width := range []int{320, 390} {
 		t.Run(fmt.Sprint(width), func(t *testing.T) {
 			t.Setenv("HOME", t.TempDir())
-			t.Cleanup(func() { appLocale.Store("en") })
+			t.Cleanup(func() { locales.SetCurrent("en") })
 			m := testMobileApp()
 			m.router().Push("/settings")
 			tt := ui.NewTester(m.viewRoot, width, 844)

@@ -12,6 +12,7 @@ import (
 
 	"miya/internal/codex"
 	"miya/internal/desktop"
+	"miya/locales"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/transfer"
@@ -206,7 +207,7 @@ func main() {
 	app := newChatApp()
 	configureInterfaceLanguage()
 	mygo.App.OnLocaleChanged(func(tag string) {
-		appLocale.Store(tag)
+		locales.SetCurrent(tag)
 		app.activeWorkspaceApp().syncUsageTray()
 	})
 	mygo.Theme.SetSource(themeSource(app.appearance))

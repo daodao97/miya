@@ -20,11 +20,11 @@ import (
 	dg "miya/internal/delegation"
 	"miya/internal/memory"
 	"miya/internal/textutil"
+	"miya/locales"
 )
 
-var appLocale atomic.Value
-
-func tr(english string) string { return interfaceText(english) }
+// tr translates English interface copy; see locales.T.
+func tr(english string) string { return locales.T(english) }
 
 type chatController struct {
 	desktopMu      sync.Mutex
