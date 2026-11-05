@@ -48,7 +48,7 @@ type collaborationUI struct {
 }
 type collaborationPanel struct {
 	from                           string
-	open, explicitlyClosed         bool
+	open                           bool
 	loaded, loading, loadingDetail bool
 	rows                           []collaborationTaskView
 	details                        map[string]collaborationTaskView
@@ -63,6 +63,14 @@ type collaborationPanel struct {
 	pending                        *collaborationRequest
 	busy                           bool
 	actionGeneration               uint64
+}
+
+// Navigation dismisses task overlays on both the outgoing and destination
+// conversations; cached task details may remain, but must not cover the page.
+func (u *collaborationUI) closePopovers() {
+	for _, pane := range u.panes {
+		pane.open = false
+	}
 }
 
 func (u *collaborationUI) pane(from string) *collaborationPanel {
@@ -118,9 +126,6 @@ func (p *collaborationPanel) refresh(cap *collaborationStatus, call collaboratio
 		p.loaded = true
 		if p.pending == nil {
 			p.err = ""
-		}
-		if len(p.rows) > 0 && !p.explicitlyClosed {
-			p.open = true
 		}
 		if p.selected != "" && !p.loadingDetail {
 			// Watches and deliveries can change without a task revision. Use

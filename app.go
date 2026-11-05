@@ -33,8 +33,8 @@ type chatApp struct {
 	onRetry func(retryRequest)
 	// onHandoff creates the phone's draft rather than a desktop-controller draft.
 	onHandoff func()
-	// workingAccessory draws controls at the trailing edge of the working
-	// status row, as the phone's Agent tasks toggle.
+	// workingAccessory draws controls at the trailing edge of the turn status
+	// row, as the phone's Agent tasks toggle.
 	workingAccessory func(*ui.Context)
 
 	sidebar   bool
@@ -539,6 +539,7 @@ func (app *chatApp) view(ctx *ui.Context) {
 		ctx = ctx.Key("workspace:" + hub.store.Active)
 	}
 	useInterfaceLanguage(ctx)
+	app.md.LinkMenu = messageLinkMenu(ctx, app.c.cwd)
 	app.markVisibleThreadRead()
 	if app.memoryRevisionSeen != app.c.memoryRevision {
 		app.memoryRevisionSeen = app.c.memoryRevision

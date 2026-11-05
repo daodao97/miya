@@ -24,19 +24,22 @@ func (app *chatApp) composerArea(c *ui.Context) {
 					app.suggestion(c.Key("pdf"), "file-text", tr("Summarize this app in a PDF"), tr("Summarize this app in a one-page PDF."))
 				})
 			}
-			ui.Column(c).Gap(8).Children(func() {
-				if msg, reconnect := cc.currentBackend().Problem(cc); msg != "" {
-					ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-						mutedText(c, msg).Grow(1).MinWidth(0)
-						if reconnect && quiet(c.Key("reconnect")).Children(func() { ui.Text(c, tr("Reconnect")) }).Clicked() {
-							cc.currentBackend().Reconnect(cc)
-						}
-					})
-				}
-				for _, a := range cc.approvals() {
-					app.approvalView(c.Key("approval:"+string(a.ID)), a)
-				}
-			})
+			msg, reconnect := cc.currentBackend().Problem(cc)
+			if msg != "" || len(cc.approvals()) > 0 {
+				ui.Column(c).Gap(8).Children(func() {
+					if msg != "" {
+						ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+							mutedText(c, msg).Grow(1).MinWidth(0)
+							if reconnect && quiet(c.Key("reconnect")).Children(func() { ui.Text(c, tr("Reconnect")) }).Clicked() {
+								cc.currentBackend().Reconnect(cc)
+							}
+						})
+					}
+					for _, a := range cc.approvals() {
+						app.approvalView(c.Key("approval:"+string(a.ID)), a)
+					}
+				})
+			}
 			app.queueView(c, cur)
 			app.taskStatus(c, cur)
 			app.collaborationTasks(c, cur)

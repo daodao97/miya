@@ -509,32 +509,33 @@ func (c *chatController) renameProject(path, name string) {
 // project cache. The Codex archive call is intentionally separate so the UI
 // can also remove locally-created threads that have no server ID yet.
 func (c *chatController) removeThreadLocal(id int, serverID string) {
-	items := append([]Thread(nil), c.threads()...)
-	filtered := items[:0]
-	for _, item := range items {
-		if item.ID == id || (serverID != "" && item.ServerID == serverID) {
-			continue
-		}
-		filtered = append(filtered, item)
-	}
-	c.setThreads(filtered)
-	if c.projectCache != nil && c.cwd != "" {
-		cached := append([]Thread(nil), c.projectCache[c.cwd]...)
-		out := cached[:0]
-		for _, item := range cached {
+	project := c.threadWorkspace(id)
+	withoutThread := func(items []Thread) []Thread {
+		filtered := make([]Thread, 0, len(items))
+		for _, item := range items {
 			if item.ID == id || (serverID != "" && item.ServerID == serverID) {
 				continue
 			}
-			out = append(out, item)
+			filtered = append(filtered, item)
 		}
-		c.projectCache[c.cwd] = out
+		return filtered
 	}
-	if c.active() == id {
-		if len(filtered) > 0 {
-			c.setActive(filtered[0].ID)
-		} else {
-			c.setActive(0)
+	if project == c.cwd {
+		filtered := withoutThread(c.threads())
+		c.setThreads(filtered)
+		if c.active() == id {
+			if len(filtered) > 0 {
+				c.selectThread(filtered[0])
+			} else {
+				c.newThread()
+			}
 		}
+	}
+	if c.projectCache != nil && project != "" {
+		c.projectCache[project] = withoutThread(c.projectCache[project])
+	}
+	if project != c.cwd && c.revision != nil {
+		c.setRevision(c.revision() + 1)
 	}
 	persistThreadListCache(c.projectCache)
 	c.refreshProjectOrder()

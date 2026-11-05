@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"time"
@@ -17,8 +18,9 @@ type collaborationPanelView struct {
 	// trailing aligns the toggle to the right edge instead of filling the row.
 	trailing bool
 	// toggleElsewhere omits the toggle because the caller draws it with
-	// drawToggle, as the phone does in the working status row.
+	// drawToggle, as both surfaces do in the turn status row.
 	toggleElsewhere bool
+	compactToggle   bool
 	call            collaborationCall
 	openThread      func(string)
 }
@@ -37,6 +39,20 @@ func (p *collaborationPanel) draw(c *ui.Context, v collaborationPanelView) {
 		}
 		return
 	}
+	if !v.toggleElsewhere {
+		ui.Row(c.Key("collaboration")).FillWidth().MinWidth(0).Gap(6).AlignItems(ui.Center).Children(func() {
+			if v.trailing {
+				ui.Box(c).Grow(1).MinWidth(0)
+			}
+			p.drawToggle(c, v)
+		})
+	}
+	if v.connected {
+		c.After(time.Second)
+	}
+}
+
+func (p *collaborationPanel) drawContent(c *ui.Context, v collaborationPanelView) {
 	pals := v.palette
 	locked := !v.connected || v.readOnly || v.capability.Stale || p.storageError != "" || p.pending != nil
 	button := func(c *ui.Context, id, label string, disabled bool, action func()) {
@@ -46,93 +62,77 @@ func (p *collaborationPanel) draw(c *ui.Context, v collaborationPanelView) {
 			action()
 		}
 	}
-	ui.Column(c.Key("collaboration")).FillWidth().MinWidth(0).Gap(6).Children(func() {
-		if !v.toggleElsewhere {
-			ui.Row(c).FillWidth().MinWidth(0).Gap(6).AlignItems(ui.Center).Children(func() {
-				if v.trailing {
-					ui.Box(c).Grow(1).MinWidth(0)
-				}
-				p.drawToggle(c, v)
+	ui.Column(c).FillWidth().MinWidth(0).Gap(8).Children(func() {
+		if !v.connected {
+			ui.Text(c, tr("Offline · Showing saved task data")).FontSize(12).TextColor(pals.muted)
+		}
+		if p.storageError != "" || v.capability.StorageError != "" {
+			ui.Text(c, tr("Task storage unavailable: ")+firstNonEmpty(p.storageError, v.capability.StorageError)).FontSize(12).TextColor(danger).Wrap().FillWidth()
+		}
+		if p.paused {
+			ui.Row(c).FillWidth().Wrap().Gap(4).AlignItems(ui.Center).Children(func() {
+				ui.Text(c, tr("Receiving results is paused")).FontSize(12).TextColor(pals.muted)
+				button(c, "resume", tr("Resume receiving results"), locked, func() { p.submit("resume", nil, v.call) })
 			})
 		}
-		if !p.open {
+		if p.err != "" {
+			ui.Text(c, p.err).FontSize(12).TextColor(danger).FillWidth().Wrap().Selectable()
+		}
+		if p.pending != nil {
+			if p.busy {
+				ui.Text(c, tr("Submitting task request…")).FontSize(12).TextColor(pals.muted)
+			} else {
+				button(c, "retry-request", tr("Retry the same request"), !v.connected, func() { p.retry(v.call) })
+			}
+		}
+		if p.selected != "" {
+			p.drawDetail(c, v, locked, button)
 			return
 		}
-		ui.Column(c).FillWidth().MinWidth(0).Padding(10).Gap(8).Background(pals.surface).Border(1, pals.border).Radius(12).Children(func() {
-			if !v.connected {
-				ui.Text(c, tr("Offline · Showing saved task data")).FontSize(12).TextColor(pals.muted)
-			}
-			if p.storageError != "" || v.capability.StorageError != "" {
-				ui.Text(c, tr("Task storage unavailable: ")+firstNonEmpty(p.storageError, v.capability.StorageError)).FontSize(12).TextColor(danger).Wrap().FillWidth()
-			}
-			if p.paused {
-				ui.Row(c).FillWidth().Wrap().Gap(4).AlignItems(ui.Center).Children(func() {
-					ui.Text(c, tr("Receiving results is paused")).FontSize(12).TextColor(pals.muted)
-					button(c, "resume", tr("Resume receiving results"), locked, func() { p.submit("resume", nil, v.call) })
-				})
-			}
-			if p.err != "" {
-				ui.Text(c, p.err).FontSize(12).TextColor(danger).FillWidth().Wrap().Selectable()
-			}
-			if p.pending != nil {
-				if p.busy {
-					ui.Text(c, tr("Submitting task request…")).FontSize(12).TextColor(pals.muted)
-				} else {
-					button(c, "retry-request", tr("Retry the same request"), !v.connected, func() { p.retry(v.call) })
-				}
-			}
-			if p.selected != "" {
-				p.drawDetail(c, v, locked, button)
-				return
-			}
-			if p.loaded && len(p.rows) == 0 {
-				ui.Text(c, tr("No collaboration tasks yet")).FontSize(12).TextColor(pals.muted)
-			}
-			ui.Scroll(c.Key("task-cards")).FillWidth().MaxHeight(218).Children(func() {
-				ui.Column(c).FillWidth().MinWidth(0).Gap(6).Children(func() {
-					for _, task := range p.rows {
-						b := ui.ButtonBase(c.Key(task.ID)).FillWidth().MinWidth(0).Padding(9).Radius(9).Border(1, pals.border).Label(task.Title)
-						b.Children(func() {
-							ui.Column(c).FillWidth().MinWidth(0).Gap(4).Children(func() {
-								ui.Text(c, nativeText(task.Title)).FontSize(13).FontWeight(600).TextColor(pals.ink).SingleLine().Ellipsis("…").FillWidth()
-								ui.Text(c, backendFor(task.Agent).Name()+" · "+collaborationStateLabel(task.State)).FontSize(11).TextColor(pals.muted)
-								if text := firstNonEmpty(task.ResultSummary, task.Progress); text != "" {
-									ui.Text(c, nativeText(text)).FontSize(12).TextColor(pals.muted).FillWidth().SingleLine().Ellipsis("…")
-								}
-								if notice := collaborationNotificationLabel(task.Notification); notice != "" {
-									ui.Text(c, notice).FontSize(11).TextColor(pals.muted)
-								}
-							})
-						})
-						if b.Clicked() {
-							p.selected = task.ID
-							if v.connected {
-								p.read(task.ID, v.call)
+		if p.loaded && len(p.rows) == 0 {
+			ui.Text(c, tr("No collaboration tasks yet")).FontSize(12).TextColor(pals.muted)
+		}
+		ui.Scroll(c.Key("task-cards")).FillWidth().MaxHeight(218).Children(func() {
+			ui.Column(c).FillWidth().MinWidth(0).Gap(6).Children(func() {
+				for _, task := range p.rows {
+					b := ui.ButtonBase(c.Key(task.ID)).FillWidth().MinWidth(0).Padding(9).Radius(9).Border(1, pals.border).Label(task.Title)
+					b.Children(func() {
+						ui.Column(c).FillWidth().MinWidth(0).Gap(4).Children(func() {
+							ui.Text(c, nativeText(task.Title)).FontSize(13).FontWeight(600).TextColor(pals.ink).SingleLine().Ellipsis("…").FillWidth()
+							ui.Text(c, backendFor(task.Agent).Name()+" · "+collaborationStateLabel(task.State)).FontSize(11).TextColor(pals.muted)
+							if text := firstNonEmpty(task.ResultSummary, task.Progress); text != "" {
+								ui.Text(c, nativeText(text)).FontSize(12).TextColor(pals.muted).FillWidth().SingleLine().Ellipsis("…")
 							}
+							if notice := collaborationNotificationLabel(task.Notification); notice != "" {
+								ui.Text(c, notice).FontSize(11).TextColor(pals.muted)
+							}
+						})
+					})
+					if b.Clicked() {
+						p.selected = task.ID
+						if v.connected {
+							p.read(task.ID, v.call)
 						}
 					}
-				})
-			})
-			ui.Row(c).FillWidth().Wrap().Gap(4).Children(func() {
-				if p.next != "" {
-					button(c, "more", tr("Load more"), p.loading || !v.connected, func() { p.refresh(v.capability, v.call, true) })
 				}
-				active := false
-				for _, task := range p.rows {
-					if !dg.Terminal(task.State) {
-						active = true
-						break
-					}
-				}
-				if active {
-					button(c, "cancel-all", tr("Stop all delegated tasks"), locked, func() { p.submit("cancel_all", nil, v.call) })
-				}
-				button(c, "refresh", tr("Refresh"), !v.connected || p.loading, func() { p.loaded = false; p.loadedAt = time.Time{}; p.refresh(v.capability, v.call, false) })
 			})
 		})
-		if v.connected {
-			c.After(time.Second)
-		}
+		ui.Row(c).FillWidth().Wrap().Gap(4).Children(func() {
+			if p.next != "" {
+				button(c, "more", tr("Load more"), p.loading || !v.connected, func() { p.refresh(v.capability, v.call, true) })
+			}
+			active := false
+			for _, task := range p.rows {
+				if !dg.Terminal(task.State) {
+					active = true
+					break
+				}
+			}
+			if active {
+				button(c, "cancel-all", tr("Stop all delegated tasks"), locked, func() { p.submit("cancel_all", nil, v.call) })
+			}
+			button(c, "refresh", tr("Refresh"), !v.connected || p.loading, func() { p.loaded = false; p.loadedAt = time.Time{}; p.refresh(v.capability, v.call, false) })
+		})
 	})
 }
 
@@ -153,7 +153,16 @@ func (p *collaborationPanel) drawToggle(c *ui.Context, v collaborationPanelView)
 	b.Children(func() {
 		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 			icon(c, "git-branch", 14, pals.muted)
-			ui.Text(c, p.title()).FontSize(12).TextColor(pals.ink).SingleLine().Ellipsis("…")
+			text := p.title()
+			if v.compactToggle {
+				text = fmt.Sprintf("%d", len(p.rows))
+			}
+			label := ui.Text(c, text).FontSize(12).SingleLine().Ellipsis("…")
+			if v.toggleElsewhere {
+				label.FontWeight(400).TextColor(pals.muted)
+			} else {
+				label.TextColor(pals.ink)
+			}
 			if p.loading {
 				ui.Spinner(c).FontSize(12)
 			}
@@ -161,8 +170,20 @@ func (p *collaborationPanel) drawToggle(c *ui.Context, v collaborationPanelView)
 	})
 	if b.Clicked() {
 		p.open = !p.open
-		p.explicitlyClosed = !p.open
 	}
+	ui.PopoverBase(c.Key("task-popover"), b, &p.open, func(panel ui.Element) {
+		// Bound the whole panel, including task actions, to the space above
+		// the status row. Long lists and details scroll inside the overlay.
+		safe, root := c.SafeArea(), c.Root().Bounds()
+		width := min(float32(560), root.W-safe.Left-safe.Right-24)
+		height := min(float32(480), b.Bounds().Y-safe.Top-20)
+		panel.AttachTo(b, ui.AnchorTopRight, ui.AnchorBottomRight).Margin(0, 0, 8, 0).
+			Width(width).Padding(10).Background(pals.surface).Border(1, pals.border).Radius(12).
+			Shadow(0, 4, 16, 0, ui.RGBA(0, 0, 0, 0.16)).Label(tr("Agent tasks"))
+		ui.Scroll(c.Key("task-popover-scroll")).FillWidth().MaxHeight(max(float32(1), height-22)).Children(func() {
+			p.drawContent(c, v)
+		})
+	})
 }
 
 type collaborationButton func(*ui.Context, string, string, bool, func())
@@ -216,11 +237,11 @@ func (p *collaborationPanel) drawDetail(c *ui.Context, v collaborationPanelView,
 		})
 	})
 	ui.Row(c).FillWidth().Wrap().Gap(4).Children(func() {
-		if task.Thread != "" {
-			button(c, "open-target", tr("Open target conversation"), false, func() { v.openThread(task.Thread) })
+		if task.Thread != "" && task.Thread != p.from {
+			button(c, "open-target", tr("Open target conversation"), false, func() { p.open = false; v.openThread(task.Thread) })
 		}
 		if task.From != "" && task.From != p.from {
-			button(c, "open-source", tr("Open source conversation"), false, func() { v.openThread(task.From) })
+			button(c, "open-source", tr("Open source conversation"), false, func() { p.open = false; v.openThread(task.From) })
 		}
 		if !dg.Terminal(task.State) {
 			button(c, "cancel", tr("Cancel task"), locked || task.CancelRequested, func() { p.submit("cancel_task", map[string]any{"task_id": task.ID}, v.call) })

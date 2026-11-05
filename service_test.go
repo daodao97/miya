@@ -90,6 +90,60 @@ func TestServiceRestartWhenIdleChecksAllWork(t *testing.T) {
 	}
 }
 
+func TestServiceDeleteSelectedConversationUpdatesWindow(t *testing.T) {
+	for _, last := range []bool{false, true} {
+		name := "select-next"
+		if last {
+			name = "last-conversation"
+		}
+		t.Run(name, func(t *testing.T) {
+			f := newServiceFixture(t)
+			target := Thread{ID: 1, ServerID: "delete-this", Title: "Delete", HistoryLoaded: true}
+			keep := Thread{ID: 2, ServerID: "keep-this", Title: "Keep", HistoryLoaded: true, Draft: "keep draft"}
+			f.serv.do(func() {
+				items := []Thread{target}
+				if !last {
+					items = append(items, keep)
+				}
+				f.srv.c.setThreads(items)
+				f.srv.c.projectCache[f.srv.c.cwd] = items
+			})
+			window := f.window()
+			t.Cleanup(func() { window.cancel(); window.remote.Close() })
+			f.win.do(func() {
+				window.setActive(target.ID)
+				window.rememberDraft("old draft")
+				window.setAttachments([]string{"old-attachment.txt"})
+				window.mirror.messages[target.ID] = []Message{{Role: "assistant", Content: "old response"}}
+				window.deleteThread(target)
+			})
+			f.waitWindow("deleted conversation to disappear", func() bool { return window.threadWithID(target.ID).ID == 0 })
+			f.win.do(func() {
+				want := keep.ID
+				if last {
+					want = 0
+				}
+				if window.active() != want {
+					t.Errorf("selected conversation = %d, want %d", window.active(), want)
+				}
+				draft := keep.Draft
+				if last {
+					draft = ""
+				}
+				if window.draft() != draft || len(window.attachments()) != 0 {
+					t.Error("deleted conversation left its composer contents in the new selection")
+				}
+				if _, ok := window.mirror.drafts[target.ID]; ok {
+					t.Error("deleted conversation retained its draft")
+				}
+				if _, ok := window.mirror.messages[target.ID]; ok {
+					t.Error("deleted conversation retained its messages")
+				}
+			})
+		})
+	}
+}
+
 func TestCompletionNoticeSurvivesServiceSnapshots(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	c := serverController(t.TempDir(), "")

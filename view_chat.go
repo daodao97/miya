@@ -74,6 +74,7 @@ func (app *chatApp) home(c *ui.Context) {
 func (app *chatApp) messageList(c *ui.Context, t Thread) {
 	c = c.Key(t.ID)
 	groups := app.groups.ofThread(t, app.c.revision())
+	status, completedGroup := currentTurnStatus(t, groups)
 	state := app.listFor(t.ID)
 	state.Key = func(i int) any { return messageViewKey(groups[i].Messages[0]) }
 	if t.Busy {
@@ -83,7 +84,7 @@ func (app *chatApp) messageList(c *ui.Context, t Thread) {
 	list := ui.List(c, state, len(groups), func(i int) {
 		ui.Column(c).FillWidth().AlignItems(ui.Center).Children(func() {
 			ui.Column(c).FillWidth().MaxWidth(744).Children(func() {
-				app.groupView(c, groups[i])
+				app.groupViewWithFooter(c, groups[i], i != completedGroup)
 			})
 		})
 	}).Grow(1).MinHeight(0).Padding(app.listPadding()).Gap(app.listPadding()).Children(func() {
@@ -127,36 +128,84 @@ func (app *chatApp) messageList(c *ui.Context, t Thread) {
 			}
 		})
 	}
-	if t.Busy {
+	if status != "" || completedGroup >= 0 {
 		ui.Row(c).FillWidth().Justify(ui.Center).Padding(0, app.listPadding(), 6, app.listPadding()).Children(func() {
-			ui.Row(c).FillWidth().MaxWidth(744).Gap(8).AlignItems(ui.Center).Children(func() {
-				if label := threadReconnectLabel(t); label != "" {
+			row := ui.Row(c.Key("turn-status")).FillWidth().MaxWidth(744).MinHeight(44).Gap(8).AlignItems(ui.Center)
+			if app.mobile {
+				row.Gap(6)
+			}
+			row.Children(func() {
+				phoneHint, desktopHint := "", false
+				if label := threadReconnectLabel(t); t.Busy && label != "" {
 					ui.Row(c.Key("reconnecting")).Gap(8).AlignItems(ui.Center).Label(label).Children(func() {
 						ui.Spinner(c).FontSize(13).TextColor(warnInk)
 						ui.Text(c, label).FontSize(12).TextColor(warnInk).Tooltip(t.Status)
 					})
-				} else {
-					workingLabel(c.Key("working"), "clock", threadWorkingLabel(t)).
-						Tooltip(tr("Average output speed for this turn, including wait time."))
-					if hint := stalledHint(t, len(app.c.approvals()) > 0, time.Now()); hint != "" {
+				} else if status != "" {
+					label := workingLabel(c.Key("working"), "clock", status).MinWidth(0).Shrink(1)
+					if t.Busy {
+						label.Tooltip(tr("Average output speed for this turn, including wait time."))
+					} else if completedGroup >= 0 {
+						label.Tooltip(formatMessageTimestamp(groups[completedGroup].Timestamp))
+					}
+					if hint := stalledHint(t, len(app.c.approvals()) > 0, time.Now()); t.Busy && hint != "" {
 						if app.mobile {
-							ui.Box(c).Grow(1).MinWidth(0)
-							ui.Text(c, tr("No response yet")).Shrink(0).SingleLine().FontSize(12).TextColor(warnInk).Tooltip(hint)
+							phoneHint = hint
 						} else {
+							desktopHint = true
 							ui.Text(c, "· "+hint).Grow(1).MinWidth(0).FontSize(12).TextColor(warnInk)
 						}
 					}
 				}
-				if app.workingAccessory != nil {
-					ui.Box(c.Key("accessory-gap")).Grow(1).MinWidth(0)
-					app.workingAccessory(c.Key("accessory"))
+				if completedGroup >= 0 {
+					responseDiffStats(c.Key("diff-stats"), groups[completedGroup].DiffStats)
+					app.responseActions(c.Key("response-actions"), groups[completedGroup])
 				}
+				// The phone's short hint and the Agent tasks toggle keep to the
+				// right edge; a desktop hint takes the free space before them.
+				trailing := ui.Row(c.Key("trailing")).MinWidth(0).Shrink(0).Gap(8).Justify(ui.End).AlignItems(ui.Center)
+				if desktopHint {
+					trailing.Shrink(0)
+				} else {
+					trailing.Grow(1)
+				}
+				trailing.Children(func() {
+					if phoneHint != "" {
+						ui.Text(c, tr("No response yet")).Shrink(0).SingleLine().FontSize(12).TextColor(warnInk).Tooltip(phoneHint)
+					}
+					if app.workingAccessory != nil {
+						app.workingAccessory(c.Key("accessory"))
+					} else if !app.mobile {
+						app.collaborationToggle(c.Key("accessory"), t)
+					}
+				})
 			})
 		})
 	}
 }
 
+// Keep the current turn above the composer in both states. Older responses
+// retain their historical timing; the latest completed response uses this row.
+func currentTurnStatus(t Thread, groups []messageGroup) (string, int) {
+	if t.Busy {
+		return threadWorkingLabel(t), -1
+	}
+	if last := len(groups) - 1; last >= 0 && !groups[last].User {
+		return turnElapsedLabel(groups[last].Messages, false), last
+	}
+	return "", -1
+}
+
+func (app *chatApp) turnStatusVisible(t Thread) bool {
+	label, completedGroup := currentTurnStatus(t, app.groups.ofThread(t, app.c.revision()))
+	return label != "" || completedGroup >= 0
+}
+
 func (app *chatApp) groupView(c *ui.Context, g messageGroup) {
+	app.groupViewWithFooter(c, g, true)
+}
+
+func (app *chatApp) groupViewWithFooter(c *ui.Context, g messageGroup, inlineFooter bool) {
 	if g.User {
 		app.userGroupView(c, g)
 		return
@@ -173,49 +222,67 @@ func (app *chatApp) groupView(c *ui.Context, g messageGroup) {
 		if g.Streaming {
 			return
 		}
+		if !inlineFooter {
+			return
+		}
 		size := float32(28)
 		if app.mobile {
 			size = 44
 		}
 		ui.Row(c).AlignItems(ui.Center).Gap(8).Height(size).Children(func() {
-			if elapsed := turnElapsedLabel(g.Messages, false); elapsed != "" {
+			elapsed := turnElapsedLabel(g.Messages, false)
+			if elapsed != "" {
 				ui.Text(c, elapsed).TextColor(muted).FontSize(11).Tooltip(formatMessageTimestamp(g.Timestamp))
 			}
 			if stats := g.DiffStats; stats.Added > 0 || stats.Deleted > 0 {
 				ui.Row(c.Key("diff-stats")).Gap(4).AlignItems(ui.Center).Children(func() {
-					ui.Text(c, "·").TextColor(muted).FontSize(11)
-					ui.Text(c, fmt.Sprintf("+%d", stats.Added)).TextColor(success).FontSize(11)
-					ui.Text(c, fmt.Sprintf("−%d", stats.Deleted)).TextColor(danger).FontSize(11)
+					if elapsed != "" {
+						ui.Text(c, "·").TextColor(muted).FontSize(11)
+					}
+					responseDiffStats(c, stats)
 				})
 			}
 			copied := app.copied[g.ID]
 			if !app.mobile && !hovered && !copied {
 				return
 			}
-			gap := float32(8)
-			copyAlign, handoffAlign := ui.Center, ui.Center
-			if app.mobile {
-				gap = 0
-				copyAlign, handoffAlign = ui.End, ui.Start
-			}
-			ui.Row(c.Key("actions")).AlignItems(ui.Center).Gap(gap).Children(func() {
-				name := "copy"
-				if copied {
-					name = "check"
-				}
-				b := quiet(c.Key("copy")).Size(size, size).PaddingX(6).Justify(copyAlign).Label(tr("Copy response")).Tooltip(tr("Copy response"))
-				b.Children(func() { icon(c, name, 15, muted) })
-				if b.Clicked() {
-					c.WriteClipboard(messageGroupText(g))
-					app.copied[g.ID] = true
-				}
-				h := quiet(c.Key("handoff")).Size(size, size).PaddingX(6).Justify(handoffAlign).Label(tr("Hand off to a new conversation")).Tooltip(tr("Hand off to a new conversation"))
-				h.Children(func() { icon(c, "arrow-right", 15, muted) })
-				if h.Clicked() {
-					app.handoffToNewThread()
-				}
-			})
+			app.responseActions(c.Key("actions"), g)
 		})
+	})
+}
+
+func responseDiffStats(c *ui.Context, stats diffLineStats) {
+	if stats.Added == 0 && stats.Deleted == 0 {
+		return
+	}
+	ui.Row(c).Shrink(0).Gap(4).AlignItems(ui.Center).Children(func() {
+		ui.Text(c, fmt.Sprintf("+%d", stats.Added)).TextColor(success).FontSize(11)
+		ui.Text(c, fmt.Sprintf("−%d", stats.Deleted)).TextColor(danger).FontSize(11)
+	})
+}
+
+func (app *chatApp) responseActions(c *ui.Context, g messageGroup) {
+	size, gap := float32(28), float32(8)
+	copyAlign, handoffAlign := ui.Center, ui.Center
+	if app.mobile {
+		size, gap, copyAlign, handoffAlign = 44, 0, ui.End, ui.Start
+	}
+	ui.Row(c).Shrink(0).AlignItems(ui.Center).Gap(gap).Children(func() {
+		name := "copy"
+		if app.copied[g.ID] {
+			name = "check"
+		}
+		b := quiet(c.Key("copy")).Size(size, size).PaddingX(6).Justify(copyAlign).Label(tr("Copy response")).Tooltip(tr("Copy response"))
+		b.Children(func() { icon(c, name, 15, muted) })
+		if b.Clicked() {
+			c.WriteClipboard(messageGroupText(g))
+			app.copied[g.ID] = true
+		}
+		h := quiet(c.Key("handoff")).Size(size, size).PaddingX(6).Justify(handoffAlign).Label(tr("Hand off to a new conversation")).Tooltip(tr("Hand off to a new conversation"))
+		h.Children(func() { icon(c, "arrow-right", 15, muted) })
+		if h.Clicked() {
+			app.handoffToNewThread()
+		}
 	})
 }
 

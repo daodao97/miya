@@ -192,8 +192,8 @@ func cachedImage(src string) ui.ImageSource {
 func workingLabel(c *ui.Context, symbol, s string) ui.Element {
 	row := ui.Row(c).AlignItems(ui.Center).Gap(8).Label(s)
 	row.Children(func() {
-		icon(c, symbol, 15, muted)
-		ui.Text(c, s).FontSize(12).TextColor(muted)
+		icon(c, symbol, 15, muted).Shrink(0)
+		ui.Text(c, s).MinWidth(0).MaxLines(2).FontSize(12).TextColor(muted)
 	})
 	return row
 }

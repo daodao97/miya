@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -26,10 +27,17 @@ func TestMobileResponseActionsWorkWithoutHover(t *testing.T) {
 				tt.Move(-1, -1)
 				tt.Frame()
 				saveMobileNativeSnapshot(t, tt, fmt.Sprintf("response-actions-%d-%s", width, agent))
+				status, ok := tt.Find("Worked for 3s")
+				if !ok {
+					t.Fatal("missing response status")
+				}
 				for _, label := range []string{"Copy response", "Hand off to a new conversation"} {
 					r, ok := tt.Find(label)
 					if !ok || r.W < 44 || r.H < 44 || r.X < 0 || r.X+r.W > float32(width) {
 						t.Fatalf("touch action missing or too small: %s %v", label, r)
+					}
+					if middle := status.Y + status.H/2; middle < r.Y || middle > r.Y+r.H {
+						t.Fatalf("%s is not on the status row: %v / %v", label, r, status)
 					}
 				}
 				if err := tt.Click("Copy response"); err != nil {
@@ -46,6 +54,9 @@ func TestMobileResponseActionsWorkWithoutHover(t *testing.T) {
 					t.Fatal(err)
 				}
 				m.images = []string{photo}
+				// Attachments change the composer height and the anchored status
+				// toolbar's position, just as a real UI frame would after picking one.
+				tt.Frame()
 				if err := tt.Click("Hand off to a new conversation"); err != nil {
 					t.Fatal(err)
 				}
@@ -68,6 +79,24 @@ func TestMobileResponseActionsWorkWithoutHover(t *testing.T) {
 				}
 				saveMobileNativeSnapshot(t, tt, fmt.Sprintf("response-handoff-%d-%s", width, agent))
 			})
+		}
+	}
+}
+
+func TestLatestResponseToolbarWithoutDuration(t *testing.T) {
+	app, tt := testApp(t)
+	app.c.setThreads([]Thread{{ID: 1, ServerID: "s1", HistoryLoaded: true, Messages: []Message{{ID: 1, Role: "assistant", Content: "A reply without timing metadata"}}}})
+	app.c.setActive(1)
+	tt.Frame()
+	if err := tt.Click("Copy response"); err != nil {
+		t.Fatal(err)
+	}
+	if tt.Clipboard() != "A reply without timing metadata" {
+		t.Fatal(tt.Clipboard())
+	}
+	for _, s := range tt.Texts() {
+		if strings.HasPrefix(s, "Worked for ") {
+			t.Fatal("invented response duration", s)
 		}
 	}
 }

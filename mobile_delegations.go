@@ -90,8 +90,8 @@ func (m *mobileApp) collaborationPane() (*collaborationPanel, collaborationPanel
 	t := m.view.c.current()
 	from := ThreadRef{Source: m.state.ReferenceSource, Backend: threadAgent(t), SessionID: t.ServerID}.URL()
 	p := m.pal
-	// While a turn runs, the toggle sits at the end of the working status row.
-	v := collaborationPanelView{palette: taskPalette{p.surface, p.line, p.ink, p.muted}, capability: capability, from: from, readOnly: t.ReadOnly, connected: m.connected, call: m.collaborationCall, openThread: m.openCollaborationThread, trailing: true, toggleElsewhere: t.Busy}
+	// Running and completed turns share the same status row and task toggle.
+	v := collaborationPanelView{palette: taskPalette{p.surface, p.line, p.ink, p.muted}, capability: capability, from: from, readOnly: t.ReadOnly, connected: m.connected, call: m.collaborationCall, openThread: m.openCollaborationThread, trailing: true, toggleElsewhere: m.view.turnStatusVisible(t)}
 	return m.collaborations.pane(from), v, true
 }
 
@@ -101,9 +101,10 @@ func (m *mobileApp) collaborationTasks(c *ui.Context) {
 	}
 }
 
-// collaborationToggle is the working row's accessory on the phone.
+// collaborationToggle is the turn status row's accessory on the phone.
 func (m *mobileApp) collaborationToggle(c *ui.Context) {
 	if pane, v, ok := m.collaborationPane(); ok && v.toggleElsewhere && !pane.hidden() {
+		v.compactToggle = c.Root().Bounds().W < 360 || m.textScale > 1.3
 		ui.Row(c).Shrink(0).Margin(0, -8, 0, 0).Children(func() { pane.drawToggle(c, v) })
 	}
 }
@@ -114,13 +115,25 @@ func (m *mobileApp) openCollaborationThread(raw string) {
 		m.sendErr = tr("Conversation unavailable")
 		return
 	}
+	if thread, _, found := m.referencedThread(ref); found {
+		m.openThread(thread)
+		return
+	}
+	m.sendErr = tr("Conversation unavailable")
+}
+
+// Resolve the complete backend identity across projects. Numeric sidebar IDs
+// may be reused after a reconnect and must not choose the destination.
+func (m *mobileApp) referencedThread(ref ThreadRef) (Thread, phoneProject, bool) {
+	if !ref.valid() || ref.Source != m.state.ReferenceSource {
+		return Thread{}, phoneProject{}, false
+	}
 	for _, project := range m.state.Projects {
 		for _, thread := range project.Threads {
 			if threadAgent(thread) == ref.Backend && thread.ServerID == ref.SessionID {
-				m.openThread(thread)
-				return
+				return thread, project, true
 			}
 		}
 	}
-	m.sendErr = tr("Conversation unavailable")
+	return Thread{}, phoneProject{}, false
 }

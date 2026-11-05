@@ -99,6 +99,16 @@ func TestCollaborationPanelRefreshesSelectedNotificationWithoutTaskRevisionChang
 	}
 }
 
+func TestCollaborationRefreshDoesNotOpenPopover(t *testing.T) {
+	pane := (&collaborationUI{}).pane("source")
+	pane.refresh(&collaborationStatus{Version: 1}, func(_ collaborationRequest, done func(json.RawMessage, error)) {
+		done(collaborationArgsJSON(collaborationListView{Tasks: []collaborationTaskView{{ID: "review", Title: "Review", State: dg.Completed}}}), nil)
+	}, false)
+	if pane.hidden() || pane.open {
+		t.Fatal("refresh should reveal the task entry without opening its popover")
+	}
+}
+
 func TestCollaborationTaskCardsUseSameLayoutOnBothClients(t *testing.T) {
 	for _, width := range []int{1120, 320, 390} {
 		t.Run(fmt.Sprint(width), func(t *testing.T) {
@@ -128,7 +138,9 @@ func TestCollaborationTaskCardsUseSameLayoutOnBothClients(t *testing.T) {
 				}
 			}
 			view := collaborationPanelView{palette: taskPalette{panel, line, ink, muted}, capability: &collaborationStatus{Version: 1, Revision: 7}, connected: true, call: call, openThread: func(string) {}}
-			tt := ui.NewTester(func(c *ui.Context) { ui.Column(c).FillWidth().Padding(12).Children(func() { pane.draw(c, view) }) }, width, 750)
+			tt := ui.NewTester(func(c *ui.Context) {
+				ui.Column(c).Fill().Padding(12).Justify(ui.End).Children(func() { pane.draw(c, view) })
+			}, width, 750)
 			tt.Frame()
 			if !tt.HasText("Two compatibility issues") || !tt.HasText("Results returned") {
 				t.Fatal("card omitted fixed summary or delivery state", tt.Texts())

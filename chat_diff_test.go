@@ -84,6 +84,18 @@ func TestCompletedResponseShowsDiffStats(t *testing.T) {
 			t.Fatalf("missing %q in %q", want, tt.Texts())
 		}
 	}
+	status, _ := tt.Find("Worked for 11s")
+	added, _ := tt.Find("+2")
+	deleted, _ := tt.Find("−1")
+	copy, _ := tt.Find("Copy response")
+	if added.X < status.X+status.W || deleted.X < added.X+added.W || copy.X < deleted.X+deleted.W {
+		t.Fatalf("latest diff stats are not between elapsed time and actions: %v / %v / %v / %v", status, added, deleted, copy)
+	}
+	for _, stat := range []ui.Rect{added, deleted} {
+		if middle := status.Y + status.H/2; middle < stat.Y || middle > stat.Y+stat.H {
+			t.Fatalf("latest diff stats stayed below the reply: %v / %v", status, stat)
+		}
+	}
 	// The phone shares the same response footer, including its action buttons.
 	app.mobile = true
 	phone := ui.NewTester(func(c *ui.Context) { app.groupView(c, groupMessages(app.c.current().Messages)[0]) }, 320, 200)

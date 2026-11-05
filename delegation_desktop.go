@@ -39,14 +39,28 @@ func (app *chatApp) collaborationCall(request collaborationRequest, done func(js
 	finish(value, err)
 }
 
-func (app *chatApp) collaborationTasks(c *ui.Context, t Thread) {
+func (app *chatApp) collaborationPane(t Thread) (*collaborationPanel, collaborationPanelView, bool) {
 	capability := app.c.collaborationCapabilities()
 	if capability == nil || capability.Version < 1 {
-		return
+		return nil, collaborationPanelView{}, false
 	}
 	from := app.c.threadRef(t).URL()
-	pane := app.collaborations.pane(from)
-	pane.draw(c, collaborationPanelView{palette: taskPalette{panel, line, ink, muted}, capability: capability, from: from, readOnly: t.ReadOnly, connected: true, call: app.collaborationCall, openThread: app.openCollaborationThread})
+	// Running and completed turns share the same status row and task toggle.
+	v := collaborationPanelView{palette: taskPalette{panel, line, ink, muted}, capability: capability, from: from, readOnly: t.ReadOnly, connected: true, call: app.collaborationCall, openThread: app.openCollaborationThread, trailing: true, toggleElsewhere: app.turnStatusVisible(t)}
+	return app.collaborations.pane(from), v, true
+}
+
+func (app *chatApp) collaborationTasks(c *ui.Context, t Thread) {
+	if pane, v, ok := app.collaborationPane(t); ok {
+		pane.draw(c, v)
+	}
+}
+
+// collaborationToggle is the turn status row's accessory on the desktop.
+func (app *chatApp) collaborationToggle(c *ui.Context, t Thread) {
+	if pane, v, ok := app.collaborationPane(t); ok && v.toggleElsewhere && !pane.hidden() {
+		ui.Row(c).Shrink(0).Margin(0, -8, 0, 0).Children(func() { pane.drawToggle(c, v) })
+	}
 }
 
 func (app *chatApp) openCollaborationThread(raw string) {
@@ -66,6 +80,7 @@ func (app *chatApp) openCollaborationThread(raw string) {
 				return
 			}
 		}
+		app.collaborations.closePopovers()
 		app.section = ""
 		app.c.selectThread(thread)
 		return

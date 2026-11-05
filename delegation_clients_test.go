@@ -132,7 +132,7 @@ func TestCollaborationPhoneAndDesktopCanResolveUnknownNotification(t *testing.T)
 			var cap *collaborationStatus
 			f.serv.do(func() { cap = f.srv.c.collaborationCapabilities() })
 			v := collaborationPanelView{palette: taskPalette{panel, line, ink, muted}, capability: cap, connected: true, call: call}
-			tt := ui.NewTester(func(c *ui.Context) { ui.Column(c).FillWidth().Padding(12).Children(func() { p.draw(c, v) }) }, width, 750)
+			tt := ui.NewTester(func(c *ui.Context) { ui.Column(c).Fill().Padding(12).Justify(ui.End).Children(func() { p.draw(c, v) }) }, width, 750)
 			tt.Frame()
 			if err := tt.Click("Stop tracking this notification"); err != nil {
 				t.Fatal(err)

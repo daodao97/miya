@@ -201,3 +201,41 @@ func TestMobileAgentTasksToggleSharesWorkingRow(t *testing.T) {
 		t.Fatalf("toggle drawn %d times", count/2)
 	}
 }
+
+func TestDesktopAgentTasksToggleSharesWorkingRow(t *testing.T) {
+	app, tt := testApp(t)
+	app.c.collaborationRemote = &collaborationStatus{Version: 1}
+	app.c.setThreads([]Thread{{ID: 1, ServerID: "s1", Title: "Running", Busy: true, HistoryLoaded: true, StartedAtMs: time.Now().Add(-10 * time.Second).UnixMilli()}})
+	app.c.setActive(1)
+	tt.Frame()
+	if tt.HasText("Agent tasks") {
+		t.Fatal("toggle shown without any Agent tasks")
+	}
+	pane, _, _ := app.collaborationPane(app.c.current())
+	pane.loaded, pane.rows = true, []collaborationTaskView{{ID: "t1", Title: "Review", Agent: agentCodex}}
+	tt.Frame()
+	working, ok := tt.Find(threadWorkingLabel(app.c.current()))
+	if !ok {
+		t.Fatal("missing working status", tt.Texts())
+	}
+	toggle, ok := tt.Find("Agent tasks (1)")
+	if !ok {
+		t.Fatal("missing Agent tasks toggle")
+	}
+	if mid := working.Y + working.H/2; mid < toggle.Y || mid > toggle.Y+toggle.H {
+		t.Fatalf("toggle %v not on the working row %v", toggle, working)
+	}
+	if toggle.X < working.X+working.W+100 {
+		t.Fatalf("toggle %v not at the right edge of the row %v", toggle, working)
+	}
+	count := 0
+	for _, s := range tt.Texts() {
+		if s == "Agent tasks (1)" {
+			count++
+		}
+	}
+	// One button contributes its accessibility label and its text.
+	if count != 2 {
+		t.Fatalf("toggle drawn %d times", count/2)
+	}
+}

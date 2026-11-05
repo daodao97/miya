@@ -239,6 +239,8 @@ func (c *chatController) watchService(cl *serviceClient) {
 }
 
 func (c *chatController) applyState(s svcState) {
+	active := c.active()
+	hadActive := c.threadWithID(active).ID != 0
 	c.collaborationRemote = s.Collaboration
 	c.referenceSource = s.ReferenceSource
 	c.memoryRevision = s.MemoryRevision
@@ -280,6 +282,17 @@ func (c *chatController) applyState(s svcState) {
 	c.claudeDefaultModel = s.ClaudeDefaultModel
 	c.accountState, c.accountReset, c.quotaLimits, c.quotaStatus = s.Account, s.AccountReset, s.QuotaLimits, s.QuotaStatus
 	c.mirror.phone = s.Phone
+	// Each window owns its selection. When a conversation disappears from
+	// the service, discard its stale draft/messages and select a live one.
+	if hadActive && c.threadWithID(active).ID == 0 {
+		delete(c.mirror.messages, active)
+		delete(c.mirror.drafts, active)
+		if len(threads) > 0 {
+			c.selectThread(threads[0])
+		} else {
+			c.newThread()
+		}
+	}
 	// No revision bump: a state carries no messages (applyMessages bumps it),
 	// and the view's group cache keys on the thread, its busy flag and turn
 	// itself. Bumping here regrouped the open conversation at every push.

@@ -253,11 +253,7 @@ func newMobileApp() *mobileApp {
 		formErrors: map[string]string{},
 	}
 	m.view.md = markdown.Options{
-		OnLink: func(link string) {
-			if ui.SafeToOpen(link) {
-				go mygo.Shell.OpenExternal(link)
-			}
-		},
+		OnLink:    m.openMessageLink,
 		LoadImage: func(src string) (ui.ImageSource, error) { return loadImage(imageSourcePath(src)) },
 	}
 	m.view.imagePreview = m.messageImage
@@ -269,17 +265,8 @@ func newMobileApp() *mobileApp {
 		m.sendPhoneAction(r)
 	}
 	m.view.referenceThread = func(ref ThreadRef) (Thread, bool) {
-		if ref.Source != m.state.ReferenceSource {
-			return Thread{}, false
-		}
-		for _, p := range m.state.Projects {
-			for _, t := range p.Threads {
-				if t.ServerID == ref.SessionID && threadAgent(t) == ref.Backend {
-					return t, true
-				}
-			}
-		}
-		return Thread{}, false
+		t, _, ok := m.referencedThread(ref)
+		return t, ok
 	}
 
 	return m
@@ -905,11 +892,17 @@ func (m *mobileApp) resetComposer() {
 }
 
 func (m *mobileApp) openThread(t Thread) {
+	m.collaborations.closePopovers()
 	m.drawerSearch, m.drawerQuery = false, ""
-	if _, project := m.find(t.ID); project.Path != "" {
+	_, project := m.find(t.ID)
+	if t.ServerID != "" {
+		_, project, _ = m.referencedThread(ThreadRef{Source: m.state.ReferenceSource, Backend: threadAgent(t), SessionID: t.ServerID})
+	}
+	if project.Path != "" {
 		m.selected, m.expandedProject, m.projectsExpanded = project.Path, project.Path, true
 	}
-	if m.open == t.ID && m.router().Path() == "/thread" {
+	cur := m.view.c.current()
+	if m.open == t.ID && cur.ServerID == t.ServerID && threadAgent(cur) == threadAgent(t) && m.router().Path() == "/thread" {
 		m.menu = false
 		return
 	}
@@ -1111,6 +1104,7 @@ func (m *mobileApp) connectionLine() string {
 
 func (m *mobileApp) viewRoot(c *ui.Context) {
 	useInterfaceLanguage(c)
+	m.view.md.LinkMenu = messageLinkMenu(c, m.composerProject())
 	m.updateReconnectCountdown(c)
 	m.textScale = c.Preferences().TextScale
 	// Before SetTheme, the theme is the system's appearance.
@@ -2035,6 +2029,9 @@ func (m *mobileApp) threadRequest(op string, id int) remote.Request {
 			p = phoneProject{}
 		}
 		t = cur
+	}
+	if _, project, ok := m.referencedThread(ThreadRef{Source: m.state.ReferenceSource, Backend: threadAgent(t), SessionID: t.ServerID}); ok {
+		p = project
 	}
 	r.ServerID, r.Agent, r.Project = t.ServerID, threadAgent(t), p.Path
 	return r
