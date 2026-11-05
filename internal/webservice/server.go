@@ -1,4 +1,6 @@
-package main
+// Package webservice finds the web servers a project runs on this desktop
+// and proxies them to a paired phone through the private file tunnel.
+package webservice
 
 import (
 	"context"
@@ -13,11 +15,11 @@ import (
 	"time"
 )
 
-const desktopWebPrefix = "/.miya-web/"
+const Prefix = "/.miya-web/"
 
 // Only numeric ports on this desktop's own interfaces are reachable.
 // The handler is served inside the existing paired, private file tunnel.
-func desktopWebServer(validators ...func(context.Context, string, string, int) error) http.Handler {
+func Server(validators ...func(context.Context, string, string, int) error) http.Handler {
 	transport := &http.Transport{DialContext: func(ctx context.Context, _, address string) (net.Conn, error) {
 		host, port, err := net.SplitHostPort(address)
 		if err != nil {
@@ -37,21 +39,21 @@ func desktopWebServer(validators ...func(context.Context, string, string, int) e
 		return conn, nil
 	}, IdleConnTimeout: 30 * time.Second, ResponseHeaderTimeout: 20 * time.Second}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		parts := strings.SplitN(strings.TrimPrefix(r.URL.Path, desktopWebPrefix), "/", 2)
-		if !strings.HasPrefix(r.URL.Path, desktopWebPrefix) || len(parts) != 2 {
+		parts := strings.SplitN(strings.TrimPrefix(r.URL.Path, Prefix), "/", 2)
+		if !strings.HasPrefix(r.URL.Path, Prefix) || len(parts) != 2 {
 			http.NotFound(w, r)
 			return
 		}
-		port, err := parseWebPort(parts[0])
+		port, err := ParsePort(parts[0])
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		prefix := desktopWebPrefix + parts[0]
+		prefix := Prefix + parts[0]
 		target := &url.URL{Scheme: "http", Host: "localhost:" + strconv.Itoa(port)}
 		host := r.Header.Get("X-Miya-Web-Host")
 		token := r.Header.Get("X-Miya-Runtime")
-		if !validWebServiceHost(host, token) || host != "" && !rt.LocalHost(host) {
+		if !ValidHost(host, token) || host != "" && !rt.LocalHost(host) {
 			http.Error(w, "Invalid local service address", http.StatusBadRequest)
 			return
 		}
@@ -99,7 +101,7 @@ func localWebHost(host string) bool {
 	return strings.EqualFold(host, "localhost") || host == "127.0.0.1" || host == "::1"
 }
 
-func parseWebPort(value string) (int, error) {
+func ParsePort(value string) (int, error) {
 	for _, ch := range value {
 		if ch < '0' || ch > '9' {
 			return 0, fmt.Errorf("Enter a port number between 1 and 65535")
@@ -141,4 +143,14 @@ func webServiceLocationForHost(location, prefix string, port int, host string) s
 		return u.String()
 	}
 	return location
+}
+
+// The phone cannot enumerate the desktop's interfaces. Non-loopback literals
+// require an owned runtime token; the desktop checks its own interfaces again.
+func ValidHost(host, token string) bool {
+	if host == "" || host == "127.0.0.1" || host == "::1" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return token != "" && ip != nil && !ip.IsUnspecified() && !ip.IsMulticast()
 }

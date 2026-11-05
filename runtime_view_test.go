@@ -12,11 +12,12 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	rt "miya/internal/runtime"
+	"miya/internal/webservice"
 )
 
 func sampleConversationRuntime(ref ThreadRef) conversationRuntime {
 	p := rt.Process{Identity: rt.Identity{Host: "desktop", Boot: "boot", Start: "start", PID: 42}, Name: "node", Status: "running"}
-	return conversationRuntime{View: rt.View{Key: runtimeKey(ref), TasksKnown: true, Tasks: []rt.Task{{ID: "opaque", Kind: "local_bash", Description: "Start app", Status: "running"}}, Processes: []rt.Process{p}, ObservedAt: time.Now().UnixMilli()}, Services: []phoneWebService{{Port: 5173, Host: "127.0.0.1", Process: "node", RuntimeToken: "test-token"}}}
+	return conversationRuntime{View: rt.View{Key: runtimeKey(ref), TasksKnown: true, Tasks: []rt.Task{{ID: "opaque", Kind: "local_bash", Description: "Start app", Status: "running"}}, Processes: []rt.Process{p}, ObservedAt: time.Now().UnixMilli()}, Services: []webservice.Service{{Port: 5173, Host: "127.0.0.1", Process: "node", RuntimeToken: "test-token"}}}
 }
 func TestMobileRuntimeIsConversationScopedAndHasBackgroundDetails(t *testing.T) {
 	for _, width := range []int{320, 390} {
@@ -93,7 +94,7 @@ func TestPhoneRuntimeEndpointValidatesStableReferenceAndNeverFallsBack(t *testin
 		}
 		return sample, nil
 	}
-	handler.webServices = func(context.Context, string) ([]phoneWebService, error) {
+	handler.webServices = func(context.Context, string) ([]webservice.Service, error) {
 		t.Error("runtime fell back to directory candidates")
 		return nil, nil
 	}

@@ -20,6 +20,7 @@ import (
 
 	"github.com/egoist/mygo/i18n"
 	"golang.org/x/text/language"
+	"miya/internal/webservice"
 	"miya/locales"
 )
 
@@ -31,7 +32,7 @@ func projectFileID(root string) string {
 type fileProject struct{ ID, Name, Path string }
 type desktopFileServer struct {
 	projects    func(context.Context) ([]fileProject, error)
-	webServices func(context.Context, string) ([]phoneWebService, error)
+	webServices func(context.Context, string) ([]webservice.Service, error)
 	runtime     func(context.Context, ThreadRef, string) (conversationRuntime, error)
 }
 
@@ -66,7 +67,7 @@ func (c *chatController) fileServer() http.Handler {
 			return nil, c.ctx.Err()
 		}
 	}}
-	web := desktopWebServer(func(ctx context.Context, token, host string, port int) error {
+	web := webservice.Server(func(ctx context.Context, token, host string, port int) error {
 		manager, ok := onMain(ctx, c.dispatch, func() *runtimeManager { return c.runtimes() })
 		if !ok {
 			return ctx.Err()
@@ -79,7 +80,7 @@ func (c *chatController) fileServer() http.Handler {
 			controls.ServeHTTP(w, r)
 			return
 		}
-		if strings.HasPrefix(r.URL.Path, desktopWebPrefix) {
+		if strings.HasPrefix(r.URL.Path, webservice.Prefix) {
 			web.ServeHTTP(w, r)
 			return
 		}
@@ -109,7 +110,7 @@ func (s desktopFileServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	timeout := 5 * time.Second
-	if parts[1] == projectWebServicesPath || parts[1] == ".miya-runtime" {
+	if parts[1] == webservice.ProjectFile || parts[1] == ".miya-runtime" {
 		timeout = 10 * time.Second
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), timeout)
@@ -151,10 +152,10 @@ func (s desktopFileServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	if parts[1] == projectWebServicesPath {
+	if parts[1] == webservice.ProjectFile {
 		discover := s.webServices
 		if discover == nil {
-			discover = discoverProjectWebServices
+			discover = webservice.Discover
 		}
 		services, err := discover(ctx, project.Path)
 		if err != nil {

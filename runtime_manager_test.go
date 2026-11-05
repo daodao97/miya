@@ -22,6 +22,7 @@ import (
 	"miya/internal/claude"
 	"miya/internal/codex"
 	rt "miya/internal/runtime"
+	"miya/internal/webservice"
 )
 
 func TestCodexRuntimeRecoversTaggedServicesWithoutNativeTerminals(t *testing.T) {
@@ -83,24 +84,24 @@ func TestRuntimeOwnedServiceOnDesktopLANInterface(t *testing.T) {
 		t.Fatalf("LAN listener missing: %+v", result)
 	}
 	svc := result.Services[0]
-	request := httptest.NewRequest(http.MethodGet, desktopWebPrefix+strconv.Itoa(port)+"/", nil)
+	request := httptest.NewRequest(http.MethodGet, webservice.Prefix+strconv.Itoa(port)+"/", nil)
 	request.Header.Set("X-Miya-Web-Host", host)
 	request.Header.Set("X-Miya-Runtime", svc.RuntimeToken)
 	response := httptest.NewRecorder()
-	desktopWebServer(m.validateToken).ServeHTTP(response, request)
+	webservice.Server(m.validateToken).ServeHTTP(response, request)
 	if response.Code != 404 {
 		t.Fatalf("owned LAN proxy = %d: %s", response.Code, response.Body.String())
 	}
 	request.Header.Del("X-Miya-Runtime")
 	response = httptest.NewRecorder()
-	desktopWebServer(m.validateToken).ServeHTTP(response, request)
+	webservice.Server(m.validateToken).ServeHTTP(response, request)
 	if response.Code != 400 {
 		t.Fatal("LAN proxy accepted missing ownership token")
 	}
 	request.Header.Set("X-Miya-Runtime", svc.RuntimeToken)
 	request.Header.Set("X-Miya-Web-Host", "203.0.113.1")
 	response = httptest.NewRecorder()
-	desktopWebServer(m.validateToken).ServeHTTP(response, request)
+	webservice.Server(m.validateToken).ServeHTTP(response, request)
 	if response.Code != 400 {
 		t.Fatal("LAN proxy accepted another computer")
 	}

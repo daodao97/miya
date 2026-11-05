@@ -10,6 +10,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"miya/internal/fsutil"
 	"miya/internal/remote"
+	"miya/internal/thumbnail"
 )
 
 func (m *mobileApp) previewPath(source string) string {
@@ -91,7 +92,7 @@ func (m *mobileApp) messageImage(source string) ui.ImageSource {
 }
 
 func storePhonePreview(path string, data []byte) error {
-	if len(data) == 0 || len(data) > maxPhonePreviewBytes {
+	if len(data) == 0 || len(data) > thumbnail.MaxBytes {
 		return errors.New(tr("Invalid image preview"))
 	}
 	img, err := ui.DecodeImage(data)
@@ -111,7 +112,7 @@ func storePhonePreview(path string, data []byte) error {
 	return nil
 }
 
-func (m *mobileApp) receiveImage(preview phoneImagePreview) {
+func (m *mobileApp) receiveImage(preview thumbnail.Image) {
 	path, gen := m.previewPath(preview.Source), m.generation
 	conn := m.conn
 	go func() {

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"miya/internal/webservice"
 )
 
 func TestMobileWebServiceNavigation(t *testing.T) {
@@ -99,7 +100,7 @@ func TestMobileWebServicesListKeepsConversationProject(t *testing.T) {
 			if m.webProject != "/b" || m.webServices.project != "/b" {
 				t.Fatal("service list used selected project instead of conversation project")
 			}
-			m.webServices.services = []phoneWebService{{Port: 3000, Process: "node"}, {Port: 5173, Process: "vite"}}
+			m.webServices.services = []webservice.Service{{Port: 3000, Process: "node"}, {Port: 5173, Process: "vite"}}
 			tt.Frame()
 			for _, label := range []string{"proj-b", "Port 3000", "Port 5173", "Refresh web services", "Enter port manually"} {
 				if !tt.HasText(label) {

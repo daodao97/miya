@@ -17,6 +17,7 @@ import (
 	"github.com/egoist/mygo/ui/editor"
 	"github.com/egoist/mygo/ui/markdown"
 	"miya/internal/fsutil"
+	"miya/internal/webservice"
 	"miya/internal/worktree"
 )
 
@@ -471,7 +472,7 @@ func (app *chatApp) navigate(s *panelSurface) {
 	}
 	s.address, s.loaded = target, target
 	if app.c.remoteHost() {
-		app.navigateRemoteBrowser(s, target, phoneWebService{})
+		app.navigateRemoteBrowser(s, target, webservice.Service{})
 		return
 	}
 	if err := s.web.Page().LoadURL(target); err != nil {

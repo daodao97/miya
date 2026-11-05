@@ -1,9 +1,10 @@
-package main
+package webservice
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"miya/internal/model"
 	rt "miya/internal/runtime"
 	"net"
 	"os"
@@ -14,14 +15,14 @@ import (
 	"strings"
 )
 
-const projectWebServicesPath = ".miya-web-services"
+const ProjectFile = ".miya-web-services"
 
-type phoneWebService struct {
-	RuntimeToken string     `json:"runtimeToken,omitempty"`
-	Owner        *ThreadRef `json:"owner,omitempty"`
-	Port         int        `json:"port"`
-	Process      string     `json:"process"`
-	Host         string     `json:"host,omitempty"`
+type Service struct {
+	RuntimeToken string           `json:"runtimeToken,omitempty"`
+	Owner        *model.ThreadRef `json:"owner,omitempty"`
+	Port         int              `json:"port"`
+	Process      string           `json:"process"`
+	Host         string           `json:"host,omitempty"`
 }
 
 type webListenerProcess struct {
@@ -31,24 +32,24 @@ type webListenerProcess struct {
 	hosts     map[int]string
 }
 
-func discoverProjectWebServices(ctx context.Context, project string) ([]phoneWebService, error) {
+func Discover(ctx context.Context, project string) ([]Service, error) {
 	root, err := filepath.EvalSymlinks(project)
 	if err != nil {
 		return nil, err
 	}
-	listeners, err := runWebLSOF(ctx, "-nP", "-a", "-u", strconv.Itoa(os.Getuid()), "-iTCP", "-sTCP:LISTEN", "-F0pcfnt")
+	listeners, err := RunLSOF(ctx, "-nP", "-a", "-u", strconv.Itoa(os.Getuid()), "-iTCP", "-sTCP:LISTEN", "-F0pcfnt")
 	if err != nil {
 		return nil, err
 	}
 	processes := parseWebListeners(listeners)
 	if len(processes) == 0 {
-		return []phoneWebService{}, nil
+		return []Service{}, nil
 	}
 	pids := make([]string, 0, len(processes))
 	for _, process := range processes {
 		pids = append(pids, strconv.Itoa(process.pid))
 	}
-	cwd, err := runWebLSOF(ctx, "-a", "-p", strings.Join(pids, ","), "-d", "cwd", "-F0pn")
+	cwd, err := RunLSOF(ctx, "-a", "-p", strings.Join(pids, ","), "-d", "cwd", "-F0pn")
 	if err != nil {
 		return nil, err
 	}
@@ -57,10 +58,10 @@ func discoverProjectWebServices(ctx context.Context, project string) ([]phoneWeb
 		processes[i].cwd = directories[processes[i].pid]
 	}
 	candidates := projectWebCandidates(root, processes)
-	return probeProjectWebServices(ctx, candidates)
+	return Probe(ctx, candidates)
 }
 
-func runWebLSOF(ctx context.Context, args ...string) ([]byte, error) {
+func RunLSOF(ctx context.Context, args ...string) ([]byte, error) {
 	binary, err := exec.LookPath("lsof")
 	if err != nil {
 		return nil, errors.New("Unable to find listening ports on your computer. Enter a port manually.")
@@ -80,7 +81,7 @@ func runWebLSOF(ctx context.Context, args ...string) ([]byte, error) {
 	return output, nil
 }
 
-func webLSOFFields(data []byte) []string {
+func LSOFFields(data []byte) []string {
 	fields := strings.Split(string(data), "\x00")
 	for i := range fields {
 		fields[i] = strings.TrimLeft(fields[i], "\n")
@@ -91,7 +92,7 @@ func webLSOFFields(data []byte) []string {
 func parseWebListeners(data []byte) []webListenerProcess {
 	var processes []webListenerProcess
 	family := ""
-	for _, field := range webLSOFFields(data) {
+	for _, field := range LSOFFields(data) {
 		if len(field) < 2 {
 			continue
 		}
@@ -117,7 +118,7 @@ func parseWebListeners(data []byte) []webListenerProcess {
 			if err != nil || host != "*" && !loopbackListenerHost(host) {
 				continue
 			}
-			port, err := parseWebPort(value)
+			port, err := ParsePort(value)
 			if err == nil {
 				p := &processes[len(processes)-1]
 				p.ports = append(p.ports, port)
@@ -145,7 +146,7 @@ func loopbackListenerHost(host string) bool {
 func parseWebProcessDirectories(data []byte) map[int]string {
 	out := map[int]string{}
 	pid := 0
-	for _, field := range webLSOFFields(data) {
+	for _, field := range LSOFFields(data) {
 		if len(field) < 2 {
 			continue
 		}
@@ -161,8 +162,8 @@ func parseWebProcessDirectories(data []byte) map[int]string {
 	return out
 }
 
-func projectWebCandidates(root string, processes []webListenerProcess) []phoneWebService {
-	byPort := map[int]phoneWebService{}
+func projectWebCandidates(root string, processes []webListenerProcess) []Service {
+	byPort := map[int]Service{}
 	for _, process := range processes {
 		if process.cwd == "" {
 			continue
@@ -177,11 +178,11 @@ func projectWebCandidates(root string, processes []webListenerProcess) []phoneWe
 		}
 		for _, port := range process.ports {
 			if _, exists := byPort[port]; !exists {
-				byPort[port] = phoneWebService{Port: port, Process: process.name, Host: process.hosts[port]}
+				byPort[port] = Service{Port: port, Process: process.name, Host: process.hosts[port]}
 			}
 		}
 	}
-	services := make([]phoneWebService, 0, len(byPort))
+	services := make([]Service, 0, len(byPort))
 	for _, service := range byPort {
 		services = append(services, service)
 	}
@@ -189,7 +190,7 @@ func projectWebCandidates(root string, processes []webListenerProcess) []phoneWe
 	return services
 }
 
-func probeProjectWebServices(ctx context.Context, candidates []phoneWebService) ([]phoneWebService, error) {
+func Probe(ctx context.Context, candidates []Service) ([]Service, error) {
 	endpoints := make([]rt.Endpoint, len(candidates))
 	for i, service := range candidates {
 		endpoints[i] = rt.Endpoint{Host: service.Host, Port: service.Port}
@@ -198,7 +199,7 @@ func probeProjectWebServices(ctx context.Context, candidates []phoneWebService) 
 	if err != nil {
 		return nil, err
 	}
-	services := make([]phoneWebService, 0, len(candidates))
+	services := make([]Service, 0, len(candidates))
 	for i, endpoint := range verified {
 		if endpoint.Protocol == "http" {
 			service := candidates[i]

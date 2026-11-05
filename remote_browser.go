@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"miya/internal/webservice"
 	"net"
 	"net/url"
 	"strconv"
@@ -10,7 +11,7 @@ import (
 
 // Only localhost URLs change meaning when the workspace is remote. Public
 // websites keep loading normally in the client's WebView.
-func remoteBrowserService(target string, service phoneWebService) (phoneWebService, *url.URL, bool, error) {
+func remoteBrowserService(target string, service webservice.Service) (webservice.Service, *url.URL, bool, error) {
 	u, err := url.Parse(target)
 	if err != nil {
 		return service, nil, false, err
@@ -32,7 +33,7 @@ func remoteBrowserService(target string, service phoneWebService) (phoneWebServi
 	if err != nil {
 		return service, u, true, err
 	}
-	if _, err = parseWebPort(port); err != nil {
+	if _, err = webservice.ParsePort(port); err != nil {
 		return service, u, true, err
 	}
 	if service.Host == "" {
@@ -44,7 +45,7 @@ func remoteBrowserService(target string, service phoneWebService) (phoneWebServi
 	return service, u, true, nil
 }
 
-func (app *chatApp) navigateRemoteBrowser(s *panelSurface, target string, service phoneWebService) {
+func (app *chatApp) navigateRemoteBrowser(s *panelSurface, target string, service webservice.Service) {
 	s.webGeneration++
 	gen := s.webGeneration
 	if s.webProxy != nil {

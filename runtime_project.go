@@ -7,11 +7,12 @@ import (
 	"sync"
 
 	rt "miya/internal/runtime"
+	"miya/internal/webservice"
 )
 
 // Project overview aggregates proven session resources first. Directory-based
 // listeners remain explicitly unowned candidates, never session evidence.
-func (c *chatController) projectRuntimeServices(ctx context.Context, project string) ([]phoneWebService, error) {
+func (c *chatController) projectRuntimeServices(ctx context.Context, project string) ([]webservice.Service, error) {
 	type plan struct {
 		manager *runtimeManager
 		keys    []rt.SessionKey
@@ -56,7 +57,7 @@ func (c *chatController) projectRuntimeServices(ctx context.Context, project str
 	}
 	close(jobs)
 	workers.Wait()
-	services := []phoneWebService{}
+	services := []webservice.Service{}
 	owned := map[string]bool{}
 	for i, view := range views {
 		for _, service := range runtimeResult(prepared.manager, prepared.keys[i], view).Services {
@@ -64,7 +65,7 @@ func (c *chatController) projectRuntimeServices(ctx context.Context, project str
 			owned[service.Host+":"+strconv.Itoa(service.Port)] = true
 		}
 	}
-	candidates, err := discoverProjectWebServices(ctx, project)
+	candidates, err := webservice.Discover(ctx, project)
 	if err != nil && len(services) == 0 {
 		return nil, err
 	}

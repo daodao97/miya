@@ -14,6 +14,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"miya/internal/remote"
 	"miya/internal/textutil"
+	"miya/internal/webservice"
 )
 
 type mobileWebServices struct {
@@ -25,7 +26,7 @@ type mobileWebServices struct {
 	supported        bool
 	loading          bool
 	requestedAt      time.Time
-	services         []phoneWebService
+	services         []webservice.Service
 	err              string
 	cancel           context.CancelFunc
 }
@@ -77,7 +78,7 @@ func (m *mobileApp) requestWebServices(state *mobileWebServices) {
 	gen := m.generation
 	go func() {
 		defer cancel()
-		var services []phoneWebService
+		var services []webservice.Service
 		var result *conversationRuntime
 		var err error
 		if state.ref.SessionID != "" {
@@ -108,11 +109,11 @@ func (m *mobileApp) requestWebServices(state *mobileWebServices) {
 	}()
 }
 
-func fetchPhoneWebServices(ctx context.Context, dial func(context.Context) (net.Conn, error), project string) ([]phoneWebService, error) {
+func fetchPhoneWebServices(ctx context.Context, dial func(context.Context) (net.Conn, error), project string) ([]webservice.Service, error) {
 	transport := &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) { return dial(ctx) }}
 	defer transport.CloseIdleConnections()
 	client := &http.Client{Transport: transport, Timeout: 12 * time.Second}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://desktop/"+projectFileID(project)+"/"+projectWebServicesPath, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://desktop/"+projectFileID(project)+"/"+webservice.ProjectFile, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -124,15 +125,15 @@ func fetchPhoneWebServices(ctx context.Context, dial func(context.Context) (net.
 	if response.StatusCode != http.StatusOK {
 		return nil, errors.New("project web services unavailable")
 	}
-	var services []phoneWebService
+	var services []webservice.Service
 	if err := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&services); err != nil {
 		return nil, err
 	}
 	for _, service := range services {
-		if !validWebServiceHost(service.Host, service.RuntimeToken) {
+		if !webservice.ValidHost(service.Host, service.RuntimeToken) {
 			return nil, errors.New("invalid service address")
 		}
-		if _, err := parseWebPort(strconv.Itoa(service.Port)); err != nil {
+		if _, err := webservice.ParsePort(strconv.Itoa(service.Port)); err != nil {
 			return nil, err
 		}
 	}
@@ -218,14 +219,14 @@ func fetchPhoneRuntime(ctx context.Context, dial func(context.Context) (net.Conn
 		return conversationRuntime{}, errors.New(tr("Conversation runtime identity mismatch"))
 	}
 	for _, service := range result.Services {
-		if service.Host == "" || !validWebServiceHost(service.Host, service.RuntimeToken) || service.Port < 1 || service.Port > 65535 || service.RuntimeToken == "" {
+		if service.Host == "" || !webservice.ValidHost(service.Host, service.RuntimeToken) || service.Port < 1 || service.Port > 65535 || service.RuntimeToken == "" {
 			return conversationRuntime{}, errors.New(tr("Invalid runtime service endpoint"))
 		}
 	}
 	return result, nil
 }
 
-func (m *mobileApp) runtimeServiceOwner(service phoneWebService) string {
+func (m *mobileApp) runtimeServiceOwner(service webservice.Service) string {
 	if service.Owner == nil {
 		return tr("Project candidate · Conversation ownership unconfirmed")
 	}

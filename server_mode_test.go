@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"miya/internal/remote"
+	"miya/internal/webservice"
 	"miya/internal/worktree"
 )
 
@@ -211,15 +212,15 @@ func TestRemoteHostDeletedGitFile(t *testing.T) {
 
 func TestRemoteBrowserServerTargets(t *testing.T) {
 	for _, raw := range []string{"http://localhost:3000/docs?q=yes", "http://127.0.0.1:5173/", "http://[::1]:8080/"} {
-		s, u, proxy, err := remoteBrowserService(raw, phoneWebService{})
+		s, u, proxy, err := remoteBrowserService(raw, webservice.Service{})
 		if err != nil || !proxy || s.Port == 0 || u == nil {
 			t.Fatal(raw, s, err)
 		}
 	}
-	if _, _, proxy, err := remoteBrowserService("https://example.com/", phoneWebService{}); proxy || err != nil {
+	if _, _, proxy, err := remoteBrowserService("https://example.com/", webservice.Service{}); proxy || err != nil {
 		t.Fatal("public website was redirected to server", err)
 	}
-	if _, _, _, err := remoteBrowserService("https://localhost:3000/", phoneWebService{}); err == nil {
+	if _, _, _, err := remoteBrowserService("https://localhost:3000/", webservice.Service{}); err == nil {
 		t.Fatal("unsupported localhost TLS silently used client network")
 	}
 }

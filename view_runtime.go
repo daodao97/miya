@@ -9,6 +9,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"miya/internal/textutil"
+	"miya/internal/webservice"
 )
 
 func (app *chatApp) runtimeSurface(c *ui.Context, p *panelState, s *panelSurface) {
@@ -111,7 +112,7 @@ func (app *chatApp) loadRuntimeSurface(s *panelSurface, ref ThreadRef) {
 		})
 	}()
 }
-func (app *chatApp) openRuntimeService(p *panelState, s *panelSurface, ref ThreadRef, service phoneWebService) {
+func (app *chatApp) openRuntimeService(p *panelState, s *panelSurface, ref ThreadRef, service webservice.Service) {
 	cl := app.c.remote
 	go func() {
 		var err error

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"miya/internal/memory"
 	"miya/internal/remote"
+	"miya/internal/webservice"
 	"net"
 	"os"
 	"path/filepath"
@@ -273,7 +274,7 @@ func (s *service) handle(p *svcPeer, req svcRequest) (any, error) {
 	case "hello":
 		return svcHello{Version: serviceVersion, Exe: s.exe, ExeTime: s.exeTime, PID: os.Getpid(), Busy: s.busy(), Remote: s.persistent}, nil
 	case "runtimeValidate":
-		var r phoneWebService
+		var r webservice.Service
 		if err := arg(&r); err != nil {
 			return nil, err
 		}

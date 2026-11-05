@@ -12,18 +12,19 @@ import (
 	"github.com/egoist/mygo/ui"
 	"miya/internal/remote"
 	"miya/internal/textutil"
+	"miya/internal/webservice"
 )
 
 func newPhoneWebProxy(conn *remote.Conn, port int, host string, tokens ...string) (*phoneFileProxy, error) {
 	value := strconv.Itoa(port)
-	if _, err := parseWebPort(value); err != nil {
+	if _, err := webservice.ParsePort(value); err != nil {
 		return nil, err
 	}
 	token := ""
 	if len(tokens) > 0 {
 		token = tokens[0]
 	}
-	if !validWebServiceHost(host, token) {
+	if !webservice.ValidHost(host, token) {
 		return nil, errors.New(tr("Invalid local service address"))
 	}
 	p := new(phoneFileProxy)
@@ -32,7 +33,7 @@ func newPhoneWebProxy(conn *remote.Conn, port int, host string, tokens ...string
 		p.webToken = tokens[0]
 	}
 	p.conn.Store(conn)
-	err := p.startProxy(desktopWebPrefix+value, "http://localhost:"+value, func(ctx context.Context) (net.Conn, error) {
+	err := p.startProxy(webservice.Prefix+value, "http://localhost:"+value, func(ctx context.Context) (net.Conn, error) {
 		current := p.conn.Load()
 		if current == nil {
 			return nil, errors.New(tr("Desktop connection lost"))
@@ -42,21 +43,11 @@ func newPhoneWebProxy(conn *remote.Conn, port int, host string, tokens ...string
 	return p, err
 }
 
-// The phone cannot enumerate the desktop's interfaces. Non-loopback literals
-// require an owned runtime token; the desktop checks its own interfaces again.
-func validWebServiceHost(host, token string) bool {
-	if host == "" || host == "127.0.0.1" || host == "::1" {
-		return true
-	}
-	ip := net.ParseIP(host)
-	return token != "" && ip != nil && !ip.IsUnspecified() && !ip.IsMulticast()
-}
-
 func (m *mobileApp) openWebPort(port int) {
-	m.openWebService(phoneWebService{Port: port})
+	m.openWebService(webservice.Service{Port: port})
 }
 
-func (m *mobileApp) openWebService(service phoneWebService) {
+func (m *mobileApp) openWebService(service webservice.Service) {
 	if !m.connected || m.conn == nil || m.filesCancel != nil || !m.state.WebPorts {
 		return
 	}
@@ -106,7 +97,7 @@ func (m *mobileApp) webPage(c *ui.Context) {
 			ui.Text(c, tr("Enter the port of an HTTP service running on your computer, such as 3000, 5173, or 8080.")).FontSize(m.font(15)).TextColor(p.muted).LineHeight(1.5)
 			ui.TextInput(c.Key("port"), &m.webPort).Label(tr("Web port")).Placeholder(tr("For example, 3000")).FillWidth().MinHeight(52).Padding(14).Background(p.surface).Radius(14).
 				InputOptions(ui.InputOptions{Keyboard: ui.KeyboardNumber, Correction: ui.CorrectionOff, Return: ui.ReturnGo})
-			port, err := parseWebPort(strings.TrimSpace(m.webPort))
+			port, err := webservice.ParsePort(strings.TrimSpace(m.webPort))
 			if m.webPort != "" && err != nil {
 				ui.Text(c, err.Error()).FontSize(m.font(14)).TextColor(danger)
 			}

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	rt "miya/internal/runtime"
+	"miya/internal/webservice"
 	"os"
 	"strconv"
 	"strings"
@@ -24,7 +25,7 @@ func runtimeTaggedRoots(ctx context.Context, key rt.SessionKey, all []rt.Process
 	if key.Backend != agentCodex || key.SessionID == "" {
 		return nil
 	}
-	data, err := runWebLSOF(ctx, "-nP", "-a", "-u", strconv.Itoa(os.Getuid()), "-iTCP", "-sTCP:LISTEN", "-F0p")
+	data, err := webservice.RunLSOF(ctx, "-nP", "-a", "-u", strconv.Itoa(os.Getuid()), "-iTCP", "-sTCP:LISTEN", "-F0p")
 	if err != nil {
 		return nil
 	}
@@ -33,7 +34,7 @@ func runtimeTaggedRoots(ctx context.Context, key rt.SessionKey, all []rt.Process
 		byPID[p.Identity.PID] = p
 	}
 	var roots []rt.Root
-	for _, field := range webLSOFFields(data) {
+	for _, field := range webservice.LSOFFields(data) {
 		if !strings.HasPrefix(field, "p") {
 			continue
 		}
@@ -71,7 +72,7 @@ func runtimeListeners(ctx context.Context, processes []rt.Process) ([]rt.Endpoin
 	if len(pids) == 0 {
 		return []rt.Endpoint{}, nil
 	}
-	data, err := runWebLSOF(ctx, "-nP", "-a", "-p", strings.Join(pids, ","), "-iTCP", "-sTCP:LISTEN", "-F0pcfnt")
+	data, err := webservice.RunLSOF(ctx, "-nP", "-a", "-p", strings.Join(pids, ","), "-iTCP", "-sTCP:LISTEN", "-F0pcfnt")
 	if err != nil {
 		return nil, err
 	}

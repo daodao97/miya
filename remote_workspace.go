@@ -13,6 +13,7 @@ import (
 	"miya/internal/agentusage"
 	"miya/internal/fsutil"
 	"miya/internal/remote"
+	"miya/internal/thumbnail"
 	"miya/internal/worktree"
 )
 
@@ -76,7 +77,7 @@ func (c *chatController) prepareHost(r hostRequest) (deferred, error) {
 		case "upload-files":
 			return saveDesktopUploads(r.Images)
 		case "preview":
-			return phonePreview(r.Path)
+			return thumbnail.File(r.Path)
 		case "usage":
 			return []agentusage.Reading{agentusage.Read(ctx, "codex"), agentusage.Read(ctx, "claude")}, nil
 		case "usage-reset":

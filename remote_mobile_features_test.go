@@ -14,6 +14,7 @@ import (
 
 	"miya/internal/codex"
 	"miya/internal/remote"
+	"miya/internal/thumbnail"
 )
 
 func TestPhonePreviewRequestChecksConversationAndWorksBeforeSubscribe(t *testing.T) {
@@ -33,7 +34,7 @@ func TestPhonePreviewRequestChecksConversationAndWorksBeforeSubscribe(t *testing
 				if frame.Type != "image" {
 					continue
 				}
-				var preview phoneImagePreview
+				var preview thumbnail.Image
 				if err := json.Unmarshal(frame.Data, &preview); err != nil || preview.Source != ref {
 					t.Fatalf("wrong preview reply: %v", err)
 				}

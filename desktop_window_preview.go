@@ -9,6 +9,7 @@ import (
 
 	"miya/internal/desktop"
 	"miya/internal/remote"
+	"miya/internal/thumbnail"
 )
 
 type phoneDesktopPreview struct {
@@ -253,7 +254,7 @@ func (d *desktopControl) previewWindow(hint desktopWindowHint) (desktop.Window, 
 	if err != nil {
 		return w, nil, err
 	}
-	data, err = phonePreviewData(data)
+	data, err = thumbnail.Data(data)
 	return w, data, err
 }
 

@@ -12,33 +12,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"miya/internal/remote"
+	"miya/internal/thumbnail"
 )
-
-func TestPhonePreviewIsBoundedAndKeepsOriginal(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "large image.png")
-	f, err := os.Create(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	img := image.NewRGBA(image.Rect(0, 0, 1600, 800))
-	img.Set(10, 10, color.RGBA{R: 255, A: 255})
-	if err := png.Encode(f, img); err != nil {
-		t.Fatal(err)
-	}
-	f.Close()
-	original, _ := os.ReadFile(path)
-	preview, err := phonePreview(localImageDataURI(path))
-	if err != nil {
-		t.Fatal(err)
-	}
-	config, _, err := image.DecodeConfig(bytes.NewReader(preview))
-	if err != nil || config.Width != phonePreviewEdge || config.Height != phonePreviewEdge/2 || len(preview) > maxPhonePreviewBytes {
-		t.Fatalf("invalid thumbnail: %+v, bytes=%d, err=%v", config, len(preview), err)
-	}
-	if after, _ := os.ReadFile(path); !bytes.Equal(original, after) {
-		t.Fatal("thumbnail generation modified the original")
-	}
-}
 
 func TestPhonePreviewSurvivesSendAndRelaunch(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
@@ -55,7 +30,7 @@ func TestPhonePreviewSurvivesSendAndRelaunch(t *testing.T) {
 		t.Fatal(err)
 	}
 	source := localImageDataURI(paths[0])
-	preview, err := phonePreview(source)
+	preview, err := thumbnail.File(source)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +61,7 @@ func TestPhonePreviewSurvivesSendAndRelaunch(t *testing.T) {
 	m.receiveThread(th.ID, delta)
 	m.images, m.sending = []string{local}, true
 	m.sent(th.ID, "")
-	m.receiveImage(phoneImagePreview{Source: source, Data: preview})
+	m.receiveImage(thumbnail.Image{Source: source, Data: preview})
 	next()
 	if m.messageImage(source) == nil || len(m.images) != 0 {
 		t.Fatal("sent photo has no preview after composer attachments were cleared")
@@ -185,5 +160,31 @@ func TestPhonePreviewRetryDoesNotTouchReconnectedSession(t *testing.T) {
 	m.retryImage("photo", m.conn)
 	if m.previewRetries["photo"] != 3 {
 		t.Fatal("retry budget was not enforced")
+	}
+}
+
+func TestPhonePreviewIsBoundedAndKeepsOriginal(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "large image.png")
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	img := image.NewRGBA(image.Rect(0, 0, 1600, 800))
+	img.Set(10, 10, color.RGBA{R: 255, A: 255})
+	if err := png.Encode(f, img); err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+	original, _ := os.ReadFile(path)
+	thumb, err := thumbnail.File(localImageDataURI(path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	config, _, err := image.DecodeConfig(bytes.NewReader(thumb))
+	if err != nil || config.Width != thumbnail.Edge || config.Height != thumbnail.Edge/2 || len(thumb) > thumbnail.MaxBytes {
+		t.Fatalf("invalid thumbnail: %+v, bytes=%d, err=%v", config, len(thumb), err)
+	}
+	if after, _ := os.ReadFile(path); !bytes.Equal(original, after) {
+		t.Fatal("thumbnail generation modified the original")
 	}
 }

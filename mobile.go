@@ -15,6 +15,7 @@ import (
 	"miya/internal/codex"
 	"miya/internal/remote"
 	"miya/internal/textutil"
+	"miya/internal/thumbnail"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -610,7 +611,7 @@ func (m *mobileApp) read(gen int, conn *remote.Conn) (greeted bool, err error) {
 			if json.Unmarshal(f.Data, &p) == nil {
 				var image ui.ImageSource
 				message := f.Error
-				if len(p.Data) > 0 && len(p.Data) <= maxPhonePreviewBytes {
+				if len(p.Data) > 0 && len(p.Data) <= thumbnail.MaxBytes {
 					image, _ = ui.DecodeImage(p.Data)
 					if image == nil {
 						message = tr("Unable to decode window preview")
@@ -676,7 +677,7 @@ func (m *mobileApp) read(gen int, conn *remote.Conn) (greeted bool, err error) {
 				})
 			}
 		case "image":
-			var preview phoneImagePreview
+			var preview thumbnail.Image
 			if json.Unmarshal(f.Data, &preview) == nil {
 				if f.Error != "" {
 					m.onMain(gen, func() { m.retryImage(preview.Source, conn) })

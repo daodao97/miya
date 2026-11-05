@@ -16,6 +16,7 @@ import (
 	"miya/internal/codex"
 	"miya/internal/desktop"
 	"miya/internal/remote"
+	"miya/internal/thumbnail"
 
 	qrcode "github.com/skip2/go-qrcode"
 )
@@ -181,7 +182,7 @@ func (c *chatController) servePhone(ctx context.Context, conn *remote.Conn) {
 // sendPhonePreview runs only in a bounded worker. Its caller snapshots the
 // subscription authorization; requests before subscribe still check history.
 func (c *chatController) sendPhonePreview(ctx context.Context, conn phoneConnection, r remote.Request, allowed bool, send func(remote.Frame) bool) bool {
-	preview := phoneImagePreview{Source: r.ImageSource}
+	img := thumbnail.Image{Source: r.ImageSource}
 	var imageErr error
 	if !allowed {
 		// A cached message can request its image before subscribe
@@ -205,19 +206,19 @@ func (c *chatController) sendPhonePreview(ctx context.Context, conn phoneConnect
 	if !allowed {
 		imageErr = fmt.Errorf("Image is not in the current conversation")
 	} else {
-		preview.Data, imageErr = phonePreview(r.ImageSource)
+		img.Data, imageErr = thumbnail.File(r.ImageSource)
 	}
 	if imageErr == nil {
 		if transport, ok := conn.(interface{ SendImage(string, []byte) error }); ok {
-			if err := transport.SendImage(preview.Source, preview.Data); err == nil {
+			if err := transport.SendImage(img.Source, img.Data); err == nil {
 				return true
 			} else {
 				imageErr = err
-				preview.Data = nil
+				img.Data = nil
 			}
 		}
 	}
-	data, _ := json.Marshal(preview)
+	data, _ := json.Marshal(img)
 	frame := remote.Frame{Type: "image", Data: data}
 	if imageErr != nil {
 		frame.Error = imageErr.Error()
@@ -556,7 +557,7 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 				select {
 				case previews <- previewRequest{request: r, allowed: allowed}:
 				default:
-					data, _ := json.Marshal(phoneImagePreview{Source: r.ImageSource})
+					data, _ := json.Marshal(thumbnail.Image{Source: r.ImageSource})
 					if !send(remote.Frame{Type: "image", Data: data, Error: "Image preview is busy. Try again shortly."}) {
 						return
 					}

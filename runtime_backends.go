@@ -7,6 +7,7 @@ import (
 	"miya/internal/remote"
 	rt "miya/internal/runtime"
 	"miya/internal/textutil"
+	"miya/internal/webservice"
 	"time"
 )
 
@@ -113,7 +114,7 @@ func (c *chatController) prepareRuntime(ref ThreadRef, project string) (deferred
 	}, nil
 }
 func runtimeResult(manager *runtimeManager, key rt.SessionKey, view rt.View) conversationRuntime {
-	result := conversationRuntime{View: view, Services: []phoneWebService{}}
+	result := conversationRuntime{View: view, Services: []webservice.Service{}}
 	for _, e := range view.Endpoints {
 		if e.Protocol != "http" {
 			continue
@@ -125,7 +126,7 @@ func runtimeResult(manager *runtimeManager, key rt.SessionKey, view rt.View) con
 				break
 			}
 		}
-		result.Services = append(result.Services, phoneWebService{Port: e.Port, Host: e.Host, Process: name, RuntimeToken: manager.token(key, e), Owner: &ThreadRef{Source: key.Source, Backend: key.Backend, SessionID: key.SessionID}})
+		result.Services = append(result.Services, webservice.Service{Port: e.Port, Host: e.Host, Process: name, RuntimeToken: manager.token(key, e), Owner: &ThreadRef{Source: key.Source, Backend: key.Backend, SessionID: key.SessionID}})
 	}
 	return result
 }
@@ -136,8 +137,8 @@ func remoteRuntimeRequest(ref ThreadRef, project string) remote.Request {
 }
 
 type conversationRuntime struct {
-	View     rt.View           `json:"view"`
-	Services []phoneWebService `json:"services"`
+	View     rt.View              `json:"view"`
+	Services []webservice.Service `json:"services"`
 }
 
 func (c *chatController) readRuntime(ctx context.Context, ref ThreadRef, project string) (conversationRuntime, error) {
