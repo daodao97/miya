@@ -853,7 +853,7 @@ type phoneHost struct {
 var desktopPhone *phoneHost
 
 func phoneDir() string {
-	if os.Getenv("MIYA_DIR") != "" {
+	if os.Getenv("MIYA_DIR") != "" || appdir.Isolated() {
 		return filepath.Join(appdir.Dir(), "remote")
 	}
 	home, err := os.UserHomeDir()

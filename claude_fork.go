@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"miya/internal/appdir"
 	"os"
 	"path/filepath"
 	"sync"
@@ -123,11 +124,11 @@ func forkClaudeSessionBefore(path string, prompt int) (string, error) {
 var supersededMu sync.Mutex
 
 func claudeSupersededPath() string {
-	home, err := os.UserHomeDir()
-	if err != nil || home == "" {
+	dir := appdir.File("quickgui-claude")
+	if dir == "" {
 		return ""
 	}
-	return filepath.Join(home, ".codex", "quickgui-claude", "superseded.json")
+	return filepath.Join(dir, "superseded.json")
 }
 
 func loadClaudeSuperseded() map[string]bool {

@@ -266,21 +266,9 @@ func normalizePermissionPolicy(policy string) string {
 // Keep the legacy service preference stable; device UI uses MyGo i18n.
 func normalizeLocale(_ string) string { return "en" }
 
-func permissionPolicyPath() string {
-	home, err := os.UserHomeDir()
-	if err != nil || home == "" {
-		return ""
-	}
-	return filepath.Join(home, ".codex", "quickgui-settings.json")
-}
+func permissionPolicyPath() string { return appdir.File("quickgui-settings.json") }
 
-func threadListCachePath() string {
-	home, err := os.UserHomeDir()
-	if err != nil || home == "" {
-		return ""
-	}
-	return filepath.Join(home, ".codex", "quickgui-thread-cache.json")
-}
+func threadListCachePath() string { return appdir.File("quickgui-thread-cache.json") }
 
 func loadThreadListCache() map[string][]Thread {
 	path := threadListCachePath()

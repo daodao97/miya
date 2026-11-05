@@ -2,17 +2,12 @@ package main
 
 import (
 	"encoding/json"
+	"miya/internal/appdir"
 	"os"
 	"path/filepath"
 )
 
-func projectOrderPath() string {
-	home, err := os.UserHomeDir()
-	if err != nil || home == "" {
-		return ""
-	}
-	return filepath.Join(home, ".codex", "quickgui-project-order.json")
-}
+func projectOrderPath() string { return appdir.File("quickgui-project-order.json") }
 func persistProjectOrder(projects []Project) {
 	path := projectOrderPath()
 	if path == "" {

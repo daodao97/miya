@@ -28,9 +28,10 @@ func automationAgentPath() string {
 
 // syncAutomationLaunchAgent installs the agent while an automation is on and
 // removes it otherwise; an unchanged agent is left alone. Tests never touch
-// it.
+// it, nor does an isolated instance: the login item belongs to the installed
+// app, and an isolated one would replace or remove it.
 func syncAutomationLaunchAgent(enabled bool) {
-	if testing.Testing() || runtime.GOOS != "darwin" {
+	if testing.Testing() || runtime.GOOS != "darwin" || appdir.Isolated() {
 		return
 	}
 	var err error

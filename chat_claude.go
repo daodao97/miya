@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"miya/internal/appdir"
 	"miya/internal/claude"
 	"miya/internal/codex"
 	dg "miya/internal/delegation"
@@ -34,8 +35,11 @@ func claudeHistoryPath(id string) string {
 	if id == "" || filepath.Base(id) != id {
 		return ""
 	}
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".codex", "quickgui-claude", id+".json")
+	dir := appdir.File("quickgui-claude")
+	if dir == "" {
+		return ""
+	}
+	return filepath.Join(dir, id+".json")
 }
 func saveClaudeHistory(t Thread) {
 	p := claudeHistoryPath(t.ServerID)

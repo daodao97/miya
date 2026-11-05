@@ -32,6 +32,20 @@ Miya 使用同一个可执行文件运行不同进程：
 
 桌面「设置 → 通用 → 后台服务」提供手动重启入口。空闲时请求后台退出，窗口自动重连并启动服务；有任务时先让用户选择「空闲后重启」或「立即重启」。后者会中断所有项目的运行任务，并暂时断开手机连接，只有用户在设置中明确选择后才发送正常退出请求。窗口保留未发送草稿，并在重连后核验服务 PID 已变化才显示重启成功。独立运行模式不提供单独的后台重启。
 
+## 独立验证（不覆盖已安装应用）
+
+开发中需要实际运行新版本、又要继续使用已安装的 Miya 时，不走安装流程：
+
+```sh
+scripts/run-isolated.sh            # 构建并打开独立窗口（--no-build 跳过构建）
+scripts/run-isolated.sh status     # 独立后台的 hello 与状态
+scripts/run-isolated.sh stop       # 请求独立后台退出
+```
+
+脚本以 `MIYA_ISOLATED_DIR`（默认 `~/Library/Application Support/Miya-dev`）直接运行 `build/` 中的二进制。窗口找不到该目录下的后台，会启动自己的 `-server`。Miya 的设置、对话缓存、项目排序、Claude 历史、手机配对、记忆和 Socket 都写在这个目录，也不安装或删除登录项（[internal/appdir/appdir.go](../internal/appdir/appdir.go) 的 `Isolated`）。Agent 自己的数据（`~/.codex`、`~/.claude`）仍然共享，所以 Codex 和 Claude Code 保持登录；不要在两个应用中同时打开同一个对话。
+
+只设置 `MIYA_DIR` 不会进入隔离模式：服务器部署用它存放服务状态，设置和历史保持在原位置（见 [server.md](server.md)）。
+
 ## 1. 构建并验签
 
 在仓库根目录执行；以下为 Apple Silicon macOS 的本地安装：
