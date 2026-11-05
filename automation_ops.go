@@ -16,10 +16,6 @@ import (
 // through these operations, which run in the controller that owns them:
 // windows send them to the background service.
 
-// deferred is a reply worked out off the main thread, for requests that wait
-// on other programs; the service runs it before it replies.
-type deferred func() (any, error)
-
 // automationView is an automation as the page shows it.
 type automationView struct {
 	automation.Automation

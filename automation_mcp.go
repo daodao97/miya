@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"miya/internal/automation"
-	"miya/internal/codex"
 	"miya/internal/model"
 	"miya/internal/textutil"
 )
@@ -243,75 +242,4 @@ func automationDiff(old, next automation.Automation) string {
 	add("Completion check", automationCheckText(old), automationCheckText(next))
 	add("Instructions", old.Instructions, next.Instructions)
 	return strings.Join(lines, "\n")
-}
-
-// Miya's own requests to the person, shown as approval cards in a
-// conversation: their ids start with miya: and Miya answers them itself.
-
-func isMiyaApproval(a codex.Approval) bool { return strings.Contains(string(a.ID), "\"miya:") }
-
-// askUser shows a card in caller's conversation and returns its id and the
-// channel its answer arrives on.
-func (c *chatController) askUser(caller Thread, reason, detail string) (json.RawMessage, chan bool) {
-	c.miyaSerial++
-	id, _ := json.Marshal(fmt.Sprintf("miya:%d:%d", caller.ID, c.miyaSerial))
-	ch := make(chan bool, 1)
-	if c.miyaPending == nil {
-		c.miyaPending = map[string]chan bool{}
-	}
-	c.miyaPending[string(id)] = ch
-	a := codex.Approval{ID: id, Method: "miya/automation", ThreadID: caller.ServerID, Reason: reason, Command: detail}
-	c.setApprovals(append(append([]codex.Approval(nil), c.approvals()...), a))
-	return id, ch
-}
-
-func (c *chatController) respondMiya(a codex.Approval, result any) {
-	c.removeRequest(a.ID)
-	ch := c.miyaPending[string(a.ID)]
-	delete(c.miyaPending, string(a.ID))
-	if ch == nil {
-		return
-	}
-	data, _ := json.Marshal(result)
-	var r struct {
-		Decision string `json:"decision"`
-	}
-	_ = json.Unmarshal(data, &r)
-	ch <- r.Decision == "accept"
-}
-
-// miyaRequestTimeout is how long a card waits; then it counts as declined.
-const miyaRequestTimeout = 10 * time.Minute
-
-// waitUser waits off the main thread for the answer to a card.
-func (c *chatController) waitUser(id json.RawMessage, ch chan bool) bool {
-	select {
-	case ok := <-ch:
-		return ok
-	case <-time.After(miyaRequestTimeout):
-		c.dispatch(func() {
-			delete(c.miyaPending, string(id))
-			c.removeRequest(id)
-		})
-		return false
-	}
-}
-
-// onMain runs f on the main thread and waits for it.
-func (c *chatController) onMain(f func() (any, error)) (any, error) {
-	type result struct {
-		v   any
-		err error
-	}
-	done := make(chan result, 1)
-	c.dispatch(func() {
-		v, err := f()
-		done <- result{v, err}
-	})
-	select {
-	case r := <-done:
-		return r.v, r.err
-	case <-time.After(30 * time.Second):
-		return nil, errors.New("Miya is not responding")
-	}
 }

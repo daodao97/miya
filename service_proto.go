@@ -246,3 +246,7 @@ func (e *executor) do(f func()) {
 	e.push(func() { f(); close(done) })
 	<-done
 }
+
+// deferred is a reply worked out off the main thread, for requests that wait
+// on other programs; the service runs it before it replies.
+type deferred func() (any, error)

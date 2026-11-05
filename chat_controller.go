@@ -1674,3 +1674,22 @@ func (c *chatController) setCurrentPermissionPolicy(policy string) {
 	}
 	c.update(c.active(), func(t *Thread) { t.PermissionPolicy = policy })
 }
+
+// onMain runs f on the main thread and waits for it.
+func (c *chatController) onMain(f func() (any, error)) (any, error) {
+	type result struct {
+		v   any
+		err error
+	}
+	done := make(chan result, 1)
+	c.dispatch(func() {
+		v, err := f()
+		done <- result{v, err}
+	})
+	select {
+	case r := <-done:
+		return r.v, r.err
+	case <-time.After(30 * time.Second):
+		return nil, errors.New("Miya is not responding")
+	}
+}
