@@ -16,8 +16,8 @@ func TestPhoneAutomationsReadListAndHistory(t *testing.T) {
 	c := serverController(t.TempDir(), "")
 	c.startAutomations(filepath.Join(t.TempDir(), "automations.json"), false)
 	v := mobileAutomationFixture()
-	c.auto.store.Automations = []automation.Automation{v.Automation}
-	c.auto.store.Runs[v.ID] = v.Runs
+	c.auto.Store.Automations = []automation.Automation{v.Automation}
+	c.auto.Store.Runs[v.ID] = v.Runs
 	if !c.phoneSnapshot().Automations {
 		t.Fatal("automation capability not advertised")
 	}
@@ -36,7 +36,7 @@ func TestPhoneAutomationsReadListAndHistory(t *testing.T) {
 			if list[0].ID != v.ID || list[0].ScheduleText == "" || len(list[0].Runs) != 1 || list[0].Runs[0].Report.Summary != v.Runs[0].Report.Summary {
 				t.Fatal("schedule or structured run report lost in transport")
 			}
-			if len(c.auto.active) != 0 || len(c.threads()) != 0 {
+			if len(c.auto.Active) != 0 || len(c.threads()) != 0 {
 				t.Fatal("viewing automations started a run")
 			}
 			return
@@ -136,7 +136,7 @@ printf '%s\n' '{"structured_output":{"name":"每日检查","schedule":"0 9 * * 1
 	restarted := serverController(dir, "")
 	restarted.startAutomations(path, false)
 	frame = restarted.phoneAutomationCreate(r)
-	if frame.Error != "" || len(restarted.auto.store.Automations) != 1 || restarted.auto.store.Automations[0].Created != saved.Created {
+	if frame.Error != "" || len(restarted.auto.Store.Automations) != 1 || restarted.auto.Store.Automations[0].Created != saved.Created {
 		t.Fatal("retry after service restart duplicated the automation")
 	}
 	a.Schedule = "invalid"
@@ -194,8 +194,8 @@ func TestPhoneAutomationRunStartsInItsProjectAndRejectsOverlap(t *testing.T) {
 	c.startAutomations(filepath.Join(t.TempDir(), "automations.json"), false)
 	v := mobileAutomationFixture()
 	v.Project, v.Enabled = t.TempDir(), false
-	c.auto.store.Automations = []automation.Automation{v.Automation}
-	c.auto.submit = func(r SendRequest) int {
+	c.auto.Store.Automations = []automation.Automation{v.Automation}
+	c.auto.Submit = func(r SendRequest) int {
 		if r.Project != v.Project || r.Agent != v.Agent || !r.MemoryControl {
 			t.Errorf("wrong automation submission: %+v", r)
 		}

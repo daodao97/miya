@@ -93,13 +93,13 @@ func (c *chatController) automationOp(op string, r automationRequest) (any, erro
 	if s == nil {
 		return nil, errors.New("Automations require the Miya background service")
 	}
-	now := s.now()
+	now := s.Now()
 	switch op {
 	case "automationList":
 		views := []automationView{}
-		for _, a := range s.store.Automations {
-			_, running := s.active[a.ID]
-			views = append(views, automationViewOf(a, append([]automation.Run(nil), s.store.Runs[a.ID]...), running, now))
+		for _, a := range s.Store.Automations {
+			_, running := s.Active[a.ID]
+			views = append(views, automationViewOf(a, append([]automation.Run(nil), s.Store.Runs[a.ID]...), running, now))
 		}
 		return views, nil
 	case "automationDraft":
@@ -112,13 +112,13 @@ func (c *chatController) automationOp(op string, r automationRequest) (any, erro
 		if err != nil {
 			return nil, err
 		}
-		return automationViewOf(a, s.store.Runs[a.ID], false, now), nil
+		return automationViewOf(a, s.Store.Runs[a.ID], false, now), nil
 	case "automationToggle":
-		i, ok := s.store.Find(r.ID)
+		i, ok := s.Store.Find(r.ID)
 		if !ok {
 			return nil, errors.New("Automation not found")
 		}
-		a := &s.store.Automations[i]
+		a := &s.Store.Automations[i]
 		if r.Enabled && !a.Enabled {
 			// Turning one on does not run the times it was off for.
 			a.Due = now
@@ -127,18 +127,18 @@ func (c *chatController) automationOp(op string, r automationRequest) (any, erro
 		c.automationsChanged()
 		return nil, nil
 	case "automationDelete":
-		i, ok := s.store.Find(r.ID)
+		i, ok := s.Store.Find(r.ID)
 		if !ok {
 			return nil, nil
 		}
-		s.store.Automations = append(s.store.Automations[:i], s.store.Automations[i+1:]...)
-		delete(s.store.Runs, r.ID)
+		s.Store.Automations = append(s.Store.Automations[:i], s.Store.Automations[i+1:]...)
+		delete(s.Store.Runs, r.ID)
 		// A run in progress goes on as an ordinary conversation.
-		delete(s.active, r.ID)
+		delete(s.Active, r.ID)
 		c.automationsChanged()
 		return nil, nil
 	case "automationRunNow":
-		return nil, c.startAutomationRun(r.ID, false)
+		return nil, c.auto.StartRun(r.ID, false)
 	}
 	return nil, errors.New("Unknown automation operation: " + op)
 }
@@ -156,7 +156,7 @@ func (c *chatController) prepareAutomationDraft(ctx context.Context, r automatio
 	if agent == "" {
 		return nil, errors.New("Agent must be codex or claude-code")
 	}
-	cfg, now := claude.CLI{Binary: c.claudeBinary, Args: c.claudeArgs, Env: c.claudeEnv}, c.auto.now()
+	cfg, now := claude.CLI{Binary: c.claudeBinary, Args: c.claudeArgs, Env: c.claudeEnv}, c.auto.Now()
 	return deferred(func() (any, error) {
 		d, err := automation.DraftFor(ctx, cfg, agent, project, request, now)
 		if err != nil {
@@ -181,8 +181,8 @@ func (c *chatController) saveAutomation(a automation.Automation) (automation.Aut
 // createID lets a phone retry an interrupted creation without adding it twice.
 func (c *chatController) saveAutomationWithCreateID(a automation.Automation, createID string) (automation.Automation, error) {
 	s := c.auto
-	now := s.now()
-	i, exists := s.store.Find(a.ID)
+	now := s.Now()
+	i, exists := s.Store.Find(a.ID)
 	if !exists {
 		a.ID, a.Created, a.Due = createID, now, now
 	}
@@ -190,14 +190,14 @@ func (c *chatController) saveAutomationWithCreateID(a automation.Automation, cre
 		return automation.Automation{}, err
 	}
 	if exists {
-		old := s.store.Automations[i]
+		old := s.Store.Automations[i]
 		a.Created, a.Due = old.Created, old.Due
 		if a.Schedule != old.Schedule || a.Enabled && !old.Enabled {
 			a.Due = now
 		}
-		s.store.Automations[i] = a
+		s.Store.Automations[i] = a
 	} else {
-		s.store.Automations = append(s.store.Automations, a)
+		s.Store.Automations = append(s.Store.Automations, a)
 	}
 	c.automationsChanged()
 	return a, nil
@@ -206,8 +206,8 @@ func (c *chatController) saveAutomationWithCreateID(a automation.Automation, cre
 // automationsChanged saves the automations and keeps the login item to
 // whether one is on.
 func (c *chatController) automationsChanged() {
-	c.auto.persist()
-	syncAutomationLaunchAgent(c.auto.store.AnyEnabled())
+	c.auto.Persist()
+	syncAutomationLaunchAgent(c.auto.Store.AnyEnabled())
 	if c.revision != nil {
 		c.setRevision(c.revision() + 1)
 	}

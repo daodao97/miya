@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"miya/internal/automation"
 	"strings"
 )
@@ -17,19 +16,6 @@ func autoRunReport(t Thread) *automation.Report {
 	}
 	r := automation.Report{Summary: reply, Artifacts: files, Auto: true}.Cleaned()
 	return &r
-}
-
-// automationRunMessage is what a run sends: the instructions, how to report
-// the result, and the previous result to compare with.
-func automationRunMessage(a automation.Automation, prev *automation.Run) string {
-	var b strings.Builder
-	b.WriteString(a.Instructions)
-	b.WriteString("\n\n---\n")
-	fmt.Fprintf(&b, "This is Miya scheduled automation \"%s\". Before finishing, call Miya's report_result tool with this run's result: summary (one or two sentences), findings (key conclusions), metrics (each with name, value, unit), artifacts (output files or links), and needs_user (whether user action is required).", a.Name)
-	if prev != nil && prev.Report != nil {
-		fmt.Fprintf(&b, "\n\nResults from the previous run (%s) follow. Compare them with this run and identify new, removed, and significantly changed items:\n%s", formatAutomationTime(prev.Started), automation.FormatReport(*prev.Report))
-	}
-	return b.String()
 }
 
 func init() {
@@ -62,14 +48,14 @@ func (c *chatController) mcpReportResult(r mcpRequest) (any, error) {
 	if !ok {
 		return nil, errors.New(mcpCallerUnknown)
 	}
-	for id, run := range c.auto.active {
-		if run.thread != caller.ID {
+	for id, run := range c.auto.Active {
+		if run.Thread != caller.ID {
 			continue
 		}
 		rep := r.Report.Cleaned()
 		rep.Auto = false
-		c.auto.store.UpdateLastRun(id, func(x *automation.Run) { x.Report = &rep })
-		c.auto.persist()
+		c.auto.Store.UpdateLastRun(id, func(x *automation.Run) { x.Report = &rep })
+		c.auto.Persist()
 		return "Run result recorded.", nil
 	}
 	return nil, errors.New("This conversation is not an active automation run. No report is needed.")

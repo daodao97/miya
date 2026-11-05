@@ -250,7 +250,7 @@ func (app *chatApp) automationRow(c *ui.Context, v automationView) {
 			ui.Text(c, automation.DescribeCron(v.Schedule)).FontWeight(500).SingleLine().Ellipsis("…")
 			next := tr("Paused")
 			if v.Enabled {
-				next = tr("Next ") + formatAutomationTime(v.Next)
+				next = tr("Next ") + automation.FormatTime(v.Next)
 			}
 			ui.Text(c, next).FontSize(12).TextColor(muted).SingleLine()
 		})
@@ -380,7 +380,7 @@ func (app *chatApp) automationDetail(c *ui.Context) {
 	ui.Row(c).FillWidth().Gap(10).Children(func() {
 		next := tr("Paused")
 		if v.Enabled {
-			next = formatAutomationTime(v.Next)
+			next = automation.FormatTime(v.Next)
 		}
 		stat(c, tr("Next run"), next)
 		if total > 0 {
@@ -466,7 +466,7 @@ func (app *chatApp) runRow(c *ui.Context, v automationView, r automation.Run, ru
 	if r.Result == automation.Skipped {
 		title = tr("Skipped, ") + r.Summary
 	}
-	meta := r.Started.Format("Jan 2 ") + tr(weekdayNames[r.Started.Weekday()]) + r.Started.Format(" 15:04")
+	meta := r.Started.Format("Jan 2 ") + tr(automation.WeekdayNames[r.Started.Weekday()]) + r.Started.Format(" 15:04")
 	if r.CatchUp {
 		meta += tr(" · Catch-up run")
 	}
@@ -733,7 +733,7 @@ func (app *chatApp) draftPreview(c *ui.Context, d *automationView) {
 				})
 				ui.Row(c).Gap(6).Children(func() {
 					for i, t := range d.Upcoming {
-						chip := ui.Text(c.Key(i), fmt.Sprintf(tr("%d/%d %s %s"), t.Month(), t.Day(), tr(weekdayNames[t.Weekday()]), t.Format("15:04"))).
+						chip := ui.Text(c.Key(i), fmt.Sprintf(tr("%d/%d %s %s"), t.Month(), t.Day(), tr(automation.WeekdayNames[t.Weekday()]), t.Format("15:04"))).
 							FontSize(12).Padding(1, 8, 1, 8).Radius(6).Background(subtle).TextColor(muted)
 						if i == 0 {
 							chip.TextColor(ink)

@@ -17,7 +17,7 @@ func TestAutomationOps(t *testing.T) {
 	if saved.ID == "" || saved.ScheduleText != "Daily at 18:00" || !saved.Next.Equal(atLocal("2026-11-02 18:00")) || len(saved.Upcoming) != 3 || saved.Created.IsZero() {
 		t.Fatalf("bad saved view: %+v", saved)
 	}
-	if !c.automationsEnabled() {
+	if !c.auto.Enabled() {
 		t.Fatal("saved automation not on")
 	}
 	if err := c.automationCall("automationToggle", automationRequest{ID: saved.ID, Enabled: false}, nil); err != nil {
@@ -32,7 +32,7 @@ func TestAutomationOps(t *testing.T) {
 	if err := c.automationCall("automationToggle", automationRequest{ID: saved.ID, Enabled: true}, nil); err != nil {
 		t.Fatal(err)
 	}
-	c.automationTick()
+	c.auto.Tick()
 	if len(h.sent) != 0 {
 		t.Fatal("times while paused were run")
 	}
@@ -50,7 +50,7 @@ func TestAutomationOps(t *testing.T) {
 	if err := c.automationCall("automationDelete", automationRequest{ID: saved.ID}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := c.automationCall("automationList", automationRequest{}, &list); err != nil || len(list) != 0 || c.automationsEnabled() {
+	if err := c.automationCall("automationList", automationRequest{}, &list); err != nil || len(list) != 0 || c.auto.Enabled() {
 		t.Fatalf("delete failed: %+v %v", list, err)
 	}
 	bad := automation.Automation{Name: "x", Project: c.cwd, Instructions: "y", Schedule: "nope"}

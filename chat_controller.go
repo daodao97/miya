@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"miya/internal/appdir"
+	"miya/internal/automation"
 	"miya/internal/claude"
 	"miya/internal/codex"
 	dg "miya/internal/delegation"
@@ -43,7 +44,7 @@ type chatController struct {
 	memoryResults  map[string]bool
 
 	// auto is the automations, in the controller that runs them.
-	auto *automationState
+	auto *automation.Runner
 	// miyaPending are the answers Miya's own cards wait for.
 	miyaPending map[string]chan bool
 	miyaSerial  int

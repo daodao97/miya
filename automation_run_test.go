@@ -13,7 +13,7 @@ import (
 
 type automationHarness struct {
 	c      *chatController
-	s      *automationState
+	s      *automation.Runner
 	now    time.Time
 	sent   []SendRequest
 	checks []bool
@@ -28,9 +28,9 @@ func newAutomationHarness(t *testing.T) *automationHarness {
 	c.cwd = t.TempDir()
 	c.startAutomations(filepath.Join(t.TempDir(), "automations.json"), false)
 	h.s = c.auto
-	h.s.now = func() time.Time { return h.now }
-	h.s.background = func(work func() func()) { work()() }
-	h.s.check = func(dir, command string) (bool, string) {
+	h.s.Now = func() time.Time { return h.now }
+	h.s.Background = func(work func() func()) { work()() }
+	h.s.Check = func(dir, command string) (bool, string) {
 		ok := len(h.checks) > 0 && h.checks[0]
 		if len(h.checks) > 0 {
 			h.checks = h.checks[1:]
@@ -40,7 +40,7 @@ func newAutomationHarness(t *testing.T) *automationHarness {
 		}
 		return false, "--- FAIL: TestX\nFAIL demo 0.01s"
 	}
-	h.s.submit = func(r SendRequest) int {
+	h.s.Submit = func(r SendRequest) int {
 		h.sent = append(h.sent, r)
 		if r.ThreadID != 0 {
 			c.update(r.ThreadID, func(th *Thread) {
@@ -64,7 +64,7 @@ func (h *automationHarness) add(t *testing.T, a automation.Automation) automatio
 	if err := a.Normalize(); err != nil {
 		t.Fatal(err)
 	}
-	h.s.store.Automations = append(h.s.store.Automations, a)
+	h.s.Store.Automations = append(h.s.Store.Automations, a)
 	return a
 }
 
@@ -76,19 +76,19 @@ func (h *automationHarness) endTurn(thread int, reply string) {
 }
 
 func (h *automationHarness) last(id string) automation.Run {
-	r, _ := h.s.store.LastRun(id)
+	r, _ := h.s.Store.LastRun(id)
 	return r
 }
 
 func TestAutomationRunsOnScheduleAndRetriesFailedChecks(t *testing.T) {
 	h := newAutomationHarness(t)
 	a := h.add(t, automation.Automation{Name: "Issue 分拣", Agent: agentClaude, Instructions: "看 Issue", Schedule: "0 9 * * 1-5", Check: "make test", Rounds: 3})
-	h.c.automationTick()
+	h.c.auto.Tick()
 	if len(h.sent) != 0 {
 		t.Fatal("ran before its time")
 	}
 	h.now = atLocal("2026-11-02 09:00").Add(20 * time.Second)
-	h.c.automationTick()
+	h.c.auto.Tick()
 	if len(h.sent) != 1 || h.sent[0].Project != h.c.cwd || h.sent[0].Agent != agentClaude || !strings.HasPrefix(h.sent[0].Text, "看 Issue") {
 		t.Fatalf("bad first round: %+v", h.sent)
 	}
@@ -97,13 +97,13 @@ func TestAutomationRunsOnScheduleAndRetriesFailedChecks(t *testing.T) {
 	if run.Result != automation.Running || run.CatchUp || thread.Automation != a.ID || !strings.HasPrefix(thread.Title, "Issue 分拣 · Nov 2") {
 		t.Fatalf("bad run start: %+v %+v", run, thread)
 	}
-	h.c.automationTick()
+	h.c.auto.Tick()
 	if len(h.sent) != 1 {
 		t.Fatal("acted while the round ran")
 	}
 	h.checks = []bool{false, true}
 	h.endTurn(run.Thread, "修了 #142")
-	h.c.automationTick()
+	h.c.auto.Tick()
 	if len(h.sent) != 2 || h.sent[1].ThreadID != run.Thread || !strings.Contains(h.sent[1].Text, "Check failed (round 1/3)") || !strings.Contains(h.sent[1].Text, "FAIL: TestX") {
 		t.Fatalf("failed check did not start round 2: %+v", h.sent)
 	}
@@ -111,12 +111,12 @@ func TestAutomationRunsOnScheduleAndRetriesFailedChecks(t *testing.T) {
 		t.Fatalf("round not recorded: %+v", r)
 	}
 	h.endTurn(run.Thread, "测试修好了\n细节")
-	h.c.automationTick()
+	h.c.auto.Tick()
 	r := h.last(a.ID)
-	if r.Result != automation.Passed || r.Round != 2 || r.Summary != "测试修好了" || r.Finished.IsZero() || len(h.s.active) != 0 {
+	if r.Result != automation.Passed || r.Round != 2 || r.Summary != "测试修好了" || r.Finished.IsZero() || len(h.s.Active) != 0 {
 		t.Fatalf("run not passed: %+v", r)
 	}
-	saved := automation.Load(h.s.path)
+	saved := automation.Load(h.s.Path)
 	if len(saved.Runs[a.ID]) != 1 || saved.Automations[0].Due.IsZero() {
 		t.Fatalf("run not saved: %+v", saved)
 	}
@@ -126,12 +126,12 @@ func TestAutomationFailsWhenRoundsRunOut(t *testing.T) {
 	h := newAutomationHarness(t)
 	a := h.add(t, automation.Automation{Name: "CI", Instructions: "修 CI", Schedule: "* * * * *", Check: "make ci", Rounds: 2})
 	h.now = h.now.Add(time.Minute)
-	h.c.automationTick()
+	h.c.auto.Tick()
 	thread := h.last(a.ID).Thread
 	h.endTurn(thread, "试一次")
-	h.c.automationTick()
+	h.c.auto.Tick()
 	h.endTurn(thread, "再试一次")
-	h.c.automationTick()
+	h.c.auto.Tick()
 	if r := h.last(a.ID); r.Result != automation.Failed || r.Round != 2 || r.Summary != "Check failed: FAIL demo 0.01s" {
 		t.Fatalf("bad failed run: %+v", r)
 	}
@@ -142,30 +142,30 @@ func TestAutomationSkipsCatchesUpAndStops(t *testing.T) {
 	h.now = atLocal("2026-11-02 08:00")
 	a := h.add(t, automation.Automation{Name: "日报", Instructions: "写日报", Schedule: "0 * * * *"})
 	h.now = atLocal("2026-11-02 11:30")
-	h.c.automationTick()
+	h.c.auto.Tick()
 	if len(h.sent) != 1 || !h.last(a.ID).CatchUp {
 		t.Fatalf("missed hours did not make one catch-up run: %d sent, %+v", len(h.sent), h.last(a.ID))
 	}
 	thread := h.last(a.ID).Thread
 	h.now = atLocal("2026-11-02 12:00").Add(10 * time.Second)
-	h.c.automationTick()
-	runs := h.s.store.Runs[a.ID]
+	h.c.auto.Tick()
+	runs := h.s.Store.Runs[a.ID]
 	if len(h.sent) != 1 || len(runs) != 2 || runs[1].Result != automation.Skipped {
 		t.Fatalf("busy run not skipped: %+v", runs)
 	}
 	// The run ended while skipped; its record is the one before the skip.
-	h.s.store.Automations[0].Enabled = false
+	h.s.Store.Automations[0].Enabled = false
 	h.endTurn(thread, "写好了")
-	h.c.automationTick()
-	if len(h.s.active) != 0 {
+	h.c.auto.Tick()
+	if len(h.s.Active) != 0 {
 		t.Fatal("paused run still followed")
 	}
 	h.now = atLocal("2026-11-02 13:00").Add(10 * time.Second)
-	h.c.automationTick()
+	h.c.auto.Tick()
 	if len(h.sent) != 1 {
 		t.Fatal("paused automation ran")
 	}
-	if h.c.automationsEnabled() {
+	if h.c.auto.Enabled() {
 		t.Fatal("paused automation keeps the service up")
 	}
 }
@@ -174,7 +174,7 @@ func TestAutomationWithoutProjectFails(t *testing.T) {
 	h := newAutomationHarness(t)
 	a := h.add(t, automation.Automation{Name: "x", Project: "/nonexistent/miya-test", Instructions: "y", Schedule: "* * * * *"})
 	h.now = h.now.Add(time.Minute)
-	h.c.automationTick()
+	h.c.auto.Tick()
 	if r := h.last(a.ID); r.Result != automation.Failed || !strings.Contains(r.Summary, "Project directory does not exist") || len(h.sent) != 0 {
 		t.Fatalf("missing project not reported: %+v", r)
 	}
@@ -184,17 +184,17 @@ func TestAutomationWaitsForApprovals(t *testing.T) {
 	h := newAutomationHarness(t)
 	a := h.add(t, automation.Automation{Name: "x", Instructions: "y", Schedule: "* * * * *"})
 	h.now = h.now.Add(time.Minute)
-	h.c.automationTick()
+	h.c.auto.Tick()
 	thread := h.last(a.ID).Thread
 	id, _ := json.Marshal("claude:" + itoa(thread) + ":req1")
 	h.c.setApprovals([]codex.Approval{{ID: id, Method: "claude/permission"}})
 	h.endTurn(thread, "Waiting")
-	h.c.automationTick()
+	h.c.auto.Tick()
 	if h.last(a.ID).Result != automation.Running {
 		t.Fatal("a round waiting for approval was taken as ended")
 	}
 	h.c.setApprovals(nil)
-	h.c.automationTick()
+	h.c.auto.Tick()
 	if h.last(a.ID).Result != automation.Passed {
 		t.Fatalf("run not finished after the approval: %+v", h.last(a.ID))
 	}
@@ -209,7 +209,7 @@ func TestAutomationRunsInterruptedByRestart(t *testing.T) {
 	}
 	c := testController()
 	c.startAutomations(path, false)
-	if r, _ := c.auto.store.LastRun("a1"); r.Result != automation.Interrupted {
+	if r, _ := c.auto.Store.LastRun("a1"); r.Result != automation.Interrupted {
 		t.Fatalf("unfinished run kept running: %+v", r)
 	}
 }

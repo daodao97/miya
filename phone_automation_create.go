@@ -56,10 +56,10 @@ func (c *chatController) phoneAutomationCreate(r remote.Request) remote.Frame {
 		return phoneAutomationFormFrame(r, nil, errors.New("Invalid creation request. Start again."))
 	}
 	id := "phone-" + hex.EncodeToString(key)
-	if i, exists := c.auto.store.Find(id); exists {
-		a := c.auto.store.Automations[i]
-		_, running := c.auto.active[id]
-		v := automationViewOf(a, c.auto.store.Runs[id], running, c.auto.now())
+	if i, exists := c.auto.Store.Find(id); exists {
+		a := c.auto.Store.Automations[i]
+		_, running := c.auto.Active[id]
+		v := automationViewOf(a, c.auto.Store.Runs[id], running, c.auto.Now())
 		return phoneAutomationFormFrame(r, &v, nil)
 	}
 	var a automation.Automation
@@ -71,6 +71,6 @@ func (c *chatController) phoneAutomationCreate(r remote.Request) remote.Frame {
 	if err != nil {
 		return phoneAutomationFormFrame(r, nil, err)
 	}
-	v := automationViewOf(a, nil, false, c.auto.now())
+	v := automationViewOf(a, nil, false, c.auto.Now())
 	return phoneAutomationFormFrame(r, &v, nil)
 }

@@ -98,7 +98,7 @@ func (c *chatController) mcpAutomation(op string, r mcpRequest) (any, error) {
 			return nil, err
 		}
 		a.ID = ""
-		id, ch := c.askUser(caller, "Create automation \""+a.Name+"\"", automationCardDetail(a, c.auto.now()))
+		id, ch := c.askUser(caller, "Create automation \""+a.Name+"\"", automationCardDetail(a, c.auto.Now()))
 		return deferred(func() (any, error) {
 			if !c.waitUser(id, ch) {
 				return "The user did not confirm. No automation was created.", nil
@@ -108,13 +108,13 @@ func (c *chatController) mcpAutomation(op string, r mcpRequest) (any, error) {
 				if err != nil {
 					return nil, err
 				}
-				return automationViewOf(saved, nil, false, c.auto.now()), nil
+				return automationViewOf(saved, nil, false, c.auto.Now()), nil
 			})
 			if err != nil {
 				return nil, err
 			}
 			view := v.(automationView)
-			return fmt.Sprintf("Created automation %q (ID %s), %s. Next run: %s.", view.Name, view.ID, view.ScheduleText, formatAutomationTime(view.Next)), nil
+			return fmt.Sprintf("Created automation %q (ID %s), %s. Next run: %s.", view.Name, view.ID, view.ScheduleText, automation.FormatTime(view.Next)), nil
 		}), nil
 	case "mcpAutomationUpdate":
 		return c.mcpUpdateAutomation(r, args)
@@ -124,9 +124,9 @@ func (c *chatController) mcpAutomation(op string, r mcpRequest) (any, error) {
 
 func (c *chatController) mcpUpdateAutomation(r mcpRequest, args mcpAutomationArgs) (any, error) {
 	s := c.auto
-	i, ok := s.store.Find(strings.TrimSpace(args.ID))
+	i, ok := s.Store.Find(strings.TrimSpace(args.ID))
 	if !ok {
-		for j, a := range s.store.Automations {
+		for j, a := range s.Store.Automations {
 			if a.Name == strings.TrimSpace(args.ID) {
 				i, ok = j, true
 			}
@@ -135,7 +135,7 @@ func (c *chatController) mcpUpdateAutomation(r mcpRequest, args mcpAutomationArg
 	if !ok {
 		return nil, fmt.Errorf("Automation %q not found. Use list_automations to see available automations.", args.ID)
 	}
-	old := s.store.Automations[i]
+	old := s.Store.Automations[i]
 	next := old
 	if args.Name != "" {
 		next.Name = args.Name
@@ -193,31 +193,22 @@ func (c *chatController) mcpUpdateAutomation(r mcpRequest, args mcpAutomationArg
 
 func (c *chatController) automationListText() string {
 	s := c.auto
-	if len(s.store.Automations) == 0 {
+	if len(s.Store.Automations) == 0 {
 		return "No automations yet."
 	}
 	var b strings.Builder
-	for _, a := range s.store.Automations {
+	for _, a := range s.Store.Automations {
 		state := "Paused"
 		if a.Enabled {
-			state = "Enabled; next run: " + formatAutomationTime(a.Next(s.now()))
+			state = "Enabled; next run: " + automation.FormatTime(a.Next(s.Now()))
 		}
 		fmt.Fprintf(&b, "%s\"%s\"· %s · %s · %s", a.ID, a.Name, filepath.Base(a.Project), automation.DescribeCron(a.Schedule), state)
-		if r, ok := s.store.LastRun(a.ID); ok {
+		if r, ok := s.Store.LastRun(a.ID); ok {
 			fmt.Fprintf(&b, " · Last run: %s", automation.ResultLabel(r.Result))
 		}
 		b.WriteString("\n")
 	}
 	return strings.TrimRight(b.String(), "\n")
-}
-
-var weekdayNames = []string{"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"}
-
-func formatAutomationTime(t time.Time) string {
-	if t.IsZero() {
-		return "Not scheduled"
-	}
-	return fmt.Sprintf("%d/%d (%s) %s", t.Month(), t.Day(), weekdayNames[t.Weekday()], t.Format("15:04"))
 }
 
 func automationCheckText(a automation.Automation) string {
@@ -230,7 +221,7 @@ func automationCheckText(a automation.Automation) string {
 // automationCardDetail is what the confirmation card shows of a new one.
 func automationCardDetail(a automation.Automation, now time.Time) string {
 	return strings.Join([]string{
-		fmt.Sprintf("Schedule: %s (%s); next run: %s", automation.DescribeCron(a.Schedule), a.Schedule, formatAutomationTime(a.Next(now))),
+		fmt.Sprintf("Schedule: %s (%s); next run: %s", automation.DescribeCron(a.Schedule), a.Schedule, automation.FormatTime(a.Next(now))),
 		"Project: " + a.Project,
 		"Agent: " + backendFor(a.Agent).Name(),
 		"Completion check: " + automationCheckText(a),

@@ -75,17 +75,17 @@ func TestMCPCreateAutomationAsksFirst(t *testing.T) {
 	if card.ThreadID != caller.ServerID || requestAgent(card) != "Miya" || !strings.Contains(card.Command, "Weekdays 9:00") || !strings.Contains(card.Command, "Check: go test ./...; up to 3 rounds") || !h.c.threadAwaitsUser(caller) {
 		t.Fatalf("bad card: %+v", card)
 	}
-	if len(h.s.store.Automations) != 0 {
+	if len(h.s.Store.Automations) != 0 {
 		t.Fatal("created before the user accepted")
 	}
 	h.c.respond(card, approvalResult(card, true))
 	if got := await(t, out); !strings.Contains(got, "Created automation \"每日分拣\"") || !strings.Contains(got, "11/2 (Mon) 09:00") {
 		t.Fatalf("bad answer: %q", got)
 	}
-	if len(h.s.store.Automations) != 1 || len(h.c.approvals()) != 0 {
-		t.Fatalf("not created: %+v", h.s.store.Automations)
+	if len(h.s.Store.Automations) != 1 || len(h.c.approvals()) != 0 {
+		t.Fatalf("not created: %+v", h.s.Store.Automations)
 	}
-	a := h.s.store.Automations[0]
+	a := h.s.Store.Automations[0]
 	if a.Project != h.c.cwd || a.Agent != agentClaude || a.Rounds != 3 || !a.Enabled {
 		t.Fatalf("bad automation: %+v", a)
 	}
@@ -94,7 +94,7 @@ func TestMCPCreateAutomationAsksFirst(t *testing.T) {
 	out = startDeferred(t, res, err)
 	card = miyaCard(t, h.c)
 	h.c.respond(card, approvalResult(card, false))
-	if got := await(t, out); !strings.Contains(got, "No automation was created") || len(h.s.store.Automations) != 1 {
+	if got := await(t, out); !strings.Contains(got, "No automation was created") || len(h.s.Store.Automations) != 1 {
 		t.Fatalf("declined card created one: %q", got)
 	}
 
@@ -112,7 +112,7 @@ func TestMCPUpdateAndListAutomations(t *testing.T) {
 	a := h.add(t, automation.Automation{Name: "每日分拣", Instructions: "看 Issue", Schedule: "0 9 * * 1-5"})
 	off := false
 	res, err := h.c.mcpHandle("mcpAutomationUpdate", mcpRequest{Tool: "update_automation", Auto: &mcpAutomationArgs{ID: a.ID, Enabled: &off}})
-	if err != nil || !strings.Contains(res.(string), "Paused") || h.s.store.Automations[0].Enabled || len(h.c.approvals()) != 0 {
+	if err != nil || !strings.Contains(res.(string), "Paused") || h.s.Store.Automations[0].Enabled || len(h.c.approvals()) != 0 {
 		t.Fatalf("pausing: %v %v", res, err)
 	}
 	automationCaller(h, "update_automation")
@@ -123,8 +123,8 @@ func TestMCPUpdateAndListAutomations(t *testing.T) {
 		t.Fatalf("bad diff: %q", card.Command)
 	}
 	h.c.respond(card, approvalResult(card, true))
-	if got := await(t, out); !strings.Contains(got, "Updated") || h.s.store.Automations[0].Schedule != "0 7 * * *" {
-		t.Fatalf("not changed: %q %+v", got, h.s.store.Automations[0])
+	if got := await(t, out); !strings.Contains(got, "Updated") || h.s.Store.Automations[0].Schedule != "0 7 * * *" {
+		t.Fatalf("not changed: %q %+v", got, h.s.Store.Automations[0])
 	}
 	list, err := h.c.mcpHandle("mcpAutomationList", mcpRequest{Tool: "list_automations"})
 	if err != nil || !strings.Contains(list.(string), a.ID+"\"每日分拣\"") || !strings.Contains(list.(string), "Paused") {
@@ -154,7 +154,7 @@ func TestMCPCreateAutomationFromBackgroundProject(t *testing.T) {
 	if got := await(t, out); !strings.Contains(got, "Created") {
 		t.Fatalf("bad answer: %q", got)
 	}
-	if a := h.s.store.Automations[0]; a.Project != other || a.Agent != agentCodex {
+	if a := h.s.Store.Automations[0]; a.Project != other || a.Agent != agentCodex {
 		t.Fatalf("automation not in the caller's project: %+v", a)
 	}
 	list := h.c.mcpThreads(mcpRequest{Tool: "create_automation"})

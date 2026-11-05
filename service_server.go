@@ -661,7 +661,7 @@ func (s *service) checkIdle() {
 		s.stop()
 		return
 	}
-	if s.persistent || busy || len(s.peerList()) > 0 || desktopPhone.connected() || s.c.automationsEnabled() {
+	if s.persistent || busy || len(s.peerList()) > 0 || desktopPhone.connected() || s.c.auto.Enabled() {
 		s.idleSince = time.Time{}
 		return
 	}

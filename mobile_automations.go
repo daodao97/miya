@@ -298,7 +298,7 @@ func (m *mobileApp) automationPhoneDetail(c *ui.Context, v automationView) {
 		if v.Enabled && !v.Next.IsZero() {
 			ui.Row(c).FillWidth().Wrap().Gap(12).AlignItems(ui.Baseline).Children(func() {
 				ui.Text(c, v.Next.Format("15:04")).FontSize(m.font(32)).FontWeight(600)
-				ui.Text(c, fmt.Sprintf(tr("%d/%d %s"), v.Next.Month(), v.Next.Day(), tr(weekdayNames[v.Next.Weekday()]))).FontSize(m.font(14)).TextColor(p.muted)
+				ui.Text(c, fmt.Sprintf(tr("%d/%d %s"), v.Next.Month(), v.Next.Day(), tr(automation.WeekdayNames[v.Next.Weekday()]))).FontSize(m.font(14)).TextColor(p.muted)
 			})
 		}
 		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {

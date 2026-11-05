@@ -30,13 +30,13 @@ func TestAutomationsPage(t *testing.T) {
 	c.cwd = t.TempDir()
 	c.startAutomations(filepath.Join(t.TempDir(), "automations.json"), false)
 	now := atLocal("2026-11-02 08:30")
-	c.auto.now = func() time.Time { return now }
+	c.auto.Now = func() time.Time { return now }
 	issue, err := c.saveAutomation(automation.Automation{Name: "每日 Issue 分拣", Project: c.cwd, Agent: agentClaude, Instructions: "查看最近 24 小时新开的 Issue。值得处理的直接修复并补测试，修不了的列出来说明原因。", Request: "每个工作日 9 点看新 Issue，能修就修", Schedule: "0 9 * * 1-5", Check: "go test ./...", Rounds: 3, Enabled: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	c.auto.store.AddRun(issue.ID, automation.Run{Started: atLocal("2026-11-01 09:00"), Finished: atLocal("2026-11-01 09:14"), Round: 2, Rounds: 3, Result: automation.Passed, Summary: "修复 #142 时区判断，补了测试", Thread: 99})
-	c.auto.store.AddRun(issue.ID, automation.Run{Started: atLocal("2026-10-31 09:00"), Finished: atLocal("2026-10-31 09:31"), Round: 3, Rounds: 3, Result: automation.Failed, Summary: "检查未通过：FAIL demo/auth"})
+	c.auto.Store.AddRun(issue.ID, automation.Run{Started: atLocal("2026-11-01 09:00"), Finished: atLocal("2026-11-01 09:14"), Round: 2, Rounds: 3, Result: automation.Passed, Summary: "修复 #142 时区判断，补了测试", Thread: 99})
+	c.auto.Store.AddRun(issue.ID, automation.Run{Started: atLocal("2026-10-31 09:00"), Finished: atLocal("2026-10-31 09:31"), Round: 3, Rounds: 3, Result: automation.Failed, Summary: "检查未通过：FAIL demo/auth"})
 	if _, err := c.saveAutomation(automation.Automation{Name: "仓库日报", Project: c.cwd, Agent: agentCodex, Instructions: "写今天的仓库日报", Schedule: "0 18 * * *"}); err != nil {
 		t.Fatal(err)
 	}

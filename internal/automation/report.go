@@ -2,6 +2,7 @@ package automation
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"miya/internal/textutil"
@@ -114,4 +115,17 @@ func FormatReport(r Report) string {
 		b.WriteString("User action was required.\n")
 	}
 	return strings.TrimRight(b.String(), "\n")
+}
+
+// RunMessage is what a run sends: the instructions, how to report
+// the result, and the previous result to compare with.
+func RunMessage(a Automation, prev *Run) string {
+	var b strings.Builder
+	b.WriteString(a.Instructions)
+	b.WriteString("\n\n---\n")
+	fmt.Fprintf(&b, "This is Miya scheduled automation \"%s\". Before finishing, call Miya's report_result tool with this run's result: summary (one or two sentences), findings (key conclusions), metrics (each with name, value, unit), artifacts (output files or links), and needs_user (whether user action is required).", a.Name)
+	if prev != nil && prev.Report != nil {
+		fmt.Fprintf(&b, "\n\nResults from the previous run (%s) follow. Compare them with this run and identify new, removed, and significantly changed items:\n%s", FormatTime(prev.Started), FormatReport(*prev.Report))
+	}
+	return b.String()
 }

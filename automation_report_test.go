@@ -18,7 +18,7 @@ func TestAutomationRunsReportAndCarryResults(t *testing.T) {
 	h := newAutomationHarness(t)
 	a := h.add(t, automation.Automation{Name: "上游对账", Instructions: "对账", Schedule: "* * * * *"})
 	h.now = h.now.Add(time.Minute)
-	h.c.automationTick()
+	h.c.auto.Tick()
 	if !strings.HasPrefix(h.sent[0].Text, "对账") || !strings.Contains(h.sent[0].Text, "report_result") || strings.Contains(h.sent[0].Text, "previous run") {
 		t.Fatalf("bad first message: %q", h.sent[0].Text)
 	}
@@ -34,14 +34,14 @@ func TestAutomationRunsReportAndCarryResults(t *testing.T) {
 	}
 	h.c.update(thread, func(th *Thread) { th.Messages[len(th.Messages)-1].Status = "completed" })
 	h.endTurn(thread, "Done")
-	h.c.automationTick()
+	h.c.auto.Tick()
 	r := h.last(a.ID)
 	if r.Result != automation.Passed || r.Report == nil || r.Report.Auto || !r.Report.NeedsUser || r.Summary != "上游多扣 3 笔" || string(r.Report.Metrics[0].Value) != "0.8" {
 		t.Fatalf("bad finished run: %+v %+v", r, r.Report)
 	}
 
 	h.now = h.now.Add(time.Minute)
-	h.c.automationTick()
+	h.c.auto.Tick()
 	if len(h.sent) != 2 || !strings.Contains(h.sent[1].Text, "previous run") || !strings.Contains(h.sent[1].Text, "多扣占比: 0.8%") || !strings.Contains(h.sent[1].Text, "pomo 多扣 12.3 元") {
 		t.Fatalf("previous result not carried: %q", h.sent[len(h.sent)-1].Text)
 	}
@@ -49,15 +49,15 @@ func TestAutomationRunsReportAndCarryResults(t *testing.T) {
 	// Without a report, the run keeps an automatic summary of its reply.
 	thread2 := h.last(a.ID).Thread
 	h.endTurn(thread2, "这次没有异常")
-	h.c.automationTick()
+	h.c.auto.Tick()
 	if r := h.last(a.ID); r.Report == nil || !r.Report.Auto || r.Report.Summary != "这次没有异常" || r.Summary != "这次没有异常" {
 		t.Fatalf("no automatic report: %+v %+v", r, r.Report)
 	}
 
 	// Turned off, the next run goes without it.
-	h.s.store.Automations[0].NoCarryOver = true
+	h.s.Store.Automations[0].NoCarryOver = true
 	h.now = h.now.Add(time.Minute)
-	h.c.automationTick()
+	h.c.auto.Tick()
 	if strings.Contains(h.sent[len(h.sent)-1].Text, "previous run") {
 		t.Fatal("previous result carried while off")
 	}
