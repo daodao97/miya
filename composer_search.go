@@ -14,13 +14,6 @@ import (
 	"unicode/utf8"
 )
 
-type composerChoice struct {
-	Name, Detail string
-	ArgumentHint string     `json:"argumentHint,omitempty"`
-	Ref          *ThreadRef `json:"ref,omitempty"`
-	Agent        string     `json:"agent,omitempty"`
-}
-
 var composerCommands = []composerChoice{
 	{Name: "goal", Detail: "Set a goal · /goal pause · /goal resume · /goal clear", ArgumentHint: "Describe a goal, or enter pause / resume / clear"},
 	{Name: "new", Detail: "Start a new conversation"},

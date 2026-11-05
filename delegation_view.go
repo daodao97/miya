@@ -1,16 +1,5 @@
 package main
 
-// Only capability and revision metadata travels with chat state. Task bodies,
-// context snapshots and results are fetched explicitly, never broadcast.
-type collaborationStatus struct {
-	Version      int      `json:"version"`
-	Revision     uint64   `json:"revision"`
-	Operations   []string `json:"operations"`
-	StorageError string   `json:"storage_error,omitempty"`
-	Stale        bool     `json:"stale,omitempty"`
-	CleanupError string   `json:"cleanup_error,omitempty"`
-}
-
 func (c *chatController) collaborationCapabilities() *collaborationStatus {
 	s := c.collaboration
 	if s == nil {

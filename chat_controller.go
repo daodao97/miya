@@ -145,11 +145,6 @@ type chatController struct {
 	setRevision         func(int)
 }
 
-type Project struct {
-	Name string
-	Path string
-}
-
 type threadListCache struct {
 	Projects map[string][]Thread `json:"projects"`
 }
@@ -646,6 +641,7 @@ func (c *chatController) dispatch(f func()) {
 		}
 	})
 }
+
 func (c *chatController) nextID() int { c.serial++; return c.serial }
 
 // Keep published IDs across launches: older phones subscribe by this number.
@@ -671,6 +667,7 @@ func (c *chatController) assignCachedThreadIDs() {
 		c.projectCache[path] = threads
 	}
 }
+
 func (c *chatController) current() Thread {
 	for _, t := range c.threads() {
 		if t.ID == c.active() {
@@ -813,6 +810,7 @@ func (c *chatController) refreshProjectOrder() {
 		}
 	}
 }
+
 func (c *chatController) connect() {
 	if c.remote != nil {
 		c.forward("connect", nil)
@@ -1044,6 +1042,7 @@ func (c *chatController) loadModels(ctx context.Context, client *codex.Client, g
 		})
 	}()
 }
+
 func (c *chatController) readHistory(t Thread) {
 	c.resume(t, nil)
 }
@@ -1119,6 +1118,7 @@ func (c *chatController) changeWorkspace(path string) error {
 	c.discoverAll()
 	return nil
 }
+
 func (c *chatController) selectModel(value string) {
 	if c.remote != nil {
 		c.setModel(value)
@@ -1134,6 +1134,7 @@ func (c *chatController) selectModel(value string) {
 		}
 	}
 }
+
 func (c *chatController) modelNames() []string {
 	out := []string{}
 	for _, m := range c.models() {
@@ -1152,6 +1153,7 @@ func (c *chatController) modelNames() []string {
 	}
 	return out
 }
+
 func (c *chatController) efforts() []string {
 	for _, m := range c.models() {
 		if m.Model == c.model() {
@@ -1164,6 +1166,7 @@ func (c *chatController) efforts() []string {
 	}
 	return nil
 }
+
 func (c *chatController) newThread() {
 	if c.setDraftPermission != nil {
 		c.setDraftPermission("")
@@ -1172,6 +1175,7 @@ func (c *chatController) newThread() {
 	c.setDraft("")
 	c.setAttachments(nil)
 }
+
 func (c *chatController) rememberDraft(value string) {
 	c.setDraft(value)
 	if c.remote != nil {
@@ -1226,6 +1230,7 @@ func (c *chatController) attachmentInputs(paths []string) []map[string]any {
 	}
 	return inputs
 }
+
 func (c *chatController) selectThread(t Thread) {
 	// Viewing history does not count as conversation activity.
 	if latest := c.threadWithID(t.ID); latest.ID != 0 {
@@ -1366,6 +1371,7 @@ func (c *chatController) resume(t Thread, after *SendRequest) {
 		})
 	}()
 }
+
 func (c *chatController) historyMessages(remote codex.Thread) []Message {
 	out := prepareHistoryMessages(remote)
 	for i := range out {
@@ -1592,6 +1598,7 @@ func (c *chatController) stopThread(id int) {
 	c.update(t.ID, func(t *Thread) { t.StopRequested = true; t.Status = "Stopping…" })
 	backendOf(t).Stop(c, t)
 }
+
 func (c *chatController) interrupt(t Thread) {
 	client := c.client
 	if client == nil {
@@ -1616,12 +1623,14 @@ func approvalForPermissionPolicy(policy string) string {
 	}
 	return "on-request"
 }
+
 func reviewerForPermissionPolicy(policy string) string {
 	if policy == "on-failure" {
 		return "auto_review"
 	}
 	return "user"
 }
+
 func turnSandboxForPermissionPolicy(policy string) map[string]any {
 	if policy == "never" {
 		return map[string]any{"type": "dangerFullAccess"}
@@ -1635,6 +1644,7 @@ func (c *chatController) permissionForThread(t Thread) string {
 	}
 	return c.selectedPermissionPolicy()
 }
+
 func (c *chatController) currentPermissionPolicy() string {
 	t := c.current()
 	if t.ID == 0 && c.draftPermission != nil && c.draftPermission() != "" {
@@ -1642,6 +1652,7 @@ func (c *chatController) currentPermissionPolicy() string {
 	}
 	return c.permissionForThread(t)
 }
+
 func (c *chatController) setCurrentPermissionPolicy(policy string) {
 	policy = normalizePermissionPolicy(policy)
 	if c.current().ID == 0 {
