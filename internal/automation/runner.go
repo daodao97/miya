@@ -33,7 +33,6 @@ type Host interface {
 	// Outcome is how a conversation's latest turn ended, as a sub-agent
 	// status, and its last reply.
 	Outcome(id int) (status, reply string)
-	AgentName(agent string) string
 	// AutoReport is the result of a run whose agent reported none.
 	AutoReport(model.Thread) *Report
 	Deliver(notification.Notice)
@@ -202,7 +201,7 @@ func (rn *Runner) StartRun(id string, catchUp bool) error {
 	if info, err := os.Stat(a.Project); err != nil || !info.IsDir() {
 		run.Result, run.Summary, run.Finished = Failed, "Project directory does not exist: "+a.Project, now
 	} else if thread = rn.Submit(model.SendRequest{Agent: a.Agent, Project: a.Project, Text: RunMessage(a, prev), MemoryControl: true}); thread == 0 {
-		run.Result, run.Summary, run.Finished = Failed, rn.host.AgentName(a.Agent)+" is not ready", now
+		run.Result, run.Summary, run.Finished = Failed, model.AgentName(a.Agent)+" is not ready", now
 	}
 	if thread != 0 {
 		title := a.Name + " · " + now.Format("Jan 2, 15:04")

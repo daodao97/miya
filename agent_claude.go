@@ -5,8 +5,9 @@ import (
 	"strings"
 	"time"
 
-	"miya/internal/codex"
 	"miya/internal/claude"
+	"miya/internal/codex"
+	"miya/internal/model"
 )
 
 // claudeBackend runs the Claude Code CLI over stream-json, one process per
@@ -14,7 +15,7 @@ import (
 type claudeBackend struct{}
 
 func (claudeBackend) ID() string          { return agentClaude }
-func (claudeBackend) Name() string        { return "Claude Code" }
+func (claudeBackend) Name() string        { return model.AgentName(model.AgentClaude) }
 func (claudeBackend) Icon() agentIconSpec { return agentIconSpec{SVG: "claude-code", Color: "#c46b4d"} }
 func (claudeBackend) Caps() agentCaps     { return agentCaps{Models: true, Effort: true, StallHint: true} }
 

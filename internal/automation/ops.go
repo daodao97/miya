@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-)
 
-import ()
+	"miya/internal/model"
+)
 
 // View is an automation as the page shows it.
 type View struct {
@@ -58,7 +58,7 @@ func (rn *Runner) CardDetail(a Automation, now time.Time) string {
 	return strings.Join([]string{
 		fmt.Sprintf("Schedule: %s (%s); next run: %s", DescribeCron(a.Schedule), a.Schedule, FormatTime(a.Next(now))),
 		"Project: " + a.Project,
-		"Agent: " + rn.host.AgentName(a.Agent),
+		"Agent: " + model.AgentName(a.Agent),
 		"Completion check: " + CheckText(a),
 		"Instructions: " + a.Instructions,
 	}, "\n")
@@ -74,7 +74,7 @@ func (rn *Runner) Diff(old, next Automation) string {
 	}
 	add("Name", old.Name, next.Name)
 	add("Schedule", DescribeCron(old.Schedule), DescribeCron(next.Schedule))
-	add("Agent", rn.host.AgentName(old.Agent), rn.host.AgentName(next.Agent))
+	add("Agent", model.AgentName(old.Agent), model.AgentName(next.Agent))
 	add("Completion check", CheckText(old), CheckText(next))
 	add("Instructions", old.Instructions, next.Instructions)
 	return strings.Join(lines, "\n")

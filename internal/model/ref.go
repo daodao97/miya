@@ -16,6 +16,18 @@ const (
 // Backends are the agent backend IDs, in agentBackends' order.
 var Backends = []string{AgentCodex, AgentClaude}
 
+// agentNames are the backends' display names.
+var agentNames = map[string]string{AgentCodex: "Codex", AgentClaude: "Claude Code"}
+
+// AgentName is a backend's display name. An unknown ID gets the first
+// backend's, as main's backendFor falls back to it.
+func AgentName(id string) string {
+	if n, ok := agentNames[id]; ok {
+		return n
+	}
+	return agentNames[Backends[0]]
+}
+
 // RegisteredBackend reports whether id names an agent backend.
 func RegisteredBackend(id string) bool {
 	for _, b := range Backends {

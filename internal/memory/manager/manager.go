@@ -26,7 +26,6 @@ type Host interface {
 	Projects() (cwd string, paths []string)
 	// ClaudeBinary is the Claude Code executable, "" when none is found.
 	ClaudeBinary() string
-	AgentName(agent string) string
 	// Changed tells windows the memory library changed.
 	Changed()
 }

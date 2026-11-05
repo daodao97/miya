@@ -71,4 +71,7 @@ func TestModelBackendsMatchAgentBackends(t *testing.T) {
 	if strings.Join(ids, ",") != strings.Join(model.Backends, ",") {
 		t.Fatalf("model.Backends = %v, agentBackends = %v", model.Backends, ids)
 	}
+	if got, want := model.AgentName("unknown"), backendFor("unknown").Name(); got != want {
+		t.Fatalf("model.AgentName falls back to %q, backendFor to %q", got, want)
+	}
 }

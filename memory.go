@@ -36,7 +36,6 @@ func (h memoryHost) ThreadRef(t Thread) ThreadRef         { return h.c.threadRef
 func (h memoryHost) Workspace(thread int) string          { return h.c.threadWorkspace(thread) }
 func (h memoryHost) NextID() int                          { return h.c.nextID() }
 func (h memoryHost) ClaudeBinary() string                 { return h.c.claudeBinary }
-func (h memoryHost) AgentName(agent string) string        { return backendFor(agent).Name() }
 func (h memoryHost) Changed()                             { h.c.memoryChanged() }
 func (h memoryHost) Projects() (string, []string) {
 	var paths []string

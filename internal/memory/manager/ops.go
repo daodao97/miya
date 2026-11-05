@@ -163,7 +163,7 @@ func (mg *Manager) Op(op string, r Request) (any, error) {
 			}
 			selected := r.Settings.ExtractionAgent()
 			if r.Settings.AutoExtract && !r.Settings.Disabled && !available(selected) && !(settings.AutoExtract && settings.ExtractionAgent() == selected) {
-				return nil, fmt.Errorf("Automatic extraction requires a working %s configuration", mg.Host.AgentName(selected))
+				return nil, fmt.Errorf("Automatic extraction requires a working %s configuration", model.AgentName(selected))
 			}
 			err := store.Configure(scope, *r.Settings)
 			if err == nil {

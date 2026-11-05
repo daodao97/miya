@@ -140,7 +140,6 @@ func (h automationHost) Thread(id int) Thread                   { return h.c.thr
 func (h automationHost) UpdateThread(id int, f func(*Thread))   { h.c.update(id, f) }
 func (h automationHost) AwaitsUser(t Thread) bool               { return h.c.threadAwaitsUser(t) }
 func (h automationHost) Outcome(id int) (string, string)        { return h.c.handoffState(id) }
-func (h automationHost) AgentName(agent string) string          { return backendFor(agent).Name() }
 func (h automationHost) AutoReport(t Thread) *automation.Report { return autoRunReport(t) }
 func (h automationHost) Deliver(n notification.Notice)          { h.c.deliverNotice(n, "completion") }
 func (h automationHost) SyncLoginItem(enabled bool)             { syncAutomationLaunchAgent(enabled) }

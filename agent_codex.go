@@ -66,7 +66,7 @@ func isMissingCodexThread(err error, threadID string) bool {
 }
 
 func (codexBackend) ID() string          { return agentCodex }
-func (codexBackend) Name() string        { return "Codex" }
+func (codexBackend) Name() string        { return model.AgentName(model.AgentCodex) }
 func (codexBackend) Icon() agentIconSpec { return agentIconSpec{PNG: codexAgentPNG} }
 func (codexBackend) Caps() agentCaps {
 	return agentCaps{Models: true, Effort: true, Quota: true, ThreadCommands: true}
