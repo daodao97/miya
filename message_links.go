@@ -74,14 +74,3 @@ func localFileLink(cwd, link string) (string, bool) {
 	rel, err := filepath.Rel(cwd, file)
 	return rel, err == nil
 }
-
-// Conversation links stay inside the connected desktop's namespace on phones.
-func (m *mobileApp) openMessageLink(link string) {
-	if _, ok := model.ParseThreadURL(link); ok {
-		m.openCollaborationThread(link)
-		return
-	}
-	if ui.SafeToOpen(link) {
-		go mygo.Shell.OpenExternal(link)
-	}
-}

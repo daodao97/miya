@@ -3,65 +3,10 @@ package main
 import (
 	"fmt"
 	"math"
-	"strings"
 	"time"
 
 	"github.com/egoist/mygo/ui"
 )
-
-// Only subscription usage is shared, never account identity or credentials.
-// Agents without real quota data are omitted entirely.
-type phoneAgentQuota struct {
-	Agent   string             `json:"agent"`
-	Windows []phoneQuotaWindow `json:"windows"`
-}
-
-type phoneQuotaWindow struct {
-	Label       string  `json:"label"`
-	UsedPercent float64 `json:"usedPercent"`
-	ResetsAt    int64   `json:"resetsAt,omitempty"`
-}
-
-func (c *chatController) phoneQuotas() []phoneAgentQuota {
-	q := c.quotaLimits.RateLimits
-	if v, ok := c.quotaLimits.ByID[codexAccountLimitID]; ok {
-		q = &v
-	}
-	if q == nil {
-		return nil
-	}
-	windows := composerQuotaWindows(c.quotaLimits)
-	// Preserve additional account windows without using model-specific buckets.
-	for _, w := range []*quotaWindow{q.Primary, q.Secondary} {
-		if w == nil {
-			continue
-		}
-		found := false
-		for _, existing := range windows {
-			if existing == w {
-				found = true
-			}
-		}
-		if !found {
-			windows = append(windows, w)
-		}
-	}
-	quota := phoneAgentQuota{Agent: agentCodex}
-	for i, w := range windows {
-		if math.IsNaN(w.UsedPercent) || math.IsInf(w.UsedPercent, 0) {
-			continue
-		}
-		v := phoneQuotaWindow{Label: strings.TrimSuffix(quotaLabel(w, i), tr("Quota")), UsedPercent: math.Max(0, math.Min(100, w.UsedPercent))}
-		if w.ResetsAt != nil && *w.ResetsAt > 0 {
-			v.ResetsAt = *w.ResetsAt
-		}
-		quota.Windows = append(quota.Windows, v)
-	}
-	if len(quota.Windows) == 0 {
-		return nil
-	}
-	return []phoneAgentQuota{quota}
-}
 
 func quotaResetLabel(unix int64) string {
 	if unix <= 0 {

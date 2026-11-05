@@ -40,3 +40,17 @@ func (f *mobileTextField) paste(c *ui.Context, input ui.Element, value *string, 
 	input.Focus()
 	c.Invalidate()
 }
+
+func (m *mobileApp) taskStatus(c *ui.Context) {
+	t := m.view.c.current()
+	p := m.pal
+	taskStatusBar(c, t, len(m.approvalsFor(t.ServerID)) > 0, taskPalette{p.surface, p.line, p.ink, p.muted}, func(id, action string) {
+		if m.conn == nil || !m.connected {
+			m.sendErr = tr("Not connected to desktop")
+			return
+		}
+		r := m.threadRequest("task", t.ID)
+		r.Text = id + " " + action
+		go m.conn.Send(r)
+	})
+}

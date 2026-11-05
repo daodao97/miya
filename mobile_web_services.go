@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"miya/internal/model"
 	"miya/internal/remote"
+	rt "miya/internal/runtime"
 	"miya/internal/textutil"
 	"miya/internal/webservice"
 )
@@ -239,4 +241,33 @@ func (m *mobileApp) runtimeServiceOwner(service webservice.Service) string {
 		}
 	}
 	return tr("Verified conversation service")
+}
+
+func (m *mobileApp) runtimeDetails(c *ui.Context, view rt.View) {
+	p := m.pal
+	ui.Text(c, tr("Background tasks")).FontSize(m.font(15)).FontWeight(600)
+	if len(view.Tasks) == 0 {
+		ui.Text(c, map[bool]string{true: tr("No native background tasks"), false: tr("Native task list unconfirmed")}[view.TasksKnown]).FontSize(m.font(14)).TextColor(p.muted)
+	}
+	for _, task := range view.Tasks {
+		ui.Column(c.Key("task-" + task.ID)).FillWidth().Padding(14).Gap(6).Radius(14).Background(p.surface).Children(func() {
+			ui.Text(c, textutil.FirstNonEmpty(task.Description, tr("Background tasks"))).FontSize(m.font(15)).LineHeight(1.4)
+			ui.Text(c, runtimeStatus(task.Status)+" · "+runtimeKind(task.Kind)).FontSize(m.font(13)).TextColor(p.muted)
+		})
+	}
+	ui.Text(c, tr("System process")).FontSize(m.font(15)).FontWeight(600)
+	if len(view.Processes) == 0 {
+		ui.Text(c, tr("No process identity available for verification")).FontSize(m.font(14)).TextColor(p.muted)
+	}
+	for _, process := range view.Processes {
+		ui.Text(c, fmt.Sprintf("%s · PID %d · %s", process.Name, process.Identity.PID, runtimeStatus(process.Status))).FontSize(m.font(14)).TextColor(p.muted).LineHeight(1.5)
+	}
+	for _, endpoint := range view.Endpoints {
+		if endpoint.Protocol != "http" {
+			ui.Text(c, fmt.Sprintf("%s:%d · TCP", endpoint.Host, endpoint.Port)).FontSize(m.font(13)).TextColor(p.muted)
+		}
+	}
+	if view.ObservedAt > 0 {
+		ui.Text(c, tr("Last verified ")+time.UnixMilli(view.ObservedAt).Local().Format("15:04:05")).FontSize(m.font(12)).TextColor(p.muted)
+	}
 }

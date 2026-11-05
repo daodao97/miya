@@ -1,6 +1,10 @@
 package main
 
-import "github.com/egoist/mygo/ui"
+import (
+	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/ui"
+	"miya/internal/model"
+)
 
 // Primary destinations belong to the drawer; only their child pages pop
 // the navigation stack. Rendering, buttons and edge gestures share this rule.
@@ -29,5 +33,16 @@ func (m *mobileApp) navigationBack(c *ui.Context, path string) {
 		} else {
 			m.router().Back()
 		}
+	}
+}
+
+// Conversation links stay inside the connected desktop's namespace on phones.
+func (m *mobileApp) openMessageLink(link string) {
+	if _, ok := model.ParseThreadURL(link); ok {
+		m.openCollaborationThread(link)
+		return
+	}
+	if ui.SafeToOpen(link) {
+		go mygo.Shell.OpenExternal(link)
 	}
 }
