@@ -115,7 +115,7 @@ with socket.socket(socket.AF_UNIX) as conn:
 PY
 ```
 
-自定义数据目录和长路径的 socket 回退算法见 [internal/appdir/appdir.go](../internal/appdir/appdir.go) 中的 `Dir` 和 [service_proto.go](../service_proto.go) 中的 `serviceSocket`。找不到默认 socket 时先检查实际路径和进程，不能直接认定服务没运行。
+自定义数据目录和长路径的 socket 回退算法见 [internal/appdir/appdir.go](../internal/appdir/appdir.go) 中的 `Dir` 和 [internal/svcproto/svcproto.go](../internal/svcproto/svcproto.go) 中的 `Socket`。找不到默认 socket 时先检查实际路径和进程，不能直接认定服务没运行。
 
 ## 3. 备份替换并重开窗口
 

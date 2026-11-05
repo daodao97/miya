@@ -5,7 +5,7 @@ import "fmt"
 func (c *chatController) taskAction(threadID int, taskID, action string) string {
 	if c.remote != nil {
 		var message string
-		if err := c.remote.call("task", svcTaskAction{threadID, taskID, action}, &message); err != nil {
+		if err := c.remote.call("task", svcTaskAction{Thread: threadID, Task: taskID, Action: action}, &message); err != nil {
 			return err.Error()
 		}
 		return message

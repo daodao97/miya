@@ -20,7 +20,7 @@ Status: Draft
 
 现有 [agentBackend](../agent.go) 提供 Agent 注册、创建、发送、停止和恢复操作。[mcp_server.go](../mcp_server.go) 暴露 `list_threads`、`read_thread`、`thread_status` 和 `delegate`；[mcp_host.go](../mcp_host.go) 在后台调用 `submit`，向新会话或已有会话发送任务。[handoff.go](../handoff.go) 在发起方显示交接活动并跟踪目标进度。
 
-[后台服务](../service_proto.go) 持有 Codex app-server、Claude 执行进程和项目会话，窗口只镜像状态。现有架构已经支持多个会话执行，无需另建进程管理器。[ThreadRef](../thread_reference.go) 还提供来源、后端、原生会话 ID 组成的稳定身份。
+[后台服务](../internal/svcproto/svcproto.go) 持有 Codex app-server、Claude 执行进程和项目会话，窗口只镜像状态。现有架构已经支持多个会话执行，无需另建进程管理器。[ThreadRef](../thread_reference.go) 还提供来源、后端、原生会话 ID 组成的稳定身份。
 
 ### 改造前的记录混用了会话身份和任务边界
 
@@ -553,7 +553,7 @@ P0 与 P1 可以在同一开发阶段完成。只有单独交付 P0 时，才允
 | `view_delegations.go`、`delegation_desktop.go` | 共用任务卡与表单、桌面服务接线和目标会话导航 |
 | `mobile_delegations.go` | 手机异步调用、断线清理、任务面板接线和目标会话导航 |
 
-现有 agent.go 增加可选受管提交信息，chat_events.go 与 chat_claude.go 提供执行生命周期；mcp_host.go 保留适配入口，handoff.go 改为读取 TaskID 状态。queue.go 与通知共用会话空闲调度，service_proto.go、service_server.go 及手机协议同步能力与视图。
+现有 agent.go 增加可选受管提交信息，chat_events.go 与 chat_claude.go 提供执行生命周期；mcp_host.go 保留适配入口，handoff.go 改为读取 TaskID 状态。queue.go 与通知共用会话空闲调度，internal/svcproto、service_server.go 及手机协议同步能力与视图。
 
 ### 测试覆盖归属错误和副作用不确定窗口
 

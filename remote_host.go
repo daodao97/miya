@@ -979,16 +979,6 @@ func (p *phoneHost) reset() {
 	}()
 }
 
-// phoneStatus is what the settings show of the phone connection; the
-// service sends it to its windows.
-type phoneStatus struct {
-	Enabled bool   `json:"enabled,omitempty"`
-	Busy    bool   `json:"busy,omitempty"`
-	Link    string `json:"link,omitempty"`
-	Peers   int    `json:"peers,omitempty"`
-	Message string `json:"message,omitempty"`
-}
-
 func (p *phoneHost) status() phoneStatus {
 	if p == nil {
 		return phoneStatus{}
