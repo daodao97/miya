@@ -3,11 +3,9 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"log"
-	"miya/internal/appdir"
-	"miya/internal/async"
-	"miya/internal/automation"
 	"net"
 	"os"
 	"os/exec"
@@ -15,6 +13,11 @@ import (
 	"path/filepath"
 	"syscall"
 	"time"
+
+	"miya/internal/appdir"
+	"miya/internal/async"
+	"miya/internal/automation"
+	"miya/internal/remote"
 )
 
 // runService is the executable run with -server: it owns the agents until
@@ -60,8 +63,10 @@ func runServiceWithOptions(options serverOptions) error {
 		// Phones read the service's controller, which holds every project.
 		desktopPhone = newPhoneHost(c)
 		if options.Persistent {
-			desktopPhone.service = s
-			desktopPhone.start()
+			desktopPhone.Service = func(ctx context.Context, conn *remote.Conn) { s.handleConn(&svcPeer{wire: conn}) }
+			desktopPhone.Terminal = c.serveRemoteTerminal
+			desktopPhone.SaveLink = func(link string) (string, error) { return connectionFile(), saveServerConnection(link) }
+			desktopPhone.Start()
 		}
 		close(ready)
 	})

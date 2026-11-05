@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,10 +16,9 @@ import (
 	"miya/internal/codex"
 	"miya/internal/desktop"
 	"miya/internal/model"
+	"miya/internal/phone"
 	"miya/internal/remote"
 	"miya/internal/thumbnail"
-
-	qrcode "github.com/skip2/go-qrcode"
 )
 
 // The desktop shows its state to phones; nothing a phone sends changes it.
@@ -456,187 +455,30 @@ func readOnlyHistory(ctx context.Context, t phoneThread) ([]Message, string) {
 	return messages, ""
 }
 
-// phoneHost owns the desktop's bridge. Its fields belong to the main thread.
-type phoneHost struct {
-	service    *service
-	c          *chatController
-	bridge     *remote.Bridge
-	link       string
-	qr         [][]bool
-	peers      int
-	busy       bool
-	enabled    bool
-	message    string
-	generation int
-}
+// phoneHost is the desktop's bridge to phones, in internal/phone.
+type phoneHost = phone.Pairing
 
 var desktopPhone *phoneHost
 
 // newPhoneHost restores the bridge if the user left it on, so the phone's
 // saved link keeps working across desktop restarts.
 func newPhoneHost(c *chatController) *phoneHost {
-	p := &phoneHost{c: c}
-	onCleanup(func() {
-		p.generation++
-		if b := p.bridge; b != nil {
-			p.bridge = nil
-			b.Close()
-		}
-	})
+	p := phone.NewPairing(phoneHostOf{c})
+	onCleanup(p.Close)
 	if loadPhoneEnabled() && !servingRemote {
-		p.start()
+		p.Start()
 	}
 	return p
 }
 
-func (p *phoneHost) start() {
-	if p.bridge != nil || p.busy {
-		return
-	}
-	dir := phoneDir()
-	if dir == "" {
-		p.message = "Unable to determine data directory"
-		return
-	}
-	p.enabled = true
-	persistPhoneEnabled(true)
-	p.busy, p.message = true, ""
-	p.generation++
-	gen := p.generation
-	c := p.c
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
-		defer cancel()
-		options := remote.Options{
-			StateDir: dir,
-			Serve:    c.servePhone,
-			Files:    c.fileServer(),
-			OnPeers: func(n int) {
-				runOnMain(func() {
-					if p.generation == gen {
-						p.peers = n
-						invalidate()
-					}
-				})
-			},
-		}
-		if p.service != nil {
-			options.Service = func(ctx context.Context, conn *remote.Conn) { p.service.handleConn(&svcPeer{wire: conn}) }
-			options.Terminal = c.serveRemoteTerminal
-		}
-		b, err := remote.Start(ctx, options)
-		var link string
-		var qr [][]bool
-		if err == nil {
-			link = b.Link()
-			if code, qerr := qrcode.New(link, qrcode.Medium); qerr == nil {
-				qr = code.Bitmap()
-			}
-		}
-		runOnMain(func() {
-			if p.generation != gen {
-				if b != nil {
-					go b.Close()
-				}
-				return
-			}
-			p.busy = false
-			if err != nil {
-				p.message = "Unable to enable mobile connections: " + err.Error()
-				if p.service != nil {
-					log.Printf("miya: Tailcat startup failed: %v; retrying", err)
-					time.AfterFunc(5*time.Second, func() {
-						c.dispatch(func() {
-							if p.enabled && p.generation == gen {
-								p.start()
-							}
-						})
-					})
-				}
-			} else {
-				p.bridge, p.link, p.qr = b, link, qr
-				if p.service != nil {
-					if err := saveServerConnection(link); err != nil {
-						p.message = err.Error()
-						log.Printf("miya: cannot save pairing link: %v", err)
-					} else {
-						log.Printf("miya: Tailcat ready; pairing link saved in %s", connectionFile())
-					}
-				}
-			}
-			invalidate()
-		})
-	}()
-}
+// phoneHostOf is a controller as the phone bridge's phone.Host.
+type phoneHostOf struct{ c *chatController }
 
-// stop disconnects phones and stays off at the next launch. The identity is
-// kept, so turning it on again shows the same QR code.
-func (p *phoneHost) stop() {
-	p.generation++
-	p.enabled = false
-	persistPhoneEnabled(false)
-	if b := p.bridge; b != nil {
-		go b.Close()
-	}
-	p.bridge, p.link, p.qr, p.peers, p.busy, p.message = nil, "", nil, 0, false, ""
-}
-
-// reset revokes the current QR code: phones holding it can no longer
-// connect, and a new one is shown.
-func (p *phoneHost) reset() {
-	if p.busy {
-		return
-	}
-	p.generation++
-	b := p.bridge
-	p.bridge, p.link, p.qr, p.peers, p.busy, p.message = nil, "", nil, 0, true, ""
-	dir := phoneDir()
-	go func() {
-		if b != nil {
-			b.Close()
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
-		defer cancel()
-		err := remote.ForgetIdentity(ctx, dir)
-		runOnMain(func() {
-			p.busy = false
-			if err != nil {
-				p.message = "Unable to reset connection: " + err.Error()
-				invalidate()
-				return
-			}
-			p.start()
-		})
-	}()
-}
-
-func (p *phoneHost) status() phoneStatus {
-	if p == nil {
-		return phoneStatus{}
-	}
-	s := phoneStatus{Enabled: p.enabled, Busy: p.busy, Peers: p.peers, Message: p.message}
-	if p.bridge != nil {
-		s.Link = p.link
-	}
-	return s
-}
-
-func (p *phoneHost) connected() bool { return p != nil && p.peers > 0 }
-
-// do runs a settings action: start, stop or reset.
-func (p *phoneHost) do(action string) {
-	if p == nil {
-		return
-	}
-	switch action {
-	case "start":
-		p.start()
-	case "stop":
-		p.stop()
-	case "reset":
-		p.reset()
-	}
-}
+func (h phoneHostOf) Serve(ctx context.Context, conn *remote.Conn) { h.c.servePhone(ctx, conn) }
+func (h phoneHostOf) Files() http.Handler                          { return h.c.fileServer() }
+func (h phoneHostOf) Dispatch(f func())                            { h.c.dispatch(f) }
+func (h phoneHostOf) RunOnMain(f func())                           { runOnMain(f) }
+func (h phoneHostOf) Invalidate()                                  { invalidate() }
 
 type phoneSendReq struct {
 	req              remote.Request

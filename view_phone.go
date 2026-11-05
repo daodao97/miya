@@ -16,7 +16,7 @@ func (app *chatApp) phoneSettings(c *ui.Context) {
 	var act func(string)
 	switch {
 	case desktopPhone != nil && !app.c.remoteHost():
-		st, act = desktopPhone.status(), desktopPhone.do
+		st, act = desktopPhone.Status(), desktopPhone.Do
 	case app.c.remote != nil && app.c.mirror != nil:
 		st, act = app.c.mirror.phone, func(a string) { app.c.forward("phone", a) }
 	default:

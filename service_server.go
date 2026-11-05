@@ -454,7 +454,7 @@ func (s *service) handle(p *svcPeer, req svcRequest) (any, error) {
 		}
 	case "phone":
 		_ = arg(&value)
-		desktopPhone.do(value)
+		desktopPhone.Do(value)
 		invalidate()
 	case "dequeue":
 		var a svcQueued
@@ -664,7 +664,7 @@ func (s *service) checkIdle() {
 		s.stop()
 		return
 	}
-	if s.persistent || busy || len(s.peerList()) > 0 || desktopPhone.connected() || s.c.auto.Enabled() {
+	if s.persistent || busy || len(s.peerList()) > 0 || desktopPhone.Connected() || s.c.auto.Enabled() {
 		s.idleSince = time.Time{}
 		return
 	}
@@ -714,6 +714,6 @@ func (c *chatController) snapshotState() svcState {
 		Models: c.models(), Model: c.model(), Effort: c.effort(), PermissionPolicy: c.permissionPolicy(), Locale: c.locale(),
 		ClaudeCommand: c.claudeCommand, ClaudeError: c.claudeError, ClaudeBinary: c.claudeBinary, ClaudeArgs: c.claudeArgs, ClaudeEnv: c.claudeEnv, ClaudeModel: c.claudeModel, ClaudeEffort: c.claudeEffort, ClaudeDefaultModel: c.claudeDefaultModel,
 		Account: c.accountState, AccountReset: c.accountReset, QuotaLimits: c.quotaLimits, QuotaStatus: c.quotaStatus,
-		Phone: desktopPhone.status(),
+		Phone: desktopPhone.Status(),
 	}
 }
