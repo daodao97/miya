@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"miya/internal/appdir"
+	"miya/internal/async"
 	"miya/internal/codex"
 )
 
@@ -247,6 +248,5 @@ func (e *executor) do(f func()) {
 	<-done
 }
 
-// deferred is a reply worked out off the main thread, for requests that wait
-// on other programs; the service runs it before it replies.
-type deferred func() (any, error)
+// deferred is a reply worked out off the main thread; see async.Reply.
+type deferred = async.Reply

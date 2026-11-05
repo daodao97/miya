@@ -9,6 +9,7 @@ import (
 	"miya/internal/textutil"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 )
 
@@ -377,4 +378,41 @@ func (c *chatController) mcpRuntime(r mcpRequest) (any, error) {
 		}
 		return data.(conversationRuntime).View, nil
 	}), nil
+}
+
+// Strict identity for every memory operation, including reads: the shared
+// Codex app-server's cwd is not the caller's workspace. No time-based guess.
+func (c *chatController) mcpCallerWithArguments(tool string, raw json.RawMessage) (Thread, Message, error) {
+	var want map[string]any
+	if json.Unmarshal(raw, &want) != nil || want == nil {
+		return Thread{}, Message{}, errors.New("Tool arguments must be an object")
+	}
+	type candidate struct {
+		thread  Thread
+		message Message
+	}
+	var matches []candidate
+	for _, t := range c.allThreads() {
+		for _, m := range t.Messages {
+			if (m.Status != "inProgress" && m.Status != "in_progress") || !isMiyaToolCall(m, tool) {
+				continue
+			}
+			var got map[string]any
+			if strings.EqualFold(m.Kind, "claudetool") {
+				_, got = claudeToolCall(m)
+			} else if m.Item != nil {
+				_ = json.Unmarshal(m.Item.Arguments, &got)
+			}
+			if got != nil && reflect.DeepEqual(want, got) {
+				matches = append(matches, candidate{t, m})
+			}
+		}
+	}
+	if len(matches) == 0 {
+		return Thread{}, Message{}, errors.New(mcpCallerUnknown)
+	}
+	if len(matches) != 1 {
+		return Thread{}, Message{}, errors.New("The calling conversation is ambiguous. Stagger calls with identical arguments and retry.")
+	}
+	return matches[0].thread, matches[0].message, nil
 }
