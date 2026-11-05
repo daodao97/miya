@@ -66,7 +66,7 @@ func TestAccountReadUsesRealResetDetailsWithoutRedeeming(t *testing.T) {
 		}},
 	}}
 	data, ok := readAccountDisplay(context.Background(), rpc, accountDisplay{})
-	if !ok || data.Limits.ResetCredits.AvailableCount != 4 || data.Limits.ResetCredits.next().ID != "soon" || len(rpc.steps) != 0 {
+	if !ok || data.Limits.ResetCredits.AvailableCount != 4 || data.Limits.ResetCredits.Next().ID != "soon" || len(rpc.steps) != 0 {
 		t.Fatalf("reset-credit response was not mapped: %+v", data)
 	}
 	// The available count can exceed the capped detail list, and null details
@@ -75,7 +75,7 @@ func TestAccountReadUsesRealResetDetailsWithoutRedeeming(t *testing.T) {
 	if err := json.Unmarshal([]byte(`{"rateLimitResetCredits":{"availableCount":2,"credits":null}}`), &countOnly); err != nil {
 		t.Fatal(err)
 	}
-	if countOnly.ResetCredits.AvailableCount != 2 || countOnly.ResetCredits.next() != nil {
+	if countOnly.ResetCredits.AvailableCount != 2 || countOnly.ResetCredits.Next() != nil {
 		t.Fatal("count-only credits were treated as complete details")
 	}
 }
@@ -241,7 +241,7 @@ func TestReadRealAccountResetCredits(t *testing.T) {
 		t.Skip("the configured Codex account is not signed in with ChatGPT")
 	}
 	if summary := data.Limits.ResetCredits; summary != nil {
-		t.Logf("real reset-credit summary: available=%d, details=%d, selectable=%t", summary.AvailableCount, len(summary.Credits), summary.next() != nil)
+		t.Logf("real reset-credit summary: available=%d, details=%d, selectable=%t", summary.AvailableCount, len(summary.Credits), summary.Next() != nil)
 	} else {
 		t.Log("the server did not provide a reset-credit summary for this account")
 	}

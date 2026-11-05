@@ -1,6 +1,7 @@
 package main
 
 import (
+	"miya/internal/account"
 	"miya/internal/model"
 	"miya/internal/phoneapi"
 )
@@ -44,4 +45,22 @@ type (
 	phoneDesktopReply         = phoneapi.DesktopReply
 	phoneCollaborationResult  = phoneapi.CollaborationResult
 	phoneCommands             = phoneapi.Commands
+)
+
+// The account data lives in internal/account.
+type (
+	accountDisplay      = account.Display
+	accountLimits       = account.Limits
+	accountIdentity     = account.Identity
+	quotaSnapshot       = account.QuotaSnapshot
+	quotaWindow         = account.QuotaWindow
+	resetCredit         = account.ResetCredit
+	resetCreditsSummary = account.ResetCreditsSummary
+	accountResetAttempt = account.ResetAttempt
+	accountResetAction  = account.ResetAction
+)
+
+var (
+	sameAccount     = account.SameAccount
+	nextResetCredit = account.NextResetCredit
 )

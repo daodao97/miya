@@ -219,8 +219,8 @@ func quotaBar(c *ui.Context, w *quotaWindow, index int) {
 
 func resetCreditCard(c *ui.Context, data accountDisplay, action accountResetAction, connected bool, ask, cancel, use func()) {
 	summary := data.Limits.ResetCredits
-	credit := summary.next()
-	retry := action.Attempt != nil && action.Attempt.Submitted && action.Attempt.matches(data)
+	credit := summary.Next()
+	retry := action.Attempt != nil && action.Attempt.Submitted && action.Attempt.Matches(data)
 	settingsCard(c).Gap(10).Children(func() {
 		ui.Row(c).Wrap().AlignItems(ui.Center).Gap(8).Children(func() {
 			ui.Text(c, tr("Reset cards")).FontSize(14).FontWeight(600)
@@ -259,7 +259,7 @@ func resetCreditCard(c *ui.Context, data accountDisplay, action accountResetActi
 		} else if summary.AvailableCount > 0 {
 			mutedText(c, tr("Reset card details unavailable. Refresh before using."))
 		}
-		if action.Confirming && action.Attempt.matches(data) {
+		if action.Confirming && action.Attempt.Matches(data) {
 			label := tr("Confirm")
 			if action.Attempt.Submitted {
 				label = tr("Retry fetching result")

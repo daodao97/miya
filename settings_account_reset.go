@@ -11,46 +11,6 @@ import (
 	"miya/internal/codex"
 )
 
-type resetCredit struct {
-	ID          string `json:"id"`
-	ResetType   string `json:"resetType"`
-	Status      string `json:"status"`
-	GrantedAt   int64  `json:"grantedAt"`
-	ExpiresAt   *int64 `json:"expiresAt"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-}
-
-type resetCreditsSummary struct {
-	AvailableCount int           `json:"availableCount"`
-	Credits        []resetCredit `json:"credits"`
-}
-
-// Match magpie's order: available Codex credits that expire first, then
-// credits with no expiry. The count is authoritative even if details are capped.
-func nextResetCredit(credits []resetCredit) int {
-	first := -1
-	for i, credit := range credits {
-		if credit.Status != "available" || credit.ResetType != "codexRateLimits" || credit.ID == "" {
-			continue
-		}
-		if first < 0 || credit.ExpiresAt != nil && (credits[first].ExpiresAt == nil || *credit.ExpiresAt < *credits[first].ExpiresAt) {
-			first = i
-		}
-	}
-	return first
-}
-
-func (s *resetCreditsSummary) next() *resetCredit {
-	if s == nil || s.AvailableCount <= 0 {
-		return nil
-	}
-	if i := nextResetCredit(s.Credits); i >= 0 {
-		return &s.Credits[i]
-	}
-	return nil
-}
-
 type accountCaller interface {
 	Call(context.Context, string, any, any) error
 }
@@ -83,16 +43,8 @@ func readAccountDisplay(ctx context.Context, client accountCaller, cached accoun
 	return result, true
 }
 
-type accountResetAttempt struct {
-	Account        accountIdentity
-	AccountID      string
-	Credit         resetCredit
-	IdempotencyKey string
-	Submitted      bool
-}
-
 func newAccountResetAttempt(data accountDisplay) (*accountResetAttempt, error) {
-	credit := data.Limits.ResetCredits.next()
+	credit := data.Limits.ResetCredits.Next()
 	if data.Identity == nil || data.Identity.Type != "chatgpt" || credit == nil {
 		return nil, errors.New(tr("No reset card details available. Refresh and retry."))
 	}
@@ -103,18 +55,6 @@ func newAccountResetAttempt(data accountDisplay) (*accountResetAttempt, error) {
 	id[6], id[8] = id[6]&0x0f|0x40, id[8]&0x3f|0x80
 	key := fmt.Sprintf("%x-%x-%x-%x-%x", id[:4], id[4:6], id[6:8], id[8:10], id[10:])
 	return &accountResetAttempt{Account: *data.Identity, AccountID: data.Limits.AccountID, Credit: *credit, IdempotencyKey: key}, nil
-}
-
-func (a *accountResetAttempt) matches(data accountDisplay) bool {
-	return a != nil && sameAccount(&a.Account, data.Identity) && (a.AccountID == "" || a.AccountID == data.Limits.AccountID)
-}
-
-type accountResetAction struct {
-	Attempt    *accountResetAttempt
-	Confirming bool
-	Busy       bool
-	Notice     string
-	Failed     bool
 }
 
 type resetExecution struct {
@@ -133,11 +73,11 @@ func executeAccountReset(ctx context.Context, client accountCaller, attempt acco
 	if !readOK || fresh.UsageError != "" {
 		return result, errors.New(tr("Unable to verify the latest account and reset cards. Refresh and retry."))
 	}
-	if !attempt.matches(fresh) {
+	if !attempt.Matches(fresh) {
 		return result, errors.New(tr("The signed-in account changed. Select a reset card again."))
 	}
 	if !attempt.Submitted {
-		credit := fresh.Limits.ResetCredits.next()
+		credit := fresh.Limits.ResetCredits.Next()
 		if credit == nil || credit.ID != attempt.Credit.ID {
 			return result, errors.New(tr("The selected reset card changed. Cancel and select it again."))
 		}
@@ -197,7 +137,7 @@ func (c *chatController) askAccountReset() {
 		return
 	}
 	action := c.accountReset
-	if action.Attempt == nil || !action.Attempt.Submitted || !action.Attempt.matches(c.accountCache) {
+	if action.Attempt == nil || !action.Attempt.Submitted || !action.Attempt.Matches(c.accountCache) {
 		attempt, err := newAccountResetAttempt(c.accountCache)
 		if err != nil {
 			c.setAccountReset(accountResetAction{Notice: err.Error(), Failed: true})
