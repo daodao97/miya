@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"miya/internal/textutil"
 	"strings"
 )
 
@@ -69,7 +70,7 @@ func subAgentSummary(agents []SubAgent) string {
 			parts = append(parts, fmt.Sprintf(tr("%d steps"), a.Steps))
 		}
 		if subAgentActive(a.Status) && a.Detail != "" {
-			parts = append(parts, firstLine(a.Detail))
+			parts = append(parts, textutil.FirstLine(a.Detail))
 		}
 		return strings.Join(parts, " · ")
 	}

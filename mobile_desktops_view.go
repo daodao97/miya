@@ -1,6 +1,9 @@
 package main
 
-import "github.com/egoist/mygo/ui"
+import (
+	"github.com/egoist/mygo/ui"
+	"miya/internal/textutil"
+)
 
 func (m *mobileApp) openDesktopManager() {
 	m.openDrawerPage("/desktops")
@@ -19,7 +22,7 @@ func (m *mobileApp) drawerDesktopSwitcher(c *ui.Context) {
 		ui.Row(c).FillWidth().Gap(6).AlignItems(ui.Center).Children(func() {
 			label := m.connectionLine()
 			if label == "" {
-				label = firstNonEmpty(m.host, tr("Connected"))
+				label = textutil.FirstNonEmpty(m.host, tr("Connected"))
 			}
 			ui.Text(c, label).FontSize(m.font(12)).TextColor(p.muted).MinWidth(0).Shrink(1).SingleLine().Ellipsis("…")
 			icon(c, "chevron-down", 11, p.muted)
@@ -65,7 +68,7 @@ func (m *mobileApp) desktopsView(c *ui.Context) {
 							ui.Text(c, desktop.Name).FontSize(m.font(17)).FontWeight(500).SingleLine().Ellipsis("…")
 							status := tr("Saved")
 							if current {
-								status = tr("Current desktop · ") + firstNonEmpty(m.connectionLine(), tr("Connected"))
+								status = tr("Current desktop · ") + textutil.FirstNonEmpty(m.connectionLine(), tr("Connected"))
 							}
 							ui.Text(c, status).FontSize(m.font(12)).TextColor(p.muted).MaxLines(2)
 						})

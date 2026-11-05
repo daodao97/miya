@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"miya/internal/codex"
+	"miya/internal/textutil"
 )
 
 // Codex reports sub-agents on its collab agent calls: receiverThreadIds are
@@ -44,7 +45,7 @@ func codexSubAgents(item codex.Item) []SubAgent {
 	}
 	// A spawned agent is best told by what it was asked.
 	if item.Tool == "spawnAgent" && len(agents) == 1 {
-		if p := firstLine(item.Prompt); p != "" {
+		if p := textutil.FirstLine(item.Prompt); p != "" {
 			agents[0].Name = p
 		}
 	}
@@ -92,8 +93,8 @@ func codexCallStatus(s string) string {
 // sub-agent's life rather than a state to follow.
 func codexSubAgentActivity(item codex.Item) string {
 	labels := map[string]string{"started": "Subagent started", "interacted": "Subagent input sent", "interrupted": "Subagent interrupted", "completed": "Subagent completed"}
-	s := firstNonEmpty(labels[item.Kind], "Sub-agent activity")
-	if who := firstNonEmpty(item.AgentPath, item.AgentThreadID); who != "" {
+	s := textutil.FirstNonEmpty(labels[item.Kind], "Sub-agent activity")
+	if who := textutil.FirstNonEmpty(item.AgentPath, item.AgentThreadID); who != "" {
 		s += " · " + who
 	}
 	return s

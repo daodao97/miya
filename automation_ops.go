@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"miya/internal/textutil"
 	"strings"
 	"time"
 )
@@ -148,7 +149,7 @@ func (c *chatController) prepareAutomationDraft(ctx context.Context, r automatio
 	if request == "" {
 		return nil, errors.New("Describe what you want to do first")
 	}
-	project, agent := firstNonEmpty(r.Project, c.cwd), normalizeAgentID(firstNonEmpty(r.Agent, agentCodex))
+	project, agent := textutil.FirstNonEmpty(r.Project, c.cwd), normalizeAgentID(textutil.FirstNonEmpty(r.Agent, agentCodex))
 	if agent == "" {
 		return nil, errors.New("Agent must be codex or claude-code")
 	}

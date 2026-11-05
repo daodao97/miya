@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"miya/internal/fsutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -127,7 +128,7 @@ func (s desktopWorkspaceStore) save() error {
 	if err != nil {
 		return err
 	}
-	return writePrivateFile(remoteServerPath(), data)
+	return fsutil.WritePrivateFile(remoteServerPath(), data)
 }
 
 // Each workspace owns its controller and entire window state. Keeping these

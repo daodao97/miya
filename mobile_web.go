@@ -11,6 +11,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 	"miya/internal/remote"
+	"miya/internal/textutil"
 )
 
 func newPhoneWebProxy(conn *remote.Conn, port int, host string, tokens ...string) (*phoneFileProxy, error) {
@@ -83,7 +84,7 @@ func (m *mobileApp) webPage(c *ui.Context) {
 	ui.Scroll(c).FillWidth().Grow(1).MinHeight(0).Children(func() {
 		ui.Column(c).FillWidth().Padding(20).Gap(16).Children(func() {
 			project := m.project(state.project)
-			ui.Text(c, firstNonEmpty(project.Name, tr("Current project"))+map[bool]string{true: tr(" · This conversation"), false: tr(" · Project overview")}[state.ref.SessionID != ""]).FontSize(m.font(22)).FontWeight(600)
+			ui.Text(c, textutil.FirstNonEmpty(project.Name, tr("Current project"))+map[bool]string{true: tr(" · This conversation"), false: tr(" · Project overview")}[state.ref.SessionID != ""]).FontSize(m.font(22)).FontWeight(600)
 			if m.webDetails && state.runtime != nil {
 				m.runtimeDetails(c, state.runtime.View)
 			}

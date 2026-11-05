@@ -11,6 +11,7 @@ import (
 
 	"miya/internal/codex"
 	"miya/internal/memory"
+	"miya/internal/textutil"
 )
 
 type memoryRequest struct {
@@ -226,7 +227,7 @@ func (c *chatController) memoryOp(op string, r memoryRequest) (any, error) {
 			if r.File != "AGENTS.md" && r.File != "CLAUDE.md" {
 				return nil, errors.New("Select AGENTS.md or CLAUDE.md")
 			}
-			promotion, err := previewMemoryFile(scope.ProjectPath, r.File, firstNonEmpty(strings.TrimSpace(r.Content), old.Content))
+			promotion, err := previewMemoryFile(scope.ProjectPath, r.File, textutil.FirstNonEmpty(strings.TrimSpace(r.Content), old.Content))
 			if err != nil {
 				return nil, err
 			}

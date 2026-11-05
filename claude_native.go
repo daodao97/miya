@@ -7,6 +7,7 @@ import (
 	"io"
 	"miya/internal/claude"
 	"miya/internal/memory"
+	"miya/internal/textutil"
 	"os"
 	"path/filepath"
 	"sort"
@@ -227,7 +228,7 @@ func summarizeClaudeSession(path string) (claudeSession, bool) {
 		// Sessions without a prompt hold nothing to show.
 		return claudeSession{}, false
 	}
-	s.Title = clippedTitle(firstNonEmpty(custom, claudeReferenceTitle(aiTitle), claudeReferenceTitle(summary), prompt, "Claude Code conversation"))
+	s.Title = clippedTitle(textutil.FirstNonEmpty(custom, claudeReferenceTitle(aiTitle), claudeReferenceTitle(summary), prompt, "Claude Code conversation"))
 	return s, true
 }
 
@@ -355,7 +356,7 @@ func parseClaudeSession(path string) ([]Message, error) {
 					}
 					output := claudeVisibleText(claudeBlocks(b.Content))
 					if shown := claudeToolOutput(out[i], output); shown != "" {
-						out[i].Content += "\n" + bounded(shown)
+						out[i].Content += "\n" + textutil.Bounded(shown)
 					}
 					out[i].CompletedAtMs = at
 					claudeFinishSubAgents(&out[i], output, e.ToolUseResult)

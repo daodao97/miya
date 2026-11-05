@@ -11,6 +11,7 @@ import (
 	"miya/internal/codex"
 	"miya/internal/desktop"
 	"miya/internal/remote"
+	"miya/internal/textutil"
 )
 
 type phoneDesktopReply struct {
@@ -222,7 +223,7 @@ func (m *mobileApp) receiveWindowPreview(conn *remote.Conn, p phoneDesktopPrevie
 		return
 	}
 	if message != "" || image == nil {
-		m.failWindowPreview(string(p.Approval), current, firstNonEmpty(message, tr("Unable to load window preview. Try again.")))
+		m.failWindowPreview(string(p.Approval), current, textutil.FirstNonEmpty(message, tr("Unable to load window preview. Try again.")))
 		return
 	}
 	current.loading, current.stale, current.message = false, false, ""
@@ -331,7 +332,7 @@ func (m *mobileApp) desktopWindowPreview(c *ui.Context, a codex.Approval) {
 		return
 	}
 	blocked := !m.connected || m.desktopRequest != "" || m.desktopUIOpen()
-	ui.Text(c, firstNonEmpty(p.dialog.Title, a.Reason, p.window.Title)).FontSize(m.font(17)).FontWeight(600).LineHeight(1.4).MaxLines(2)
+	ui.Text(c, textutil.FirstNonEmpty(p.dialog.Title, a.Reason, p.window.Title)).FontSize(m.font(17)).FontWeight(600).LineHeight(1.4).MaxLines(2)
 	if p.dialog.Message != "" {
 		if p.expanded {
 			ui.Scroll(c).FillWidth().MaxHeight(144).Children(func() { ui.Text(c, p.dialog.Message).FontSize(m.font(14)).LineHeight(1.45).Selectable() })

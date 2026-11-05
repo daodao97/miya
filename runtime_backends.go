@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"miya/internal/remote"
 	rt "miya/internal/runtime"
+	"miya/internal/textutil"
 	"time"
 )
 
@@ -62,7 +63,7 @@ func (claudeBackend) Runtime(c *chatController, t Thread) runtimeSource {
 		tasks, known, pid, _ := client.Runtime()
 		out := runtimeSnapshot{Known: known, Tasks: []rt.Task{}}
 		for _, task := range tasks {
-			out.Tasks = append(out.Tasks, rt.Task{ID: task.ID, RunID: task.RunID, RunOrder: task.RunID, ToolID: task.ToolUseID, Kind: task.Kind, Description: rt.Summary(firstNonEmpty(task.Description, task.Command, "Background tasks")), Status: task.Status})
+			out.Tasks = append(out.Tasks, rt.Task{ID: task.ID, RunID: task.RunID, RunOrder: task.RunID, ToolID: task.ToolUseID, Kind: task.Kind, Description: rt.Summary(textutil.FirstNonEmpty(task.Description, task.Command, "Background tasks")), Status: task.Status})
 		}
 		if pid > 0 {
 			out.Roots = []rt.Root{{PID: pid, TaskID: "_session"}}

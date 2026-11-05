@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"mime"
+	"miya/internal/fsutil"
 	"os"
 	"path/filepath"
 )
@@ -56,7 +57,7 @@ func claudeImages(blocks []claudeBlock) []string {
 			if err != nil {
 				continue
 			}
-			if os.MkdirAll(filepath.Dir(path), 0o700) != nil || writeFileAtomic(path, func(f *os.File) error { _, err := f.Write(data); return err }) != nil {
+			if os.MkdirAll(filepath.Dir(path), 0o700) != nil || fsutil.WriteFileAtomic(path, func(f *os.File) error { _, err := f.Write(data); return err }) != nil {
 				continue
 			}
 		}

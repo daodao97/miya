@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"miya/internal/codex"
+	"miya/internal/textutil"
 	"os"
 	"path/filepath"
 	"slices"
@@ -14,7 +15,7 @@ import (
 
 func (codexBackend) ModelChoices(c *chatController) []string { return c.modelNames() }
 func (codexBackend) ModelLabel(_ *chatController, v string) string {
-	return firstNonEmpty(v, tr("Default model"))
+	return textutil.FirstNonEmpty(v, tr("Default model"))
 }
 func (codexBackend) EffortChoices(c *chatController) []string { return c.efforts() }
 func (codexBackend) Model(c *chatController) string {

@@ -8,6 +8,7 @@ import (
 	"mime"
 	"miya/internal/codex"
 	"miya/internal/memory"
+	"miya/internal/textutil"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -173,27 +174,20 @@ func cleanUserText(text string) string {
 	return strings.TrimSpace(text)
 }
 
-func bounded(text string) string {
-	r := []rune(text)
-	if len(r) > 8000 {
-		return "[earlier output omitted]\n" + string(r[len(r)-8000:])
-	}
-	return text
-}
 func jsonText(raw json.RawMessage) string {
 	if len(raw) == 0 || string(raw) == "null" {
 		return ""
 	}
 	var text string
 	if json.Unmarshal(raw, &text) == nil {
-		return bounded(text)
+		return textutil.Bounded(text)
 	}
 	var v any
 	if json.Unmarshal(raw, &v) != nil {
 		return ""
 	}
 	b, _ := json.MarshalIndent(v, "", "  ")
-	return bounded(string(b))
+	return textutil.Bounded(string(b))
 }
 func itemMessage(item codex.Item) (Message, bool) {
 	m := Message{Kind: item.Type, Status: item.Status, Item: &item}
@@ -270,13 +264,13 @@ func itemMessage(item codex.Item) (Message, bool) {
 			m.Content += fmt.Sprintf(tr("\nExit code: %d"), *item.ExitCode)
 		}
 		if item.AggregatedOutput != "" {
-			m.Content += "\n" + bounded(item.AggregatedOutput)
+			m.Content += "\n" + textutil.Bounded(item.AggregatedOutput)
 		}
 	case "filechange":
 		m.Role = "tool"
 		m.Content = tr("File changes · ") + item.Status
 		for _, change := range item.Changes {
-			m.Content += "\n" + change.Path + "\n" + bounded(change.Diff)
+			m.Content += "\n" + change.Path + "\n" + textutil.Bounded(change.Diff)
 		}
 	case "mcptoolcall", "dynamictoolcall":
 		m.Role = "tool"

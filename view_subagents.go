@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/egoist/mygo/ui"
+	"miya/internal/textutil"
 )
 
 // subAgentList shows the sub-agents an activity tracks, whichever agent's
@@ -22,7 +23,7 @@ func subAgentList(c *ui.Context, agents []SubAgent) {
 					}
 				})
 				ui.Column(c).FillWidth().MinWidth(0).Gap(2).Children(func() {
-					ui.Text(c, nativeText(firstNonEmpty(a.Name, a.ID))).FontSize(12).TextColor(ink).SingleLine().Ellipsis("…")
+					ui.Text(c, nativeText(textutil.FirstNonEmpty(a.Name, a.ID))).FontSize(12).TextColor(ink).SingleLine().Ellipsis("…")
 					line := subAgentStatusLabel(a.Status)
 					if a.Steps > 0 {
 						line += fmt.Sprintf(tr(" · %d steps"), a.Steps)

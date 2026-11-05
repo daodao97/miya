@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"miya/internal/textutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -248,7 +249,7 @@ func (c *chatController) mcpStatus(r mcpRequest) (mcpStatusResult, error) {
 			last = i
 		}
 	}
-	return mcpStatusResult{Reference: c.threadRef(t).URL(), ID: t.ID, Title: threadRefTitle(t), Agent: threadAgent(t), Status: status, Reply: clipRunes(lastReply(t.Messages[last+1:]), 4000)}, nil
+	return mcpStatusResult{Reference: c.threadRef(t).URL(), ID: t.ID, Title: threadRefTitle(t), Agent: threadAgent(t), Status: status, Reply: textutil.ClipRunes(lastReply(t.Messages[last+1:]), 4000)}, nil
 }
 
 // mcpDelegate sends a task to another conversation, new or existing, with
@@ -292,7 +293,7 @@ func (c *chatController) mcpDelegate(r mcpRequest) (mcpDelegateResult, error) {
 	}
 	id := c.submit(sendRequest{ThreadID: r.Thread, Agent: agent, Project: c.threadWorkspace(caller.ID), Text: text, MemoryControl: true})
 	if id == 0 {
-		return mcpDelegateResult{}, errors.New(firstNonEmpty(c.lastSubmitError, "Handoff failed: the target agent is not ready, or the conversation is read-only"))
+		return mcpDelegateResult{}, errors.New(textutil.FirstNonEmpty(c.lastSubmitError, "Handoff failed: the target agent is not ready, or the conversation is read-only"))
 	}
 	c.noteHandoffs([]Thread{caller}, id, threadRefTask(task))
 	if c.delegationParent == nil {

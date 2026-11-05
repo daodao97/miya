@@ -1,6 +1,7 @@
 package main
 
 import (
+	"miya/internal/textutil"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -26,7 +27,7 @@ func matchingThreadRefs(projects []phoneProject, self int, query string) []threa
 			if q != "" && !strings.Contains(strings.ToLower(threadRefTitle(t)), q) && !strings.Contains(strings.ToLower(t.ServerID), q) {
 				continue
 			}
-			out = append(out, threadReference{Thread: t, ProjectName: firstNonEmpty(p.Name, filepath.Base(p.Path))})
+			out = append(out, threadReference{Thread: t, ProjectName: textutil.FirstNonEmpty(p.Name, filepath.Base(p.Path))})
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool {

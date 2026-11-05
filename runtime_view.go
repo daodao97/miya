@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/egoist/mygo/ui"
 	rt "miya/internal/runtime"
+	"miya/internal/textutil"
 	"time"
 )
 
@@ -31,7 +32,7 @@ func (m *mobileApp) runtimeDetails(c *ui.Context, view rt.View) {
 	}
 	for _, task := range view.Tasks {
 		ui.Column(c.Key("task-" + task.ID)).FillWidth().Padding(14).Gap(6).Radius(14).Background(p.surface).Children(func() {
-			ui.Text(c, firstNonEmpty(task.Description, tr("Background tasks"))).FontSize(m.font(15)).LineHeight(1.4)
+			ui.Text(c, textutil.FirstNonEmpty(task.Description, tr("Background tasks"))).FontSize(m.font(15)).LineHeight(1.4)
 			ui.Text(c, runtimeStatus(task.Status)+" · "+runtimeKind(task.Kind)).FontSize(m.font(13)).TextColor(p.muted)
 		})
 	}

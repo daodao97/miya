@@ -11,6 +11,7 @@ import (
 	"time"
 
 	dg "miya/internal/delegation"
+	"miya/internal/textutil"
 )
 
 var errManagedCancelled = errors.New("Cancelled before native input was submitted")
@@ -279,7 +280,7 @@ func (s *collaborationState) start(task dg.Task) {
 		} else {
 			title := task.Title
 			if strings.TrimSpace(title) == "" {
-				title = clipRunes(firstLine(task.Prompt), 120)
+				title = textutil.ClipRunes(textutil.FirstLine(task.Prompt), 120)
 			}
 			parent, _ := c.threadByReference(task.From)
 			title += " · " + threadRefTitle(parent)

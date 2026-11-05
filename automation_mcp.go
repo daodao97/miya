@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"miya/internal/codex"
+	"miya/internal/textutil"
 )
 
 // The miya MCP tools for automations: an agent turns what the person said
@@ -86,7 +87,7 @@ func (c *chatController) mcpAutomation(op string, r mcpRequest) (any, error) {
 		if !ok {
 			return nil, errors.New(mcpCallerUnknown)
 		}
-		a := Automation{Name: args.Name, Project: c.threadWorkspace(caller.ID), Agent: firstNonEmpty(args.Agent, threadAgent(caller)),
+		a := Automation{Name: args.Name, Project: c.threadWorkspace(caller.ID), Agent: textutil.FirstNonEmpty(args.Agent, threadAgent(caller)),
 			Instructions: args.Instructions, Schedule: args.Schedule, Check: args.Check, Rounds: args.Rounds, Enabled: true}
 		if a.Rounds == 0 {
 			a.Rounds = 3

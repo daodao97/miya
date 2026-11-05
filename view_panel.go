@@ -15,6 +15,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
 	"github.com/egoist/mygo/ui/markdown"
+	"miya/internal/fsutil"
 )
 
 // The right panel follows Waku's: each conversation keeps its own tabs of
@@ -746,7 +747,7 @@ func (app *chatApp) saveFile(p *panelState, rel string, ed *fileEditor) {
 		})
 		return
 	}
-	err := writeFileAtomic(filepath.Join(p.cwd, rel), func(f *os.File) error {
+	err := fsutil.WriteFileAtomic(filepath.Join(p.cwd, rel), func(f *os.File) error {
 		_, err := buf.WriteTo(f)
 		return err
 	})

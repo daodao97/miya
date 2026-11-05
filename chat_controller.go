@@ -19,6 +19,7 @@ import (
 	"miya/internal/codex"
 	dg "miya/internal/delegation"
 	"miya/internal/memory"
+	"miya/internal/textutil"
 )
 
 var appLocale atomic.Value
@@ -201,7 +202,7 @@ func newChatController() *chatController {
 	c.onDraftReturned = c.restoreDraft
 	c.historyStatus, c.setHistoryStatus = createSignal("Loading conversations…")
 	c.revision, c.setRevision = createSignal(0)
-	c.status, c.setStatus = createSignal(firstNonEmpty(c.lastSubmitError, "Connecting to Codex…"))
+	c.status, c.setStatus = createSignal(textutil.FirstNonEmpty(c.lastSubmitError, "Connecting to Codex…"))
 	c.quotaStatus = "Loading quota…"
 	c.ready, c.setReady = createSignal(false)
 	c.approvals, c.setApprovals = createSignal([]codex.Approval{})
@@ -1023,14 +1024,6 @@ func (c *chatController) loadThreadList(ctx context.Context, client *codex.Clien
 	}()
 }
 
-func firstNonEmpty(values ...string) string {
-	for _, v := range values {
-		if strings.TrimSpace(v) != "" {
-			return v
-		}
-	}
-	return ""
-}
 func (c *chatController) loadModels(ctx context.Context, client *codex.Client, generation int) {
 	go func() {
 		var models struct {
@@ -1451,7 +1444,7 @@ func (c *chatController) sendCodex(req sendRequest) int {
 	}
 	if t.ID == 0 {
 		// Use the first request until the agent supplies a named title.
-		project := firstNonEmpty(req.Project, c.cwd)
+		project := textutil.FirstNonEmpty(req.Project, c.cwd)
 		t = Thread{PermissionPolicy: req.Policy, ID: c.nextID(), Title: conversationTitle("", text, ""), Project: filepath.Base(project), Age: "now", Loaded: true, HistoryLoaded: true}
 		c.addThread(project, t)
 	}

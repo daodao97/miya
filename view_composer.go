@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"miya/internal/textutil"
 )
 
 func (app *chatApp) composerArea(c *ui.Context) {
@@ -506,11 +507,11 @@ func (app *chatApp) effortPicker(c *ui.Context) {
 	cc := app.c
 	b := cc.currentBackend()
 	app.picker(c.Key("effort"), &app.effortOpen, 220, func() {
-		ui.Text(c, tr(firstNonEmpty(b.Effort(cc), "Default effort"))).TextColor(muted).FontSize(11)
+		ui.Text(c, tr(textutil.FirstNonEmpty(b.Effort(cc), "Default effort"))).TextColor(muted).FontSize(11)
 		icon(c, "chevron-down", 12, muted)
 	}, func() {
 		ui.Text(c, tr("Thinking")).FontWeight(600)
-		app.choiceList(c, b.EffortChoices(cc), b.Effort(cc), func(v string) string { return tr(firstNonEmpty(v, "Default")) }, func(v string) { b.SetEffort(cc, v); app.effortOpen = false })
+		app.choiceList(c, b.EffortChoices(cc), b.Effort(cc), func(v string) string { return tr(textutil.FirstNonEmpty(v, "Default")) }, func(v string) { b.SetEffort(cc, v); app.effortOpen = false })
 	})
 }
 

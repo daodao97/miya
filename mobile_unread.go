@@ -5,11 +5,12 @@ import (
 
 	"github.com/egoist/mygo"
 	"miya/internal/remote"
+	"miya/internal/textutil"
 )
 
 func unreadMatches(u phoneUnread, t Thread) bool {
 	if u.ServerID != "" {
-		return u.ServerID == t.ServerID && firstNonEmpty(u.Agent, agentCodex) == threadAgent(t)
+		return u.ServerID == t.ServerID && textutil.FirstNonEmpty(u.Agent, agentCodex) == threadAgent(t)
 	}
 	return u.Thread == strconv.Itoa(t.ID)
 }

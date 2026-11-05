@@ -10,6 +10,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"miya/internal/codex"
 	"miya/internal/remote"
+	"miya/internal/textutil"
 )
 
 func (m *mobileApp) fieldsFor(a codex.Approval) map[string]string {
@@ -226,7 +227,7 @@ func (m *mobileApp) questionFields(c *ui.Context, a codex.Approval) {
 				}
 			}
 			value := fields[q.ID]
-			input := ui.TextInput(c.Key("answer"), &value).FillWidth().MinHeight(44).FontSize(m.font(16)).Placeholder(tr("You can also enter your own answer")).Label(firstNonEmpty(q.Header, q.Question))
+			input := ui.TextInput(c.Key("answer"), &value).FillWidth().MinHeight(44).FontSize(m.font(16)).Placeholder(tr("You can also enter your own answer")).Label(textutil.FirstNonEmpty(q.Header, q.Question))
 			if q.IsSecret {
 				input.Password()
 			}
@@ -276,7 +277,7 @@ func (m *mobileApp) elicitationFields(c *ui.Context, a codex.Approval) {
 		for _, key := range keys {
 			field := schema.Properties[key]
 			ui.Column(c.Key(key)).FillWidth().Gap(8).Children(func() {
-				label := firstNonEmpty(field.Title, key)
+				label := textutil.FirstNonEmpty(field.Title, key)
 				if slices.Contains(schema.Required, key) {
 					label += tr(" · Required")
 				}
@@ -303,7 +304,7 @@ func (m *mobileApp) elicitationFields(c *ui.Context, a codex.Approval) {
 					})
 				default:
 					value := fields[key]
-					if ui.TextInput(c.Key("value"), &value).FillWidth().MinHeight(44).FontSize(m.font(16)).Label(firstNonEmpty(field.Title, key)).Changed() {
+					if ui.TextInput(c.Key("value"), &value).FillWidth().MinHeight(44).FontSize(m.font(16)).Label(textutil.FirstNonEmpty(field.Title, key)).Changed() {
 						fields[key] = value
 					}
 				}

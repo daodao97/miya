@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"miya/internal/textutil"
 )
 
 func (app *chatApp) runtimeSurface(c *ui.Context, p *panelState, s *panelSurface) {
@@ -54,7 +55,7 @@ func (app *chatApp) runtimeSurface(c *ui.Context, p *panelState, s *panelSurface
 			}
 			for _, task := range view.Tasks {
 				ui.Column(c.Key("task-" + task.ID)).FillWidth().Padding(12).Gap(6).Radius(8).Background(panel).Children(func() {
-					ui.Text(c, firstNonEmpty(task.Description, tr("Background tasks"))).FontSize(12).LineHeight(1.4)
+					ui.Text(c, textutil.FirstNonEmpty(task.Description, tr("Background tasks"))).FontSize(12).LineHeight(1.4)
 					ui.Text(c, runtimeStatus(task.Status)+" · "+runtimeKind(task.Kind)).FontSize(11).TextColor(muted)
 				})
 			}

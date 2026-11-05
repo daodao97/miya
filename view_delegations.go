@@ -8,6 +8,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	dg "miya/internal/delegation"
+	"miya/internal/textutil"
 )
 
 type collaborationPanelView struct {
@@ -67,7 +68,7 @@ func (p *collaborationPanel) drawContent(c *ui.Context, v collaborationPanelView
 			ui.Text(c, tr("Offline · Showing saved task data")).FontSize(12).TextColor(pals.muted)
 		}
 		if p.storageError != "" || v.capability.StorageError != "" {
-			ui.Text(c, tr("Task storage unavailable: ")+firstNonEmpty(p.storageError, v.capability.StorageError)).FontSize(12).TextColor(danger).Wrap().FillWidth()
+			ui.Text(c, tr("Task storage unavailable: ")+textutil.FirstNonEmpty(p.storageError, v.capability.StorageError)).FontSize(12).TextColor(danger).Wrap().FillWidth()
 		}
 		if p.paused {
 			ui.Row(c).FillWidth().Wrap().Gap(4).AlignItems(ui.Center).Children(func() {
@@ -100,7 +101,7 @@ func (p *collaborationPanel) drawContent(c *ui.Context, v collaborationPanelView
 						ui.Column(c).FillWidth().MinWidth(0).Gap(4).Children(func() {
 							ui.Text(c, nativeText(task.Title)).FontSize(13).FontWeight(600).TextColor(pals.ink).SingleLine().Ellipsis("…").FillWidth()
 							ui.Text(c, backendFor(task.Agent).Name()+" · "+collaborationStateLabel(task.State)).FontSize(11).TextColor(pals.muted)
-							if text := firstNonEmpty(task.ResultSummary, task.Progress); text != "" {
+							if text := textutil.FirstNonEmpty(task.ResultSummary, task.Progress); text != "" {
 								ui.Text(c, nativeText(text)).FontSize(12).TextColor(pals.muted).FillWidth().SingleLine().Ellipsis("…")
 							}
 							if notice := collaborationNotificationLabel(task.Notification); notice != "" {

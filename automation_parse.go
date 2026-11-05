@@ -15,6 +15,7 @@ import (
 
 	"miya/internal/claude"
 	"miya/internal/codex"
+	"miya/internal/textutil"
 )
 
 // An automation is written as one sentence; the person's agent turns it into
@@ -118,7 +119,7 @@ func draftWithClaude(ctx context.Context, cfg draftConfig, project, prompt strin
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("Claude Code could not draft the automation: %v %s", err, clipRunes(strings.TrimSpace(stderr.String()), 300))
+		return nil, fmt.Errorf("Claude Code could not draft the automation: %v %s", err, textutil.ClipRunes(strings.TrimSpace(stderr.String()), 300))
 	}
 	return claudeStructuredOutput(out)
 }
@@ -134,7 +135,7 @@ func claudeStructuredOutput(out []byte) ([]byte, error) {
 		return nil, fmt.Errorf("Unable to parse Claude Code output: %v", err)
 	}
 	if r.IsError {
-		return nil, errors.New("Claude Code could not draft the automation: " + clipRunes(r.Result, 300))
+		return nil, errors.New("Claude Code could not draft the automation: " + textutil.ClipRunes(r.Result, 300))
 	}
 	if len(r.StructuredOutput) > 0 && string(r.StructuredOutput) != "null" {
 		return r.StructuredOutput, nil
@@ -161,7 +162,7 @@ func draftWithCodex(ctx context.Context, project, prompt string) ([]byte, error)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("Codex could not draft the automation: %v %s", err, clipRunes(lastLine(stderr.String()), 300))
+		return nil, fmt.Errorf("Codex could not draft the automation: %v %s", err, textutil.ClipRunes(lastLine(stderr.String()), 300))
 	}
 	return os.ReadFile(last)
 }
@@ -182,7 +183,7 @@ func automationFromDraft(d automationDraft, agent, project, request string) (Aut
 		a.Instructions = a.Request
 	}
 	if strings.TrimSpace(a.Name) == "" {
-		a.Name = clipRunes(firstLine(a.Request), 14)
+		a.Name = textutil.ClipRunes(textutil.FirstLine(a.Request), 14)
 	}
 	if err := a.normalize(); err != nil {
 		return Automation{}, false, err

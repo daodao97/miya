@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"miya/internal/textutil"
 	"strings"
 )
 
@@ -66,15 +67,15 @@ func (r RunReport) cleaned() RunReport {
 		var out []string
 		for _, s := range items {
 			if s = strings.TrimSpace(s); s != "" && len(out) < reportListLimit {
-				out = append(out, clipRunes(s, reportItemLimit))
+				out = append(out, textutil.ClipRunes(s, reportItemLimit))
 			}
 		}
 		return out
 	}
-	out := RunReport{Summary: clipRunes(strings.TrimSpace(r.Summary), reportSummaryLimit), Findings: list(r.Findings), Artifacts: list(r.Artifacts), NeedsUser: r.NeedsUser, Auto: r.Auto}
+	out := RunReport{Summary: textutil.ClipRunes(strings.TrimSpace(r.Summary), reportSummaryLimit), Findings: list(r.Findings), Artifacts: list(r.Artifacts), NeedsUser: r.NeedsUser, Auto: r.Auto}
 	for _, m := range r.Metrics {
 		if strings.TrimSpace(m.Name) != "" && len(out.Metrics) < reportListLimit {
-			out.Metrics = append(out.Metrics, RunMetric{Name: clipRunes(strings.TrimSpace(m.Name), 100), Value: flexString(clipRunes(strings.TrimSpace(string(m.Value)), 100)), Unit: clipRunes(strings.TrimSpace(m.Unit), 20)})
+			out.Metrics = append(out.Metrics, RunMetric{Name: textutil.ClipRunes(strings.TrimSpace(m.Name), 100), Value: flexString(textutil.ClipRunes(strings.TrimSpace(string(m.Value)), 100)), Unit: textutil.ClipRunes(strings.TrimSpace(m.Unit), 20)})
 		}
 	}
 	return out

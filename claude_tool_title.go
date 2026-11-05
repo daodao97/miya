@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"miya/internal/textutil"
 	"os"
 	"path/filepath"
 	"sort"
@@ -50,11 +51,6 @@ func inputString(input map[string]any, keys ...string) string {
 	return ""
 }
 
-func firstLine(s string) string {
-	l, _, _ := strings.Cut(s, "\n")
-	return strings.TrimSpace(l)
-}
-
 // shortPath shows a path under the home directory with ~.
 func shortPath(p string) string {
 	if home, err := os.UserHomeDir(); err == nil && home != "" {
@@ -82,7 +78,7 @@ func claudeToolTitle(m Message) string {
 	var detail, prefix string
 	switch name {
 	case "Bash":
-		prefix, detail = verb(tr("Ran "), tr("Running ")), firstLine(inputString(input, "command", "description"))
+		prefix, detail = verb(tr("Ran "), tr("Running ")), textutil.FirstLine(inputString(input, "command", "description"))
 	case "Read", "NotebookRead":
 		prefix, detail = verb(tr("Read "), tr("Reading ")), shortPath(inputString(input, "file_path", "notebook_path", "path"))
 	case "Edit", "MultiEdit", "Write", "NotebookEdit":
@@ -101,7 +97,7 @@ func claudeToolTitle(m Message) string {
 		return verb(tr("Updated tasks"), tr("Updating tasks"))
 	}
 	if detail != "" {
-		return prefix + firstLine(detail)
+		return prefix + textutil.FirstLine(detail)
 	}
 	// Other tools: their name and their first text argument.
 	keys := make([]string, 0, len(input))
@@ -111,10 +107,10 @@ func claudeToolTitle(m Message) string {
 	sort.Strings(keys)
 	for _, k := range keys {
 		if s, ok := input[k].(string); ok && strings.TrimSpace(s) != "" {
-			return name + " · " + firstLine(s)
+			return name + " · " + textutil.FirstLine(s)
 		}
 	}
-	return firstNonEmpty(name, messageLabel(m.Kind))
+	return textutil.FirstNonEmpty(name, messageLabel(m.Kind))
 }
 
 // activityIcon is a Claude tool's own icon, else its kind's.

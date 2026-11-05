@@ -6,6 +6,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/richtext"
+	"miya/internal/textutil"
 )
 
 const composerCommandTag = "composer-command"
@@ -31,7 +32,7 @@ func (s threadMentionStyle) commandAttachment(name string) *richtext.Attachment 
 	font := s.font
 	font.Family, font.Weight, font.LineHeight = monoFont, 600, 0
 	font.Size *= 0.94
-	layout := ui.ShapeText(clipRunes(name, 24), font, 0)
+	layout := ui.ShapeText(textutil.ClipRunes(name, 24), font, 0)
 	w, h := layout.Size()
 	return &richtext.Attachment{
 		Name: name, Width: w + 16, Height: s.font.Size * 1.8,
@@ -53,7 +54,7 @@ func (s *inlineThreadInput) commandHint() string {
 	name := strings.TrimPrefix(a.Attachment.Name, "/")
 	for _, choice := range s.commands {
 		if choice.Name == name {
-			return firstNonEmpty(choice.ArgumentHint, choice.Detail)
+			return textutil.FirstNonEmpty(choice.ArgumentHint, choice.Detail)
 		}
 	}
 	return ""

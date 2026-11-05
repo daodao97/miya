@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"miya/internal/fsutil"
 	"miya/internal/remote"
 )
 
@@ -100,7 +101,7 @@ func storePhonePreview(path string, data []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return err
 	}
-	if err := writeFileAtomic(path, func(f *os.File) error { _, err := f.Write(data); return err }); err != nil {
+	if err := fsutil.WriteFileAtomic(path, func(f *os.File) error { _, err := f.Write(data); return err }); err != nil {
 		return err
 	}
 	imageMu.Lock()

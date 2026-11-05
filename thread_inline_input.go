@@ -7,6 +7,7 @@ import (
 	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/richtext"
+	"miya/internal/textutil"
 )
 
 type threadMentionStyle struct {
@@ -27,7 +28,7 @@ func (s threadMentionStyle) attachment(ref ThreadRef, title string) *richtext.At
 }
 
 func (s threadMentionStyle) tagAttachment(uri, title, prefix string) *richtext.Attachment {
-	label := prefix + clipRunes(strings.Join(strings.Fields(title), " "), 22)
+	label := prefix + textutil.ClipRunes(strings.Join(strings.Fields(title), " "), 22)
 	font := s.font
 	font.Size *= 0.94
 	font.Weight = 500

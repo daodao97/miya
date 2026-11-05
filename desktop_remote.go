@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"miya/internal/fsutil"
 	"miya/internal/remote"
 )
 
@@ -115,7 +116,7 @@ func prepareDesktopIdentity() error {
 		if os.IsNotExist(err) {
 			secret = make([]byte, 32)
 			if _, err = rand.Read(secret); err == nil {
-				err = writePrivateFile(path, secret)
+				err = fsutil.WritePrivateFile(path, secret)
 			}
 		}
 		if err == nil && len(secret) != 32 {

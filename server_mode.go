@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"miya/internal/fsutil"
 	"os"
 	"path/filepath"
 )
@@ -74,23 +75,5 @@ func saveServerConnection(link string) error {
 	if err := os.MkdirAll(serviceDir(), 0700); err != nil {
 		return err
 	}
-	return writePrivateFile(connectionFile(), []byte(link+"\n"))
-}
-
-// Rename a complete 0600 file, including when replacing an older file with
-// broader permissions. Pairing capabilities must never enter shared logs.
-func writePrivateFile(path string, data []byte) error {
-	f, err := os.CreateTemp(filepath.Dir(path), ".miya-private-*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(f.Name())
-	_, err = f.Write(data)
-	if closeErr := f.Close(); err == nil {
-		err = closeErr
-	}
-	if err != nil {
-		return err
-	}
-	return os.Rename(f.Name(), path)
+	return fsutil.WritePrivateFile(connectionFile(), []byte(link+"\n"))
 }

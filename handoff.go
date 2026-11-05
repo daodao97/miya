@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"miya/internal/textutil"
 	"strconv"
 	"strings"
 )
@@ -31,11 +32,11 @@ func threadRefTask(text string) string {
 		end = m.End
 	}
 	b.WriteString(own[end:])
-	return clipRunes(strings.Join(strings.Fields(firstLine(strings.TrimSpace(b.String()))), " "), 80)
+	return textutil.ClipRunes(strings.Join(strings.Fields(textutil.FirstLine(strings.TrimSpace(b.String()))), " "), 80)
 }
 
 func threadRefTitle(t Thread) string {
-	return firstNonEmpty(strings.TrimSpace(t.Title), t.ServerID, tr("New conversation"))
+	return textutil.FirstNonEmpty(strings.TrimSpace(t.Title), t.ServerID, tr("New conversation"))
 }
 
 // Keep the exact reference tokens. Titles never need to be reversed into IDs.
@@ -102,15 +103,15 @@ func threadPacket(t Thread, messages []Message) string {
 		}
 	}
 	if len(requests) > 0 {
-		packetSection(&b, tr("Original request"), clipRunes(requests[0], 800))
+		packetSection(&b, tr("Original request"), textutil.ClipRunes(requests[0], 800))
 		if len(requests) > 1 {
-			packetSection(&b, tr("Latest request"), clipRunes(requests[len(requests)-1], 800))
+			packetSection(&b, tr("Latest request"), textutil.ClipRunes(requests[len(requests)-1], 800))
 		}
 	}
 	var conclusions []string
 	for i := max(0, len(turns)-2); i < len(turns); i++ {
 		if reply := lastReply(turns[i]); reply != "" {
-			conclusions = append(conclusions, clipRunes(reply, 1500))
+			conclusions = append(conclusions, textutil.ClipRunes(reply, 1500))
 		}
 	}
 	if len(conclusions) > 0 {
@@ -125,9 +126,9 @@ func threadPacket(t Thread, messages []Message) string {
 	if agents := latestSubAgents(messages); len(agents) > 0 {
 		var lines []string
 		for _, a := range agents {
-			line := firstNonEmpty(a.Name, a.ID) + " · " + subAgentStatusLabel(a.Status)
+			line := textutil.FirstNonEmpty(a.Name, a.ID) + " · " + subAgentStatusLabel(a.Status)
 			if a.Detail != "" {
-				line += " · " + clipRunes(a.Detail, 200)
+				line += " · " + textutil.ClipRunes(a.Detail, 200)
 			}
 			lines = append(lines, line)
 			if len(lines) == 10 {
@@ -179,13 +180,6 @@ func changedFiles(messages []Message) []string {
 		}
 	}
 	return files
-}
-
-func clipRunes(s string, n int) string {
-	if r := []rune(s); len(r) > n {
-		return strings.TrimSpace(string(r[:n])) + "…"
-	}
-	return s
 }
 
 // threadContextDisplay shows the context packets of a message as the
@@ -364,7 +358,7 @@ func (c *chatController) noteHandoffs(sources []Thread, target int, task string)
 		item := fmt.Sprintf("handoff:%d:%d", target, len(c.handoffs))
 		c.handoffs = append(c.handoffs, handoff{From: src.ID, To: target, Item: item})
 		status, detail := c.handoffState(target)
-		agent := SubAgent{ID: "thread:" + strconv.Itoa(target), Name: firstNonEmpty(task, tr("Handoff task")), Status: firstNonEmpty(status, subAgentPending), Detail: detail}
+		agent := SubAgent{ID: "thread:" + strconv.Itoa(target), Name: textutil.FirstNonEmpty(task, tr("Handoff task")), Status: textutil.FirstNonEmpty(status, subAgentPending), Detail: detail}
 		title := threadRefTitle(c.threadWithID(target))
 		c.update(src.ID, func(t *Thread) {
 			// The agents list says it all; the title names the target.
@@ -390,11 +384,11 @@ func (c *chatController) handoffState(target int) (string, string) {
 		for _, m := range t.Messages[last+1:] {
 			switch m.Role {
 			case "assistant":
-				if s := firstLine(m.Content); s != "" {
+				if s := textutil.FirstLine(m.Content); s != "" {
 					status, detail = subAgentCompleted, s
 				}
 			case "error":
-				status, detail = subAgentFailed, firstLine(m.Content)
+				status, detail = subAgentFailed, textutil.FirstLine(m.Content)
 			}
 		}
 		return status, detail

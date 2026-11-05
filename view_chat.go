@@ -7,6 +7,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/markdown"
+	"miya/internal/textutil"
 )
 
 // groupCache keeps the presentation groups of the open conversation until
@@ -450,11 +451,11 @@ func activityTitle(m Message) string {
 			a := m.Item.CommandActions[0]
 			switch a.Type {
 			case "read":
-				return tr("Read ") + firstNonEmpty(a.Name, a.Path, tr("Files"))
+				return tr("Read ") + textutil.FirstNonEmpty(a.Name, a.Path, tr("Files"))
 			case "search":
-				return tr("Searched ") + firstNonEmpty(a.Query, a.Path, tr("Files"))
+				return tr("Searched ") + textutil.FirstNonEmpty(a.Query, a.Path, tr("Files"))
 			case "listFiles":
-				return tr("Listed ") + firstNonEmpty(a.Path, tr("Files"))
+				return tr("Listed ") + textutil.FirstNonEmpty(a.Path, tr("Files"))
 			}
 		}
 		verb := tr("Ran ")
@@ -571,7 +572,7 @@ func (app *chatApp) activityBody(c *ui.Context, m Message) {
 
 func diffView(c *ui.Context, diff string) {
 	ui.Column(c).FillWidth().MinWidth(0).Background(codeBg).Radius(8).Padding(10).Selectable().Children(func() {
-		for i, l := range strings.Split(bounded(diff), "\n") {
+		for i, l := range strings.Split(textutil.Bounded(diff), "\n") {
 			color := muted
 			switch {
 			case strings.HasPrefix(l, "+"):

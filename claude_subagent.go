@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"miya/internal/claude"
+	"miya/internal/textutil"
 )
 
 // Claude Code runs a sub-agent as a Task (lately Agent) tool call. It streams
@@ -20,7 +21,7 @@ func claudeSubAgent(id, name string, input json.RawMessage, status string) []Sub
 	}
 	var in map[string]any
 	_ = json.Unmarshal(input, &in)
-	return []SubAgent{{ID: id, Name: firstLine(inputString(in, "description", "prompt", "subagent_type")), Status: claudeSubAgentStatus(status)}}
+	return []SubAgent{{ID: id, Name: textutil.FirstLine(inputString(in, "description", "prompt", "subagent_type")), Status: claudeSubAgentStatus(status)}}
 }
 
 func claudeSubAgentStatus(toolStatus string) string {
@@ -43,10 +44,10 @@ func applyClaudeAgentTasks(t *Thread, tasks []claude.AgentTask) {
 		if a := claudeTaskAgent(t, task.ToolUseID, task.ID); a != nil {
 			a.ID, a.Status = task.ID, task.Status
 			if a.Name == "" {
-				a.Name = firstLine(task.Name)
+				a.Name = textutil.FirstLine(task.Name)
 			}
 			if task.Detail != "" {
-				a.Detail = firstLine(task.Detail)
+				a.Detail = textutil.FirstLine(task.Detail)
 			}
 			if task.Steps > a.Steps {
 				a.Steps = task.Steps
@@ -90,10 +91,10 @@ func claudeTaskFrame(t *Thread, f claude.Frame) {
 	case "task_started":
 		a.Status = subAgentRunning
 		if a.Name == "" {
-			a.Name = firstLine(f.Description)
+			a.Name = textutil.FirstLine(f.Description)
 		}
 	case "task_progress":
-		if s := firstLine(f.Description); s != "" {
+		if s := textutil.FirstLine(f.Description); s != "" {
 			a.Detail = s
 		}
 	case "task_updated":
@@ -110,7 +111,7 @@ func claudeTaskFrame(t *Thread, f claude.Frame) {
 		if s := claudeTaskStatus(status); s != "" {
 			a.Status = s
 		}
-		if s := firstLine(f.Summary); s != "" {
+		if s := textutil.FirstLine(f.Summary); s != "" {
 			a.Detail = s
 		}
 	}
@@ -145,7 +146,7 @@ func claudeSubAgentStep(t *Thread, parent string, blocks []claude.Block) {
 				a.Steps++
 				a.Detail = claudeToolTitle(Message{Kind: "claudeTool", Status: "inProgress", Content: b.Name + "\n" + string(b.Input)})
 			case "text":
-				if s := firstLine(b.Text); s != "" {
+				if s := textutil.FirstLine(b.Text); s != "" {
 					a.Detail = s
 				}
 			}
@@ -227,7 +228,7 @@ func claudeTaskReportText(output string) (string, int) {
 // its sub-agent used.
 func claudeTaskReport(output string) (string, int) {
 	text, steps := claudeTaskReportText(output)
-	return firstLine(text), steps
+	return textutil.FirstLine(text), steps
 }
 
 // claudeToolOutput is what a tool call shows of its output: a sub-agent's

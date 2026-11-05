@@ -5,6 +5,7 @@ import (
 
 	"github.com/egoist/mygo/i18n"
 	"github.com/egoist/mygo/ui"
+	"miya/internal/textutil"
 )
 
 func (m *mobileApp) settingsView(c *ui.Context) {
@@ -18,7 +19,7 @@ func (m *mobileApp) settingsView(c *ui.Context) {
 		ui.Column(c).FillWidth().Padding(24, 16).Gap(12).Children(func() {
 			m.languageSettings(c.Key("language"))
 			ui.Text(c, tr("Desktop connections")).FontSize(m.font(13)).TextColor(p.muted).Margin(0, 12)
-			ui.Text(c, firstNonEmpty(m.host, tr("Desktop"))).FontSize(m.font(17)).FontWeight(500).Margin(0, 12)
+			ui.Text(c, textutil.FirstNonEmpty(m.host, tr("Desktop"))).FontSize(m.font(17)).FontWeight(500).Margin(0, 12)
 			if status := m.connectionLine(); status != "" {
 				ui.Text(c, status).FontSize(m.font(13)).TextColor(p.muted).Margin(0, 12)
 			}

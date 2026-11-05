@@ -8,6 +8,7 @@ import (
 	"unicode"
 
 	"miya/internal/codex"
+	"miya/internal/textutil"
 )
 
 const noticeTextLimit = 160
@@ -80,7 +81,7 @@ func completionNoticeBody(old, next Thread) string {
 		return next.CompletionNoticeBody
 	}
 	// Codex clears TurnID on completion. The busy snapshot still owns it.
-	turn := firstNonEmpty(old.TurnID, next.TurnID)
+	turn := textutil.FirstNonEmpty(old.TurnID, next.TurnID)
 	for i := len(next.Messages) - 1; i >= 0; i-- {
 		m := next.Messages[i]
 		if m.Role == "user" {

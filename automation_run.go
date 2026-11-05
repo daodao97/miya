@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"miya/internal/codex"
+	"miya/internal/textutil"
 )
 
 // automationState is the automations of the controller that runs them: the
@@ -225,7 +226,7 @@ func (c *chatController) advanceAutomation(id string, r *activeAutomationRun) {
 	case status == subAgentFailed:
 		c.finishAutomationRun(id, runFailed, reply)
 	case status != subAgentCompleted:
-		c.finishAutomationRun(id, runFailed, firstNonEmpty(t.Status, "No response received"))
+		c.finishAutomationRun(id, runFailed, textutil.FirstNonEmpty(t.Status, "No response received"))
 	case a.Check == "":
 		c.finishAutomationRun(id, runPassed, reply)
 	default:
@@ -284,7 +285,7 @@ func (c *chatController) finishAutomationRun(id, result, summary string) {
 	now := s.now()
 	var run AutomationRun
 	s.store.updateLastRun(id, func(x *AutomationRun) {
-		x.Result, x.Summary, x.Finished = result, clipRunes(firstLine(summary), 200), now
+		x.Result, x.Summary, x.Finished = result, textutil.ClipRunes(textutil.FirstLine(summary), 200), now
 		if r != nil {
 			x.Round = r.round
 		}
@@ -292,7 +293,7 @@ func (c *chatController) finishAutomationRun(id, result, summary string) {
 			x.Report = autoRunReport(c.threadWithID(x.Thread))
 		}
 		if result == runPassed && x.Report != nil && !x.Report.Auto {
-			x.Summary = clipRunes(firstLine(x.Report.Summary), 200)
+			x.Summary = textutil.ClipRunes(textutil.FirstLine(x.Report.Summary), 200)
 		}
 		run = *x
 	})
@@ -310,7 +311,7 @@ func (c *chatController) automationNotice(a Automation, run AutomationRun) {
 		title += fmt.Sprintf("(round %d/%d)", run.Round, run.Rounds)
 	}
 	c.deliverNotice(taskNotice{ID: fmt.Sprintf("miya-auto-%s-%d", a.ID, run.Started.Unix()), Thread: strconv.Itoa(run.Thread),
-		Title: title, Body: firstNonEmpty(run.Summary, a.Name)}, "completion")
+		Title: title, Body: textutil.FirstNonEmpty(run.Summary, a.Name)}, "completion")
 }
 
 // approvalThread is the conversation an approval waits in, Codex's by its
@@ -367,7 +368,7 @@ func (c *chatController) threadAwaitsUser(t Thread) bool {
 func runAutomationCheck(dir, command string) (bool, string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, firstNonEmpty(os.Getenv("SHELL"), "/bin/sh"), "-lc", command)
+	cmd := exec.CommandContext(ctx, textutil.FirstNonEmpty(os.Getenv("SHELL"), "/bin/sh"), "-lc", command)
 	cmd.Dir = dir
 	out, err := cmd.CombinedOutput()
 	text := string(out)

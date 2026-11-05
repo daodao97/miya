@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"miya/internal/textutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -92,7 +93,7 @@ func (a *Automation) normalize() error {
 	a.Instructions = strings.TrimSpace(a.Instructions)
 	a.Schedule = strings.Join(strings.Fields(a.Schedule), " ")
 	a.Check = strings.TrimSpace(a.Check)
-	if a.Agent = normalizeAgentID(firstNonEmpty(a.Agent, agentCodex)); a.Agent == "" {
+	if a.Agent = normalizeAgentID(textutil.FirstNonEmpty(a.Agent, agentCodex)); a.Agent == "" {
 		return errors.New("Agent must be codex or claude-code")
 	}
 	switch {

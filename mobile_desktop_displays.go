@@ -7,6 +7,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"miya/internal/desktop"
+	"miya/internal/textutil"
 )
 
 func (p *mobileDesktopPage) invalidateTarget() {
@@ -20,7 +21,7 @@ func (p *mobileDesktopPage) invalidateTarget() {
 
 func desktopDisplayTitle(display desktop.Display, number int) string {
 	title := fmt.Sprintf(tr("Desktop %d"), number)
-	title += " · " + firstNonEmpty(display.Name, tr("Unnamed display"))
+	title += " · " + textutil.FirstNonEmpty(display.Name, tr("Unnamed display"))
 	return title
 }
 
@@ -30,7 +31,7 @@ func (p *mobileDesktopPage) displayTitle() string {
 			return desktopDisplayTitle(p.display, i+1)
 		}
 	}
-	return firstNonEmpty(p.display.Name, tr("Full desktop"))
+	return textutil.FirstNonEmpty(p.display.Name, tr("Full desktop"))
 }
 
 func (m *mobileApp) desktopPresentDisplays(p *mobileDesktopPage, displays []desktop.Display) {

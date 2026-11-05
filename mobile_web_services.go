@@ -13,6 +13,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"miya/internal/remote"
+	"miya/internal/textutil"
 )
 
 type mobileWebServices struct {
@@ -169,13 +170,13 @@ func (m *mobileApp) webServicesList(c *ui.Context, state *mobileWebServices) {
 		return
 	}
 	for _, service := range state.services {
-		label := "http://" + net.JoinHostPort(firstNonEmpty(service.Host, "localhost"), strconv.Itoa(service.Port))
+		label := "http://" + net.JoinHostPort(textutil.FirstNonEmpty(service.Host, "localhost"), strconv.Itoa(service.Port))
 		if m.phoneButton(c.Key(service.Port)).FillWidth().MinHeight(64).Padding(14).Gap(12).Radius(14).Background(p.surface).
 			Label(tr("Open ") + label).Disabled(m.filesCancel != nil).Children(func() {
 			icon(c, "globe", 22, p.ink)
 			ui.Column(c).Grow(1).MinWidth(0).Gap(4).Children(func() {
 				ui.Text(c, tr("Port ")+strconv.Itoa(service.Port)).FontSize(m.font(17)).FontWeight(600)
-				ui.Text(c, firstNonEmpty(service.Process, tr("Web services"))+" · HTTP").FontSize(m.font(13)).TextColor(p.muted).SingleLine().Ellipsis("…")
+				ui.Text(c, textutil.FirstNonEmpty(service.Process, tr("Web services"))+" · HTTP").FontSize(m.font(13)).TextColor(p.muted).SingleLine().Ellipsis("…")
 				if state.ref.SessionID == "" {
 					ui.Text(c, m.runtimeServiceOwner(service)).FontSize(m.font(12)).TextColor(p.muted).SingleLine().Ellipsis("…")
 				}

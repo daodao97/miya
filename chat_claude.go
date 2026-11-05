@@ -16,6 +16,7 @@ import (
 	"miya/internal/claude"
 	"miya/internal/codex"
 	dg "miya/internal/delegation"
+	"miya/internal/textutil"
 )
 
 func newClaudeSessionID() string {
@@ -549,7 +550,7 @@ func (c *chatController) handleClaude(id int, f claude.Frame) {
 							}
 							output := claudeVisibleText(claudeBlocks(b.Content))
 							if shown := claudeToolOutput(t.Messages[i], output); shown != "" {
-								t.Messages[i].Content += "\n" + bounded(shown)
+								t.Messages[i].Content += "\n" + textutil.Bounded(shown)
 							}
 							claudeFinishSubAgents(&t.Messages[i], output, f.ToolUseResult)
 						}

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"miya/internal/codex"
+	"miya/internal/textutil"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -266,7 +267,7 @@ func resetCreditCard(c *ui.Context, data accountDisplay, action accountResetActi
 			if action.Busy {
 				label = tr("Using card…")
 			}
-			who := firstNonEmpty(action.Attempt.Account.Email, tr("Current account"))
+			who := textutil.FirstNonEmpty(action.Attempt.Account.Email, tr("Current account"))
 			ui.Column(c).Padding(12).Gap(8).Background(subtle).Radius(8).Children(func() {
 				ui.Row(c).Wrap().AlignItems(ui.Center).Gap(8).Children(func() {
 					ui.Text(c, tr("Use a reset card?")).FontWeight(600).Grow(1)

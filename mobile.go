@@ -14,6 +14,7 @@ import (
 
 	"miya/internal/codex"
 	"miya/internal/remote"
+	"miya/internal/textutil"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -1695,7 +1696,7 @@ func (m *mobileApp) composer(c *ui.Context, agent string, busy bool) {
 		}
 		ui.Column(c.Key("composer-box")).FillWidth().Padding(6, 6, 6, 10).Background(p.surface).Radius(26).Children(func() {
 			opts := m.sendOptions(agent)
-			effort := strings.ToUpper(firstNonEmpty(opts.Effort, tr("Default")))
+			effort := strings.ToUpper(textutil.FirstNonEmpty(opts.Effort, tr("Default")))
 			hasDraft := strings.TrimSpace(m.draft) != "" || len(m.images) > 0
 			steerAvailable := busy && hasDraft
 			showEffort := effort != "" && c.Root().Bounds().W >= 360 && m.textScale <= 1.3 && !steerAvailable

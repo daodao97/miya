@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"miya/internal/agentusage"
+	"miya/internal/fsutil"
 	"miya/internal/remote"
 )
 
@@ -127,7 +128,7 @@ func (c *chatController) prepareHost(r hostRequest) (deferred, error) {
 			if len(r.Text) > maxEditableFile || isBinary([]byte(r.Text)) {
 				return nil, errors.New("Unable to save this file")
 			}
-			return nil, writeFileAtomic(path, func(f *os.File) error { _, err := io.WriteString(f, r.Text); return err })
+			return nil, fsutil.WriteFileAtomic(path, func(f *os.File) error { _, err := io.WriteString(f, r.Text); return err })
 		}
 		return nil, errors.New("Unknown server operation")
 	}, nil

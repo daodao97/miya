@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"miya/internal/codex"
+	"miya/internal/textutil"
 )
 
 type goalCommand struct {
@@ -64,7 +65,7 @@ func (c *chatController) codexGoalCommand(req sendRequest) (int, string) {
 		policy = c.permissionForThread(t)
 	}
 	if t.ID == 0 {
-		cwd := firstNonEmpty(req.Project, c.cwd)
+		cwd := textutil.FirstNonEmpty(req.Project, c.cwd)
 		t = Thread{ID: c.nextID(), Agent: agentCodex, PermissionPolicy: policy,
 			Title: conversationTitle("", g.objective, ""), Project: filepath.Base(cwd), Loaded: true, HistoryLoaded: true}
 		c.addThread(cwd, t)

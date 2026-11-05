@@ -13,6 +13,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"miya/internal/desktop"
 	"miya/internal/remote"
+	"miya/internal/textutil"
 )
 
 // The remote desktop page is native MyGo UI. Frames and input travel over the
@@ -343,7 +344,7 @@ func (m *mobileApp) desktopRetry(p *mobileDesktopPage) {
 
 func (p *mobileDesktopPage) connectedStatus() string {
 	if p.windowOnly {
-		return tr("Connected · ") + firstNonEmpty(p.window.Title, p.window.App, tr("Permission window"))
+		return tr("Connected · ") + textutil.FirstNonEmpty(p.window.Title, p.window.App, tr("Permission window"))
 	}
 	if p.display.ID != 0 {
 		return tr("Connected · ") + p.displayTitle()
@@ -749,7 +750,7 @@ func (m *mobileApp) desktopPageView(c *ui.Context) {
 			m.navigationBack(c, "/desktop")
 			title := tr("Remote desktop")
 			if p.windowOnly {
-				title = firstNonEmpty(p.window.Title, p.window.App, tr("Permission window"))
+				title = textutil.FirstNonEmpty(p.window.Title, p.window.App, tr("Permission window"))
 			}
 			if !p.windowOnly && p.display.ID != 0 {
 				title = p.displayTitle()
@@ -1288,7 +1289,7 @@ func (m *mobileApp) desktopWindowCard(c *ui.Context, p *mobileDesktopPage, w des
 	pal := m.pal
 	key := desktopWindowKey(w)
 	img, loaded := p.thumbs[key]
-	title := firstNonEmpty(w.Title, w.App, tr("Untitled window"))
+	title := textutil.FirstNonEmpty(w.Title, w.App, tr("Untitled window"))
 	card := m.phoneButton(c.Key("desktop-window-" + key)).Column().Grow(1).Basis(0).MinWidth(0).Gap(6).Padding(8).Background(pal.surface).Radius(12)
 	card.Children(func() {
 		ui.Column(c).FillWidth().AspectRatio(1.6).Radius(8).Clip().Background(pal.bg).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
@@ -1298,7 +1299,7 @@ func (m *mobileApp) desktopWindowCard(c *ui.Context, p *mobileDesktopPage, w des
 			case !loaded && p.pickable:
 				ui.Spinner(c)
 			default:
-				ui.Text(c, firstNonEmpty(w.App, tr("Window"))).FontSize(m.font(12)).TextColor(pal.muted).MaxLines(1)
+				ui.Text(c, textutil.FirstNonEmpty(w.App, tr("Window"))).FontSize(m.font(12)).TextColor(pal.muted).MaxLines(1)
 			}
 		})
 		ui.Text(c, title).FontSize(m.font(14)).FontWeight(600).LineHeight(1.3).MaxLines(2)

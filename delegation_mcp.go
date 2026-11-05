@@ -12,6 +12,7 @@ import (
 	"time"
 
 	dg "miya/internal/delegation"
+	"miya/internal/textutil"
 )
 
 type collaborationArgs struct {
@@ -431,7 +432,7 @@ func collaborationListFor(manager *dg.Manager, caller string, a collaborationArg
 		v := taskPublic(task)
 		delete(v, "result")
 		if dg.Terminal(task.State) {
-			v["result_summary"] = clipRunes(task.Result.Text, 280)
+			v["result_summary"] = textutil.ClipRunes(task.Result.Text, 280)
 		}
 		taskNotification(v, snapshot, task.ID, caller)
 		out = append(out, v)

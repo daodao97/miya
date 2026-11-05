@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"miya/internal/textutil"
 )
 
 // automationsUI is the Automations page's state; the automations live in
@@ -460,7 +461,7 @@ func (app *chatApp) runRow(c *ui.Context, v automationView, r AutomationRun, run
 	case r.Result == runFailed:
 		color = autoBad
 	}
-	title = firstNonEmpty(title, runResultLabel(r.Result))
+	title = textutil.FirstNonEmpty(title, runResultLabel(r.Result))
 	if r.Result == runSkipped {
 		title = tr("Skipped, ") + r.Summary
 	}
@@ -518,7 +519,7 @@ func (app *chatApp) openAutomationForm(v *automationView) {
 	a.gen++
 	if v != nil {
 		draft := *v
-		a.editID, a.request, a.draft = v.ID, firstNonEmpty(v.Request, v.Instructions), &draft
+		a.editID, a.request, a.draft = v.ID, textutil.FirstNonEmpty(v.Request, v.Instructions), &draft
 		a.project, a.agent, a.enable = v.Project, v.Agent, v.Enabled
 	}
 }
@@ -944,7 +945,7 @@ func (app *chatApp) reportView(c *ui.Context, r AutomationRun, latest bool) {
 				a.openReports[key] = !a.openReports[key]
 			}
 			if !open {
-				ui.Text(c, firstLine(rep.Summary)).FontSize(12).SingleLine().Ellipsis("…")
+				ui.Text(c, textutil.FirstLine(rep.Summary)).FontSize(12).SingleLine().Ellipsis("…")
 				return
 			}
 			ui.Text(c, rep.Summary).FontSize(13).LineHeight(1.6).Selectable()

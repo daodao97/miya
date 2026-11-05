@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"miya/internal/codex"
+	"miya/internal/textutil"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -107,7 +108,7 @@ func (app *chatApp) questionField(c *ui.Context, q codex.Question, answers map[s
 			}
 		}
 		value := answers[q.ID]
-		in := ui.TextInput(c.Key("answer"), &value).Placeholder(tr("Type your answer…")).Label(firstNonEmpty(q.Header, q.Question))
+		in := ui.TextInput(c.Key("answer"), &value).Placeholder(tr("Type your answer…")).Label(textutil.FirstNonEmpty(q.Header, q.Question))
 		if q.IsSecret {
 			in.Password()
 		}

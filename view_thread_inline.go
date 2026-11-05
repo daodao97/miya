@@ -10,6 +10,7 @@ import (
 	"github.com/egoist/mygo/ui/markdown"
 	"github.com/egoist/mygo/ui/markdown/parser"
 	"github.com/egoist/mygo/ui/richtext"
+	"miya/internal/textutil"
 )
 
 var mentionPlaceholder = regexp.MustCompile("\ue000([0-9]+)\ue001")
@@ -72,7 +73,7 @@ func (app *chatApp) threadMessage(c *ui.Context, message Message) {
 				before.Text = run.Text[end:match[0]]
 				title := mentions[i].Title
 				pieces = append(pieces, piece{span: before, link: a.Link, label: before.Text}, piece{
-					span: ui.Span{Text: " @ " + clipRunes(strings.Join(strings.Fields(title), " "), 22) + " ", Weight: 500, Color: style.ink, Background: style.background, Radius: 5},
+					span: ui.Span{Text: " @ " + textutil.ClipRunes(strings.Join(strings.Fields(title), " "), 22) + " ", Weight: 500, Color: style.ink, Background: style.background, Radius: 5},
 					link: mentions[i].Ref.URL(), label: title,
 				})
 				end = match[1]

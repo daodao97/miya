@@ -9,6 +9,7 @@ import (
 
 	"miya/internal/codex"
 	"miya/internal/remote"
+	"miya/internal/textutil"
 )
 
 type phoneApprovalReply struct {
@@ -101,7 +102,7 @@ func validateMobileForm(a codex.Approval, fields map[string]string) (map[string]
 		if len(field.Enum) > 0 || field.Type != "string" {
 			var decoded any
 			if err := json.Unmarshal([]byte(value), &decoded); err != nil {
-				return nil, fmt.Errorf("Invalid value for %s", firstNonEmpty(field.Title, key))
+				return nil, fmt.Errorf("Invalid value for %s", textutil.FirstNonEmpty(field.Title, key))
 			}
 			content[key] = decoded
 		} else {

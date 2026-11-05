@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/egoist/mygo/ui"
+	"miya/internal/textutil"
 )
 
 type desktopShortcut struct {
@@ -128,7 +129,7 @@ func (app *chatApp) switcherChoices(query string) []threadReference {
 	var choices []threadReference
 	seen := map[int]bool{}
 	for _, project := range app.c.threadRefProjects() {
-		name := firstNonEmpty(project.Name, filepath.Base(project.Path))
+		name := textutil.FirstNonEmpty(project.Name, filepath.Base(project.Path))
 		for _, thread := range project.Threads {
 			if thread.ID == 0 || seen[thread.ID] {
 				continue

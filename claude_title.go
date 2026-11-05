@@ -1,6 +1,7 @@
 package main
 
 import (
+	"miya/internal/textutil"
 	"regexp"
 	"strings"
 )
@@ -34,7 +35,7 @@ func claudeCommandText(text string) string {
 			args = strings.TrimSpace(part[2])
 		}
 	}
-	name = firstNonEmpty(name, message)
+	name = textutil.FirstNonEmpty(name, message)
 	if name != "" && !strings.HasPrefix(name, "/") {
 		name = "/" + name
 	}
@@ -72,7 +73,7 @@ func claudeReferenceTitle(text string) string {
 	end := 0
 	for _, mention := range mentions {
 		title.WriteString(text[end:mention.Start])
-		title.WriteString(firstNonEmpty(strings.TrimSpace(mention.Title), "Referenced conversation"))
+		title.WriteString(textutil.FirstNonEmpty(strings.TrimSpace(mention.Title), "Referenced conversation"))
 		end = mention.End
 	}
 	title.WriteString(text[end:])

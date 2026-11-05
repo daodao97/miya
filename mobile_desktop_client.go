@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"miya/internal/desktop"
+	"miya/internal/textutil"
 )
 
 // desktopClient speaks the Mac's control API over the paired, encrypted
@@ -90,7 +91,7 @@ func (c *desktopClient) doHeader(ctx context.Context, method, path string, body 
 		if r := []rune(message); len(r) > 300 {
 			message = string(r[:300])
 		}
-		return nil, response.Header, &desktopHTTPError{Status: response.StatusCode, Message: firstNonEmpty(message, fmt.Sprintf(tr("Mac returned an error (%d)"), response.StatusCode))}
+		return nil, response.Header, &desktopHTTPError{Status: response.StatusCode, Message: textutil.FirstNonEmpty(message, fmt.Sprintf(tr("Mac returned an error (%d)"), response.StatusCode))}
 	}
 	if err != nil {
 		return nil, nil, err

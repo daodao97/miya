@@ -18,6 +18,7 @@ import (
 
 	"miya/internal/codex"
 	"miya/internal/memory"
+	"miya/internal/textutil"
 )
 
 func TestMemoryInstalledCodexExposesNoOperationalTools(t *testing.T) {
@@ -46,7 +47,7 @@ func TestMemoryInstalledCodexExposesNoOperationalTools(t *testing.T) {
 			}
 			var names []string
 			for _, tool := range body.Tools {
-				names = append(names, firstNonEmpty(tool.Name, tool.Type))
+				names = append(names, textutil.FirstNonEmpty(tool.Name, tool.Type))
 			}
 			requests <- names
 		}
@@ -145,7 +146,7 @@ func TestMemoryLiveCodexExtraction(t *testing.T) {
 				data, _ := os.ReadFile(diagnostic)
 				redacted := regexp.MustCompile(`"[^"\n]*"|'[^'\n]*'`).ReplaceAllString(string(data), "<quoted>")
 				redacted = regexp.MustCompile(`https?://\S+|sk-[A-Za-z0-9_-]+`).ReplaceAllString(redacted, "<redacted>")
-				t.Fatalf("%v; sanitized CLI diagnostic: %s", err, clipRunes(redacted, 1200))
+				t.Fatalf("%v; sanitized CLI diagnostic: %s", err, textutil.ClipRunes(redacted, 1200))
 			}
 			if tc.empty && len(got) != 0 {
 				t.Fatalf("unwanted memory extracted: %+v", got)

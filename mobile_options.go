@@ -8,6 +8,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"miya/internal/remote"
+	"miya/internal/textutil"
 )
 
 func (m *mobileApp) agentOptions(agent string) phoneAgentOptions {
@@ -32,7 +33,7 @@ func (m *mobileApp) sendOptions(agent string) remote.SendOptions {
 	return o
 }
 func (m *mobileApp) saveOptions() {
-	dir := firstNonEmpty(m.cacheDir, m.dataDir)
+	dir := textutil.FirstNonEmpty(m.cacheDir, m.dataDir)
 	if dir == "" {
 		return
 	}

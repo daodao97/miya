@@ -300,32 +300,6 @@ func readImageFile(path string) ([]byte, error) {
 	return os.ReadFile(path)
 }
 
-// writeFileAtomic replaces a file without leaving it half written, keeping
-// its permissions.
-func writeFileAtomic(path string, write func(f *os.File) error) error {
-	mode := os.FileMode(0o644)
-	if info, err := os.Stat(path); err == nil {
-		mode = info.Mode().Perm()
-	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*")
-	if err != nil {
-		return err
-	}
-	name := tmp.Name()
-	defer os.Remove(name)
-	if err := write(tmp); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	if err := os.Chmod(name, mode); err != nil {
-		return err
-	}
-	return os.Rename(name, path)
-}
-
 // browserURL turns what is typed in the address bar into a URL: a port is a
 // local server, a host without a scheme is https, local hosts http.
 func browserURL(input string) string {

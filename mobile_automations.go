@@ -9,6 +9,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"miya/internal/remote"
+	"miya/internal/textutil"
 )
 
 type mobileAutomations struct {
@@ -385,7 +386,7 @@ func (m *mobileApp) automationPhoneRun(c *ui.Context, v automationView, r Automa
 	expanded := m.autos.openRuns[key]
 	summary := r.Summary
 	if r.Report != nil {
-		summary = firstNonEmpty(summary, r.Report.Summary)
+		summary = textutil.FirstNonEmpty(summary, r.Report.Summary)
 	}
 	hasDetails := false
 	if report := r.Report; report != nil {
@@ -476,7 +477,7 @@ func (m *mobileApp) automationRunThread(v automationView, r AutomationRun) (Thre
 			continue
 		}
 		for _, t := range p.Threads {
-			if threadAgent(t) != firstNonEmpty(v.Agent, agentCodex) {
+			if threadAgent(t) != textutil.FirstNonEmpty(v.Agent, agentCodex) {
 				continue
 			}
 			if r.ServerID != "" && t.ServerID == r.ServerID || r.ServerID == "" && r.Thread != 0 && t.ID == r.Thread {

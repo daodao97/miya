@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"miya/internal/textutil"
 	"os"
 	"strings"
 	"sync"
@@ -282,7 +283,7 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *mcpErro
 		}
 		_ = json.Unmarshal(params, &p)
 		return map[string]any{
-			"protocolVersion": firstNonEmpty(p.ProtocolVersion, mcpProtocolVersion),
+			"protocolVersion": textutil.FirstNonEmpty(p.ProtocolVersion, mcpProtocolVersion),
 			"capabilities":    map[string]any{"tools": map[string]any{}},
 			"serverInfo":      map[string]any{"name": "miya", "version": "1"},
 			"instructions":    mcpInstructions,
@@ -408,7 +409,7 @@ func (s *mcpServer) callTool(name string, raw json.RawMessage) (string, error) {
 			return s.legacyTaskStatus(req, mcpWait(a.WaitSeconds, 300))
 		}
 		out, err := s.status(mcpRequest{Workspace: s.workspace, Tool: name, Thread: res.Thread, Reference: res.Reference}, mcpWait(a.WaitSeconds, 300))
-		return fmt.Sprintf("Handed off to session %s (%s).\n", firstNonEmpty(res.Reference, "Creating"), backendFor(res.Agent).Name()) + out, err
+		return fmt.Sprintf("Handed off to session %s (%s).\n", textutil.FirstNonEmpty(res.Reference, "Creating"), backendFor(res.Agent).Name()) + out, err
 	}
 	return "", fmt.Errorf("Unknown tool %s", name)
 }

@@ -1,6 +1,9 @@
 package main
 
-import "github.com/egoist/mygo/ui"
+import (
+	"github.com/egoist/mygo/ui"
+	"miya/internal/textutil"
+)
 
 func (m *mobileApp) homeBackground() ui.Color {
 	if m.dark {
@@ -110,7 +113,7 @@ func (m *mobileApp) drawerProject(c *ui.Context, project phoneProject) {
 
 func (m *mobileApp) drawerThread(c *ui.Context, thread Thread) {
 	p := m.pal
-	title := firstNonEmpty(thread.Title, tr("Untitled conversation"))
+	title := textutil.FirstNonEmpty(thread.Title, tr("Untitled conversation"))
 	row := m.phoneButton(c).FillWidth().MinHeight(48).Padding(0).Gap(10).Radius(10).Background(ui.Transparent).Label(nativeText(title))
 	if thread.ID == m.open || row.Pressed() {
 		row.Background(p.surface)
