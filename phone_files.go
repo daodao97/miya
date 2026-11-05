@@ -20,6 +20,7 @@ import (
 
 	"github.com/egoist/mygo/i18n"
 	"golang.org/x/text/language"
+	"miya/internal/async"
 	"miya/internal/desktop/control"
 	"miya/internal/model"
 	"miya/internal/webservice"
@@ -70,7 +71,7 @@ func (c *chatController) fileServer() http.Handler {
 		}
 	}}
 	web := webservice.Server(func(ctx context.Context, token, host string, port int) error {
-		manager, ok := onMain(ctx, c.dispatch, func() *runtimeManager { return c.runtimes() })
+		manager, ok := async.OnMain(ctx, c.dispatch, func() *runtimeManager { return c.runtimes() })
 		if !ok {
 			return ctx.Err()
 		}

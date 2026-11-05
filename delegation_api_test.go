@@ -38,7 +38,7 @@ func collaborationUserCall(t *testing.T, f *serviceFixture, operation, from stri
 func collaborationStoredFixtureTask(t *testing.T, f *serviceFixture, caller int) dg.Task {
 	t.Helper()
 	var from string
-	f.serv.do(func() { from = f.srv.c.threadRef(f.srv.c.threadWithID(caller)).URL() })
+	f.serv.Do(func() { from = f.srv.c.threadRef(f.srv.c.threadWithID(caller)).URL() })
 	value, err := f.srv.c.collaboration.call(func() (any, error) {
 		return f.srv.c.collaboration.manager.Create(dg.StartInput{From: from, RequestID: "fixture", Agent: agentClaude, Workspace: f.srv.c.cwd, Prompt: "fixture task"})
 	})
@@ -81,7 +81,7 @@ func TestCollaborationStopPausesAndExplicitResumeIgnoresOldStopFlag(t *testing.T
 	f := newServiceFixture(t)
 	caller := collaborationCaller(t, f, agentClaude, "paused-source")
 	var from string
-	f.serv.do(func() {
+	f.serv.Do(func() {
 		c := f.srv.c
 		c.update(caller, func(th *Thread) { th.Busy = true; th.LaunchModel = "original"; th.LaunchEffort = "high" })
 		from = c.threadRef(c.threadWithID(caller)).URL()
@@ -91,7 +91,7 @@ func TestCollaborationStopPausesAndExplicitResumeIgnoresOldStopFlag(t *testing.T
 		t.Fatal(err)
 	}
 	waitCollaborationTask(t, f, result["task_id"].(string))
-	f.serv.do(func() {
+	f.serv.Do(func() {
 		f.srv.c.stopThread(caller)
 		f.srv.c.update(caller, func(th *Thread) { th.Busy = false; th.StopRequested = true })
 	})
@@ -143,7 +143,7 @@ func TestCollaborationWriteFailureIsVisibleInQueriesAndState(t *testing.T) {
 	if err != nil || result["stale"] != true || !hasMessage || message == "" || result["cancel_requested"] != false {
 		t.Fatalf("stale query: %v %v", result, err)
 	}
-	f.serv.do(func() {
+	f.serv.Do(func() {
 		state := f.srv.c.snapshotState()
 		phone := f.srv.c.phoneSnapshot()
 		if state.Collaboration == nil || !state.Collaboration.Stale || phone.Collaboration == nil || !phone.Collaboration.Stale {
@@ -214,7 +214,7 @@ func TestCollaborationCorruptStoreDoesNotPanicStopOrLegacyTools(t *testing.T) {
 	}
 	var readErr, createErr error
 	var capability *collaborationStatus
-	f.serv.do(func() {
+	f.serv.Do(func() {
 		c := f.srv.c
 		c.collaboration.cancel()
 		c.collaboration = newCollaboration(c, dir)
@@ -236,7 +236,7 @@ func TestCollaborationUnboundTurnBufferIsBoundedAndRequiresRecheck(t *testing.T)
 	f := newServiceFixture(t)
 	callerID := collaborationCaller(t, f, agentCodex, "source")
 	var from string
-	f.serv.do(func() { from = f.srv.c.threadRef(f.srv.c.threadWithID(callerID)).URL() })
+	f.serv.Do(func() { from = f.srv.c.threadRef(f.srv.c.threadWithID(callerID)).URL() })
 	s := f.srv.c.collaboration
 	value, err := s.call(func() (any, error) {
 		return s.manager.Create(dg.StartInput{From: from, RequestID: "early", Agent: agentCodex, Workspace: f.srv.c.cwd, Prompt: "test"})
@@ -246,7 +246,7 @@ func TestCollaborationUnboundTurnBufferIsBoundedAndRequiresRecheck(t *testing.T)
 	}
 	task := value.(dg.Task)
 	var targetID int
-	f.serv.do(func() {
+	f.serv.Do(func() {
 		c := f.srv.c
 		targetID = c.nextID()
 		worker := Thread{ID: targetID, Agent: agentCodex, ServerID: "worker", ExecutionID: task.ID, Busy: true, HistoryLoaded: true}
@@ -261,7 +261,7 @@ func TestCollaborationUnboundTurnBufferIsBoundedAndRequiresRecheck(t *testing.T)
 			t.Error("unbound event buffer grew without limit")
 		}
 	})
-	t.Cleanup(func() { f.serv.do(func() { f.srv.c.update(targetID, func(th *Thread) { th.Busy = false }) }) })
+	t.Cleanup(func() { f.serv.Do(func() { f.srv.c.update(targetID, func(th *Thread) { th.Busy = false }) }) })
 	value, err = s.call(func() (any, error) { return s.manager.Read(task.ID) })
 	if err != nil {
 		t.Fatal(err)

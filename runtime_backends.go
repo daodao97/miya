@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"miya/internal/async"
 	"miya/internal/remote"
 	rt "miya/internal/runtime"
 	"miya/internal/textutil"
@@ -142,7 +143,7 @@ type conversationRuntime struct {
 }
 
 func (c *chatController) readRuntime(ctx context.Context, ref ThreadRef, project string) (conversationRuntime, error) {
-	cl, ok := onMain(ctx, c.dispatch, func() *serviceClient { return c.remote })
+	cl, ok := async.OnMain(ctx, c.dispatch, func() *serviceClient { return c.remote })
 	if !ok {
 		return conversationRuntime{}, ctx.Err()
 	}
@@ -155,7 +156,7 @@ func (c *chatController) readRuntime(ctx context.Context, ref ThreadRef, project
 		work deferred
 		err  error
 	}
-	result, ok := onMain(ctx, c.dispatch, func() prepared { work, err := c.prepareRuntime(ref, project); return prepared{work, err} })
+	result, ok := async.OnMain(ctx, c.dispatch, func() prepared { work, err := c.prepareRuntime(ref, project); return prepared{work, err} })
 	if !ok {
 		return conversationRuntime{}, ctx.Err()
 	}

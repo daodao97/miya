@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"miya/internal/async"
 	"miya/internal/codex"
 	"miya/internal/model"
 	"miya/internal/notification"
@@ -102,7 +103,7 @@ func TestServiceDeleteSelectedConversationUpdatesWindow(t *testing.T) {
 			f := newServiceFixture(t)
 			target := Thread{ID: 1, ServerID: "delete-this", Title: "Delete", HistoryLoaded: true}
 			keep := Thread{ID: 2, ServerID: "keep-this", Title: "Keep", HistoryLoaded: true, Draft: "keep draft"}
-			f.serv.do(func() {
+			f.serv.Do(func() {
 				items := []Thread{target}
 				if !last {
 					items = append(items, keep)
@@ -112,7 +113,7 @@ func TestServiceDeleteSelectedConversationUpdatesWindow(t *testing.T) {
 			})
 			window := f.window()
 			t.Cleanup(func() { window.cancel(); window.remote.Close() })
-			f.win.do(func() {
+			f.win.Do(func() {
 				window.setActive(target.ID)
 				window.rememberDraft("old draft")
 				window.setAttachments([]string{"old-attachment.txt"})
@@ -120,7 +121,7 @@ func TestServiceDeleteSelectedConversationUpdatesWindow(t *testing.T) {
 				window.deleteThread(target)
 			})
 			f.waitWindow("deleted conversation to disappear", func() bool { return window.threadWithID(target.ID).ID == 0 })
-			f.win.do(func() {
+			f.win.Do(func() {
 				want := keep.ID
 				if last {
 					want = 0
@@ -183,8 +184,8 @@ type serviceFixture struct {
 	t    *testing.T
 	sock string
 	srv  *service
-	serv *executor // the service's main thread
-	win  *executor // the windows' main thread
+	serv *async.Executor // the service's main thread
+	win  *async.Executor // the windows' main thread
 }
 
 func newServiceFixture(t *testing.T) *serviceFixture {
@@ -200,12 +201,12 @@ func newServiceFixture(t *testing.T) *serviceFixture {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { os.RemoveAll(sockDir) })
-	f := &serviceFixture{t: t, sock: filepath.Join(sockDir, "s.sock"), serv: newExecutor(), win: newExecutor()}
+	f := &serviceFixture{t: t, sock: filepath.Join(sockDir, "s.sock"), serv: async.NewExecutor(), win: async.NewExecutor()}
 	stop := make(chan struct{})
-	go f.serv.loop(stop)
-	go f.win.loop(stop)
+	go f.serv.Loop(stop)
+	go f.win.Loop(stop)
 	oldHook := currentInvalidateHook()
-	f.serv.do(func() {
+	f.serv.Do(func() {
 		f.srv = newService(serverController(dir, bin), f.serv)
 	})
 	setInvalidateHook(f.srv.markDirty)
@@ -221,7 +222,7 @@ func newServiceFixture(t *testing.T) *serviceFixture {
 		// Let the Claude run report its end before the state goes away.
 		for deadline := time.Now().Add(30 * time.Second); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
 			busy := true
-			f.serv.do(func() { busy = f.srv.busy() })
+			f.serv.Do(func() { busy = f.srv.busy() })
 			if !busy {
 				break
 			}
@@ -251,9 +252,9 @@ func (f *serviceFixture) window() *chatController {
 		f.t.Fatal(err)
 	}
 	var c *chatController
-	f.win.do(func() {
+	f.win.Do(func() {
 		c = newMirrorController()
-		c.run = f.win.push
+		c.run = f.win.Push
 		c.attachService(cl, st)
 	})
 	return c
@@ -305,7 +306,7 @@ func (f *serviceFixture) waitWindow(what string, ok func() bool) {
 	f.t.Helper()
 	for deadline := time.Now().Add(30 * time.Second); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
 		done := false
-		f.win.do(func() { done = ok() })
+		f.win.Do(func() { done = ok() })
 		if done {
 			return
 		}
@@ -326,7 +327,7 @@ func TestServiceKeepsTurnsRunningAfterTheWindowQuits(t *testing.T) {
 	f := newServiceFixture(t)
 	a := f.window()
 	f.waitWindow("Claude to be ready in the window", func() bool { return a.backendReady() || a.claudeBinary != "" })
-	f.win.do(func() {
+	f.win.Do(func() {
 		a.setAgent(agentClaude)
 		a.rememberDraft("hello")
 		a.send()
@@ -337,7 +338,7 @@ func TestServiceKeepsTurnsRunningAfterTheWindowQuits(t *testing.T) {
 		cur := a.current()
 		return id != 0 && cur.Busy && strings.HasPrefix(assistantText(cur), "partial")
 	})
-	f.win.do(func() {
+	f.win.Do(func() {
 		if a.draft() != "" || a.current().Messages[0].Content != "hello" {
 			t.Errorf("window after send: draft %q messages %+v", a.draft(), a.current().Messages)
 		}
@@ -347,7 +348,7 @@ func TestServiceKeepsTurnsRunningAfterTheWindowQuits(t *testing.T) {
 	a.remote.Close()
 	for deadline := time.Now().Add(30 * time.Second); ; time.Sleep(20 * time.Millisecond) {
 		var th Thread
-		f.serv.do(func() { th = f.srv.c.threadWithID(id) })
+		f.serv.Do(func() { th = f.srv.c.threadWithID(id) })
 		if !th.Busy && assistantText(th) == "partial done" {
 			break
 		}
@@ -359,7 +360,7 @@ func TestServiceKeepsTurnsRunningAfterTheWindowQuits(t *testing.T) {
 	// A new window finds the finished reply.
 	b := f.window()
 	f.waitWindow("the conversation in the new window", func() bool { return b.threadWithID(id).ID != 0 })
-	f.win.do(func() { b.selectThread(b.threadWithID(id)) })
+	f.win.Do(func() { b.selectThread(b.threadWithID(id)) })
 	f.waitWindow("the whole reply in the new window", func() bool {
 		cur := b.current()
 		return !cur.Busy && assistantText(cur) == "partial done" && len(cur.Messages) == 2
@@ -372,15 +373,15 @@ func TestServiceRetryContinuesFailedResponseAfterOutput(t *testing.T) {
 	persistSetting("notifications-completion", "off")
 	a := f.window()
 	f.waitWindow("Claude to be ready", func() bool { return a.claudeBinary != "" })
-	f.serv.do(func() {
+	f.serv.Do(func() {
 		th := failedResponse()
 		th.Agent = agentClaude
 		f.srv.c.setThreads([]Thread{th})
 	})
 	f.waitWindow("the failed conversation", func() bool { return a.threadWithID(1).ID == 1 })
-	f.win.do(func() { a.selectThread(a.threadWithID(1)) })
+	f.win.Do(func() { a.selectThread(a.threadWithID(1)) })
 	f.waitWindow("the failed response", func() bool { return len(a.threadWithID(1).Messages) == 3 })
-	f.win.do(func() {
+	f.win.Do(func() {
 		a.setDraft("keep this draft")
 		if err := a.retryResponse(retryRequest{ThreadID: 1, MessageID: 12}); err != nil {
 			t.Error(err)
@@ -390,7 +391,7 @@ func TestServiceRetryContinuesFailedResponseAfterOutput(t *testing.T) {
 		th := a.threadWithID(1)
 		return !th.Busy && assistantText(th) == "partial done"
 	})
-	f.win.do(func() {
+	f.win.Do(func() {
 		th := a.threadWithID(1)
 		if th.ServerID != "s1" || len(th.Messages) != 5 || th.Messages[0].ID != 10 || th.Messages[1].ID != 11 || th.Messages[2].ID != 12 || th.Messages[3].Role != "user" || !strings.Contains(th.Messages[3].Content, retryContinuePrompt) || a.draft() != "keep this draft" {
 			t.Errorf("retry did not continue the failed turn or preserve its output and draft: %+v", th)
@@ -422,7 +423,7 @@ func TestServiceRetryRewindsOnlyTheLastUserMessage(t *testing.T) {
 	}
 	paths := []string{image, filepath.Join(t.TempDir(), "notes.txt")}
 	shown, images := attachmentDisplay(prompt, paths)
-	f.serv.do(func() {
+	f.serv.Do(func() {
 		c := f.srv.c
 		writeClaudeSession(t, c.cwd, "s1", sessionLines(c.cwd)...)
 		c.serial = 100
@@ -436,9 +437,9 @@ func TestServiceRetryRewindsOnlyTheLastUserMessage(t *testing.T) {
 	})
 	a := f.window()
 	f.waitWindow("the failed conversation", func() bool { return a.threadWithID(1).ID == 1 })
-	f.win.do(func() { a.selectThread(a.threadWithID(1)) })
+	f.win.Do(func() { a.selectThread(a.threadWithID(1)) })
 	f.waitWindow("the failed turn", func() bool { return len(a.threadWithID(1).Messages) == 4 })
-	f.win.do(func() {
+	f.win.Do(func() {
 		a.rememberDraft("keep my draft")
 		a.setAttachments([]string{"/tmp/unsent.txt"})
 		if err := a.retryResponse(retryRequest{ThreadID: 1, MessageID: 14}); err != nil {
@@ -449,7 +450,7 @@ func TestServiceRetryRewindsOnlyTheLastUserMessage(t *testing.T) {
 		th := a.threadWithID(1)
 		return !th.Busy && len(th.Messages) == 4 && th.Messages[3].Content == "partial done"
 	})
-	f.win.do(func() {
+	f.win.Do(func() {
 		th := a.threadWithID(1)
 		if th.ServerID == "s1" || th.Messages[0].Content != "first" || th.Messages[1].Content != "reply one" || th.Messages[2].Content != shown {
 			t.Fatal("retry did not preserve earlier turns and replay the last original request")
@@ -467,22 +468,22 @@ func TestServiceRetryRewindsOnlyTheLastUserMessage(t *testing.T) {
 func TestServiceDraftSurvivesStaleSnapshotsAndQuickSwitches(t *testing.T) {
 	f := newServiceFixture(t)
 	persistSetting("notifications-completion", "off")
-	f.serv.do(func() {
+	f.serv.Do(func() {
 		f.srv.c.setThreads([]Thread{
 			{ID: 1, ServerID: "s1", Agent: agentClaude, Busy: true, HistoryLoaded: true},
 			{ID: 2, ServerID: "s2", Agent: agentClaude, HistoryLoaded: true},
 		})
 	})
 	t.Cleanup(func() {
-		f.serv.do(func() {
+		f.serv.Do(func() {
 			f.srv.c.update(1, func(th *Thread) { th.Busy, th.Queue = false, nil })
 		})
 	})
 	a := f.window()
 	var stale svcState
-	f.serv.do(func() { stale = f.srv.c.snapshotState() })
+	f.serv.Do(func() { stale = f.srv.c.snapshotState() })
 	stale.Threads[0].Draft = "已经发送的消息"
-	f.win.do(func() {
+	f.win.Do(func() {
 		a.selectThread(a.threadWithID(1))
 		a.rememberDraft("已经发送的消息")
 		a.send()
@@ -547,13 +548,13 @@ func TestServiceReturnsUnsentDraftsToTheWindow(t *testing.T) {
 	f := newServiceFixture(t)
 	w := f.window()
 	var id int
-	f.serv.do(func() {
+	f.serv.Do(func() {
 		c := f.srv.c
 		id = c.nextID()
 		c.setThreads([]Thread{{ID: id, Title: "Lost", Agent: agentClaude, ServerID: "s1", HistoryLoaded: true}})
 	})
 	f.waitWindow("the conversation", func() bool { return w.threadWithID(id).ID != 0 })
-	f.win.do(func() { w.selectThread(w.threadWithID(id)) })
-	f.serv.do(func() { f.srv.c.returnDraft(id, "try again", []string{"/tmp/a.png"}) })
+	f.win.Do(func() { w.selectThread(w.threadWithID(id)) })
+	f.serv.Do(func() { f.srv.c.returnDraft(id, "try again", []string{"/tmp/a.png"}) })
 	f.waitWindow("the returned draft", func() bool { return w.draft() == "try again" && len(w.attachments()) == 1 })
 }

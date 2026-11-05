@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"miya/internal/async"
 	"miya/internal/codex"
 	"miya/internal/remote"
 )
@@ -40,14 +41,14 @@ func (c *testPhoneConnection) Receive(v any) error {
 	}
 }
 
-func serveTestPhone(t *testing.T, c *chatController) (*testPhoneConnection, *executor) {
+func serveTestPhone(t *testing.T, c *chatController) (*testPhoneConnection, *async.Executor) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	conn := &testPhoneConnection{ctx: ctx, requests: make(chan remote.Request, 8), frames: make(chan remote.Frame, 32)}
-	ex := newExecutor()
+	ex := async.NewExecutor()
 	quit, done, exited := make(chan struct{}), make(chan struct{}), make(chan struct{})
-	c.run = ex.push
-	go func() { defer close(exited); ex.loop(quit) }()
+	c.run = ex.Push
+	go func() { defer close(exited); ex.Loop(quit) }()
 	go func() { defer close(done); c.servePhoneConnection(ctx, conn) }()
 	t.Cleanup(func() {
 		cancel()
@@ -89,7 +90,7 @@ func TestPhoneSubscriptionRecoversWhenStartupListArrives(t *testing.T) {
 	if d := conn.nextThread(t); !d.Thread.Loading || d.Thread.ServerID != "original" {
 		t.Fatalf("startup incorrectly reported a deleted conversation: %+v", d)
 	}
-	ex.do(func() {
+	ex.Do(func() {
 		c.connecting = false
 		c.setReady(true)
 		c.setThreads([]Thread{
@@ -134,7 +135,7 @@ func TestPhoneRetrySameSubscriptionReadsHistoryAgain(t *testing.T) {
 		t.Fatalf("expected a temporary history-read error, got %+v", d)
 	}
 	// Neither sidebar metadata nor its revision changes as the client returns.
-	ex.do(func() { c.client = client })
+	ex.Do(func() { c.client = client })
 	conn.requests <- req
 	d := conn.nextThread(t)
 	if d.Thread.Status != "" || !d.Thread.HistoryLoaded || len(d.Changed) != 2 {

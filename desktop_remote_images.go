@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"miya/internal/async"
 )
 
 type remoteImageResult struct {
@@ -68,7 +69,7 @@ func (app *chatApp) loadRemoteImage(src string) (ui.ImageSource, error) {
 		client *serviceClient
 		source string
 	}
-	host, ok := onMain(c.ctx, c.dispatch, func() imageHost { return imageHost{c.remote, c.referenceSource} })
+	host, ok := async.OnMain(c.ctx, c.dispatch, func() imageHost { return imageHost{c.remote, c.referenceSource} })
 	if !ok {
 		return nil, c.ctx.Err()
 	}

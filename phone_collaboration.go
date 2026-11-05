@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 
+	"miya/internal/async"
 	"miya/internal/remote"
 )
 
@@ -38,7 +39,7 @@ func (c *chatController) phoneCollaboration(ctx context.Context, r remote.Reques
 		value any
 		err   error
 	}
-	prepared, ok := onMain(ctx, c.dispatch, func() pending {
+	prepared, ok := async.OnMain(ctx, c.dispatch, func() pending {
 		if err := ctx.Err(); err != nil {
 			return pending{err: err}
 		}

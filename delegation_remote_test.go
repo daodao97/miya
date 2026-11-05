@@ -13,13 +13,13 @@ func TestCollaborationWorkspaceSwitchKeepsPendingRequestAtOriginalService(t *tes
 	first := newServiceFixture(t)
 	caller := collaborationCaller(t, first, agentClaude, "first-source")
 	var from, source string
-	first.serv.do(func() {
+	first.serv.Do(func() {
 		c := first.srv.c
 		from, source = c.threadRef(c.threadWithID(caller)).URL(), c.referenceSource
 	})
 	second := newServiceFixture(t)
 	secondSource := "fedcba9876543210fedcba9876543210"
-	second.serv.do(func() { second.srv.c.referenceSource = secondSource })
+	second.serv.Do(func() { second.srv.c.referenceSource = secondSource })
 	clientA, err := dialService(first.sock)
 	if err != nil {
 		t.Fatal(err)
@@ -31,9 +31,9 @@ func TestCollaborationWorkspaceSwitchKeepsPendingRequestAtOriginalService(t *tes
 	}
 	defer clientB.Close()
 	var app *chatApp
-	first.win.do(func() {
+	first.win.Do(func() {
 		c := newMirrorController()
-		c.run, c.remote, c.referenceSource = first.win.push, clientA, source
+		c.run, c.remote, c.referenceSource = first.win.Push, clientA, source
 		app = &chatApp{c: c}
 	})
 	s := first.srv.c.collaboration
@@ -43,7 +43,7 @@ func TestCollaborationWorkspaceSwitchKeepsPendingRequestAtOriginalService(t *tes
 	defer release()
 	s.post(func() { close(entered); <-gate })
 	<-entered
-	first.win.do(func() {
+	first.win.Do(func() {
 		p := app.collaborations.pane(from)
 		p.submit("start_task", map[string]any{"agent": agentClaude, "task": "original service only", "context": "none", "notify": "none"}, app.collaborationCall)
 	})
@@ -54,7 +54,7 @@ func TestCollaborationWorkspaceSwitchKeepsPendingRequestAtOriginalService(t *tes
 	if s.busy.Load() < 2 {
 		t.Fatal("original service did not receive the pending request")
 	}
-	first.win.do(func() { app.c.remote, app.c.referenceSource = clientB, secondSource })
+	first.win.Do(func() { app.c.remote, app.c.referenceSource = clientB, secondSource })
 	release()
 	first.waitWindow("late response from the original service", func() bool {
 		p := app.collaborations.pane(from)
@@ -63,7 +63,7 @@ func TestCollaborationWorkspaceSwitchKeepsPendingRequestAtOriginalService(t *tes
 	if len(second.srv.c.collaboration.manager.View().Tasks) != 0 {
 		t.Fatal("switching services moved the accepted task to another service")
 	}
-	first.win.do(func() {
+	first.win.Do(func() {
 		app.c.remote, app.c.referenceSource = clientA, source
 		app.collaborations.pane(from).retry(app.collaborationCall)
 	})
@@ -84,7 +84,7 @@ func TestCollaborationWorkspaceSwitchKeepsPendingRequestAtOriginalService(t *tes
 		task := waitCollaborationTask(t, first, id)
 		for deadline := time.Now().Add(5 * time.Second); ; {
 			idle := false
-			first.serv.do(func() {
+			first.serv.Do(func() {
 				thread, found := first.srv.c.threadByReference(task.Target)
 				idle = found && !thread.Busy && first.srv.c.managedReservations[thread.ID] == ""
 			})

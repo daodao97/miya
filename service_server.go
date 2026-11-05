@@ -7,12 +7,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"miya/internal/appdir"
+	"miya/internal/async"
 	"miya/internal/automation"
 	"miya/internal/memory"
+	"miya/internal/memory/manager"
 	"miya/internal/notification"
 	"miya/internal/remote"
 	"miya/internal/webservice"
-	"miya/internal/memory/manager"
 	"net"
 	"os"
 	"path/filepath"
@@ -27,7 +28,7 @@ const serviceIdleTimeout = 10 * time.Minute
 
 type service struct {
 	c        *chatController
-	exec     *executor
+	exec     *async.Executor
 	mu       sync.Mutex
 	peers    map[*svcPeer]bool
 	dirty    chan struct{}
@@ -86,12 +87,12 @@ func (p *svcPeer) write(data []byte) error {
 	return err
 }
 
-func newService(c *chatController, ex *executor) *service {
+func newService(c *chatController, ex *async.Executor) *service {
 	c.runtimePath = filepath.Join(appdir.Dir(), "runtime.json")
 	c.memories().Store = memory.New(filepath.Join(appdir.Dir(), "memory"))
 	s := &service{c: c, exec: ex, peers: map[*svcPeer]bool{}, dirty: make(chan struct{}, 1), quit: make(chan struct{}), idleTimeout: serviceIdleTimeout}
 	c.push = notification.NewHub()
-	c.run = ex.push
+	c.run = ex.Push
 	c.onDraftReturned = s.draftReturned
 	c.memories().Engine = newMemoryEngine(c)
 	c.collaboration = newCollaboration(c, filepath.Join(appdir.Dir(), "delegations"))
@@ -186,7 +187,7 @@ func (s *service) handleConn(p *svcPeer) {
 
 func (s *service) request(p *svcPeer, req svcRequest) {
 	if req.ID == 0 {
-		s.exec.push(func() { _, _ = s.handle(p, req) })
+		s.exec.Push(func() { _, _ = s.handle(p, req) })
 		return
 	}
 	if p.wire != nil && p.inflight.Add(1) > 32 {
@@ -195,7 +196,7 @@ func (s *service) request(p *svcPeer, req svcRequest) {
 		return
 	}
 	done := make(chan svcMessage, 1)
-	s.exec.push(func() {
+	s.exec.Push(func() {
 		res, err := s.handle(p, req)
 		if d, ok := res.(deferred); ok && err == nil {
 			// Work that waits on other programs runs off the executor.
@@ -571,7 +572,7 @@ func (s *service) publishLoop() {
 		case <-t.C:
 		}
 		last = time.Now()
-		s.exec.push(s.publish)
+		s.exec.Push(s.publish)
 	}
 }
 
@@ -653,7 +654,7 @@ func (s *service) watchIdle(every time.Duration) {
 			return
 		case <-t.C:
 		}
-		s.exec.push(s.checkIdle)
+		s.exec.Push(s.checkIdle)
 	}
 }
 

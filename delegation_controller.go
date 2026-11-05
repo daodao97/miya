@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"miya/internal/async"
 	"miya/internal/claude"
 	dg "miya/internal/delegation"
 	"miya/internal/model"
@@ -36,7 +37,7 @@ type collaborationState struct {
 	c              *chatController
 	manager        *dg.Manager
 	loadError      error
-	worker         *executor
+	worker         *async.Executor
 	ctx            context.Context
 	cancel         context.CancelFunc
 	done           chan struct{}
@@ -48,13 +49,13 @@ type collaborationState struct {
 
 func newCollaboration(c *chatController, dir string) *collaborationState {
 	ctx, cancel := context.WithCancel(c.parentContext())
-	s := &collaborationState{c: c, worker: newExecutor(), ctx: ctx, cancel: cancel, done: make(chan struct{}), dispatched: map[string]bool{}}
+	s := &collaborationState{c: c, worker: async.NewExecutor(), ctx: ctx, cancel: cancel, done: make(chan struct{}), dispatched: map[string]bool{}}
 	s.manager, s.loadError = dg.Open(dg.NewStore(dir), dg.Options{})
 	if s.loadError == nil {
 		s.loadError = s.manager.Recover()
 		c.collaborationPaused = s.manager.View().Paused
 	}
-	go func() { defer close(s.done); s.worker.loop(ctx.Done()) }()
+	go func() { defer close(s.done); s.worker.Loop(ctx.Done()) }()
 	go func() {
 		ticker := time.NewTicker(time.Second)
 		defer ticker.Stop()
@@ -80,7 +81,7 @@ func (s *collaborationState) post(f func()) {
 	default:
 	}
 	s.busy.Add(1)
-	s.worker.push(func() {
+	s.worker.Push(func() {
 		defer s.busy.Add(-1)
 		var revision uint64
 		var health string
@@ -120,7 +121,7 @@ func (s *collaborationState) onMain(f func() (any, error)) (any, error) {
 		v   any
 		err error
 	}
-	r, ok := onMain(s.ctx, s.c.dispatch, func() reply {
+	r, ok := async.OnMain(s.ctx, s.c.dispatch, func() reply {
 		if s.ctx.Err() != nil {
 			return reply{err: s.ctx.Err()}
 		}

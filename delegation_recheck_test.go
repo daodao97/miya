@@ -19,7 +19,7 @@ func TestCollaborationClaudeRootResultCanBeRecheckedAfterRestart(t *testing.T) {
 	task := collaborationStoredFixtureTask(t, f, caller)
 	var targetID int
 	target := ThreadRef{Source: testReferenceSource, Backend: agentClaude, SessionID: "target"}.URL()
-	f.serv.do(func() {
+	f.serv.Do(func() {
 		c := f.srv.c
 		targetID = c.nextID()
 		c.addThread(c.cwd, Thread{ID: targetID, Agent: agentClaude, ServerID: "target", HistoryLoaded: true, Busy: true, ExecutionID: task.ID,
@@ -40,7 +40,7 @@ func TestCollaborationClaudeRootResultCanBeRecheckedAfterRestart(t *testing.T) {
 	if err := os.Mkdir(index, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	f.serv.do(func() {
+	f.serv.Do(func() {
 		c := f.srv.c
 		// A child's result must never create parent completion evidence.
 		c.handleClaude(targetID, claude.Frame{Type: "result", UUID: "child-result", ParentToolUseID: "child-call", Result: "wrong result"})
@@ -51,7 +51,7 @@ func TestCollaborationClaudeRootResultCanBeRecheckedAfterRestart(t *testing.T) {
 	if _, err := s.manager.NativeOutcome(task.ID); err == nil {
 		t.Fatal("child result created parent terminal evidence")
 	}
-	f.serv.do(func() {
+	f.serv.Do(func() {
 		c := f.srv.c
 		c.handleClaude(targetID, claude.Frame{Type: "result", UUID: "root-result", Result: "fixed result"})
 		c.update(targetID, func(t *Thread) { t.Busy = false })
@@ -75,7 +75,7 @@ func TestCollaborationClaudeRootResultCanBeRecheckedAfterRestart(t *testing.T) {
 	if err := os.Rename(index+".saved", index); err != nil {
 		t.Fatal(err)
 	}
-	f.serv.do(func() {
+	f.serv.Do(func() {
 		c := f.srv.c
 		c.collaboration = newCollaboration(c, filepath.Dir(index))
 		c.managedExecutions, c.managedReservations = nil, nil
@@ -89,7 +89,7 @@ func TestCollaborationClaudeRootResultCanBeRecheckedAfterRestart(t *testing.T) {
 		t.Fatal("restart guessed an uncommitted outcome", current)
 	}
 	var work any
-	f.serv.do(func() { work, err = f.srv.c.prepareTaskRecheck(task.From, task.ID) })
+	f.serv.Do(func() { work, err = f.srv.c.prepareTaskRecheck(task.From, task.ID) })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +106,7 @@ func TestCollaborationClaudeLiveBindingIsSavedBeforeInput(t *testing.T) {
 	f := newServiceFixture(t)
 	// Exercise the actual stream adapter with a native root-result UUID.
 	var binary string
-	f.serv.do(func() { binary = f.srv.c.claudeBinary })
+	f.serv.Do(func() { binary = f.srv.c.claudeBinary })
 	protocol := strings.Replace(fakeClaude, `"type":"result",`, `"type":"result","uuid":"root-result",`, 1)
 	if err := os.WriteFile(binary, []byte(protocol), 0o755); err != nil {
 		t.Fatal(err)

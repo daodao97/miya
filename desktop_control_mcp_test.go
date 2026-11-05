@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"miya/internal/async"
 	"miya/internal/codex"
 	"miya/internal/desktop"
 	"miya/internal/remote"
@@ -98,10 +99,10 @@ func TestDesktopPhoneOpenRequiresStableConversation(t *testing.T) {
 	c.setThreads([]Thread{{ID: 1, ServerID: "s1", HistoryLoaded: true}})
 	ctx, cancel := context.WithCancel(context.Background())
 	conn := &testPhoneConnection{ctx: ctx, requests: make(chan remote.Request, 8), frames: make(chan remote.Frame, 32)}
-	ex := newExecutor()
+	ex := async.NewExecutor()
 	quit, done, exited := make(chan struct{}), make(chan struct{}), make(chan struct{})
-	c.run = ex.push
-	go func() { defer close(exited); ex.loop(quit) }()
+	c.run = ex.Push
+	go func() { defer close(exited); ex.Loop(quit) }()
 	go func() { defer close(done); c.servePhoneConnection(ctx, desktopEOFConnection{conn}) }()
 	t.Cleanup(func() { cancel(); <-done; close(quit); <-exited })
 	ask := func(r remote.Request) remote.Frame {

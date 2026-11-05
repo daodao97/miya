@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log"
 	"miya/internal/appdir"
+	"miya/internal/async"
 	"miya/internal/automation"
 	"net"
 	"os"
@@ -44,12 +45,12 @@ func runServiceWithOptions(options serverOptions) error {
 	}
 	defer ln.Close()
 	os.Chmod(sock, 0o600)
-	ex := newExecutor()
-	runOnMain = ex.push
+	ex := async.NewExecutor()
+	runOnMain = ex.Push
 	miyaMCPEnabled = true
 	var s *service
 	ready := make(chan struct{})
-	ex.push(func() {
+	ex.Push(func() {
 		c := newChatController()
 		s = newService(c, ex)
 		s.persistent = options.Persistent
@@ -80,12 +81,12 @@ func runServiceWithOptions(options serverOptions) error {
 		select {
 		case <-s.quit:
 		case <-signals:
-			ex.push(s.stop)
+			ex.Push(s.stop)
 			<-s.quit
 		}
 		close(quit)
 	}()
-	ex.loop(quit)
+	ex.Loop(quit)
 	ln.Close()
 	os.Remove(sock)
 	runCleanups()

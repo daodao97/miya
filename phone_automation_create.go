@@ -7,6 +7,7 @@ import (
 	"errors"
 	"time"
 
+	"miya/internal/async"
 	"miya/internal/automation"
 	"miya/internal/remote"
 )
@@ -30,7 +31,7 @@ func (c *chatController) phoneAutomationDraft(ctx context.Context, r remote.Requ
 		work deferred
 		err  error
 	}
-	pending, ok := onMain(ctx, c.dispatch, func() pendingDraft {
+	pending, ok := async.OnMain(ctx, c.dispatch, func() pendingDraft {
 		work, err := c.prepareAutomationDraft(ctx, automation.Request{Request: r.Text, Project: r.Project, Agent: r.Agent})
 		return pendingDraft{work, err}
 	})

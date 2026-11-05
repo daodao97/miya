@@ -36,7 +36,7 @@ func TestPhoneCompletionReadUpdatesDesktopWithoutPush(t *testing.T) {
 			}
 			break
 		}
-		ex.do(func() {
+		ex.Do(func() {
 			if got := c.desktopThreadUnread(thread); got != (version != 200) {
 				t.Errorf("version %d: desktop unread = %v", version, got)
 			}

@@ -22,7 +22,7 @@ func TestMemoryServiceSharesPersistenceAndInvalidationAcrossWindows(t *testing.T
 	}
 	f.waitWindow("memory revision in both windows", func() bool { return a.memoryRevision > 0 && a.memoryRevision == b.memoryRevision })
 	var rev uint64
-	f.win.do(func() {
+	f.win.Do(func() {
 		rev = b.memoryRevision
 		if a.memories().Store != nil || b.memories().Store != nil {
 			t.Error("window owns a memory writer")
@@ -68,7 +68,7 @@ func TestMemoryAutomaticSettingsAndSessionDisableThroughService(t *testing.T) {
 	if err := b.remote.call("memoryList", manager.Request{}, &list); err != nil || !list.Settings.AutoInject || !list.Settings.AutoExtract || !list.ExtractorAvailable {
 		t.Fatalf("automatic settings not shared: %+v %v", list, err)
 	}
-	f.serv.do(func() { f.srv.c.setThreads([]Thread{{ID: 1, ServerID: "session", HistoryLoaded: true}}) })
+	f.serv.Do(func() { f.srv.c.setThreads([]Thread{{ID: 1, ServerID: "session", HistoryLoaded: true}}) })
 	disabled := true
 	if err := a.remote.call("memorySessionConfigure", manager.Request{Thread: 1, SessionDisabled: &disabled}, nil); err != nil {
 		t.Fatal(err)

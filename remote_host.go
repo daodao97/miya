@@ -14,6 +14,7 @@ import (
 
 	"github.com/egoist/mygo/push/apns"
 	"miya/internal/appdir"
+	"miya/internal/async"
 	"miya/internal/automation"
 	"miya/internal/codex"
 	"miya/internal/desktop"
@@ -167,19 +168,6 @@ func (c *chatController) phoneThreadFor(r remote.Request) phoneThread {
 
 func hasHistory(t Thread) bool { return len(t.Messages) > 0 || t.HistoryLoaded }
 
-// onMain runs f on the UI thread and waits for its result.
-func onMain[T any](ctx context.Context, dispatch func(func()), f func() T) (T, bool) {
-	ch := make(chan T, 1)
-	dispatch(func() { ch <- f() })
-	select {
-	case v := <-ch:
-		return v, true
-	case <-ctx.Done():
-		var zero T
-		return zero, false
-	}
-}
-
 // servePhone keeps one phone up to date until it disconnects.
 func (c *chatController) servePhone(ctx context.Context, conn *remote.Conn) {
 	c.servePhoneConnection(ctx, conn)
@@ -193,7 +181,7 @@ func (c *chatController) sendPhonePreview(ctx context.Context, conn phoneConnect
 	if !allowed {
 		// A cached message can request its image before subscribe
 		// finishes. Validate against that conversation's history too.
-		target, ok := onMain(ctx, c.dispatch, func() phoneThread { return c.phoneThreadFor(r) })
+		target, ok := async.OnMain(ctx, c.dispatch, func() phoneThread { return c.phoneThreadFor(r) })
 		if !ok {
 			return false
 		}
@@ -377,7 +365,7 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 	for {
 		want := sub
 		ref := subscription
-		s, ok := onMain(ctx, c.dispatch, func() snapshot {
+		s, ok := async.OnMain(ctx, c.dispatch, func() snapshot {
 			v := snapshot{state: c.phoneSnapshot(), revision: c.revision(),
 				loading: c.connecting || !c.ready() || c.historyStatus() == "Loading conversations…"}
 			if deviceID != "" && c.push != nil {
@@ -439,7 +427,7 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 			}
 		}
 		if pending != nil {
-			res, ok := onMain(ctx, c.dispatch, func() phoneSendResult { return pending.send(c) })
+			res, ok := async.OnMain(ctx, c.dispatch, func() phoneSendResult { return pending.send(c) })
 			if !ok {
 				return
 			}
@@ -460,7 +448,7 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 				list []composerChoice
 				ok   bool
 			}
-			k, ok := onMain(ctx, c.dispatch, func() known { l, ok := c.claudeCommandsFor(project); return known{l, ok} })
+			k, ok := async.OnMain(ctx, c.dispatch, func() known { l, ok := c.claudeCommandsFor(project); return known{l, ok} })
 			if !ok {
 				return
 			}
@@ -486,11 +474,11 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 			}
 			switch r.Op {
 			case "desktop-preview", "desktop-action":
-				allowed, ok := onMain(ctx, c.dispatch, func() bool { return c.phoneDesktopApproval(r) })
+				allowed, ok := async.OnMain(ctx, c.dispatch, func() bool { return c.phoneDesktopApproval(r) })
 				if !ok {
 					return
 				}
-				hint, ok := onMain(ctx, c.dispatch, func() control.WindowHint { return c.phoneDesktopHint(r) })
+				hint, ok := async.OnMain(ctx, c.dispatch, func() control.WindowHint { return c.phoneDesktopHint(r) })
 				if !ok {
 					return
 				}
@@ -503,7 +491,7 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 					}
 				}
 			case "desktop-open":
-				target, ok := onMain(ctx, c.dispatch, func() phoneThread { return c.phoneThreadFor(r) })
+				target, ok := async.OnMain(ctx, c.dispatch, func() phoneThread { return c.phoneThreadFor(r) })
 				if !ok {
 					return
 				}
@@ -517,7 +505,7 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 					var window *desktop.Window
 					if r.WindowOnly {
 						window = &desktop.Window{ID: r.WindowID, PID: r.WindowPID}
-						allowed, alive := onMain(ctx, c.dispatch, func() bool { return c.phoneDesktopApproval(r) })
+						allowed, alive := async.OnMain(ctx, c.dispatch, func() bool { return c.phoneDesktopApproval(r) })
 						if !alive {
 							return
 						}
@@ -570,7 +558,7 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 					result   any
 					err      error
 				}
-				pending, ok := onMain(ctx, c.dispatch, func() pendingMemory {
+				pending, ok := async.OnMain(ctx, c.dispatch, func() pendingMemory {
 					v, err := c.memories().Op("memoryList", manager.Request{Project: r.Project, Scope: r.MemoryScope})
 					return pendingMemory{revision: c.memoryRevision, result: v, err: err}
 				})
@@ -609,12 +597,12 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 					}
 				}
 			case "automation-create":
-				frame, ok := onMain(ctx, c.dispatch, func() remote.Frame { return c.phoneAutomationCreate(r) })
+				frame, ok := async.OnMain(ctx, c.dispatch, func() remote.Frame { return c.phoneAutomationCreate(r) })
 				if !ok || !send(frame) {
 					return
 				}
 			case "automation-run":
-				frame, ok := onMain(ctx, c.dispatch, func() remote.Frame {
+				frame, ok := async.OnMain(ctx, c.dispatch, func() remote.Frame {
 					_, err := c.automationOp("automationRunNow", automation.Request{ID: r.AutomationID})
 					result := phoneAutomationRunResult{RequestID: r.RequestID}
 					list, _ := c.automationOp("automationList", automation.Request{})
@@ -630,7 +618,7 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 					return
 				}
 			case "automations":
-				frame, ok := onMain(ctx, c.dispatch, func() remote.Frame {
+				frame, ok := async.OnMain(ctx, c.dispatch, func() remote.Frame {
 					result, err := c.automationOp("automationList", automation.Request{})
 					frame := remote.Frame{Type: "automations"}
 					if err == nil {
@@ -645,7 +633,7 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 					return
 				}
 			case "quota":
-				if _, ok := onMain(ctx, c.dispatch, func() bool { c.refreshQuota(); return true }); !ok {
+				if _, ok := async.OnMain(ctx, c.dispatch, func() bool { c.refreshQuota(); return true }); !ok {
 					return
 				}
 			case "push":
@@ -654,7 +642,7 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 				if json.Unmarshal(r.Push, &registration) != nil {
 					message = "Invalid notification registration"
 				} else {
-					result, _ := onMain(ctx, c.dispatch, func() string {
+					result, _ := async.OnMain(ctx, c.dispatch, func() string {
 						if c.push == nil {
 							return "Notification service unavailable"
 						}
@@ -677,7 +665,7 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 					return
 				}
 			case "read", "read-all":
-				n, _ := onMain(ctx, c.dispatch, func() notification.PhoneState {
+				n, _ := async.OnMain(ctx, c.dispatch, func() notification.PhoneState {
 					if r.Op == "read" {
 						c.markPhoneCompletionRead(r)
 					}
@@ -721,21 +709,21 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 					}
 				}
 			case "prefetch":
-				onMain(ctx, c.dispatch, func() bool {
+				async.OnMain(ctx, c.dispatch, func() bool {
 					if ref, ok := model.ParseThreadURL(r.Reference); ok {
 						c.prefetchReference(ref)
 					}
 					return true
 				})
 			case "stop":
-				onMain(ctx, c.dispatch, func() bool {
+				async.OnMain(ctx, c.dispatch, func() bool {
 					if t := c.phoneThreadFor(r); t.found {
 						c.stopThread(t.thread.ID)
 					}
 					return true
 				})
 			case "task":
-				message, _ := onMain(ctx, c.dispatch, func() string {
+				message, _ := async.OnMain(ctx, c.dispatch, func() string {
 					t := c.phoneThreadFor(r)
 					if !t.found {
 						return "Conversation is no longer on the desktop"
@@ -747,7 +735,7 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 					return
 				}
 			case "retry":
-				message, _ := onMain(ctx, c.dispatch, func() string {
+				message, _ := async.OnMain(ctx, c.dispatch, func() string {
 					t := c.phoneThreadFor(r)
 					if !t.found {
 						return "Conversation is no longer on the desktop"
@@ -761,7 +749,7 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 					return
 				}
 			case "dequeue", "steer-queued", "drain-queue":
-				message, _ := onMain(ctx, c.dispatch, func() string {
+				message, _ := async.OnMain(ctx, c.dispatch, func() string {
 					if err := c.phoneQueueAction(r); err != nil {
 						return err.Error()
 					}
@@ -771,7 +759,7 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 					return
 				}
 			case "respond":
-				message, _ := onMain(ctx, c.dispatch, func() string {
+				message, _ := async.OnMain(ctx, c.dispatch, func() string {
 					if err := c.phoneApprovalResponse(r); err != nil {
 						return err.Error()
 					}

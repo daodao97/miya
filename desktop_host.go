@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"miya/internal/async"
 	"miya/internal/desktop"
 	"miya/internal/desktop/control"
 	"miya/internal/remote"
@@ -60,7 +61,7 @@ func (c *chatController) confirmDesktopAction(ctx context.Context, r remote.Requ
 			} else if absentSince.IsZero() {
 				absentSince = time.Now()
 			} else if time.Since(absentSince) >= 300*time.Millisecond {
-				_, _ = onMain(ctx, c.dispatch, func() bool { c.completeDesktopAction(r, action); return true })
+				_, _ = async.OnMain(ctx, c.dispatch, func() bool { c.completeDesktopAction(r, action); return true })
 				return
 			}
 		}
@@ -79,7 +80,7 @@ func (c *chatController) sendPhoneDesktopAction(ctx context.Context, r remote.Re
 	var err error
 	if allowed {
 		var alive bool
-		allowed, alive = onMain(ctx, c.dispatch, func() bool { return c.phoneDesktopApproval(r) })
+		allowed, alive = async.OnMain(ctx, c.dispatch, func() bool { return c.phoneDesktopApproval(r) })
 		if !alive {
 			return
 		}
@@ -114,7 +115,7 @@ func (c *chatController) sendPhoneDesktopPreview(ctx context.Context, r remote.R
 		}
 	}
 	if err == nil {
-		live, alive := onMain(ctx, c.dispatch, func() bool { return c.phoneDesktopApproval(r) })
+		live, alive := async.OnMain(ctx, c.dispatch, func() bool { return c.phoneDesktopApproval(r) })
 		if !alive {
 			return
 		}

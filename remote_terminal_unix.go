@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/creack/pty"
+	"miya/internal/async"
 	"miya/internal/remote"
 )
 
@@ -20,7 +21,7 @@ func (c *chatController) serveRemoteTerminal(ctx context.Context, wire *remote.C
 		return
 	}
 	_ = wire.SetReadDeadline(time.Time{})
-	known, ok := onMain(ctx, c.dispatch, func() bool {
+	known, ok := async.OnMain(ctx, c.dispatch, func() bool {
 		if open.Project == "" {
 			return false
 		}

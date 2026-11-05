@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"sync"
 
+	"miya/internal/async"
 	rt "miya/internal/runtime"
 	"miya/internal/webservice"
 )
@@ -17,7 +18,7 @@ func (c *chatController) projectRuntimeServices(ctx context.Context, project str
 		manager *runtimeManager
 		keys    []rt.SessionKey
 	}
-	prepared, ok := onMain(ctx, c.dispatch, func() plan {
+	prepared, ok := async.OnMain(ctx, c.dispatch, func() plan {
 		manager := c.runtimes()
 		out := plan{manager: manager}
 		for _, thread := range c.projectThreads(project) {

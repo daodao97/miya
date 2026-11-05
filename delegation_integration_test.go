@@ -18,7 +18,7 @@ import (
 func collaborationCaller(t *testing.T, f *serviceFixture, agent, serverID string) int {
 	t.Helper()
 	var id int
-	f.serv.do(func() {
+	f.serv.Do(func() {
 		c := f.srv.c
 		id = c.nextID()
 		c.addThread(c.cwd, Thread{ID: id, Agent: agent, ServerID: serverID, Title: "Initiator", HistoryLoaded: true, Loaded: true, Resumed: true})
@@ -33,7 +33,7 @@ func collaborationMCPCall(t *testing.T, f *serviceFixture, caller int, name stri
 		t.Fatal(err)
 	}
 	var messageID int
-	f.serv.do(func() {
+	f.serv.Do(func() {
 		c := f.srv.c
 		messageID = c.nextID()
 		c.update(caller, func(t *Thread) {
@@ -47,7 +47,7 @@ func collaborationMCPCall(t *testing.T, f *serviceFixture, caller int, name stri
 	defer client.Close()
 	var result map[string]any
 	err = client.call("mcpCollaboration", mcpRequest{Tool: name, Arguments: raw}, &result)
-	f.serv.do(func() {
+	f.serv.Do(func() {
 		f.srv.c.update(caller, func(t *Thread) {
 			for i := range t.Messages {
 				if t.Messages[i].ID == messageID {
@@ -90,7 +90,7 @@ func TestCollaborationClaudeTasksRunIndependentlyAndFreezeResults(t *testing.T) 
 		t.Fatal("two tasks share identity")
 	}
 	var busy int
-	f.serv.do(func() {
+	f.serv.Do(func() {
 		for _, th := range f.srv.c.allThreads() {
 			if th.ExecutionID == aID || th.ExecutionID == bID {
 				if th.Busy {
@@ -113,7 +113,7 @@ func TestCollaborationClaudeTasksRunIndependentlyAndFreezeResults(t *testing.T) 
 	}
 	for deadline := time.Now().Add(3 * time.Second); time.Now().Before(deadline); {
 		ready := false
-		f.serv.do(func() {
+		f.serv.Do(func() {
 			target, ok := f.srv.c.threadByReference(a.Target)
 			ready = ok && !target.Busy && f.srv.c.managedReservations[target.ID] == ""
 		})
@@ -123,7 +123,7 @@ func TestCollaborationClaudeTasksRunIndependentlyAndFreezeResults(t *testing.T) 
 		time.Sleep(10 * time.Millisecond)
 	}
 	var sent int
-	f.serv.do(func() {
+	f.serv.Do(func() {
 		target, _ := f.srv.c.threadByReference(a.Target)
 		sent = f.srv.c.submit(SendRequest{ThreadID: target.ID, Text: "A later unrelated message"})
 	})
@@ -142,7 +142,7 @@ func TestCollaborationClaudeTasksRunIndependentlyAndFreezeResults(t *testing.T) 
 func TestCollaborationCodexBindsNativeTurnBeforeReturningFixedResult(t *testing.T) {
 	f := newServiceFixture(t)
 	var dir string
-	f.serv.do(func() { dir = f.srv.c.cwd })
+	f.serv.Do(func() { dir = f.srv.c.cwd })
 	bin, err := filepath.Abs("testdata/codex-server.py")
 	if err != nil {
 		t.Fatal(err)
@@ -156,7 +156,7 @@ func TestCollaborationCodexBindsNativeTurnBeforeReturningFixedResult(t *testing.
 	if err := client.Call(context.Background(), "thread/start", map[string]any{"cwd": dir}, &source); err != nil {
 		t.Fatal(err)
 	}
-	f.serv.do(func() { f.srv.c.client = client; f.srv.c.setReady(true) })
+	f.serv.Do(func() { f.srv.c.client = client; f.srv.c.setReady(true) })
 	go func() {
 		for event := range client.Events() {
 			f.srv.c.dispatch(func() { f.srv.c.handle(event) })
@@ -186,7 +186,7 @@ func TestCollaborationMCPRejectsAmbiguousCallerBeforeCreatingTasks(t *testing.T)
 	b := collaborationCaller(t, f, agentClaude, "b")
 	args := map[string]any{"request_id": "same", "agent": agentClaude, "task": "same request"}
 	raw, _ := json.Marshal(args)
-	f.serv.do(func() {
+	f.serv.Do(func() {
 		c := f.srv.c
 		for _, id := range []int{a, b} {
 			c.update(id, func(th *Thread) {
@@ -222,7 +222,7 @@ func TestCollaborationNewToolsValidateArgumentsAndBoundWait(t *testing.T) {
 func TestCollaborationCompletionNotificationWaitsForIdleAndStartsOneTurn(t *testing.T) {
 	f := newServiceFixture(t)
 	caller := collaborationCaller(t, f, agentClaude, "notify-source")
-	f.serv.do(func() { f.srv.c.update(caller, func(th *Thread) { th.Busy = true }) })
+	f.serv.Do(func() { f.srv.c.update(caller, func(th *Thread) { th.Busy = true }) })
 	result, err := collaborationMCPCall(t, f, caller, "start_task", map[string]any{"request_id": "notify", "agent": agentClaude, "task": "Review compatibility", "notify": "on_finish"})
 	if err != nil {
 		t.Fatal(err)
@@ -232,7 +232,7 @@ func TestCollaborationCompletionNotificationWaitsForIdleAndStartsOneTurn(t *test
 		t.Fatal("no durable completion notification")
 	}
 	var notices int
-	f.serv.do(func() {
+	f.serv.Do(func() {
 		for _, m := range f.srv.c.threadWithID(caller).Messages {
 			if m.Role == "user" && strings.HasPrefix(m.Content, "[Miya collaboration]") {
 				notices++
@@ -242,7 +242,7 @@ func TestCollaborationCompletionNotificationWaitsForIdleAndStartsOneTurn(t *test
 	if notices != 0 {
 		t.Fatal("busy parent received another turn")
 	}
-	f.serv.do(func() { f.srv.c.update(caller, func(th *Thread) { th.Busy = false }) })
+	f.serv.Do(func() { f.srv.c.update(caller, func(th *Thread) { th.Busy = false }) })
 	for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); {
 		delivered := false
 		for _, d := range f.srv.c.collaboration.manager.View().Deliveries {
@@ -258,7 +258,7 @@ func TestCollaborationCompletionNotificationWaitsForIdleAndStartsOneTurn(t *test
 			t.Fatalf("notification not delivered: %+v", d)
 		}
 	}
-	f.serv.do(func() {
+	f.serv.Do(func() {
 		notices = 0
 		for _, m := range f.srv.c.threadWithID(caller).Messages {
 			if m.Role == "user" && strings.HasPrefix(m.Content, "[Miya collaboration]") {

@@ -17,7 +17,7 @@ func TestCollaborationPhoneRequestsDoNotBlockStateStreaming(t *testing.T) {
 	c := serverController(t.TempDir(), "")
 	conn, ex := serveTestPhone(t, c)
 	var from string
-	ex.do(func() {
+	ex.Do(func() {
 		c.collaboration = newCollaboration(c, t.TempDir())
 		c.addThread(c.cwd, Thread{ID: c.nextID(), Agent: agentCodex, ServerID: "source", HistoryLoaded: true})
 		from = c.threadRef(c.threads()[0]).URL()
@@ -44,7 +44,7 @@ func TestCollaborationPhoneRequestsDoNotBlockStateStreaming(t *testing.T) {
 	for s.busy.Load() < 2 && time.Now().Before(deadline) {
 		time.Sleep(time.Millisecond)
 	}
-	ex.do(func() { c.setStatus("State stream remains responsive") })
+	ex.Do(func() { c.setStatus("State stream remains responsive") })
 	streamed := false
 	for !streamed {
 		select {

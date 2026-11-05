@@ -32,7 +32,7 @@ func TestPhoneClaudeSendPreservesReadOnlyHistory(t *testing.T) {
 	if messages := phoneOf(t, m, conn.nextThread(t)); len(messages) != 2 {
 		t.Fatalf("initial phone history: %+v", messages)
 	}
-	ex.do(func() {
+	ex.Do(func() {
 		if c.threadWithID(7).HistoryLoaded || len(c.threadWithID(7).Messages) != 0 {
 			t.Error("phone viewing should reproduce a controller with metadata only")
 		}

@@ -6,7 +6,6 @@ import (
 	"hash/fnv"
 	"os"
 	"path/filepath"
-	"sync"
 	"time"
 
 	"miya/internal/appdir"
@@ -199,53 +198,6 @@ func messageFingerprint(m Message) uint64 {
 		fmt.Fprintf(h, "|%d", len(m.Item.Changes))
 	}
 	return h.Sum64()
-}
-
-// executor runs functions one at a time, in order, on the goroutine that
-// loops it: the service's main thread.
-type executor struct {
-	mu   sync.Mutex
-	q    []func()
-	wake chan struct{}
-}
-
-func newExecutor() *executor { return &executor{wake: make(chan struct{}, 1)} }
-
-func (e *executor) push(f func()) {
-	e.mu.Lock()
-	e.q = append(e.q, f)
-	e.mu.Unlock()
-	select {
-	case e.wake <- struct{}{}:
-	default:
-	}
-}
-
-func (e *executor) loop(quit <-chan struct{}) {
-	for {
-		e.mu.Lock()
-		q := e.q
-		e.q = nil
-		e.mu.Unlock()
-		for _, f := range q {
-			f()
-		}
-		if len(q) > 0 {
-			continue
-		}
-		select {
-		case <-e.wake:
-		case <-quit:
-			return
-		}
-	}
-}
-
-// do runs f on the executor and waits for it.
-func (e *executor) do(f func()) {
-	done := make(chan struct{})
-	e.push(func() { f(); close(done) })
-	<-done
 }
 
 // deferred is a reply worked out off the main thread; see async.Reply.
