@@ -413,7 +413,7 @@ func (s *mcpServer) callTool(name string, raw json.RawMessage) (string, error) {
 			return s.legacyTaskStatus(req, mcpWait(a.WaitSeconds, 300))
 		}
 		out, err := s.status(mcpRequest{Workspace: s.workspace, Tool: name, Thread: res.Thread, Reference: res.Reference}, mcpWait(a.WaitSeconds, 300))
-		return fmt.Sprintf("Handed off to session %s (%s).\n", textutil.FirstNonEmpty(res.Reference, "Creating"), backendFor(res.Agent).Name()) + out, err
+		return fmt.Sprintf("Handed off to session %s (%s).\n", textutil.FirstNonEmpty(res.Reference, "Creating"), model.AgentName(res.Agent)) + out, err
 	}
 	return "", fmt.Errorf("Unknown tool %s", name)
 }
@@ -447,7 +447,7 @@ func (s *mcpServer) status(req mcpRequest, wait time.Duration) (string, error) {
 		}
 		s.sleep(step)
 	}
-	out := fmt.Sprintf("Conversation \"%s\" (%s): %s\n%s", res.Title, backendFor(res.Agent).Name(), subagent.StatusLabel(res.Status), res.Reference)
+	out := fmt.Sprintf("Conversation \"%s\" (%s): %s\n%s", res.Title, model.AgentName(res.Agent), subagent.StatusLabel(res.Status), res.Reference)
 	if subagent.Active(res.Status) && wait > 0 {
 		out += fmt.Sprintf(". Still running after %d seconds. Use thread_status to check later.", int(wait/time.Second))
 	}
@@ -475,7 +475,7 @@ func formatMCPThreads(res mcpThreadsResult) string {
 		if t.Status == subagent.Running {
 			status = "Running"
 		}
-		fmt.Fprintf(&b, "\"%s\"· %s · %s\n%s\n", t.Title, backendFor(t.Agent).Name(), status, t.Reference)
+		fmt.Fprintf(&b, "\"%s\"· %s · %s\n%s\n", t.Title, model.AgentName(t.Agent), status, t.Reference)
 	}
 	return strings.TrimRight(b.String(), "\n")
 }
