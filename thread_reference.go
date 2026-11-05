@@ -65,22 +65,6 @@ func referenceSourceForService() (string, string) {
 	return id, ""
 }
 
-func MessageParts(text string) []MessagePart {
-	var out []MessagePart
-	end := 0
-	for _, m := range composerMentions(text) {
-		if m.Start > end {
-			out = append(out, MessagePart{Type: "text", Text: text[end:m.Start]})
-		}
-		out = append(out, m.Part)
-		end = m.End
-	}
-	if end < len(text) {
-		out = append(out, MessagePart{Type: "text", Text: text[end:]})
-	}
-	return out
-}
-
 func PartsText(parts []MessagePart) (string, error) {
 	var b strings.Builder
 	for _, p := range parts {

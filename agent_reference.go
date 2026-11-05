@@ -2,7 +2,6 @@ package main
 
 import (
 	"miya/internal/model"
-	"sort"
 	"strings"
 )
 
@@ -17,38 +16,6 @@ func agentReferenceText(agent, title string) string {
 	title = strings.Join(strings.Fields(title), " ")
 	title = strings.NewReplacer(`\`, `\\`, `[`, `\[`, `]`, `\]`).Replace(title)
 	return "#[" + title + "](" + uri + ")"
-}
-
-type composerMention struct {
-	Start, End int
-	Part       MessagePart
-}
-
-func composerMentions(text string) []composerMention {
-	var out []composerMention
-	for _, m := range model.ThreadMentions(text) {
-		ref := m.Ref
-		out = append(out, composerMention{m.Start, m.End, MessagePart{Type: "thread_ref", Ref: &ref, TitleSnapshot: m.Title}})
-	}
-	for _, m := range model.AgentMentions(text) {
-		out = append(out, composerMention{m.Start, m.End, MessagePart{Type: "agent_ref", Agent: m.Agent, TitleSnapshot: m.Title}})
-	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].Start == out[j].Start {
-			return out[i].End > out[j].End
-		}
-		return out[i].Start < out[j].Start
-	})
-	var merged []composerMention
-	end := 0
-	for _, m := range out {
-		if m.Start < end {
-			continue
-		}
-		merged = append(merged, m)
-		end = m.End
-	}
-	return merged
 }
 
 func agentChoices(query string, allowed []string) []composerChoice {

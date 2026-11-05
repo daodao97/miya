@@ -27,9 +27,15 @@ type (
 	Project             = model.Project
 	collaborationStatus = model.CollaborationStatus
 	composerChoice      = model.ComposerChoice
+	composerMention     = model.Mention
 )
 
 var SourceIDPattern = model.SourceIDPattern
+
+var (
+	composerMentions = model.Mentions
+	MessageParts     = model.MessageParts
+)
 
 // The phone protocol's data lives in internal/phoneapi.
 type (
