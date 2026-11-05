@@ -185,8 +185,8 @@ func memoryExtractorArgs() []string {
 	return []string{"-p", "--output-format", "json", "--json-schema", memoryExtractionSchema, "--tools", "", "--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`, "--disable-slash-commands", "--no-session-persistence", "--safe-mode", "--setting-sources", "user", "--settings", `{"disableAllHooks":true}`, "--no-chrome", "--system-prompt", memoryExtractionSystem}
 }
 
-func extractMemoryWithClaude(ctx context.Context, cfg draftConfig, job memory.ExtractionJob) ([]memory.Candidate, error) {
-	bin := cfg.claudeBinary
+func extractMemoryWithClaude(ctx context.Context, cfg claude.CLI, job memory.ExtractionJob) ([]memory.Candidate, error) {
+	bin := cfg.Binary
 	if bin == "" {
 		var err error
 		bin, err = claude.Binary()
@@ -206,7 +206,7 @@ func extractMemoryWithClaude(ctx context.Context, cfg draftConfig, job memory.Ex
 	cmd := exec.CommandContext(ctx, bin, memoryExtractorArgs()...)
 	cmd.WaitDelay = time.Second
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), cfg.claudeEnv...)
+	cmd.Env = append(os.Environ(), cfg.Env...)
 	cmd.Stdin = strings.NewReader(string(input))
 	// Never return stdout/stderr in routine errors: either can contain evidence.
 	var output extractionOutput
@@ -215,7 +215,7 @@ func extractMemoryWithClaude(ctx context.Context, cfg draftConfig, job memory.Ex
 	if err != nil {
 		return nil, errors.New("Claude extraction failed")
 	}
-	raw, err := claudeStructuredOutput(output.Bytes())
+	raw, err := claude.StructuredOutput(output.Bytes())
 	if err != nil {
 		return nil, errors.New("Unable to parse Claude extraction result")
 	}
@@ -255,14 +255,14 @@ type memoryEngine struct {
 	paused  atomic.Bool
 	busy    atomic.Bool
 	mu      sync.Mutex
-	cfg     draftConfig
-	extract func(context.Context, draftConfig, memory.ExtractionJob) ([]memory.Candidate, error)
+	cfg     claude.CLI
+	extract func(context.Context, claude.CLI, memory.ExtractionJob) ([]memory.Candidate, error)
 	onSaved func(memory.Scope, memory.ExtractionJob, []memory.Entry)
 }
 
 func newMemoryEngine(c *chatController) *memoryEngine {
 	ctx, cancel := context.WithCancel(c.parentContext())
-	e := &memoryEngine{store: c.memory, ctx: ctx, cancel: cancel, wake: make(chan struct{}, 1), cfg: draftConfig{c.claudeBinary, append([]string(nil), c.claudeArgs...), append([]string(nil), c.claudeEnv...)}, extract: extractMemory}
+	e := &memoryEngine{store: c.memory, ctx: ctx, cancel: cancel, wake: make(chan struct{}, 1), cfg: claude.CLI{Binary: c.claudeBinary, Args: append([]string(nil), c.claudeArgs...), Env: append([]string(nil), c.claudeEnv...)}, extract: extractMemory}
 	e.onSaved = func(_ memory.Scope, _ memory.ExtractionJob, _ []memory.Entry) {
 		// Automatic extraction updates the library, never the conversation.
 		c.dispatch(c.memoryChanged)
@@ -277,7 +277,7 @@ func (e *memoryEngine) wakeup() {
 	default:
 	}
 }
-func (e *memoryEngine) configure(cfg draftConfig) {
+func (e *memoryEngine) configure(cfg claude.CLI) {
 	e.mu.Lock()
 	e.cfg = cfg
 	e.mu.Unlock()
@@ -353,7 +353,7 @@ func extractionInputRunes(job memory.ExtractionJob) int {
 	return utf8.RuneCount(b)
 }
 
-func extractMemory(ctx context.Context, cfg draftConfig, job memory.ExtractionJob) ([]memory.Candidate, error) {
+func extractMemory(ctx context.Context, cfg claude.CLI, job memory.ExtractionJob) ([]memory.Candidate, error) {
 	switch job.ExtractorAgent {
 	case "", agentClaude:
 		return extractMemoryWithClaude(ctx, cfg, job)

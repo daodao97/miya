@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"miya/internal/claude"
 	"miya/internal/model"
 	"miya/internal/textutil"
 	"strings"
@@ -154,7 +155,7 @@ func (c *chatController) prepareAutomationDraft(ctx context.Context, r automatio
 	if agent == "" {
 		return nil, errors.New("Agent must be codex or claude-code")
 	}
-	cfg, now := draftConfig{c.claudeBinary, c.claudeArgs, c.claudeEnv}, c.auto.now()
+	cfg, now := claude.CLI{Binary: c.claudeBinary, Args: c.claudeArgs, Env: c.claudeEnv}, c.auto.now()
 	return deferred(func() (any, error) {
 		d, err := draftAutomation(ctx, cfg, agent, project, request, now)
 		if err != nil {

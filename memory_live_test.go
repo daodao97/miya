@@ -47,7 +47,7 @@ func TestMemoryLiveClaudeToNewCodexSession(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	start := time.Now()
-	candidates, err := extractMemoryWithClaude(ctx, draftConfig{command.Path, command.Args, command.Env}, job)
+	candidates, err := extractMemoryWithClaude(ctx, claude.CLI{Binary: command.Path, Args: command.Args, Env: command.Env}, job)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +132,7 @@ func TestMemoryLiveClaudeLatencyAndCorrections(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg := draftConfig{command.Path, command.Args, command.Env}
+	cfg := claude.CLI{Binary: command.Path, Args: command.Args, Env: command.Env}
 	var durations []int64
 	var samples []map[string]any
 	for _, mode := range []string{"fact", "one-off", "tool-instruction", "correction", "forget", "assistant-report"} {

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"miya/internal/claude"
 	"miya/internal/memory"
 )
 
@@ -48,7 +49,7 @@ else:sys.exit(1)
 func TestMemoryCodexSelectionUsesIsolatedConfiguredCLI(t *testing.T) {
 	_, log := fakeMemoryCodex(t)
 	job := memory.ExtractionJob{ExtractorAgent: agentCodex, Session: "source-session", TurnID: "turn", Evidence: []memory.Evidence{{ID: "user", Kind: "user_statement", Text: "一次性调整，无需记住"}}}
-	got, err := extractMemory(context.Background(), draftConfig{claudeBinary: "missing-claude"}, job)
+	got, err := extractMemory(context.Background(), claude.CLI{Binary: "missing-claude"}, job)
 	if err != nil || len(got) != 0 {
 		t.Fatalf("Codex dispatch: %+v %v", got, err)
 	}
@@ -78,10 +79,10 @@ func TestMemoryCodexSelectionUsesIsolatedConfiguredCLI(t *testing.T) {
 func TestMemoryCodexRejectsUnexpectedToolEvents(t *testing.T) {
 	fakeMemoryCodex(t)
 	t.Setenv("MIYA_CODEX_TEST_ITEM", "command_execution")
-	if _, err := extractMemory(context.Background(), draftConfig{}, memory.ExtractionJob{ExtractorAgent: agentCodex}); err == nil {
+	if _, err := extractMemory(context.Background(), claude.CLI{}, memory.ExtractionJob{ExtractorAgent: agentCodex}); err == nil {
 		t.Fatal("Codex operational tool result accepted")
 	}
-	if _, err := extractMemory(context.Background(), draftConfig{}, memory.ExtractionJob{ExtractorAgent: "unknown-agent"}); err == nil {
+	if _, err := extractMemory(context.Background(), claude.CLI{}, memory.ExtractionJob{ExtractorAgent: "unknown-agent"}); err == nil {
 		t.Fatal("unknown agent silently fell back")
 	}
 }

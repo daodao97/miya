@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"miya/internal/claude"
 	"miya/internal/memory"
 )
 
@@ -32,7 +33,7 @@ func TestMemoryEngineSerializesAndPausesForUpgrade(t *testing.T) {
 	saved := make(chan struct{}, 1)
 	var calls atomic.Int32
 	e := &memoryEngine{store: store, ctx: ctx, cancel: cancel, wake: make(chan struct{}, 1)}
-	e.extract = func(ctx context.Context, _ draftConfig, j memory.ExtractionJob) ([]memory.Candidate, error) {
+	e.extract = func(ctx context.Context, _ claude.CLI, j memory.ExtractionJob) ([]memory.Candidate, error) {
 		calls.Add(1)
 		entered <- j
 		select {

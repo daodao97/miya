@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"miya/internal/claude"
 	"miya/internal/codex"
 	"miya/internal/memory"
 	"miya/internal/textutil"
@@ -140,7 +141,7 @@ func TestMemoryLiveCodexExtraction(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 			defer cancel()
 			start := time.Now()
-			got, err := extractMemory(ctx, draftConfig{}, job)
+			got, err := extractMemory(ctx, claude.CLI{}, job)
 			t.Logf("duration=%s candidates=%d", time.Since(start), len(got))
 			if err != nil {
 				data, _ := os.ReadFile(diagnostic)

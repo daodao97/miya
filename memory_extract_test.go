@@ -29,7 +29,7 @@ print(json.dumps({'structured_output':{'candidates':[]}}))
 		t.Fatal(err)
 	}
 	job := memory.ExtractionJob{Session: "session", TurnID: "turn", TaskKey: "task", Evidence: []memory.Evidence{{ID: "u", Kind: "user_statement", Text: "一次性调整按钮"}}}
-	got, err := extractMemoryWithClaude(context.Background(), draftConfig{claudeBinary: bin, claudeArgs: []string{"--resume", "main-session", "--tools", "Bash"}, claudeEnv: []string{"MIYA_EXTRACT_TEST_LOG=" + log}}, job)
+	got, err := extractMemoryWithClaude(context.Background(), claude.CLI{Binary: bin, Args: []string{"--resume", "main-session", "--tools", "Bash"}, Env: []string{"MIYA_EXTRACT_TEST_LOG=" + log}}, job)
 	if err != nil || len(got) != 0 {
 		t.Fatalf("extract: %+v %v", got, err)
 	}
@@ -210,7 +210,7 @@ func TestMemoryLiveClaudeExtraction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg := draftConfig{command.Path, command.Args, command.Env}
+	cfg := claude.CLI{Binary: command.Path, Args: command.Args, Env: command.Env}
 	for _, tc := range []struct {
 		name, text string
 		wantEmpty  bool

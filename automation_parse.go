@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -74,15 +73,9 @@ func projectTopFiles(dir string) string {
 	return strings.Join(names, ", ")
 }
 
-// draftConfig is how this Miya runs Claude Code, which the call reuses.
-type draftConfig struct {
-	claudeBinary          string
-	claudeArgs, claudeEnv []string
-}
-
 // draftAutomation asks agent to turn request into settings. It runs
 // programs and waits for them: call it off the main thread.
-func draftAutomation(ctx context.Context, cfg draftConfig, agent, project, request string, now time.Time) (automationDraft, error) {
+func draftAutomation(ctx context.Context, cfg claude.CLI, agent, project, request string, now time.Time) (automationDraft, error) {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 	prompt := automationDraftPrompt(request, project, now)
@@ -103,44 +96,25 @@ func draftAutomation(ctx context.Context, cfg draftConfig, agent, project, reque
 	return d, nil
 }
 
-func draftWithClaude(ctx context.Context, cfg draftConfig, project, prompt string) ([]byte, error) {
-	bin := cfg.claudeBinary
+func draftWithClaude(ctx context.Context, cfg claude.CLI, project, prompt string) ([]byte, error) {
+	bin := cfg.Binary
 	if bin == "" {
 		var err error
 		if bin, err = claude.Binary(); err != nil {
 			return nil, err
 		}
 	}
-	args := append(append([]string(nil), cfg.claudeArgs...), "-p", prompt, "--json-schema", automationDraftSchema, "--output-format", "json", "--tools", "")
+	args := append(append([]string(nil), cfg.Args...), "-p", prompt, "--json-schema", automationDraftSchema, "--output-format", "json", "--tools", "")
 	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Dir = project
-	cmd.Env = append(os.Environ(), cfg.claudeEnv...)
+	cmd.Env = append(os.Environ(), cfg.Env...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("Claude Code could not draft the automation: %v %s", err, textutil.ClipRunes(strings.TrimSpace(stderr.String()), 300))
 	}
-	return claudeStructuredOutput(out)
-}
-
-// claudeStructuredOutput is the answer of a Claude Code --json-schema run.
-func claudeStructuredOutput(out []byte) ([]byte, error) {
-	var r struct {
-		IsError          bool            `json:"is_error"`
-		Result           string          `json:"result"`
-		StructuredOutput json.RawMessage `json:"structured_output"`
-	}
-	if err := json.Unmarshal(out, &r); err != nil {
-		return nil, fmt.Errorf("Unable to parse Claude Code output: %v", err)
-	}
-	if r.IsError {
-		return nil, errors.New("Claude Code could not draft the automation: " + textutil.ClipRunes(r.Result, 300))
-	}
-	if len(r.StructuredOutput) > 0 && string(r.StructuredOutput) != "null" {
-		return r.StructuredOutput, nil
-	}
-	return []byte(r.Result), nil
+	return claude.StructuredOutput(out)
 }
 
 func draftWithCodex(ctx context.Context, project, prompt string) ([]byte, error) {
