@@ -12,16 +12,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/egoist/mygo/push/apns"
-	"miya/internal/appdir"
 	"miya/internal/async"
-	"miya/internal/automation"
 	"miya/internal/codex"
 	"miya/internal/desktop"
-	"miya/internal/desktop/control"
-	"miya/internal/memory/manager"
 	"miya/internal/model"
-	"miya/internal/notification"
 	"miya/internal/remote"
 	"miya/internal/thumbnail"
 
@@ -256,11 +250,6 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 			}
 		}
 	}()
-	type previewRequest struct {
-		request remote.Request
-		allowed bool
-		hint    control.WindowHint
-	}
 	previews := make(chan previewRequest, 8)
 	workersDone := make(chan struct{}, 2)
 	for range 2 {
@@ -295,23 +284,7 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 	}()
 	ticker := time.NewTicker(phonePollInterval)
 	defer ticker.Stop()
-	var (
-		deviceID  string
-		lastState []byte
-		// sync is what the phone holds of the conversation it watches.
-		sync         *phoneThreadSync
-		sub          int
-		subscription remote.Request
-		lastRevision = -1
-		// read holds history read for the phone alone, for a conversation
-		// the desktop has not opened; fetched marks the attempt.
-		read    *Thread
-		fetched bool
-		// pending is a send waiting for the desktop to be ready for it.
-		pending *phoneSendReq
-		// cmdWant is a project whose Claude Code commands the phone awaits.
-		cmdWant string
-	)
+	ps := &phoneSession{c: c, ctx: ctx, send: send, collaborationJobs: collaborationJobs, drafts: drafts, previews: previews, lastRevision: -1}
 	type snapshot struct {
 		state    phoneState
 		revision int
@@ -319,13 +292,13 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 		loading  bool
 	}
 	for {
-		want := sub
-		ref := subscription
+		want := ps.sub
+		ref := ps.subscription
 		s, ok := async.OnMain(ctx, c.dispatch, func() snapshot {
 			v := snapshot{state: c.phoneSnapshot(), revision: c.revision(),
 				loading: c.connecting || !c.ready() || c.historyStatus() == "Loading conversations…"}
-			if deviceID != "" && c.push != nil {
-				v.state.Notifications = c.push.State(deviceID)
+			if ps.deviceID != "" && c.push != nil {
+				v.state.Notifications = c.push.State(ps.deviceID)
 			}
 			if want != 0 || ref.ServerID != "" {
 				v.t = c.phoneThreadFor(ref)
@@ -335,71 +308,71 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 		if !ok {
 			return
 		}
-		if data, err := json.Marshal(s.state); err == nil && !bytes.Equal(data, lastState) {
+		if data, err := json.Marshal(s.state); err == nil && !bytes.Equal(data, ps.lastState) {
 			if !send(remote.Frame{Type: "state", Data: data}) {
 				return
 			}
-			lastState = data
+			ps.lastState = data
 			// A startup list can arrive without a streamed-message revision.
-			lastRevision = -1
-			if read != nil && read.Status != "" {
-				read, fetched = nil, false
+			ps.lastRevision = -1
+			if ps.read != nil && ps.read.Status != "" {
+				ps.read, ps.fetched = nil, false
 			}
 		}
-		if s.t.found && s.t.thread.ID != sub {
-			sub, subscription.Thread = s.t.thread.ID, s.t.thread.ID
-			lastRevision, read, fetched, sync = -1, nil, false, nil
+		if s.t.found && s.t.thread.ID != ps.sub {
+			ps.sub, ps.subscription.Thread = s.t.thread.ID, s.t.thread.ID
+			ps.lastRevision, ps.read, ps.fetched, ps.sync = -1, nil, false, nil
 		}
-		if sub != 0 && s.revision != lastRevision {
-			lastRevision = s.revision
+		if ps.sub != 0 && s.revision != ps.lastRevision {
+			ps.lastRevision = s.revision
 			t := s.t.thread
 			switch {
 			case !s.t.found:
-				t = Thread{ID: sub, ServerID: subscription.ServerID, Agent: subscription.Agent, Status: "Conversation is no longer on the desktop"}
+				t = Thread{ID: ps.sub, ServerID: ps.subscription.ServerID, Agent: ps.subscription.Agent, Status: "Conversation is no longer on the desktop"}
 				if s.loading {
 					t.Loading, t.Status = true, "Loading conversation…"
 				}
 			case hasHistory(t) || t.Loading:
 				// The desktop's own copy is live; prefer it.
-			case read != nil:
-				t.Messages, t.HistoryLoaded, t.Status = read.Messages, true, read.Status
-			case !fetched:
-				fetched = true
+			case ps.read != nil:
+				t.Messages, t.HistoryLoaded, t.Status = ps.read.Messages, true, ps.read.Status
+			case !ps.fetched:
+				ps.fetched = true
 				messages, status := readOnlyHistory(ctx, s.t)
-				read = &Thread{Messages: messages, Status: status}
+				ps.read = &Thread{Messages: messages, Status: status}
 				t.Messages, t.HistoryLoaded, t.Status = messages, true, status
 				// Read again next poll, should the desktop change meanwhile.
-				lastRevision = -1
+				ps.lastRevision = -1
 			}
-			if sync == nil {
-				sync = newPhoneThreadSync(nil)
+			if ps.sync == nil {
+				ps.sync = newPhoneThreadSync(nil)
 			}
-			if d, changed := sync.Update(t); changed {
+			if d, changed := ps.sync.Update(t); changed {
 				if data, err := json.Marshal(d); err == nil {
-					if !send(remote.Frame{Type: "thread", Thread: sub, Data: data}) {
+					if !send(remote.Frame{Type: "thread", Thread: ps.sub, Data: data}) {
 						return
 					}
 				}
 			}
 		}
-		if pending != nil {
-			res, ok := async.OnMain(ctx, c.dispatch, func() phoneSendResult { return pending.send(c) })
+		if ps.pending != nil {
+			res, ok := async.OnMain(ctx, c.dispatch, func() phoneSendResult { return ps.pending.send(c) })
 			if !ok {
 				return
 			}
 			reply := remote.Frame{Type: "sent", Thread: res.thread, Error: res.err}
-			if res.thread == 0 && res.err == "" && time.Now().After(pending.until) {
+			if res.thread == 0 && res.err == "" && time.Now().After(ps.pending.until) {
 				reply.Error = "Desktop is not ready. Try again shortly."
 			}
 			if res.thread != 0 || reply.Error != "" {
-				pending = nil
+				ps.pending = nil
 				if !send(reply) {
 					return
 				}
 			}
 		}
-		if cmdWant != "" {
-			project := cmdWant
+		if ps.cmdWant != "" {
+			project := ps.cmdWant
 			type known struct {
 				list []composerChoice
 				ok   bool
@@ -409,7 +382,7 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 				return
 			}
 			if k.ok {
-				cmdWant = ""
+				ps.cmdWant = ""
 				data, _ := json.Marshal(phoneCommands{Project: project, Commands: k.list})
 				if !send(remote.Frame{Type: "commands", Data: data}) {
 					return
@@ -428,305 +401,8 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 			if !ok {
 				return
 			}
-			switch r.Op {
-			case "desktop-preview", "desktop-action":
-				allowed, ok := async.OnMain(ctx, c.dispatch, func() bool { return c.phoneDesktopApproval(r) })
-				if !ok {
-					return
-				}
-				hint, ok := async.OnMain(ctx, c.dispatch, func() control.WindowHint { return c.phoneDesktopHint(r) })
-				if !ok {
-					return
-				}
-				select {
-				case previews <- previewRequest{request: r, allowed: allowed, hint: hint}:
-				default:
-					data, _ := json.Marshal(control.Preview{RequestID: r.RequestID, Approval: r.Approval})
-					if !send(remote.Frame{Type: r.Op, Data: data, Error: "The permission window is busy. Try again later."}) {
-						return
-					}
-				}
-			case "desktop-open":
-				target, ok := async.OnMain(ctx, c.dispatch, func() phoneThread { return c.phoneThreadFor(r) })
-				if !ok {
-					return
-				}
-				reply := phoneDesktopReply{RequestID: r.RequestID}
-				var err error
-				if !desktop.Available() {
-					err = fmt.Errorf("Remote desktop requires macOS 14 or later")
-				} else if !target.found || r.ServerID == "" {
-					err = fmt.Errorf("Conversation is no longer on the desktop. Reopen it.")
-				} else {
-					var window *desktop.Window
-					if r.WindowOnly {
-						window = &desktop.Window{ID: r.WindowID, PID: r.WindowPID}
-						allowed, alive := async.OnMain(ctx, c.dispatch, func() bool { return c.phoneDesktopApproval(r) })
-						if !alive {
-							return
-						}
-						if !allowed {
-							err = fmt.Errorf("Permission request handled. Return to the conversation.")
-						}
-					} else if r.WindowPick {
-						// Choosing a window shares no more than the full desktop the
-						// person opened from the menu, so it needs no approval.
-						window = &desktop.Window{}
-					}
-					if err == nil {
-						reply.Token, err = c.desktopControls().OpenWindow(ctx, window)
-						if err == nil && r.WindowPick && !r.WindowOnly {
-							c.desktopControls().AllowPick(reply.Token)
-						}
-						if err == nil && r.WindowOnly {
-							c.desktopControls().SetOnAction(reply.Token, func(window desktop.Window, action desktop.Action, before []desktop.Window) {
-								actionRequest := r
-								actionRequest.WindowID, actionRequest.WindowPID = window.ID, window.PID
-								c.confirmDesktopAction(ctx, actionRequest, action, before)
-							})
-						}
-					}
-				}
-				data, _ := json.Marshal(reply)
-				frame := remote.Frame{Type: "desktop-open", Data: data}
-				if err != nil {
-					frame.Error = err.Error()
-				}
-				if !send(frame) {
-					return
-				}
-			case "desktop-close":
-				c.desktopControls().Revoke(r.DesktopToken)
-			case "image":
-				allowed := sync != nil && r.Thread == sub && (r.ServerID == "" || r.ServerID == subscription.ServerID) && sync.HasImage(r.ImageSource)
-				select {
-				case previews <- previewRequest{request: r, allowed: allowed}:
-				default:
-					data, _ := json.Marshal(thumbnail.Image{Source: r.ImageSource})
-					if !send(remote.Frame{Type: "image", Data: data, Error: "Image preview is busy. Try again shortly."}) {
-						return
-					}
-				}
-			case "memory":
-				// An advertised, read-only capability. No mobile mutation route.
-				type pendingMemory struct {
-					revision uint64
-					result   any
-					err      error
-				}
-				pending, ok := async.OnMain(ctx, c.dispatch, func() pendingMemory {
-					v, err := c.memories().Op("memoryList", manager.Request{Project: r.Project, Scope: r.MemoryScope})
-					return pendingMemory{revision: c.memoryRevision, result: v, err: err}
-				})
-				if !ok {
-					return
-				}
-				result, err := pending.result, pending.err
-				if d, ok := result.(deferred); ok && err == nil {
-					result, err = d()
-				}
-				reply := phoneMemoryResult{Revision: pending.revision, Project: r.Project, Scope: r.MemoryScope}
-				frame := remote.Frame{Type: "memory"}
-				if err != nil {
-					frame.Error = err.Error()
-				} else if list, ok := result.(manager.List); ok {
-					reply.List = list
-				}
-				frame.Data, _ = json.Marshal(reply)
-				if !send(frame) {
-					return
-				}
-			case "collaboration":
-				select {
-				case collaborationJobs <- r:
-				default:
-					if !send(collaborationPhoneFrame(r.RequestID, nil, fmt.Errorf("Collaboration requests are busy. Retry with the same request_id."))) {
-						return
-					}
-				}
-			case "automation-draft":
-				select {
-				case drafts <- r:
-				default:
-					if !send(phoneAutomationFormFrame(r, nil, fmt.Errorf("Another automation is being generated. Try again shortly."))) {
-						return
-					}
-				}
-			case "automation-create":
-				frame, ok := async.OnMain(ctx, c.dispatch, func() remote.Frame { return c.phoneAutomationCreate(r) })
-				if !ok || !send(frame) {
-					return
-				}
-			case "automation-run":
-				frame, ok := async.OnMain(ctx, c.dispatch, func() remote.Frame {
-					_, err := c.automationOp("automationRunNow", automation.Request{ID: r.AutomationID})
-					result := phoneAutomationRunResult{RequestID: r.RequestID}
-					list, _ := c.automationOp("automationList", automation.Request{})
-					result.List, _ = list.([]automation.View)
-					data, _ := json.Marshal(result)
-					frame := remote.Frame{Type: "automation-run", Data: data}
-					if err != nil {
-						frame.Error = err.Error()
-					}
-					return frame
-				})
-				if !ok || !send(frame) {
-					return
-				}
-			case "automations":
-				frame, ok := async.OnMain(ctx, c.dispatch, func() remote.Frame {
-					result, err := c.automationOp("automationList", automation.Request{})
-					frame := remote.Frame{Type: "automations"}
-					if err == nil {
-						frame.Data, err = json.Marshal(result)
-					}
-					if err != nil {
-						frame.Error = err.Error()
-					}
-					return frame
-				})
-				if !ok || !send(frame) {
-					return
-				}
-			case "quota":
-				if _, ok := async.OnMain(ctx, c.dispatch, func() bool { c.refreshQuota(); return true }); !ok {
-					return
-				}
-			case "push":
-				var registration notification.Registration
-				var message string
-				if json.Unmarshal(r.Push, &registration) != nil {
-					message = "Invalid notification registration"
-				} else {
-					result, _ := async.OnMain(ctx, c.dispatch, func() string {
-						if c.push == nil {
-							return "Notification service unavailable"
-						}
-						if err := c.push.Register(registration); err != nil {
-							return err.Error()
-						}
-						return ""
-					})
-					message = result
-					if message == "" {
-						deviceID = registration.ID
-					}
-					if message == "" && !registration.Disabled {
-						if _, err := apns.OpenProvider(appdir.Dir()); err != nil {
-							message = "Phone registered. APNs is not configured on the desktop; run mygo push setup."
-						}
-					}
-				}
-				if !send(remote.Frame{Type: "push", Error: message}) {
-					return
-				}
-			case "read", "read-all":
-				n, _ := async.OnMain(ctx, c.dispatch, func() notification.PhoneState {
-					if r.Op == "read" {
-						c.markPhoneCompletionRead(r)
-					}
-					if c.push == nil || deviceID == "" {
-						return notification.PhoneState{}
-					}
-					if r.Op == "read-all" {
-						return c.push.MarkAllRead(deviceID, r.ReadVersion)
-					}
-					target := c.phoneThreadFor(r)
-					if !target.found {
-						return c.push.State(deviceID)
-					}
-					notice := notification.Notice{Thread: fmt.Sprint(target.thread.ID), ServerID: target.thread.ServerID, Agent: model.ThreadAgent(target.thread), Project: target.cwd}
-					return c.push.MarkRead(deviceID, notice.UnreadKey(), r.ReadVersion)
-				})
-				data, _ := json.Marshal(n)
-				if !send(remote.Frame{Type: "read", Data: data}) {
-					return
-				}
-			case "subscribe":
-				// Retry the same thread too: an earlier history read may have failed
-				// while the desktop was still reconnecting.
-				subscription = r
-				sub, lastRevision, read, fetched = r.Thread, -1, nil, false
-				sync = newPhoneThreadSync(r.Have)
-			case "send":
-				if pending != nil {
-					if !send(remote.Frame{Type: "sent", Error: "The previous message is still being sent"}) {
-						return
-					}
-				} else {
-					paths, err := savePhoneImages(r.Images)
-					r.Images = nil
-					if err != nil {
-						if !send(remote.Frame{Type: "sent", Error: err.Error()}) {
-							return
-						}
-					} else {
-						pending = &phoneSendReq{req: r, paths: paths, until: time.Now().Add(30 * time.Second)}
-					}
-				}
-			case "prefetch":
-				async.OnMain(ctx, c.dispatch, func() bool {
-					if ref, ok := model.ParseThreadURL(r.Reference); ok {
-						c.prefetchReference(ref)
-					}
-					return true
-				})
-			case "stop":
-				async.OnMain(ctx, c.dispatch, func() bool {
-					if t := c.phoneThreadFor(r); t.found {
-						c.stopThread(t.thread.ID)
-					}
-					return true
-				})
-			case "task":
-				message, _ := async.OnMain(ctx, c.dispatch, func() string {
-					t := c.phoneThreadFor(r)
-					if !t.found {
-						return "Conversation is no longer on the desktop"
-					}
-					id, action, _ := strings.Cut(r.Text, " ")
-					return c.taskAction(t.thread.ID, id, action)
-				})
-				if !send(remote.Frame{Type: "action", Thread: r.Thread, Error: message}) {
-					return
-				}
-			case "retry":
-				message, _ := async.OnMain(ctx, c.dispatch, func() string {
-					t := c.phoneThreadFor(r)
-					if !t.found {
-						return "Conversation is no longer on the desktop"
-					}
-					if err := c.retryResponse(retryRequest{ThreadID: t.thread.ID, MessageID: r.MessageID}); err != nil {
-						return err.Error()
-					}
-					return ""
-				})
-				if !send(remote.Frame{Type: "action", Thread: r.Thread, Error: message}) {
-					return
-				}
-			case "dequeue", "steer-queued", "drain-queue":
-				message, _ := async.OnMain(ctx, c.dispatch, func() string {
-					if err := c.phoneQueueAction(r); err != nil {
-						return err.Error()
-					}
-					return ""
-				})
-				if !send(remote.Frame{Type: "action", Thread: r.Thread, Error: message}) {
-					return
-				}
-			case "respond":
-				message, _ := async.OnMain(ctx, c.dispatch, func() string {
-					if err := c.phoneApprovalResponse(r); err != nil {
-						return err.Error()
-					}
-					return ""
-				})
-				data, _ := json.Marshal(phoneApprovalReply{ID: r.Approval})
-				if !send(remote.Frame{Type: "responded", Data: data, Error: message}) {
-					return
-				}
-			case "commands":
-				cmdWant = r.Project
+			if h := phoneRequests[r.Op]; h != nil && !h(ps, r) {
+				return
 			}
 		case <-ticker.C:
 		}
