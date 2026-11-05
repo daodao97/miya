@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"miya/internal/agentusage"
+	"miya/internal/appdir"
 	"miya/internal/fsutil"
 	"miya/internal/remote"
 	"miya/internal/thumbnail"
@@ -242,7 +243,7 @@ func saveDesktopUploads(files []remote.Image) (paths []string, err error) {
 	if err := checkDesktopUploads(len(files), 0, 0); err != nil {
 		return nil, err
 	}
-	dir := filepath.Join(serviceDir(), "uploads")
+	dir := filepath.Join(appdir.Dir(), "uploads")
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return nil, err
 	}

@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"miya/internal/appdir"
 	"miya/internal/codex"
 	dg "miya/internal/delegation"
 )
@@ -170,7 +171,7 @@ func TestCollaborationCodexBindsNativeTurnBeforeReturningFixedResult(t *testing.
 	if task.NativeTurnID == "" || task.Target == "" || task.State != dg.Completed || task.Result.Text == "" {
 		t.Fatalf("native execution not bound: %+v", task)
 	}
-	loaded, err := dg.NewStore(filepath.Join(serviceDir(), "delegations")).Load()
+	loaded, err := dg.NewStore(filepath.Join(appdir.Dir(), "delegations")).Load()
 	if err != nil {
 		t.Fatal(err)
 	}

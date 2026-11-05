@@ -5,6 +5,7 @@ package main
 import (
 	"errors"
 	"log"
+	"miya/internal/appdir"
 	"net"
 	"os"
 	"os/exec"
@@ -22,7 +23,7 @@ func runService() error {
 
 func runServiceWithOptions(options serverOptions) error {
 	servingRemote = options.Persistent
-	dir := serviceDir()
+	dir := appdir.Dir()
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
@@ -98,7 +99,7 @@ func spawnService(workspace string) error {
 	if exe == "" {
 		return errors.New("miya: no executable to start the service")
 	}
-	dir := serviceDir()
+	dir := appdir.Dir()
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}

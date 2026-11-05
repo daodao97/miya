@@ -57,3 +57,19 @@ type MessagePart struct {
 	TitleSnapshot string     `json:"titleSnapshot,omitempty"`
 	Agent         string     `json:"agent,omitempty"`
 }
+
+// NormalizeAgentID maps an agent name a user or agent wrote to its backend
+// ID, or "" when it names no backend.
+func NormalizeAgentID(id string) string {
+	normalized := strings.ToLower(strings.TrimSpace(id))
+	if RegisteredBackend(normalized) {
+		return normalized
+	}
+	switch normalized {
+	case AgentCodex:
+		return AgentCodex
+	case AgentClaude, "claude", "claude code":
+		return AgentClaude
+	}
+	return ""
+}

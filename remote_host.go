@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/push/apns"
+	"miya/internal/appdir"
 	"miya/internal/codex"
 	"miya/internal/desktop"
 	"miya/internal/remote"
@@ -667,7 +668,7 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 						deviceID = registration.ID
 					}
 					if message == "" && !registration.Disabled {
-						if _, err := apns.OpenProvider(serviceDir()); err != nil {
+						if _, err := apns.OpenProvider(appdir.Dir()); err != nil {
 							message = "Phone registered. APNs is not configured on the desktop; run mygo push setup."
 						}
 					}
@@ -853,7 +854,7 @@ var desktopPhone *phoneHost
 
 func phoneDir() string {
 	if os.Getenv("MIYA_DIR") != "" {
-		return filepath.Join(serviceDir(), "remote")
+		return filepath.Join(appdir.Dir(), "remote")
 	}
 	home, err := os.UserHomeDir()
 	if err != nil || home == "" {

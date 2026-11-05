@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"miya/internal/appdir"
 	"miya/internal/claude"
 	"miya/internal/codex"
 	dg "miya/internal/delegation"
@@ -165,7 +166,7 @@ const (
 func newChatController() *chatController {
 	c := &chatController{projectCache: make(map[string][]Thread), fastMode: loadSetting("codexServiceTier") == "fast"}
 	c.referenceSource, c.lastSubmitError = referenceSourceForService()
-	c.referenceDir = serviceDir()
+	c.referenceDir = appdir.Dir()
 	c.loadForkedReferences()
 	var setProjects func([]Project)
 	c.projects, setProjects = createSignal([]Project{})

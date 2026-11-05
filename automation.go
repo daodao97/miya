@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"miya/internal/appdir"
+	"miya/internal/model"
 	"miya/internal/textutil"
 	"os"
 	"path/filepath"
@@ -93,7 +95,7 @@ func (a *Automation) normalize() error {
 	a.Instructions = strings.TrimSpace(a.Instructions)
 	a.Schedule = strings.Join(strings.Fields(a.Schedule), " ")
 	a.Check = strings.TrimSpace(a.Check)
-	if a.Agent = normalizeAgentID(textutil.FirstNonEmpty(a.Agent, agentCodex)); a.Agent == "" {
+	if a.Agent = model.NormalizeAgentID(textutil.FirstNonEmpty(a.Agent, agentCodex)); a.Agent == "" {
 		return errors.New("Agent must be codex or claude-code")
 	}
 	switch {
@@ -140,7 +142,7 @@ type automationStore struct {
 	Runs        map[string][]AutomationRun `json:"runs,omitempty"`
 }
 
-func automationsPath() string { return filepath.Join(serviceDir(), "automations.json") }
+func automationsPath() string { return filepath.Join(appdir.Dir(), "automations.json") }
 
 // loadAutomations reads the store; a missing or damaged file is an empty
 // store, with damaged entries left out rather than stopping the others.

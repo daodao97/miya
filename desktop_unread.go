@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strconv"
 
+	"miya/internal/appdir"
 	"miya/internal/remote"
 )
 
@@ -21,7 +22,7 @@ func desktopUnreadKey(t Thread) string {
 
 func (c *chatController) loadDesktopUnread() {
 	c.desktopUnread = map[string]int64{}
-	data, err := os.ReadFile(filepath.Join(serviceDir(), "desktop-unread.json"))
+	data, err := os.ReadFile(filepath.Join(appdir.Dir(), "desktop-unread.json"))
 	if err == nil {
 		_ = json.Unmarshal(data, &c.desktopUnread)
 	}
@@ -35,7 +36,7 @@ func (c *chatController) persistDesktopUnread() {
 	if err != nil {
 		return
 	}
-	path := filepath.Join(serviceDir(), "desktop-unread.json")
+	path := filepath.Join(appdir.Dir(), "desktop-unread.json")
 	if os.MkdirAll(filepath.Dir(path), 0700) == nil && os.WriteFile(path+".tmp", data, 0600) == nil {
 		_ = os.Rename(path+".tmp", path)
 	}

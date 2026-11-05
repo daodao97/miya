@@ -11,11 +11,12 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"miya/internal/appdir"
 	"miya/internal/fsutil"
 	"miya/internal/remote"
 )
 
-func remoteServerPath() string { return filepath.Join(serviceDir(), "desktop-workspaces.json") }
+func remoteServerPath() string { return filepath.Join(appdir.Dir(), "desktop-workspaces.json") }
 
 func remoteServerLink() string {
 	store, err := loadDesktopWorkspaces()
@@ -107,11 +108,11 @@ var desktopIdentity struct {
 
 func prepareDesktopIdentity() error {
 	desktopIdentity.Do(func() {
-		if err := os.MkdirAll(serviceDir(), 0700); err != nil {
+		if err := os.MkdirAll(appdir.Dir(), 0700); err != nil {
 			desktopIdentity.err = err
 			return
 		}
-		path := filepath.Join(serviceDir(), "desktop-client-secret")
+		path := filepath.Join(appdir.Dir(), "desktop-client-secret")
 		secret, err := os.ReadFile(path)
 		if os.IsNotExist(err) {
 			secret = make([]byte, 32)
@@ -127,7 +128,7 @@ func prepareDesktopIdentity() error {
 			return
 		}
 		remote.SetClientSecret(secret)
-		remote.SetKeySlotFile(filepath.Join(serviceDir(), "desktop-client-key-slot"))
+		remote.SetKeySlotFile(filepath.Join(appdir.Dir(), "desktop-client-key-slot"))
 	})
 	return desktopIdentity.err
 }

@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"miya/internal/appdir"
 	"miya/internal/memory"
 	"miya/internal/remote"
 	"miya/internal/webservice"
@@ -83,14 +84,14 @@ func (p *svcPeer) write(data []byte) error {
 }
 
 func newService(c *chatController, ex *executor) *service {
-	c.runtimePath = filepath.Join(serviceDir(), "runtime.json")
-	c.memory = memory.New(filepath.Join(serviceDir(), "memory"))
+	c.runtimePath = filepath.Join(appdir.Dir(), "runtime.json")
+	c.memory = memory.New(filepath.Join(appdir.Dir(), "memory"))
 	s := &service{c: c, exec: ex, peers: map[*svcPeer]bool{}, dirty: make(chan struct{}, 1), quit: make(chan struct{}), idleTimeout: serviceIdleTimeout}
 	c.push = newPushHub()
 	c.run = ex.push
 	c.onDraftReturned = s.draftReturned
 	c.memoryEngine = newMemoryEngine(c)
-	c.collaboration = newCollaboration(c, filepath.Join(serviceDir(), "delegations"))
+	c.collaboration = newCollaboration(c, filepath.Join(appdir.Dir(), "delegations"))
 	return s
 }
 

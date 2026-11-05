@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"miya/internal/appdir"
 	"miya/internal/remote"
 )
 
@@ -20,7 +21,7 @@ func TestDesktopWorkspacesMigrateAndKeepLocalSelection(t *testing.T) {
 	t.Setenv("MIYA_DIR", t.TempDir())
 	link := testDesktopLink()
 	legacy, _ := json.Marshal(map[string]string{"link": link})
-	if err := os.WriteFile(filepath.Join(serviceDir(), "remote-client.json"), legacy, 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(appdir.Dir(), "remote-client.json"), legacy, 0600); err != nil {
 		t.Fatal(err)
 	}
 	store, err := loadDesktopWorkspaces()

@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"miya/internal/appdir"
 	"miya/internal/fsutil"
 	"os"
 	"path/filepath"
@@ -25,7 +26,7 @@ func serveCommand(args []string) error {
 		return fmt.Errorf("unexpected arguments: %v", flags.Args())
 	}
 	if *data == "" {
-		*data = serviceDir()
+		*data = appdir.Dir()
 	}
 	if *data != "" {
 		abs, err := filepath.Abs(*data)
@@ -58,7 +59,7 @@ func serveCommand(args []string) error {
 	return runServiceWithOptions(serverOptions{Persistent: true})
 }
 
-func connectionFile() string { return filepath.Join(serviceDir(), "connection.txt") }
+func connectionFile() string { return filepath.Join(appdir.Dir(), "connection.txt") }
 
 func requestServerRestart() error {
 	cl, err := dialService(serviceSocket())
@@ -72,7 +73,7 @@ func requestServerRestart() error {
 }
 
 func saveServerConnection(link string) error {
-	if err := os.MkdirAll(serviceDir(), 0700); err != nil {
+	if err := os.MkdirAll(appdir.Dir(), 0700); err != nil {
 		return err
 	}
 	return fsutil.WritePrivateFile(connectionFile(), []byte(link+"\n"))

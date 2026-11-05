@@ -35,3 +35,14 @@ func Bounded(text string) string {
 	}
 	return text
 }
+
+// LastLine is the last line of s that says something.
+func LastLine(s string) string {
+	lines := strings.Split(strings.TrimSpace(s), "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		if l := strings.TrimSpace(lines[i]); l != "" {
+			return l
+		}
+	}
+	return ""
+}

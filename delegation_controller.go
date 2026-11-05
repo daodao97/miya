@@ -11,6 +11,7 @@ import (
 	"time"
 
 	dg "miya/internal/delegation"
+	"miya/internal/model"
 	"miya/internal/textutil"
 )
 
@@ -153,7 +154,7 @@ func (c *chatController) prepareDelegation(caller Thread, a collaborationArgs) (
 	if agent == "" {
 		agent = threadAgent(caller)
 	}
-	if agent = normalizeAgentID(agent); agent == "" || !registeredBackend(agent) {
+	if agent = model.NormalizeAgentID(agent); agent == "" || !registeredBackend(agent) {
 		return dg.StartInput{}, errors.New("INVALID_ARGUMENT: Unknown agent")
 	}
 	var target Thread

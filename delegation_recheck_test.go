@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"miya/internal/appdir"
 	"miya/internal/claude"
 	dg "miya/internal/delegation"
 )
@@ -32,7 +33,7 @@ func TestCollaborationClaudeRootResultCanBeRecheckedAfterRestart(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	index := filepath.Join(serviceDir(), "delegations", "index.json")
+	index := filepath.Join(appdir.Dir(), "delegations", "index.json")
 	if err := os.Rename(index, index+".saved"); err != nil {
 		t.Fatal(err)
 	}

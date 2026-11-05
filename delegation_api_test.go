@@ -13,6 +13,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"miya/internal/appdir"
 	"miya/internal/codex"
 	dg "miya/internal/delegation"
 	"miya/internal/subagent"
@@ -126,7 +127,7 @@ func TestCollaborationWriteFailureIsVisibleInQueriesAndState(t *testing.T) {
 	f := newServiceFixture(t)
 	caller := collaborationCaller(t, f, agentClaude, "storage-source")
 	task := collaborationStoredFixtureTask(t, f, caller)
-	index := filepath.Join(serviceDir(), "delegations", "index.json")
+	index := filepath.Join(appdir.Dir(), "delegations", "index.json")
 	if err := os.Rename(index, index+".saved"); err != nil {
 		t.Fatal(err)
 	}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"miya/internal/appdir"
 	"miya/internal/fsutil"
 	"os"
 	"path/filepath"
@@ -97,7 +98,7 @@ func loadDesktopWorkspaces() (desktopWorkspaceStore, error) {
 	}
 	// Migrate the old singleton in memory. The next successful selection
 	// saves the registry; an intentional local selection never resurrects it.
-	data, err = os.ReadFile(filepath.Join(serviceDir(), "remote-client.json"))
+	data, err = os.ReadFile(filepath.Join(appdir.Dir(), "remote-client.json"))
 	if os.IsNotExist(err) {
 		return store, nil
 	}
@@ -121,7 +122,7 @@ func loadDesktopWorkspaces() (desktopWorkspaceStore, error) {
 }
 
 func (s desktopWorkspaceStore) save() error {
-	if err := os.MkdirAll(serviceDir(), 0700); err != nil {
+	if err := os.MkdirAll(appdir.Dir(), 0700); err != nil {
 		return err
 	}
 	data, err := json.Marshal(s)

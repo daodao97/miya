@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"log"
+	"miya/internal/appdir"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -100,6 +101,6 @@ func automationAgentPlist(exe string) []byte {
 	<key>StandardErrorPath</key><string>%s</string>
 </dict>
 </plist>
-`, automationAgentLabel, esc(exe), esc(filepath.Join(serviceDir(), "service.log")), esc(filepath.Join(serviceDir(), "service.log")))
+`, automationAgentLabel, esc(exe), esc(filepath.Join(appdir.Dir(), "service.log")), esc(filepath.Join(appdir.Dir(), "service.log")))
 	return b.Bytes()
 }

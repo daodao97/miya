@@ -162,7 +162,7 @@ func draftWithCodex(ctx context.Context, project, prompt string) ([]byte, error)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("Codex could not draft the automation: %v %s", err, textutil.ClipRunes(lastLine(stderr.String()), 300))
+		return nil, fmt.Errorf("Codex could not draft the automation: %v %s", err, textutil.ClipRunes(textutil.LastLine(stderr.String()), 300))
 	}
 	return os.ReadFile(last)
 }

@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"miya/internal/appdir"
 	"miya/internal/codex"
 )
 
@@ -152,21 +153,9 @@ type svcWorkspace struct {
 	Error string `json:"error,omitempty"`
 }
 
-// serviceDir keeps the service's lock, socket and log.
-func serviceDir() string {
-	if d := os.Getenv("MIYA_DIR"); d != "" {
-		return d
-	}
-	base, err := os.UserConfigDir()
-	if err != nil {
-		base = os.TempDir()
-	}
-	return filepath.Join(base, "Miya")
-}
-
-// serviceSocket is in serviceDir unless that path is too long for a socket.
+// serviceSocket is in appdir.Dir unless that path is too long for a socket.
 func serviceSocket() string {
-	p := filepath.Join(serviceDir(), "service.sock")
+	p := filepath.Join(appdir.Dir(), "service.sock")
 	if len(p) < 100 {
 		return p
 	}

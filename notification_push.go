@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/push/apns"
+	"miya/internal/appdir"
 )
 
 type pushRegistration struct {
@@ -37,8 +38,8 @@ type pushHub struct {
 }
 
 func newPushHub() *pushHub {
-	h := &pushHub{storageDir: serviceDir(), devices: map[string]pushRegistration{}, queue: make(chan pushDelivery, 128)}
-	if b, e := os.ReadFile(filepath.Join(serviceDir(), "push-devices.json")); e == nil {
+	h := &pushHub{storageDir: appdir.Dir(), devices: map[string]pushRegistration{}, queue: make(chan pushDelivery, 128)}
+	if b, e := os.ReadFile(filepath.Join(appdir.Dir(), "push-devices.json")); e == nil {
 		_ = json.Unmarshal(b, &h.devices)
 	}
 	if h.devices == nil {
@@ -102,10 +103,10 @@ func (h *pushHub) register(r pushRegistration) error {
 	if e != nil {
 		return e
 	}
-	if e = os.MkdirAll(serviceDir(), 0700); e != nil {
+	if e = os.MkdirAll(appdir.Dir(), 0700); e != nil {
 		return e
 	}
-	path := filepath.Join(serviceDir(), "push-devices.json")
+	path := filepath.Join(appdir.Dir(), "push-devices.json")
 	if e = os.WriteFile(path+".tmp", b, 0600); e != nil {
 		return e
 	}
@@ -142,7 +143,7 @@ func (h *pushHub) run() {
 		if !ok {
 			continue
 		}
-		p, e := apns.OpenProvider(serviceDir())
+		p, e := apns.OpenProvider(appdir.Dir())
 		if e == nil && p.Topic() != "com.daodao.miya" {
 			e = errors.New("APNs topic must be com.daodao.miya")
 		}

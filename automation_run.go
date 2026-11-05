@@ -260,7 +260,7 @@ func (c *chatController) afterAutomationCheck(id string, r *activeAutomationRun,
 		c.finishAutomationRun(id, runInterrupted, "Automation paused")
 		return
 	case r.round >= a.Rounds:
-		c.finishAutomationRun(id, runFailed, "Check failed: "+lastLine(output))
+		c.finishAutomationRun(id, runFailed, "Check failed: "+textutil.LastLine(output))
 		return
 	}
 	r.round++
@@ -380,15 +380,4 @@ func runAutomationCheck(dir, command string) (bool, string) {
 		text = "…" + string(r[len(r)-4000:])
 	}
 	return err == nil, strings.TrimSpace(text)
-}
-
-// lastLine is the last line of s that says something.
-func lastLine(s string) string {
-	lines := strings.Split(strings.TrimSpace(s), "\n")
-	for i := len(lines) - 1; i >= 0; i-- {
-		if l := strings.TrimSpace(lines[i]); l != "" {
-			return l
-		}
-	}
-	return ""
 }

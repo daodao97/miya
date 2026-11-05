@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/egoist/mygo/ui/markdown/parser"
+	"miya/internal/appdir"
 )
 
 func parseThreadURL(raw string) (ThreadRef, bool) {
@@ -204,7 +205,7 @@ func loadReferenceSource(dir string) (string, error) {
 }
 
 func referenceSourceForService() (string, string) {
-	id, err := loadReferenceSource(serviceDir())
+	id, err := loadReferenceSource(appdir.Dir())
 	if err != nil {
 		return "", "Unable to initialize conversation reference source: " + err.Error()
 	}

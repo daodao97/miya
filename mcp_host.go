@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"miya/internal/model"
 	"miya/internal/subagent"
 	"miya/internal/textutil"
 	"os"
@@ -280,7 +281,7 @@ func (c *chatController) mcpDelegate(r mcpRequest) (mcpDelegateResult, error) {
 	}
 	agent := threadAgent(caller)
 	if r.Thread == 0 && r.Agent != "" {
-		if agent = normalizeAgentID(r.Agent); agent == "" {
+		if agent = model.NormalizeAgentID(r.Agent); agent == "" {
 			return mcpDelegateResult{}, fmt.Errorf("Agent %q not found. Choose %s or %s.", r.Agent, agentCodex, agentClaude)
 		}
 	}
@@ -304,20 +305,6 @@ func (c *chatController) mcpDelegate(r mcpRequest) (mcpDelegateResult, error) {
 		c.delegationParent[id] = caller.ID
 	}
 	return mcpDelegateResult{Reference: c.threadRef(c.threadWithID(id)).URL(), Thread: id, Agent: threadAgent(c.threadWithID(id))}, nil
-}
-
-func normalizeAgentID(id string) string {
-	normalized := strings.ToLower(strings.TrimSpace(id))
-	if registeredBackend(normalized) {
-		return normalized
-	}
-	switch normalized {
-	case agentCodex:
-		return agentCodex
-	case agentClaude, "claude", "claude code":
-		return agentClaude
-	}
-	return ""
 }
 
 // delegationDepth is how many hand-offs led to a conversation.
