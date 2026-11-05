@@ -33,7 +33,7 @@ func TestClaudeRunUsesTheChosenModelAndEffort(t *testing.T) {
 	if loadSetting("claudeModel") != "opus" || loadSetting("claudeEffort") != "high" {
 		t.Fatal("choices not saved")
 	}
-	if c.submit(sendRequest{Agent: agentClaude, Text: "hi"}) == 0 {
+	if c.submit(SendRequest{Agent: agentClaude, Text: "hi"}) == 0 {
 		t.Fatal("not sent")
 	}
 	var args string

@@ -24,7 +24,7 @@ type automationState struct {
 	active map[string]*activeAutomationRun
 	// now, submit, check and background are replaced in tests.
 	now    func() time.Time
-	submit func(sendRequest) int
+	submit func(SendRequest) int
 	check  func(dir, command string) (bool, string)
 	// background runs work off the main thread, then its result on it.
 	background func(work func() func())
@@ -171,7 +171,7 @@ func (c *chatController) startAutomationRun(id string, catchUp bool) error {
 	thread := 0
 	if info, err := os.Stat(a.Project); err != nil || !info.IsDir() {
 		run.Result, run.Summary, run.Finished = runFailed, "Project directory does not exist: "+a.Project, now
-	} else if thread = s.submit(sendRequest{Agent: a.Agent, Project: a.Project, Text: automationRunMessage(a, prev), MemoryControl: true}); thread == 0 {
+	} else if thread = s.submit(SendRequest{Agent: a.Agent, Project: a.Project, Text: automationRunMessage(a, prev), MemoryControl: true}); thread == 0 {
 		run.Result, run.Summary, run.Finished = runFailed, backendFor(a.Agent).Name()+" is not ready", now
 	}
 	if thread != 0 {
@@ -265,7 +265,7 @@ func (c *chatController) afterAutomationCheck(id string, r *activeAutomationRun,
 	r.round++
 	s.store.updateLastRun(id, func(run *AutomationRun) { run.Round = r.round })
 	s.persist()
-	if s.submit(sendRequest{ThreadID: r.thread, Text: automationCheckMessage(a, r.round-1, output), MemoryControl: true}) == 0 {
+	if s.submit(SendRequest{ThreadID: r.thread, Text: automationCheckMessage(a, r.round-1, output), MemoryControl: true}) == 0 {
 		c.finishAutomationRun(id, runFailed, "Unable to start the next round")
 	}
 }

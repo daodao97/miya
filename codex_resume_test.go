@@ -114,7 +114,7 @@ func codexTurnRequests(t *testing.T, path string) []string {
 
 func TestCodexRetriesFailedTurnFromOriginalMessage(t *testing.T) {
 	c, d, logPath := codexResumeFixture(t)
-	c.submit(sendRequest{ThreadID: 1, Text: "error"})
+	c.submit(SendRequest{ThreadID: 1, Text: "error"})
 	waitCodexResume(t, c, d, func() bool {
 		th := c.threadWithID(1)
 		return !th.Busy && len(th.Messages) > 0 && th.Messages[len(th.Messages)-1].Role == "error"
@@ -182,7 +182,7 @@ func TestCodexRetriesFailedTurnFromOriginalMessage(t *testing.T) {
 func TestCodexRetryKeepsHistoryWhenRevertFails(t *testing.T) {
 	t.Setenv("QUICKGUI_FIXTURE_REVERT_ERROR", `{"code":-32600,"message":"cannot revert"}`)
 	c, d, logPath := codexResumeFixture(t)
-	c.submit(sendRequest{ThreadID: 1, Text: "error"})
+	c.submit(SendRequest{ThreadID: 1, Text: "error"})
 	waitCodexResume(t, c, d, func() bool {
 		th := c.threadWithID(1)
 		return !th.Busy && len(th.Messages) > 0 && th.Messages[len(th.Messages)-1].Role == "error"
@@ -280,7 +280,7 @@ func TestCodexPhoneSendResumesAfterWorkspaceSwitch(t *testing.T) {
 func TestCodexWorkspaceSwitchKeepsTwoLiveTurns(t *testing.T) {
 	c, d, _ := codexResumeFixture(t)
 	first, second, client := c.cwd, t.TempDir(), c.client
-	if c.submit(sendRequest{ThreadID: 1, Text: "long"}) != 1 {
+	if c.submit(SendRequest{ThreadID: 1, Text: "long"}) != 1 {
 		t.Fatal("could not start first turn")
 	}
 	waitCodexResume(t, c, d, func() bool { return c.threadWithID(1).TurnID != "" })
@@ -291,7 +291,7 @@ func TestCodexWorkspaceSwitchKeepsTwoLiveTurns(t *testing.T) {
 	if !(&service{c: c}).busy() {
 		t.Fatal("background turn must prevent service shutdown or upgrade")
 	}
-	id := c.submit(sendRequest{Text: "long", Agent: agentCodex})
+	id := c.submit(SendRequest{Text: "long", Agent: agentCodex})
 	waitCodexResume(t, c, d, func() bool { return c.threadWithID(id).TurnID != "" && c.historyStatus() == "" })
 	for _, path := range []string{first, second, first} {
 		if err := c.changeWorkspace(path); err != nil {
@@ -313,16 +313,16 @@ func TestCodexWorkspaceSwitchKeepsTwoLiveTurns(t *testing.T) {
 func TestCodexBackgroundApprovalDrainsQueueInOriginalProject(t *testing.T) {
 	c, d, logPath := codexResumeFixture(t)
 	first := c.cwd
-	c.submit(sendRequest{ThreadID: 1, Text: "question"})
+	c.submit(SendRequest{ThreadID: 1, Text: "question"})
 	waitCodexResume(t, c, d, func() bool { return len(c.approvals()) == 1 })
-	c.submit(sendRequest{ThreadID: 1, Text: "queued follow-up"})
+	c.submit(SendRequest{ThreadID: 1, Text: "queued follow-up"})
 	if err := c.changeWorkspace(t.TempDir()); err != nil {
 		t.Fatal(err)
 	}
 	if len(c.approvals()) != 1 {
 		t.Fatal("switch discarded the pending background approval")
 	}
-	foreground := c.submit(sendRequest{Text: "long", Agent: agentCodex})
+	foreground := c.submit(SendRequest{Text: "long", Agent: agentCodex})
 	waitCodexResume(t, c, d, func() bool { return c.threadWithID(foreground).TurnID != "" && c.historyStatus() == "" })
 	c.respond(c.approvals()[0], map[string]any{"answers": map[string]any{}})
 	waitCodexResume(t, c, d, func() bool {

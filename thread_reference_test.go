@@ -95,7 +95,7 @@ func TestReferenceSourcePersistsIndependentlyOfPairing(t *testing.T) {
 		t.Fatal(err)
 	}
 	again, err := loadReferenceSource(dir)
-	if err != nil || id != again || !sourceIDPattern.MatchString(id) {
+	if err != nil || id != again || !SourceIDPattern.MatchString(id) {
 		t.Fatalf("source changed: %s %s %v", id, again, err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "reference-source"), []byte("corrupt"), 0600); err != nil {

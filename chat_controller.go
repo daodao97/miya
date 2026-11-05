@@ -1263,7 +1263,7 @@ func (c *chatController) selectThread(t Thread) {
 }
 
 // resume continues a Codex thread, then submits after, when given.
-func (c *chatController) resume(t Thread, after *sendRequest) {
+func (c *chatController) resume(t Thread, after *SendRequest) {
 	if c.remote != nil {
 		c.forward("resume", t.ID)
 		return
@@ -1422,7 +1422,7 @@ func (c *chatController) send() { c.sendDraft(false) }
 // sendDraft submits the window's draft; in a running turn it steers the
 // turn, or waits in the queue when steer is false.
 func (c *chatController) sendDraft(steer bool) int {
-	req := sendRequest{Steer: steer, ThreadID: c.current().ID, Text: c.draft(), Attachments: append([]string(nil), c.attachments()...), Agent: c.currentAgent(), Model: c.currentBackend().Model(c), Effort: c.currentBackend().Effort(c), Policy: c.currentPermissionPolicy()}
+	req := SendRequest{Steer: steer, ThreadID: c.current().ID, Text: c.draft(), Attachments: append([]string(nil), c.attachments()...), Agent: c.currentAgent(), Model: c.currentBackend().Model(c), Effort: c.currentBackend().Effort(c), Policy: c.currentPermissionPolicy()}
 	id := c.submit(req)
 	if id != 0 {
 		c.setActive(id)
@@ -1432,7 +1432,7 @@ func (c *chatController) sendDraft(steer bool) int {
 	return id
 }
 
-func (c *chatController) sendCodex(req sendRequest) int {
+func (c *chatController) sendCodex(req SendRequest) int {
 	if !c.ready() {
 		return 0
 	}

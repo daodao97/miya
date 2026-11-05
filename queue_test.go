@@ -63,9 +63,9 @@ func userTexts(th Thread) []string {
 
 func TestQueuedMessagesSendTogetherAfterTheTurn(t *testing.T) {
 	c, d := queueController(t)
-	c.submit(sendRequest{ThreadID: 1, Text: "first", Attachments: []string{"/tmp/a.txt"}})
-	c.submit(sendRequest{ThreadID: 1, Text: "second"})
-	c.submit(sendRequest{ThreadID: 1, Text: "third", Attachments: []string{"/tmp/b.txt"}})
+	c.submit(SendRequest{ThreadID: 1, Text: "first", Attachments: []string{"/tmp/a.txt"}})
+	c.submit(SendRequest{ThreadID: 1, Text: "second"})
+	c.submit(SendRequest{ThreadID: 1, Text: "third", Attachments: []string{"/tmp/b.txt"}})
 	th := c.threadWithID(1)
 	if len(th.Queue) != 3 || len(th.Messages) != 0 {
 		t.Fatalf("queued %+v", th)
@@ -84,13 +84,13 @@ func TestQueuedReferencesKeepEachSendTimeSnapshot(t *testing.T) {
 	src := handoffSource()
 	c.setThreads(append(c.threads(), src))
 	raw := referenceText(testReference(src), src.Title)
-	if c.submit(sendRequest{ThreadID: 1, Text: "第一次 " + raw}) != 1 {
+	if c.submit(SendRequest{ThreadID: 1, Text: "第一次 " + raw}) != 1 {
 		t.Fatal(c.lastSubmitError)
 	}
 	c.update(src.ID, func(t *Thread) {
 		t.Messages = append(t.Messages, Message{Role: "user", Content: "第二次请求"}, Message{Role: "assistant", Content: "新的结论"})
 	})
-	if c.submit(sendRequest{ThreadID: 1, Text: "第二次 " + raw}) != 1 {
+	if c.submit(SendRequest{ThreadID: 1, Text: "第二次 " + raw}) != 1 {
 		t.Fatal(c.lastSubmitError)
 	}
 	c.update(1, func(t *Thread) { t.Busy = false })
@@ -110,7 +110,7 @@ func TestQueuedReferencesKeepEachSendTimeSnapshot(t *testing.T) {
 
 func TestStoppedTurnPausesTheQueue(t *testing.T) {
 	c, d := queueController(t)
-	c.submit(sendRequest{ThreadID: 1, Text: "later"})
+	c.submit(SendRequest{ThreadID: 1, Text: "later"})
 	c.update(1, func(t *Thread) { t.Busy, t.StopRequested = false, true })
 	d.drain()
 	if th := c.threadWithID(1); len(th.Queue) != 1 || len(th.Messages) != 0 {

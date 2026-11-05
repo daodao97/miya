@@ -171,7 +171,7 @@ func TestAgentTagsDoNotFallBackToOrdinaryMessagesOnOlderService(t *testing.T) {
 	tag := agentReferenceText(agentCodex, "Codex")
 	app, _ := testApp(t)
 	app.c.remote = &serviceClient{}
-	if id := app.c.submit(sendRequest{Text: tag + " review"}); id != 0 || !strings.Contains(app.c.lastSubmitError, "Update the Miya") {
+	if id := app.c.submit(SendRequest{Text: tag + " review"}); id != 0 || !strings.Contains(app.c.lastSubmitError, "Update the Miya") {
 		t.Fatal("old service received unsupported Agent input", id, app.c.lastSubmitError)
 	}
 	m := testMobileApp()

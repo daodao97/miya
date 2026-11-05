@@ -37,7 +37,7 @@ func memoryTaskKey(t Thread, session string) string {
 	return "session:" + session
 }
 
-func (c *chatController) beginMemoryTurn(t Thread, req sendRequest, firstMessage int) string {
+func (c *chatController) beginMemoryTurn(t Thread, req SendRequest, firstMessage int) string {
 	if c.memory == nil || t.MemoryDisabled || t.Automation != "" || req.MemoryControl || req.KeepSessionSettings || memoryCommand(req.Text) {
 		// A failed turn never completes, so its record would otherwise attach the
 		// next skipped turn's output to the failed turn's messages.

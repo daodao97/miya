@@ -7,15 +7,10 @@ import "strings"
 // queue lives in the conversation, in the process running the agents, so it
 // is sent even after the window quits.
 
-type queuedMessage struct {
-	ID int `json:"id"`
-	sendRequest
-}
-
-func (c *chatController) enqueue(id int, req sendRequest) int {
+func (c *chatController) enqueue(id int, req SendRequest) int {
 	req.ThreadID, req.Steer = id, false
-	q := queuedMessage{ID: c.nextID(), sendRequest: req}
-	c.update(id, func(t *Thread) { t.Queue = append(append([]queuedMessage(nil), t.Queue...), q) })
+	q := QueuedMessage{ID: c.nextID(), SendRequest: req}
+	c.update(id, func(t *Thread) { t.Queue = append(append([]QueuedMessage(nil), t.Queue...), q) })
 	return id
 }
 
@@ -25,7 +20,7 @@ func (c *chatController) removeQueued(threadID, queuedID int) {
 		return
 	}
 	c.update(threadID, func(t *Thread) {
-		out := make([]queuedMessage, 0, len(t.Queue))
+		out := make([]QueuedMessage, 0, len(t.Queue))
 		for _, q := range t.Queue {
 			if q.ID != queuedID {
 				out = append(out, q)
@@ -60,8 +55,8 @@ func (c *chatController) drainQueue(id int) {
 	if t.ID == 0 || len(t.Queue) == 0 || t.Busy || t.Loading || t.ReadOnly || t.StopRequested {
 		return
 	}
-	queue := append([]queuedMessage(nil), t.Queue...)
-	req := queue[len(queue)-1].sendRequest
+	queue := append([]QueuedMessage(nil), t.Queue...)
+	req := queue[len(queue)-1].SendRequest
 	req.ThreadID, req.Steer, req.Attachments = id, false, nil
 	req.MemoryControl = false
 	texts := make([]string, 0, len(queue))
@@ -95,7 +90,7 @@ func (c *chatController) steerQueued(threadID, queuedID int) {
 		if q.ID != queuedID {
 			continue
 		}
-		req := q.sendRequest
+		req := q.SendRequest
 		req.ThreadID, req.Steer = threadID, true
 		if backendOf(t).Steer(c, t, req) {
 			c.removeQueued(threadID, queuedID)

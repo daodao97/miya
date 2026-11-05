@@ -324,7 +324,7 @@ func (s *collaborationState) start(task dg.Task) {
 		if text == "" {
 			text = task.Prompt
 		}
-		id := c.submitExpanded(sendRequest{ExecutionID: task.ID, Origin: "delegation", ThreadID: t.ID, Agent: task.Agent, Project: task.Workspace, Text: text, Model: task.Config.Model, Effort: task.Config.Effort, Policy: task.Config.Policy, ExplicitSettings: true, MemoryControl: true})
+		id := c.submitExpanded(SendRequest{ExecutionID: task.ID, Origin: "delegation", ThreadID: t.ID, Agent: task.Agent, Project: task.Workspace, Text: text, Model: task.Config.Model, Effort: task.Config.Effort, Policy: task.Config.Policy, ExplicitSettings: true, MemoryControl: true})
 		if id == 0 {
 			return nil, errors.New("Native submission was not started")
 		}

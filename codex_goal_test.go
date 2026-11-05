@@ -12,7 +12,7 @@ import (
 func TestCodexGoalCommandsUseNativeRPC(t *testing.T) {
 	c, d, log := codexResumeFixture(t)
 	c.update(1, func(t *Thread) { t.Resumed = false })
-	id, msg := c.codexGoalCommand(sendRequest{ThreadID: 1, Text: "/goal --budget 50000 fix CI"})
+	id, msg := c.codexGoalCommand(SendRequest{ThreadID: 1, Text: "/goal --budget 50000 fix CI"})
 	if id != 1 || msg != "" {
 		t.Fatalf("%d %s", id, msg)
 	}

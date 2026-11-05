@@ -48,13 +48,6 @@ type memoryPromotion struct {
 	Before string `json:"before"`
 	After  string `json:"after"`
 }
-type memoryNotice struct {
-	Explicit bool   `json:"explicit,omitempty"`
-	Scope    string `json:"scope"`
-	Project  string `json:"project,omitempty"`
-	ID       string `json:"id"`
-	Version  uint64 `json:"version"`
-}
 
 func (c *chatController) noteMemory(thread int, e memory.Entry) {
 	c.memoryChanged()
@@ -64,7 +57,7 @@ func (c *chatController) noteMemory(thread int, e memory.Entry) {
 	c.update(thread, func(t *Thread) {
 		// The notice contains only identity; its body is read on demand, so
 		// forgetting leaves no extra plaintext in histories or state broadcasts.
-		t.Messages = append(t.Messages, Message{ID: c.nextID(), Role: "memory", Kind: "memory", SentAtMs: time.Now().UnixMilli(), Memory: &memoryNotice{Explicit: true, Scope: e.Scope.Kind, Project: e.Scope.ProjectPath, ID: e.ID, Version: e.Version}})
+		t.Messages = append(t.Messages, Message{ID: c.nextID(), Role: "memory", Kind: "memory", SentAtMs: time.Now().UnixMilli(), Memory: &MemoryNotice{Explicit: true, Scope: e.Scope.Kind, Project: e.Scope.ProjectPath, ID: e.ID, Version: e.Version}})
 	})
 }
 

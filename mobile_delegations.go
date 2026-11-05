@@ -125,7 +125,7 @@ func (m *mobileApp) openCollaborationThread(raw string) {
 // Resolve the complete backend identity across projects. Numeric sidebar IDs
 // may be reused after a reconnect and must not choose the destination.
 func (m *mobileApp) referencedThread(ref ThreadRef) (Thread, phoneProject, bool) {
-	if !ref.valid() || ref.Source != m.state.ReferenceSource {
+	if !ref.Valid() || ref.Source != m.state.ReferenceSource {
 		return Thread{}, phoneProject{}, false
 	}
 	for _, project := range m.state.Projects {

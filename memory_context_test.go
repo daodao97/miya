@@ -26,7 +26,7 @@ func TestMemoryInjectedIntoCodexWithoutChangingUserTextOrHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	query := "手机构建入口是什么"
-	if c.submit(sendRequest{ThreadID: 1, Text: query}) != 1 {
+	if c.submit(SendRequest{ThreadID: 1, Text: query}) != 1 {
 		t.Fatal(c.lastSubmitError)
 	}
 	waitCodexResume(t, c, d, func() bool { return !c.threadWithID(1).Busy && len(c.threadWithID(1).Messages) > 2 })
@@ -59,7 +59,7 @@ func TestMemoryInjectedIntoCodexWithoutChangingUserTextOrHistory(t *testing.T) {
 	if got := claudeVisibleText([]claudeBlock{{Type: "text", Text: augmented}}); got != query {
 		t.Fatalf("Claude history leaked: %q", got)
 	}
-	req := sendRequest{ThreadID: 1, Text: query, KeepSessionSettings: true}
+	req := SendRequest{ThreadID: 1, Text: query, KeepSessionSettings: true}
 	if c.prepareMemoryInput(c.threadWithID(1), req, c.cwd, c.threadRef(c.threadWithID(1)).URL()).text(query) != query {
 		t.Fatal("native task control injected memory")
 	}
@@ -75,7 +75,7 @@ func TestMemoryQueueRecallsAtExecutionAndFailuresDoNotBlockSend(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.submit(sendRequest{ThreadID: 1, Text: "手机构建"}) != 1 {
+	if c.submit(SendRequest{ThreadID: 1, Text: "手机构建"}) != 1 {
 		t.Fatal("queue rejected")
 	}
 	if len(c.threadWithID(1).Queue) != 1 {
@@ -85,7 +85,7 @@ func TestMemoryQueueRecallsAtExecutionAndFailuresDoNotBlockSend(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	req := c.threadWithID(1).Queue[0].sendRequest
+	req := c.threadWithID(1).Queue[0].SendRequest
 	input := c.prepareMemoryInput(c.threadWithID(1), req, c.cwd, "session")
 	if text := input.text(req.Text); !strings.Contains(text, "手机构建新约定") || strings.Contains(text, "手机构建旧约定") {
 		t.Fatalf("queued recall frozen too early: %q", text)
@@ -115,15 +115,15 @@ func TestMemoryAbsolutePathMessagesAreNotSlashCommands(t *testing.T) {
 	}
 	th := c.threadWithID(1)
 	text := "/Users/daodao/project 项目构建入口是什么"
-	if c.beginMemoryTurn(th, sendRequest{Text: text}, 10) == "" {
+	if c.beginMemoryTurn(th, SendRequest{Text: text}, 10) == "" {
 		t.Fatal("absolute path incorrectly disabled extraction")
 	}
-	input := c.prepareMemoryInput(th, sendRequest{Text: text}, c.cwd, c.threadRef(th).URL())
+	input := c.prepareMemoryInput(th, SendRequest{Text: text}, c.cwd, c.threadRef(th).URL())
 	if !strings.Contains(input.text(text), "build-ios.sh") {
 		t.Fatal("absolute path incorrectly disabled recall")
 	}
 	for _, command := range []string{"/compact", "/review changes", "/goal run", "/loop 5m check", "/custom-skill"} {
-		if c.beginMemoryTurn(th, sendRequest{Text: command}, 20) != "" {
+		if c.beginMemoryTurn(th, SendRequest{Text: command}, 20) != "" {
 			t.Fatalf("command unexpectedly enabled extraction: %s", command)
 		}
 	}

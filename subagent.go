@@ -6,21 +6,6 @@ import (
 	"strings"
 )
 
-// SubAgent is one sub-agent a message started or reports on. Each agent's
-// adapter normalizes its own events into it (Claude Code's Task calls and the
-// frames streamed under them, Codex's collab agent calls), so the chat shows
-// every agent's sub-agents alike without knowing where they came from.
-type SubAgent struct {
-	ID string `json:"id"`
-	// Name is what the sub-agent was asked to do, or who it is.
-	Name   string `json:"name,omitempty"`
-	Status string `json:"status"`
-	// Detail is its latest step while it runs, then its last word.
-	Detail string `json:"detail,omitempty"`
-	// Steps counts the tools it called, when its agent reports them.
-	Steps int `json:"steps,omitempty"`
-}
-
 // A sub-agent's status is one of these, whatever its agent calls them.
 const (
 	subAgentPending     = "pending"

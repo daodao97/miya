@@ -276,7 +276,7 @@ func TestServiceWindowWaitsInsteadOfStartingLocalAgents(t *testing.T) {
 	if c.remote == nil || c.client != nil || len(c.claudeRuns) != 0 || c.ready() {
 		t.Fatal("disconnected window started local agents")
 	}
-	if got := c.submit(sendRequest{Text: "不要启动本地会话"}); got != 0 || len(c.threads()) != 0 || c.lastSubmitError == "" {
+	if got := c.submit(SendRequest{Text: "不要启动本地会话"}); got != 0 || len(c.threads()) != 0 || c.lastSubmitError == "" {
 		t.Fatal("offline window accepted a local send")
 	}
 	select {

@@ -252,7 +252,7 @@ func (app *chatApp) groupViewWithFooter(c *ui.Context, g messageGroup, inlineFoo
 	})
 }
 
-func responseDiffStats(c *ui.Context, stats diffLineStats) {
+func responseDiffStats(c *ui.Context, stats DiffLineStats) {
 	if stats.Added == 0 && stats.Deleted == 0 {
 		return
 	}

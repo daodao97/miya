@@ -202,7 +202,7 @@ func memoryExpiry(s string) (time.Time, error) {
 	return t, nil
 }
 func (c *chatController) memorySource(t Thread, call Message, a memoryArgs) (memory.Source, error) {
-	if !c.threadRef(t).valid() {
+	if !c.threadRef(t).Valid() {
 		return memory.Source{}, errors.New("Session identity is not ready. Try again shortly.")
 	}
 	quote := strings.TrimSpace(a.Quote)

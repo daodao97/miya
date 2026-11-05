@@ -124,7 +124,7 @@ func TestCollaborationClaudeTasksRunIndependentlyAndFreezeResults(t *testing.T) 
 	var sent int
 	f.serv.do(func() {
 		target, _ := f.srv.c.threadByReference(a.Target)
-		sent = f.srv.c.submit(sendRequest{ThreadID: target.ID, Text: "A later unrelated message"})
+		sent = f.srv.c.submit(SendRequest{ThreadID: target.ID, Text: "A later unrelated message"})
 	})
 	if sent == 0 {
 		t.Fatal("ordinary follow-up rejected")

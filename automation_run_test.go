@@ -14,7 +14,7 @@ type automationHarness struct {
 	c      *chatController
 	s      *automationState
 	now    time.Time
-	sent   []sendRequest
+	sent   []SendRequest
 	checks []bool
 }
 
@@ -39,7 +39,7 @@ func newAutomationHarness(t *testing.T) *automationHarness {
 		}
 		return false, "--- FAIL: TestX\nFAIL demo 0.01s"
 	}
-	h.s.submit = func(r sendRequest) int {
+	h.s.submit = func(r SendRequest) int {
 		h.sent = append(h.sent, r)
 		if r.ThreadID != 0 {
 			c.update(r.ThreadID, func(th *Thread) {

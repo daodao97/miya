@@ -87,7 +87,7 @@ func TestThreadReferenceDoesNotChangeSourceConversation(t *testing.T) {
 			} else {
 				c.setThreads([]Thread{target, src})
 			}
-			if id := c.submit(sendRequest{ThreadID: 1, Text: "参考 " + referenceText(testReference(src), src.Title) + " 给登录页加上提示"}); id != 1 {
+			if id := c.submit(SendRequest{ThreadID: 1, Text: "参考 " + referenceText(testReference(src), src.Title) + " 给登录页加上提示"}); id != 1 {
 				t.Fatalf("submit returned %d", id)
 			}
 			target = c.threadWithID(1)

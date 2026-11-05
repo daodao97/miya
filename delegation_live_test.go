@@ -224,7 +224,7 @@ func TestInstalledAgentCollaborationMCP(t *testing.T) {
 	var parentID int
 	prompt := "Miya MCP continuation verification in an empty temporary workspace. Use start_task with request_id miya-live-mcp-1, agent codex, task exactly 'Reply only MIYA_MCP_TASK_OK. Do not use tools or read files.', context none. Omit the notify argument to use automatic continuation. After start_task immediately end your first reply with MIYA_WAITING; do not wait or read the task in this first turn. When Miya later sends its completion notification, use read_task to verify the fixed result and then reply only MIYA_MCP_PARENT_OK. Use only start_task and read_task; do not access files, use built-in tools, or create any other tasks."
 	f.serv.do(func() {
-		parentID = f.srv.c.submit(sendRequest{Agent: agentClaude, Project: cwd, Text: prompt, MemoryControl: true})
+		parentID = f.srv.c.submit(SendRequest{Agent: agentClaude, Project: cwd, Text: prompt, MemoryControl: true})
 	})
 	if parentID == 0 {
 		t.Fatal("native parent did not start")

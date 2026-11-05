@@ -26,7 +26,7 @@ func (c *chatController) loadForkedReferences() {
 	}
 	c.forkedReferences = map[ThreadRef]referenceSession{}
 	for _, session := range sessions {
-		if session.Ref.valid() && session.Ref.Source == c.referenceSource {
+		if session.Ref.Valid() && session.Ref.Source == c.referenceSource {
 			c.forkedReferences[session.Ref] = session
 		}
 	}
@@ -34,7 +34,7 @@ func (c *chatController) loadForkedReferences() {
 
 func (c *chatController) rememberForkedReference(t Thread, project string) {
 	ref := c.threadRef(t)
-	if !ref.valid() {
+	if !ref.Valid() {
 		return
 	}
 	if c.forkedReferences == nil {

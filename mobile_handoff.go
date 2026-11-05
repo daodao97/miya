@@ -9,7 +9,7 @@ func (m *mobileApp) handoffToNewThread() {
 	}
 	source := m.view.c.current()
 	ref := ThreadRef{Source: m.state.ReferenceSource, Backend: threadAgent(source), SessionID: source.ServerID}
-	if source.ID == 0 || !ref.valid() {
+	if source.ID == 0 || !ref.Valid() {
 		m.sendErr = tr("Available once the session is created")
 		return
 	}

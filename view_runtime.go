@@ -13,7 +13,7 @@ import (
 
 func (app *chatApp) runtimeSurface(c *ui.Context, p *panelState, s *panelSurface) {
 	ref := app.c.threadRef(app.c.current())
-	if !ref.valid() {
+	if !ref.Valid() {
 		panelMessage(c, tr("Background tasks"), tr("Send a message to start a conversation and view runtime information"))
 		return
 	}

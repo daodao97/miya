@@ -65,7 +65,7 @@ func (c *chatController) retryResponse(req retryRequest) error {
 			if !backendOf(t).Ready(c) {
 				return fmt.Errorf("Unable to retry. Check the connection or agent settings.")
 			}
-			if c.submit(sendRequest{ThreadID: t.ID, Text: retryContinuePrompt, KeepSessionSettings: true, MemoryControl: true}) == 0 {
+			if c.submit(SendRequest{ThreadID: t.ID, Text: retryContinuePrompt, KeepSessionSettings: true, MemoryControl: true}) == 0 {
 				return fmt.Errorf("Unable to retry. Check the connection or agent settings.")
 			}
 			return nil

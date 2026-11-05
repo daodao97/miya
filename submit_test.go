@@ -27,15 +27,15 @@ func TestSubmitWithoutWindowState(t *testing.T) {
 	c := &chatController{cwd: dir, ctx: context.Background(), claudeBinary: bin, claudeEnv: []string{"MIYA_OUT=" + out}}
 	c.threads, c.setThreads = createSignal([]Thread{})
 	c.approvals, c.setApprovals = createSignal([]codex.Approval{})
-	if c.submit(sendRequest{Agent: agentClaude, Text: "   "}) != 0 {
+	if c.submit(SendRequest{Agent: agentClaude, Text: "   "}) != 0 {
 		t.Fatal("an empty message was sent")
 	}
-	id := c.submit(sendRequest{Agent: agentClaude, Text: "hello from the server", Policy: "never"})
+	id := c.submit(SendRequest{Agent: agentClaude, Text: "hello from the server", Policy: "never"})
 	th := c.threadWithID(id)
 	if id == 0 || th.Agent != agentClaude || !th.Busy || th.PermissionPolicy != "never" || len(th.Messages) != 1 || th.Messages[0].Content != "hello from the server" {
 		t.Fatalf("conversation %+v", th)
 	}
-	if c.submit(sendRequest{ThreadID: id, Text: "again"}) != id || len(c.threadWithID(id).Queue) != 1 || len(c.threadWithID(id).Messages) != 1 {
+	if c.submit(SendRequest{ThreadID: id, Text: "again"}) != id || len(c.threadWithID(id).Queue) != 1 || len(c.threadWithID(id).Messages) != 1 {
 		t.Fatal("a message for a busy conversation was not queued")
 	}
 	var args string

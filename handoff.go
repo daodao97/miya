@@ -226,7 +226,7 @@ func (c *chatController) resolveThreadRef(id int) (Thread, []Message, bool) {
 }
 
 func (c *chatController) resolveReference(ref ThreadRef) (Thread, []Message, error) {
-	if !ref.valid() {
+	if !ref.Valid() {
 		return Thread{}, nil, fmt.Errorf("%s", tr("Invalid session identity"))
 	}
 	if ref.Source != c.referenceSource {
@@ -289,7 +289,7 @@ func (c *chatController) prefetchThread(id int) {
 
 // Cache by backend identity. A fork or reused UI number cannot inherit history.
 func (c *chatController) prefetchReference(ref ThreadRef) {
-	if !ref.valid() {
+	if !ref.Valid() {
 		return
 	}
 	if c.remote != nil {
@@ -442,7 +442,7 @@ func (app *chatApp) threadChoices(query string) []composerChoice {
 	for _, match := range matchingThreadRefs(app.c.threadRefProjects(), app.c.active(), query) {
 		t := match.Thread
 		ref := app.c.threadRef(t)
-		if !ref.valid() {
+		if !ref.Valid() {
 			continue
 		}
 		out = append(out, composerChoice{Name: threadRefTitle(t), Detail: tr("Conversation · ") + backendOf(t).Name() + " · " + match.ProjectName, Ref: &ref})
@@ -451,7 +451,7 @@ func (app *chatApp) threadChoices(query string) []composerChoice {
 }
 
 func insertThreadReference(value string, token composerToken, ref ThreadRef, title string) string {
-	if token.Kind != '@' || token.Start < 0 || token.End < token.Start || token.End > len(value) || !ref.valid() {
+	if token.Kind != '@' || token.Start < 0 || token.End < token.Start || token.End > len(value) || !ref.Valid() {
 		return value
 	}
 	return value[:token.Start] + referenceText(ref, title) + " " + value[token.End:]
@@ -465,7 +465,7 @@ func (app *chatApp) handoffToNewThread() {
 	c := app.c
 	t := c.current()
 	ref := c.threadRef(t)
-	if !ref.valid() {
+	if !ref.Valid() {
 		app.notice = tr("Available once the session is created")
 		return
 	}

@@ -96,7 +96,7 @@ func (c *chatController) noteRuntime(t Thread) {
 // Used by UI, phone and MCP: resolve the stable session on the executor, then
 // perform native RPC/system observation outside it.
 func (c *chatController) prepareRuntime(ref ThreadRef, project string) (deferred, error) {
-	if !ref.valid() || ref.Source != c.referenceSource {
+	if !ref.Valid() || ref.Source != c.referenceSource {
 		return nil, errors.New("Conversation runtime belongs to another desktop or has an invalid identity")
 	}
 	target := c.phoneThreadFor(remoteRuntimeRequest(ref, project))

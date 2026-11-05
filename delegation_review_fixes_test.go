@@ -61,7 +61,7 @@ func TestManagedCodexResumeFailuresNeverReturnSystemInputAsDraft(t *testing.T) {
 				if failure == "unavailable" {
 					c.client = nil
 				}
-				req := sendRequest{ThreadID: 1, ExecutionID: id, Text: "system input"}
+				req := SendRequest{ThreadID: 1, ExecutionID: id, Text: "system input"}
 				c.resume(c.threadWithID(1), &req)
 				if failure == "changed" {
 					for deadline := time.Now().Add(5 * time.Second); ; {
@@ -94,7 +94,7 @@ func TestManagedCodexResumeFailuresNeverReturnSystemInputAsDraft(t *testing.T) {
 					t.Fatal("managed input entered ordinary queue")
 				}
 				if failure == "history-busy" {
-					c.submitExpanded(sendRequest{ThreadID: 1, Text: "ordinary user follow-up"})
+					c.submitExpanded(SendRequest{ThreadID: 1, Text: "ordinary user follow-up"})
 					q := c.threadWithID(1).Queue
 					if len(q) != 1 || q[0].ExecutionID != "" {
 						t.Fatal("ordinary user queue changed")

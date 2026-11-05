@@ -188,11 +188,11 @@ func TestMemorySkippedTurnClearsFailedTurnRecord(t *testing.T) {
 	attachMemory(t, c)
 	c.memoryTurns = map[int]memoryTurn{1: {LocalID: "failed", FirstMessage: 10}}
 	thread := Thread{ID: 1}
-	c.beginMemoryTurn(thread, sendRequest{Text: "/compact", Steer: true}, 20)
+	c.beginMemoryTurn(thread, SendRequest{Text: "/compact", Steer: true}, 20)
 	if c.memoryTurns[1].LocalID != "failed" {
 		t.Fatal("steer into a running turn must keep its record")
 	}
-	if got := c.beginMemoryTurn(thread, sendRequest{Text: "/compact"}, 20); got != "" {
+	if got := c.beginMemoryTurn(thread, SendRequest{Text: "/compact"}, 20); got != "" {
 		t.Fatalf("command turn joined memory: %q", got)
 	}
 	if _, ok := c.memoryTurns[1]; ok {

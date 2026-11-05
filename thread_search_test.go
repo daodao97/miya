@@ -74,7 +74,7 @@ func TestComposerCanChooseGlobalConversationBeyondFirstPage(t *testing.T) {
 func TestServiceMirrorsGlobalThreadSearchMetadata(t *testing.T) {
 	c := serverController(t.TempDir(), "")
 	c.setThreads([]Thread{{ID: 1, ServerID: "session-1", Title: "Current: "}})
-	c.projectCache["/other"] = []Thread{{ID: 8, ServerID: "session-8", Title: "后台对话", Draft: "未发送", Queue: []queuedMessage{{Text: "排队"}}, Messages: []Message{{Role: "user", Content: "完整正文"}}}}
+	c.projectCache["/other"] = []Thread{{ID: 8, ServerID: "session-8", Title: "后台对话", Draft: "未发送", Queue: []QueuedMessage{{Text: "排队"}}, Messages: []Message{{Role: "user", Content: "完整正文"}}}}
 	c.projectCache[c.cwd] = []Thread{{ID: 99, ServerID: "session-99", Title: "旧缓存"}}
 	data, err := json.Marshal(c.snapshotState())
 	if err != nil {

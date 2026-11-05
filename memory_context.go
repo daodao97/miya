@@ -31,7 +31,7 @@ func memoryCommand(text string) bool {
 	return true
 }
 
-func (c *chatController) prepareMemoryInput(t Thread, req sendRequest, project, session string) memoryInput {
+func (c *chatController) prepareMemoryInput(t Thread, req SendRequest, project, session string) memoryInput {
 	if c.memory == nil || t.MemoryDisabled || t.Automation != "" || req.MemoryControl || req.KeepSessionSettings || memoryCommand(req.Text) {
 		return memoryInput{}
 	}

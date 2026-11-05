@@ -129,7 +129,7 @@ func claudeInput(text string, paths []string) ([]map[string]any, error) {
 	}
 	return blocks, nil
 }
-func (c *chatController) sendClaude(req sendRequest) int {
+func (c *chatController) sendClaude(req SendRequest) int {
 	text, paths, policy := req.Text, req.Attachments, req.Policy
 	t := c.threadWithID(req.ThreadID)
 	if t.ID != 0 && !t.HistoryLoaded {
@@ -182,10 +182,10 @@ func (c *chatController) sendClaude(req sendRequest) int {
 		c.claudeRuns = map[int]*claude.Client{}
 	}
 	existing := c.claudeRuns[id]
-	generation := c.threadWithID(id).claudeGeneration
+	generation := c.threadWithID(id).ClaudeGeneration
 	if existing == nil {
 		generation++
-		c.update(id, func(t *Thread) { t.claudeGeneration = generation })
+		c.update(id, func(t *Thread) { t.ClaudeGeneration = generation })
 	}
 	var executionEpoch string
 	if execution := c.managedExecutions[req.ExecutionID]; execution != nil {
@@ -198,7 +198,7 @@ func (c *chatController) sendClaude(req sendRequest) int {
 	}
 	reject := func(err error) {
 		c.dispatch(func() {
-			if c.threadWithID(id).claudeGeneration != generation {
+			if c.threadWithID(id).ClaudeGeneration != generation {
 				return
 			}
 			if existing == nil {
@@ -265,20 +265,20 @@ func (c *chatController) sendClaude(req sendRequest) int {
 		}
 		run, err := claude.Start(c.ctx, claude.Options{Binary: c.claudeBinary, Args: append(append([]string(nil), c.claudeArgs...), claudeMCPArgs(cwd)...), Env: append(append([]string(nil), c.claudeEnv...), claudeMCPEnv()...), Cwd: cwd, SessionID: t.ServerID, Resume: t.Resumed, PermissionMode: claudePermissionMode(policy), Model: req.Model, Effort: req.Effort, Content: content, BeforeInput: beforeInput}, func(f claude.Frame) {
 			c.dispatch(func() {
-				if c.threadWorkspace(id) == cwd && c.threadWithID(id).claudeGeneration == generation {
+				if c.threadWorkspace(id) == cwd && c.threadWithID(id).ClaudeGeneration == generation {
 					c.handleClaude(id, f)
 				}
 			})
 		}, func(err error) {
 			c.dispatch(func() {
-				if c.threadWithID(id).claudeGeneration == generation {
+				if c.threadWithID(id).ClaudeGeneration == generation {
 					c.finishClaude(id, cwd, err)
 				}
 			})
 		})
 		mem.finish(err == nil)
 		c.dispatch(func() {
-			if c.threadWithID(id).claudeGeneration != generation {
+			if c.threadWithID(id).ClaudeGeneration != generation {
 				if run != nil {
 					go run.Stop()
 				}

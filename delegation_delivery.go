@@ -36,7 +36,7 @@ func (s *collaborationState) deliverPending() {
 				c.managedExecutions = map[string]*managedExecution{}
 			}
 			c.managedExecutions[d.ID] = &managedExecution{thread: t.ID, pending: map[string]dg.Event{}}
-			id := c.submitExpanded(sendRequest{ExecutionID: d.ID, Origin: "delegation_notice", ThreadID: t.ID, Text: s.manager.NotificationText(d), Model: t.LaunchModel, Effort: t.LaunchEffort, Policy: c.permissionForThread(t), ExplicitSettings: true, KeepSessionSettings: true, MemoryControl: true})
+			id := c.submitExpanded(SendRequest{ExecutionID: d.ID, Origin: "delegation_notice", ThreadID: t.ID, Text: s.manager.NotificationText(d), Model: t.LaunchModel, Effort: t.LaunchEffort, Policy: c.permissionForThread(t), ExplicitSettings: true, KeepSessionSettings: true, MemoryControl: true})
 			if id == 0 {
 				return nil, errors.New("Notification was rejected before native submission")
 			}

@@ -15,24 +15,6 @@ import (
 	"github.com/egoist/mygo/ui/markdown/parser"
 )
 
-// ThreadRef identifies a backend session, never a window or a sidebar row.
-type ThreadRef struct {
-	Source    string `json:"source"`
-	Backend   string `json:"backend"`
-	SessionID string `json:"sessionId"`
-}
-
-func (r ThreadRef) valid() bool {
-	return sourceIDPattern.MatchString(r.Source) && registeredBackend(r.Backend) && r.SessionID != "" && !strings.ContainsAny(r.SessionID, "\x00\r\n")
-}
-
-func (r ThreadRef) URL() string {
-	if !r.valid() {
-		return ""
-	}
-	return "miya://" + r.Source + "/thread/" + r.Backend + "/" + url.PathEscape(r.SessionID)
-}
-
 func parseThreadURL(raw string) (ThreadRef, bool) {
 	u, err := url.Parse(raw)
 	if err != nil || u.Scheme != "miya" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
@@ -44,22 +26,10 @@ func parseThreadURL(raw string) (ThreadRef, bool) {
 	}
 	sid, err := url.PathUnescape(p[3])
 	r := ThreadRef{Source: u.Host, Backend: p[2], SessionID: sid}
-	return r, err == nil && r.valid() && r.URL() == raw
+	return r, err == nil && r.Valid() && r.URL() == raw
 }
 
-var sourceIDPattern = regexp.MustCompile(`^[0-9a-f]{32}$`)
 var threadMentionPattern = regexp.MustCompile(`@\[((?:\\.|[^\]\\\r\n])*)\]\((miya://[^\s<>()\[\]]+)\)`)
-
-// MessagePart is the lossless composer representation. The explicit text
-// spelling @[title](URL) survives backend history and plain-text clipboard
-// round trips; a bare URL is ordinary text and does not load any context.
-type MessagePart struct {
-	Type          string     `json:"type"`
-	Text          string     `json:"text,omitempty"`
-	Ref           *ThreadRef `json:"ref,omitempty"`
-	TitleSnapshot string     `json:"titleSnapshot,omitempty"`
-	Agent         string     `json:"agent,omitempty"`
-}
 
 type threadMention struct {
 	Start, End int
@@ -172,7 +142,7 @@ func partsText(parts []MessagePart) (string, error) {
 		case "text":
 			b.WriteString(p.Text)
 		case "thread_ref":
-			if p.Ref == nil || !p.Ref.valid() {
+			if p.Ref == nil || !p.Ref.Valid() {
 				return "", errors.New("Invalid conversation reference identity")
 			}
 			b.WriteString(referenceText(*p.Ref, p.TitleSnapshot))
@@ -199,7 +169,7 @@ func loadReferenceSource(dir string) (string, error) {
 			return "", err
 		}
 		id := strings.TrimSpace(string(data))
-		if !sourceIDPattern.MatchString(id) {
+		if !SourceIDPattern.MatchString(id) {
 			return "", errors.New("Invalid conversation reference source file")
 		}
 		return id, nil
@@ -278,7 +248,7 @@ func splitReferenceContext(text string) (string, []referenceSnapshot) {
 				break
 			}
 		}
-		if !s.Ref.valid() || !found {
+		if !s.Ref.Valid() || !found {
 			return text, nil
 		}
 		covered[s.Ref] = true

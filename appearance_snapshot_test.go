@@ -21,7 +21,7 @@ func TestDarkModeSnapshot(t *testing.T) {
 	c := app.c
 	c.setThreads([]Thread{{ID: 1, Agent: agentClaude, ServerID: "s1", Title: "深色模式", Busy: true, HistoryLoaded: true,
 		StartedAtMs: time.Now().Add(-12 * time.Second).UnixMilli(), LastOutputAtMs: time.Now().UnixMilli(),
-		Queue: []queuedMessage{{ID: 9, sendRequest: sendRequest{Text: "接下来加个测试"}}},
+		Queue: []QueuedMessage{{ID: 9, SendRequest: SendRequest{Text: "接下来加个测试"}}},
 		Messages: []Message{
 			{ID: 1, Role: "user", Content: "电脑端也增加暗黑模式"},
 			{ID: 2, Role: "assistant", Content: "好的，先看配色。\n\n```go\nfunc main() { println(\"hi\") }\n```\n\n- 一项\n- **两项**", Status: "completed"},

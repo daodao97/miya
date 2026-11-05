@@ -62,14 +62,14 @@ func (c *chatController) phoneAgentOptions() []phoneAgentOptions {
 	return out
 }
 
-func (c *chatController) phoneSendRequest(r remote.Request, paths []string, agent string) (sendRequest, error) {
+func (c *chatController) phoneSendRequest(r remote.Request, paths []string, agent string) (SendRequest, error) {
 	if agent == "" {
 		agent = agentCodex
 	}
 	if agent != agentCodex && agent != agentClaude {
-		return sendRequest{}, errors.New("Unsupported agent")
+		return SendRequest{}, errors.New("Unsupported agent")
 	}
-	req := sendRequest{Agent: agent, Text: r.Text, Attachments: paths, Steer: r.Steer}
+	req := SendRequest{Agent: agent, Text: r.Text, Attachments: paths, Steer: r.Steer}
 	if r.Options == nil {
 		return req, nil
 	}

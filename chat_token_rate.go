@@ -12,11 +12,11 @@ import (
 // earlier turns. Only the reported count travels to windows and phones.
 func resetTurnOutput(t *Thread) {
 	t.TurnOutputTokens = nil
-	t.turnOutputBaseline = nil
-	t.claudeOutputTokens = nil
+	t.TurnOutputBaseline = nil
+	t.ClaudeOutputTokens = nil
 	t.ClaudeMessageID = ""
 	if t.Usage != nil && t.Usage.Total.OutputTokens != nil {
-		t.turnOutputBaseline = new(*t.Usage.Total.OutputTokens)
+		t.TurnOutputBaseline = new(*t.Usage.Total.OutputTokens)
 	}
 }
 
@@ -25,21 +25,21 @@ func recordCodexOutput(t *Thread, usage *codex.TokenUsage) {
 		return
 	}
 	total := *usage.Total.OutputTokens
-	if t.turnOutputBaseline == nil {
+	if t.TurnOutputBaseline == nil {
 		// A resumed session may first report its historical total during this
 		// turn. The last request identifies which output is new.
 		last := usage.Last.OutputTokens
 		if last == nil || *last < 0 || *last > total {
 			return
 		}
-		t.turnOutputBaseline = new(total - *last)
+		t.TurnOutputBaseline = new(total - *last)
 	}
-	if total < *t.turnOutputBaseline {
+	if total < *t.TurnOutputBaseline {
 		// A reset/compacted total cannot be compared with the old baseline.
 		t.TurnOutputTokens = nil
 		return
 	}
-	t.TurnOutputTokens = new(total - *t.turnOutputBaseline)
+	t.TurnOutputTokens = new(total - *t.TurnOutputBaseline)
 }
 
 func recordClaudeOutput(t *Thread, messageID string, raw json.RawMessage) {
@@ -54,12 +54,12 @@ func recordClaudeOutput(t *Thread, messageID string, raw json.RawMessage) {
 	}
 	// Claude reports cumulative usage for each message, sometimes more than
 	// once. Reconcile by message ID rather than adding duplicate reports.
-	counts := maps.Clone(t.claudeOutputTokens)
+	counts := maps.Clone(t.ClaudeOutputTokens)
 	if counts == nil {
 		counts = make(map[string]int)
 	}
 	counts[messageID] = max(counts[messageID], *usage.OutputTokens)
-	t.claudeOutputTokens = counts
+	t.ClaudeOutputTokens = counts
 	total := 0
 	for _, count := range counts {
 		total += count

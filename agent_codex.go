@@ -90,7 +90,7 @@ func (codexBackend) Open(c *chatController, t Thread) {
 	}
 }
 
-func (codexBackend) Send(c *chatController, req sendRequest) int { return c.sendCodex(req) }
+func (codexBackend) Send(c *chatController, req SendRequest) int { return c.sendCodex(req) }
 
 func (codexBackend) Stop(c *chatController, t Thread) {
 	// Without a turn yet, the run interrupts itself once turn/start returns.
@@ -155,7 +155,7 @@ func (codexBackend) Rewind(c *chatController, t Thread, m Message, text string) 
 // Codex steers with turn/steer, which the running turn takes as input. The
 // user message shows at once and is matched as a sent one is; a steer Codex
 // refuses, as for a turn that just ended, goes to the queue or is sent.
-func (codexBackend) Steer(c *chatController, t Thread, req sendRequest) bool {
+func (codexBackend) Steer(c *chatController, t Thread, req SendRequest) bool {
 	if t.TurnID == "" || t.ServerID == "" || !t.Resumed || c.client == nil {
 		return false
 	}

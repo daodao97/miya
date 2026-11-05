@@ -22,7 +22,7 @@ func (claudeBackend) Ready(c *chatController) bool                { return c.cla
 func (claudeBackend) Problem(c *chatController) (string, bool)    { return c.claudeError, false }
 func (claudeBackend) Reconnect(*chatController)                   {}
 func (claudeBackend) Open(c *chatController, t Thread)            { c.loadClaudeHistory(t) }
-func (claudeBackend) Send(c *chatController, req sendRequest) int { return c.sendClaude(req) }
+func (claudeBackend) Send(c *chatController, req SendRequest) int { return c.sendClaude(req) }
 
 func (claudeBackend) Stop(c *chatController, t Thread) {
 	if run := c.claudeRuns[t.ID]; run != nil {
@@ -115,7 +115,7 @@ func (claudeBackend) Rewind(c *chatController, t Thread, m Message, text string)
 
 // Claude Code steers by a user message written to the running turn's
 // input, which it folds into the turn.
-func (claudeBackend) Steer(c *chatController, t Thread, req sendRequest) bool {
+func (claudeBackend) Steer(c *chatController, t Thread, req SendRequest) bool {
 	run := c.claudeRuns[t.ID]
 	if run == nil || !run.Steerable() {
 		return false

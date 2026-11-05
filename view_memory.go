@@ -539,7 +539,7 @@ func (app *chatApp) memoryPromotionView(c *ui.Context, e memory.Entry) {
 		}
 	})
 }
-func (app *chatApp) memoryNoticeView(c *ui.Context, n *memoryNotice) {
+func (app *chatApp) memoryNoticeView(c *ui.Context, n *MemoryNotice) {
 	if n == nil || !n.Explicit {
 		return
 	}

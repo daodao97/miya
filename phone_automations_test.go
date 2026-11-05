@@ -194,7 +194,7 @@ func TestPhoneAutomationRunStartsInItsProjectAndRejectsOverlap(t *testing.T) {
 	v := mobileAutomationFixture()
 	v.Project, v.Enabled = t.TempDir(), false
 	c.auto.store.Automations = []Automation{v.Automation}
-	c.auto.submit = func(r sendRequest) int {
+	c.auto.submit = func(r SendRequest) int {
 		if r.Project != v.Project || r.Agent != v.Agent || !r.MemoryControl {
 			t.Errorf("wrong automation submission: %+v", r)
 		}

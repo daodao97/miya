@@ -30,7 +30,7 @@ func TestSteerFoldsIntoTheRunningClaudeTurn(t *testing.T) {
 	}
 	c.claudeBinary, c.claudeEnv = bin, []string{"MIYA_OUT=" + out}
 	c.setThreads(nil)
-	id := c.submit(sendRequest{Agent: agentClaude, Text: "first"})
+	id := c.submit(SendRequest{Agent: agentClaude, Text: "first"})
 	for deadline := time.Now().Add(time.Minute); ; time.Sleep(10 * time.Millisecond) {
 		d.drain()
 		if run := c.claudeRuns[id]; run != nil && run.Steerable() {
@@ -40,7 +40,7 @@ func TestSteerFoldsIntoTheRunningClaudeTurn(t *testing.T) {
 			t.Fatal("the run never took more messages")
 		}
 	}
-	if c.submit(sendRequest{ThreadID: id, Text: "steered please", Steer: true}) != id {
+	if c.submit(SendRequest{ThreadID: id, Text: "steered please", Steer: true}) != id {
 		t.Fatal("steer refused")
 	}
 	th := c.threadWithID(id)
@@ -60,14 +60,14 @@ func TestSteerFoldsIntoTheRunningClaudeTurn(t *testing.T) {
 func TestSteerFallsBackToTheQueue(t *testing.T) {
 	c, _ := queueController(t)
 	// No running process, as a turn still starting.
-	if c.submit(sendRequest{ThreadID: 1, Text: "later", Steer: true}) != 1 {
+	if c.submit(SendRequest{ThreadID: 1, Text: "later", Steer: true}) != 1 {
 		t.Fatal("refused")
 	}
 	if th := c.threadWithID(1); len(th.Queue) != 1 || th.Queue[0].Steer || len(th.Messages) != 0 {
 		t.Fatalf("not queued: %+v", th)
 	}
 	// Codex cannot steer a thread without a running turn either.
-	if (codexBackend{}).Steer(c, Thread{ID: 1, ServerID: "t1", Resumed: true}, sendRequest{Text: "x"}) {
+	if (codexBackend{}).Steer(c, Thread{ID: 1, ServerID: "t1", Resumed: true}, SendRequest{Text: "x"}) {
 		t.Fatal("Codex steered without a turn")
 	}
 }

@@ -64,7 +64,7 @@ func TestClaudeHistoryLoadDrainsQueueAfterProjectSwitch(t *testing.T) {
 	writeClaudeSession(t, cwd, "s1", `{"type":"user","uuid":"u1","message":{"content":"Earlier question"}}`)
 	c.update(1, func(th *Thread) { th.Busy, th.HistoryLoaded = false, false })
 	c.loadClaudeHistory(c.threadWithID(1))
-	if c.submit(sendRequest{ThreadID: 1, Text: "Queued follow-up"}) != 1 {
+	if c.submit(SendRequest{ThreadID: 1, Text: "Queued follow-up"}) != 1 {
 		t.Fatal("follow-up was not accepted while history was loading")
 	}
 	c.projectCache = map[string][]Thread{cwd: c.threads()}

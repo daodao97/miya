@@ -110,7 +110,7 @@ func TestMemoryExplicitNoticeContainsScopeAndUndo(t *testing.T) {
 	c := app.c
 	attachMemory(t, c)
 	e := completeMemory(t, c, "memorySave", memoryRequest{Scope: "user", Kind: "preference", Content: "偏好中文解释"}).(memory.Entry)
-	notice := &memoryNotice{Explicit: true, Scope: "user", ID: e.ID, Version: e.Version}
+	notice := &MemoryNotice{Explicit: true, Scope: "user", ID: e.ID, Version: e.Version}
 	c.setThreads([]Thread{{ID: 1, ServerID: "session", HistoryLoaded: true, Messages: []Message{{ID: 10, Role: "user", Content: "记住"}, {ID: 11, Role: "tool", Kind: "commandExecution"}, {ID: 12, Role: "tool", Kind: "commandExecution"}, {ID: 13, Role: "memory", Memory: notice}}}})
 	c.setActive(1)
 	key := fmt.Sprintf("/%s/%s/%d", notice.Scope, notice.ID, notice.Version)
@@ -135,7 +135,7 @@ func TestMemoryExplicitNoticeContainsScopeAndUndo(t *testing.T) {
 func TestMemoryLegacyAutomaticCardsStayOutOfConversation(t *testing.T) {
 	app, tt := testApp(t)
 	c := app.c
-	legacy := Message{ID: 12, Role: "memory", Kind: "memory", Memory: &memoryNotice{Scope: "project", ID: "old", Version: 1}}
+	legacy := Message{ID: 12, Role: "memory", Kind: "memory", Memory: &MemoryNotice{Scope: "project", ID: "old", Version: 1}}
 	c.setThreads([]Thread{{ID: 1, ServerID: "session", HistoryLoaded: true, Messages: []Message{
 		{ID: 10, Role: "user", Content: "项目背景"}, {ID: 11, Role: "assistant", Content: "正常回答"}, legacy,
 	}}})

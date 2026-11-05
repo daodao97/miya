@@ -213,7 +213,7 @@ func (c *chatController) mcpThreads(r mcpRequest) mcpThreadsResult {
 func (c *chatController) mcpThreadsFor(caller Thread, project string) mcpThreadsResult {
 	res := mcpThreadsResult{Threads: []mcpThreadInfo{}}
 	for _, t := range c.projectThreads(project) {
-		if t.ID == 0 || t.ID == caller.ID || !c.threadRef(t).valid() {
+		if t.ID == 0 || t.ID == caller.ID || !c.threadRef(t).Valid() {
 			continue
 		}
 		status := "idle"
@@ -286,12 +286,12 @@ func (c *chatController) mcpDelegate(r mcpRequest) (mcpDelegateResult, error) {
 	text := task
 	if !r.NoContext {
 		ref := c.threadRef(caller)
-		if !ref.valid() {
+		if !ref.Valid() {
 			return mcpDelegateResult{}, errors.New("The session must be created before its context can be handed off")
 		}
 		text += "\n\n" + referenceText(ref, threadRefTitle(caller))
 	}
-	id := c.submit(sendRequest{ThreadID: r.Thread, Agent: agent, Project: c.threadWorkspace(caller.ID), Text: text, MemoryControl: true})
+	id := c.submit(SendRequest{ThreadID: r.Thread, Agent: agent, Project: c.threadWorkspace(caller.ID), Text: text, MemoryControl: true})
 	if id == 0 {
 		return mcpDelegateResult{}, errors.New(textutil.FirstNonEmpty(c.lastSubmitError, "Handoff failed: the target agent is not ready, or the conversation is read-only"))
 	}

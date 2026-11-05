@@ -16,7 +16,7 @@ type messageGroup struct {
 	Streaming     bool
 	Timestamp     int64
 	ShowTimestamp bool
-	DiffStats     diffLineStats
+	DiffStats     DiffLineStats
 }
 
 const collapsedThreadCount = 5

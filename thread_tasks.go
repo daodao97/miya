@@ -8,16 +8,6 @@ import (
 	"miya/internal/codex"
 )
 
-// ThreadTask is the common view of native goals and session schedules. The
-// agent owns execution; Miya only projects its reported state and controls.
-type ThreadTask struct {
-	ID, Kind, Title, Status, Detail string
-	Schedule                        string `json:",omitempty"`
-	NextRunAtMs                     int64  `json:",omitempty"`
-	TokensUsed, TimeUsedSeconds     int64  `json:",omitempty"`
-	TokenBudget                     *int64 `json:",omitempty"`
-}
-
 func activeThreadGoal(t Thread) bool {
 	for _, task := range t.Tasks {
 		if task.Kind == "goal" && task.Status == "active" {

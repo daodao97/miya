@@ -51,7 +51,7 @@ func (app *chatApp) queueView(c *ui.Context, t Thread) {
 
 // editQueued takes a message out of the queue and back into the composer,
 // before what is already being written there.
-func (app *chatApp) editQueued(threadID int, q queuedMessage) {
+func (app *chatApp) editQueued(threadID int, q QueuedMessage) {
 	cc := app.c
 	cc.removeQueued(threadID, q.ID)
 	text, _ := splitReferenceContext(q.Text)

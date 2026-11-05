@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"miya/internal/codex"
+	"miya/internal/model"
 )
 
 // Every agent the app talks to is an agentBackend. The interface and the
@@ -13,8 +14,8 @@ import (
 // and listing it in agentBackends.
 
 const (
-	agentCodex  = "codex"
-	agentClaude = "claude-code"
+	agentCodex  = model.AgentCodex
+	agentClaude = model.AgentClaude
 )
 
 // agentCaps says which shared controls apply to an agent's conversations.
@@ -63,7 +64,7 @@ type agentBackend interface {
 	Open(c *chatController, t Thread)
 	// Send starts a turn of req, which submit checked, and returns the
 	// conversation running it.
-	Send(c *chatController, req sendRequest) int
+	Send(c *chatController, req SendRequest) int
 	Stop(c *chatController, t Thread)
 	Archive(c *chatController, t Thread)
 	Delete(c *chatController, t Thread)
@@ -96,7 +97,7 @@ type agentBackend interface {
 	// Steer adds a message to the running turn of t; false when it cannot,
 	// and the message waits in the queue instead. A steer the agent refuses
 	// later goes to the queue too.
-	Steer(c *chatController, t Thread, req sendRequest) bool
+	Steer(c *chatController, t Thread, req SendRequest) bool
 }
 
 // agentBackends lists the agents in the order the picker shows them; the
@@ -186,7 +187,7 @@ func (c *chatController) rewind(threadID, messageID int, text string) {
 // finishRewind ends an adapter's rewind: on success it drops the message and
 // what followed, lets the adapter record its new history, and sends the text.
 func (c *chatController) finishRewind(id, messageID int, text string, err error, apply func(*Thread)) {
-	req := sendRequest{ThreadID: id, Text: text}
+	req := SendRequest{ThreadID: id, Text: text}
 	c.update(id, func(t *Thread) {
 		t.Busy = false
 		if err != nil {
@@ -212,31 +213,6 @@ func (c *chatController) finishRewind(id, messageID int, text string, err error,
 	if c.submit(req) == 0 {
 		c.returnDraft(id, text, req.Attachments)
 	}
-}
-
-// sendRequest is one message to send, with what the window chose for it.
-type sendRequest struct {
-	ExecutionID string `json:"executionId,omitempty"`
-	Origin      string `json:"origin,omitempty"`
-	// Internal/MCP/automation messages do not become automatic memories.
-	MemoryControl bool `json:"memoryControl,omitempty"`
-	// ThreadID is the conversation, 0 to start one of Agent.
-	ThreadID int
-	Agent    string
-	Text     string
-	Parts    []MessagePart `json:"parts,omitempty"`
-	// Project is a new conversation's project, "" the open one.
-	Project     string
-	Attachments []string
-	// Model, Effort and Policy default to the app's settings and the
-	// conversation's permission choice.
-	Model, Effort, Policy string
-	ExplicitSettings      bool
-	// Steer adds the message to a running turn instead of queueing it.
-	Steer bool
-	// KeepSessionSettings is used by native task controls, which must work
-	// even after the user has changed the next message's launch settings.
-	KeepSessionSettings bool
 }
 
 func (c *chatController) threadWithID(id int) Thread {
@@ -293,7 +269,7 @@ func (c *chatController) addThread(project string, t Thread) {
 
 // submit sends a message without reading any window's state. It returns
 // the conversation that took it, or 0 when it cannot be sent now.
-func (c *chatController) submit(req sendRequest) int {
+func (c *chatController) submit(req SendRequest) int {
 	c.lastSubmitError = ""
 	if hasAgentReferences(req.Text, req.Parts) {
 		capability := c.collaborationCapabilities()
@@ -353,7 +329,7 @@ func (c *chatController) submit(req sendRequest) int {
 }
 
 // submitExpanded starts or queues req, its references already expanded.
-func (c *chatController) submitExpanded(req sendRequest) int {
+func (c *chatController) submitExpanded(req SendRequest) int {
 	req.Text = strings.TrimSpace(req.Text)
 	if req.Text == "" && len(req.Attachments) == 0 {
 		return 0

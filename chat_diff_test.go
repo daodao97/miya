@@ -13,12 +13,12 @@ import (
 func TestCountDiffLines(t *testing.T) {
 	for _, tc := range []struct {
 		name, diff string
-		want       diffLineStats
+		want       DiffLineStats
 	}{
-		{"empty", "", diffLineStats{}},
-		{"headerless", "+new\n-old\n context", diffLineStats{1, 1}},
-		{"multiple files and signs in content", "--- a/a\n+++ b/a\n@@ -1,2 +1,3 @@\n--- removed\n+++ added\n+extra\n context\n--- a/b\n+++ /dev/null\n@@ -1 +0,0 @@\n-last\n\\ No newline at end of file\n", diffLineStats{2, 2}},
-		{"metadata only", "diff --git a/a b/a\nold mode 100644\nnew mode 100755\nBinary files a/a and b/a differ\n", diffLineStats{}},
+		{"empty", "", DiffLineStats{}},
+		{"headerless", "+new\n-old\n context", DiffLineStats{Added: 1, Deleted: 1}},
+		{"multiple files and signs in content", "--- a/a\n+++ b/a\n@@ -1,2 +1,3 @@\n--- removed\n+++ added\n+extra\n context\n--- a/b\n+++ /dev/null\n@@ -1 +0,0 @@\n-last\n\\ No newline at end of file\n", DiffLineStats{Added: 2, Deleted: 2}},
+		{"metadata only", "diff --git a/a b/a\nold mode 100644\nnew mode 100755\nBinary files a/a and b/a differ\n", DiffLineStats{}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := countDiffLines(tc.diff); got != tc.want {
@@ -41,11 +41,11 @@ func TestTurnDiffStatsPreferLatestFullDiff(t *testing.T) {
 	if len(messages) != 2 || !strings.Contains(messages[1].Content, "[earlier output omitted]") {
 		t.Fatalf("diff was not updated/bounded: %+v", messages)
 	}
-	if got := turnDiffStats(messages); got != (diffLineStats{2000, 1}) {
+	if got := turnDiffStats(messages); got != (DiffLineStats{Added: 2000, Deleted: 1}) {
 		t.Fatalf("full diff count = %+v", got)
 	}
 	c.handle(event("turn/diff/updated", `{"threadId":"t1","turnId":"turn1","diff":""}`))
-	if got := turnDiffStats(c.threads()[0].Messages); got != (diffLineStats{}) {
+	if got := turnDiffStats(c.threads()[0].Messages); got != (DiffLineStats{}) {
 		t.Fatalf("reverted diff retained old edits: %+v", got)
 	}
 }
@@ -62,11 +62,11 @@ func TestTurnDiffStatsHistoryAndTurnBoundaries(t *testing.T) {
 	running := m
 	running.Status = "inProgress"
 	messages := []Message{m, failed, running, {Kind: "diff", TurnID: "another", Content: "+next"}}
-	if got := turnDiffStats(messages); got != (diffLineStats{3, 1}) {
+	if got := turnDiffStats(messages); got != (DiffLineStats{Added: 3, Deleted: 1}) {
 		t.Fatalf("history stats = %+v", got)
 	}
 	groups := groupMessages(append([]Message{{Role: "user"}}, messages...))
-	if len(groups) != 2 || groups[1].DiffStats != (diffLineStats{3, 1}) {
+	if len(groups) != 2 || groups[1].DiffStats != (DiffLineStats{Added: 3, Deleted: 1}) {
 		t.Fatalf("group stats = %+v", groups)
 	}
 }

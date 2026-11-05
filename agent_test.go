@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"miya/internal/codex"
+	"miya/internal/model"
 )
 
 // The interface is shared by every agent: views reach agents only through
@@ -57,5 +58,17 @@ func TestAgentRegistry(t *testing.T) {
 	claudeID, _ := json.Marshal("claude:3:r1")
 	if approvalOwner(codex.Approval{ID: claudeID}).ID() != agentClaude || approvalOwner(codex.Approval{ID: json.RawMessage("7")}).ID() != agentCodex {
 		t.Fatal("approval routing")
+	}
+}
+
+// ThreadRef.Valid checks backends against model.Backends, which cannot see
+// agentBackends. Adding an adapter must add its ID there too.
+func TestModelBackendsMatchAgentBackends(t *testing.T) {
+	var ids []string
+	for _, b := range agentBackends {
+		ids = append(ids, b.ID())
+	}
+	if strings.Join(ids, ",") != strings.Join(model.Backends, ",") {
+		t.Fatalf("model.Backends = %v, agentBackends = %v", model.Backends, ids)
 	}
 }

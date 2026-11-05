@@ -39,7 +39,7 @@ func parseGoalCommand(text string) (goalCommand, bool, error) {
 	return g, true, nil
 }
 
-func (c *chatController) codexGoalCommand(req sendRequest) (int, string) {
+func (c *chatController) codexGoalCommand(req SendRequest) (int, string) {
 	g, _, err := parseGoalCommand(req.Text)
 	if err != nil {
 		return 0, err.Error()
@@ -71,7 +71,7 @@ func (c *chatController) codexGoalCommand(req sendRequest) (int, string) {
 		c.addThread(cwd, t)
 	}
 	client, id, cwd := c.client, t.ID, c.threadWorkspace(t.ID)
-	cGoalRevision := t.goalRevision
+	cGoalRevision := t.GoalRevision
 	c.update(id, func(t *Thread) { t.TaskPending = true })
 	go func() {
 		ctx, cancel := context.WithTimeout(c.parentContext(), 45*time.Second)
@@ -134,7 +134,7 @@ func (c *chatController) codexGoalCommand(req sendRequest) (int, string) {
 					t.Messages = append(t.Messages, Message{ID: c.nextID(), Role: "error", Content: t.Status})
 					return
 				}
-				if t.goalRevision == cGoalRevision {
+				if t.GoalRevision == cGoalRevision {
 					applyCodexGoal(t, response.Goal)
 				}
 			})
@@ -165,7 +165,7 @@ func (c *chatController) refreshCodexGoal(id int) {
 				return
 			}
 			c.update(id, func(current *Thread) {
-				if current.ServerID == t.ServerID && current.goalRevision == t.goalRevision {
+				if current.ServerID == t.ServerID && current.GoalRevision == t.GoalRevision {
 					applyCodexGoal(current, response.Goal)
 				}
 			})

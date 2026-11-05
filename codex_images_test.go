@@ -27,14 +27,14 @@ func TestCodexSentImagesStayPreviews(t *testing.T) {
 				c.resume(c.threadWithID(1), nil)
 				waitCodexResume(t, c, d, func() bool { return c.threadWithID(1).Resumed })
 				if steer {
-					c.submit(sendRequest{ThreadID: 1, Text: "long"})
+					c.submit(SendRequest{ThreadID: 1, Text: "long"})
 					waitCodexResume(t, c, d, func() bool { return c.threadWithID(1).TurnID != "" })
 				}
 				path := filepath.Join(t.TempDir(), "photo with spaces.png")
 				if err := os.WriteFile(path, testPNG(t), 0600); err != nil {
 					t.Fatal(err)
 				}
-				req := sendRequest{ThreadID: 1, Steer: steer, Attachments: []string{path}}
+				req := SendRequest{ThreadID: 1, Steer: steer, Attachments: []string{path}}
 				wantText := "Please inspect the attached file(s)."
 				if !imageOnly {
 					req.Text = "look at this"

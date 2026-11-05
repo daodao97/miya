@@ -333,7 +333,7 @@ func (s *service) handle(p *svcPeer, req svcRequest) (any, error) {
 		}
 		c.prefetchReference(ref)
 	case "submit":
-		var r sendRequest
+		var r SendRequest
 		if err := arg(&r); err != nil {
 			return nil, err
 		}
