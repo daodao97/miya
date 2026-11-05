@@ -8,6 +8,7 @@ import (
 
 	"miya/internal/claude"
 	"miya/internal/memory"
+	"miya/internal/memory/extractor"
 )
 
 // An ordinary Claude turn is not kept alive: its thread Status still reads
@@ -26,7 +27,7 @@ func TestMemoryOrdinaryClaudeResultQueuesExtraction(t *testing.T) {
 			if err := c.memory.Configure(scope, memory.Settings{AutoExtract: true}); err != nil {
 				t.Fatal(err)
 			}
-			c.memoryEngine = &memoryEngine{wake: make(chan struct{}, 1)}
+			c.memoryEngine = extractor.NewIdleEngine()
 			now := time.Now().UnixMilli()
 			c.setThreads([]Thread{{ID: 1, Agent: agentClaude, ServerID: "claude-session", Busy: true, Status: "Claude Code is running…", Messages: []Message{
 				{ID: 10, Role: "user", Content: "以后手机构建都用 scripts/build-ios.sh", SentAtMs: now},

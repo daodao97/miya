@@ -110,7 +110,7 @@ func (s *service) stop() {
 			s.c.collaboration.cancel()
 		}
 		if s.c.memoryEngine != nil {
-			s.c.memoryEngine.cancel()
+			s.c.memoryEngine.Stop()
 		}
 		close(s.quit)
 	})
@@ -484,7 +484,7 @@ func (s *service) handle(p *svcPeer, req svcRequest) (any, error) {
 	case "quitWhenIdle":
 		s.quitWhenIdle = true
 		if c.memoryEngine != nil {
-			c.memoryEngine.pause()
+			c.memoryEngine.Pause()
 		}
 		if !s.busy() {
 			s.stop()
@@ -509,7 +509,7 @@ func (s *service) busy() bool {
 	if s.c.runtimeBusy() {
 		return true
 	}
-	if s.c.memoryCalls > 0 || s.c.memoryEngine != nil && s.c.memoryEngine.busy.Load() || len(s.c.claudeRuns) > 0 {
+	if s.c.memoryCalls > 0 || s.c.memoryEngine != nil && s.c.memoryEngine.Busy() || len(s.c.claudeRuns) > 0 {
 		return true
 	}
 	for _, t := range s.c.threads() {

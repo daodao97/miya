@@ -9,6 +9,7 @@ import (
 
 	"miya/internal/claude"
 	"miya/internal/memory"
+	"miya/internal/memory/extractor"
 )
 
 func TestMemorySuccessfulCompletionCapturedBeforeQueueAndDeduplicated(t *testing.T) {
@@ -21,7 +22,7 @@ func TestMemorySuccessfulCompletionCapturedBeforeQueueAndDeduplicated(t *testing
 				t.Fatal(err)
 			}
 			c.referenceSource = testReferenceSource
-			c.memoryEngine = &memoryEngine{wake: make(chan struct{}, 1)}
+			c.memoryEngine = extractor.NewIdleEngine()
 			c.setThreads([]Thread{{ID: 1, Agent: agent, ServerID: "session", Busy: true, TurnID: "turn-1", Messages: []Message{{ID: 10, Role: "user", Content: "本项目手机构建使用 scripts/build-ios.sh", SentAtMs: time.Now().UnixMilli()}, {ID: 11, Role: "assistant", Content: "已确认。", SentAtMs: time.Now().UnixMilli()}}}})
 			c.memoryTurns = map[int]memoryTurn{1: {LocalID: "local-turn-1", FirstMessage: 10}}
 			if agent == agentCodex {
@@ -52,7 +53,7 @@ func TestMemoryFailedStoppedSubAgentAndHistoryDoNotExtract(t *testing.T) {
 			attachMemory(t, c)
 			scope, _ := memory.ProjectScope(c.cwd)
 			_ = c.memory.Configure(scope, memory.Settings{AutoExtract: true})
-			c.memoryEngine = &memoryEngine{wake: make(chan struct{}, 1)}
+			c.memoryEngine = extractor.NewIdleEngine()
 			th := Thread{ID: 1, Agent: agentClaude, ServerID: "session", Busy: true, Messages: []Message{{ID: 10, Role: "user", Content: "Memory"}, {ID: 11, Role: "assistant", Content: "回复"}}}
 			if variant == "stopped" {
 				th.StopRequested = true
@@ -88,7 +89,7 @@ func TestMemoryOversizedCompletedRoundReportsSkippedExtraction(t *testing.T) {
 	if err := c.memory.Configure(scope, memory.Settings{AutoExtract: true}); err != nil {
 		t.Fatal(err)
 	}
-	c.memoryEngine = &memoryEngine{wake: make(chan struct{}, 1)}
+	c.memoryEngine = extractor.NewIdleEngine()
 	c.setThreads([]Thread{{ID: 1, ServerID: "session", Messages: []Message{
 		{ID: 10, Role: "user", Content: strings.Repeat("问", memory.MaxExtractionInput), SentAtMs: time.Now().UnixMilli()},
 		{ID: 11, Role: "assistant", Content: "Completed", SentAtMs: time.Now().UnixMilli()},
@@ -112,7 +113,7 @@ func TestMemoryLongFinalAnswerIsShortenedInsteadOfSkippingRound(t *testing.T) {
 	if err := c.memory.Configure(scope, memory.Settings{AutoExtract: true}); err != nil {
 		t.Fatal(err)
 	}
-	c.memoryEngine = &memoryEngine{wake: make(chan struct{}, 1)}
+	c.memoryEngine = extractor.NewIdleEngine()
 	answer := "构建入口是 scripts/build-ios.sh。" + strings.Repeat("答", memory.MaxExtractionInput)
 	c.setThreads([]Thread{{ID: 1, ServerID: "session", Messages: []Message{
 		{ID: 10, Role: "user", Content: "手机构建", SentAtMs: time.Now().UnixMilli()},

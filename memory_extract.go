@@ -1,21 +1,17 @@
 package main
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
 	"miya/internal/claude"
 	"miya/internal/memory"
 	"miya/internal/memory/extractor"
-	"miya/internal/textutil"
 )
 
 type memoryTurn struct {
@@ -167,107 +163,17 @@ func (c *chatController) completedMemoryTurn(id int, backendTurn string) {
 			c.memoryCalls--
 			c.memoryChanged()
 		})
-		engine.wakeup()
+		engine.Wakeup()
 	}()
 }
 
-type memoryEngine struct {
-	store   *memory.Store
-	ctx     context.Context
-	cancel  context.CancelFunc
-	wake    chan struct{}
-	paused  atomic.Bool
-	busy    atomic.Bool
-	mu      sync.Mutex
-	cfg     claude.CLI
-	extract func(context.Context, claude.CLI, memory.ExtractionJob) ([]memory.Candidate, error)
-	onSaved func(memory.Scope, memory.ExtractionJob, []memory.Entry)
+func newMemoryEngine(c *chatController) *extractor.Engine {
+	cfg := claude.CLI{Binary: c.claudeBinary, Args: append([]string(nil), c.claudeArgs...), Env: append([]string(nil), c.claudeEnv...)}
+	return extractor.NewEngine(c.parentContext(), c.memory, cfg, c.memorySaved)
 }
 
-func newMemoryEngine(c *chatController) *memoryEngine {
-	ctx, cancel := context.WithCancel(c.parentContext())
-	e := &memoryEngine{store: c.memory, ctx: ctx, cancel: cancel, wake: make(chan struct{}, 1), cfg: claude.CLI{Binary: c.claudeBinary, Args: append([]string(nil), c.claudeArgs...), Env: append([]string(nil), c.claudeEnv...)}, extract: extractor.Extract}
-	e.onSaved = func(_ memory.Scope, _ memory.ExtractionJob, _ []memory.Entry) {
-		// Automatic extraction updates the library, never the conversation.
-		c.dispatch(c.memoryChanged)
-	}
-	go e.loop()
-	return e
-}
-
-func (e *memoryEngine) wakeup() {
-	select {
-	case e.wake <- struct{}{}:
-	default:
-	}
-}
-func (e *memoryEngine) configure(cfg claude.CLI) {
-	e.mu.Lock()
-	e.cfg = cfg
-	e.mu.Unlock()
-	e.wakeup()
-}
-func (e *memoryEngine) pause() { e.paused.Store(true) }
-
-func (e *memoryEngine) loop() {
-	recoveryNeeded := true
-	timer := time.NewTicker(5 * time.Second)
-	defer timer.Stop()
-	for {
-		if !e.paused.Load() {
-			e.busy.Store(true)
-			if recoveryNeeded {
-				if err := e.store.RecoverExtractions(); err != nil {
-					e.busy.Store(false)
-					select {
-					case <-e.ctx.Done():
-						return
-					case <-e.wake:
-					case <-timer.C:
-					}
-					continue
-				}
-				recoveryNeeded = false
-			}
-			scope, job, ok, err := e.store.ClaimExtraction()
-			if err == nil && ok {
-				e.mu.Lock()
-				cfg := e.cfg
-				e.mu.Unlock()
-				started := time.Now()
-				ctx, cancel := context.WithTimeout(e.ctx, 90*time.Second)
-				candidates, runErr := e.extract(ctx, cfg, job)
-				cancel()
-				if runErr != nil && e.ctx.Err() == nil {
-					// Adapter errors carry CLI startup diagnostics, never extraction input.
-					log.Printf("memory extraction failed (agent %s, attempt %d): %s", job.ExtractorAgent, job.Attempts, textutil.ClipRunes(strings.Join(strings.Fields(runErr.Error()), " "), 400))
-				}
-				entries, commitErr := e.store.CompleteExtraction(scope, job.Key, candidates, time.Since(started), runErr, e.ctx.Err() != nil)
-				if commitErr != nil {
-					entries, commitErr = e.store.CompleteExtraction(scope, job.Key, candidates, time.Since(started), runErr, e.ctx.Err() != nil)
-				}
-				if commitErr != nil {
-					recoveryNeeded = true
-				}
-				if len(entries) > 0 && e.onSaved != nil {
-					e.onSaved(scope, job, entries)
-				}
-				e.busy.Store(false)
-				if e.ctx.Err() != nil {
-					return
-				}
-				if runErr == nil && commitErr == nil {
-					continue
-				}
-			} else {
-				e.busy.Store(false)
-			}
-		}
-		select {
-		case <-e.ctx.Done():
-			return
-		case <-e.wake:
-		case <-timer.C:
-		}
-	}
+// memorySaved hears of the memories the engine saved. Automatic extraction
+// updates the library, never the conversation.
+func (c *chatController) memorySaved(memory.Scope, memory.ExtractionJob, []memory.Entry) {
+	c.dispatch(c.memoryChanged)
 }

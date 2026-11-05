@@ -21,6 +21,7 @@ import (
 	"miya/internal/codex"
 	dg "miya/internal/delegation"
 	"miya/internal/memory"
+	"miya/internal/memory/extractor"
 	"miya/internal/model"
 	"miya/internal/notification"
 	"miya/internal/textutil"
@@ -39,7 +40,7 @@ type chatController struct {
 	memory         *memory.Store // non-nil only in the background service
 	memoryCalls    int           // executor-owned; pending IO prevents idle service exit
 	memoryRevision uint64
-	memoryEngine   *memoryEngine
+	memoryEngine   *extractor.Engine
 	memoryTurns    map[int]memoryTurn
 	memoryResults  map[string]bool
 
