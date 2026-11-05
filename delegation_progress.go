@@ -19,7 +19,7 @@ func (s *collaborationState) checkProgress() {
 	value, err := s.onMain(func() (any, error) {
 		c := s.c
 		var events []dg.Event
-		for id, run := range c.managedExecutions {
+		for id, run := range c.collaboration.executions {
 			if !strings.HasPrefix(id, "task-") {
 				continue
 			}

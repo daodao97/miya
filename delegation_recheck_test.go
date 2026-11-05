@@ -24,8 +24,8 @@ func TestCollaborationClaudeRootResultCanBeRecheckedAfterRestart(t *testing.T) {
 		targetID = c.nextID()
 		c.addThread(c.cwd, Thread{ID: targetID, Agent: agentClaude, ServerID: "target", HistoryLoaded: true, Busy: true, ExecutionID: task.ID,
 			Messages: []Message{{Role: "user", Content: task.Prompt}, {Role: "assistant", Content: "fixed result", ExecutionID: task.ID}}})
-		c.managedExecutions = map[string]*managedExecution{task.ID: {thread: targetID, epoch: "claude:original"}}
-		c.managedReservations = map[int]string{targetID: task.ID}
+		c.collaboration.executions = map[string]*managedExecution{task.ID: {thread: targetID, epoch: "claude:original"}}
+		c.collaboration.reservations = map[int]string{targetID: task.ID}
 	})
 	s := f.srv.c.collaboration
 	if _, err := s.call(func() (any, error) {
@@ -78,7 +78,7 @@ func TestCollaborationClaudeRootResultCanBeRecheckedAfterRestart(t *testing.T) {
 	f.serv.Do(func() {
 		c := f.srv.c
 		c.collaboration = newCollaboration(c, filepath.Dir(index))
-		c.managedExecutions, c.managedReservations = nil, nil
+		c.collaboration.executions, c.collaboration.reservations = nil, nil
 		c.update(targetID, func(t *Thread) {
 			t.ExecutionID = ""
 			t.Messages = append(t.Messages, Message{Role: "assistant", Content: "later unrelated result"})

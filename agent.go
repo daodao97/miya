@@ -353,10 +353,10 @@ func (c *chatController) submitExpanded(req SendRequest) int {
 	}
 	// A managed input is one independent execution, never an ordinary queued
 	// message. In particular resume may reveal a still-running native turn.
-	if req.ExecutionID != "" && (t.Busy || t.Loading || c.managedTargetUnavailable(t) || c.managedReservations[t.ID] != "" && c.managedReservations[t.ID] != req.ExecutionID) {
+	if req.ExecutionID != "" && (t.Busy || t.Loading || c.managedTargetUnavailable(t) || c.collaboration.reservation(t.ID) != "" && c.collaboration.reservation(t.ID) != req.ExecutionID) {
 		return 0
 	}
-	if reservation := c.managedReservations[t.ID]; reservation != "" && reservation != req.ExecutionID {
+	if reservation := c.collaboration.reservation(t.ID); reservation != "" && reservation != req.ExecutionID {
 		return c.enqueue(t.ID, req)
 	}
 	if t.Busy || t.Loading {

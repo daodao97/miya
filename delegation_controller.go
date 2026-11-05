@@ -45,6 +45,39 @@ type collaborationState struct {
 	dispatched     map[string]bool // worker-owned
 	nextCollection time.Time
 	cleanupError   atomic.Pointer[string]
+	// Main-thread owned: the conversation each execution reserved, the
+	// executions in progress, and the receivers whose delivery is paused.
+	reservations map[int]string
+	executions   map[string]*managedExecution
+	pausedRefs   map[string]bool
+	pauseGen     map[string]uint64
+}
+
+// A window has no collaboration, so these read nothing on a nil state.
+
+func (s *collaborationState) reservation(thread int) string {
+	if s == nil {
+		return ""
+	}
+	return s.reservations[thread]
+}
+
+func (s *collaborationState) execution(id string) *managedExecution {
+	if s == nil {
+		return nil
+	}
+	return s.executions[id]
+}
+
+func (s *collaborationState) isPaused(ref string) bool {
+	return s != nil && s.pausedRefs[ref]
+}
+
+func (s *collaborationState) pauseGeneration(ref string) uint64 {
+	if s == nil {
+		return 0
+	}
+	return s.pauseGen[ref]
 }
 
 func newCollaboration(c *chatController, dir string) *collaborationState {
@@ -53,7 +86,7 @@ func newCollaboration(c *chatController, dir string) *collaborationState {
 	s.manager, s.loadError = dg.Open(dg.NewStore(dir), dg.Options{})
 	if s.loadError == nil {
 		s.loadError = s.manager.Recover()
-		c.collaborationPaused = s.manager.View().Paused
+		s.pausedRefs = s.manager.View().Paused
 	}
 	go func() { defer close(s.done); s.worker.Loop(ctx.Done()) }()
 	go func() {
@@ -225,13 +258,13 @@ func (c *chatController) prepareDelegation(caller Thread, a collaborationArgs) (
 	}
 	if target.ID != 0 {
 		key := from + "\n" + a.RequestID
-		if reserved := c.managedReservations[target.ID]; reserved != "" && reserved != key {
+		if reserved := c.collaboration.reservation(target.ID); reserved != "" && reserved != key {
 			return dg.StartInput{}, errors.New("THREAD_BUSY: Target is reserved")
 		}
-		if c.managedReservations == nil {
-			c.managedReservations = map[int]string{}
+		if c.collaboration.reservations == nil {
+			c.collaboration.reservations = map[int]string{}
 		}
-		c.managedReservations[target.ID] = key
+		c.collaboration.reservations[target.ID] = key
 	}
 	return in, nil
 }
@@ -240,8 +273,8 @@ func (s *collaborationState) create(in dg.StartInput) (dg.Task, error) {
 	task, err := s.manager.Create(in)
 	if err != nil {
 		_, _ = s.onMain(func() (any, error) {
-			if t, ok := s.c.threadByReference(in.Target); ok && s.c.managedReservations[t.ID] == in.From+"\n"+in.RequestID {
-				delete(s.c.managedReservations, t.ID)
+			if t, ok := s.c.threadByReference(in.Target); ok && s.c.collaboration.reservation(t.ID) == in.From+"\n"+in.RequestID {
+				delete(s.c.collaboration.reservations, t.ID)
 				s.c.drainQueue(t.ID)
 			}
 			return nil, nil
@@ -276,7 +309,7 @@ func (s *collaborationState) start(task dg.Task) {
 			if t.Busy || t.Loading || t.ReadOnly || t.TaskPending || c.managedTargetUnavailable(t) {
 				return nil, errors.New("Target session is busy or read-only")
 			}
-			reserved := c.managedReservations[t.ID]
+			reserved := c.collaboration.reservation(t.ID)
 			if reserved != "" && reserved != task.ID && reserved != task.From+"\n"+task.RequestID {
 				return nil, errors.New("Target session is reserved by another submission")
 			}
@@ -296,14 +329,14 @@ func (s *collaborationState) start(task dg.Task) {
 		if !c.agentStatus(task.Agent).Ready {
 			return nil, errors.New("Target agent is not ready")
 		}
-		if c.managedReservations == nil {
-			c.managedReservations = map[int]string{}
+		if c.collaboration.reservations == nil {
+			c.collaboration.reservations = map[int]string{}
 		}
-		c.managedReservations[t.ID] = task.ID
-		if c.managedExecutions == nil {
-			c.managedExecutions = map[string]*managedExecution{}
+		c.collaboration.reservations[t.ID] = task.ID
+		if c.collaboration.executions == nil {
+			c.collaboration.executions = map[string]*managedExecution{}
 		}
-		c.managedExecutions[task.ID] = &managedExecution{thread: t.ID, pending: map[string]dg.Event{}}
+		c.collaboration.executions[task.ID] = &managedExecution{thread: t.ID, pending: map[string]dg.Event{}}
 		return t, nil
 	})
 	if err != nil {
@@ -348,25 +381,25 @@ func (s *collaborationState) failBeforeStart(task dg.Task, err error) {
 func (s *collaborationState) release(id string) {
 	_, _ = s.onMain(func() (any, error) {
 		c := s.c
-		execution := c.managedExecutions[id]
+		execution := c.collaboration.execution(id)
 		if execution == nil {
 			if task, err := s.manager.Read(id); err == nil {
-				if t, ok := c.threadByReference(task.Target); ok && c.managedReservations[t.ID] == task.From+"\n"+task.RequestID {
-					delete(c.managedReservations, t.ID)
+				if t, ok := c.threadByReference(task.Target); ok && c.collaboration.reservation(t.ID) == task.From+"\n"+task.RequestID {
+					delete(c.collaboration.reservations, t.ID)
 					c.drainQueue(t.ID)
 				}
 			}
 		}
 		if execution != nil {
-			if c.managedReservations[execution.thread] == id {
-				delete(c.managedReservations, execution.thread)
+			if c.collaboration.reservation(execution.thread) == id {
+				delete(c.collaboration.reservations, execution.thread)
 			}
 			c.update(execution.thread, func(t *Thread) {
 				if t.ExecutionID == id {
 					t.ExecutionID = ""
 				}
 			})
-			delete(c.managedExecutions, id)
+			delete(c.collaboration.executions, id)
 			c.drainQueue(execution.thread)
 		}
 		return nil, nil
@@ -421,7 +454,7 @@ func (c *chatController) persistManagedExecutionBinding(ctx context.Context, id,
 		var allowed bool
 		_, err := s.onMain(func() (any, error) {
 			t, found := c.threadByReference(target)
-			allowed = found && !c.collaborationPaused[target] && c.managedReservations[t.ID] == id && t.ExecutionID == id && !t.StopRequested
+			allowed = found && !c.collaboration.isPaused(target) && c.collaboration.reservation(t.ID) == id && t.ExecutionID == id && !t.StopRequested
 			return nil, nil
 		})
 		if err != nil {
@@ -437,7 +470,7 @@ func (c *chatController) persistManagedExecutionBinding(ctx context.Context, id,
 		// Stop may have arrived while the input intent was syncing.
 		_, err = s.onMain(func() (any, error) {
 			t, found := c.threadByReference(target)
-			allowed = found && !c.collaborationPaused[target] && c.managedReservations[t.ID] == id && t.ExecutionID == id && !t.StopRequested
+			allowed = found && !c.collaboration.isPaused(target) && c.collaboration.reservation(t.ID) == id && t.ExecutionID == id && !t.StopRequested
 			return nil, nil
 		})
 		if err == nil && !allowed {
@@ -494,7 +527,7 @@ func (c *chatController) managedEventWithOutcome(id string, event dg.Event, save
 		})
 		return
 	}
-	if run := c.managedExecutions[id]; run != nil {
+	if run := c.collaboration.execution(id); run != nil {
 		run.sequence++
 		event.Sequence = run.sequence
 	}

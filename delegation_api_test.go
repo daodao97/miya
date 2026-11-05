@@ -251,13 +251,13 @@ func TestCollaborationUnboundTurnBufferIsBoundedAndRequiresRecheck(t *testing.T)
 		targetID = c.nextID()
 		worker := Thread{ID: targetID, Agent: agentCodex, ServerID: "worker", ExecutionID: task.ID, Busy: true, HistoryLoaded: true}
 		c.addThread(c.cwd, worker)
-		c.managedExecutions = map[string]*managedExecution{task.ID: {thread: targetID}}
-		c.managedReservations = map[int]string{targetID: task.ID}
+		c.collaboration.executions = map[string]*managedExecution{task.ID: {thread: targetID}}
+		c.collaboration.reservations = map[int]string{targetID: task.ID}
 		for i := 0; i < 9; i++ {
 			c.managedCodexOutput(worker, "turn/completed", codex.Event{Turn: codex.Turn{ID: fmt.Sprint(i), Status: "completed"}})
 		}
 		c.managedCodexAccepted(task.ID, "intended-turn", "live-epoch", nil, true)
-		if run := c.managedExecutions[task.ID]; !run.pendingOverflow || len(run.pending) != 0 {
+		if run := c.collaboration.executions[task.ID]; !run.pendingOverflow || len(run.pending) != 0 {
 			t.Error("unbound event buffer grew without limit")
 		}
 	})

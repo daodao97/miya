@@ -124,7 +124,7 @@ func (c *chatController) collaborationUserOp(r collaborationRequest) (any, error
 		result, err := collaborationListFor(s.manager, r.From, a, r.From == "")
 		if values, ok := result.(map[string]any); ok {
 			s.withHealth(values)
-			values["paused"] = c.collaborationPaused[r.From] || s.manager.Paused(r.From)
+			values["paused"] = c.collaboration.isPaused(r.From) || s.manager.Paused(r.From)
 			values["revision"] = s.manager.Revision()
 		}
 		return result, err

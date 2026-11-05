@@ -86,7 +86,7 @@ func TestCollaborationWorkspaceSwitchKeepsPendingRequestAtOriginalService(t *tes
 			idle := false
 			first.serv.Do(func() {
 				thread, found := first.srv.c.threadByReference(task.Target)
-				idle = found && !thread.Busy && first.srv.c.managedReservations[thread.ID] == ""
+				idle = found && !thread.Busy && first.srv.c.collaboration.reservations[thread.ID] == ""
 			})
 			if idle {
 				break

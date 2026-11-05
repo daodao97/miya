@@ -115,7 +115,7 @@ func TestCollaborationClaudeTasksRunIndependentlyAndFreezeResults(t *testing.T) 
 		ready := false
 		f.serv.Do(func() {
 			target, ok := f.srv.c.threadByReference(a.Target)
-			ready = ok && !target.Busy && f.srv.c.managedReservations[target.ID] == ""
+			ready = ok && !target.Busy && f.srv.c.collaboration.reservations[target.ID] == ""
 		})
 		if ready {
 			break

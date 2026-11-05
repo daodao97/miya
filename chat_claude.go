@@ -182,7 +182,7 @@ func (c *chatController) sendClaude(req SendRequest) int {
 		c.update(id, func(t *Thread) { t.ClaudeGeneration = generation })
 	}
 	var executionEpoch string
-	if execution := c.managedExecutions[req.ExecutionID]; execution != nil {
+	if execution := c.collaboration.execution(req.ExecutionID); execution != nil {
 		if existing != nil {
 			_, _, _, execution.epoch = existing.Runtime()
 		} else {

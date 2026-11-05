@@ -56,8 +56,8 @@ func TestManagedCodexResumeFailuresNeverReturnSystemInputAsDraft(t *testing.T) {
 					}
 					id = d.ID
 				}
-				c.managedExecutions = map[string]*managedExecution{id: {thread: 1}}
-				c.managedReservations = map[int]string{1: id}
+				c.collaboration.executions = map[string]*managedExecution{id: {thread: 1}}
+				c.collaboration.reservations = map[int]string{1: id}
 				if failure == "unavailable" {
 					c.client = nil
 				}
@@ -77,7 +77,7 @@ func TestManagedCodexResumeFailuresNeverReturnSystemInputAsDraft(t *testing.T) {
 					c.client = nil
 				}
 				waitCodexResume(t, c, dispatch, func() bool {
-					if c.managedReservations[1] != "" {
+					if c.collaboration.reservations[1] != "" {
 						return false
 					}
 					if delivery {

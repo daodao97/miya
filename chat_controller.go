@@ -55,20 +55,16 @@ type chatController struct {
 	// handoffs track work explicitly delegated to another conversation.
 	handoffs []handoff
 	// delegationParent is the conversation that handed each its work.
-	delegationParent             map[int]int
-	collaboration                *collaborationState
-	collaborationRemote          *collaborationStatus
-	managedReservations          map[int]string
-	collaborationPaused          map[string]bool
-	collaborationPauseGeneration map[string]uint64
-	managedExecutions            map[string]*managedExecution
-	mcpSessionAccess             map[string]bool
-	fastMode                     bool
-	push                         *notification.Hub
-	claudeBinary                 string
-	claudeError                  string
-	claudeArgs, claudeEnv        []string
-	claudeCommand                string
+	delegationParent      map[int]int
+	collaboration         *collaborationState
+	collaborationRemote   *collaborationStatus
+	mcpSessionAccess      map[string]bool
+	fastMode              bool
+	push                  *notification.Hub
+	claudeBinary          string
+	claudeError           string
+	claudeArgs, claudeEnv []string
+	claudeCommand         string
 	// claudeModel and claudeEffort are Claude Code's choices, "" its default.
 	claudeModel, claudeEffort string
 	// claudeDefaultModel is the model Claude Code uses when none is chosen.
@@ -1587,18 +1583,7 @@ func (c *chatController) stopThread(id int) {
 	if c.collaboration != nil {
 		ref := c.threadRef(t).URL()
 		if ref != "" {
-			s := c.collaboration
-			if c.collaborationPaused == nil {
-				c.collaborationPaused = map[string]bool{}
-			}
-			if c.collaborationPauseGeneration == nil {
-				c.collaborationPauseGeneration = map[string]uint64{}
-			}
-			c.collaborationPaused[ref] = true
-			c.collaborationPauseGeneration[ref]++
-			if s.manager != nil {
-				s.post(func() { _ = s.manager.Pause(ref, true) })
-			}
+			c.collaboration.pause(ref)
 		}
 	}
 	if !t.Busy && c.claudeRuns[t.ID] == nil {

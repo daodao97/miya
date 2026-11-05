@@ -28,7 +28,7 @@ func (s *collaborationState) interruptTask(task dg.Task) error {
 		c := s.c
 		t, ok := c.threadByReference(task.Target)
 		if !ok {
-			if execution := c.managedExecutions[id]; execution != nil {
+			if execution := c.collaboration.execution(id); execution != nil {
 				t = c.threadWithID(execution.thread)
 				ok = t.ID != 0
 			}
@@ -45,21 +45,37 @@ func (s *collaborationState) interruptTask(task dg.Task) error {
 	return err
 }
 
+// pause holds deliveries to ref on the controller's thread and in the store.
+// Each pause starts a generation, so a resume already in flight cannot undo it.
+func (s *collaborationState) pause(ref string) {
+	if s.pausedRefs == nil {
+		s.pausedRefs = map[string]bool{}
+	}
+	if s.pauseGen == nil {
+		s.pauseGen = map[string]uint64{}
+	}
+	s.pausedRefs[ref] = true
+	s.pauseGen[ref]++
+	if s.manager != nil {
+		s.post(func() { _ = s.manager.Pause(ref, true) })
+	}
+}
+
 // Runs on the controller executor. A later Stop must win over an in-flight
 // resume, even if it arrives between the durable write and this callback.
 func (c *chatController) resumeCollaboration(ref string) deferred {
 	s := c.collaboration
-	generation := c.collaborationPauseGeneration[ref]
+	generation := c.collaboration.pauseGeneration(ref)
 	return func() (any, error) {
 		return s.call(func() (any, error) {
 			if err := s.manager.Pause(ref, false); err != nil {
 				return nil, err
 			}
 			return s.onMain(func() (any, error) {
-				if c.collaborationPauseGeneration[ref] == generation {
-					delete(c.collaborationPaused, ref)
+				if c.collaboration.pauseGeneration(ref) == generation {
+					delete(c.collaboration.pausedRefs, ref)
 				}
-				return map[string]any{"paused": c.collaborationPaused[ref]}, nil
+				return map[string]any{"paused": c.collaboration.isPaused(ref)}, nil
 			})
 		})
 	}

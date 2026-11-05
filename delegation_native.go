@@ -13,7 +13,7 @@ func (c *chatController) managedCodexAccepted(id, turn, epoch string, err error,
 	if id == "" || c.collaboration == nil {
 		return
 	}
-	run := c.managedExecutions[id]
+	run := c.collaboration.execution(id)
 	if run == nil {
 		return
 	}
@@ -77,7 +77,7 @@ func (c *chatController) managedCodexOutput(before Thread, method string, e code
 	if id == "" || c.collaboration == nil {
 		return
 	}
-	run := c.managedExecutions[id]
+	run := c.collaboration.execution(id)
 	if run == nil {
 		return
 	}
@@ -185,7 +185,7 @@ func (c *chatController) managedClaudeResult(id int, state dg.State, nativeResul
 		state = dg.Failed
 	}
 	epoch := ""
-	if run := c.managedExecutions[t.ExecutionID]; run != nil {
+	if run := c.collaboration.execution(t.ExecutionID); run != nil {
 		epoch = run.epoch
 	}
 	c.managedEventWithOutcome(t.ExecutionID, dg.Event{Target: c.threadRef(t).URL(), SessionEpoch: epoch, NativeResultID: nativeResultID, State: state, Result: result}, nativeResultID != "")
@@ -193,7 +193,7 @@ func (c *chatController) managedClaudeResult(id int, state dg.State, nativeResul
 
 func (c *chatController) managedClaudeStarted(id int) {
 	t := c.threadWithID(id)
-	run := c.managedExecutions[t.ExecutionID]
+	run := c.collaboration.execution(t.ExecutionID)
 	if run == nil || run.started {
 		return
 	}
