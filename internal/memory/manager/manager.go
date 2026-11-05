@@ -27,9 +27,6 @@ type Host interface {
 	// ClaudeBinary is the Claude Code executable, "" when none is found.
 	ClaudeBinary() string
 	AgentName(agent string) string
-	// OwnText is a message's text without the context of the conversations
-	// it references.
-	OwnText(text string) string
 	// Changed tells windows the memory library changed.
 	Changed()
 }

@@ -101,7 +101,7 @@ func (mg *Manager) CompletedTurn(id int, backendTurn string) {
 		text := m.Content
 		if m.Role == "user" {
 			text = memory.StripContext(text)
-			text = mg.Host.OwnText(text)
+			text, _ = model.SplitReferenceContext(text)
 		}
 		if strings.TrimSpace(text) == "" {
 			continue

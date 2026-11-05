@@ -39,7 +39,7 @@ func (mg *Manager) PrepareInput(t model.Thread, req model.SendRequest, project, 
 	if err != nil {
 		return Input{}
 	}
-	own := mg.Host.OwnText(req.Text)
+	own, _ := model.SplitReferenceContext(req.Text)
 	p, err := mg.Store.Prepare(scope, session, fmt.Sprint(t.MemoryEpoch), own, TaskKey(t, session))
 	if err != nil {
 		return Input{}

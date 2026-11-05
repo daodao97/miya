@@ -64,7 +64,7 @@ func (mg *Manager) Source(t model.Thread, call model.Message, a Args) (memory.So
 		if m.Role != "user" {
 			continue
 		}
-		own := mg.Host.OwnText(m.Content)
+		own, _ := model.SplitReferenceContext(m.Content)
 		if a.SourceMessageID != "" && m.ItemID != a.SourceMessageID {
 			continue
 		}
