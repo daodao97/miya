@@ -115,7 +115,7 @@ func draftWithClaude(ctx context.Context, cfg claude.CLI, project, prompt string
 	if err != nil {
 		return nil, fmt.Errorf("Claude Code could not draft the automation: %v %s", err, textutil.ClipRunes(strings.TrimSpace(stderr.String()), 300))
 	}
-	return claude.StructuredOutput(out)
+	return claude.StructuredOutput(out, "draft the automation")
 }
 
 func draftWithCodex(ctx context.Context, project, prompt string) ([]byte, error) {

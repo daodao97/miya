@@ -59,7 +59,7 @@ func WithClaude(ctx context.Context, cfg claude.CLI, job memory.ExtractionJob) (
 	if err != nil {
 		return nil, errors.New("Claude extraction failed")
 	}
-	raw, err := claude.StructuredOutput(output.Bytes())
+	raw, err := claude.StructuredOutput(output.Bytes(), "extract memories")
 	if err != nil {
 		return nil, errors.New("Unable to parse Claude extraction result")
 	}

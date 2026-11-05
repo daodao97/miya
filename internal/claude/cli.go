@@ -15,8 +15,9 @@ type CLI struct {
 	Args, Env []string
 }
 
-// StructuredOutput is the answer of a Claude Code --json-schema run.
-func StructuredOutput(out []byte) ([]byte, error) {
+// StructuredOutput is the answer of a Claude Code --json-schema run. task
+// says what the run was for, as its error reports: "draft the automation".
+func StructuredOutput(out []byte, task string) ([]byte, error) {
 	var r struct {
 		IsError          bool            `json:"is_error"`
 		Result           string          `json:"result"`
@@ -26,7 +27,7 @@ func StructuredOutput(out []byte) ([]byte, error) {
 		return nil, fmt.Errorf("Unable to parse Claude Code output: %v", err)
 	}
 	if r.IsError {
-		return nil, errors.New("Claude Code could not draft the automation: " + textutil.ClipRunes(r.Result, 300))
+		return nil, errors.New("Claude Code could not " + task + ": " + textutil.ClipRunes(r.Result, 300))
 	}
 	if len(r.StructuredOutput) > 0 && string(r.StructuredOutput) != "null" {
 		return r.StructuredOutput, nil

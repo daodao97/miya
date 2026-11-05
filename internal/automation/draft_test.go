@@ -25,11 +25,11 @@ func TestAutomationDraftPromptAndAnswers(t *testing.T) {
 		t.Fatal("hidden files listed")
 	}
 	out := []byte(`{"type":"result","is_error":false,"result":"{}","structured_output":{"name":"每日分拣","schedule":"0 9 * * 1-5","check":"go test ./...","rounds":3,"instructions":"看 Issue","time_missing":false}}`)
-	raw, err := claude.StructuredOutput(out)
+	raw, err := claude.StructuredOutput(out, "draft the automation")
 	if err != nil || !strings.Contains(string(raw), "每日分拣") {
 		t.Fatalf("structured output not read: %s %v", raw, err)
 	}
-	if _, err := claude.StructuredOutput([]byte(`{"is_error":true,"result":"Not logged in"}`)); err == nil || !strings.Contains(err.Error(), "Not logged in") {
+	if _, err := claude.StructuredOutput([]byte(`{"is_error":true,"result":"Not logged in"}`), "draft the automation"); err == nil || !strings.Contains(err.Error(), "Not logged in") || !strings.Contains(err.Error(), "could not draft the automation") {
 		t.Fatalf("error not reported: %v", err)
 	}
 }
