@@ -3,7 +3,6 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"io"
 	"net"
@@ -32,29 +31,6 @@ sleep 1
 printf '%s\n' '{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"done"}}}'
 printf '%s\n' '{"type":"result","subtype":"success","is_error":false,"result":"partial done"}'
 `
-
-// serverController is a controller with every signal the service reads.
-func serverController(dir, claudeBin string) *chatController {
-	c := &chatController{referenceSource: testReferenceSource, cwd: dir, ctx: context.Background(), claudeBinary: claudeBin, projectCache: map[string][]Thread{}}
-	c.agent, c.setAgent = createSignal(agentCodex)
-	c.draftPermission, c.setDraftPermission = createSignal("")
-	c.projects, c.setProjects = createSignal([]Project{{Name: "demo", Path: dir}})
-	c.threads, c.setThreads = createSignal([]Thread{})
-	c.active, c.setActive = createSignal(0)
-	c.draft, c.setDraft = createSignal("")
-	c.model, c.setModel = createSignal("")
-	c.effort, c.setEffort = createSignal("")
-	c.permissionPolicy, c.setPermissionPolicy = createSignal("on-request")
-	c.locale, c.setLocale = createSignal("en")
-	c.models, c.setModels = createSignal([]codex.Model{})
-	c.attachments, c.setAttachments = createSignal([]string{})
-	c.status, c.setStatus = createSignal("")
-	c.ready, c.setReady = createSignal(false)
-	c.approvals, c.setApprovals = createSignal([]codex.Approval{})
-	c.historyStatus, c.setHistoryStatus = createSignal("")
-	c.revision, c.setRevision = createSignal(0)
-	return c
-}
 
 func TestServiceRestartWhenIdleChecksAllWork(t *testing.T) {
 	for _, work := range []string{"idle", "current-project", "background-project", "memory"} {

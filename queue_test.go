@@ -7,35 +7,8 @@ import (
 	"miya/internal/model"
 	"os/exec"
 	"strings"
-	"sync"
 	"testing"
 )
-
-// testDispatch is a controller's own queue of dispatched work, so that a
-// run still ending after its test never touches the shared dispatch state.
-type testDispatch struct {
-	mu sync.Mutex
-	q  []func()
-}
-
-func (d *testDispatch) push(f func()) { d.mu.Lock(); d.q = append(d.q, f); d.mu.Unlock() }
-
-func (d *testDispatch) take() []func() {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	q := d.q
-	d.q = nil
-	return q
-}
-
-// drain runs what is dispatched, and what that dispatches, on the test.
-func (d *testDispatch) drain() {
-	for q := d.take(); len(q) > 0; q = d.take() {
-		for _, f := range q {
-			f()
-		}
-	}
-}
 
 func queueController(t *testing.T) (*chatController, *testDispatch) {
 	t.Helper()

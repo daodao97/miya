@@ -10,7 +10,6 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-	"time"
 
 	"miya/internal/codex"
 	"miya/internal/remote"
@@ -79,17 +78,6 @@ func codexResumeFixture(t *testing.T) (*chatController, *testDispatch, string) {
 	c.connect()
 	waitCodexResume(t, c, d, func() bool { return c.ready() && c.historyStatus() == "" && len(c.models()) > 0 })
 	return c, d, logPath
-}
-
-func waitCodexResume(t *testing.T, c *chatController, d *testDispatch, done func() bool) {
-	t.Helper()
-	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(5 * time.Millisecond) {
-		d.drain()
-		if done() {
-			return
-		}
-	}
-	t.Fatalf("Codex fixture timed out: status %q, threads %+v", c.status(), c.threads())
 }
 
 func codexTurnRequests(t *testing.T, path string) []string {
