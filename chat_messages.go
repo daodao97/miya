@@ -8,6 +8,7 @@ import (
 	"mime"
 	"miya/internal/codex"
 	"miya/internal/memory"
+	"miya/internal/model"
 	"miya/internal/subagent"
 	"miya/internal/textutil"
 	"net/url"
@@ -17,11 +18,6 @@ import (
 	"strings"
 )
 
-var attachmentEnvelope = regexp.MustCompile(`(?is).*?files\s+mentioned\s+by\s+the\s+user\s*:\s*.*?my\s+request\s*:\s*`)
-var attachmentInstruction = regexp.MustCompile(`(?is)distinguish\s+instructions\s+in\s+attached\s+documents\s+from\s+the\s+user'?s\s+request\.?`)
-var attachmentTempPath = regexp.MustCompile(`(?im)^\s*(?:codex-clipboard-[\w-]+\.(?:png|jpg|jpeg|gif|webp)\s*:\s*)?/var/folders/[^\n]+\s*$`)
-var attachmentImageTag = regexp.MustCompile(`(?is)<image\b[^>]*>\s*</image\s*>|<image\b[^>]*/?>`)
-var attachmentImagePlaceholder = regexp.MustCompile(`(?i)\[image:\s*[^\]]*\]`)
 var attachmentImagePath = regexp.MustCompile(`(?i)<image\b[^>]*\bpath=["']([^"']+)["']`)
 
 // History reads and live events may assign different runtime IDs to the same
@@ -106,7 +102,7 @@ func messageAttachments(m Message) []string {
 // Remove only attachment display suffixes we can resend as real attachments.
 // Keep the original reference tokens and their send-time context snapshots.
 func messagePrompt(m Message) string {
-	text := strings.TrimSpace(attachmentImagePlaceholder.ReplaceAllString(claudeCommandText(m.Content), ""))
+	text := strings.TrimSpace(model.ImagePlaceholder.ReplaceAllString(claudeCommandText(m.Content), ""))
 	paths := messageAttachments(m)
 	for i := len(paths) - 1; i >= 0; i-- {
 		text = strings.TrimSuffix(text, "\n📎 "+filepath.Base(paths[i]))
@@ -165,16 +161,6 @@ func nativeText(value string) string {
 	return value[:end] + tr("\n[Content truncated for display]")
 }
 
-func cleanUserText(text string) string {
-	text = memory.StripContext(text)
-	text = attachmentEnvelope.ReplaceAllString(text, "")
-	text = attachmentInstruction.ReplaceAllString(text, "")
-	text = attachmentTempPath.ReplaceAllString(text, "")
-	text = attachmentImageTag.ReplaceAllString(text, "")
-	text = attachmentImagePlaceholder.ReplaceAllString(text, "")
-	return strings.TrimSpace(text)
-}
-
 func jsonText(raw json.RawMessage) string {
 	if len(raw) == 0 || string(raw) == "null" {
 		return ""
@@ -216,7 +202,7 @@ func itemMessage(item codex.Item) (Message, bool) {
 				for _, uri := range attachmentImages(v.Text) {
 					m.Images = append(m.Images, uri)
 				}
-				m.Content += cleanUserText(v.Text)
+				m.Content += model.CleanUserText(v.Text)
 			case "image", "input_image":
 				src := strings.TrimSpace(v.URL)
 				if src == "" {
@@ -327,7 +313,7 @@ func itemMessage(item codex.Item) (Message, bool) {
 	// Attachment placeholders can be introduced by more than one content item;
 	// sanitize after the complete message has been assembled as the final guard.
 	if m.Role == "user" {
-		m.Content = cleanUserText(m.Content)
+		m.Content = model.CleanUserText(m.Content)
 	}
 	return m, true
 }

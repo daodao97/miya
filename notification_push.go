@@ -170,3 +170,11 @@ func (h *pushHub) run() {
 		}
 	}
 }
+
+// noteDesktopPresence holds phone notifications until until: a desktop
+// window in use shows them itself.
+func (h *pushHub) noteDesktopPresence(until time.Time) {
+	h.mu.Lock()
+	h.desktopUntil = until
+	h.mu.Unlock()
+}

@@ -7,6 +7,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/markdown"
+	"miya/internal/model"
 	"miya/internal/subagent"
 	"miya/internal/textutil"
 )
@@ -422,7 +423,7 @@ func (app *chatApp) messageView(c *ui.Context, m Message, streaming bool) {
 }
 
 func (app *chatApp) markdown(c *ui.Context, m Message, streaming bool) {
-	content := attachmentImagePlaceholder.ReplaceAllString(m.Content, "")
+	content := model.ImagePlaceholder.ReplaceAllString(m.Content, "")
 	ui.Column(c).FillWidth().MinWidth(0).Children(func() {
 		if streaming {
 			markdown.Stream(c, content, &app.md)

@@ -268,9 +268,7 @@ func (s *service) handle(p *svcPeer, req svcRequest) (any, error) {
 			return nil, err
 		}
 		if present && c.push != nil {
-			c.push.mu.Lock()
-			c.push.desktopUntil = time.Now().Add(25 * time.Second)
-			c.push.mu.Unlock()
+			c.push.noteDesktopPresence(time.Now().Add(25 * time.Second))
 		}
 	case "hello":
 		return svcHello{Version: serviceVersion, Exe: s.exe, ExeTime: s.exeTime, PID: os.Getpid(), Busy: s.busy(), Remote: s.persistent}, nil

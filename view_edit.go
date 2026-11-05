@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/egoist/mygo/ui"
+	"miya/internal/model"
 )
 
 // userGroupView shows a user message, with an edit button while the pointer
@@ -45,7 +46,7 @@ func (app *chatApp) userGroupView(c *ui.Context, g messageGroup) {
 func (app *chatApp) startEdit(m Message) {
 	m.Content = claudeCommandText(m.Content)
 	var keep []string
-	for _, l := range strings.Split(attachmentImagePlaceholder.ReplaceAllString(m.Content, ""), "\n") {
+	for _, l := range strings.Split(model.ImagePlaceholder.ReplaceAllString(m.Content, ""), "\n") {
 		if !strings.HasPrefix(l, "📎 ") {
 			keep = append(keep, l)
 		}

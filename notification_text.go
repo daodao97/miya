@@ -8,6 +8,7 @@ import (
 	"unicode"
 
 	"miya/internal/codex"
+	"miya/internal/model"
 	"miya/internal/textutil"
 )
 
@@ -139,7 +140,7 @@ func noticeTask(t Thread) string {
 		if m.Role != "user" {
 			continue
 		}
-		text := noticePlainText(cleanUserText(m.Content))
+		text := noticePlainText(model.CleanUserText(m.Content))
 		switch strings.ToLower(strings.Trim(text, " 。.!！?？")) {
 		case "", "继续", "继续吧", "实现吧", "干吧", "好的", "好", "可以", "嗯", "ok", "yes", "continue", "go ahead":
 			continue
