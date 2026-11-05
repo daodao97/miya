@@ -55,7 +55,7 @@ func TestDesktopDisplaysPickerNamesAndLayout(t *testing.T) {
 func TestDesktopDisplaysInitializeShowsChoiceThenSelectsSecondary(t *testing.T) {
 	_, wait := unlockUI(t)
 	d, token, displays, _ := displayTestDesktop(t)
-	d.lease.window = nil // the full-desktop menu entry
+	d.SetLeaseWindow(nil) // the full-desktop menu entry
 	frame := windowJPEG(t)
 	d.captureDisplay = func(display desktop.Display) ([]byte, error) { return frame, nil }
 	m := testMobileApp()
@@ -148,8 +148,8 @@ func TestDesktopDisplaysDiscardInFlightFrameAfterSwitch(t *testing.T) {
 	}
 	started, release := make(chan struct{}), make(chan struct{})
 	var delay atomic.Bool
-	base := client.http.Transport
-	client.http.Transport = displayRoundTripFunc(func(r *http.Request) (*http.Response, error) {
+	base := client.Transport()
+	client.SetTransport(displayRoundTripFunc(func(r *http.Request) (*http.Response, error) {
 		response, err := base.RoundTrip(r)
 		if strings.HasSuffix(r.URL.Path, "/frame") && delay.CompareAndSwap(false, true) {
 			close(started)
@@ -159,7 +159,7 @@ func TestDesktopDisplaysDiscardInFlightFrameAfterSwitch(t *testing.T) {
 			}
 		}
 		return response, err
-	})
+	}))
 	m := testMobileApp()
 	p := liveTestDesktopPage(t, m)
 	p.client, p.pickable, p.displaysAvailable, p.display, p.displays, p.image = client, true, true, displays[0], displays, nil

@@ -29,8 +29,8 @@ func TestDesktopApplicationPickerLaunchesAndShowsWindow(t *testing.T) {
 	tt := ui.NewTester(m.desktopPageView, 390, 750)
 	tt.Frame()
 	tt.Frame()
-	d.work.Lock()
-	time.AfterFunc(300*time.Millisecond, d.work.Unlock)
+	release := d.HoldWork()
+	time.AfterFunc(300*time.Millisecond, release)
 	if err := tt.Click("Open Notes"); err != nil {
 		t.Fatal(err)
 	}

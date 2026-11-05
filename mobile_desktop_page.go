@@ -1207,9 +1207,9 @@ func (m *mobileApp) desktopRelease(p *mobileDesktopPage) {
 	}
 	p.released = true
 	if p.conn == m.conn {
-		m.desktopClosing = append(m.desktopClosing, p.client.token)
+		m.desktopClosing = append(m.desktopClosing, p.client.Token())
 	}
-	sendDesktopClose(p.conn, p.client.token)
+	sendDesktopClose(p.conn, p.client.Token())
 }
 
 func desktopWindowKey(w desktop.Window) string { return fmt.Sprintf("%d-%d", w.ID, w.PID) }

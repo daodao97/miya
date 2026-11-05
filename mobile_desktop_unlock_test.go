@@ -45,7 +45,7 @@ func unlockClient(t *testing.T, status int, receive func(string)) *desktopClient
 	client := newDesktopClient(func(ctx context.Context) (net.Conn, error) {
 		return (&net.Dialer{}).DialContext(ctx, "tcp", server.Listener.Addr().String())
 	}, "test")
-	t.Cleanup(client.transport.CloseIdleConnections)
+	t.Cleanup(client.CloseIdleConnections)
 	return client
 }
 

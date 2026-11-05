@@ -551,3 +551,20 @@ func (d *desktopControl) LeaseDone() <-chan struct{} {
 	}
 	return d.lease.ctx.Done()
 }
+
+// SetLeaseWindow binds the current lease to window, or to the full desktop
+// when nil, as the phone's menu does. Tests use it to set up a lease.
+func (d *desktopControl) SetLeaseWindow(window *desktop.Window) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.lease != nil {
+		d.lease.window = window
+	}
+}
+
+// HoldWork takes the lock desktop actions run under until the returned func
+// is called. Tests use it to keep the desktop busy.
+func (d *desktopControl) HoldWork() (release func()) {
+	d.work.Lock()
+	return d.work.Unlock
+}

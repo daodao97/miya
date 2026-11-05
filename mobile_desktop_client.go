@@ -270,3 +270,14 @@ func (c *desktopClient) stop() {
 	_, _ = c.do(ctx, http.MethodPost, "/stop", struct{}{})
 	c.transport.CloseIdleConnections()
 }
+
+// Token is the lease token the client sends.
+func (c *desktopClient) Token() string { return c.token }
+
+// Transport is the client's HTTP transport; SetTransport replaces it, as
+// tests do to delay or fail requests.
+func (c *desktopClient) Transport() http.RoundTripper      { return c.http.Transport }
+func (c *desktopClient) SetTransport(rt http.RoundTripper) { c.http.Transport = rt }
+
+// CloseIdleConnections closes the connections the client keeps open.
+func (c *desktopClient) CloseIdleConnections() { c.transport.CloseIdleConnections() }
