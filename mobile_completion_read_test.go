@@ -13,7 +13,7 @@ func TestMobileCompletionReadWaitsForLiveContents(t *testing.T) {
 		t.Fatal("cached messages and sidebar metadata acknowledged unseen contents")
 	}
 	sync := newPhoneThreadSync(nil)
-	delta, _ := sync.update(thread)
+	delta, _ := sync.Update(thread)
 	m.receiveThread(thread.ID, delta)
 	r, read, ok := m.completionReadRequest()
 	if !ok || r.Op != "read" || r.ServerID != thread.ServerID || r.Project != "/a" || r.ReadCompletedAtMs != 100 || r.ReadVersion != 0 {
@@ -24,7 +24,7 @@ func TestMobileCompletionReadWaitsForLiveContents(t *testing.T) {
 		t.Fatal("the same completed result was acknowledged twice")
 	}
 	thread.CompletedAtMs = 200
-	delta, _ = sync.update(thread)
+	delta, _ = sync.Update(thread)
 	m.receiveThread(thread.ID, delta)
 	if r, _, ok := m.completionReadRequest(); !ok || r.ReadCompletedAtMs != 200 {
 		t.Fatal("a metadata-only completion delta with unchanged messages was not acknowledged")

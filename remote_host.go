@@ -384,7 +384,7 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 			if sync == nil {
 				sync = newPhoneThreadSync(nil)
 			}
-			if d, changed := sync.update(t); changed {
+			if d, changed := sync.Update(t); changed {
 				if data, err := json.Marshal(d); err == nil {
 					if !send(remote.Frame{Type: "thread", Thread: sub, Data: data}) {
 						return
@@ -1127,7 +1127,10 @@ func newPhoneThreadSync(have []remote.Seen) *phoneThreadSync {
 
 // update is the delta that brings the phone to t, and whether there is one;
 // it records the delta as sent.
-func (s *phoneThreadSync) update(t Thread) (phoneThreadDelta, bool) {
+// HasImage reports whether the conversation last synced shows image src.
+func (s *phoneThreadSync) HasImage(src string) bool { return s.images[src] }
+
+func (s *phoneThreadSync) Update(t Thread) (phoneThreadDelta, bool) {
 	msgs := t.Messages
 	t.Messages, t.Draft = nil, ""
 	meta, _ := json.Marshal(t)

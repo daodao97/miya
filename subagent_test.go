@@ -196,16 +196,16 @@ func TestSubAgentProgressReachesPhone(t *testing.T) {
 	th := Thread{ID: 1, Agent: agentClaude, Messages: []Message{{ID: 1, Role: "tool", Kind: "claudeTool", Content: "Agent\n{}", Status: "inProgress",
 		Agents: []SubAgent{{ID: "a", Name: "Watch logs", Status: subagent.Running}}}}}
 	s := newPhoneThreadSync(nil)
-	if _, ok := s.update(th); !ok {
+	if _, ok := s.Update(th); !ok {
 		t.Fatal("first update not sent")
 	}
 	th.Messages[0].Agents = []SubAgent{{ID: "a", Name: "Watch logs", Status: subagent.Running, Steps: 2, Detail: "Reading logs"}}
-	d, ok := s.update(th)
+	d, ok := s.Update(th)
 	if !ok || len(d.Changed) != 1 {
 		t.Fatalf("progress not sent: %+v", d)
 	}
 	th.Messages[0].Agents = []SubAgent{{ID: "a", Name: "Watch logs", Status: subagent.Completed, Steps: 2, Detail: "Reading logs"}}
-	d, ok = s.update(th)
+	d, ok = s.Update(th)
 	if !ok || len(d.Changed) != 1 {
 		t.Fatalf("background end not sent: %+v", d)
 	}
@@ -220,7 +220,7 @@ func TestSubAgentProgressReachesPhone(t *testing.T) {
 	if a := got.Changed[0].Agents; len(a) != 1 || a[0].Status != subagent.Completed || a[0].Steps != 2 || a[0].Detail != "Reading logs" {
 		t.Fatalf("sub-agents lost on the wire: %+v", got.Changed[0])
 	}
-	if _, ok := s.update(th); ok {
+	if _, ok := s.Update(th); ok {
 		t.Fatal("unchanged conversation sent again")
 	}
 }

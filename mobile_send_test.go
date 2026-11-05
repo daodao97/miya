@@ -68,7 +68,7 @@ func TestMobileNewSendKeepsMessageWhenServerIdentityArrives(t *testing.T) {
 	sync := newPhoneThreadSync(nil)
 	thread := Thread{ID: 3, Agent: agentCodex, HistoryLoaded: true, Busy: true,
 		Messages: []Message{{ID: 10, Role: "user", Content: "首条消息应一直可见", ItemID: "pending-user"}}}
-	delta, changed := sync.update(thread)
+	delta, changed := sync.Update(thread)
 	if !changed {
 		t.Fatal("initial user message was not published")
 	}
@@ -80,7 +80,7 @@ func TestMobileNewSendKeepsMessageWhenServerIdentityArrives(t *testing.T) {
 	// Only metadata changes next; the desktop correctly omits the user
 	// message because its fingerprint was already sent.
 	thread.ServerID = "created"
-	delta, changed = sync.update(thread)
+	delta, changed = sync.Update(thread)
 	if !changed || len(delta.Changed) != 0 || delta.Reset {
 		t.Fatalf("expected an identity-only delta: %+v", delta)
 	}
@@ -93,7 +93,7 @@ func TestMobileNewSendKeepsMessageWhenServerIdentityArrives(t *testing.T) {
 		t.Fatalf("confirmed history was not retained for reconnection: %+v", got)
 	}
 	thread.Messages = append(thread.Messages, Message{ID: 11, Role: "assistant", Content: "正在处理"})
-	delta, _ = sync.update(thread)
+	delta, _ = sync.Update(thread)
 	m.receiveThread(3, delta)
 	tt.Frame()
 	messages := m.view.c.current().Messages

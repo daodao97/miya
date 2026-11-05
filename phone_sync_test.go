@@ -53,21 +53,21 @@ func TestPhoneThreadDeltas(t *testing.T) {
 	m := newMobileApp()
 	s := newPhoneThreadSync(nil)
 
-	d, ok := s.update(desk)
+	d, ok := s.Update(desk)
 	if !ok || !d.Reset || len(d.Changed) != 40 {
 		t.Fatalf("first update should be whole: reset %v, %d changed", d.Reset, len(d.Changed))
 	}
 	if got := phoneOf(t, m, d); !sameMessages(got, desk.Messages) {
 		t.Fatal("the phone should hold the conversation")
 	}
-	if _, ok := s.update(desk); ok {
+	if _, ok := s.Update(desk); ok {
 		t.Error("nothing changed, nothing to send")
 	}
 
 	// Streaming: the last message grows.
 	desk.Messages[39].Content += " more"
 	desk.Messages = append(desk.Messages, Message{ID: 41, Role: "assistant", Content: "new"})
-	d, ok = s.update(desk)
+	d, ok = s.Update(desk)
 	if !ok || d.Reset || len(d.Changed) != 2 {
 		t.Fatalf("a streamed update should send only what changed: %d changed", len(d.Changed))
 	}
@@ -83,7 +83,7 @@ func TestPhoneThreadDeltas(t *testing.T) {
 		req.Have = append(req.Have, remote.Seen{ID: msg.ID, FP: messageFingerprint(msg)})
 	}
 	s = newPhoneThreadSync(req.Have)
-	d, ok = s.update(desk)
+	d, ok = s.Update(desk)
 	if !ok || d.Reset || len(d.Changed) != 0 {
 		t.Fatalf("a cached conversation should need no messages: reset %v, %d changed", d.Reset, len(d.Changed))
 	}
@@ -100,7 +100,7 @@ func TestPhoneThreadDeltas(t *testing.T) {
 	restarted.Messages[39].Content = desk.Messages[39].Content
 	restarted.Messages[40].Content = desk.Messages[40].Content
 	s = newPhoneThreadSync(req.Have)
-	d, _ = s.update(restarted)
+	d, _ = s.Update(restarted)
 	if len(d.Changed) != 41 {
 		t.Errorf("new IDs should resend everything: %d", len(d.Changed))
 	}
@@ -119,7 +119,7 @@ func TestPhoneThreadDeltasKeepHistoryWhileResuming(t *testing.T) {
 			desk := longThread(4)
 			m := newMobileApp()
 			s := newPhoneThreadSync(nil)
-			d, _ := s.update(desk)
+			d, _ := s.Update(desk)
 			phoneOf(t, m, d)
 			if reconnect {
 				var have []remote.Seen
@@ -132,7 +132,7 @@ func TestPhoneThreadDeltasKeepHistoryWhileResuming(t *testing.T) {
 			loading.Loading, loading.Busy = true, true
 			for _, loaded := range []bool{false, true} {
 				loading.HistoryLoaded = loaded
-				d, _ = s.update(loading)
+				d, _ = s.Update(loading)
 				if len(d.Order) != len(desk.Messages) || len(d.Changed) != 0 || d.Reset {
 					t.Fatalf("resume must retain message order: %+v", d)
 				}
@@ -145,13 +145,13 @@ func TestPhoneThreadDeltasKeepHistoryWhileResuming(t *testing.T) {
 				desk.Messages[i].ID += 100
 			}
 			desk.Messages = append(desk.Messages, Message{ID: 105, Role: "user", Content: "Follow-up"})
-			d, _ = s.update(desk)
+			d, _ = s.Update(desk)
 			if got := phoneOf(t, m, d); !sameMessages(got, desk.Messages) {
 				t.Fatal("the loaded history and follow-up were not applied")
 			}
 			// An authoritative empty history still clears old messages.
 			desk.Messages = nil
-			d, _ = s.update(desk)
+			d, _ = s.Update(desk)
 			if got := phoneOf(t, m, d); len(got) != 0 {
 				t.Fatal("completed empty history retained deleted messages")
 			}
@@ -177,7 +177,7 @@ func TestPhoneTransferSize(t *testing.T) {
 	full := func() { b, _ := json.Marshal(desk); before = append(before, b) }
 	s := newPhoneThreadSync(nil)
 	delta := func() {
-		if d, ok := s.update(desk); ok {
+		if d, ok := s.Update(desk); ok {
 			b, _ := json.Marshal(d)
 			after = append(after, b)
 		}

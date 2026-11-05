@@ -34,9 +34,9 @@ func TestGoalEventsAndClaudeSchedulesStayOnTheirThread(t *testing.T) {
 	}
 	// Thread tasks travel with metadata, even when no message changed.
 	sync := newPhoneThreadSync(nil)
-	sync.update(c.threads()[1])
+	sync.Update(c.threads()[1])
 	c.update(2, func(t *Thread) { t.Tasks[0].Status = "completed" })
-	delta, changed := sync.update(c.threads()[1])
+	delta, changed := sync.Update(c.threads()[1])
 	if !changed || len(delta.Changed) != 0 || delta.Thread.Tasks[0].Status != "completed" {
 		t.Fatal("phone did not get task-only change")
 	}

@@ -51,7 +51,7 @@ func TestMobileMetadataUpdateReusesHistory(t *testing.T) {
 	desk := longThread(1000)
 	m.open = desk.ID
 	s := newPhoneThreadSync(nil)
-	d, _ := s.update(desk)
+	d, _ := s.Update(desk)
 	m.receiveThread(desk.ID, d)
 	before := m.view.c.current()
 	groups := m.view.groups.of(m.view.c)
@@ -59,7 +59,7 @@ func TestMobileMetadataUpdateReusesHistory(t *testing.T) {
 	m.cacheDir = t.TempDir()
 	t.Cleanup(func() { m.flushCache(true) })
 	desk.Tokens, desk.Title = 123, "Updated title"
-	d, _ = s.update(desk)
+	d, _ = s.Update(desk)
 	m.receiveThread(desk.ID, d)
 	cur := m.view.c.current()
 	if cur.Tokens != 123 || m.title != "Updated title" {
@@ -73,7 +73,7 @@ func TestMobileMetadataUpdateReusesHistory(t *testing.T) {
 	}
 	// Busy changes must still refresh how the last response is presented.
 	desk.Busy = true
-	d, _ = s.update(desk)
+	d, _ = s.Update(desk)
 	m.receiveThread(desk.ID, d)
 	groups = m.view.groups.of(m.view.c)
 	if !groups[len(groups)-1].Streaming {
@@ -81,7 +81,7 @@ func TestMobileMetadataUpdateReusesHistory(t *testing.T) {
 	}
 	desk.Messages = append([]Message(nil), desk.Messages...)
 	desk.Messages[len(desk.Messages)-1].Content = "Updated reply"
-	d, _ = s.update(desk)
+	d, _ = s.Update(desk)
 	m.receiveThread(desk.ID, d)
 	cur = m.view.c.current()
 	if cur.Messages[len(cur.Messages)-1].Content != "Updated reply" || m.view.c.revision() == revision || len(m.dirty) == 0 {
@@ -96,7 +96,7 @@ func BenchmarkMobileThreadUpdate(b *testing.B) {
 			desk := longThread(1000)
 			m.openThread(desk)
 			s := newPhoneThreadSync(nil)
-			d, _ := s.update(desk)
+			d, _ := s.Update(desk)
 			m.receiveThread(desk.ID, d)
 			m.view.groups.of(m.view.c)
 			b.ReportAllocs()

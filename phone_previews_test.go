@@ -57,7 +57,7 @@ func TestPhonePreviewSurvivesSendAndRelaunch(t *testing.T) {
 	th.Messages = []Message{{ID: 10, Role: "user", Images: []string{source}, Content: "look"}}
 	m.openThread(th)
 	sync := newPhoneThreadSync(nil)
-	delta, _ := sync.update(th)
+	delta, _ := sync.Update(th)
 	m.receiveThread(th.ID, delta)
 	m.images, m.sending = []string{local}, true
 	m.sent(th.ID, "")
@@ -100,10 +100,10 @@ func TestPhoneDeltaDetectsChangedImageSource(t *testing.T) {
 	th := longThread(1)
 	th.Messages[0].Images = []string{"file:///desktop/first.png"}
 	sync := newPhoneThreadSync(nil)
-	sync.update(th)
+	sync.Update(th)
 	th.Messages[0].Images = []string{"file:///desktop/other.png"}
-	delta, changed := sync.update(th)
-	if !changed || len(delta.Changed) != 1 || !sync.images[th.Messages[0].Images[0]] || sync.images["file:///desktop/first.png"] {
+	delta, changed := sync.Update(th)
+	if !changed || len(delta.Changed) != 1 || !sync.HasImage(th.Messages[0].Images[0]) || sync.HasImage("file:///desktop/first.png") {
 		t.Fatal("image replacement did not update the phone")
 	}
 }

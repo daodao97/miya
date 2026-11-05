@@ -28,7 +28,7 @@ func TestReconnectStateReachesDesktopAndPhone(t *testing.T) {
 				tt = ui.NewTester(m.viewRoot, 390, 750)
 				s := newPhoneThreadSync(nil)
 				syncView = func() {
-					d, changed := s.update(c.current())
+					d, changed := s.Update(c.current())
 					if changed {
 						// Exercise the actual wire format, including status-only deltas.
 						data, _ := json.Marshal(d)

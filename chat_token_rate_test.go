@@ -144,7 +144,7 @@ func TestWorkingOutputRateReachesDesktopAndPhone(t *testing.T) {
 				m := testMobileApp()
 				m.openThread(th)
 				s := newPhoneThreadSync(nil)
-				delta, _ := s.update(th)
+				delta, _ := s.Update(th)
 				wire, err := json.Marshal(delta)
 				if err != nil {
 					t.Fatal(err)
