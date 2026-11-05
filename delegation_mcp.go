@@ -15,7 +15,7 @@ import (
 
 func init() {
 	for _, t := range coordinator.Tools() {
-		mcpTools = append(mcpTools, mcpTool(t))
+		registerMCPTools((*mcpServer).collaborationTool, true, mcpTool(t))
 	}
 }
 

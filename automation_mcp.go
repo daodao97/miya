@@ -30,7 +30,7 @@ func init() {
 	for k, v := range automationToolProps {
 		update[k] = v
 	}
-	mcpTools = append(mcpTools,
+	registerMCPTools((*mcpServer).automationTool, false,
 		mcpTool{Name: "list_automations", Description: "List the scheduled automations in Miya: id, name, project, schedule, whether on, and the last run.",
 			InputSchema: map[string]any{"type": "object", "properties": map[string]any{}}, Annotations: mcpReadOnly},
 		mcpTool{Name: "create_automation", Description: "Create a scheduled automation in this project: on its schedule Miya starts a new conversation with the instructions. " +
@@ -178,7 +178,7 @@ func (c *chatController) mcpUpdateAutomation(r mcpRequest, args mcpAutomationArg
 }
 
 func init() {
-	mcpTools = append(mcpTools, mcpTool{Name: "report_result",
+	registerMCPTools(nil, false, mcpTool{Name: "report_result",
 		Description: "In a Miya automation run, report the run's structured result before finishing: a short summary, key findings, metrics, files or links produced, and whether the user needs to act. " +
 			"A later call replaces an earlier one. Only automation runs use it.",
 		InputSchema: map[string]any{"type": "object", "properties": map[string]any{

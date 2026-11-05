@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"miya/internal/automation"
-	"miya/internal/delegation/coordinator"
 	"miya/internal/model"
 	"miya/internal/subagent"
 	"miya/internal/textutil"
@@ -244,9 +243,35 @@ func mcpToolResult(text string, isError bool) map[string]any {
 	return map[string]any{"content": []map[string]any{{"type": "text", "text": text}}, "isError": isError}
 }
 
+// mcpHandler answers the tools a feature registered.
+type mcpHandler func(s *mcpServer, name string, raw json.RawMessage) (string, error)
+
+var (
+	// mcpOwnArgs handlers check their arguments themselves.
+	mcpOwnArgs = map[string]mcpHandler{}
+	// mcpHandlers run once the arguments decode as the common ones.
+	mcpHandlers = map[string]mcpHandler{}
+)
+
+// registerMCPTools lists tools in tools/list, in registration order, and has
+// h answer them; without h, callTool answers them itself. An ownArgs handler
+// gets the arguments before the common check.
+func registerMCPTools(h mcpHandler, ownArgs bool, tools ...mcpTool) {
+	for _, t := range tools {
+		mcpTools = append(mcpTools, t)
+		switch {
+		case h == nil:
+		case ownArgs:
+			mcpOwnArgs[t.Name] = h
+		default:
+			mcpHandlers[t.Name] = h
+		}
+	}
+}
+
 func (s *mcpServer) callTool(name string, raw json.RawMessage) (string, error) {
-	if coordinator.IsTool(name) {
-		return s.collaborationTool(name, raw)
+	if h := mcpOwnArgs[name]; h != nil {
+		return h(s, name, raw)
 	}
 	var a struct {
 		WindowApp      string `json:"window_app"`
@@ -262,11 +287,8 @@ func (s *mcpServer) callTool(name string, raw json.RawMessage) (string, error) {
 	if len(raw) > 0 && string(raw) != "null" && json.Unmarshal(raw, &a) != nil {
 		return "", errors.New("Invalid arguments")
 	}
-	if name == "search_memory" || name == "remember" || name == "forget_memory" {
-		return s.memoryTool(name, raw)
-	}
-	if strings.Contains(name, "automation") {
-		return s.automationTool(name, raw)
+	if h := mcpHandlers[name]; h != nil {
+		return h(s, name, raw)
 	}
 	if len(raw) == 0 || string(raw) == "null" {
 		raw = json.RawMessage(`{}`)
