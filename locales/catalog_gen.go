@@ -15644,6 +15644,16 @@ func (msgs Messages) UpdatedAc5f8c() string {
 	return Catalog.Format(msgs.locale, "updated_ac5f8c", nil)
 }
 
+// UpdatedAtBf2ac1 says "Updated at "
+// in the language the app shows.
+func UpdatedAtBf2ac1() string { return In(i18n.Locale()).UpdatedAtBf2ac1() }
+
+// UpdatedAtBf2ac1 says "Updated at "
+// in the language of msgs.
+func (msgs Messages) UpdatedAtBf2ac1() string {
+	return Catalog.Format(msgs.locale, "updatedAt_bf2ac1", nil)
+}
+
 // UpdatedJustNow61c8f7 says "Updated just now"
 // in the language the app shows.
 func UpdatedJustNow61c8f7() string { return In(i18n.Locale()).UpdatedJustNow61c8f7() }

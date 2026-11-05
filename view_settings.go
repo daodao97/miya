@@ -119,7 +119,7 @@ func accountDetails(c *ui.Context, data accountDisplay) {
 				}
 			})
 			if !data.Updated.IsZero() {
-				ui.Text(c, tr("Updated ")+data.Updated.Local().Format("15:04:05")).FontSize(11).TextColor(muted)
+				ui.Text(c, tr("Updated at ")+data.Updated.Local().Format("15:04:05")).FontSize(11).TextColor(muted)
 			}
 		})
 		ui.Box(c).FillWidth().Height(1).Background(line)
@@ -175,7 +175,7 @@ func accountDetails(c *ui.Context, data accountDisplay) {
 						if q.Credits.Unlimited {
 							text = tr("Unlimited")
 						} else if q.Credits.Balance != nil {
-							text = *q.Credits.Balance
+							text = formatCreditBalance(*q.Credits.Balance)
 						} else if q.Credits.HasCredits {
 							text = tr("Credits available")
 						}

@@ -74,8 +74,9 @@ type (
 )
 
 var (
-	sameAccount     = account.SameAccount
-	nextResetCredit = account.NextResetCredit
+	sameAccount         = account.SameAccount
+	nextResetCredit     = account.NextResetCredit
+	formatCreditBalance = account.FormatBalance
 )
 
 // The service protocol lives in internal/svcproto.
