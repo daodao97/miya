@@ -7,6 +7,7 @@ import (
 	"miya/internal/mcpproto"
 	"miya/internal/mcpserver"
 	"miya/internal/model"
+	"miya/internal/msgfmt"
 	"miya/internal/phoneapi"
 	"miya/internal/svcproto"
 )
@@ -186,4 +187,40 @@ var (
 	messageLabel            = transcript.MessageLabel
 	parseClaudeSession      = transcript.Parse
 	summarizeClaudeSession  = transcript.Summarize
+)
+
+// Message display helpers live in internal/msgfmt.
+type (
+	activityRun  = msgfmt.ActivityRun
+	messageGroup = msgfmt.MessageGroup
+)
+
+var (
+	activityIcon           = msgfmt.ActivityIcon
+	activityRuns           = msgfmt.ActivityRuns
+	attachmentDisplay      = msgfmt.AttachmentDisplay
+	codexTurnTimes         = msgfmt.CodexTurnTimes
+	collapsedThreadCount   = msgfmt.CollapsedThreadCount
+	completeClaudeTiming   = msgfmt.CompleteClaudeTiming
+	conversationTitle      = msgfmt.ConversationTitle
+	displayedThreads       = msgfmt.DisplayedThreads
+	formatElapsed          = msgfmt.FormatElapsed
+	formatMessageTimestamp = msgfmt.FormatMessageTimestamp
+	groupMessages          = msgfmt.GroupMessages
+	imageSource            = msgfmt.ImageSource
+	itemMessage            = msgfmt.ItemMessage
+	jsonText               = msgfmt.JsonText
+	messageAttachments     = msgfmt.MessageAttachments
+	messageGroupText       = msgfmt.MessageGroupText
+	messagePrompt          = msgfmt.MessagePrompt
+	messageViewKey         = msgfmt.MessageViewKey
+	nativeText             = msgfmt.NativeText
+	recordClaudeOutput     = msgfmt.RecordClaudeOutput
+	recordCodexOutput      = msgfmt.RecordCodexOutput
+	resetTurnOutput        = msgfmt.ResetTurnOutput
+	threadMessageGroups    = msgfmt.ThreadMessageGroups
+	threadReconnectLabel   = msgfmt.ThreadReconnectLabel
+	threadTokenRateLabel   = msgfmt.ThreadTokenRateLabel
+	threadWorkingLabel     = msgfmt.ThreadWorkingLabel
+	turnElapsedLabel       = msgfmt.TurnElapsedLabel
 )
