@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"miya/internal/appdir"
 	"miya/internal/memory"
+	"miya/internal/notification"
 	"miya/internal/remote"
 	"miya/internal/webservice"
 	"net"
@@ -87,7 +88,7 @@ func newService(c *chatController, ex *executor) *service {
 	c.runtimePath = filepath.Join(appdir.Dir(), "runtime.json")
 	c.memory = memory.New(filepath.Join(appdir.Dir(), "memory"))
 	s := &service{c: c, exec: ex, peers: map[*svcPeer]bool{}, dirty: make(chan struct{}, 1), quit: make(chan struct{}), idleTimeout: serviceIdleTimeout}
-	c.push = newPushHub()
+	c.push = notification.NewHub()
 	c.run = ex.push
 	c.onDraftReturned = s.draftReturned
 	c.memoryEngine = newMemoryEngine(c)
@@ -268,7 +269,7 @@ func (s *service) handle(p *svcPeer, req svcRequest) (any, error) {
 			return nil, err
 		}
 		if present && c.push != nil {
-			c.push.noteDesktopPresence(time.Now().Add(25 * time.Second))
+			c.push.NoteDesktopPresence(time.Now().Add(25 * time.Second))
 		}
 	case "hello":
 		return svcHello{Version: serviceVersion, Exe: s.exe, ExeTime: s.exeTime, PID: os.Getpid(), Busy: s.busy(), Remote: s.persistent}, nil

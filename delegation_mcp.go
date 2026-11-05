@@ -279,7 +279,7 @@ func (c *chatController) startCollaboration(caller Thread, name string, a collab
 	if previous, ok := s.manager.FindRequest(from, a.RequestID); ok {
 		agent := a.Agent
 		if agent == "" {
-			agent = threadAgent(caller)
+			agent = model.ThreadAgent(caller)
 		}
 		if name == "send_thread" {
 			agent = previous.Agent

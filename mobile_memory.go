@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"miya/internal/model"
 	"miya/internal/remote"
 )
 
@@ -141,7 +142,7 @@ func (m *mobileApp) memoryPage(c *ui.Context) {
 							}
 							for _, project := range m.state.Projects {
 								for _, thread := range project.Threads {
-									if (ThreadRef{Source: m.state.ReferenceSource, Backend: threadAgent(thread), SessionID: thread.ServerID}) != ref {
+									if (ThreadRef{Source: m.state.ReferenceSource, Backend: model.ThreadAgent(thread), SessionID: thread.ServerID}) != ref {
 										continue
 									}
 									if m.phoneButton(c.Key("source")).MinHeight(44).Label(tr("Source conversation")).Children(func() { ui.Text(c, tr("Source conversation")).FontSize(m.font(14)) }).Clicked() {

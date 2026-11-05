@@ -52,7 +52,7 @@ func TestAgentRegistry(t *testing.T) {
 			}
 		}
 	}
-	if threadAgent(Thread{}) != agentCodex || backendFor("unknown").ID() != agentBackends[0].ID() {
+	if model.ThreadAgent(Thread{}) != agentCodex || backendFor("unknown").ID() != agentBackends[0].ID() {
 		t.Fatal("defaults")
 	}
 	claudeID, _ := json.Marshal("claude:3:r1")

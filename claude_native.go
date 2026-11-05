@@ -7,6 +7,7 @@ import (
 	"io"
 	"miya/internal/claude"
 	"miya/internal/memory"
+	"miya/internal/model"
 	"miya/internal/subagent"
 	"miya/internal/textutil"
 	"os"
@@ -428,7 +429,7 @@ func (c *chatController) loadClaudeSessionsAt(cwd string) {
 			items := append([]Thread(nil), c.threads()...)
 			known := map[string]int{}
 			for i, t := range items {
-				if threadAgent(t) == agentClaude && t.ServerID != "" {
+				if model.ThreadAgent(t) == agentClaude && t.ServerID != "" {
 					known[t.ServerID] = i
 				}
 			}

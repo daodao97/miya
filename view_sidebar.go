@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/egoist/mygo/ui"
+	"miya/internal/model"
 )
 
 func (app *chatApp) sidebarView(c *ui.Context) {
@@ -214,7 +215,7 @@ func (app *chatApp) threadRow(c *ui.Context, t Thread) {
 			row.Background(chosen)
 		}
 		row.Children(func() {
-			agent := threadAgent(t)
+			agent := model.ThreadAgent(t)
 			if t.Automation != "" {
 				icon(c, "clock", 14, agentTint(agent))
 			} else {

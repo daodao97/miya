@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"miya/internal/claude"
+	"miya/internal/notification"
 )
 
 func TestClaudeEmptyResultExplained(t *testing.T) {
@@ -74,7 +75,7 @@ func TestClaudeStoppedResultDoesNotReportFailure(t *testing.T) {
 			if tc.tool && got.Messages[1].Status != "interrupted" {
 				t.Fatalf("stopped tool status = %q", got.Messages[1].Status)
 			}
-			if notice, ok := completionNotice(old, got); ok {
+			if notice, ok := notification.Completion(old, got); ok {
 				t.Fatalf("requested stop produced a completion notification: %+v", notice)
 			}
 		})
@@ -152,7 +153,7 @@ func TestClaudeErrorVisibleAfterProcessExit(t *testing.T) {
 	if _, ok := tt.Find("Retry response"); !ok {
 		t.Fatalf("error has no retry action: %q", texts)
 	}
-	if notice, ok := completionNotice(old, c.current()); !ok || notice.Title != "Miya · Failed" {
+	if notice, ok := notification.Completion(old, c.current()); !ok || notice.Title != "Miya · Failed" {
 		t.Fatalf("error reported as success: %+v, %v", notice, ok)
 	}
 }

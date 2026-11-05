@@ -9,6 +9,7 @@ import (
 
 	"miya/internal/codex"
 	dg "miya/internal/delegation"
+	"miya/internal/model"
 )
 
 //go:embed assets/agents/codex.png
@@ -20,7 +21,7 @@ type codexBackend struct{}
 // Resumed and writer ownership are valid only for the current app-server.
 // Claude's Resumed instead describes its persisted CLI session.
 func resetCodexSession(t *Thread) {
-	if threadAgent(*t) != agentCodex {
+	if model.ThreadAgent(*t) != agentCodex {
 		return
 	}
 	t.Resumed, t.ReadOnly = false, false
@@ -34,7 +35,7 @@ func resetCodexSession(t *Thread) {
 
 func (c *chatController) resetCodexSessions() {
 	for _, t := range c.allThreads() {
-		if threadAgent(t) == agentCodex && t.ExecutionID != "" {
+		if model.ThreadAgent(t) == agentCodex && t.ExecutionID != "" {
 			c.managedEvent(t.ExecutionID, dg.Event{State: dg.NeedsAttention, Result: dg.Result{Error: "Codex connection ended before execution could be confirmed"}})
 		}
 	}

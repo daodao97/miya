@@ -9,6 +9,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"miya/internal/codex"
+	"miya/internal/notification"
 )
 
 func mobileHomeFixture() *mobileApp {
@@ -23,7 +24,7 @@ func mobileHomeFixture() *mobileApp {
 		{ID: 5, ServerID: "unread", Title: "补充接口测试", Agent: agentClaude, LastActivityAt: 400},
 	}
 	m.state.Approvals = []codex.Approval{{ID: json.RawMessage(`1`), ThreadID: "approval"}}
-	m.state.Notifications.Unread = []phoneUnread{{ServerID: "unread", Agent: agentClaude}}
+	m.state.Notifications.Unread = []notification.Unread{{ServerID: "unread", Agent: agentClaude}}
 	return m
 }
 

@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"github.com/egoist/mygo"
 	"log"
+	"miya/internal/model"
+	"miya/internal/notification"
 	"miya/internal/remote"
 )
 
@@ -30,7 +32,7 @@ func (m *mobileApp) setupPush() {
 		current := m.view.c.current()
 		viewing := target.Thread != 0 && target.Thread == m.open
 		if target.ServerID != "" {
-			viewing = m.open != 0 && current.ServerID == target.ServerID && (target.Agent == "" || target.Agent == threadAgent(current))
+			viewing = m.open != 0 && current.ServerID == target.ServerID && (target.Agent == "" || target.Agent == model.ThreadAgent(current))
 		}
 		if viewing {
 			return 0
@@ -70,7 +72,7 @@ func (m *mobileApp) syncPush() {
 	if m.conn == nil || m.pushID == "" || (!m.pushDisabled && m.pushToken == "") {
 		return
 	}
-	b, _ := json.Marshal(pushRegistration{ID: m.pushID, Token: m.pushToken, Disabled: m.pushDisabled})
+	b, _ := json.Marshal(notification.Registration{ID: m.pushID, Token: m.pushToken, Disabled: m.pushDisabled})
 	conn := m.conn
 	go conn.Send(remote.Request{Op: "push", Push: b})
 }
@@ -82,7 +84,7 @@ func (m *mobileApp) openPushThread() {
 		for _, t := range p.Threads {
 			match := t.ID == m.pushOpen
 			if m.pushOpenRef.ServerID != "" {
-				match = t.ServerID == m.pushOpenRef.ServerID && (m.pushOpenRef.Agent == "" || threadAgent(t) == m.pushOpenRef.Agent) && (m.pushOpenRef.Project == "" || p.Path == m.pushOpenRef.Project)
+				match = t.ServerID == m.pushOpenRef.ServerID && (m.pushOpenRef.Agent == "" || model.ThreadAgent(t) == m.pushOpenRef.Agent) && (m.pushOpenRef.Project == "" || p.Path == m.pushOpenRef.Project)
 			}
 			if match {
 				m.pushOpen = 0

@@ -152,7 +152,7 @@ func (c *chatController) prepareDelegation(caller Thread, a collaborationArgs) (
 	}
 	agent := a.Agent
 	if agent == "" {
-		agent = threadAgent(caller)
+		agent = model.ThreadAgent(caller)
 	}
 	if agent = model.NormalizeAgentID(agent); agent == "" || !registeredBackend(agent) {
 		return dg.StartInput{}, errors.New("INVALID_ARGUMENT: Unknown agent")
@@ -164,7 +164,7 @@ func (c *chatController) prepareDelegation(caller Thread, a collaborationArgs) (
 		if !ok {
 			return dg.StartInput{}, errors.New("THREAD_NOT_FOUND: Target is unavailable")
 		}
-		agent = threadAgent(target)
+		agent = model.ThreadAgent(target)
 		if c.threadWorkspace(target.ID) != c.threadWorkspace(caller.ID) {
 			return dg.StartInput{}, errors.New("ACCESS_DENIED: Target belongs to another project")
 		}

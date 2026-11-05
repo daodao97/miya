@@ -6,6 +6,7 @@ import (
 	"unicode/utf8"
 
 	dg "miya/internal/delegation"
+	"miya/internal/model"
 	"miya/internal/subagent"
 )
 
@@ -26,10 +27,10 @@ func (s *collaborationState) checkProgress() {
 			if !t.Busy || t.ExecutionID != id {
 				continue
 			}
-			if threadAgent(t) == agentCodex && (run.turn == "" || run.turn != t.TurnID || c.client == nil || run.epoch != c.client.RuntimeEpoch()) {
+			if model.ThreadAgent(t) == agentCodex && (run.turn == "" || run.turn != t.TurnID || c.client == nil || run.epoch != c.client.RuntimeEpoch()) {
 				continue
 			}
-			if threadAgent(t) == agentClaude && !run.started {
+			if model.ThreadAgent(t) == agentClaude && !run.started {
 				continue
 			}
 			task, err := s.manager.Read(id)

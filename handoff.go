@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"miya/internal/model"
 	"miya/internal/subagent"
 	"miya/internal/textutil"
 	"strconv"
@@ -84,7 +85,7 @@ func expandThreadRefs(text string, self ThreadRef, resolve func(ThreadRef) (Thre
 func threadPacket(t Thread, messages []Message) string {
 	title := threadRefTitle(t)
 	var b strings.Builder
-	fmt.Fprintf(&b, tr("Session ID: %s\nBackend: %s\n"), t.ServerID, threadAgent(t))
+	fmt.Fprintf(&b, tr("Session ID: %s\nBackend: %s\n"), t.ServerID, model.ThreadAgent(t))
 	fmt.Fprintf(&b, tr("The following context from conversation \"%s\" (%s) was compiled by Miya from its history for reference.\n"), title, backendOf(t).Name())
 	var requests []string
 	var turns [][]Message
@@ -207,7 +208,7 @@ type handoff struct {
 
 // threadRef returns no public identity until the backend session exists.
 func (c *chatController) threadRef(t Thread) ThreadRef {
-	return ThreadRef{Source: c.referenceSource, Backend: threadAgent(t), SessionID: t.ServerID}
+	return ThreadRef{Source: c.referenceSource, Backend: model.ThreadAgent(t), SessionID: t.ServerID}
 }
 
 // Local numeric lookup is retained only for internal controls and MCP routing.
@@ -235,7 +236,7 @@ func (c *chatController) resolveReference(ref ThreadRef) (Thread, []Message, err
 	}
 	for _, project := range c.threadRefProjects() {
 		for _, t := range project.Threads {
-			if threadAgent(t) != ref.Backend || t.ServerID != ref.SessionID {
+			if model.ThreadAgent(t) != ref.Backend || t.ServerID != ref.SessionID {
 				continue
 			}
 			if t.HistoryLoaded {
@@ -312,7 +313,7 @@ func (c *chatController) prefetchReference(ref ThreadRef) {
 	var pt phoneThread
 	for _, project := range c.threadRefProjects() {
 		for _, t := range project.Threads {
-			if threadAgent(t) == ref.Backend && t.ServerID == ref.SessionID {
+			if model.ThreadAgent(t) == ref.Backend && t.ServerID == ref.SessionID {
 				if t.HistoryLoaded {
 					return
 				}

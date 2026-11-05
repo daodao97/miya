@@ -1,6 +1,9 @@
 package main
 
-import "miya/internal/remote"
+import (
+	"miya/internal/model"
+	"miya/internal/remote"
+)
 
 func (m *mobileApp) handoffToNewThread() {
 	if m.sending {
@@ -8,7 +11,7 @@ func (m *mobileApp) handoffToNewThread() {
 		return
 	}
 	source := m.view.c.current()
-	ref := ThreadRef{Source: m.state.ReferenceSource, Backend: threadAgent(source), SessionID: source.ServerID}
+	ref := ThreadRef{Source: m.state.ReferenceSource, Backend: model.ThreadAgent(source), SessionID: source.ServerID}
 	if source.ID == 0 || !ref.Valid() {
 		m.sendErr = tr("Available once the session is created")
 		return
@@ -16,7 +19,7 @@ func (m *mobileApp) handoffToNewThread() {
 	project := ""
 	for _, p := range m.state.Projects {
 		for _, t := range p.Threads {
-			if t.ServerID == ref.SessionID && threadAgent(t) == ref.Backend {
+			if t.ServerID == ref.SessionID && model.ThreadAgent(t) == ref.Backend {
 				project = p.Path
 				break
 			}

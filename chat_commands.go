@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"miya/internal/codex"
+	"miya/internal/model"
 )
 
 // These commands are app-server operations, never slash text passed to a model.
@@ -32,7 +33,7 @@ func (c *chatController) threadCommand(threadID int, agent, command, policy stri
 		c.fastMode = r.FastMode
 		return r.Thread, r.Message
 	}
-	if _, ok, _ := parseGoalCommand("/" + command); ok && (threadID == 0 && agent != agentClaude || threadID != 0 && threadAgent(c.threadWithID(threadID)) == agentCodex) {
+	if _, ok, _ := parseGoalCommand("/" + command); ok && (threadID == 0 && agent != agentClaude || threadID != 0 && model.ThreadAgent(c.threadWithID(threadID)) == agentCodex) {
 		return c.codexGoalCommand(SendRequest{ThreadID: threadID, Agent: agentCodex, Text: "/" + command, Policy: policy, Model: c.model(), Effort: c.effort()})
 	}
 	t := c.threadWithID(threadID)

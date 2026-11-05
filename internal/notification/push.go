@@ -1,4 +1,4 @@
-package main
+package notification
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 	"miya/internal/appdir"
 )
 
-type pushRegistration struct {
+type Registration struct {
 	ID       string    `json:"id"`
 	Token    string    `json:"token"`
 	Disabled bool      `json:"disabled"`
@@ -23,27 +23,27 @@ type pushRegistration struct {
 type pushDelivery struct {
 	Version      uint64
 	BadgeOnly    bool
-	Registration pushRegistration
-	Notice       taskNotice
+	Registration Registration
+	Notice       Notice
 	Attempts     int
 }
-type pushHub struct {
+type Hub struct {
 	storageDir   string
 	unread       map[string]*deviceUnread
 	desktopUntil time.Time
 	mu           sync.Mutex
-	devices      map[string]pushRegistration
+	devices      map[string]Registration
 	queue        chan pushDelivery
 	lastError    string
 }
 
-func newPushHub() *pushHub {
-	h := &pushHub{storageDir: appdir.Dir(), devices: map[string]pushRegistration{}, queue: make(chan pushDelivery, 128)}
+func NewHub() *Hub {
+	h := &Hub{storageDir: appdir.Dir(), devices: map[string]Registration{}, queue: make(chan pushDelivery, 128)}
 	if b, e := os.ReadFile(filepath.Join(appdir.Dir(), "push-devices.json")); e == nil {
 		_ = json.Unmarshal(b, &h.devices)
 	}
 	if h.devices == nil {
-		h.devices = map[string]pushRegistration{}
+		h.devices = map[string]Registration{}
 	}
 	if b, e := os.ReadFile(filepath.Join(h.storageDir, "push-unread.json")); e == nil {
 		_ = json.Unmarshal(b, &h.unread)
@@ -51,7 +51,7 @@ func newPushHub() *pushHub {
 	go h.run()
 	return h
 }
-func (h *pushHub) register(r pushRegistration) error {
+func (h *Hub) Register(r Registration) error {
 	if len(r.ID) != 32 {
 		return errors.New("invalid device ID")
 	}
@@ -92,7 +92,7 @@ func (h *pushHub) register(r pushRegistration) error {
 	h.devices[r.ID] = r
 	d := h.unreadDeviceLocked(r.ID)
 	if r.Disabled && len(d.Threads) > 0 {
-		d.Threads = map[string]phoneUnread{}
+		d.Threads = map[string]Unread{}
 		d.Revision++
 		unreadChanged = true
 	}
@@ -112,7 +112,7 @@ func (h *pushHub) register(r pushRegistration) error {
 	}
 	return os.Rename(path+".tmp", path)
 }
-func (h *pushHub) publish(n taskNotice) {
+func (h *Hub) Publish(n Notice) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if time.Now().Before(h.desktopUntil) {
@@ -123,12 +123,12 @@ func (h *pushHub) publish(n taskNotice) {
 			continue
 		}
 		d := h.unreadDeviceLocked(r.ID)
-		key := n.unreadKey()
+		key := n.UnreadKey()
 		if previous, ok := d.Threads[key]; ok && previous.NoticeID == n.ID {
 			continue
 		}
 		d.Revision++
-		d.Threads[key] = phoneUnread{Key: key, Thread: n.Thread, ServerID: n.ServerID, Agent: n.Agent, Project: n.Project, NoticeID: n.ID, Version: d.Revision}
+		d.Threads[key] = Unread{Key: key, Thread: n.Thread, ServerID: n.ServerID, Agent: n.Agent, Project: n.Project, NoticeID: n.ID, Version: d.Revision}
 		h.persistUnreadLocked()
 		select {
 		case h.queue <- pushDelivery{Registration: r, Notice: n, Version: d.Revision}:
@@ -137,7 +137,7 @@ func (h *pushHub) publish(n taskNotice) {
 		}
 	}
 }
-func (h *pushHub) run() {
+func (h *Hub) run() {
 	for d := range h.queue {
 		notice, ok := h.notificationFor(d)
 		if !ok {
@@ -173,8 +173,22 @@ func (h *pushHub) run() {
 
 // noteDesktopPresence holds phone notifications until until: a desktop
 // window in use shows them itself.
-func (h *pushHub) noteDesktopPresence(until time.Time) {
+func (h *Hub) NoteDesktopPresence(until time.Time) {
 	h.mu.Lock()
 	h.desktopUntil = until
 	h.mu.Unlock()
 }
+
+// NewQueueHub is a hub for tests outside this package: it keeps devices in
+// memory and queues deliveries for NextDelivery instead of sending them.
+func NewQueueHub(dir string, devices ...Registration) *Hub {
+	h := &Hub{storageDir: dir, devices: map[string]Registration{}, queue: make(chan pushDelivery, 20)}
+	for _, d := range devices {
+		h.devices[d.ID] = d
+	}
+	return h
+}
+
+// NextDelivery waits for the next queued delivery and returns the APNs
+// notification it makes.
+func (h *Hub) NextDelivery() (apns.Notification, bool) { return h.notificationFor(<-h.queue) }

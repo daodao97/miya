@@ -41,7 +41,7 @@ func (c *chatController) handle(f codex.Frame) {
 				continue
 			}
 			for _, t := range threads {
-				if t.ServerID != "" && t.ServerID == e.ThreadID && threadAgent(t) == agentCodex {
+				if t.ServerID != "" && t.ServerID == e.ThreadID && model.ThreadAgent(t) == agentCodex {
 					target = t
 					break
 				}

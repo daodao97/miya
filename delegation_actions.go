@@ -1,5 +1,9 @@
 package main
 
+import (
+	"miya/internal/model"
+)
+
 import dg "miya/internal/delegation"
 
 // Native identity may still be pending. Persist cancellation first; startup
@@ -33,7 +37,7 @@ func (s *collaborationState) interruptTask(task dg.Task) error {
 			return nil, nil
 		}
 		c.update(t.ID, func(t *Thread) { t.StopRequested = true })
-		if t.Busy && (threadAgent(t) != agentCodex || t.TurnID != "") {
+		if t.Busy && (model.ThreadAgent(t) != agentCodex || t.TurnID != "") {
 			backendOf(t).Stop(c, t)
 		}
 		return nil, nil

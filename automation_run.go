@@ -14,6 +14,7 @@ import (
 
 	"miya/internal/automation"
 	"miya/internal/codex"
+	"miya/internal/notification"
 	"miya/internal/subagent"
 	"miya/internal/textutil"
 )
@@ -312,7 +313,7 @@ func (c *chatController) automationNotice(a automation.Automation, run automatio
 	if run.Rounds > 1 {
 		title += fmt.Sprintf("(round %d/%d)", run.Round, run.Rounds)
 	}
-	c.deliverNotice(taskNotice{ID: fmt.Sprintf("miya-auto-%s-%d", a.ID, run.Started.Unix()), Thread: strconv.Itoa(run.Thread),
+	c.deliverNotice(notification.Notice{ID: fmt.Sprintf("miya-auto-%s-%d", a.ID, run.Started.Unix()), Thread: strconv.Itoa(run.Thread),
 		Title: title, Body: textutil.FirstNonEmpty(run.Summary, a.Name)}, "completion")
 }
 

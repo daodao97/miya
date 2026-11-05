@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"miya/internal/codex"
+	"miya/internal/notification"
 )
 
 // fakeClaude speaks enough stream-json for one turn: a first delta, a
@@ -147,7 +148,7 @@ func TestServiceDeleteSelectedConversationUpdatesWindow(t *testing.T) {
 func TestCompletionNoticeSurvivesServiceSnapshots(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	c := serverController(t.TempDir(), "")
-	h := testUnreadHub(t)
+	h := notification.NewQueueHub(t.TempDir(), notification.Registration{ID: strings.Repeat("a", 32), Token: strings.Repeat("b", 64), Updated: time.Now()})
 	c.push = h
 	c.installNotifications()
 	c.setThreads([]Thread{{ID: 1, ServerID: "thread", Busy: true, TurnID: "turn", Messages: []Message{
@@ -157,8 +158,7 @@ func TestCompletionNoticeSurvivesServiceSnapshots(t *testing.T) {
 	c.update(1, func(t *Thread) {
 		t.Busy, t.CompletedAtMs, t.TurnID = false, 10, ""
 	})
-	delivery := <-h.queue
-	push, ok := h.notificationFor(delivery)
+	push, ok := h.NextDelivery()
 	if !ok || push.Payload.Body != "按钮已修复。" {
 		t.Fatal("phone did not receive the result excerpt", push)
 	}
@@ -167,7 +167,7 @@ func TestCompletionNoticeSurvivesServiceSnapshots(t *testing.T) {
 		t.Fatal("snapshot included transcript")
 	}
 	// A desktop that never subscribed to this thread sees metadata only.
-	n, ok := completionNotice(Thread{Busy: true}, state.Threads[0])
+	n, ok := notification.Completion(Thread{Busy: true}, state.Threads[0])
 	if !ok || n.Body != push.Payload.Body {
 		t.Fatal("desktop and phone notification bodies differ", n)
 	}

@@ -6,26 +6,16 @@ import (
 	"github.com/egoist/mygo"
 	"log"
 	"miya/internal/codex"
+	"miya/internal/model"
+	"miya/internal/notification"
 	"strconv"
 	"time"
 )
 
-type taskNotice struct{ ID, Thread, Title, Body, ServerID, Agent, Project string }
-
-func completionNotice(old, next Thread) (taskNotice, bool) {
-	if !old.Busy || next.Busy || next.CompletedAtMs == 0 || next.Status == tr("Stopped") {
-		return taskNotice{}, false
-	}
-	title := tr("Miya · Completed")
-	if next.Status != "" {
-		title = tr("Miya · Failed")
-	}
-	return taskNotice{ID: fmt.Sprintf("miya-%d-%d", next.ID, next.CompletedAtMs), Thread: strconv.Itoa(next.ID), Title: title, Body: completionNoticeBody(old, next)}, true
-}
 func (c *chatController) installNotifications() {
 	set := c.setThreads
-	c.setThreads = func(next []Thread) {
-		previous := map[int]Thread{}
+	c.setThreads = func(next []model.Thread) {
+		previous := map[int]model.Thread{}
 		for _, t := range c.threads() {
 			previous[t.ID] = t
 		}
@@ -36,7 +26,7 @@ func (c *chatController) installNotifications() {
 			}
 			// An automation tells how its whole run ended instead.
 			if old, ok := previous[t.ID]; ok && t.Automation == "" {
-				if n, yes := completionNotice(old, t); yes {
+				if n, yes := notification.Completion(old, t); yes {
 					c.deliverNotice(n, "completion")
 				}
 			}
@@ -58,24 +48,24 @@ func (c *chatController) installApprovalNotifications() {
 			// Claude Code's approvals and background projects' too.
 			if t, ok := c.approvalThread(a); ok {
 				sum := sha256.Sum256(append([]byte(a.ThreadID), a.ID...))
-				n := approvalNotice(t, a)
+				n := notification.Approval(t, a)
 				n.ID = fmt.Sprintf("miya-wait-%x", sum[:16])
 				c.deliverNotice(n, "waiting")
 			}
 		}
 	}
 }
-func (c *chatController) deliverNotice(n taskNotice, kind string) {
+func (c *chatController) deliverNotice(n notification.Notice, kind string) {
 	if loadSetting("notifications-"+kind) == "off" {
 		return
 	}
 	if c.push != nil {
 		if id, err := strconv.Atoi(n.Thread); err == nil {
 			if target := c.phoneThread(id); target.found {
-				n.ServerID, n.Agent, n.Project = target.thread.ServerID, threadAgent(target.thread), target.cwd
+				n.ServerID, n.Agent, n.Project = target.thread.ServerID, model.ThreadAgent(target.thread), target.cwd
 			}
 		}
-		c.push.publish(n)
+		c.push.Publish(n)
 		return
 	}
 	w := currentWindow()

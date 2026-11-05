@@ -1,6 +1,9 @@
 package main
 
-import "strings"
+import (
+	"miya/internal/model"
+	"strings"
+)
 
 type threadTag struct {
 	Ref   ThreadRef
@@ -19,7 +22,7 @@ func (app *chatApp) referenceTitle(ref ThreadRef) string {
 		}
 		for _, project := range app.c.threadRefProjects() {
 			for _, t := range project.Threads {
-				if t.ServerID == ref.SessionID && threadAgent(t) == ref.Backend {
+				if t.ServerID == ref.SessionID && model.ThreadAgent(t) == ref.Backend {
 					return threadRefTitle(t)
 				}
 			}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/egoist/mygo/ui"
+	"miya/internal/model"
 	"miya/internal/textutil"
 )
 
@@ -119,7 +120,7 @@ func (m *mobileApp) drawerThread(c *ui.Context, thread Thread) {
 		row.Background(p.surface)
 	}
 	row.Children(func() {
-		agentIcon(c, threadAgent(thread), 18)
+		agentIcon(c, model.ThreadAgent(thread), 18)
 		if m.textScale > 1.3 {
 			row.Padding(8, 0)
 			ui.Column(c).Grow(1).MinWidth(0).Gap(4).Children(func() {

@@ -10,6 +10,7 @@ import (
 
 	"miya/internal/automation"
 	"miya/internal/codex"
+	"miya/internal/model"
 	"miya/internal/textutil"
 )
 
@@ -88,7 +89,7 @@ func (c *chatController) mcpAutomation(op string, r mcpRequest) (any, error) {
 		if !ok {
 			return nil, errors.New(mcpCallerUnknown)
 		}
-		a := automation.Automation{Name: args.Name, Project: c.threadWorkspace(caller.ID), Agent: textutil.FirstNonEmpty(args.Agent, threadAgent(caller)),
+		a := automation.Automation{Name: args.Name, Project: c.threadWorkspace(caller.ID), Agent: textutil.FirstNonEmpty(args.Agent, model.ThreadAgent(caller)),
 			Instructions: args.Instructions, Schedule: args.Schedule, Check: args.Check, Rounds: args.Rounds, Enabled: true}
 		if a.Rounds == 0 {
 			a.Rounds = 3

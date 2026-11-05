@@ -8,6 +8,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	dg "miya/internal/delegation"
+	"miya/internal/model"
 )
 
 func TestMobileTaskOpensTargetConversation(t *testing.T) {
@@ -25,7 +26,7 @@ func TestMobileTaskOpensTargetConversation(t *testing.T) {
 					target.ID = source.ID
 				}
 				m.state.Projects[1].Threads[0] = target
-				targetRef := ThreadRef{Source: m.state.ReferenceSource, Backend: threadAgent(target), SessionID: target.ServerID}.URL()
+				targetRef := ThreadRef{Source: m.state.ReferenceSource, Backend: model.ThreadAgent(target), SessionID: target.ServerID}.URL()
 				m.openThread(source)
 				m.showThread(source)
 				pane, _, _ := m.collaborationPane()
@@ -94,7 +95,7 @@ func TestMobileMessageLinksOpenConversation(t *testing.T) {
 				m := testMobileApp()
 				source := m.state.Projects[0].Threads[0]
 				target := m.state.Projects[1].Threads[0]
-				ref := ThreadRef{Source: m.state.ReferenceSource, Backend: threadAgent(target), SessionID: target.ServerID}
+				ref := ThreadRef{Source: m.state.ReferenceSource, Backend: model.ThreadAgent(target), SessionID: target.ServerID}
 				body := "[Target conversation](" + ref.URL() + ")"
 				role := "assistant"
 				if strings.Contains(kind, "mention") {

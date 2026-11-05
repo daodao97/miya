@@ -16,6 +16,8 @@ import (
 	"miya/internal/appdir"
 	"miya/internal/codex"
 	"miya/internal/desktop"
+	"miya/internal/model"
+	"miya/internal/notification"
 	"miya/internal/remote"
 	"miya/internal/thumbnail"
 
@@ -39,26 +41,26 @@ type phoneProject struct {
 }
 
 type phoneState struct {
-	Collaboration    *collaborationStatus   `json:"collaboration,omitempty"`
-	DesktopWindows   bool                   `json:"desktopWindows,omitempty"`
-	DesktopControl   bool                   `json:"desktopControl,omitempty"`
-	MemoryRevision   uint64                 `json:"memoryRevision,omitempty"`
-	Memory           bool                   `json:"memory,omitempty"`
-	ReferenceSource  string                 `json:"referenceSource"`
-	Files            bool                   `json:"files,omitempty"`
-	WebPorts         bool                   `json:"webPorts,omitempty"`
-	Runtime          bool                   `json:"runtime,omitempty"`
-	WebServices      bool                   `json:"webServices,omitempty"`
-	FileReferences   bool                   `json:"fileReferences,omitempty"`
-	Automations      bool                   `json:"automations,omitempty"`
-	AutomationRun    bool                   `json:"automationRun,omitempty"`
-	AutomationCreate bool                   `json:"automationCreate,omitempty"`
-	Projects         []phoneProject         `json:"projects"`
-	Status           string                 `json:"status"`
-	Approvals        []codex.Approval       `json:"approvals"`
-	Agents           []phoneAgentOptions    `json:"agents,omitempty"`
-	Quotas           []phoneAgentQuota      `json:"quotas,omitempty"`
-	Notifications    phoneNotificationState `json:"notifications"`
+	Collaboration    *collaborationStatus    `json:"collaboration,omitempty"`
+	DesktopWindows   bool                    `json:"desktopWindows,omitempty"`
+	DesktopControl   bool                    `json:"desktopControl,omitempty"`
+	MemoryRevision   uint64                  `json:"memoryRevision,omitempty"`
+	Memory           bool                    `json:"memory,omitempty"`
+	ReferenceSource  string                  `json:"referenceSource"`
+	Files            bool                    `json:"files,omitempty"`
+	WebPorts         bool                    `json:"webPorts,omitempty"`
+	Runtime          bool                    `json:"runtime,omitempty"`
+	WebServices      bool                    `json:"webServices,omitempty"`
+	FileReferences   bool                    `json:"fileReferences,omitempty"`
+	Automations      bool                    `json:"automations,omitempty"`
+	AutomationRun    bool                    `json:"automationRun,omitempty"`
+	AutomationCreate bool                    `json:"automationCreate,omitempty"`
+	Projects         []phoneProject          `json:"projects"`
+	Status           string                  `json:"status"`
+	Approvals        []codex.Approval        `json:"approvals"`
+	Agents           []phoneAgentOptions     `json:"agents,omitempty"`
+	Quotas           []phoneAgentQuota       `json:"quotas,omitempty"`
+	Notifications    notification.PhoneState `json:"notifications"`
 	// Agent, Model and Effort are the desktop's defaults for new messages.
 	Agent  string `json:"agent"`
 	Model  string `json:"model"`
@@ -142,7 +144,7 @@ func (c *chatController) phoneThreadFor(r remote.Request) phoneThread {
 		return c.phoneThread(r.Thread)
 	}
 	match := func(t Thread, path string) bool {
-		return t.ServerID == r.ServerID && (r.Agent == "" || threadAgent(t) == r.Agent) &&
+		return t.ServerID == r.ServerID && (r.Agent == "" || model.ThreadAgent(t) == r.Agent) &&
 			(r.Project == "" || path == r.Project)
 	}
 	for _, t := range c.threads() {
@@ -376,7 +378,7 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 			v := snapshot{state: c.phoneSnapshot(), revision: c.revision(),
 				loading: c.connecting || !c.ready() || c.historyStatus() == "Loading conversations…"}
 			if deviceID != "" && c.push != nil {
-				v.state.Notifications = c.push.notificationState(deviceID)
+				v.state.Notifications = c.push.State(deviceID)
 			}
 			if want != 0 || ref.ServerID != "" {
 				v.t = c.phoneThreadFor(ref)
@@ -649,7 +651,7 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 					return
 				}
 			case "push":
-				var registration pushRegistration
+				var registration notification.Registration
 				var message string
 				if json.Unmarshal(r.Push, &registration) != nil {
 					message = "Invalid notification registration"
@@ -658,7 +660,7 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 						if c.push == nil {
 							return "Notification service unavailable"
 						}
-						if err := c.push.register(registration); err != nil {
+						if err := c.push.Register(registration); err != nil {
 							return err.Error()
 						}
 						return ""
@@ -677,22 +679,22 @@ func (c *chatController) servePhoneConnection(ctx context.Context, conn phoneCon
 					return
 				}
 			case "read", "read-all":
-				n, _ := onMain(ctx, c.dispatch, func() phoneNotificationState {
+				n, _ := onMain(ctx, c.dispatch, func() notification.PhoneState {
 					if r.Op == "read" {
 						c.markPhoneCompletionRead(r)
 					}
 					if c.push == nil || deviceID == "" {
-						return phoneNotificationState{}
+						return notification.PhoneState{}
 					}
 					if r.Op == "read-all" {
-						return c.push.markAllRead(deviceID, r.ReadVersion)
+						return c.push.MarkAllRead(deviceID, r.ReadVersion)
 					}
 					target := c.phoneThreadFor(r)
 					if !target.found {
-						return c.push.notificationState(deviceID)
+						return c.push.State(deviceID)
 					}
-					notice := taskNotice{Thread: fmt.Sprint(target.thread.ID), ServerID: target.thread.ServerID, Agent: threadAgent(target.thread), Project: target.cwd}
-					return c.push.markRead(deviceID, notice.unreadKey(), r.ReadVersion)
+					notice := notification.Notice{Thread: fmt.Sprint(target.thread.ID), ServerID: target.thread.ServerID, Agent: model.ThreadAgent(target.thread), Project: target.cwd}
+					return c.push.MarkRead(deviceID, notice.UnreadKey(), r.ReadVersion)
 				})
 				data, _ := json.Marshal(n)
 				if !send(remote.Frame{Type: "read", Data: data}) {
@@ -1075,7 +1077,7 @@ type phoneSendReq struct {
 func (p *phoneSendReq) send(c *chatController) phoneSendResult {
 	if !p.ownershipChecked && c.client != nil && c.ready() {
 		target := c.phoneThreadFor(p.req)
-		if target.found && target.thread.ReadOnly && !target.thread.Loading && !target.thread.Busy && threadAgent(target.thread) == agentCodex {
+		if target.found && target.thread.ReadOnly && !target.thread.Loading && !target.thread.Busy && model.ThreadAgent(target.thread) == agentCodex {
 			p.ownershipChecked = true
 			c.resume(target.thread, nil)
 			return phoneSendResult{}
@@ -1117,7 +1119,7 @@ func (c *chatController) phoneSend(r remote.Request, paths []string) phoneSendRe
 			case t.ReadOnly:
 				return phoneSendResult{err: "Another Codex process is using this conversation. Read-only access."}
 			}
-			req, err := c.phoneSendRequest(r, paths, threadAgent(t))
+			req, err := c.phoneSendRequest(r, paths, model.ThreadAgent(t))
 			if err != nil {
 				return phoneSendResult{err: err.Error()}
 			}

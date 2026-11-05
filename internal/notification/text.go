@@ -1,4 +1,4 @@
-package main
+package notification
 
 import (
 	"encoding/json"
@@ -77,7 +77,7 @@ func noticePlainText(text string) string {
 	return text
 }
 
-func completionNoticeBody(old, next Thread) string {
+func CompletionBody(old, next model.Thread) string {
 	if next.CompletionNoticeBody != "" {
 		return next.CompletionNoticeBody
 	}
@@ -117,7 +117,7 @@ func completionNoticeBody(old, next Thread) string {
 			return text
 		}
 	}
-	if task := noticeTask(next); task != "" {
+	if task := Task(next); task != "" {
 		return task
 	}
 	return tr("Task completed. Open the conversation to view the result.")
@@ -125,16 +125,16 @@ func completionNoticeBody(old, next Thread) string {
 
 // Compute before messages are stripped from service snapshots. Windows can
 // notify about an unsubscribed conversation without loading its transcript.
-func updateCompletionNoticeBody(old Thread, next *Thread) {
+func UpdateCompletionBody(old model.Thread, next *model.Thread) {
 	if next.Busy {
 		next.CompletionNoticeBody = ""
 	} else if old.Busy && next.CompletedAtMs != 0 && next.Status != tr("Stopped") {
 		next.CompletionNoticeBody = ""
-		next.CompletionNoticeBody = completionNoticeBody(old, *next)
+		next.CompletionNoticeBody = CompletionBody(old, *next)
 	}
 }
 
-func noticeTask(t Thread) string {
+func Task(t model.Thread) string {
 	for i := len(t.Messages) - 1; i >= 0; i-- {
 		m := t.Messages[i]
 		if m.Role != "user" {
@@ -158,8 +158,8 @@ func noticeTask(t Thread) string {
 	return noticePlainText(tr("Task: ") + title)
 }
 
-func approvalNotice(t Thread, a codex.Approval) taskNotice {
-	n := taskNotice{Thread: strconv.Itoa(t.ID), Title: tr("Miya · Confirmation needed")}
+func Approval(t model.Thread, a codex.Approval) Notice {
+	n := Notice{Thread: strconv.Itoa(t.ID), Title: tr("Miya · Confirmation needed")}
 	switch a.Method {
 	case "item/tool/requestUserInput":
 		n.Title = tr("Miya · Answer needed")
@@ -197,7 +197,7 @@ func approvalNotice(t Thread, a codex.Approval) taskNotice {
 		}
 	}
 	if n.Body == "" {
-		n.Body = noticeTask(t)
+		n.Body = Task(t)
 	}
 	if n.Body == "" {
 		n.Body = tr("The task is waiting for your confirmation.")

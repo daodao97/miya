@@ -4,6 +4,7 @@ import (
 	"strconv"
 
 	"github.com/egoist/mygo/ui"
+	"miya/internal/model"
 	"miya/internal/remote"
 )
 
@@ -85,7 +86,7 @@ func (m *mobileApp) threadMenu(c *ui.Context, project string) {
 						})
 					})
 					if item.Clicked() {
-						ref := ThreadRef{Source: m.state.ReferenceSource, Backend: threadAgent(t), SessionID: t.ServerID}
+						ref := ThreadRef{Source: m.state.ReferenceSource, Backend: model.ThreadAgent(t), SessionID: t.ServerID}
 						m.draft = insertThreadReference(m.draft, token, ref, title)
 						if m.conn != nil {
 							m.sendPhoneAction(remote.Request{Op: "prefetch", Reference: ref.URL()})

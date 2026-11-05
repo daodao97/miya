@@ -222,7 +222,7 @@ func (c *chatController) mcpThreadsFor(caller Thread, project string) mcpThreads
 		if t.Busy || t.Loading {
 			status = subagent.Running
 		}
-		res.Threads = append(res.Threads, mcpThreadInfo{Reference: c.threadRef(t).URL(), ID: t.ID, Title: threadRefTitle(t), Agent: threadAgent(t), Status: status})
+		res.Threads = append(res.Threads, mcpThreadInfo{Reference: c.threadRef(t).URL(), ID: t.ID, Title: threadRefTitle(t), Agent: model.ThreadAgent(t), Status: status})
 	}
 	return res
 }
@@ -251,7 +251,7 @@ func (c *chatController) mcpStatus(r mcpRequest) (mcpStatusResult, error) {
 			last = i
 		}
 	}
-	return mcpStatusResult{Reference: c.threadRef(t).URL(), ID: t.ID, Title: threadRefTitle(t), Agent: threadAgent(t), Status: status, Reply: textutil.ClipRunes(lastReply(t.Messages[last+1:]), 4000)}, nil
+	return mcpStatusResult{Reference: c.threadRef(t).URL(), ID: t.ID, Title: threadRefTitle(t), Agent: model.ThreadAgent(t), Status: status, Reply: textutil.ClipRunes(lastReply(t.Messages[last+1:]), 4000)}, nil
 }
 
 // mcpDelegate sends a task to another conversation, new or existing, with
@@ -279,7 +279,7 @@ func (c *chatController) mcpDelegate(r mcpRequest) (mcpDelegateResult, error) {
 			return mcpDelegateResult{}, errors.New("The conversation no longer exists or is unavailable")
 		}
 	}
-	agent := threadAgent(caller)
+	agent := model.ThreadAgent(caller)
 	if r.Thread == 0 && r.Agent != "" {
 		if agent = model.NormalizeAgentID(r.Agent); agent == "" {
 			return mcpDelegateResult{}, fmt.Errorf("Agent %q not found. Choose %s or %s.", r.Agent, agentCodex, agentClaude)
@@ -304,7 +304,7 @@ func (c *chatController) mcpDelegate(r mcpRequest) (mcpDelegateResult, error) {
 	if _, ok := c.delegationParent[id]; !ok && id != caller.ID {
 		c.delegationParent[id] = caller.ID
 	}
-	return mcpDelegateResult{Reference: c.threadRef(c.threadWithID(id)).URL(), Thread: id, Agent: threadAgent(c.threadWithID(id))}, nil
+	return mcpDelegateResult{Reference: c.threadRef(c.threadWithID(id)).URL(), Thread: id, Agent: model.ThreadAgent(c.threadWithID(id))}, nil
 }
 
 // delegationDepth is how many hand-offs led to a conversation.

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"miya/internal/model"
 	"miya/internal/textutil"
 	"path/filepath"
 	"sort"
@@ -19,7 +20,7 @@ func matchingThreadRefs(projects []phoneProject, self int, query string) []threa
 	var out []threadReference
 	for _, p := range projects {
 		for _, t := range p.Threads {
-			key := threadAgent(t) + ":" + t.ServerID
+			key := model.ThreadAgent(t) + ":" + t.ServerID
 			if t.ID == 0 || t.ID == self || t.ServerID == "" || seen[key] {
 				continue
 			}

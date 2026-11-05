@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"miya/internal/model"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,7 +15,7 @@ const testReferenceSource = "0123456789abcdef0123456789abcdef"
 func testRef(backend, sid string) ThreadRef {
 	return ThreadRef{Source: testReferenceSource, Backend: backend, SessionID: sid}
 }
-func testReference(t Thread) ThreadRef { return testRef(threadAgent(t), t.ServerID) }
+func testReference(t Thread) ThreadRef { return testRef(model.ThreadAgent(t), t.ServerID) }
 
 func TestThreadReferenceURLIsExactAndLossless(t *testing.T) {
 	for _, sid := range []string{"019a-uuid", "CaseSensitive", "中文 空格", "a/b?#%()"} {

@@ -4,25 +4,19 @@ import (
 	"strconv"
 
 	"github.com/egoist/mygo"
+	"miya/internal/notification"
 	"miya/internal/remote"
-	"miya/internal/textutil"
 )
 
-func unreadMatches(u phoneUnread, t Thread) bool {
-	if u.ServerID != "" {
-		return u.ServerID == t.ServerID && textutil.FirstNonEmpty(u.Agent, agentCodex) == threadAgent(t)
-	}
-	return u.Thread == strconv.Itoa(t.ID)
-}
-func (m *mobileApp) unreadFor(t Thread) (phoneUnread, bool) {
+func (m *mobileApp) unreadFor(t Thread) (notification.Unread, bool) {
 	for _, u := range m.state.Notifications.Unread {
-		if unreadMatches(u, t) {
+		if u.Matches(t) {
 			return u, true
 		}
 	}
-	return phoneUnread{}, false
+	return notification.Unread{}, false
 }
-func (m *mobileApp) applyNotifications(n phoneNotificationState) {
+func (m *mobileApp) applyNotifications(n notification.PhoneState) {
 	if n.Unread == nil {
 		return
 	}

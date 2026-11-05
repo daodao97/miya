@@ -20,6 +20,8 @@ import (
 	"miya/internal/codex"
 	dg "miya/internal/delegation"
 	"miya/internal/memory"
+	"miya/internal/model"
+	"miya/internal/notification"
 	"miya/internal/textutil"
 	"miya/locales"
 )
@@ -64,7 +66,7 @@ type chatController struct {
 	managedExecutions            map[string]*managedExecution
 	mcpSessionAccess             map[string]bool
 	fastMode                     bool
-	push                         *pushHub
+	push                         *notification.Hub
 	claudeBinary                 string
 	claudeError                  string
 	claudeArgs, claudeEnv        []string
@@ -325,7 +327,7 @@ func writeThreadListCache(projects map[string][]Thread) {
 			metadata[project] = append(metadata[project], Thread{
 				MemoryDisabled: thread.MemoryDisabled,
 				ID:             thread.ID, ServerID: thread.ServerID, Title: thread.Title, Agent: thread.Agent,
-				Resumed: threadAgent(thread) != agentCodex && thread.Resumed,
+				Resumed: model.ThreadAgent(thread) != agentCodex && thread.Resumed,
 				Project: thread.Project, Age: thread.Age, LastActivityAt: thread.LastActivityAt,
 				LaunchModel: thread.LaunchModel, LaunchEffort: thread.LaunchEffort, PermissionPolicy: thread.PermissionPolicy,
 			})
@@ -716,7 +718,7 @@ func (c *chatController) update(id int, fn func(*Thread)) {
 					}
 				}
 			}
-			updateCompletionNoticeBody(old, &items[i])
+			notification.UpdateCompletionBody(old, &items[i])
 			if old.ServerID != items[i].ServerID && old.ServerID != "" {
 				c.rememberForkedReference(old, c.cwd)
 			}
@@ -765,7 +767,7 @@ func (c *chatController) update(id int, fn func(*Thread)) {
 					}
 				}
 			}
-			updateCompletionNoticeBody(old, &items[i])
+			notification.UpdateCompletionBody(old, &items[i])
 			if old.ServerID != items[i].ServerID && old.ServerID != "" {
 				c.rememberForkedReference(old, path)
 			}
@@ -778,7 +780,7 @@ func (c *chatController) update(id int, fn func(*Thread)) {
 			if c.revision != nil {
 				c.setRevision(c.revision() + 1)
 			}
-			if n, ok := completionNotice(old, items[i]); ok {
+			if n, ok := notification.Completion(old, items[i]); ok {
 				c.deliverNotice(n, "completion")
 			}
 			if old.Busy && !items[i].Busy && len(items[i].Queue) > 0 {
@@ -950,7 +952,7 @@ func (c *chatController) loadThreadList(ctx context.Context, client *codex.Clien
 			for _, remote := range result.data {
 				found := false
 				for i := range items {
-					if threadAgent(items[i]) == agentCodex && items[i].ServerID == remote.ID {
+					if model.ThreadAgent(items[i]) == agentCodex && items[i].ServerID == remote.ID {
 						found = true
 						items[i].Title = conversationTitle(remote.Name, remote.Preview, items[i].Title)
 						items[i].Age = time.Unix(remote.UpdatedAt, 0).Format("Jan 2")
@@ -1097,7 +1099,7 @@ func (c *chatController) changeWorkspace(path string) error {
 		if cached[i].Busy || c.claudeRuns[cached[i].ID] != nil {
 			continue
 		}
-		if threadAgent(cached[i]) != agentCodex {
+		if model.ThreadAgent(cached[i]) != agentCodex {
 			backendOf(cached[i]).Suspend(c, cached[i])
 			cached[i].Loaded = false
 			cached[i].Loading = false

@@ -7,6 +7,8 @@ import (
 	"strconv"
 
 	"miya/internal/appdir"
+	"miya/internal/model"
+	"miya/internal/notification"
 	"miya/internal/remote"
 )
 
@@ -17,7 +19,7 @@ type desktopRead struct {
 
 // Backend session IDs survive history reloads and reassigned sidebar IDs.
 func desktopUnreadKey(t Thread) string {
-	return (taskNotice{Thread: strconv.Itoa(t.ID), ServerID: t.ServerID, Agent: threadAgent(t)}).unreadKey()
+	return (notification.Notice{Thread: strconv.Itoa(t.ID), ServerID: t.ServerID, Agent: model.ThreadAgent(t)}).UnreadKey()
 }
 
 func (c *chatController) loadDesktopUnread() {
@@ -46,7 +48,7 @@ func (c *chatController) recordDesktopCompletion(old, next Thread) {
 	if c.mirror != nil || c.desktopUnread == nil || old.Loading {
 		return
 	}
-	if _, completed := completionNotice(old, next); !completed {
+	if _, completed := notification.Completion(old, next); !completed {
 		return
 	}
 	key := desktopUnreadKey(next)

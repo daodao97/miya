@@ -9,6 +9,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"miya/internal/automation"
+	"miya/internal/model"
 	"miya/internal/remote"
 	"miya/internal/textutil"
 )
@@ -478,7 +479,7 @@ func (m *mobileApp) automationRunThread(v automationView, r automation.Run) (Thr
 			continue
 		}
 		for _, t := range p.Threads {
-			if threadAgent(t) != textutil.FirstNonEmpty(v.Agent, agentCodex) {
+			if model.ThreadAgent(t) != textutil.FirstNonEmpty(v.Agent, agentCodex) {
 				continue
 			}
 			if r.ServerID != "" && t.ServerID == r.ServerID || r.ServerID == "" && r.Thread != 0 && t.ID == r.Thread {

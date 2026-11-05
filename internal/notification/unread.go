@@ -1,4 +1,4 @@
-package main
+package notification
 
 import (
 	"encoding/json"
@@ -9,9 +9,11 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/push/apns"
+	"miya/internal/model"
+	"miya/internal/textutil"
 )
 
-type phoneUnread struct {
+type Unread struct {
 	Key      string `json:"key"`
 	Thread   string `json:"thread"`
 	ServerID string `json:"serverId,omitempty"`
@@ -20,35 +22,35 @@ type phoneUnread struct {
 	NoticeID string `json:"noticeId"`
 	Version  uint64 `json:"version"`
 }
-type phoneNotificationState struct {
-	Revision uint64        `json:"revision"`
-	Unread   []phoneUnread `json:"unread"`
+type PhoneState struct {
+	Revision uint64   `json:"revision"`
+	Unread   []Unread `json:"unread"`
 }
 type deviceUnread struct {
-	Revision uint64                 `json:"revision"`
-	Threads  map[string]phoneUnread `json:"threads"`
+	Revision uint64            `json:"revision"`
+	Threads  map[string]Unread `json:"threads"`
 }
 
-func (n taskNotice) unreadKey() string {
+func (n Notice) UnreadKey() string {
 	if n.ServerID != "" {
 		data, _ := json.Marshal([]string{n.Agent, n.Project, n.ServerID})
 		return string(data)
 	}
 	return "thread:" + n.Thread
 }
-func (h *pushHub) unreadDeviceLocked(id string) *deviceUnread {
+func (h *Hub) unreadDeviceLocked(id string) *deviceUnread {
 	if h.unread == nil {
 		h.unread = map[string]*deviceUnread{}
 	}
 	if h.unread[id] == nil {
-		h.unread[id] = &deviceUnread{Threads: map[string]phoneUnread{}}
+		h.unread[id] = &deviceUnread{Threads: map[string]Unread{}}
 	}
 	if h.unread[id].Threads == nil {
-		h.unread[id].Threads = map[string]phoneUnread{}
+		h.unread[id].Threads = map[string]Unread{}
 	}
 	return h.unread[id]
 }
-func (h *pushHub) persistUnreadLocked() {
+func (h *Hub) persistUnreadLocked() {
 	if h.storageDir == "" {
 		return
 	}
@@ -67,21 +69,21 @@ func (h *pushHub) persistUnreadLocked() {
 		h.lastError = "Failed to save unread status: " + err.Error()
 	}
 }
-func (h *pushHub) notificationState(id string) phoneNotificationState {
+func (h *Hub) State(id string) PhoneState {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	return h.notificationStateLocked(id)
 }
-func (h *pushHub) notificationStateLocked(id string) phoneNotificationState {
+func (h *Hub) notificationStateLocked(id string) PhoneState {
 	d := h.unreadDeviceLocked(id)
-	out := phoneNotificationState{Revision: d.Revision, Unread: make([]phoneUnread, 0, len(d.Threads))}
+	out := PhoneState{Revision: d.Revision, Unread: make([]Unread, 0, len(d.Threads))}
 	for _, u := range d.Threads {
 		out.Unread = append(out.Unread, u)
 	}
 	sort.Slice(out.Unread, func(i, j int) bool { return out.Unread[i].Version < out.Unread[j].Version })
 	return out
 }
-func (h *pushHub) markRead(id, key string, version uint64) phoneNotificationState {
+func (h *Hub) MarkRead(id, key string, version uint64) PhoneState {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	d := h.unreadDeviceLocked(id)
@@ -102,7 +104,7 @@ func (h *pushHub) markRead(id, key string, version uint64) phoneNotificationStat
 
 // Notification counts are absolute and recomputed at delivery time. A retry
 // or a delayed alert can never restore an already-read conversation's badge.
-func (h *pushHub) notificationFor(d pushDelivery) (apns.Notification, bool) {
+func (h *Hub) notificationFor(d pushDelivery) (apns.Notification, bool) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	r, ok := h.devices[d.Registration.ID]
@@ -111,7 +113,7 @@ func (h *pushHub) notificationFor(d pushDelivery) (apns.Notification, bool) {
 	}
 	state := h.unreadDeviceLocked(r.ID)
 	count := len(state.Threads)
-	current, unread := state.Threads[d.Notice.unreadKey()]
+	current, unread := state.Threads[d.Notice.UnreadKey()]
 	badgeOnly := d.BadgeOnly || !unread || current.Version != d.Version
 	n := apns.Notification{DeviceToken: r.Token, Expiration: time.Now().Add(time.Hour), Payload: apns.Payload{Badge: &count}}
 	if badgeOnly {
@@ -125,7 +127,7 @@ func (h *pushHub) notificationFor(d pushDelivery) (apns.Notification, bool) {
 	return n, true
 }
 
-func (h *pushHub) markAllRead(id string, version uint64) phoneNotificationState {
+func (h *Hub) MarkAllRead(id string, version uint64) PhoneState {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	d := h.unreadDeviceLocked(id)
@@ -148,4 +150,13 @@ func (h *pushHub) markAllRead(id string, version uint64) phoneNotificationState 
 		}
 	}
 	return h.notificationStateLocked(id)
+}
+
+// Matches reports whether u is t's unread state: by its backend session when
+// it has one, else by its window-local ID.
+func (u Unread) Matches(t model.Thread) bool {
+	if u.ServerID != "" {
+		return u.ServerID == t.ServerID && textutil.FirstNonEmpty(u.Agent, model.AgentCodex) == model.ThreadAgent(t)
+	}
+	return u.Thread == strconv.Itoa(t.ID)
 }

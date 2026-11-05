@@ -12,6 +12,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"miya/internal/model"
 	"miya/internal/remote"
 )
 
@@ -330,7 +331,7 @@ func (m *mobileApp) restoreDesktopSession(id string) {
 	if thread.ID != 0 && thread.ServerID != "" {
 		for _, project := range m.state.Projects {
 			for _, saved := range project.Threads {
-				if saved.ServerID == thread.ServerID && threadAgent(saved) == threadAgent(thread) {
+				if saved.ServerID == thread.ServerID && model.ThreadAgent(saved) == model.ThreadAgent(thread) {
 					thread = saved
 				}
 			}
@@ -378,7 +379,7 @@ func (m *mobileApp) desktopForNotification(target remote.Request) string {
 		found := false
 		for _, project := range state.Projects {
 			for _, thread := range project.Threads {
-				if thread.ServerID == target.ServerID && (target.Agent == "" || threadAgent(thread) == target.Agent) && (target.Project == "" || project.Path == target.Project) {
+				if thread.ServerID == target.ServerID && (target.Agent == "" || model.ThreadAgent(thread) == target.Agent) && (target.Project == "" || project.Path == target.Project) {
 					found = true
 				}
 			}

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"miya/internal/model"
 	"miya/internal/remote"
 )
 
@@ -88,7 +89,7 @@ func (m *mobileApp) collaborationPane() (*collaborationPanel, collaborationPanel
 		return nil, collaborationPanelView{}, false
 	}
 	t := m.view.c.current()
-	from := ThreadRef{Source: m.state.ReferenceSource, Backend: threadAgent(t), SessionID: t.ServerID}.URL()
+	from := ThreadRef{Source: m.state.ReferenceSource, Backend: model.ThreadAgent(t), SessionID: t.ServerID}.URL()
 	p := m.pal
 	// Running and completed turns share the same status row and task toggle.
 	v := collaborationPanelView{palette: taskPalette{p.surface, p.line, p.ink, p.muted}, capability: capability, from: from, readOnly: t.ReadOnly, connected: m.connected, call: m.collaborationCall, openThread: m.openCollaborationThread, trailing: true, toggleElsewhere: m.view.turnStatusVisible(t)}
@@ -130,7 +131,7 @@ func (m *mobileApp) referencedThread(ref ThreadRef) (Thread, phoneProject, bool)
 	}
 	for _, project := range m.state.Projects {
 		for _, thread := range project.Threads {
-			if threadAgent(thread) == ref.Backend && thread.ServerID == ref.SessionID {
+			if model.ThreadAgent(thread) == ref.Backend && thread.ServerID == ref.SessionID {
 				return thread, project, true
 			}
 		}

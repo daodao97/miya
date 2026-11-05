@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"miya/internal/model"
 	"miya/internal/remote"
 	"miya/internal/textutil"
 	"miya/internal/webservice"
@@ -45,7 +46,7 @@ func (m *mobileApp) openWebServices(project string) {
 	if m.open != 0 {
 		t, p := m.find(m.open)
 		if p.Path == project && t.ServerID != "" {
-			m.webRef = ThreadRef{Source: m.state.ReferenceSource, Backend: threadAgent(t), SessionID: t.ServerID}
+			m.webRef = ThreadRef{Source: m.state.ReferenceSource, Backend: model.ThreadAgent(t), SessionID: t.ServerID}
 		}
 	}
 	m.router().Push("/web")
@@ -232,7 +233,7 @@ func (m *mobileApp) runtimeServiceOwner(service webservice.Service) string {
 	}
 	for _, project := range m.state.Projects {
 		for _, thread := range project.Threads {
-			if thread.ServerID == service.Owner.SessionID && threadAgent(thread) == service.Owner.Backend {
+			if thread.ServerID == service.Owner.SessionID && model.ThreadAgent(thread) == service.Owner.Backend {
 				return tr("From conversation: ") + thread.Title
 			}
 		}

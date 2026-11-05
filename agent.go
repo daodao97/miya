@@ -113,16 +113,7 @@ func backendFor(id string) agentBackend {
 	return agentBackends[0]
 }
 
-// threadAgent is a conversation's agent; conversations from before agents
-// were recorded are Codex's.
-func threadAgent(t Thread) string {
-	if t.Agent == "" {
-		return agentCodex
-	}
-	return t.Agent
-}
-
-func backendOf(t Thread) agentBackend { return backendFor(threadAgent(t)) }
+func backendOf(t Thread) agentBackend { return backendFor(model.ThreadAgent(t)) }
 
 func approvalOwner(a codex.Approval) agentBackend {
 	for _, b := range agentBackends {
@@ -137,7 +128,7 @@ func approvalOwner(a codex.Approval) agentBackend {
 // new conversation.
 func (c *chatController) currentAgent() string {
 	if t := c.current(); t.ID != 0 {
-		return threadAgent(t)
+		return model.ThreadAgent(t)
 	}
 	if c.agent != nil {
 		return backendFor(c.agent()).ID()
@@ -307,7 +298,7 @@ func (c *chatController) submit(req SendRequest) int {
 			return 0
 		}
 	}
-	if _, ok, _ := parseGoalCommand(req.Text); ok && (req.ThreadID == 0 && req.Agent != agentClaude || req.ThreadID != 0 && threadAgent(c.threadWithID(req.ThreadID)) == agentCodex) {
+	if _, ok, _ := parseGoalCommand(req.Text); ok && (req.ThreadID == 0 && req.Agent != agentClaude || req.ThreadID != 0 && model.ThreadAgent(c.threadWithID(req.ThreadID)) == agentCodex) {
 		id, message := c.codexGoalCommand(req)
 		if message != "" {
 			c.setStatus(message)

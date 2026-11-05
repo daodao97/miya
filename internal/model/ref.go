@@ -73,3 +73,12 @@ func NormalizeAgentID(id string) string {
 	}
 	return ""
 }
+
+// ThreadAgent is a conversation's agent; conversations from before agents
+// were recorded are Codex's.
+func ThreadAgent(t Thread) string {
+	if t.Agent == "" {
+		return AgentCodex
+	}
+	return t.Agent
+}

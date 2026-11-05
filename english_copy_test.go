@@ -11,6 +11,7 @@ import (
 	"testing"
 	"unicode"
 
+	"miya/internal/notification"
 	"miya/locales"
 )
 
@@ -18,8 +19,8 @@ import (
 // These are input patterns, never interface copy.
 func TestProductSourceCopyUsesEnglishCatalog(t *testing.T) {
 	inputPatterns := map[string][]string{
-		"notification_text.go":    {"继续", "继续吧", "实现吧", "干吧", "好的", "好", "可以", "嗯", "claude code 对话", "新对话"},
-		"internal/memory/jobs.go": {"忘记", "请忘记", "帮我忘记", "不要再记", "删除这条记忆"},
+		"internal/notification/text.go": {"继续", "继续吧", "实现吧", "干吧", "好的", "好", "可以", "嗯", "claude code 对话", "新对话"},
+		"internal/memory/jobs.go":       {"忘记", "请忘记", "帮我忘记", "不要再记", "删除这条记忆"},
 	}
 	containsHan := func(s string) bool {
 		return strings.ContainsFunc(s, func(r rune) bool { return unicode.Is(unicode.Han, r) })
@@ -105,7 +106,7 @@ func TestLegacyServicePreferenceDoesNotChooseDeviceLanguage(t *testing.T) {
 		t.Fatalf("settings language: %q", tt.Texts())
 	}
 	userText := "帮我检查中文文件"
-	if got := noticeTask(Thread{Messages: []Message{{Role: "user", Content: userText}}}); got != "Task: "+userText {
+	if got := notification.Task(Thread{Messages: []Message{{Role: "user", Content: userText}}}); got != "Task: "+userText {
 		t.Fatalf("user text was changed: %q", got)
 	}
 }

@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"miya/internal/codex"
+	"miya/internal/model"
+	"miya/internal/notification"
 	"miya/internal/remote"
 	"miya/internal/textutil"
 	"miya/internal/thumbnail"
@@ -459,7 +461,7 @@ func (m *mobileApp) disconnectDesktop(unregister bool) {
 	conn, cancel := m.conn, m.cancel
 	m.cancel, m.wake = nil, nil
 	if unregister && conn != nil {
-		registration, _ := json.Marshal(pushRegistration{ID: m.pushID, Token: m.pushToken, Disabled: true})
+		registration, _ := json.Marshal(notification.Registration{ID: m.pushID, Token: m.pushToken, Disabled: true})
 		hasPushID := m.pushID != ""
 		go func() {
 			if hasPushID {
@@ -654,7 +656,7 @@ func (m *mobileApp) read(gen int, conn *remote.Conn) (greeted bool, err error) {
 				m.onMain(gen, func() { m.approvalAnswered(result.ID, message) })
 			}
 		case "read":
-			var n phoneNotificationState
+			var n notification.PhoneState
 			if json.Unmarshal(f.Data, &n) == nil {
 				m.onMain(gen, func() { m.applyNotifications(n) })
 			}
@@ -757,7 +759,7 @@ func (m *mobileApp) applyPhoneState(s phoneState) {
 	if m.open != 0 && cur.ServerID != "" {
 		for _, p := range s.Projects {
 			for _, t := range p.Threads {
-				if t.ServerID == cur.ServerID && threadAgent(t) == threadAgent(cur) && t.ID != m.open {
+				if t.ServerID == cur.ServerID && model.ThreadAgent(t) == model.ThreadAgent(cur) && t.ID != m.open {
 					m.open, cur.ID = t.ID, t.ID
 					m.showThread(cur)
 					m.subscribe(t.ID)
@@ -799,7 +801,7 @@ func (m *mobileApp) receiveThread(id int, d phoneThreadDelta) {
 			m.updateThreadView(cur, false)
 			return
 		}
-		if d.Thread.ServerID != cur.ServerID || threadAgent(d.Thread) != threadAgent(cur) {
+		if d.Thread.ServerID != cur.ServerID || model.ThreadAgent(d.Thread) != model.ThreadAgent(cur) {
 			return
 		}
 	}
@@ -898,13 +900,13 @@ func (m *mobileApp) openThread(t Thread) {
 	m.drawerSearch, m.drawerQuery = false, ""
 	_, project := m.find(t.ID)
 	if t.ServerID != "" {
-		_, project, _ = m.referencedThread(ThreadRef{Source: m.state.ReferenceSource, Backend: threadAgent(t), SessionID: t.ServerID})
+		_, project, _ = m.referencedThread(ThreadRef{Source: m.state.ReferenceSource, Backend: model.ThreadAgent(t), SessionID: t.ServerID})
 	}
 	if project.Path != "" {
 		m.selected, m.expandedProject, m.projectsExpanded = project.Path, project.Path, true
 	}
 	cur := m.view.c.current()
-	if m.open == t.ID && cur.ServerID == t.ServerID && threadAgent(cur) == threadAgent(t) && m.router().Path() == "/thread" {
+	if m.open == t.ID && cur.ServerID == t.ServerID && model.ThreadAgent(cur) == model.ThreadAgent(t) && m.router().Path() == "/thread" {
 		m.menu = false
 		return
 	}
@@ -981,7 +983,7 @@ func (m *mobileApp) sendDraft(steer bool) {
 	r.Steer = steer
 	agent := m.composerAgent()
 	if m.open != 0 {
-		agent = threadAgent(m.view.c.current())
+		agent = model.ThreadAgent(m.view.c.current())
 	}
 	if len(m.state.Agents) > 0 {
 		o := m.sendOptions(agent)
@@ -2027,15 +2029,15 @@ func (m *mobileApp) threadRequest(op string, id int) remote.Request {
 	// The currently displayed page is authoritative when a new state has
 	// already reused its numeric ID for a different conversation.
 	if cur := m.view.c.current(); cur.ID == id && cur.ServerID != "" {
-		if cur.ServerID != t.ServerID || threadAgent(cur) != threadAgent(t) {
+		if cur.ServerID != t.ServerID || model.ThreadAgent(cur) != model.ThreadAgent(t) {
 			p = phoneProject{}
 		}
 		t = cur
 	}
-	if _, project, ok := m.referencedThread(ThreadRef{Source: m.state.ReferenceSource, Backend: threadAgent(t), SessionID: t.ServerID}); ok {
+	if _, project, ok := m.referencedThread(ThreadRef{Source: m.state.ReferenceSource, Backend: model.ThreadAgent(t), SessionID: t.ServerID}); ok {
 		p = project
 	}
-	r.ServerID, r.Agent, r.Project = t.ServerID, threadAgent(t), p.Path
+	r.ServerID, r.Agent, r.Project = t.ServerID, model.ThreadAgent(t), p.Path
 	return r
 }
 
@@ -2045,7 +2047,7 @@ func (m *mobileApp) applyThread(d phoneThreadDelta) {
 	var base []Message
 	if !d.Reset {
 		boundIdentity := false
-		if cur := m.view.c.current(); cur.ID == t.ID && (cur.ServerID == t.ServerID || cur.ServerID == "" && threadAgent(cur) == threadAgent(t)) {
+		if cur := m.view.c.current(); cur.ID == t.ID && (cur.ServerID == t.ServerID || cur.ServerID == "" && model.ThreadAgent(cur) == model.ThreadAgent(t)) {
 			// A new thread's first messages can arrive before its durable ID.
 			// Binding that ID changes metadata, not the history already received
 			// under its numeric ID; the desktop need not resend those messages.
