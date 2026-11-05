@@ -4,11 +4,12 @@ package main
 
 import (
 	"miya/internal/memory"
+	"miya/internal/memory/extractor/extractortest"
 	"testing"
 )
 
 func TestMemoryCodexExtractorDoesNotRequireClaude(t *testing.T) {
-	fakeMemoryCodex(t)
+	extractortest.FakeCodex(t)
 	app, _ := testApp(t)
 	c := app.c
 	attachMemory(t, c)

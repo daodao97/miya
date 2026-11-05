@@ -1,4 +1,4 @@
-package main
+package extractor
 
 import (
 	"bufio"
@@ -160,7 +160,7 @@ func codexExtractionArgs(directory string, overrides []string) []string {
 	return append(args, "-")
 }
 
-func extractMemoryWithCodex(ctx context.Context, job memory.ExtractionJob) ([]memory.Candidate, error) {
+func WithCodex(ctx context.Context, job memory.ExtractionJob) ([]memory.Candidate, error) {
 	bin, err := codex.Binary()
 	if err != nil {
 		return nil, errors.New("Codex extractor unavailable")

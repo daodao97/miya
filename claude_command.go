@@ -9,29 +9,6 @@ import (
 	"miya/internal/claude"
 )
 
-// The command that starts Claude Code: claude by default, or one with
-// options and variables of its own, as `claude --settings ~/x.json` or
-// `CLAUDE_CONFIG_DIR=~/.claude-work claude`. CLAUDE_COMMAND overrides the
-// saved setting.
-func loadClaudeCommand() string {
-	if v := strings.TrimSpace(os.Getenv("CLAUDE_COMMAND")); v != "" {
-		return v
-	}
-	path := permissionPolicyPath()
-	if path == "" {
-		return ""
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return ""
-	}
-	var settings struct {
-		ClaudeCommand string `json:"claudeCommand"`
-	}
-	_ = json.Unmarshal(data, &settings)
-	return strings.TrimSpace(settings.ClaudeCommand)
-}
-
 func persistClaudeCommand(command string) {
 	path := permissionPolicyPath()
 	if path == "" {

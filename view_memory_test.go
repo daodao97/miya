@@ -8,6 +8,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"miya/internal/memory"
+	"miya/internal/memory/extractor/extractortest"
 )
 
 func TestMemoryManagementPageAndPromotionPreview(t *testing.T) {
@@ -63,7 +64,7 @@ func TestMemoryManagementPageAndPromotionPreview(t *testing.T) {
 }
 
 func TestMemoryExtractorPickerSavesAgentWithoutEnablingAutomation(t *testing.T) {
-	fakeMemoryCodex(t)
+	extractortest.FakeCodex(t)
 	app, tt := testApp(t)
 	c := app.c
 	attachMemory(t, c)

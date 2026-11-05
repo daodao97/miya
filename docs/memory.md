@@ -291,7 +291,7 @@ Go 代码逐项检查：作用域是否允许、来源是否属于本轮、引�
 | `memory_context.go`（新增） | 从实际发送请求构造有界记忆块、按会话计算增量、记录注入快照 | 1b |
 | [agent.go](../agent.go)、[queue.go](../queue.go) | `sendRequest` 原文与上下文分离，普通发送、排队、引导、编辑重发的共同接入 | 1b |
 | [chat_controller.go](../chat_controller.go)、[agent_codex.go](../agent_codex.go)、[chat_claude.go](../chat_claude.go) | 组合实际后端输入；覆盖 Codex steer、Claude 保活发送和后台项目 | 1b |
-| `memory_extract.go`（新增） | 规范化完成事件、来源消息快照、提取队列和结构化输出校验 | 2 |
+| `memory_extract.go`（新增） | 规范化完成事件、来源消息快照、提取队列；提炼调用和结构化输出校验现位于 `internal/memory/extractor` | 2 |
 | [chat_events.go](../chat_events.go)、[chat_claude.go](../chat_claude.go) | 后端原始完成信号、持久回合标识、去重，不依赖界面通知 | 2 |
 | [internal/automation/draft.go](../internal/automation/draft.go) | 抽取可复用的结构化调用基础；不直接复用自动化的提示词、权限或 schema | 2 |
 

@@ -1,55 +1,24 @@
 //go:build !windows
 
-package main
+package extractor
 
 import (
 	"context"
 	"encoding/json"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"miya/internal/claude"
 	"miya/internal/memory"
+	"miya/internal/memory/extractor/extractortest"
+	"miya/internal/model"
 )
 
-func fakeMemoryCodex(t *testing.T) (string, string) {
-	t.Helper()
-	root := t.TempDir()
-	bin := filepath.Join(root, "codex.py")
-	log := filepath.Join(root, "log.json")
-	script := `#!/usr/bin/env python3
-import json,os,sys
-a=sys.argv[1:]
-if a[:2]==['features','list']:
- print('shell_tool stable true\nhooks stable true\nmulti_agent stable true\napps stable true')
-elif a[:2]==['mcp','list']:
- print(json.dumps([{'name':'configured-server'},{'name':'local.tool','transport':{'type':'stdio'}},{'name':'remote','transport':{'type':'streamable_http'}}]))
-elif a[0]=='exec':
- if os.environ.get('MIYA_CODEX_TEST_FAIL'):
-  sys.stderr.write('Error: failed to load bootstrap configuration\n\nCaused by:\n    url is not supported for stdio\n    in mcp_servers.remote\n')
-  sys.exit(1)
- data=json.loads(sys.stdin.read())
- with open(os.environ['MIYA_CODEX_TEST_LOG'],'w') as f:json.dump({'args':a,'cwd':os.getcwd(),'input':data},f)
- result=a[a.index('--output-last-message')+1]
- with open(result,'w') as f:json.dump({'candidates':[]},f)
- print(json.dumps({'type':'item.completed','item':{'type':os.environ.get('MIYA_CODEX_TEST_ITEM','agent_message'),'text':'{"candidates":[]}'}}))
- print(json.dumps({'type':'turn.completed'}))
-else:sys.exit(1)
-`
-	if err := os.WriteFile(bin, []byte(script), 0700); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("CODEX_BINARY", bin)
-	t.Setenv("MIYA_CODEX_TEST_LOG", log)
-	return bin, log
-}
-
 func TestMemoryCodexSelectionUsesIsolatedConfiguredCLI(t *testing.T) {
-	_, log := fakeMemoryCodex(t)
-	job := memory.ExtractionJob{ExtractorAgent: agentCodex, Session: "source-session", TurnID: "turn", Evidence: []memory.Evidence{{ID: "user", Kind: "user_statement", Text: "一次性调整，无需记住"}}}
-	got, err := extractMemory(context.Background(), claude.CLI{Binary: "missing-claude"}, job)
+	_, log := extractortest.FakeCodex(t)
+	job := memory.ExtractionJob{ExtractorAgent: model.AgentCodex, Session: "source-session", TurnID: "turn", Evidence: []memory.Evidence{{ID: "user", Kind: "user_statement", Text: "一次性调整，无需记住"}}}
+	got, err := Extract(context.Background(), claude.CLI{Binary: "missing-claude"}, job)
 	if err != nil || len(got) != 0 {
 		t.Fatalf("Codex dispatch: %+v %v", got, err)
 	}
@@ -77,21 +46,21 @@ func TestMemoryCodexSelectionUsesIsolatedConfiguredCLI(t *testing.T) {
 }
 
 func TestMemoryCodexRejectsUnexpectedToolEvents(t *testing.T) {
-	fakeMemoryCodex(t)
+	extractortest.FakeCodex(t)
 	t.Setenv("MIYA_CODEX_TEST_ITEM", "command_execution")
-	if _, err := extractMemory(context.Background(), claude.CLI{}, memory.ExtractionJob{ExtractorAgent: agentCodex}); err == nil {
+	if _, err := Extract(context.Background(), claude.CLI{}, memory.ExtractionJob{ExtractorAgent: model.AgentCodex}); err == nil {
 		t.Fatal("Codex operational tool result accepted")
 	}
-	if _, err := extractMemory(context.Background(), claude.CLI{}, memory.ExtractionJob{ExtractorAgent: "unknown-agent"}); err == nil {
+	if _, err := Extract(context.Background(), claude.CLI{}, memory.ExtractionJob{ExtractorAgent: "unknown-agent"}); err == nil {
 		t.Fatal("unknown agent silently fell back")
 	}
 }
 
 func TestMemoryCodexStartupFailureKeepsCLIDiagnosis(t *testing.T) {
-	fakeMemoryCodex(t)
+	extractortest.FakeCodex(t)
 	t.Setenv("MIYA_CODEX_TEST_FAIL", "1")
-	job := memory.ExtractionJob{ExtractorAgent: agentCodex, Session: "source-session", TurnID: "turn", Evidence: []memory.Evidence{{ID: "user", Kind: "user_statement", Text: "secret evidence text"}}}
-	_, err := extractMemoryWithCodex(context.Background(), job)
+	job := memory.ExtractionJob{ExtractorAgent: model.AgentCodex, Session: "source-session", TurnID: "turn", Evidence: []memory.Evidence{{ID: "user", Kind: "user_statement", Text: "secret evidence text"}}}
+	_, err := WithCodex(context.Background(), job)
 	if err == nil {
 		t.Fatal("failed CLI reported success")
 	}

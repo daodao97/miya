@@ -1,6 +1,7 @@
 package main
 
 import (
+	"miya/internal/claude"
 	"os"
 	"path/filepath"
 	"strings"
@@ -175,11 +176,11 @@ func TestClaudeCommandSettingPersistsAndResolves(t *testing.T) {
 	if claudeConfigDir() != "/cfg/work" {
 		t.Fatalf("config dir %q", claudeConfigDir())
 	}
-	if got := loadClaudeCommand(); got != c.claudeCommand {
+	if got := claude.LoadCommand(); got != c.claudeCommand {
 		t.Fatalf("saved %q", got)
 	}
 	t.Setenv("CLAUDE_COMMAND", "claude --model opus")
-	if loadClaudeCommand() != "claude --model opus" {
+	if claude.LoadCommand() != "claude --model opus" {
 		t.Fatal("CLAUDE_COMMAND does not override the setting")
 	}
 	c.setClaudeCommand("/missing/claude")

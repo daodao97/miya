@@ -178,7 +178,7 @@ func newChatController() *chatController {
 	c.installNotifications()
 	c.active, c.setActive = createSignal(0)
 	c.agent, c.setAgent = createSignal("codex")
-	c.applyClaudeCommand(loadClaudeCommand())
+	c.applyClaudeCommand(claude.LoadCommand())
 	c.claudeModel, c.claudeEffort = loadSetting("claudeModel"), loadSetting("claudeEffort")
 	c.claudeDefaultModel = loadSetting("claudeDefaultModel")
 	c.draft, c.setDraft = createSignal("")

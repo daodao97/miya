@@ -1,8 +1,10 @@
 package claude
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"miya/internal/appdir"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -150,4 +152,27 @@ func resolve(name string) (string, error) {
 func executable(p string) bool {
 	st, err := os.Stat(p)
 	return err == nil && !st.IsDir() && st.Mode()&0o111 != 0
+}
+
+// The command that starts Claude Code: claude by default, or one with
+// options and variables of its own, as `claude --settings ~/x.json` or
+// `CLAUDE_CONFIG_DIR=~/.claude-work claude`. CLAUDE_COMMAND overrides the
+// saved setting.
+func LoadCommand() string {
+	if v := strings.TrimSpace(os.Getenv("CLAUDE_COMMAND")); v != "" {
+		return v
+	}
+	path := appdir.File("quickgui-settings.json")
+	if path == "" {
+		return ""
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	var settings struct {
+		ClaudeCommand string `json:"claudeCommand"`
+	}
+	_ = json.Unmarshal(data, &settings)
+	return strings.TrimSpace(settings.ClaudeCommand)
 }

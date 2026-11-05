@@ -163,7 +163,7 @@ func TestClaudeLiveBackgroundCompletion(t *testing.T) {
 	if os.Getenv("MIYA_CLAUDE_BACKGROUND_LIVE") != "1" {
 		t.Skip("set MIYA_CLAUDE_BACKGROUND_LIVE=1")
 	}
-	command, err := claude.ParseCommand(loadClaudeCommand())
+	command, err := claude.ParseCommand(claude.LoadCommand())
 	if err != nil {
 		t.Fatal(err)
 	}
