@@ -482,3 +482,13 @@ var (
 	managedResult        = coordinator.NativeResult
 	provenCodexRejection = coordinator.ProvenCodexRejection
 )
+
+// Moved to internal/msgfmt.
+const (
+	retryContinuePrompt = msgfmt.RetryContinuePrompt
+)
+
+var (
+	failedAfterOutput = msgfmt.FailedAfterOutput
+	retryableError    = msgfmt.RetryableError
+)
