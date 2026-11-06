@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"miya/internal/agent"
 	agentusage "miya/internal/agent/quota"
 	"miya/internal/async"
 	"miya/internal/composer"
@@ -62,12 +63,12 @@ func (c *Controller) PrepareHost(r svcproto.HostRequest) (async.Reply, error) {
 		case "preview":
 			return thumbnail.File(r.Path)
 		case "usage":
-			return []agentusage.Reading{agentusage.Read(ctx, "codex"), agentusage.Read(ctx, "claude")}, nil
+			return []agentusage.Reading{agent.Quotas().Read(ctx, "codex"), agent.Quotas().Read(ctx, "claude")}, nil
 		case "usage-reset":
 			if r.Reset == nil {
 				return nil, errors.New("Confirmed reset operation missing")
 			}
-			return agentusage.UseCodexReset(ctx, *r.Reset)
+			return agent.Quotas().Reset(ctx, *r.Reset)
 		}
 		if r.Project == "" {
 			return nil, errors.New("Server project not specified")

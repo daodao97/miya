@@ -11,6 +11,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"miya/internal/agent/account"
 	agentusage "miya/internal/agent/quota"
 	"miya/internal/controller"
 	desktopui "miya/internal/ui"
@@ -97,7 +98,7 @@ func TestUsagePanelScrollKeepsControlsAvailable(t *testing.T) {
 func TestUsagePanelResetRequiresConfirmation(t *testing.T) {
 	app := usageFixture()
 	expires := time.Now().Add(24 * time.Hour).Unix()
-	app.Usage.Readings[0].Resets = &agentusage.ResetCredits{Count: 3, Credits: []agentusage.ResetCard{{ID: "known", Type: "codexRateLimits", Status: "available", ExpiresAt: &expires}}}
+	app.Usage.Readings[0].Resets = &account.ResetCreditsSummary{AvailableCount: 3, Credits: []account.ResetCredit{{ID: "known", ResetType: "codexRateLimits", Status: "available", ExpiresAt: &expires}}}
 	tt := ui.NewTester(app.UsagePanelView, desktopui.UsagePanelWidth, app.Usage.Height())
 	if !tt.HasText("3 reset cards") || !tt.HasText("Expiration available for 1 / 3 cards") {
 		t.Fatalf("partial reset details are misrepresented: %q", tt.Texts())

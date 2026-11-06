@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"miya/internal/agent/account"
+	codexaccount "miya/internal/agent/codex/account"
 	codex "miya/internal/agent/codex/native"
 	"miya/internal/appmodel"
 	"miya/internal/controller"
@@ -70,7 +71,7 @@ func TestAccountReadUsesRealResetDetailsWithoutRedeeming(t *testing.T) {
 			}
 		}},
 	}}
-	data, ok := account.ReadDisplay(context.Background(), rpc, account.Display{})
+	data, ok := codexaccount.ReadDisplay(context.Background(), rpc, account.Display{})
 	if !ok || data.Limits.ResetCredits.AvailableCount != 4 || data.Limits.ResetCredits.Next().ID != "soon" || len(rpc.steps) != 0 {
 		t.Fatalf("reset-credit response was not mapped: %+v", data)
 	}
@@ -92,7 +93,7 @@ func TestAccountRefreshFailureKeepsPreviousDisplay(t *testing.T) {
 		{{method: "account/read", response: resetTestAccount}, {method: "account/rateLimits/read", err: errors.New("offline")}},
 	} {
 		rpc := &scriptedAccountCaller{t: t, steps: steps}
-		result, _ := account.ReadDisplay(context.Background(), rpc, cached)
+		result, _ := codexaccount.ReadDisplay(context.Background(), rpc, cached)
 		if result.Loading || result.Refreshing || result.Identity == nil || result.Limits.ResetCredits != cached.Limits.ResetCredits || result.Limits.RateLimits != cached.Limits.RateLimits || !result.Updated.Equal(cached.Updated) {
 			t.Fatal("background refresh removed the previous account or usage")
 		}
@@ -159,7 +160,7 @@ func TestResetRedeemsSelectedCreditAndReloadsServerData(t *testing.T) {
 		{method: "account/read", response: resetTestAccount},
 		{method: "account/rateLimits/read", response: resetTestAfter},
 	}}
-	result, err := account.ExecuteReset(context.Background(), rpc, *attempt)
+	result, err := codexaccount.ExecuteReset(context.Background(), rpc, *attempt)
 	if err != nil || result.Outcome != "reset" || !result.Submitted || result.Display.Limits.ResetCredits.AvailableCount != 3 || result.Display.Limits.RateLimits.Primary.UsedPercent != 0 || len(rpc.steps) != 0 {
 		t.Fatalf("redemption did not use the refreshed server result: %+v %v", result, err)
 	}
@@ -178,7 +179,7 @@ func TestResetBlocksChangedAccountOrSelectedCredit(t *testing.T) {
 			{method: "account/read", response: resetTestAccount},
 			{method: "account/rateLimits/read", response: limits},
 		}}
-		result, err := account.ExecuteReset(context.Background(), rpc, *attempt)
+		result, err := codexaccount.ExecuteReset(context.Background(), rpc, *attempt)
 		if err == nil || result.Submitted {
 			t.Fatal("redemption was allowed after the account or card changed")
 		}
@@ -201,7 +202,7 @@ func TestResetRetryReusesKeyAfterLostResponse(t *testing.T) {
 		{method: "account/rateLimits/read", response: resetTestLimits},
 		{method: "account/rateLimitResetCredit/consume", err: context.DeadlineExceeded, check: check},
 	}}
-	result, err := account.ExecuteReset(context.Background(), first, *attempt)
+	result, err := codexaccount.ExecuteReset(context.Background(), first, *attempt)
 	if err == nil || !result.Submitted {
 		t.Fatal("lost response was not retained as an uncertain submission")
 	}
@@ -213,7 +214,7 @@ func TestResetRetryReusesKeyAfterLostResponse(t *testing.T) {
 		{method: "account/read", response: resetTestAccount},
 		{method: "account/rateLimits/read", response: resetTestAfter},
 	}}
-	result, err = account.ExecuteReset(context.Background(), retry, *attempt)
+	result, err = codexaccount.ExecuteReset(context.Background(), retry, *attempt)
 	if err != nil || result.Outcome != "alreadyRedeemed" {
 		t.Fatalf("idempotent retry failed: %+v %v", result, err)
 	}
@@ -238,7 +239,7 @@ func TestReadRealAccountResetCredits(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer client.Close()
-	data, ok := account.ReadDisplay(ctx, client, account.Display{})
+	data, ok := codexaccount.ReadDisplay(ctx, client, account.Display{})
 	if !ok || data.Error != "" || data.UsageError != "" {
 		t.Fatalf("read-only account check failed: %s %s", data.Error, data.UsageError)
 	}

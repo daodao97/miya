@@ -32,7 +32,8 @@ func (c *Controller) RefreshAccount() {
 	}
 	client := c.Client
 	cached := c.AccountCache
-	if c.Ready == nil || !c.Ready() || client == nil {
+	source := c.accountSource()
+	if c.Ready == nil || !c.Ready() || client == nil || source == nil {
 		if !cached.Updated.IsZero() {
 			cached.Notice = tr("Codex is not connected. Showing the last result.")
 			c.AccountState = cached
@@ -54,7 +55,7 @@ func (c *Controller) RefreshAccount() {
 	c.accountCancel = stop
 	go func() {
 		defer stop()
-		result, readOK := account.ReadDisplay(ctx, client, cached)
+		result, readOK := source.Read(ctx, cached)
 		c.Dispatch(func() {
 			if c.accountVersion != request || c.Client != client {
 				return
@@ -75,7 +76,8 @@ func (c *Controller) RefreshAccount() {
 // refreshQuota reads the account's rate limits for the composer's ring.
 func (c *Controller) refreshQuota() {
 	client := c.Client
-	if client == nil {
+	source := c.accountSource()
+	if client == nil || source == nil {
 		return
 	}
 	c.quotaVersion++
@@ -90,8 +92,7 @@ func (c *Controller) refreshQuota() {
 	c.quotaCancel = stop
 	go func() {
 		defer stop()
-		var result account.Limits
-		err := client.Call(ctx, "account/rateLimits/read", map[string]any{}, &result)
+		result, err := source.ReadLimits(ctx)
 		c.Dispatch(func() {
 			if request != c.quotaVersion || client != c.Client {
 				return

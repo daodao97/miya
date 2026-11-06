@@ -14,8 +14,8 @@
 
 ## 进度
 
-- Agent：进行中。
-- 会话：待处理。
+- Agent：已迁移目录并建立公共 quota.Provider、quota.Service 与 account.Source。供应商配额和账号 RPC 位于各自 Agent 实现；重置卡模型共用 account.ResetCreditsSummary。相关 race 回归通过，等待最终全量审计。
+- 会话：进行中。
 - 后台服务：待处理。
 - 项目：待处理。
 - 运行环境：待处理。

@@ -9,13 +9,15 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	"miya/internal/agent"
+	"miya/internal/agent/account"
 	agentusage "miya/internal/agent/quota"
 	"miya/internal/svcproto"
 	"miya/internal/widgets"
 )
 
-func usageResetExpiryText(r *agentusage.ResetCredits) (string, string) {
-	if r == nil || r.Count == 0 {
+func usageResetExpiryText(r *account.ResetCreditsSummary) (string, string) {
+	if r == nil || r.AvailableCount == 0 {
 		return tr("No reset cards available"), ""
 	}
 	if len(r.Credits) == 0 {
@@ -29,8 +31,8 @@ func usageResetExpiryText(r *agentusage.ResetCredits) (string, string) {
 		}
 		details = append(details, fmt.Sprintf(tr("Card %d: %s"), i+1, when))
 	}
-	if len(r.Credits) != r.Count {
-		return fmt.Sprintf(tr("Expiration available for %d / %d cards"), len(r.Credits), r.Count), strings.Join(details, "\n")
+	if len(r.Credits) != r.AvailableCount {
+		return fmt.Sprintf(tr("Expiration available for %d / %d cards"), len(r.Credits), r.AvailableCount), strings.Join(details, "\n")
 	}
 	text := tr("No expiration")
 	if at := r.Credits[0].ExpiresAt; at != nil {
@@ -50,7 +52,7 @@ func (a *App) usageResetSection(c *ui.Context, r agentusage.Reading, compact boo
 		if r.Resets != nil {
 			ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
 				widgets.Icon(c, "refresh", 13, theme.TextMuted)
-				ui.Text(c, fmt.Sprintf(tr("%d reset cards"), r.Resets.Count)).FontSize(12).FontWeight(500).TextColor(theme.Text).Grow(1)
+				ui.Text(c, fmt.Sprintf(tr("%d reset cards"), r.Resets.AvailableCount)).FontSize(12).FontWeight(500).TextColor(theme.Text).Grow(1)
 				label := tr("Use a card…")
 				retry := d.resetRetry && d.ResetAttempt != nil && d.ResetAttempt.AccountKey == r.AccountKey
 				if retry {
@@ -59,7 +61,7 @@ func (a *App) usageResetSection(c *ui.Context, r agentusage.Reading, compact boo
 				if d.Resetting {
 					label = tr("Using card…")
 				}
-				button := ui.Button(c, label).Label(tr("Use Codex reset")).Disabled(d.Busy || r.Error != "" || r.AccountKey == "" || r.Home == "" || r.Resets.Count == 0 && !retry)
+				button := ui.Button(c, label).Label(tr("Use Codex reset")).Disabled(d.Busy || r.Error != "" || r.AccountKey == "" || r.Home == "" || r.Resets.AvailableCount == 0 && !retry)
 				if compact {
 					button.FontSize(11).Height(25).Padding(0, 8)
 				}
@@ -170,7 +172,7 @@ func (a *App) consumeUsageReset() {
 		var result agentusage.ResetResult
 		var err error
 		if cl == nil {
-			result, err = agentusage.UseCodexReset(ctx, attempt)
+			result, err = agent.Quotas().Reset(ctx, attempt)
 		} else {
 			err = cl.Call("host", svcproto.HostRequest{Action: "usage-reset", Reset: &attempt}, &result)
 		}

@@ -12,22 +12,25 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"miya/internal/agent/cli"
+	"miya/internal/agent/quota"
 )
 
 // As in Magpie, /usage is handled by Claude Code itself. No prompt, tools,
 // project settings, MCP servers or persisted conversation are involved.
 var claudeArgs = []string{"-p", "/usage", "--output-format", "json", "--tools", "", "--strict-mcp-config", "--setting-sources", "", "--no-session-persistence"}
 
-func readClaude(ctx context.Context, binary, home string) ([]Window, error) {
+func readClaude(ctx context.Context, binary, home string) ([]quota.Window, error) {
 	dir, err := os.MkdirTemp("", "miya-usage-")
 	if err != nil {
 		return nil, errors.New("Unable to create the usage directory")
 	}
 	defer os.RemoveAll(dir)
 	cmd := exec.CommandContext(ctx, binary, claudeArgs...)
-	cmd.Dir, cmd.Env, cmd.Stderr = dir, commandEnv("claude", home), io.Discard
+	cmd.Dir, cmd.Env, cmd.Stderr = dir, cli.CommandEnv("claude", home), io.Discard
 	cmd.WaitDelay = time.Second
-	isolateReader(cmd)
+	cli.IsolateReader(cmd)
 	var out limitedBuffer
 	cmd.Stdout = &out
 	if err := cmd.Run(); err != nil {
@@ -49,7 +52,7 @@ var claudeLine = regexp.MustCompile(`^Current (session|week(?: \(([^)]+)\))?):\s
 var ansiUsage = regexp.MustCompile("\x1b\\[[0-?]*[ -/]*[@-~]")
 var claudeDenied = regexp.MustCompile(`(?i)\b(401|403)\b|not (logged|signed) in|signed out|unauthorized|forbidden|authentication (failed|required)|invalid (access )?token`)
 
-func parseClaude(data []byte) ([]Window, error) {
+func parseClaude(data []byte) ([]quota.Window, error) {
 	type result struct {
 		Type    string `json:"type"`
 		Result  string `json:"result"`
@@ -71,7 +74,7 @@ func parseClaude(data []byte) ([]Window, error) {
 	if r.IsError || claudeDenied.MatchString(text) {
 		return nil, errors.New("Claude returned no quota. Check CLI sign-in.")
 	}
-	var windows []Window
+	var windows []quota.Window
 	seen := make(map[string]bool)
 	for _, line := range strings.Split(text, "\n") {
 		m := claudeLine.FindStringSubmatch(strings.TrimSpace(line))
@@ -87,7 +90,7 @@ func parseClaude(data []byte) ([]Window, error) {
 			continue
 		}
 		seen[name] = true
-		windows = append(windows, Window{Name: name, Used: Percent(used), Reset: m[4]})
+		windows = append(windows, quota.Window{Name: name, Used: quota.Percent(used), Reset: m[4]})
 	}
 	if len(windows) == 0 {
 		return nil, errors.New("Subscription quota is unavailable for this account")

@@ -67,6 +67,7 @@ func (c *Controller) ConfirmAccountReset() {
 		return
 	}
 	attempt, client := *action.Attempt, c.Client
+	source := c.accountSource()
 	action.Busy, action.Notice, action.Failed = true, "", false
 	c.setAccountReset(action)
 	// The user's request outlives the Account view, so switching tabs cannot
@@ -74,7 +75,7 @@ func (c *Controller) ConfirmAccountReset() {
 	ctx, stop := context.WithTimeout(c.Ctx, 30*time.Second)
 	go func() {
 		defer stop()
-		result, err := account.ExecuteReset(ctx, client, attempt)
+		result, err := source.Reset(ctx, attempt)
 		c.Dispatch(func() {
 			if result.HaveDisplay && c.Client == client && !result.Display.Updated.Before(c.AccountCache.Updated) {
 				c.AccountCache = result.Display

@@ -11,6 +11,10 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"miya/internal/agent/account"
+	"miya/internal/agent/cli"
+	"miya/internal/agent/quota"
 )
 
 type codexWindow struct {
@@ -32,8 +36,8 @@ type codexRPC struct {
 	home    string
 }
 
-func readCodex(ctx context.Context, binary, home string) (Reading, error) {
-	r := Reading{Agent: "codex", Home: home}
+func readCodex(ctx context.Context, binary, home string) (quota.Reading, error) {
+	r := quota.Reading{Agent: "codex", Home: home}
 	err := withCodex(ctx, binary, home, func(rpc *codexRPC) error {
 		var err error
 		r, err = rpc.read()
@@ -46,9 +50,9 @@ func withCodex(ctx context.Context, binary, home string, run func(*codexRPC) err
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, binary, "app-server", "--listen", "stdio://")
-	cmd.Env, cmd.Dir, cmd.Stderr = commandEnv("codex", home), os.TempDir(), io.Discard
+	cmd.Env, cmd.Dir, cmd.Stderr = cli.CommandEnv("codex", home), os.TempDir(), io.Discard
 	cmd.WaitDelay = time.Second
-	isolateReader(cmd)
+	cli.IsolateReader(cmd)
 	in, err := cmd.StdinPipe()
 	if err != nil {
 		return err
@@ -102,25 +106,25 @@ func (rpc *codexRPC) call(method string, params any, result any) error {
 	return errors.New("Codex usage connection closed")
 }
 
-func (rpc *codexRPC) read() (Reading, error) {
-	r := Reading{Agent: "codex", Home: rpc.home}
-	var account struct {
+func (rpc *codexRPC) read() (quota.Reading, error) {
+	r := quota.Reading{Agent: "codex", Home: rpc.home}
+	var identityReply struct {
 		Account *struct{ Type, Email string } `json:"account"`
 	}
-	if err := rpc.call("account/read", map[string]bool{"refreshToken": false}, &account); err != nil {
+	if err := rpc.call("account/read", map[string]bool{"refreshToken": false}, &identityReply); err != nil {
 		return r, err
 	}
-	if account.Account == nil {
+	if identityReply.Account == nil {
 		return r, errors.New("Sign in to Codex CLI first")
 	}
-	if account.Account.Type != "chatgpt" {
+	if identityReply.Account.Type != "chatgpt" {
 		return r, errors.New("This sign-in method does not provide subscription quota")
 	}
 	var result struct {
-		Limits    codexLimits            `json:"rateLimits"`
-		ByID      map[string]codexLimits `json:"rateLimitsByLimitId"`
-		Resets    *ResetCredits          `json:"rateLimitResetCredits"`
-		AccountID string                 `json:"accountId"`
+		Limits    codexLimits                  `json:"rateLimits"`
+		ByID      map[string]codexLimits       `json:"rateLimitsByLimitId"`
+		Resets    *account.ResetCreditsSummary `json:"rateLimitResetCredits"`
+		AccountID string                       `json:"accountId"`
 	}
 	if err := rpc.call("account/rateLimits/read", nil, &result); err != nil {
 		return r, err
@@ -130,14 +134,14 @@ func (rpc *codexRPC) read() (Reading, error) {
 		limits = general
 	}
 	r.Plan, r.Windows, r.Resets = limits.Plan, codexWindows(limits), result.Resets
-	r.Account = account.Account.Email
+	r.Account = identityReply.Account.Email
 	if result.AccountID != "" {
 		r.AccountKey = "id:" + result.AccountID
 	} else if r.Account != "" {
 		r.AccountKey = "email:" + strings.ToLower(r.Account)
 	}
 	if r.Resets != nil {
-		r.Resets.normalize(time.Now())
+		r.Resets.Normalize(time.Now())
 	}
 	r.At = time.Now()
 	if len(r.Windows) == 0 && r.Resets == nil {
@@ -146,8 +150,8 @@ func (rpc *codexRPC) read() (Reading, error) {
 	return r, nil
 }
 
-func codexWindows(limits codexLimits) []Window {
-	var windows []Window
+func codexWindows(limits codexLimits) []quota.Window {
+	var windows []quota.Window
 	for i, w := range []*codexWindow{limits.Primary, limits.Secondary} {
 		if w == nil || w.Used == nil {
 			continue
@@ -167,7 +171,7 @@ func codexWindows(limits codexLimits) []Window {
 		if w.Reset > 0 {
 			reset = time.Unix(w.Reset, 0).Local().Format("01-02 15:04")
 		}
-		windows = append(windows, Window{Name: name, Used: Percent(*w.Used), Reset: reset, DurationMins: w.Mins, ResetsAt: w.Reset})
+		windows = append(windows, quota.Window{Name: name, Used: quota.Percent(*w.Used), Reset: reset, DurationMins: w.Mins, ResetsAt: w.Reset})
 	}
 	return windows
 }

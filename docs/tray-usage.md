@@ -12,7 +12,7 @@
 
 ## 读取方式
 
-实现参考本地 retty 的 `desktop_usage*.go` 和 `internal/agentusage`。读取模块移植到 Miya，沿用隔离的 CLI 协议测试。Codex 启动短生命周期的 `codex app-server --listen stdio://`，只读取账户、额度与重置卡。Claude 执行自身 `/usage` 命令，关闭工具、MCP、项目设置和会话持久化。两者均由 CLI 处理凭据，不直接读取认证文件。
+实现参考本地 retty 的 `desktop_usage*.go` 和 `internal/agent/quota`。读取模块移植到 Miya，沿用隔离的 CLI 协议测试。Codex 启动短生命周期的 `codex app-server --listen stdio://`，只读取账户、额度与重置卡。Claude 执行自身 `/usage` 命令，关闭工具、MCP、项目设置和会话持久化。两者均由 CLI 处理凭据，不直接读取认证文件。
 
 遵循 `CODEX_HOME` 和 `CLAUDE_CONFIG_DIR`，未设置时使用默认目录。这里读取本机 CLI 账户，不使用会话的自定义启动命令。读取不创建对话、不启动工具、不保存用量历史，也不连接或重启现有的会话进程。单次读取最多 20 秒，输出上限为 1 MiB。Unix 取消操作只结束该次读取拥有的进程组。
 
@@ -25,7 +25,7 @@ Codex 返回重置卡字段时显示可用数量和到期信息。数量来自 `
 ## 验证
 
 ```sh
-go test ./internal/agentusage -race
+go test ./internal/agent/quota -race
 go test ./tests/integration -run TestUsage
 MIYA_SNAPSHOT=/tmp/miya-usage-snapshots go test ./tests/integration -run TestUsage
 ```

@@ -11,6 +11,7 @@ import (
 
 	"github.com/egoist/mygo"
 
+	"miya/internal/agent"
 	agentmeta "miya/internal/agent/catalog"
 	agentusage "miya/internal/agent/quota"
 	"miya/internal/prefs"
@@ -114,8 +115,8 @@ func (app *App) refreshUsage() {
 		} else {
 			var wg sync.WaitGroup
 			for i, provider := range providers {
-				agent := provider.UsageID
-				wg.Go(func() { readings[i] = agentusage.Read(ctx, agent) })
+				agentID := provider.UsageID
+				wg.Go(func() { readings[i] = agent.Quotas().Read(ctx, agentID) })
 			}
 			wg.Wait()
 		}
@@ -145,7 +146,7 @@ func usageTrayTip(r *agentusage.Reading) string {
 		lines = append(lines, text)
 	}
 	if r.Resets != nil {
-		lines = append(lines, fmt.Sprintf(tr("%d reset cards"), r.Resets.Count))
+		lines = append(lines, fmt.Sprintf(tr("%d reset cards"), r.Resets.AvailableCount))
 	}
 	if !r.At.IsZero() {
 		lines = append(lines, r.At.Local().Format("15:04")+tr(" updated"))

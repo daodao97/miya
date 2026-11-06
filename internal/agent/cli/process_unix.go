@@ -1,6 +1,6 @@
 //go:build darwin || linux
 
-package quota
+package cli
 
 import (
 	"errors"
@@ -11,7 +11,7 @@ import (
 
 // npm's Codex launcher spawns the native CLI. Own a separate process group,
 // so cancellation cannot leave its child behind or touch a shared daemon.
-func isolateReader(cmd *exec.Cmd) {
+func IsolateReader(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error {
 		err := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)

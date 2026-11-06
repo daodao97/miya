@@ -22,7 +22,7 @@ flowchart TD
 - `internal/agent/codex` 和 `internal/agent/claude` 保存具体 Adapter。原生客户端、进程协议及历史解析分别位于各自的 `native/` 子包。发送、恢复、停止、归档、重发、插话、流事件归并、请求解析和响应编码由对应实现负责。
 - `Controller.Adapters()` 只组装绑定本工作区的实现。`agent.Workspace` 提供会话存储、调度、记忆与队列，`agent.Executions` 提供任务协调；各实现的 `Host` 扩展声明自己需要的连接状态与应用服务。实现包不导入 Controller、桌面、手机或 appmodel。窗口设置和运行状态不会通过全局 Adapter 对象共享。
 - 连接、账号服务、目标任务和跨项目目录仍由现有应用服务管理，通过 Host 桥接。原生会话与这些应用服务的协调继续使用既有状态，尚未改成独立 Session 对象或动态插件生命周期。
-- `internal/agentmeta` 是内置 Agent 的声明目录，集中保存稳定 ID、名称、图标、能力、命令路由、停滞提示时间和订阅配额入口。会话引用验证与界面使用同一份声明。
+- `internal/agent/catalog` 是内置 Agent 的声明目录，集中保存稳定 ID、名称、图标、能力、命令路由、停滞提示时间和订阅配额入口。会话引用验证与界面使用同一份声明。
 
 ## 命令和模型
 
