@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"miya/internal/claude/transcript"
+	"miya/internal/agent/claude/native/transcript"
 	"miya/internal/model"
 	"miya/internal/svcproto"
 )

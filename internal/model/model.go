@@ -2,15 +2,19 @@
 // phones share: threads, messages and their parts.
 package model
 
-import "miya/internal/codex"
+import (
+	"miya/internal/agent/codex/native"
+	"miya/internal/tokenusage"
+)
 
 type Message struct {
-	ExecutionID    string        `json:"executionId,omitempty"`
-	MemoryControl  bool          `json:"memoryControl,omitempty"`
-	MemoryTurnID   string        `json:"memoryTurnId,omitempty"`
-	Memory         *MemoryNotice `json:"memory,omitempty"`
-	HandoffTitle   string        `json:"handoffTitle,omitempty"`
-	Parts          []MessagePart `json:"parts,omitempty"`
+	Presentation   *MessagePresentation `json:"presentation,omitempty"`
+	ExecutionID    string               `json:"executionId,omitempty"`
+	MemoryControl  bool                 `json:"memoryControl,omitempty"`
+	MemoryTurnID   string               `json:"memoryTurnId,omitempty"`
+	Memory         *MemoryNotice        `json:"memory,omitempty"`
+	HandoffTitle   string               `json:"handoffTitle,omitempty"`
+	Parts          []MessagePart        `json:"parts,omitempty"`
 	Images         []string
 	Attachments    []string `json:"attachments,omitempty"`
 	Kind           string
@@ -45,7 +49,7 @@ type Thread struct {
 	// Automation is the automation that started the conversation.
 	Automation                  string `json:",omitempty"`
 	ClaudeMessageID             string
-	Usage                       *codex.TokenUsage
+	Usage                       *tokenusage.Usage
 	TurnOutputTokens            *int           `json:",omitempty"`
 	TurnOutputBaseline          *int           `json:"-"`
 	ClaudeOutputTokens          map[string]int `json:"-"`

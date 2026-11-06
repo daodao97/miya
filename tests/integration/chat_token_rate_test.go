@@ -8,7 +8,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"miya/internal/claude"
+	"miya/internal/agent/claude/native"
 	"miya/internal/controller"
 	"miya/internal/model"
 	"miya/internal/msgfmt"

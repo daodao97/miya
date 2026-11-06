@@ -7,7 +7,7 @@ import (
 	"net"
 	"testing"
 
-	"miya/internal/codex"
+	"miya/internal/agent/codex/native"
 	"miya/internal/desktop/control"
 	"miya/internal/mobile"
 	"miya/internal/phoneapi"

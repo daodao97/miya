@@ -4,9 +4,10 @@ import (
 	"strings"
 
 	"miya/internal/agent"
-
+	claudeagent "miya/internal/agent/claude"
+	codexagent "miya/internal/agent/codex"
+	codex "miya/internal/agent/codex/native"
 	"miya/internal/appmodel"
-	"miya/internal/codex"
 	"miya/internal/composer"
 	"miya/internal/model"
 	"miya/internal/msgfmt"
@@ -16,7 +17,7 @@ import (
 // Adapters returns integrations bound to this workspace. No adapter captures
 // another window's mutable state or shares it through a global registry.
 func (c *Controller) Adapters() []agent.Adapter {
-	return []agent.Adapter{CodexBackend{C: c}, claudeBackend{C: c}}
+	return []agent.Adapter{codexagent.New(codexAgentHost{agentWorkspace{c}}), claudeagent.New(claudeAgentHost{agentWorkspace{c}})}
 }
 
 func (c *Controller) BackendFor(id string) agent.Adapter {
@@ -39,7 +40,7 @@ func (c *Controller) agentStatus(id string) model.AgentStatus {
 		ModelChoices: b.ModelChoices(), EffortChoices: b.EffortChoices()}
 }
 
-// agentStatuses are every agent's states now, in agentBackends' order.
+// agentStatuses follows the adapter factory order.
 func (c *Controller) agentStatuses() []model.AgentStatus {
 	var out []model.AgentStatus
 	for _, b := range c.Adapters() {
@@ -61,14 +62,7 @@ func (c *Controller) agentList() map[string]any {
 // stopAgentRun asks a conversation's agent to stop its turn.
 func (c *Controller) stopAgentRun(t model.Thread) { c.BackendOf(t).Stop(t) }
 
-func (c *Controller) ApprovalOwner(a codex.Approval) agent.Adapter {
-	for _, b := range c.Adapters() {
-		if b.Owns(a) {
-			return b
-		}
-	}
-	return c.Adapters()[0]
-}
+func (c *Controller) ApprovalOwner(a codex.Approval) agent.Adapter { return c.BackendFor(a.Owner()) }
 
 // currentAgent is the open conversation's agent, or the one chosen for a
 // new conversation.
@@ -92,7 +86,7 @@ func (c *Controller) discoverAll() {
 	}
 }
 
-func claudeApproval(a codex.Approval) bool { return strings.Contains(string(a.ID), "claude:") }
+func claudeApproval(a codex.Approval) bool { return a.Owner() == model.AgentClaude }
 
 func (c *Controller) CanRewind(t model.Thread, m model.Message) bool {
 	return m.Role == "user" && !t.Busy && !t.Loading && !t.ReadOnly && c.BackendOf(t).CanRewind(t, m)

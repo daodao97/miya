@@ -6,10 +6,10 @@ import (
 	"strings"
 	"testing"
 
+	"miya/internal/agent/claude/native"
+	"miya/internal/agent/claude/native/transcript"
+	"miya/internal/agent/codex/native"
 	"miya/internal/appmodel"
-	"miya/internal/claude"
-	"miya/internal/claude/transcript"
-	"miya/internal/codex"
 	"miya/internal/controller"
 	"miya/internal/model"
 	"miya/internal/msgfmt"

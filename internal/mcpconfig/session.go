@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"regexp"
 
-	"miya/internal/codex"
+	"miya/internal/agent/codex/native"
 )
 
 var ComputerUseAccessPrompt = regexp.MustCompile(`^Allow Computer Use to use "([^"\r\n]+)"\?$`)

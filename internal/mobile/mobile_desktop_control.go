@@ -9,9 +9,9 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"miya/internal/codex"
 	"miya/internal/desktop"
 	"miya/internal/desktop/control"
+	"miya/internal/interaction"
 	"miya/internal/phone"
 	"miya/internal/phoneapi"
 	"miya/internal/remote"
@@ -26,7 +26,7 @@ type MobileDesktopApproval struct {
 
 // Only the service's resolution of this exact approval closes its control page.
 // A disappearing window, wrong password or another approval cannot do so.
-func (m *App) CloseResolvedDesktopControl(approvals []codex.Approval) {
+func (m *App) CloseResolvedDesktopControl(approvals []interaction.Request) {
 	ref := m.DesktopApproval
 	if len(ref.ID) == 0 {
 		return
@@ -45,7 +45,7 @@ func (m *App) openRemoteDesktop() {
 	m.openDesktopWindow(nil, desktop.Window{})
 }
 
-func (m *App) openDesktopWindow(approval *codex.Approval, window desktop.Window) {
+func (m *App) openDesktopWindow(approval *interaction.Request, window desktop.Window) {
 	if !m.Connected || m.Conn == nil || m.Open == 0 || m.desktopUIOpen() || m.DesktopRequest != "" {
 		return
 	}
@@ -127,13 +127,13 @@ func (m *App) receiveDesktopControl(conn *remote.Conn, data json.RawMessage, mes
 
 // Human takeover is offered for every pending confirmation, including tools
 // from external MCP servers. It never answers the original approval itself.
-func (m *App) desktopControlAction(c *ui.Context, a codex.Approval) {
+func (m *App) desktopControlAction(c *ui.Context, a interaction.Request) {
 	if !m.State.DesktopControl || m.Open == 0 {
 		return
 	}
 	// Tool-use consent has no desktop target. Previewing the foreground app
 	// there leaks unrelated content and can bury the actual approval controls.
-	if a.Method != "miya/desktopControl" {
+	if a.Kind() != interaction.DesktopControl {
 		return
 	}
 	if m.State.DesktopWindows {
@@ -160,7 +160,7 @@ type MobileWindowPreview struct {
 	ImageHash     [32]byte
 }
 
-func (m *App) requestWindowPreview(a codex.Approval) {
+func (m *App) requestWindowPreview(a interaction.Request) {
 	if !m.Connected || m.Conn == nil {
 		return
 	}
@@ -245,7 +245,7 @@ func (m *App) ReceiveWindowPreview(conn *remote.Conn, p control.Preview, image u
 	uiruntime.Invalidate()
 }
 
-func (m *App) scheduleWindowPreview(a codex.Approval, p *MobileWindowPreview) {
+func (m *App) scheduleWindowPreview(a interaction.Request, p *MobileWindowPreview) {
 	gen := m.Generation
 	time.AfterFunc(2*time.Second, func() {
 		m.onMain(gen, func() {
@@ -265,7 +265,7 @@ func (m *App) scheduleWindowPreview(a codex.Approval, p *MobileWindowPreview) {
 	})
 }
 
-func (m *App) pressWindowAction(a codex.Approval, p *MobileWindowPreview, action desktop.Action) {
+func (m *App) pressWindowAction(a interaction.Request, p *MobileWindowPreview, action desktop.Action) {
 	if p.Stale || p.ActionPending || !action.Enabled || m.Conn == nil {
 		return
 	}
@@ -319,7 +319,7 @@ func (m *App) receiveWindowAction(conn *remote.Conn, reply control.Preview, mess
 	uiruntime.Invalidate()
 }
 
-func (m *App) desktopWindowPreview(c *ui.Context, a codex.Approval) {
+func (m *App) desktopWindowPreview(c *ui.Context, a interaction.Request) {
 	id := string(a.ID)
 	p := m.DesktopPreviews[id]
 	if m.Connected && (p == nil || p.Version != phoneapi.ApprovalFingerprint(a)) {

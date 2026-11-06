@@ -6,19 +6,19 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"miya/internal/codex"
+	"miya/internal/interaction"
 	"miya/internal/mcpconfig"
 	"miya/internal/msgfmt"
 	"miya/internal/textutil"
 	"miya/internal/widgets"
 )
 
-func (app *App) approvalView(c *ui.Context, a codex.Approval) {
-	switch a.Method {
-	case "item/tool/requestUserInput":
+func (app *App) approvalView(c *ui.Context, a interaction.Request) {
+	switch a.Kind() {
+	case interaction.Questions:
 		app.questionView(c, a)
 		return
-	case "mcpServer/elicitation/request":
+	case interaction.Form:
 		app.elicitationView(c, a)
 		return
 	}
@@ -29,20 +29,20 @@ func (app *App) approvalView(c *ui.Context, a codex.Approval) {
 		})
 		ui.Row(c).Gap(8).Children(func() {
 			allowLabel, declineLabel := tr("Allow once"), tr("Decline")
-			if a.Method == "miya/desktopControl" {
+			if a.Kind() == interaction.DesktopControl {
 				allowLabel, declineLabel = tr("Done, continue"), tr("Cancel takeover")
 			}
 			if ui.PrimaryButton(c.Key("allow"), allowLabel).Clicked() {
-				app.C.Respond(a, codex.ApprovalResult(a, true))
+				app.C.Answer(a, interaction.Response{Action: interaction.Allow})
 			}
 			if ui.Button(c.Key("decline"), declineLabel).Clicked() {
-				app.C.Respond(a, codex.ApprovalResult(a, false))
+				app.C.Answer(a, interaction.Response{Action: interaction.Decline})
 			}
 		})
 	})
 }
 
-func (app *App) questionView(c *ui.Context, a codex.Approval) {
+func (app *App) questionView(c *ui.Context, a interaction.Request) {
 	id := string(a.ID)
 	answers := app.answers[id]
 	if answers == nil {
@@ -66,22 +66,18 @@ func (app *App) questionView(c *ui.Context, a codex.Approval) {
 		}
 		ui.Row(c).Gap(8).Children(func() {
 			if ui.PrimaryButton(c.Key("submit"), tr("Submit answers")).Disabled(!complete).Clicked() {
-				result := map[string]any{}
-				for qid, value := range answers {
-					result[qid] = map[string]any{"answers": []string{value}}
-				}
 				delete(app.answers, id)
-				app.C.Respond(a, map[string]any{"answers": result})
+				app.C.Answer(a, interaction.Response{Action: interaction.Submit, Answers: answers})
 			}
 			if ui.Button(c.Key("skip"), tr("Skip questions")).Clicked() {
 				delete(app.answers, id)
-				app.C.Respond(a, map[string]any{"answers": map[string]any{}})
+				app.C.Answer(a, interaction.Response{Action: interaction.Skip})
 			}
 		})
 	})
 }
 
-func (app *App) questionField(c *ui.Context, q codex.Question, answers map[string]string) {
+func (app *App) questionField(c *ui.Context, q interaction.Question, answers map[string]string) {
 	ui.Column(c).Gap(6).Children(func() {
 		if q.Header != "" && q.Header != q.Question {
 			ui.Text(c, q.Header).FontSize(11).TextColor(widgets.Muted)
@@ -114,17 +110,17 @@ func (app *App) questionField(c *ui.Context, q codex.Question, answers map[strin
 	})
 }
 
-func (app *App) elicitationView(c *ui.Context, a codex.Approval) {
+func (app *App) elicitationView(c *ui.Context, a interaction.Request) {
 	id := string(a.ID)
 	rememberable := mcpconfig.RememberableMCPAccess(a)
 	value, ok := app.forms[id]
 	if !ok {
 		value = "{}"
 	}
-	finish := func(result any) {
+	finish := func(result interaction.Response) {
 		delete(app.forms, id)
 		delete(app.formErrors, id)
-		app.C.Respond(a, result)
+		app.C.Answer(a, result)
 	}
 	// MCP forms are submitted as structured JSON; never infer consent from defaults.
 	widgets.Card(c).Children(func() {
@@ -163,7 +159,7 @@ func (app *App) elicitationView(c *ui.Context, a codex.Approval) {
 			}
 			if ui.PrimaryButton(c.Key("confirm"), label).Clicked() {
 				if a.Mode == "url" {
-					finish(map[string]any{"action": "accept"})
+					finish(interaction.Response{Action: interaction.Allow})
 					return
 				}
 				var content map[string]any
@@ -171,17 +167,17 @@ func (app *App) elicitationView(c *ui.Context, a codex.Approval) {
 					app.formErrors[id] = tr("Enter a JSON object matching the requested fields.")
 					return
 				}
-				if err := codex.ValidateForm(a.RequestedSchema, content); err != nil {
+				if err := interaction.ValidateForm(a.RequestedSchema, content); err != nil {
 					app.formErrors[id] = err.Error()
 					return
 				}
-				finish(map[string]any{"action": "accept", "content": content})
+				finish(interaction.Response{Action: interaction.Submit, Content: content})
 			}
 			if ui.Button(c.Key("decline"), tr("Decline")).Clicked() {
-				finish(map[string]any{"action": "decline"})
+				finish(interaction.Response{Action: interaction.Decline})
 			}
 			if ui.Button(c.Key("cancel"), tr("Cancel")).Clicked() {
-				finish(map[string]any{"action": "cancel"})
+				finish(interaction.Response{Action: interaction.Cancel})
 			}
 		})
 	})

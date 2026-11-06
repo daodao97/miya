@@ -1,6 +1,11 @@
 package codex
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"miya/internal/interaction"
+	"miya/internal/tokenusage"
+)
 
 type Model struct {
 	ID                        string `json:"id"`
@@ -116,47 +121,11 @@ type Goal struct {
 type GoalResponse struct {
 	Goal *Goal `json:"goal"`
 }
-type Approval struct {
-	Permissions     json.RawMessage `json:"permissions"`
-	Payload         json.RawMessage
-	Questions       []Question      `json:"questions"`
-	Message         string          `json:"message"`
-	Mode            string          `json:"mode"`
-	URL             string          `json:"url"`
-	ServerName      string          `json:"serverName"`
-	RequestedSchema json.RawMessage `json:"requestedSchema"`
-	ID              json.RawMessage
-	Method          string
-	ThreadID        string `json:"threadId"`
-	TurnID          string `json:"turnId"`
-	ItemID          string `json:"itemId"`
-	Command         string `json:"command"`
-	Cwd             string `json:"cwd"`
-	Reason          string `json:"reason"`
-	GrantRoot       string `json:"grantRoot"`
-}
 
-type Question struct {
-	ID       string `json:"id"`
-	Header   string `json:"header"`
-	Question string `json:"question"`
-	IsSecret bool   `json:"isSecret"`
-	Options  []struct {
-		Label       string `json:"label"`
-		Description string `json:"description"`
-	} `json:"options"`
-}
+// Approval and Question keep the established native client API and wire shape.
+// Interaction data belongs to the shared contract used by every adapter.
+type Approval = interaction.Request
+type Question = interaction.Question
 
-// TokenUsage is supplied by the Codex app-server, not estimated locally.
-type TokenUsage struct {
-	Last               TokenBreakdown `json:"last"`
-	Total              TokenBreakdown `json:"total"`
-	ModelContextWindow *int           `json:"modelContextWindow"`
-}
-type TokenBreakdown struct {
-	TotalTokens           int  `json:"totalTokens"`
-	InputTokens           *int `json:"inputTokens"`
-	CachedInputTokens     *int `json:"cachedInputTokens"`
-	OutputTokens          *int `json:"outputTokens"`
-	ReasoningOutputTokens *int `json:"reasoningOutputTokens"`
-}
+type TokenUsage = tokenusage.Usage
+type TokenBreakdown = tokenusage.Breakdown

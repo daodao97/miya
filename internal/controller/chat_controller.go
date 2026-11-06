@@ -14,13 +14,11 @@ import (
 	"time"
 
 	"miya/internal/account"
+	claude "miya/internal/agent/claude/native"
+	codex "miya/internal/agent/codex/native"
 	"miya/internal/appdir"
 	"miya/internal/appmodel"
 	"miya/internal/automation"
-	"miya/internal/claude"
-	"miya/internal/codex"
-	"miya/internal/composer"
-	dg "miya/internal/delegation"
 	"miya/internal/desktop/control"
 	"miya/internal/mcpconfig"
 	"miya/internal/memory/manager"
@@ -318,29 +316,8 @@ func (c *Controller) ArchiveThread(t model.Thread) {
 	c.BackendOf(t).Archive(t)
 }
 
-func (c *Controller) archiveCodexThread(t model.Thread) {
-	client := c.Client
-	if client == nil || t.ServerID == "" {
-		c.removeThreadLocal(t.ID, t.ServerID)
-		return
-	}
-	go func() {
-		ctx, cancel := context.WithTimeout(c.Ctx, 15*time.Second)
-		defer cancel()
-		err := client.Call(ctx, "thread/archive", map[string]string{"threadId": t.ServerID}, nil)
-		c.Dispatch(func() {
-			if err != nil {
-				c.SetStatus("Unable to archive conversation: " + err.Error())
-				return
-			}
-			c.removeThreadLocal(t.ID, t.ServerID)
-		})
-	}()
-}
+func (c *Controller) archiveCodexThread(t model.Thread) { c.codexAdapter().Archive(t) }
 
-// deleteThread removes the local entry immediately. Codex currently exposes
-// archive as the server-side removal operation, so synchronize that state when
-// a server-backed thread is deleted as well.
 func (c *Controller) DeleteThread(t model.Thread) {
 	if c.Remote != nil {
 		c.forward("delete", t.ID)
@@ -349,20 +326,7 @@ func (c *Controller) DeleteThread(t model.Thread) {
 	c.BackendOf(t).Delete(t)
 }
 
-func (c *Controller) deleteCodexThread(t model.Thread) {
-	c.removeThreadLocal(t.ID, t.ServerID)
-	if c.Client == nil || t.ServerID == "" {
-		return
-	}
-	client := c.Client
-	go func() {
-		ctx, cancel := context.WithTimeout(c.Ctx, 15*time.Second)
-		defer cancel()
-		if err := client.Call(ctx, "thread/archive", map[string]string{"threadId": t.ServerID}, nil); err != nil {
-			c.Dispatch(func() { c.SetStatus("Unable to delete conversation: " + err.Error()) })
-		}
-	}()
-}
+func (c *Controller) deleteCodexThread(t model.Thread) { c.codexAdapter().Delete(t) }
 
 func (c *Controller) removeProject(path string, deleteConfig bool) {
 	path, _ = filepath.Abs(path)
@@ -915,38 +879,6 @@ func (c *Controller) SelectModel(value string) {
 	}
 }
 
-func (c *Controller) modelNames() []string {
-	out := []string{}
-	for _, m := range c.Models() {
-		out = append(out, m.Model)
-	}
-	if c.Model() != "" {
-		found := false
-		for _, s := range out {
-			if s == c.Model() {
-				found = true
-			}
-		}
-		if !found {
-			out = append(out, c.Model())
-		}
-	}
-	return out
-}
-
-func (c *Controller) efforts() []string {
-	for _, m := range c.Models() {
-		if m.Model == c.Model() {
-			out := []string{}
-			for _, e := range m.SupportedReasoningEfforts {
-				out = append(out, e.ReasoningEffort)
-			}
-			return out
-		}
-	}
-	return nil
-}
-
 func (c *Controller) NewThread() {
 	if c.SetDraftPermission != nil {
 		c.SetDraftPermission("")
@@ -1038,118 +970,7 @@ func (c *Controller) Resume(t model.Thread, after *model.SendRequest) {
 		c.forward("resume", t.ID)
 		return
 	}
-	client := c.Client
-	cwd := c.ThreadWorkspace(t.ID)
-	policy := c.permissionForThread(t)
-	if client == nil {
-		c.Update(t.ID, func(t *model.Thread) {
-			t.Busy = false
-			t.Loading = false
-			t.Status = "Codex is reconnecting…"
-		})
-		if after != nil {
-			if after.ExecutionID == "" {
-				c.ReturnDraft(t.ID, after.Text, after.Attachments)
-			} else {
-				c.managedBeforeInputFailed(after.ExecutionID, "Codex is not connected before resuming")
-			}
-		}
-		return
-	}
-	c.Update(t.ID, func(t *model.Thread) {
-		t.Busy = true
-		t.Loading = true
-		t.Status = "Loading conversation…"
-	})
-	go func() {
-		ctx, cancel := context.WithTimeout(c.Ctx, 30*time.Second)
-		defer cancel()
-		var result codex.ThreadResponse
-		err := client.Call(ctx, "thread/resume", map[string]any{"threadId": t.ServerID, "cwd": cwd, "sandbox": prefs.SandboxForPolicy(policy), "approvalPolicy": prefs.ApprovalForPolicy(policy), "approvalsReviewer": prefs.ReviewerForPolicy(policy)}, &result)
-		readOnly := codex.IsWriterConflict(err)
-		if readOnly {
-			// Another Codex process owns the writer. Read the persisted rollout through
-			// thread/read so this client can still act as a conversation viewer.
-			var readResult codex.ThreadResponse
-			readErr := client.Call(ctx, "thread/read", map[string]any{"threadId": t.ServerID, "includeTurns": true}, &readResult)
-			if readErr == nil {
-				result = readResult
-				err = nil
-			}
-		}
-		// Decode attachments and normalize the complete rollout off the UI thread.
-		// Runtime IDs are assigned only after returning to the UI owner.
-		var messages []model.Message
-		if err == nil {
-			messages = msgfmt.HistoryMessages(result.Thread)
-		}
-
-		c.Dispatch(func() {
-			if c.Client != client {
-				c.Update(t.ID, func(t *model.Thread) {
-					t.Loading = false
-					t.Busy = false
-					t.Status = "Connection changed while loading. Click to retry."
-				})
-				if after != nil {
-					if after.ExecutionID == "" {
-						c.ReturnDraft(t.ID, after.Text, after.Attachments)
-					} else {
-						c.managedBeforeInputFailed(after.ExecutionID, "Codex connection changed before native input was submitted")
-					}
-				}
-				return
-			}
-			c.Update(t.ID, func(t *model.Thread) {
-				t.Busy = false
-				t.Loading = false
-				t.ReadOnly = readOnly
-				t.Resumed = err == nil && !readOnly
-				if err != nil {
-					t.Status = err.Error()
-					c.upsert(t, model.Message{Role: "error", Kind: "error", Status: "failed", Content: "Unable to load conversation: " + err.Error(), ItemID: "resume-error"})
-					return
-				}
-				t.Loaded = true
-				t.Resumed = !readOnly
-				t.HistoryLoaded = true
-				t.ReadOnly = readOnly
-				if readOnly {
-					t.Status = "Read-only · This conversation is running in another window"
-				} else {
-					t.Status = ""
-				}
-				t.Title = msgfmt.ConversationTitle(result.Thread.Name, result.Thread.Preview, t.Title)
-				for i := range messages {
-					messages[i].ID = c.NextID()
-				}
-				t.Messages = messages
-				for _, turn := range result.Thread.Turns {
-					if turn.Status == "inProgress" && !readOnly {
-						t.Busy = true
-						t.TurnID = turn.ID
-						t.StartedAtMs, t.CompletedAtMs = msgfmt.CodexTurnTimes(turn)
-						t.Status = "Working…"
-					}
-				}
-			})
-			if err == nil {
-				c.refreshCodexGoal(t.ID)
-			}
-			if after != nil && (err != nil || readOnly || c.Submit(*after) == 0) {
-				if after.ExecutionID != "" {
-					reason := "Unable to resume target session before submission"
-					if err != nil {
-						reason = err.Error()
-					}
-					c.managedBeforeInputFailed(after.ExecutionID, reason)
-				}
-				if after.ExecutionID == "" {
-					c.ReturnDraft(t.ID, after.Text, after.Attachments)
-				}
-			}
-		})
-	}()
+	c.codexAdapter().Resume(t, after)
 }
 
 func (c *Controller) HistoryMessages(remote codex.Thread) []model.Message {
@@ -1176,161 +997,6 @@ func (c *Controller) SendDraft(steer bool) int {
 	return id
 }
 
-func (c *Controller) sendCodex(req model.SendRequest) int {
-	if !c.Ready() {
-		return 0
-	}
-	text, attachments := req.Text, req.Attachments
-	t := c.ThreadWithID(req.ThreadID)
-	if t.ServerID != "" && !t.Resumed {
-		c.Resume(t, &req)
-		return t.ID
-	}
-	if t.ID == 0 {
-		// Use the first request until the agent supplies a named title.
-		project := textutil.FirstNonEmpty(req.Project, c.Cwd)
-		t = model.Thread{PermissionPolicy: req.Policy, ID: c.NextID(), Title: msgfmt.ConversationTitle("", text, ""), Project: filepath.Base(project), Age: "now", Loaded: true, HistoryLoaded: true}
-		c.AddThread(project, t)
-	}
-	id := t.ID
-	client := c.Client
-	if client == nil {
-		c.Update(id, func(t *model.Thread) {
-			t.Busy = false
-			t.Status = "Codex is reconnecting…"
-		})
-		c.ManagedEvent(req.ExecutionID, dg.Event{State: dg.Failed, Result: dg.Result{Error: "Codex is not connected before submission"}})
-		return id
-	}
-	cwd := c.ThreadWorkspace(id)
-	modelID, effort, policy := req.Model, req.Effort, req.Policy
-	serviceTier := prefs.Load("codexServiceTier")
-	sentAt := time.Now().UnixMilli()
-	pendingUserID := c.NextID()
-	localTurn := c.Memories().BeginTurn(t, req, pendingUserID)
-	c.Update(id, func(t *model.Thread) {
-		msgfmt.ResetTurnOutput(t)
-		t.ExecutionID = req.ExecutionID
-		if !req.KeepSessionSettings {
-			t.LaunchModel, t.LaunchEffort = req.Model, req.Effort
-		}
-		t.Busy = true
-		t.LastActivityAt = sentAt
-		t.Status = "Starting…"
-		t.Draft = ""
-		t.StopRequested = false
-		content, images := msgfmt.AttachmentDisplay(text, attachments)
-		t.Messages = append(t.Messages, model.Message{ID: pendingUserID, Role: "user", Content: content, Images: images, Attachments: append([]string(nil), req.Attachments...), Parts: req.Parts, ItemID: "pending-user", SentAtMs: sentAt, MemoryTurnID: localTurn, MemoryControl: req.MemoryControl || req.KeepSessionSettings})
-	})
-	go func() {
-		ctx, cancel := context.WithTimeout(c.Ctx, 45*time.Second)
-		defer cancel()
-		serverID := t.ServerID
-		var err error
-		missingThread := false
-		mayHaveStarted := false
-		if serverID == "" {
-			var r codex.ThreadResponse
-			params := map[string]any{"cwd": cwd, "sandbox": prefs.SandboxForPolicy(policy), "approvalPolicy": prefs.ApprovalForPolicy(policy), "approvalsReviewer": prefs.ReviewerForPolicy(policy)}
-			if modelID != "" {
-				params["model"] = modelID
-			}
-			err = client.Call(ctx, "thread/start", params, &r)
-			if err == nil {
-				serverID = r.Thread.ID
-				if serverID == "" {
-					err = fmt.Errorf("Codex returned an empty thread ID")
-				} else {
-					sid := serverID
-					serverName := strings.TrimSpace(r.Thread.Name)
-					c.Dispatch(func() {
-						c.Update(id, func(t *model.Thread) {
-							t.ServerID = sid
-							t.Resumed = true
-							if serverName != "" {
-								t.Title = serverName
-							}
-						})
-					})
-				}
-			}
-		}
-		var result struct {
-			Turn codex.Turn `json:"turn"`
-		}
-		if err == nil {
-			err = c.persistManagedBinding(ctx, req.ExecutionID, model.ThreadRef{Source: c.ReferenceSource, Backend: appmodel.AgentCodex, SessionID: serverID}.URL())
-		}
-		if err == nil {
-			mem := c.Memories().PrepareInput(t, req, cwd, c.ThreadRef(model.Thread{ServerID: serverID}).URL())
-			input := []map[string]any{{"type": "text", "text": composer.CollaborationTaggedInput(mem.Text(text), req.Parts), "text_elements": []any{}}}
-			own, _ := model.SplitReferenceContext(text)
-			input = append(input, composer.FileMentionInputs(own, cwd)...)
-			input = append(input, c.AttachmentInputs(attachments)...)
-			params := map[string]any{"threadId": serverID, "cwd": cwd, "input": input, "approvalPolicy": prefs.ApprovalForPolicy(policy), "approvalsReviewer": prefs.ReviewerForPolicy(policy), "sandboxPolicy": prefs.TurnSandboxForPolicy(policy)}
-			if modelID != "" {
-				params["model"] = modelID
-			}
-			if effort != "" {
-				params["effort"] = effort
-			}
-			if serviceTier != "" {
-				params["serviceTierForTurn"] = serviceTier
-			}
-			mayHaveStarted = true
-			err = client.Call(ctx, "turn/start", params, &result)
-			if codex.IsMissingThread(err, serverID) {
-				// The server explicitly rejected this turn before accepting input.
-				// Restore the same thread and retry once, without another user bubble.
-				missingThread = true
-				mayHaveStarted = false
-				err = client.Call(ctx, "thread/resume", map[string]any{"threadId": serverID, "cwd": cwd, "sandbox": prefs.SandboxForPolicy(policy), "approvalPolicy": prefs.ApprovalForPolicy(policy), "approvalsReviewer": prefs.ReviewerForPolicy(policy)}, nil)
-				if err == nil {
-					input[0]["text"] = composer.CollaborationTaggedInput(mem.Text(text), req.Parts)
-					mayHaveStarted = true
-					err = client.Call(ctx, "turn/start", params, &result)
-				}
-			}
-			mem.Finish(err == nil)
-		}
-		c.Dispatch(func() {
-			if c.Client != client {
-				c.ManagedCodexAccepted(req.ExecutionID, "", client.RuntimeEpoch(), errors.New("Codex connection changed before submission acknowledgement"), mayHaveStarted)
-				return
-			}
-			c.ManagedCodexAccepted(req.ExecutionID, result.Turn.ID, client.RuntimeEpoch(), err, mayHaveStarted)
-			if err != nil {
-				c.Update(id, func(t *model.Thread) {
-					t.Busy = false
-					if missingThread {
-						t.Resumed = false
-					}
-					t.Status = "Send failed: " + err.Error()
-					c.upsert(t, model.Message{Role: "error", Kind: "error", Status: "failed", Content: "Send failed: " + err.Error(), ItemID: "send-error-" + fmt.Sprint(c.NextID())})
-					if req.ExecutionID == "" {
-						t.Draft = text
-					}
-					t.Loaded = t.ServerID == ""
-				})
-				if req.ExecutionID == "" {
-					c.ReturnDraft(id, text, attachments)
-				}
-				return
-			}
-			c.Update(id, func(t *model.Thread) {
-				if t.Busy {
-					t.TurnID = result.Turn.ID
-					t.Status = "Working…"
-				}
-			})
-			if t := c.ThreadWithID(id); t.StopRequested && t.Busy {
-				c.interrupt(t)
-			}
-		})
-	}()
-	return id
-}
-
 func (c *Controller) Stop() { c.StopThread(c.Current().ID) }
 
 func (c *Controller) StopThread(id int) {
@@ -1352,21 +1018,7 @@ func (c *Controller) StopThread(id int) {
 	c.BackendOf(t).Stop(t)
 }
 
-func (c *Controller) interrupt(t model.Thread) {
-	client := c.Client
-	if client == nil {
-		c.Update(t.ID, func(t *model.Thread) { t.StopRequested = false; t.Status = "Codex is reconnecting…" })
-		return
-	}
-	go func() {
-		ctx, cancel := context.WithTimeout(c.Ctx, 15*time.Second)
-		defer cancel()
-		err := client.Call(ctx, "turn/interrupt", map[string]string{"threadId": t.ServerID, "turnId": t.TurnID}, nil)
-		if err != nil {
-			c.Dispatch(func() { c.Update(t.ID, func(t *model.Thread) { t.Status = "Stop failed: " + err.Error() }) })
-		}
-	}()
-}
+func (c *Controller) interrupt(t model.Thread) { c.codexAdapter().Interrupt(t) }
 
 func (c *Controller) permissionForThread(t model.Thread) string {
 	if t.PermissionPolicy != "" {

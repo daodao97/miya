@@ -3,12 +3,12 @@ package appmodel
 import (
 	"strings"
 
-	"miya/internal/codex"
+	"miya/internal/interaction"
 	"miya/internal/model"
 	"miya/internal/msgfmt"
 )
 
-func ApprovalDetail(threads []model.Thread, a codex.Approval) string {
+func ApprovalDetail(threads []model.Thread, a interaction.Request) string {
 	text := a.Reason + "\n" + a.Command
 	if a.Cwd != "" {
 		text += "\nDirectory: " + a.Cwd

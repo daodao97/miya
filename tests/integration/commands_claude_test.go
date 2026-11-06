@@ -6,13 +6,14 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"miya/internal/agent"
 	"miya/internal/appmodel"
 	"miya/internal/controller"
 	"miya/internal/model"
 	desktopui "miya/internal/ui"
 )
 
-func TestClaudeTakesCommand(t *testing.T) {
+func TestAgentCommandRouting(t *testing.T) {
 	for _, tc := range []struct {
 		agent, command string
 		want           bool
@@ -25,8 +26,8 @@ func TestClaudeTakesCommand(t *testing.T) {
 		{appmodel.AgentCodex, "lark-im", false},
 		{appmodel.AgentCodex, "compact", false},
 	} {
-		if got := appmodel.ClaudeTakesCommand(tc.agent, tc.command); got != tc.want {
-			t.Errorf("claudeTakesCommand(%q, %q) = %v, want %v", tc.agent, tc.command, got, tc.want)
+		if got := agent.DefaultCommands(tc.agent).TakesCommand(tc.command); got != tc.want {
+			t.Errorf("commandRouting(%q, %q) = %v, want %v", tc.agent, tc.command, got, tc.want)
 		}
 	}
 }

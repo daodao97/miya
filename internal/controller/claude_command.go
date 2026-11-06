@@ -3,8 +3,8 @@ package controller
 import (
 	"strings"
 
-	"miya/internal/claude"
-	"miya/internal/claude/transcript"
+	claude "miya/internal/agent/claude/native"
+	"miya/internal/agent/claude/native/transcript"
 	"miya/internal/prefs"
 	"miya/internal/uiruntime"
 )

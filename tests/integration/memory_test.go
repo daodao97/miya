@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"miya/internal/agent/claude/native"
+	"miya/internal/agent/codex/native"
 	"miya/internal/appmodel"
 	"miya/internal/async"
-	"miya/internal/claude"
-	"miya/internal/codex"
 	"miya/internal/controller"
 	"miya/internal/mcpproto"
 	"miya/internal/memory"

@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
+	"miya/internal/agent/codex/native"
 	"miya/internal/appmodel"
-	"miya/internal/codex"
 	"miya/internal/controller"
 	"miya/internal/model"
 	"miya/internal/remote"

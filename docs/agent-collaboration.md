@@ -501,8 +501,8 @@ Miya 已有适配器、后台服务与 MCP，不需要照搬 codex-host 的 CLI 
 | `go test -race ./internal/delegation` | 31 项通过，包含父任务取消后拒绝新派发、已接受子任务继续运行的边界 |
 | `go vet ./...` | 通过，全项目静态检查 |
 | `GOOS=windows GOARCH=amd64 go test -c ./internal/delegation` | 编译通过；未验证 Windows 上实际写盘、重启或 UI 行为 |
-| `QUICKGUI_CLAUDE_LIVE_TEST=1 go test ./internal/claude -run '^TestInstalledClaudeConversation$'` | Claude Code 2.1.316：空临时工作区、禁用工具的真实会话与恢复测试通过 |
-| `CODEX_INTEGRATION=1 go test ./internal/codex -run '^TestRealServer$'` | codex-cli 0.166.0：空临时工作区、只读沙箱中的两轮上下文测试通过，记录到 final_answer；该测试拒绝工具请求，没有验证 Miya MCP 委派 |
+| `QUICKGUI_CLAUDE_LIVE_TEST=1 go test ./internal/agent/claude/native -run '^TestInstalledClaudeConversation$'` | Claude Code 2.1.316：空临时工作区、禁用工具的真实会话与恢复测试通过 |
+| `CODEX_INTEGRATION=1 go test ./internal/agent/codex/native -run '^TestRealServer$'` | codex-cli 0.166.0：空临时工作区、只读沙箱中的两轮上下文测试通过，记录到 final_answer；该测试拒绝工具请求，没有验证 Miya MCP 委派 |
 | Agent 标签 UI 渲染与交互 | 桌面及 320/390 宽手机输入、选择、复制和删除/撤销检查通过；已查看 `/private/tmp/miya-collaboration-ui-20261104/` 内三个截图，未见标签溢出或正文遮挡 |
 
 本地风险复核已经据此修正原生 phase 误判、通用 RPC 错误被误当成未启动、旧 recheck 覆盖断线状态、启动中取消漏停、损坏存储下旧工具空指针，以及通知暂停和旧观察重试问题。外部独立 Agent 审查此前被自动审批拒绝，原因是该审查会把本地代码或基线发送到外部；未通过其他 Agent 绕过，不能把本地检查登记为外部审查通过。

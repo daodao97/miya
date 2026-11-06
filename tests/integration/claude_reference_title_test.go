@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"miya/internal/agent/claude/native/transcript"
 	"miya/internal/appmodel"
-	"miya/internal/claude/transcript"
 	"miya/internal/model"
 	"miya/internal/uiruntime"
 )

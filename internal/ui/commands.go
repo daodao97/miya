@@ -20,7 +20,10 @@ func (app *App) refreshCommandChoices() {
 func (app *App) commandMenuState() string {
 	catalog := app.C.CurrentAgentControls().Commands(app.C.State().Cwd, true)
 	if !catalog.Known {
-		return catalog.LoadingMessage
+		if catalog.LoadingMessage != "" {
+			return catalog.LoadingMessage
+		}
+		return tr("Loading commands…")
 	}
 	return "No matching commands"
 }

@@ -6,7 +6,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"miya/internal/claude/transcript"
+	"miya/internal/agent/presentation"
 	"miya/internal/model"
 	"miya/internal/msgfmt"
 	"miya/internal/textutil"
@@ -61,89 +61,7 @@ func responseDiffStats(c *ui.Context, stats model.DiffLineStats) {
 	})
 }
 
-func ActivityTitle(m model.Message) string {
-	active := m.Status == "inProgress" || m.Status == "in_progress"
-	switch strings.ToLower(m.Kind) {
-	case "claudetool":
-		return transcript.ToolTitle(m)
-	case "handoff":
-		if m.HandoffTitle != "" {
-			return tr("Handed off to conversation \"") + m.HandoffTitle + "\""
-		}
-		return tr("Handed off to another conversation")
-	case "reasoning":
-		if active {
-			return tr("Thinking…")
-		}
-		return tr("Thought")
-	case "commandexecution":
-		if m.Item != nil && len(m.Item.CommandActions) > 0 {
-			a := m.Item.CommandActions[0]
-			switch a.Type {
-			case "read":
-				return tr("Read ") + textutil.FirstNonEmpty(a.Name, a.Path, tr("Files"))
-			case "search":
-				return tr("Searched ") + textutil.FirstNonEmpty(a.Query, a.Path, tr("Files"))
-			case "listFiles":
-				return tr("Listed ") + textutil.FirstNonEmpty(a.Path, tr("Files"))
-			}
-		}
-		verb := tr("Ran ")
-		if active {
-			verb = tr("Running ")
-		} else if m.Status == "failed" {
-			verb = tr("Failed · ")
-		} else if m.Status == "interrupted" {
-			verb = tr("Stopped · ")
-		}
-		if m.Item != nil && m.Item.Command != "" {
-			return verb + strings.SplitN(m.Item.Command, "\n", 2)[0]
-		}
-		return verb + "command"
-	case "filechange":
-		verb := tr("Edited")
-		if active {
-			verb = tr("Editing")
-		} else if m.Status == "failed" {
-			verb = tr("Failed to edit")
-		}
-		if m.Item != nil {
-			return fmt.Sprintf("%s %d files", verb, len(m.Item.Changes))
-		}
-		return verb + " files"
-	case "plan":
-		if len(m.Plan) > 0 {
-			done := 0
-			for _, p := range m.Plan {
-				if p.Status == "completed" {
-					done++
-				}
-			}
-			return fmt.Sprintf(tr("Plan · %d / %d completed"), done, len(m.Plan))
-		}
-		return tr("Proposed plan")
-	case "mcptoolcall", "dynamictoolcall":
-		if m.Item != nil {
-			name := strings.Trim(m.Item.Server+" · "+m.Item.Tool, " ·")
-			if name != "" {
-				if active {
-					return tr("Calling ") + name
-				}
-				return tr("Called ") + name
-			}
-		}
-	case "websearch":
-		if m.Item != nil {
-			if active {
-				return tr("Searching · ") + m.Item.Query
-			}
-			return tr("Searched · ") + m.Item.Query
-		}
-	case "diff":
-		return tr("Changes in this turn")
-	}
-	return transcript.MessageLabel(m.Kind)
-}
+func ActivityTitle(m model.Message) string { return presentation.Message(m).Title }
 
 func diffView(c *ui.Context, diff string) {
 	ui.Column(c).FillWidth().MinWidth(0).Background(widgets.CodeBg).Radius(8).Padding(10).Selectable().Children(func() {

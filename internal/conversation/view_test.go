@@ -6,17 +6,17 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"miya/internal/codex"
+	"miya/internal/interaction"
 	"miya/internal/model"
 	"miya/internal/msgfmt"
 )
 
 type snapshotHost struct{ thread model.Thread }
 
-func (h *snapshotHost) ViewThread() model.Thread        { return h.thread }
-func (*snapshotHost) ViewRevision() int                 { return 0 }
-func (*snapshotHost) ViewApprovals() []codex.Approval   { return nil }
-func (h *snapshotHost) ViewSelectThread(t model.Thread) { h.thread = t }
+func (h *snapshotHost) ViewThread() model.Thread           { return h.thread }
+func (*snapshotHost) ViewRevision() int                    { return 0 }
+func (*snapshotHost) ViewApprovals() []interaction.Request { return nil }
+func (h *snapshotHost) ViewSelectThread(t model.Thread)    { h.thread = t }
 
 func TestMobileUserGroupPreservesTimestampWithoutDesktopHost(t *testing.T) {
 	m := model.Message{ID: 1, Role: "user", Content: "A phone message"}

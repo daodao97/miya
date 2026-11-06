@@ -12,8 +12,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"miya/internal/agent/claude/native/transcript"
 	"miya/internal/appmodel"
-	"miya/internal/claude/transcript"
 	"miya/internal/controller"
 	"miya/internal/model"
 	"miya/internal/uiruntime"
@@ -198,7 +198,7 @@ func TestClaudeRewindForksAndResends(t *testing.T) {
 func TestCodexCanRewind(t *testing.T) {
 	c := testController()
 	c.Ready, c.SetReady = uiruntime.CreateSignal(false)
-	b := controller.CodexBackend{C: c}
+	b := c.BackendFor(model.AgentCodex)
 	th := model.Thread{ServerID: "t1"}
 	m := model.Message{Role: "user", TurnID: "turn1"}
 	if b.CanRewind(th, m) {

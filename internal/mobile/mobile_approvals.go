@@ -9,7 +9,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"miya/internal/codex"
+	"miya/internal/interaction"
 	"miya/internal/mcpconfig"
 	"miya/internal/phone"
 	"miya/internal/phoneapi"
@@ -18,7 +18,7 @@ import (
 	"miya/internal/widgets"
 )
 
-func (m *App) FieldsFor(a codex.Approval) map[string]string {
+func (m *App) FieldsFor(a interaction.Request) map[string]string {
 	if m.ApprovalFields == nil {
 		m.ApprovalFields = map[string]map[string]string{}
 	}
@@ -29,7 +29,7 @@ func (m *App) FieldsFor(a codex.Approval) map[string]string {
 	return m.ApprovalFields[id]
 }
 
-func (m *App) submitApproval(a codex.Approval, result any, allow, remember bool) {
+func (m *App) submitApproval(a interaction.Request, reply interaction.Response, remember bool) {
 	id := string(a.ID)
 	if m.ApprovalPending[id] {
 		return
@@ -38,7 +38,7 @@ func (m *App) submitApproval(a codex.Approval, result any, allow, remember bool)
 		m.FormErrors[id] = tr("Not connected to desktop")
 		return
 	}
-	raw, err := json.Marshal(result)
+	raw, err := json.Marshal(phoneapi.LegacyResponse(a, reply))
 	if err != nil {
 		m.FormErrors[id] = err.Error()
 		return
@@ -49,7 +49,7 @@ func (m *App) submitApproval(a codex.Approval, result any, allow, remember bool)
 	m.ApprovalPending[id] = true
 	delete(m.FormErrors, id)
 	conn, gen := m.Conn, m.Generation
-	r := remote.Request{ApprovalVersion: phoneapi.ApprovalFingerprint(a), Op: "respond", Approval: a.ID, Result: raw, Allow: allow, Remember: remember}
+	r := remote.Request{Response: &reply, ApprovalVersion: phoneapi.ApprovalFingerprint(a), Op: "respond", Approval: a.ID, Result: raw, Allow: reply.Action == interaction.Allow, Remember: remember}
 	go func() {
 		if err := conn.Send(r); err != nil {
 			m.onMain(gen, func() {
@@ -70,7 +70,7 @@ func (m *App) ApprovalAnswered(id json.RawMessage, message string) {
 	delete(m.ApprovalFields, key)
 	delete(m.DesktopPreviews, key)
 	delete(m.FormErrors, key)
-	out := make([]codex.Approval, 0, len(m.State.Approvals))
+	out := make([]interaction.Request, 0, len(m.State.Approvals))
 	for _, a := range m.State.Approvals {
 		if !phone.SameJSON(a.ID, id) {
 			out = append(out, a)
@@ -84,34 +84,34 @@ func (m *App) ApprovalAnswered(id json.RawMessage, message string) {
 	}
 }
 
-func (m *App) approvalCard(c *ui.Context, a codex.Approval) {
+func (m *App) approvalCard(c *ui.Context, a interaction.Request) {
 	p := m.Pal
 	id := string(a.ID)
 	ui.Column(c).Margin(0, 12, 8, 12).Padding(14).Gap(10).Background(p.surface).Border(1, p.warn).Radius(18).Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			widgets.Icon(c, "shield-exclamation", 16, p.warn)
 			label := widgets.RequestAgent(a) + tr(" requests confirmation")
-			if a.Method == "miya/desktopControl" && m.State.DesktopWindows {
+			if a.Kind() == interaction.DesktopControl && m.State.DesktopWindows {
 				label = tr("Needs your attention")
 			}
 			ui.Text(c, label).FontSize(m.Font(14)).FontWeight(600)
 		})
 		m.desktopControlAction(c, a)
-		switch a.Method {
-		case "miya/desktopControl":
+		switch a.Kind() {
+		case interaction.DesktopControl:
 			if m.State.DesktopWindows {
 				break
 			}
 			ui.Text(c, m.Viewer.approvalDetail(a)).FontSize(m.Font(13)).LineHeight(1.45)
 			ui.Row(c).Gap(8).Children(func() {
 				if m.pill(c, "done", tr("Done, continue"), true).Disabled(m.ApprovalPending[id]).Clicked() {
-					m.submitApproval(a, nil, true, false)
+					m.submitApproval(a, interaction.Response{Action: interaction.Allow}, false)
 				}
 				if m.pill(c, "cancel", tr("Cancel takeover"), false).Disabled(m.ApprovalPending[id]).Clicked() {
-					m.submitApproval(a, nil, false, false)
+					m.submitApproval(a, interaction.Response{Action: interaction.Decline}, false)
 				}
 			})
-		case "mcpServer/elicitation/request":
+		case interaction.Form:
 			if inlineMCPConfirmation(a) {
 				ui.Scroll(c).FillWidth().MaxHeight(120).Children(func() {
 					ui.Text(c, a.Message).FontSize(m.Font(15)).LineHeight(1.4).Selectable()
@@ -120,7 +120,7 @@ func (m *App) approvalCard(c *ui.Context, a codex.Approval) {
 				break
 			}
 			fallthrough
-		case "item/tool/requestUserInput":
+		case interaction.Questions:
 			label := tr("Enter your answer")
 			summary := a.Message
 			if len(a.Questions) > 0 {
@@ -129,7 +129,7 @@ func (m *App) approvalCard(c *ui.Context, a codex.Approval) {
 			if summary != "" {
 				ui.Text(c, summary).FontSize(m.Font(15)).LineHeight(1.4).MaxLines(3)
 			}
-			if a.Method == "mcpServer/elicitation/request" {
+			if a.Kind() == interaction.Form {
 				label = tr("Review and confirm")
 			}
 			if m.pill(c, "open", label, true).Clicked() {
@@ -140,10 +140,10 @@ func (m *App) approvalCard(c *ui.Context, a codex.Approval) {
 			ui.Scroll(c).MaxHeight(140).Children(func() { ui.Text(c, m.Viewer.approvalDetail(a)).FontSize(m.Font(13)).LineHeight(1.45).Selectable() })
 			ui.Row(c).Gap(8).Children(func() {
 				if m.ApprovalButton(c, "allow", tr("Allow once"), true, m.ApprovalPending[id]).Clicked() {
-					m.submitApproval(a, nil, true, false)
+					m.submitApproval(a, interaction.Response{Action: interaction.Allow}, false)
 				}
 				if m.ApprovalButton(c, "deny", tr("Deny"), false, m.ApprovalPending[id]).Clicked() {
-					m.submitApproval(a, nil, false, false)
+					m.submitApproval(a, interaction.Response{Action: interaction.Decline}, false)
 				}
 			})
 		}
@@ -155,8 +155,8 @@ func (m *App) approvalCard(c *ui.Context, a codex.Approval) {
 
 // Confirmations with no input fields can be answered on the conversation card.
 // URL requests and forms retain their full page and existing validation.
-func inlineMCPConfirmation(a codex.Approval) bool {
-	if a.Method != "mcpServer/elicitation/request" || a.Mode != "" && a.Mode != "form" {
+func inlineMCPConfirmation(a interaction.Request) bool {
+	if a.Kind() != interaction.Form || a.Mode != "" && a.Mode != "form" {
 		return false
 	}
 	var schema phoneapi.FormSchema
@@ -174,7 +174,7 @@ func (m *App) approvalPage(c *ui.Context) {
 		ui.Text(c, tr("Confirm request")).Grow(1).TextAlign(ui.Center).FontSize(m.Font(16)).FontWeight(600)
 		ui.Box(c).Size(44, 44)
 	})
-	var approval *codex.Approval
+	var approval *interaction.Request
 	for _, a := range m.State.Approvals {
 		if phone.SameJSON(a.ID, m.approvalID) {
 			copy := a
@@ -191,7 +191,7 @@ func (m *App) approvalPage(c *ui.Context) {
 		ui.Column(c).FillWidth().Padding(20, 16).Gap(16).Children(func() {
 			ui.Text(c, widgets.RequestAgent(a)).FontSize(m.Font(20)).FontWeight(600)
 			m.desktopControlAction(c, a)
-			if a.Method == "item/tool/requestUserInput" {
+			if a.Kind() == interaction.Questions {
 				m.questionFields(c, a)
 			} else {
 				m.elicitationFields(c, a)
@@ -205,7 +205,7 @@ func (m *App) approvalPage(c *ui.Context) {
 		if m.ApprovalPending[string(a.ID)] {
 			ui.Text(c, tr("Submitting…")).TextColor(p.muted).FontSize(m.Font(13))
 		}
-		if a.Method == "item/tool/requestUserInput" {
+		if a.Kind() == interaction.Questions {
 			m.questionActions(c, a)
 		} else {
 			m.elicitationActions(c, a)
@@ -213,7 +213,7 @@ func (m *App) approvalPage(c *ui.Context) {
 	})
 }
 
-func (m *App) questionFields(c *ui.Context, a codex.Approval) {
+func (m *App) questionFields(c *ui.Context, a interaction.Request) {
 	p := m.Pal
 	fields := m.FieldsFor(a)
 	for _, q := range a.Questions {
@@ -251,7 +251,7 @@ func (m *App) questionFields(c *ui.Context, a codex.Approval) {
 	}
 }
 
-func (m *App) questionActions(c *ui.Context, a codex.Approval) {
+func (m *App) questionActions(c *ui.Context, a interaction.Request) {
 	fields := m.FieldsFor(a)
 	complete := true
 	for _, q := range a.Questions {
@@ -262,19 +262,19 @@ func (m *App) questionActions(c *ui.Context, a codex.Approval) {
 	pending := m.ApprovalPending[string(a.ID)]
 	ui.Row(c).FillWidth().Wrap().Gap(10).Children(func() {
 		if m.pill(c, "submit", tr("Submit answer"), true).Disabled(!complete || pending).Clicked() {
-			answers := map[string]any{}
+			answers := map[string]string{}
 			for _, q := range a.Questions {
-				answers[q.ID] = map[string]any{"answers": []string{fields[q.ID]}}
+				answers[q.ID] = fields[q.ID]
 			}
-			m.submitApproval(a, map[string]any{"answers": answers}, false, false)
+			m.submitApproval(a, interaction.Response{Action: interaction.Submit, Answers: answers}, false)
 		}
 		if m.pill(c, "skip", tr("Skip question"), false).Disabled(pending).Clicked() {
-			m.submitApproval(a, map[string]any{"answers": map[string]any{}}, false, false)
+			m.submitApproval(a, interaction.Response{Action: interaction.Skip}, false)
 		}
 	})
 }
 
-func (m *App) elicitationFields(c *ui.Context, a codex.Approval) {
+func (m *App) elicitationFields(c *ui.Context, a interaction.Request) {
 	p := m.Pal
 	fields := m.FieldsFor(a)
 	ui.Text(c, a.Message).FontSize(m.Font(15)).LineHeight(1.45).Selectable()
@@ -328,7 +328,7 @@ func (m *App) elicitationFields(c *ui.Context, a codex.Approval) {
 	}
 }
 
-func (m *App) elicitationActions(c *ui.Context, a codex.Approval) {
+func (m *App) elicitationActions(c *ui.Context, a interaction.Request) {
 	id := string(a.ID)
 	fields := m.FieldsFor(a)
 	pending := m.ApprovalPending[id]
@@ -338,27 +338,27 @@ func (m *App) elicitationActions(c *ui.Context, a codex.Approval) {
 	}
 	ui.Row(c).FillWidth().Gap(10).Children(func() {
 		if m.ApprovalButton(c, "confirm", label, true, pending).Grow(1).Clicked() {
-			result := map[string]any{"action": "accept"}
+			result := interaction.Response{Action: interaction.Allow}
 			if a.Mode != "url" {
 				content, err := phoneapi.ValidateMobileForm(a, fields)
 				if err != nil {
 					m.FormErrors[id] = err.Error()
 					return
 				}
-				result["content"] = content
+				result.Content = content
 			}
-			m.submitApproval(a, result, false, false)
+			m.submitApproval(a, result, false)
 		}
 		if m.ApprovalButton(c, "decline", tr("Deny"), false, pending).Grow(1).Clicked() {
-			m.submitApproval(a, map[string]any{"action": "decline"}, false, false)
+			m.submitApproval(a, interaction.Response{Action: interaction.Decline}, false)
 		}
 	})
 	ui.Row(c).FillWidth().Wrap().Gap(10).Children(func() {
 		if mcpconfig.RememberableMCPAccess(a) && m.ApprovalButton(c, "remember", tr("Always allow in this conversation"), false, pending).Clicked() {
-			m.submitApproval(a, nil, false, true)
+			m.submitApproval(a, interaction.Response{Action: interaction.Allow}, true)
 		}
 		if m.ApprovalButton(c, "cancel", tr("Cancel request"), false, pending).Clicked() {
-			m.submitApproval(a, map[string]any{"action": "cancel"}, false, false)
+			m.submitApproval(a, interaction.Response{Action: interaction.Cancel}, false)
 		}
 	})
 }

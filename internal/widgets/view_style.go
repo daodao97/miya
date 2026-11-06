@@ -8,10 +8,9 @@ import (
 	"strings"
 	"sync"
 
-	"miya/internal/agentmeta"
-
 	"github.com/egoist/mygo/ui"
 
+	"miya/internal/agentmeta"
 	"miya/internal/uiruntime"
 )
 
@@ -47,8 +46,6 @@ var Hunk = ui.Hex("#8eb6e8")
 var CodeBg = ui.Hex("#202124")
 
 var CodeInk = ui.Hex("#c7cad1")
-
-var claudeInk = ui.Hex("#c46b4d")
 
 var Shadow = ui.RGBA(0, 0, 0, 0.16)
 

@@ -1,7 +1,7 @@
 package controller
 
 import (
-	"miya/internal/codex"
+	codex "miya/internal/agent/codex/native"
 	"miya/internal/model"
 )
 

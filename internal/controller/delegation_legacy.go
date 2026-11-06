@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 
+	claude "miya/internal/agent/claude/native"
 	"miya/internal/async"
-	"miya/internal/claude"
 	"miya/internal/delegation/coordinator"
 	"miya/internal/mcpproto"
 	"miya/internal/model"

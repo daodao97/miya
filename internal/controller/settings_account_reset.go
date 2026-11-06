@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"miya/internal/account"
-	"miya/internal/codex"
+	codex "miya/internal/agent/codex/native"
 	"miya/internal/uiruntime"
 )
 

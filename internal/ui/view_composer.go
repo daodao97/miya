@@ -10,7 +10,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"miya/internal/appmodel"
+	"miya/internal/agent"
 	"miya/internal/composer"
 	"miya/internal/conversation"
 	"miya/internal/model"
@@ -323,7 +323,7 @@ func (m *completion) choose(app *App, index int) {
 		m.edit(app, "@")
 		return
 	}
-	if !appmodel.AppUICommands[choice.Name] {
+	if !agent.IsHostCommand(choice.Name) {
 		// Stage executable commands; selecting a menu item is not submission.
 		c.RememberDraft("/" + choice.Name + " ")
 		return

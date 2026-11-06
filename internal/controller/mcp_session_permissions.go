@@ -3,7 +3,7 @@ package controller
 import (
 	"errors"
 
-	"miya/internal/codex"
+	codex "miya/internal/agent/codex/native"
 	"miya/internal/mcpconfig"
 	"miya/internal/phone"
 	"miya/internal/svcproto"

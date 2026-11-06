@@ -15,9 +15,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/markdown"
 
-	"miya/internal/account"
 	"miya/internal/appmodel"
-	"miya/internal/codex"
 	"miya/internal/composer"
 	"miya/internal/conversation"
 	"miya/internal/model"
@@ -262,7 +260,7 @@ func (app *App) SendDraft(steer bool) {
 	if command, ok := composer.SlashCommand(c.State().Draft()); ok && !c.CurrentAgentControls().Commands(c.State().Cwd, false).TakesCommand(command) {
 		app.Notice = ""
 		clear := func() { c.RememberDraft(""); app.menu = "" }
-		if _, goal, _ := codex.ParseGoalCommand("/" + command); goal {
+		if name, _, _ := strings.Cut(command, " "); name == "goal" {
 			app.Notice = c.RunThreadCommand(command)
 			return
 		}
@@ -284,7 +282,8 @@ func (app *App) SendDraft(steer bool) {
 			app.openSurface(app.Panel(), surfaceDiff)
 		case "status":
 			clear()
-			app.Notice = fmt.Sprintf("Model: %s · Thinking: %s · Permissions: %s · Tokens: %d", c.State().Model(), c.State().Effort(), permissionChoiceTitle(c.CurrentPermissionPolicy()), c.Current().Tokens)
+			controls := c.CurrentAgentControls()
+			app.Notice = fmt.Sprintf("Model: %s · Thinking: %s · Permissions: %s · Tokens: %d", controls.Model(), controls.Effort(), permissionChoiceTitle(c.CurrentPermissionPolicy()), c.Current().Tokens)
 		case "fast", "fast on", "fast off":
 			clear()
 			app.Notice = c.RunThreadCommand(command)
@@ -340,7 +339,7 @@ func (app *App) pasteAttachmentsData(clipboard transfer.Data) bool {
 	if err != nil || len(data) == 0 {
 		return false
 	}
-	file, err := os.CreateTemp("", "codex-clipboard-*.png")
+	file, err := os.CreateTemp("", "miya-clipboard-*.png")
 	if err != nil {
 		return false
 	}
@@ -516,4 +515,3 @@ func (app *App) Render(ctx *ui.Context) {
 }
 
 // The account view and composer quota read through the controller's client.
-var _ account.Caller = (*codex.Client)(nil)

@@ -1,7 +1,7 @@
 package controller
 
 import (
-	"miya/internal/claude"
+	claude "miya/internal/agent/claude/native"
 	"miya/internal/memory"
 	"miya/internal/memory/extractor"
 	"miya/internal/memory/manager"

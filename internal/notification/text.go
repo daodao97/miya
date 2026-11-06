@@ -7,7 +7,7 @@ import (
 	"strings"
 	"unicode"
 
-	"miya/internal/codex"
+	"miya/internal/agent/codex/native"
 	"miya/internal/model"
 	"miya/internal/textutil"
 )

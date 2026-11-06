@@ -8,10 +8,10 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"miya/internal/appmodel"
-	"miya/internal/claude"
 	"miya/internal/model"
 	"miya/internal/phoneapi"
 	"miya/internal/remote"
+	"miya/internal/textutil"
 	"miya/internal/uiruntime"
 	"miya/internal/widgets"
 )
@@ -33,7 +33,7 @@ func (m *App) collaborationCall(request appmodel.CollaborationRequest, done func
 	if m.CollaborationCalls == nil {
 		m.CollaborationCalls = map[string]*MobileCollaborationCall{}
 	}
-	id := claude.NewSessionID()
+	id := textutil.NewID()
 	pending := &MobileCollaborationCall{Done: done}
 	m.CollaborationCalls[id] = pending
 	raw, _ := json.Marshal(request)

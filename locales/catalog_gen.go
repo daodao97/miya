@@ -18259,3 +18259,13 @@ func ConfirmDeleteC9f282() string { return In(i18n.Locale()).ConfirmDeleteC9f282
 func (msgs Messages) ConfirmDeleteC9f282() string {
 	return Catalog.Format(msgs.locale, "confirmDelete_c9f282", nil)
 }
+
+// LoadingCommands993c5d says "Loading commands…"
+// in the language the app shows.
+func LoadingCommands993c5d() string { return In(i18n.Locale()).LoadingCommands993c5d() }
+
+// LoadingCommands993c5d says "Loading commands…"
+// in the language of msgs.
+func (msgs Messages) LoadingCommands993c5d() string {
+	return Catalog.Format(msgs.locale, "loadingCommands_993c5d", nil)
+}

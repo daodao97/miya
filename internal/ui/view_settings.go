@@ -7,13 +7,12 @@ import (
 	"strings"
 	"time"
 
-	"miya/internal/agent"
-
 	"github.com/egoist/mygo/ui"
 
 	"miya/internal/account"
-	"miya/internal/codex"
+	"miya/internal/agent"
 	"miya/internal/textutil"
+	"miya/internal/tokenusage"
 	"miya/internal/widgets"
 )
 
@@ -337,7 +336,7 @@ func (app *App) projectDialogView(c *ui.Context) {
 	})
 }
 
-func UsageSummary(u *codex.TokenUsage) string {
+func UsageSummary(u *tokenusage.Usage) string {
 	if u == nil {
 		return "Usage"
 	}

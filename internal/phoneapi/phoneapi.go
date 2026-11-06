@@ -7,9 +7,8 @@ import (
 	"encoding/json"
 
 	"miya/internal/agentmeta"
-
 	"miya/internal/automation"
-	"miya/internal/codex"
+	"miya/internal/interaction"
 	"miya/internal/memory/manager"
 	"miya/internal/model"
 	"miya/internal/notification"
@@ -33,7 +32,7 @@ type State struct {
 	AutomationCreate bool                       `json:"automationCreate,omitempty"`
 	Projects         []Project                  `json:"projects"`
 	Status           string                     `json:"status"`
-	Approvals        []codex.Approval           `json:"approvals"`
+	Approvals        []interaction.Request      `json:"approvals"`
 	Agents           []AgentOptions             `json:"agents,omitempty"`
 	Quotas           []AgentQuota               `json:"quotas,omitempty"`
 	Notifications    notification.PhoneState    `json:"notifications"`

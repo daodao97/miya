@@ -1,18 +1,5 @@
 package widgets
 
-import (
-	"strings"
+import "miya/internal/interaction"
 
-	"miya/internal/appmodel"
-	"miya/internal/codex"
-)
-
-func RequestAgent(a codex.Approval) string {
-	if codex.IsMiyaApproval(a) {
-		return "Miya"
-	}
-	if strings.Contains(string(a.ID), "claude:") {
-		return appmodel.AgentName(appmodel.AgentClaude)
-	}
-	return appmodel.AgentName(appmodel.AgentCodex)
-}
+func RequestAgent(a interaction.Request) string { return a.AgentName() }

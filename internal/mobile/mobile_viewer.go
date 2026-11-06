@@ -2,7 +2,7 @@ package mobile
 
 import (
 	"miya/internal/appmodel"
-	"miya/internal/codex"
+	"miya/internal/interaction"
 	"miya/internal/model"
 	"miya/internal/uiruntime"
 )
@@ -15,8 +15,8 @@ type mobileViewer struct {
 	SetActive    func(int)
 	Revision     func() int
 	setRevision  func(int)
-	approvals    func() []codex.Approval
-	setApprovals func([]codex.Approval)
+	approvals    func() []interaction.Request
+	setApprovals func([]interaction.Request)
 }
 
 func newMobileViewer() *mobileViewer {
@@ -24,7 +24,7 @@ func newMobileViewer() *mobileViewer {
 	v.threads, v.SetThreads = uiruntime.CreateSignal([]model.Thread{})
 	v.Active, v.SetActive = uiruntime.CreateSignal(0)
 	v.Revision, v.setRevision = uiruntime.CreateSignal(0)
-	v.approvals, v.setApprovals = uiruntime.CreateSignal([]codex.Approval{})
+	v.approvals, v.setApprovals = uiruntime.CreateSignal([]interaction.Request{})
 	return v
 }
 
@@ -42,6 +42,6 @@ func (v *mobileViewer) selectThread(t model.Thread) {
 	v.SetActive(t.ID)
 }
 
-func (v *mobileViewer) approvalDetail(a codex.Approval) string {
+func (v *mobileViewer) approvalDetail(a interaction.Request) string {
 	return appmodel.ApprovalDetail(v.threads(), a)
 }

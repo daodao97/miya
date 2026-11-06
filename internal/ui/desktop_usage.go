@@ -9,10 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"miya/internal/agentmeta"
-
 	"github.com/egoist/mygo"
 
+	"miya/internal/agentmeta"
 	"miya/internal/agentusage"
 	"miya/internal/prefs"
 	"miya/internal/svcproto"

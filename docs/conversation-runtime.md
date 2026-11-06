@@ -19,8 +19,8 @@ Status: Implemented（通用运行态、Codex/Claude 适配及两端视图已实
 项目代码已经区分原生对话和运行进程，但尚未把这些信息统一起来：
 
 - [ThreadRef](../internal/model/ref.go) 有稳定的桌面来源、Agent 和原生会话标识；本机临时 `Thread.ID` 不适合作为持久归属键。
-- [chat_events.go](../internal/controller/chat_events.go) 接收 Codex 工具事件；此前 [codex.Item](../internal/codex/types.go) 未保留命令项的 `cwd`、`processId`。
-- [Claude 适配器](../internal/claude/client.go) 接收工具和系统事件，但 [agentTracker](../internal/claude/agents.go) 原来主要围绕子 Agent；本次补齐了后台工作集合与 shell 的生命周期。
+- [chat_events.go](../internal/controller/chat_events.go) 接收 Codex 工具事件；此前 [codex.Item](../internal/agent/codex/native/types.go) 未保留命令项的 `cwd`、`processId`。
+- [Claude 适配器](../internal/agent/claude/native/client.go) 接收工具和系统事件，但 [agentTracker](../internal/agent/claude/native/agents.go) 原来主要围绕子 Agent；本次补齐了后台工作集合与 shell 的生命周期。
 - 窗口、手机与 Agent 的实际执行均由桌面后台负责，运行态也应由这个后台持有。
 
 ## Design / 设计

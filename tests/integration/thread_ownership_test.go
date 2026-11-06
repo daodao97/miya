@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"miya/internal/codex"
+	"miya/internal/agent/codex/native"
 )
 
 func TestWriterConflictMessages(t *testing.T) {

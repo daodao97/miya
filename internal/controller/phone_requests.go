@@ -7,10 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"miya/internal/agentmeta"
-
 	"github.com/egoist/mygo/push/apns"
 
+	"miya/internal/agentmeta"
 	"miya/internal/appdir"
 	"miya/internal/appmodel"
 	"miya/internal/async"

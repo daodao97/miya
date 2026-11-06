@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"miya/internal/claude"
-	"miya/internal/codex"
+	"miya/internal/agent/claude/native"
+	"miya/internal/agent/codex/native"
 	"miya/internal/model"
 	"miya/internal/textutil"
 )

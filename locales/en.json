@@ -1687,5 +1687,6 @@
   "unnamedDisplay": "Unnamed display",
   "openAProjectFirstProjectMemoryAndItsAutomaticSettings_d785f7": "Open a project first. Project memory and its automatic settings belong to a project folder, not the filesystem root.",
   "automaticExtractionIsPausedAfterRepeatedFailures_b5908b": "\nAutomatic extraction is paused after repeated failures and resumes after %s.",
-  "confirmDelete_c9f282": "Confirm delete"
+  "confirmDelete_c9f282": "Confirm delete",
+  "loadingCommands_993c5d": "Loading commands…"
 }

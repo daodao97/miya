@@ -5,18 +5,19 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"miya/internal/codex"
+	"miya/internal/agent/codex/native"
+	"miya/internal/interaction"
 	"miya/internal/textutil"
 )
 
-func ApprovalFingerprint(a codex.Approval) string {
+func ApprovalFingerprint(a interaction.Request) string {
 	data, _ := json.Marshal(a)
 	return fmt.Sprintf("%x", sha256.Sum256(data))
 }
 
 // validateMobileForm uses exactly the desktop form contract. The UI renders
 // its supported primitive fields; validation remains authoritative here.
-func ValidateMobileForm(a codex.Approval, fields map[string]string) (map[string]any, error) {
+func ValidateMobileForm(a interaction.Request, fields map[string]string) (map[string]any, error) {
 	var schema FormSchema
 	if err := json.Unmarshal(a.RequestedSchema, &schema); err != nil {
 		return nil, err
@@ -40,8 +41,14 @@ func ValidateMobileForm(a codex.Approval, fields map[string]string) (map[string]
 			content[key] = value
 		}
 	}
-	if err := codex.ValidateForm(a.RequestedSchema, content); err != nil {
+	if err := interaction.ValidateForm(a.RequestedSchema, content); err != nil {
 		return nil, err
 	}
 	return content, nil
+}
+
+// LegacyResponse is the transport bridge for background services that predate
+// normalized interaction responses. Presentation code never builds wire objects.
+func LegacyResponse(a interaction.Request, reply interaction.Response) any {
+	return codex.EncodeResponse(a, reply)
 }

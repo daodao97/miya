@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"miya/internal/claude/transcript"
-	"miya/internal/codex"
+	"miya/internal/agent/claude/native/transcript"
+	"miya/internal/agent/codex/native"
 	"miya/internal/memory"
 	"miya/internal/model"
 	"miya/internal/msgfmt"

@@ -2,38 +2,60 @@ package integration
 
 import (
 	"encoding/json"
-	"os"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
+	codex "miya/internal/agent/codex/native"
 	"miya/internal/appmodel"
-	"miya/internal/codex"
 	"miya/internal/controller"
 	"miya/internal/model"
 )
 
-// The interface is shared by every agent: views reach agents only through
-// agentBackend, never by an agent's ID or its adapter's state.
+// All presentation packages consume shared contracts, including phone and shared
+// widgets. Inspect Go syntax rather than an incomplete filename/text convention.
 func TestViewsDoNotKnowAgents(t *testing.T) {
-	files, _ := filepath.Glob("internal/ui/view_*.go")
-	files = append(files, "internal/ui/app.go")
-	forbidden := []string{`"claude-code"`, `"codex"`, "agentCodex", "agentClaude", "currentAgent() ==", "currentAgent() !=",
-		".claudeError", ".claudeBinary", ".claudeCommand", ".claudeRuns", "sendClaude", "sendCodex"}
-	for _, f := range files {
-		if strings.HasSuffix(f, "_test.go") {
-			continue
-		}
-		data, err := os.ReadFile(f)
+	for _, dir := range []string{"internal/ui", "internal/mobile", "internal/conversation", "internal/widgets", "internal/agent"} {
+		files, err := filepath.Glob(filepath.Join(dir, "*.go"))
 		if err != nil {
 			t.Fatal(err)
 		}
-		for i, line := range strings.Split(string(data), "\n") {
-			for _, s := range forbidden {
-				if strings.Contains(line, s) {
-					t.Errorf("%s:%d mentions %s: %s", f, i+1, s, strings.TrimSpace(line))
+		for _, path := range files {
+			if strings.HasSuffix(path, "_test.go") {
+				continue
+			}
+			fs := token.NewFileSet()
+			file, err := parser.ParseFile(fs, path, nil, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, imp := range file.Imports {
+				name, err := strconv.Unquote(imp.Path.Value)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, native := range []string{"miya/internal/controller", "miya/internal/agent/codex", "miya/internal/agent/claude"} {
+					if name == native || strings.HasPrefix(name, native+"/") {
+						t.Errorf("%s: imports implementation %s", path, name)
+					}
 				}
 			}
+			ast.Inspect(file, func(node ast.Node) bool {
+				if selector, ok := node.(*ast.SelectorExpr); ok && (selector.Sel.Name == "AgentCodex" || selector.Sel.Name == "AgentClaude") {
+					t.Errorf("%s: selects a concrete agent", fs.Position(node.Pos()))
+				}
+				if literal, ok := node.(*ast.BasicLit); ok && literal.Kind == token.STRING {
+					value, _ := strconv.Unquote(literal.Value)
+					if value == "codex" || value == "claude" || value == "claude-code" || strings.HasPrefix(value, "item/") || strings.HasPrefix(value, "mcpServer/") {
+						t.Errorf("%s: contains native routing value %q", fs.Position(node.Pos()), value)
+					}
+				}
+				return true
+			})
 		}
 	}
 }
@@ -64,8 +86,8 @@ func TestAgentRegistry(t *testing.T) {
 	}
 }
 
-// ThreadRef.Valid checks backends against model.Backends, which cannot see
-// agentBackends. Adding an adapter must add its ID there too.
+// The built-in manifest and runtime factory must agree. A new integration
+// adds its declaration and implementation, with no edits to either UI.
 func TestModelBackendsMatchAgentBackends(t *testing.T) {
 	c := &controller.Controller{}
 	var ids []string
@@ -77,5 +99,29 @@ func TestModelBackendsMatchAgentBackends(t *testing.T) {
 	}
 	if got, want := model.AgentName("unknown"), c.BackendFor("unknown").Name(); got != want {
 		t.Fatalf("model.AgentName falls back to %q, backendFor to %q", got, want)
+	}
+}
+
+func TestAgentImplementationsDoNotImportControllerOrViews(t *testing.T) {
+	for _, dir := range []string{"internal/agent/codex", "internal/agent/claude"} {
+		files, err := filepath.Glob(filepath.Join(dir, "*.go"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, path := range files {
+			fs := token.NewFileSet()
+			file, err := parser.ParseFile(fs, path, nil, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, imp := range file.Imports {
+				name, _ := strconv.Unquote(imp.Path.Value)
+				for _, forbidden := range []string{"miya/internal/controller", "miya/internal/ui", "miya/internal/mobile", "miya/internal/appmodel"} {
+					if name == forbidden {
+						t.Errorf("%s: imports host implementation %s", path, name)
+					}
+				}
+			}
+		}
 	}
 }

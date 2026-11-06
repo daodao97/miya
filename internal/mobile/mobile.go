@@ -19,9 +19,9 @@ import (
 	"miya/internal/agent"
 	"miya/internal/agentmeta"
 	"miya/internal/appmodel"
-	"miya/internal/codex"
 	"miya/internal/conversation"
 	"miya/internal/desktop/control"
+	"miya/internal/interaction"
 	"miya/internal/memory/manager"
 	"miya/internal/model"
 	"miya/internal/msgfmt"
@@ -855,11 +855,11 @@ func (m *App) currentProject() phoneapi.Project {
 	return phoneapi.Project{}
 }
 
-func (m *App) ApprovalsFor(serverID string) []codex.Approval {
+func (m *App) ApprovalsFor(serverID string) []interaction.Request {
 	if serverID == "" {
 		return nil
 	}
-	var out []codex.Approval
+	var out []interaction.Request
 	for _, a := range m.State.Approvals {
 		if a.ThreadID == serverID {
 			out = append(out, a)

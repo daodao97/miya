@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	"miya/internal/claude"
+	claude "miya/internal/agent/claude/native"
 	"miya/internal/model"
 	"miya/internal/svcproto"
 	"miya/internal/uiruntime"

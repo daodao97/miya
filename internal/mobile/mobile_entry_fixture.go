@@ -9,7 +9,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"miya/internal/appmodel"
+	"miya/internal/agentmeta"
 	"miya/internal/model"
 	"miya/internal/phoneapi"
 	"miya/internal/uiruntime"
@@ -21,7 +21,7 @@ func MobileEntry() {
 	m := NewMobileApp()
 	m.Loaded, m.Link, m.Host = true, "miya://input-fixture", tr("Input test")
 	source := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-	thread := model.Thread{ID: 1, ServerID: "input-fixture", Agent: appmodel.AgentCodex, Title: tr("Native input interaction test"), HistoryLoaded: true}
+	thread := model.Thread{ID: 1, ServerID: "input-fixture", Agent: agentmeta.Default().ID, Title: tr("Native input interaction test"), HistoryLoaded: true}
 	m.State = phoneapi.State{ReferenceSource: source, Projects: []phoneapi.Project{{Name: "Miya", Path: "/input-fixture", Current: true, Threads: []model.Thread{thread}}}}
 	m.Router().Transition = ui.TransitionNone
 	m.OpenThread(thread)

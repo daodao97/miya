@@ -17,8 +17,8 @@ import (
 	"strings"
 	"time"
 
-	"miya/internal/claude/transcript"
-	"miya/internal/codex"
+	"miya/internal/agent/claude/native/transcript"
+	"miya/internal/agent/codex/native"
 	"miya/internal/memory"
 	"miya/internal/model"
 	"miya/internal/subagent"
@@ -97,6 +97,9 @@ func MessageAttachments(m model.Message) []string {
 // Remove only attachment display suffixes we can resend as real attachments.
 // Keep the original reference tokens and their send-time context snapshots.
 func MessagePrompt(m model.Message) string {
+	if m.Presentation != nil {
+		m.Content = m.Presentation.Content
+	}
 	text := strings.TrimSpace(model.ImagePlaceholder.ReplaceAllString(transcript.CommandText(m.Content), ""))
 	paths := MessageAttachments(m)
 	for i := len(paths) - 1; i >= 0; i-- {
@@ -450,6 +453,9 @@ func GroupMessages(messages []model.Message) []MessageGroup {
 func MessageGroupText(g MessageGroup) string {
 	var parts []string
 	for _, m := range g.Messages {
+		if m.Presentation != nil {
+			m.Content = m.Presentation.Content
+		}
 		if m.Content != "" {
 			parts = append(parts, m.Content)
 		}

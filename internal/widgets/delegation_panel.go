@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"miya/internal/appmodel"
-	"miya/internal/claude"
 	dg "miya/internal/delegation"
 	"miya/internal/model"
+	"miya/internal/textutil"
 )
 
 type CollaborationTaskView struct {
@@ -207,7 +207,7 @@ func (p *CollaborationPanel) Submit(op string, args map[string]any, call collabo
 		args = map[string]any{}
 	}
 	if op != "resume" {
-		args["request_id"] = claude.NewSessionID()
+		args["request_id"] = textutil.NewID()
 	}
 	p.Pending = &appmodel.CollaborationRequest{Operation: op, From: p.From, Arguments: CollaborationArgsJSON(args)}
 	p.Retry(call)

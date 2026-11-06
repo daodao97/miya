@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"miya/internal/account"
-	"miya/internal/codex"
+	"miya/internal/interaction"
 	"miya/internal/model"
 	"miya/internal/svcproto"
 )
@@ -15,7 +15,7 @@ type WindowState struct {
 	AccountState account.Display
 	Active       func() int
 	Agent        func() string
-	Approvals    func() []codex.Approval
+	Approvals    func() []interaction.Request
 	Attachments  func() []string
 	Cancel       context.CancelFunc
 	// CommandsChanged refreshes completions when project commands arrive.

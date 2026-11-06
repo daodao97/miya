@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"miya/internal/codex"
+	"miya/internal/agent/codex/native"
 	"miya/locales"
 )
 

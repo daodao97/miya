@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
+	"miya/internal/agent/codex/native"
 	"miya/internal/appmodel"
 	"miya/internal/async"
 	"miya/internal/automation"
-	"miya/internal/codex"
 	"miya/internal/controller"
 	"miya/internal/mcpproto"
 	"miya/internal/model"

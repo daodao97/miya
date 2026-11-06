@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"miya/internal/agent/claude/native"
 	"miya/internal/appmodel"
-	"miya/internal/claude"
 	"miya/internal/memory"
 	"miya/internal/memory/extractor"
 	"miya/internal/memory/manager"

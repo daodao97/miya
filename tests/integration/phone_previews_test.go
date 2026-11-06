@@ -12,7 +12,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"miya/internal/claude/transcript"
+	"miya/internal/agent/claude/native/transcript"
 	"miya/internal/mobile"
 	"miya/internal/model"
 	"miya/internal/phone"

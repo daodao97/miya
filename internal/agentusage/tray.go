@@ -4,12 +4,15 @@ import (
 	"fmt"
 	"math"
 	"strings"
+
+	"miya/internal/agentmeta"
 )
 
 func RemainingUsage(used float64) int { return int(math.Round(100 - Percent(used))) }
 
 func SelectedUsage(readings []Reading, agent string) *Reading {
-	for _, candidate := range []string{"codex", "claude"} {
+	for _, d := range agentmeta.Usage() {
+		candidate := d.UsageID
 		if agent != "" && agent != candidate {
 			continue
 		}
@@ -23,12 +26,7 @@ func SelectedUsage(readings []Reading, agent string) *Reading {
 	return nil
 }
 
-func AgentName(agent string) string {
-	if agent == "claude" {
-		return "Claude"
-	}
-	return "Codex"
-}
+func AgentName(id string) string { return agentmeta.UsageFor(id).UsageName }
 
 func TrayTitle(r *Reading) string {
 	if r == nil || len(r.Windows) == 0 {

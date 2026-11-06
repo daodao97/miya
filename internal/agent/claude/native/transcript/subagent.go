@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"miya/internal/claude"
+	claude "miya/internal/agent/claude/native"
 	"miya/internal/model"
 	"miya/internal/subagent"
 	"miya/internal/textutil"

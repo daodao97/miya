@@ -6,11 +6,10 @@ import (
 	"runtime"
 	"time"
 
-	"miya/internal/agentmeta"
-
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	"miya/internal/agentmeta"
 	"miya/internal/agentusage"
 	"miya/internal/uiruntime"
 	"miya/internal/widgets"

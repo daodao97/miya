@@ -1,8 +1,8 @@
 package controller
 
 import (
+	codex "miya/internal/agent/codex/native"
 	"miya/internal/appmodel"
-	"miya/internal/codex"
 )
 
 func (c *Controller) ApprovalDetail(a codex.Approval) string {

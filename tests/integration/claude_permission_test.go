@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"miya/internal/claude"
+	"miya/internal/agent/claude/native"
 	"miya/internal/controller"
 	"miya/internal/uiruntime"
 )

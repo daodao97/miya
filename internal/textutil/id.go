@@ -1,4 +1,4 @@
-package claude
+package textutil
 
 import (
 	"crypto/rand"
@@ -6,7 +6,7 @@ import (
 )
 
 // NewSessionID is a random UUID for a new Claude Code session.
-func NewSessionID() string {
+func NewID() string {
 	var b [16]byte
 	_, err := rand.Read(b[:])
 	if err != nil {

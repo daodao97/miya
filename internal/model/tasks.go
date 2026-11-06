@@ -1,7 +1,7 @@
 package model
 
 import (
-	"miya/internal/codex"
+	"miya/internal/agent/codex/native"
 )
 
 func ActiveGoal(t Thread) bool {

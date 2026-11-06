@@ -100,11 +100,4 @@ func UsageFor(id string) Descriptor {
 }
 
 // LegacyCommandAgent is the untagged native command catalog in older phone protocols.
-func LegacyCommandAgent() string {
-	for _, d := range builtins {
-		if d.NativeCommands {
-			return d.ID
-		}
-	}
-	return Default().ID
-}
+func LegacyCommandAgent() string { return Claude }

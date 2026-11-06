@@ -10,7 +10,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"miya/internal/claude/transcript"
+	"miya/internal/agent/claude/native/transcript"
 	"miya/internal/msgfmt"
 )
 

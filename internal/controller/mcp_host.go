@@ -7,9 +7,9 @@ import (
 	"reflect"
 	"strings"
 
+	"miya/internal/agent/claude/native/transcript"
 	"miya/internal/appmodel"
 	"miya/internal/async"
-	"miya/internal/claude/transcript"
 	"miya/internal/mcpconfig"
 	"miya/internal/mcpproto"
 	"miya/internal/model"

@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"miya/internal/claude"
+	claude "miya/internal/agent/claude/native"
 	"miya/internal/memory"
 	"miya/internal/model"
 	"miya/internal/subagent"

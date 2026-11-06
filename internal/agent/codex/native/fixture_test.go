@@ -14,7 +14,7 @@ func TestFixtureInteractions(t *testing.T) {
 	if _, err := exec.LookPath("python3"); err != nil {
 		t.Skip("fixture requires Python 3")
 	}
-	binary, _ := filepath.Abs("../../testdata/codex-server.py")
+	binary, _ := filepath.Abs("../../../../testdata/codex-server.py")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	c, err := Start(ctx, binary, t.TempDir())

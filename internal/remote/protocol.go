@@ -1,6 +1,10 @@
 package remote
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"miya/internal/interaction"
+)
 
 // ProtocolVersion is bumped whenever a frame's meaning changes. The phone
 // refuses a desktop whose version it does not know.
@@ -68,24 +72,25 @@ type Request struct {
 	WindowOnly    bool            `json:"windowOnly,omitempty"`
 	// WindowPick asks for a lease that may choose any window or the full
 	// desktop. Older desktops ignore it and open the full desktop.
-	WindowPick        bool            `json:"windowPick,omitempty"`
-	WindowID          uint32          `json:"windowId,omitempty"`
-	WindowPID         int             `json:"windowPid,omitempty"`
-	DesktopToken      string          `json:"desktopToken,omitempty"`
-	AutomationID      string          `json:"automationId,omitempty"`
-	RequestID         string          `json:"requestId,omitempty"`
-	MemoryScope       string          `json:"memoryScope,omitempty"`
-	BinaryAttachments bool            `json:"binaryAttachments,omitempty"`
-	Reference         string          `json:"reference,omitempty"`
-	ImageSource       string          `json:"imageSource,omitempty"`
-	ApprovalVersion   string          `json:"approvalVersion,omitempty"`
-	Options           *SendOptions    `json:"options,omitempty"`
-	Steer             bool            `json:"steer,omitempty"`
-	QueuedID          int             `json:"queuedId,omitempty"`
-	MessageID         int             `json:"messageId,omitempty"`
-	Result            json.RawMessage `json:"result,omitempty"`
-	Remember          bool            `json:"remember,omitempty"`
-	ReadVersion       uint64          `json:"readVersion,omitempty"`
+	WindowPick        bool                  `json:"windowPick,omitempty"`
+	WindowID          uint32                `json:"windowId,omitempty"`
+	WindowPID         int                   `json:"windowPid,omitempty"`
+	DesktopToken      string                `json:"desktopToken,omitempty"`
+	AutomationID      string                `json:"automationId,omitempty"`
+	RequestID         string                `json:"requestId,omitempty"`
+	MemoryScope       string                `json:"memoryScope,omitempty"`
+	BinaryAttachments bool                  `json:"binaryAttachments,omitempty"`
+	Reference         string                `json:"reference,omitempty"`
+	ImageSource       string                `json:"imageSource,omitempty"`
+	ApprovalVersion   string                `json:"approvalVersion,omitempty"`
+	Options           *SendOptions          `json:"options,omitempty"`
+	Steer             bool                  `json:"steer,omitempty"`
+	QueuedID          int                   `json:"queuedId,omitempty"`
+	MessageID         int                   `json:"messageId,omitempty"`
+	Response          *interaction.Response `json:"response,omitempty"`
+	Result            json.RawMessage       `json:"result,omitempty"`
+	Remember          bool                  `json:"remember,omitempty"`
+	ReadVersion       uint64                `json:"readVersion,omitempty"`
 	// ReadCompletedAtMs acknowledges the completed result received by the phone,
 	// independently of APNs registration and its per-device notification version.
 	ReadCompletedAtMs int64           `json:"readCompletedAtMs,omitempty"`

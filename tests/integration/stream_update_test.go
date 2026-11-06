@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"miya/internal/claude"
+	"miya/internal/agent/claude/native"
 	"miya/internal/model"
 	"miya/internal/threadlist"
 )

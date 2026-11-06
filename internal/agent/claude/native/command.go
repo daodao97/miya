@@ -4,11 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"miya/internal/appdir"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"miya/internal/appdir"
 )
 
 // Command is how Claude Code starts: its executable, the options put before

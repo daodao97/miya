@@ -12,8 +12,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"miya/internal/agent/codex/native"
 	"miya/internal/async"
-	"miya/internal/codex"
 	"miya/internal/desktop"
 	"miya/internal/mcpproto"
 	"miya/internal/mcpserver"

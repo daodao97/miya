@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
+	"miya/internal/agent/claude/native/transcript"
+	"miya/internal/agent/codex/native"
 	"miya/internal/appmodel"
-	"miya/internal/claude/transcript"
-	"miya/internal/codex"
 	"miya/internal/memory"
 	"miya/internal/model"
 	"miya/internal/phone"

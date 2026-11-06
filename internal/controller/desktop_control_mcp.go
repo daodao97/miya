@@ -5,8 +5,8 @@ import (
 	"errors"
 	"strings"
 
+	codex "miya/internal/agent/codex/native"
 	"miya/internal/async"
-	"miya/internal/codex"
 	"miya/internal/desktop"
 	"miya/internal/desktop/control"
 	"miya/internal/mcpproto"

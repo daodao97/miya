@@ -9,8 +9,8 @@ import (
 	"runtime"
 	"time"
 
+	codex "miya/internal/agent/codex/native"
 	"miya/internal/appmodel"
-	"miya/internal/codex"
 	"miya/internal/model"
 	"miya/internal/prefs"
 	"miya/internal/svcproto"

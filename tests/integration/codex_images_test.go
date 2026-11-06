@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"miya/internal/claude/transcript"
+	"miya/internal/agent/claude/native/transcript"
 	"miya/internal/model"
 	"miya/internal/widgets"
 )

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"miya/internal/codex"
+	"miya/internal/agent/codex/native"
 	"miya/internal/controller"
 	"miya/internal/mcpconfig"
 )

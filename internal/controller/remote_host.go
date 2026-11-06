@@ -13,12 +13,11 @@ import (
 	"time"
 
 	"miya/internal/agent"
-
+	claude "miya/internal/agent/claude/native"
+	"miya/internal/agent/claude/native/transcript"
+	codex "miya/internal/agent/codex/native"
 	"miya/internal/appmodel"
 	"miya/internal/async"
-	"miya/internal/claude"
-	"miya/internal/claude/transcript"
-	"miya/internal/codex"
 	"miya/internal/desktop"
 	"miya/internal/model"
 	"miya/internal/msgfmt"

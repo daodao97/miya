@@ -6,7 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"miya/internal/codex"
+	codex "miya/internal/agent/codex/native"
+	"miya/internal/interaction"
 	"miya/internal/phone"
 	"miya/internal/phoneapi"
 	"miya/internal/remote"
@@ -22,6 +23,13 @@ func (c *Controller) PhoneApprovalResponse(r remote.Request) error {
 		}
 		if r.Remember {
 			return c.RespondMCPAlways(a)
+		}
+		if r.Response != nil {
+			if err := interaction.ValidateResponse(a, *r.Response); err != nil {
+				return err
+			}
+			c.Answer(a, *r.Response)
+			return nil
 		}
 		var result any
 		switch a.Method {

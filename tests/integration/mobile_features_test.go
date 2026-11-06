@@ -9,8 +9,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"miya/internal/agent/codex/native"
 	"miya/internal/appmodel"
-	"miya/internal/codex"
 	"miya/internal/controller"
 	"miya/internal/model"
 	"miya/internal/msgfmt"

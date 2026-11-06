@@ -4,11 +4,10 @@ import (
 	"context"
 
 	"miya/internal/agent"
-
 	"miya/internal/appmodel"
 	"miya/internal/automation"
-	"miya/internal/codex"
 	"miya/internal/conversation"
+	"miya/internal/interaction"
 	"miya/internal/memory/manager"
 	"miya/internal/model"
 	"miya/internal/phoneapi"
@@ -24,7 +23,7 @@ type Host interface {
 	AgentSettings() []agent.Setting
 	AgentSpeedBadge(agent string) string
 	AllThreads() []model.Thread
-	ApprovalDetail(a codex.Approval) string
+	ApprovalDetail(a interaction.Request) string
 	ArchiveProject(path string)
 	ArchiveThread(t model.Thread)
 	AskAccountReset()
@@ -62,8 +61,8 @@ type Host interface {
 	RemoveAttachment(path string)
 	RemoveQueued(threadID int, queuedID int)
 	RenameProject(path string, name string)
-	Respond(a codex.Approval, result any)
-	RespondMCPAlways(a codex.Approval) error
+	Answer(a interaction.Request, reply interaction.Response)
+	RespondMCPAlways(a interaction.Request) error
 	Resume(t model.Thread, after *model.SendRequest)
 	ResumeQueue(id int)
 	RetryResponse(req appmodel.RetryRequest) error

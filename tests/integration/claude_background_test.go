@@ -10,9 +10,9 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"miya/internal/agent/claude/native"
+	"miya/internal/agent/claude/native/transcript"
 	"miya/internal/appmodel"
-	"miya/internal/claude"
-	"miya/internal/claude/transcript"
 	"miya/internal/controller"
 	"miya/internal/model"
 	"miya/internal/msgfmt"

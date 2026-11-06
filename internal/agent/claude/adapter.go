@@ -1,89 +1,75 @@
-package controller
+package claude
 
 import (
 	"errors"
 	"strings"
 	"time"
 
-	"miya/internal/agentmeta"
-
 	"miya/internal/agent"
-
-	"miya/internal/appmodel"
-	"miya/internal/claude"
-	"miya/internal/claude/transcript"
-	"miya/internal/codex"
+	claude "miya/internal/agent/claude/native"
+	"miya/internal/agent/claude/native/transcript"
+	"miya/internal/agentmeta"
+	"miya/internal/interaction"
 	"miya/internal/model"
 	"miya/internal/msgfmt"
 	"miya/internal/uiruntime"
 )
 
-// claudeBackend runs the Claude Code CLI over stream-json, one process per
-// turn, and reads its native sessions.
-type claudeBackend struct{ C *Controller }
+func (b Adapter) ID() string { return agentmeta.Claude }
 
-func (b claudeBackend) ID() string { return appmodel.AgentClaude }
+func (b Adapter) Name() string { return model.AgentName(model.AgentClaude) }
 
-func (b claudeBackend) Name() string { return model.AgentName(model.AgentClaude) }
+func (b Adapter) Icon() agentmeta.Icon         { return agentmeta.For(b.ID()).Icon }
+func (b Adapter) Caps() agentmeta.Capabilities { return agentmeta.For(b.ID()).Capabilities }
 
-func (b claudeBackend) Icon() agentmeta.Icon         { return agentmeta.For(b.ID()).Icon }
-func (b claudeBackend) Caps() agentmeta.Capabilities { return agentmeta.For(b.ID()).Capabilities }
+func (b Adapter) Discover() { b.host.Discover() }
 
-func (b claudeBackend) Discover() { c := b.C; c.loadClaudeSessions() }
+func (b Adapter) Ready() bool { return b.host.Snapshot().Binary != "" }
 
-func (b claudeBackend) Ready() bool { c := b.C; return c.ClaudeBinary != "" }
+func (b Adapter) Problem() (string, bool) { return b.host.Snapshot().Error, false }
 
-func (b claudeBackend) Problem() (string, bool) { c := b.C; return c.ClaudeError, false }
+func (b Adapter) Reconnect() {}
 
-func (b claudeBackend) Reconnect() {}
+func (b Adapter) Open(t model.Thread) { b.LoadHistory(t) }
 
-func (b claudeBackend) Open(t model.Thread) { c := b.C; c.LoadClaudeHistory(t) }
-
-func (b claudeBackend) Send(req model.SendRequest) int { c := b.C; return c.sendClaude(req) }
-
-func (b claudeBackend) Stop(t model.Thread) {
-	c := b.C
-	if run := c.ClaudeRuns[t.ID]; run != nil {
+func (b Adapter) Stop(t model.Thread) {
+	c := b.host
+	if run := c.Run(t.ID); run != nil {
 		go run.Stop()
 	}
 }
 
 // Archive and delete forget the app's entry; Claude Code keeps its session.
-func (b claudeBackend) Archive(t model.Thread) {
-	c := b.C
+func (b Adapter) Archive(t model.Thread) {
+	c := b.host
 	b.Stop(t)
-	c.removeThreadLocal(t.ID, t.ServerID)
+	c.RemoveThread(t.ID, t.ServerID)
 }
 
-func (b claudeBackend) Delete(t model.Thread) { b.Archive(t) }
+func (b Adapter) Delete(t model.Thread) { b.Archive(t) }
 
-func (b claudeBackend) Suspend(t model.Thread) {
+func (b Adapter) Suspend(t model.Thread) {
 	b.Stop(t)
 	t.Busy = false
 	claude.SaveHistory(t)
 }
 
-func (b claudeBackend) Owns(a codex.Approval) bool { return claudeApproval(a) }
+func (b Adapter) RespondNative(a interaction.Request, result any) { b.RespondLegacy(a, result) }
 
-func (b claudeBackend) Respond(a codex.Approval, result any) {
-	c := b.C
-	c.RespondClaude(a, result)
-}
-
-func (b claudeBackend) Settings() []agent.Setting {
-	c := b.C
+func (b Adapter) Settings() []agent.Setting {
+	c := b.host
 	return []agent.Setting{{
 		ID:          "claude-command",
 		Title:       tr("Claude Code launch command"),
 		Help:        tr("Leave blank to use claude. Arguments and environment variables are supported, for example: claude --settings ~/settings.json. Changes apply to new turns."),
 		Placeholder: "claude",
-		Value:       func() string { return c.ClaudeCommand },
-		Save:        func(v string) { c.SetClaudeCommand(v) },
+		Value:       func() string { return c.Snapshot().Command },
+		Save:        func(v string) { c.SetCommand(v) },
 		Status: func() (string, bool) {
-			if c.ClaudeError != "" {
-				return c.ClaudeError, true
+			if c.Snapshot().Error != "" {
+				return c.Snapshot().Error, true
 			}
-			parts := append(append(append([]string(nil), c.ClaudeEnv...), c.ClaudeBinary), c.ClaudeArgs...)
+			parts := append(append(append([]string(nil), c.Snapshot().Env...), c.Snapshot().Binary), c.Snapshot().Args...)
 			return "→ " + strings.Join(parts, " "), false
 		},
 	}}
@@ -92,13 +78,13 @@ func (b claudeBackend) Settings() []agent.Setting {
 // Claude Code rewinds by writing the session's history before the message
 // as a new session, which the next turn resumes; the old one is left as it
 // is and no longer listed.
-func (b claudeBackend) CanRewind(t model.Thread, m model.Message) bool {
-	c := b.C
-	return t.ServerID != "" && c.ClaudeBinary != ""
+func (b Adapter) CanRewind(t model.Thread, m model.Message) bool {
+	c := b.host
+	return t.ServerID != "" && c.Snapshot().Binary != ""
 }
 
-func (b claudeBackend) Rewind(t model.Thread, m model.Message, text string) {
-	c := b.C
+func (b Adapter) Rewind(t model.Thread, m model.Message, text string) {
+	c := b.host
 	prompt := 0
 	for _, x := range t.Messages {
 		if x.ID == m.ID {
@@ -123,7 +109,7 @@ func (b claudeBackend) Rewind(t model.Thread, m model.Message, text string) {
 			transcript.MarkSuperseded(old)
 		}
 		c.Dispatch(func() {
-			c.finishRewind(t.ID, m.ID, text, err, func(t *model.Thread) {
+			c.FinishRewind(t.ID, m.ID, text, err, func(t *model.Thread) {
 				t.HistoryLoaded = true
 				if forked == "" {
 					// The first message: a new session.
@@ -138,9 +124,9 @@ func (b claudeBackend) Rewind(t model.Thread, m model.Message, text string) {
 
 // Claude Code steers by a user message written to the running turn's
 // input, which it folds into the turn.
-func (b claudeBackend) Steer(t model.Thread, req model.SendRequest) bool {
-	c := b.C
-	run := c.ClaudeRuns[t.ID]
+func (b Adapter) Steer(t model.Thread, req model.SendRequest) bool {
+	c := b.host
+	run := c.Run(t.ID)
 	if run == nil || !run.Steerable() {
 		return false
 	}
@@ -178,4 +164,15 @@ func (b claudeBackend) Steer(t model.Thread, req model.SendRequest) bool {
 		}
 	}()
 	return true
+}
+
+func (b Adapter) Reply(a interaction.Request, reply interaction.Response) {
+	b.host.Respond(a, encodeLegacyResponse(reply))
+}
+
+func (b Adapter) RunCommand(_ int, command, _ string) (int, string) {
+	if command == "fast" || command == "fast on" || command == "fast off" {
+		return 0, tr("/fast is only supported by Codex.")
+	}
+	return 0, b.Name() + tr(" does not support this command.")
 }

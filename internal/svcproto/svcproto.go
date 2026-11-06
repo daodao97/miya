@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"miya/internal/account"
+	"miya/internal/agent/codex/native"
 	"miya/internal/appdir"
-	"miya/internal/codex"
 	"miya/internal/model"
 )
 
@@ -170,6 +170,10 @@ func MessageFingerprint(m model.Message) uint64 {
 	h.Write([]byte(head))
 	h.Write([]byte(tail))
 	h.Write([]byte(m.HandoffTitle))
+	if m.Presentation != nil {
+		b, _ := json.Marshal(m.Presentation)
+		h.Write(b)
+	}
 	if m.Memory != nil {
 		b, _ := json.Marshal(m.Memory)
 		h.Write(b)

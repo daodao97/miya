@@ -8,10 +8,10 @@ import (
 	"strings"
 	"testing"
 
+	"miya/internal/agent/claude/native"
 	"miya/internal/appdir"
 	"miya/internal/appmodel"
 	"miya/internal/async"
-	"miya/internal/claude"
 	"miya/internal/controller"
 	dg "miya/internal/delegation"
 	"miya/internal/model"

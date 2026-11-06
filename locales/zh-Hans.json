@@ -1687,5 +1687,6 @@
   "unnamedDisplay": "未命名屏幕",
   "openAProjectFirstProjectMemoryAndItsAutomaticSettings_d785f7": "请先打开一个项目。项目记忆及其自动设置属于具体的项目文件夹，而不是文件系统根目录。",
   "automaticExtractionIsPausedAfterRepeatedFailures_b5908b": "\n连续多次提炼失败，自动提炼已暂停，将在 %s 后恢复。",
-  "confirmDelete_c9f282": "确认删除"
+  "confirmDelete_c9f282": "确认删除",
+  "loadingCommands_993c5d": "正在加载命令…"
 }

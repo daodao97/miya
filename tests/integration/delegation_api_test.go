@@ -13,9 +13,9 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"miya/internal/agent/codex/native"
 	"miya/internal/appdir"
 	"miya/internal/appmodel"
-	"miya/internal/codex"
 	"miya/internal/controller"
 	dg "miya/internal/delegation"
 	"miya/internal/delegation/coordinator"

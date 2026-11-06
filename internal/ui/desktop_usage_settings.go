@@ -4,7 +4,6 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"miya/internal/agentmeta"
-
 	"miya/internal/agentusage"
 	"miya/internal/prefs"
 	"miya/internal/widgets"

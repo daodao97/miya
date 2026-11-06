@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"sync"
 
+	claude "miya/internal/agent/claude/native"
 	"miya/internal/appdir"
-	"miya/internal/claude"
 )
 
 // forkClaudeSessionBefore writes the active branch of a session before its

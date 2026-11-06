@@ -4,7 +4,7 @@ package agent
 
 import (
 	"miya/internal/agentmeta"
-	"miya/internal/codex"
+	"miya/internal/interaction"
 	"miya/internal/model"
 	"miya/internal/runtime/tracker"
 )
@@ -48,11 +48,17 @@ type Adapter interface {
 	Archive(model.Thread)
 	Delete(model.Thread)
 	Suspend(model.Thread)
-	Owns(codex.Approval) bool
-	Respond(codex.Approval, any)
+	Reply(interaction.Request, interaction.Response)
 	Settings() []Setting
 	ModelOptions() []ModelOption
+	RunCommand(threadID int, command, policy string) (int, string)
 	CanRewind(model.Thread, model.Message) bool
 	Rewind(model.Thread, model.Message, string)
 	Steer(model.Thread, model.SendRequest) bool
+}
+
+// LegacyResponder supports raw replies from older service/MCP clients. New UI
+// callers use Adapter.Reply and never construct provider payloads.
+type LegacyResponder interface {
+	RespondNative(interaction.Request, any)
 }

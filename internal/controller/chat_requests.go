@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"miya/internal/codex"
-	"miya/internal/mcpconfig"
+	"miya/internal/agent"
+	codex "miya/internal/agent/codex/native"
+	"miya/internal/interaction"
 	"miya/internal/model"
 	"miya/internal/svcproto"
 )
@@ -21,38 +22,7 @@ func (c *Controller) removeRequest(id json.RawMessage) {
 	c.SetApprovals(out)
 }
 
-func (c *Controller) ServerRequest(f codex.Frame) {
-	switch f.Method {
-	case "item/commandExecution/requestApproval", "item/fileChange/requestApproval", "item/permissions/requestApproval", "item/tool/requestUserInput", "mcpServer/elicitation/request":
-		var a codex.Approval
-		if json.Unmarshal(f.Params, &a) != nil {
-			go c.Client.Reject(f.ID, "Malformed server request")
-			return
-		}
-		a.ID = f.ID
-		a.Method = f.Method
-		a.Payload = f.Params
-		for _, v := range c.Approvals() {
-			if string(v.ID) == string(a.ID) {
-				return
-			}
-		}
-		if c.Client != nil && c.RememberedMCPAccess(a) {
-			client := c.Client
-			go func() {
-				if err := client.Reply(a.ID, mcpconfig.AccessAccepted()); err != nil {
-					c.Dispatch(func() { c.SetStatus("Unable to respond to conversation approval: " + err.Error()) })
-				}
-			}()
-			return
-		}
-		c.SetApprovals(append(append([]codex.Approval(nil), c.Approvals()...), a))
-	default:
-		client := c.Client
-		go client.Reject(f.ID, "This client does not yet support "+f.Method)
-		c.SetStatus("Unsupported server request: " + f.Method)
-	}
-}
+func (c *Controller) ServerRequest(f codex.Frame) { c.codexAdapter().HandleRequest(f) }
 
 func (c *Controller) Respond(a codex.Approval, result any) {
 	if c.Remote != nil {
@@ -74,7 +44,9 @@ func (c *Controller) Respond(a codex.Approval, result any) {
 		c.respondMiya(a, result)
 		return
 	}
-	c.ApprovalOwner(a).Respond(a, result)
+	if legacy, ok := c.ApprovalOwner(a).(agent.LegacyResponder); ok {
+		legacy.RespondNative(a, result)
+	}
 }
 
 // askUser shows a card in caller's conversation and returns its id and the
@@ -167,4 +139,13 @@ func (c *Controller) ThreadAwaitsUser(t model.Thread) bool {
 		}
 	}
 	return false
+}
+
+// Answer is the UI entry point. Native reply encoding belongs to the adapter.
+func (c *Controller) Answer(a interaction.Request, reply interaction.Response) {
+	if a.Owner() == "miya" {
+		c.Respond(a, codex.EncodeResponse(a, reply))
+		return
+	}
+	c.ApprovalOwner(a).Reply(a, reply)
 }

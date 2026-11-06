@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"testing"
 
+	"miya/internal/agent/codex/native"
 	"miya/internal/appmodel"
-	"miya/internal/codex"
 	"miya/internal/controller"
 	"miya/internal/model"
 	"miya/internal/msgfmt"
@@ -40,7 +40,7 @@ func TestCodexEffortSurvivesModelSelection(t *testing.T) {
 	c.Model, c.SetModel = uiruntime.CreateSignal("model-a")
 	c.Effort, c.SetEffort = uiruntime.CreateSignal("medium")
 	c.Models, _ = uiruntime.CreateSignal([]codex.Model{m})
-	controller.CodexBackend{C: c}.SetEffort("high")
+	c.BackendFor(model.AgentCodex).SetEffort("high")
 	c.SetEffort("medium")
 	c.SelectModel("model-a")
 	if c.Effort() != "high" {

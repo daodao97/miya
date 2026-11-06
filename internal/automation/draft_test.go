@@ -1,7 +1,7 @@
 package automation
 
 import (
-	"miya/internal/claude"
+	"miya/internal/agent/claude/native"
 	"miya/internal/model"
 	"os"
 	"path/filepath"

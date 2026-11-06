@@ -5,7 +5,6 @@ import (
 
 	"miya/internal/agentmeta"
 	"miya/internal/composer"
-
 	"miya/internal/model"
 )
 
@@ -19,11 +18,11 @@ type CommandCatalog struct {
 	LoadingMessage string
 }
 
-var HostCommands = map[string]bool{"new": true, "model": true, "permissions": true, "mention": true, "diff": true, "status": true}
+var hostCommands = map[string]bool{"new": true, "model": true, "permissions": true, "mention": true, "diff": true, "status": true}
 
 func (c CommandCatalog) TakesCommand(command string) bool {
 	name, _, _ := strings.Cut(strings.TrimSpace(command), " ")
-	return c.Native && !HostCommands[name]
+	return c.Native && !IsHostCommand(name)
 }
 func (c CommandCatalog) Filter(query string) []model.ComposerChoice {
 	query = strings.ToLower(query)
@@ -72,3 +71,5 @@ func DefaultCommands(id string) CommandCatalog {
 	return catalog
 }
 func CommandKey(id, project string) string { return id + "\x00" + project }
+
+func IsHostCommand(name string) bool { return hostCommands[name] }

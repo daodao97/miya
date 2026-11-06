@@ -7,9 +7,8 @@ import (
 	"slices"
 	"strings"
 
-	"miya/internal/agentmeta"
-
 	"miya/internal/account"
+	"miya/internal/agentmeta"
 	"miya/internal/appmodel"
 	"miya/internal/model"
 	"miya/internal/phoneapi"
@@ -21,7 +20,9 @@ func (c *Controller) phoneAgentOptions() []phoneapi.AgentOptions {
 	for _, b := range c.Adapters() {
 		a := phoneapi.AgentOptions{Agent: b.ID(), Current: remote.SendOptions{Model: b.Model(), Effort: b.Effort(), Policy: c.SelectedPermissionPolicy()}}
 		a.Descriptor = agentmeta.For(b.ID())
-		a.Commands = b.Commands(c.Cwd, false).PhoneChoices
+		if !a.Descriptor.NativeCommands {
+			a.Commands = b.Commands(c.Cwd, false).PhoneChoices
+		}
 		for _, option := range b.ModelOptions() {
 			a.Models = append(a.Models, phoneapi.ModelOption{Value: option.Value, Label: option.Label, Efforts: option.Efforts, DefaultEffort: option.DefaultEffort})
 		}

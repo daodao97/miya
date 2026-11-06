@@ -6,10 +6,10 @@ import (
 	"errors"
 	"strings"
 
+	claude "miya/internal/agent/claude/native"
 	"miya/internal/appmodel"
 	"miya/internal/async"
 	"miya/internal/automation"
-	"miya/internal/claude"
 	"miya/internal/model"
 	"miya/internal/msgfmt"
 	"miya/internal/notification"

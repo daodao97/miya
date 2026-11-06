@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"miya/internal/claude"
-	"miya/internal/codex"
+	"miya/internal/agent/claude/native"
+	"miya/internal/agent/codex/native"
 	"miya/internal/memory"
 	"miya/internal/model"
 )

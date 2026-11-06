@@ -12,9 +12,9 @@ import (
 	"github.com/egoist/mygo/ui/markdown/parser"
 	"github.com/egoist/mygo/ui/richtext"
 
+	"miya/internal/agent/presentation"
 	"miya/internal/appmodel"
-	"miya/internal/claude/transcript"
-	"miya/internal/codex"
+	"miya/internal/interaction"
 	"miya/internal/model"
 	"miya/internal/msgfmt"
 	"miya/internal/subagent"
@@ -27,7 +27,7 @@ import (
 type Host interface {
 	ViewThread() model.Thread
 	ViewRevision() int
-	ViewApprovals() []codex.Approval
+	ViewApprovals() []interaction.Request
 	ViewSelectThread(model.Thread)
 }
 
@@ -330,6 +330,9 @@ func (app *View) Chevron(c *ui.Context, open bool) {
 }
 
 func (app *View) MessageView(c *ui.Context, m model.Message, streaming bool) {
+	presented := presentation.Message(m)
+	m.Presentation = &presented
+	m.Content = presented.Content
 	switch m.Role {
 	case "memory":
 		if app.MemoryNotice != nil {
@@ -400,7 +403,7 @@ func (app *View) MessageView(c *ui.Context, m model.Message, streaming bool) {
 		}
 		header := widgets.Quiet(c.Key("header")).FillWidth().Height(28).PaddingX(0).Label(title)
 		header.Children(func() {
-			widgets.Icon(c, msgfmt.ActivityIcon(m), 14, widgets.Muted)
+			widgets.Icon(c, presentation.Message(m).Icon, 14, widgets.Muted)
 			color := widgets.Muted
 			if m.Status == "failed" && !isReasoning {
 				color = widgets.Failed
@@ -436,9 +439,10 @@ func (app *View) markdown(c *ui.Context, m model.Message, streaming bool) {
 }
 
 func (app *View) activityDetail(c *ui.Context, m model.Message) {
-	if len(m.Plan) > 0 {
+	presentation := presentation.Message(m)
+	if len(presentation.Plan) > 0 {
 		ui.Column(c).Gap(8).Padding(12).Background(widgets.Subtle).Radius(8).Children(func() {
-			for i, p := range m.Plan {
+			for i, p := range presentation.Plan {
 				marker, color := "○", widgets.Muted
 				if p.Status == "completed" {
 					marker, color = "✓", widgets.Success
@@ -467,24 +471,24 @@ func (app *View) activityDetail(c *ui.Context, m model.Message) {
 }
 
 func (app *View) activityBody(c *ui.Context, m model.Message) {
-	kind := strings.ToLower(m.Kind)
-	switch {
-	case kind == "reasoning" || kind == "plan":
-		markdown.View(c, m.Content, &app.Md)
-	case kind == "filechange" && m.Item != nil:
+	presentation := presentation.Message(m)
+	switch presentation.Format {
+	case "markdown":
+		markdown.View(c, presentation.Content, &app.Md)
+	case "files":
 		ui.Column(c).FillWidth().Gap(8).Children(func() {
-			for i, f := range m.Item.Changes {
+			for i, f := range presentation.Changes {
 				ui.Column(c.Key(i)).Gap(6).Children(func() {
 					ui.Text(c, f.Path).FontSize(12).Selectable()
 					diffView(c, f.Diff)
 				})
 			}
 		})
-	case kind == "diff":
-		diffView(c, m.Content)
+	case "diff":
+		diffView(c, presentation.Content)
 	default:
 		ui.Column(c).FillWidth().MinWidth(0).Background(widgets.CodeBg).Radius(8).Padding(12).Children(func() {
-			ui.Text(c, msgfmt.NativeText(m.Content)).Font(widgets.MonoFont).FontSize(12).LineHeight(1.5).TextColor(widgets.CodeInk).Selectable()
+			ui.Text(c, msgfmt.NativeText(presentation.Content)).Font(widgets.MonoFont).FontSize(12).LineHeight(1.5).TextColor(widgets.CodeInk).Selectable()
 		})
 	}
 }
@@ -624,7 +628,7 @@ func (app *View) ThreadReferenceContent(text string) (string, []threadTag) {
 
 func (app *View) threadMessage(c *ui.Context, message model.Message) {
 	if message.Role == "user" {
-		message.Content = transcript.CommandText(message.Content)
+		message.Content = presentation.Message(message).Content
 	}
 	content, tags := app.ThreadReferenceContent(message.Content)
 	if len(tags) == 0 {

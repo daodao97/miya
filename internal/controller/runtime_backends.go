@@ -8,79 +8,9 @@ import (
 
 	"miya/internal/async"
 	"miya/internal/model"
-	rt "miya/internal/runtime"
 	"miya/internal/runtime/tracker"
 	"miya/internal/svcproto"
-	"miya/internal/textutil"
 )
-
-func (b CodexBackend) Runtime(t model.Thread) tracker.SnapshotSource {
-	c := b.C
-	client := c.Client
-	caps := rt.Capabilities{Tasks: true, Snapshot: true, NativePID: true, SessionTag: true, RequiresHost: true}
-	if client == nil {
-		return tracker.SnapshotSource{Epoch: "disconnected", Caps: caps, Alive: func() bool { return false }}
-	}
-	return tracker.SnapshotSource{Epoch: client.RuntimeEpoch(), Caps: caps, Alive: func() bool {
-		select {
-		case <-client.Done():
-			return false
-		default:
-			return true
-		}
-	}, Snapshot: func(ctx context.Context) (tracker.TaskSnapshot, error) {
-		terminals, err := client.BackgroundTerminals(ctx, t.ServerID)
-		if err != nil {
-			return tracker.TaskSnapshot{}, err
-		}
-		out := tracker.TaskSnapshot{Known: true, Tasks: []rt.Task{}}
-		for _, terminal := range terminals {
-			task := rt.Task{ID: terminal.ProcessID, ToolID: terminal.ItemID, RunID: terminal.ItemID, Kind: "shell", Description: rt.Summary(terminal.Command), Status: "running"}
-			if task.ID == "" {
-				task.ID = terminal.ItemID
-			}
-			if terminal.OSPID != nil && *terminal.OSPID > 0 {
-				task.PID = *terminal.OSPID
-				out.Roots = append(out.Roots, rt.Root{PID: task.PID, TaskID: task.ID + "/" + task.RunID})
-			} else {
-				out.Notice = "Some background tasks did not provide system process identities; their ports cannot be attributed"
-			}
-			out.Tasks = append(out.Tasks, task)
-		}
-		return out, nil
-	}}
-}
-
-func (b claudeBackend) Runtime(t model.Thread) tracker.SnapshotSource {
-	c := b.C
-	client := c.ClaudeRuns[t.ID]
-	caps := rt.Capabilities{Tasks: true, Snapshot: true, SessionRoot: true, RequiresHost: true}
-	if client == nil {
-		return tracker.SnapshotSource{Epoch: "disconnected", Caps: caps, Alive: func() bool { return false }}
-	}
-	_, _, _, epoch := client.Runtime()
-	return tracker.SnapshotSource{Epoch: epoch, Caps: caps, Alive: func() bool {
-		select {
-		case <-client.Done():
-			return false
-		default:
-			return true
-		}
-	}, Snapshot: func(context.Context) (tracker.TaskSnapshot, error) {
-		tasks, known, pid, _ := client.Runtime()
-		out := tracker.TaskSnapshot{Known: known, Tasks: []rt.Task{}}
-		for _, task := range tasks {
-			out.Tasks = append(out.Tasks, rt.Task{ID: task.ID, RunID: task.RunID, RunOrder: task.RunID, ToolID: task.ToolUseID, Kind: task.Kind, Description: rt.Summary(textutil.FirstNonEmpty(task.Description, task.Command, "Background tasks")), Status: task.Status})
-		}
-		if pid > 0 {
-			out.Roots = []rt.Root{{PID: pid, TaskID: "_session"}}
-		}
-		if !known {
-			out.Notice = "Native background tasks are unconfirmed. Processes are verified against the current session's execution processes."
-		}
-		return out, nil
-	}}
-}
 
 func (c *Controller) noteRuntime(t model.Thread) {
 	if t.ServerID == "" || c.Remote != nil || c.Closed {

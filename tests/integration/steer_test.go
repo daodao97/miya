@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"miya/internal/appmodel"
-	"miya/internal/controller"
 	"miya/internal/model"
 )
 
@@ -71,7 +70,7 @@ func TestSteerFallsBackToTheQueue(t *testing.T) {
 		t.Fatalf("not queued: %+v", th)
 	}
 	// Codex cannot steer a thread without a running turn either.
-	if (controller.CodexBackend{C: c}).Steer(model.Thread{ID: 1, ServerID: "t1", Resumed: true}, model.SendRequest{Text: "x"}) {
+	if c.BackendFor(model.AgentCodex).Steer(model.Thread{ID: 1, ServerID: "t1", Resumed: true}, model.SendRequest{Text: "x"}) {
 		t.Fatal("Codex steered without a turn")
 	}
 }

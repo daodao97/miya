@@ -1,27 +1,9 @@
-package codex
+package interaction
 
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 )
-
-func ApprovalResult(a Approval, allow bool) any {
-	if a.Method == "item/permissions/requestApproval" {
-		var permissions any = map[string]any{}
-		if allow && len(a.Permissions) > 0 {
-			_ = json.Unmarshal(a.Permissions, &permissions)
-		}
-		return map[string]any{"permissions": permissions, "scope": "turn"}
-	}
-	decision := "decline"
-	if allow {
-		decision = "accept"
-	}
-	return map[string]string{"decision": decision}
-}
-
-func IsMiyaApproval(a Approval) bool { return strings.Contains(string(a.ID), "\"miya:") }
 
 func ValidateForm(raw json.RawMessage, content map[string]any) error {
 	var shape map[string]json.RawMessage
@@ -104,6 +86,3 @@ func ValidateForm(raw json.RawMessage, content map[string]any) error {
 	}
 	return nil
 }
-
-// Miya's own requests to the person, shown as approval cards in a
-// conversation: their ids start with miya: and Miya answers them itself.

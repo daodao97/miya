@@ -16,7 +16,7 @@ flowchart TD
     desktop --> widgets
 ```
 
-`internal/ui.Host` 描述桌面需要的操作，控制器通过结构化接口实现该契约。`Environment` 的工厂由入口注入，桌面包不导入控制器包。窗口可观察状态放在 `appmodel.WindowState` 中，界面通过 `Host.State()` 访问；Agent 后端、运行进程、会话镜像、命令缓存和引用持久化仍由控制器管理。Agent 设置及模型选择以绑定到当前控制器的操作暴露给界面。
+`internal/ui.Host` 描述桌面需要的操作，控制器通过结构化接口实现该契约。`Environment` 的工厂由入口注入，桌面包不导入控制器包。窗口可观察状态放在 `appmodel.WindowState` 中，界面通过 `Host.State()` 访问；Agent 后端、运行进程、会话镜像、命令缓存和引用持久化仍由控制器管理。Agent 设置及模型选择通过绑定工作区的统一 Adapter 暴露给界面，详见 [Agent Adapter 契约](agent-adapters.md)。
 
 `internal/conversation.View` 负责消息分组、列表、Markdown、工具详情、图片、引用和富文本输入。它只要求读取当前会话、版本和审批以及重新选择会话的少量 `Host` 方法。重试、交接、用户消息编辑、记忆通知、附件粘贴和任务入口通过回调接入。桌面专属的侧栏、工作区、文件面板和设置不在共享视图中。
 
@@ -35,11 +35,13 @@ go test ./tests/integration -run 'TestUIPackageBoundaries|TestViewsDoNotKnowAgen
 go test -tags miya_ios_input_test ./internal/mobile
 ```
 
+`TestViewsDoNotKnowAgents` 还检查四个视图包和公共 Adapter 包，禁止具体 Agent 分支及原生客户端依赖。
+
 `TestUIPackageBoundaries` 检查所有平台源文件的直接导入关系，阻止界面重新导入控制器、手机重新依赖桌面，以及控制器反向依赖视图。现有桌面和手机交互、布局、服务、会话引用、审批与并发测试继续运行。
 
 实际窗口验证使用 [独立验证流程](install-and-upgrade.md#独立验证不覆盖已安装应用)，不覆盖已安装应用或切换生产后台。桌面和 iOS 构建脚本沿用原入口；嵌入的图标、Agent 图片及托盘图片随各自所属包保存。
 
-## 2026-11-06 验证记录
+## 2026-11-06 包拆分验证记录（Adapter 重构前）
 
 | 检查 | 结果 |
 | --- | --- |
