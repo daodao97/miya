@@ -3,6 +3,7 @@ package main
 import (
 	"miya/internal/account"
 	"miya/internal/async"
+	"miya/internal/automation"
 	"miya/internal/claude"
 	"miya/internal/claude/transcript"
 	"miya/internal/composer"
@@ -331,4 +332,16 @@ var (
 	codexMCPArgs   = mcpconfig.CodexArgs
 	isMiyaToolCall = mcpconfig.IsMiyaToolCall
 	tomlString     = mcpconfig.TomlString
+)
+
+// Moved to internal/automation.
+const (
+	automationAgentLabel = automation.LaunchAgentLabel
+)
+
+var (
+	automationAgentPath   = automation.LaunchAgentPath
+	automationAgentPlist  = automation.LaunchAgentPlist
+	launchdTarget         = automation.LaunchdTarget
+	removeAutomationAgent = automation.RemoveLaunchAgent
 )
