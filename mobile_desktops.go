@@ -55,14 +55,6 @@ type desktopPersistence struct {
 	revision atomic.Uint64
 }
 
-func desktopID(raw string) (string, error) {
-	addr, err := remote.ParseLink(raw)
-	if err != nil {
-		return "", err
-	}
-	return cacheName(string(addr)), nil
-}
-
 func (d *mobileDesktops) remember(raw, name string) (mobileDesktop, error) {
 	id, err := desktopID(raw)
 	if err != nil {

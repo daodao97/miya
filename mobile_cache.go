@@ -3,8 +3,6 @@ package main
 import (
 	"compress/gzip"
 
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -34,12 +32,6 @@ type phoneSavedState struct {
 type mobileCacheWork struct {
 	mu      sync.Mutex
 	pending sync.WaitGroup
-}
-
-// cacheName names a file or directory without the value it stands for.
-func cacheName(s string) string {
-	h := sha256.Sum256([]byte(s))
-	return hex.EncodeToString(h[:12])
 }
 
 // openDiskCache uses the directory of the desktop at link, showing what it

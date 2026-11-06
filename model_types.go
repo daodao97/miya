@@ -18,6 +18,7 @@ import (
 	"miya/internal/runtime/tracker"
 	"miya/internal/svcproto"
 	"miya/internal/threadlist"
+	"miya/internal/workspaces"
 )
 
 // The conversation data lives in internal/model. These aliases keep
@@ -422,4 +423,25 @@ var (
 var (
 	readDesktopUploads = phone.ReadDesktopUploads
 	saveDesktopUploads = phone.SaveDesktopUploads
+)
+
+// Moved to internal/workspaces.
+type (
+	desktopWorkspace      = workspaces.Workspace
+	desktopWorkspaceStore = workspaces.Store
+)
+
+const (
+	localDesktopWorkspace = workspaces.Local
+)
+
+var (
+	cacheName                   = workspaces.CacheName
+	connectRemoteService        = workspaces.ConnectRemoteService
+	connectRemoteServiceContext = workspaces.ConnectRemoteServiceContext
+	desktopID                   = workspaces.IDFromLink
+	loadDesktopWorkspaces       = workspaces.Load
+	remoteServerLink            = workspaces.RemoteServerLink
+	remoteServerPath            = workspaces.RemoteServerPath
+	saveRemoteServer            = workspaces.SaveRemoteServer
 )
