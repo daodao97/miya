@@ -1177,33 +1177,6 @@ func (c *chatController) historyMessages(remote codex.Thread) []Message {
 	return out
 }
 
-// This conversion has no controller or reactive state and may run in a worker.
-func prepareHistoryMessages(remote codex.Thread) []Message {
-	var out []Message
-	for _, turn := range remote.Turns {
-		start, end := codexTurnTimes(turn)
-		for _, item := range turn.Items {
-			if m, ok := itemMessage(item); ok {
-				if m.Status == "" {
-					m.Status = turn.Status
-				}
-				m.ItemID = item.ID
-				if m.Role == "user" {
-					own, _ := model.SplitReferenceContext(m.Content)
-					m.Parts = MessageParts(own)
-				}
-				m.TurnID = turn.ID
-				m.SentAtMs, m.StartedAtMs, m.CompletedAtMs = start, start, end
-				out = append(out, m)
-			}
-		}
-		if turn.Error != nil {
-			out = append(out, Message{Role: "error", Kind: "error", Status: "failed", Content: turn.Error.Message, TurnID: turn.ID, ItemID: "turn-error", SentAtMs: start, StartedAtMs: start, CompletedAtMs: end})
-		}
-	}
-	return out
-}
-
 // send submits the window's draft in its open conversation.
 func (c *chatController) send() { c.sendDraft(false) }
 

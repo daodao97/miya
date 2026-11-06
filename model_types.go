@@ -569,3 +569,8 @@ const (
 var (
 	migrateDesktopOptions = phonecache.MigrateOptions
 )
+
+// Moved to internal/msgfmt.
+var (
+	prepareHistoryMessages = msgfmt.HistoryMessages
+)
