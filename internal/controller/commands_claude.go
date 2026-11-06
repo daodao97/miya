@@ -1,11 +1,13 @@
 package controller
 
 import (
-	appmodel "miya/internal/appmodel"
-	claude "miya/internal/claude"
-	uiruntime "miya/internal/uiruntime"
-	strings "strings"
-	time "time"
+	"strings"
+	"time"
+
+	"miya/internal/claude"
+	"miya/internal/model"
+	"miya/internal/svcproto"
+	"miya/internal/uiruntime"
 )
 
 // Claude Code reports its slash commands, the user's and the project's own
@@ -19,7 +21,7 @@ const (
 type ClaudeCommandList struct {
 	At     time.Time
 	Keep   time.Duration
-	Choice []appmodel.ComposerChoice
+	Choice []model.ComposerChoice
 }
 
 // appUICommands are the composer's commands Miya runs itself in a Claude
@@ -27,7 +29,7 @@ type ClaudeCommandList struct {
 
 // claudeCommandsFor returns Claude Code's commands in cwd and whether they
 // are known, starting to read them when they are not.
-func (c *Controller) ClaudeCommandsFor(cwd string) ([]appmodel.ComposerChoice, bool) {
+func (c *Controller) ClaudeCommandsFor(cwd string) ([]model.ComposerChoice, bool) {
 	if l, ok := c.ClaudeCmdCache[cwd]; ok {
 		if time.Since(l.At) < l.Keep {
 			return l.Choice, true
@@ -53,7 +55,7 @@ func (c *Controller) loadClaudeCommands(cwd string) {
 	if c.RemoteHost() {
 		cl := c.Remote
 		go func() {
-			var list appmodel.HostCommands
+			var list svcproto.HostCommands
 			err := cl.Call("commands", cwd, &list)
 			c.Dispatch(func() {
 				delete(c.claudeCmdLoading, cwd)
@@ -75,7 +77,7 @@ func (c *Controller) loadClaudeCommands(cwd string) {
 	binary, args, env, ctx := c.ClaudeBinary, c.ClaudeArgs, c.ClaudeEnv, c.Ctx
 	go func() {
 		list, err := claude.ListCommands(ctx, binary, args, env, cwd)
-		choices := make([]appmodel.ComposerChoice, 0, len(list))
+		choices := make([]model.ComposerChoice, 0, len(list))
 		for _, cmd := range list {
 			if cmd.Name == "" {
 				continue
@@ -87,7 +89,7 @@ func (c *Controller) loadClaudeCommands(cwd string) {
 			if cmd.ArgumentHint != "" {
 				detail = cmd.ArgumentHint + "  " + detail
 			}
-			choices = append(choices, appmodel.ComposerChoice{Name: cmd.Name, Detail: detail, ArgumentHint: cmd.ArgumentHint})
+			choices = append(choices, model.ComposerChoice{Name: cmd.Name, Detail: detail, ArgumentHint: cmd.ArgumentHint})
 		}
 		c.Dispatch(func() {
 			delete(c.claudeCmdLoading, cwd)
@@ -103,7 +105,7 @@ func (c *Controller) loadClaudeCommands(cwd string) {
 	}()
 }
 
-func (c *Controller) setClaudeCommands(cwd string, choices []appmodel.ComposerChoice, keep time.Duration) {
+func (c *Controller) setClaudeCommands(cwd string, choices []model.ComposerChoice, keep time.Duration) {
 	if c.ClaudeCmdCache == nil {
 		c.ClaudeCmdCache = map[string]ClaudeCommandList{}
 	}

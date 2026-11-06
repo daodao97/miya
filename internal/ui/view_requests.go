@@ -1,14 +1,16 @@
 package desktopui
 
 import (
-	json "encoding/json"
-	appmodel "miya/internal/appmodel"
-	codex "miya/internal/codex"
-	textutil "miya/internal/textutil"
-	widgets "miya/internal/widgets"
-	strings "strings"
+	"encoding/json"
+	"strings"
 
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui"
+
+	"miya/internal/codex"
+	"miya/internal/mcpconfig"
+	"miya/internal/msgfmt"
+	"miya/internal/textutil"
+	"miya/internal/widgets"
 )
 
 func (app *App) approvalView(c *ui.Context, a codex.Approval) {
@@ -31,10 +33,10 @@ func (app *App) approvalView(c *ui.Context, a codex.Approval) {
 				allowLabel, declineLabel = tr("Done, continue"), tr("Cancel takeover")
 			}
 			if ui.PrimaryButton(c.Key("allow"), allowLabel).Clicked() {
-				app.C.Respond(a, appmodel.ApprovalResult(a, true))
+				app.C.Respond(a, codex.ApprovalResult(a, true))
 			}
 			if ui.Button(c.Key("decline"), declineLabel).Clicked() {
-				app.C.Respond(a, appmodel.ApprovalResult(a, false))
+				app.C.Respond(a, codex.ApprovalResult(a, false))
 			}
 		})
 	})
@@ -114,7 +116,7 @@ func (app *App) questionField(c *ui.Context, q codex.Question, answers map[strin
 
 func (app *App) elicitationView(c *ui.Context, a codex.Approval) {
 	id := string(a.ID)
-	rememberable := appmodel.RememberableMCPAccess(a)
+	rememberable := mcpconfig.RememberableMCPAccess(a)
 	value, ok := app.forms[id]
 	if !ok {
 		value = "{}"
@@ -133,7 +135,7 @@ func (app *App) elicitationView(c *ui.Context, a codex.Approval) {
 			ui.Link(c, a.URL, a.URL).FontSize(12)
 		} else if !rememberable {
 			ui.Scroll(c).MaxHeight(100).Children(func() {
-				ui.Text(c, appmodel.JsonText(a.RequestedSchema)).Font(widgets.MonoFont).FontSize(11).Selectable()
+				ui.Text(c, msgfmt.JsonText(a.RequestedSchema)).Font(widgets.MonoFont).FontSize(11).Selectable()
 			})
 			if ui.TextArea(c.Key("form"), &value).Lines(3, 8).Font(widgets.MonoFont).FontSize(12).Label(tr("MCP form JSON")).Changed() {
 				app.forms[id] = value
@@ -169,7 +171,7 @@ func (app *App) elicitationView(c *ui.Context, a codex.Approval) {
 					app.formErrors[id] = tr("Enter a JSON object matching the requested fields.")
 					return
 				}
-				if err := appmodel.ValidateForm(a.RequestedSchema, content); err != nil {
+				if err := codex.ValidateForm(a.RequestedSchema, content); err != nil {
 					app.formErrors[id] = err.Error()
 					return
 				}

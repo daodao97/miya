@@ -1,28 +1,33 @@
 package mobile
 
 import (
-	json "encoding/json"
-	errors "errors"
-	fmt "fmt"
-	appmodel "miya/internal/appmodel"
-	conversation "miya/internal/conversation"
-	model "miya/internal/model"
-	remote "miya/internal/remote"
-	uiruntime "miya/internal/uiruntime"
-	os "os"
-	filepath "path/filepath"
-	strings "strings"
-	sync "sync"
-	atomic "sync/atomic"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"sync/atomic"
 
-	mygo "github.com/egoist/mygo"
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/ui"
+
+	"miya/internal/conversation"
+	"miya/internal/fsutil"
+	"miya/internal/model"
+	"miya/internal/phone"
+	"miya/internal/phoneapi"
+	"miya/internal/phonecache"
+	"miya/internal/remote"
+	"miya/internal/uiruntime"
+	"miya/internal/workspaces"
 )
 
 type MobileDesktops struct {
-	Version int                      `json:"version"`
-	Active  string                   `json:"active"`
-	Items   []appmodel.MobileDesktop `json:"items"`
+	Version int                  `json:"version"`
+	Active  string               `json:"active"`
+	Items   []phonecache.Desktop `json:"items"`
 }
 
 type desktopPersistence struct {
@@ -30,10 +35,10 @@ type desktopPersistence struct {
 	revision atomic.Uint64
 }
 
-func (d *MobileDesktops) Remember(raw, name string) (appmodel.MobileDesktop, error) {
-	id, err := appmodel.DesktopID(raw)
+func (d *MobileDesktops) Remember(raw, name string) (phonecache.Desktop, error) {
+	id, err := workspaces.IDFromLink(raw)
 	if err != nil {
-		return appmodel.MobileDesktop{}, err
+		return phonecache.Desktop{}, err
 	}
 	for i := range d.Items {
 		if d.Items[i].ID == id {
@@ -43,7 +48,7 @@ func (d *MobileDesktops) Remember(raw, name string) (appmodel.MobileDesktop, err
 			return d.Items[i], nil
 		}
 	}
-	item := appmodel.MobileDesktop{ID: id, Link: strings.TrimSpace(raw), Name: strings.TrimSpace(name)}
+	item := phonecache.Desktop{ID: id, Link: strings.TrimSpace(raw), Name: strings.TrimSpace(name)}
 	if item.Name == "" {
 		item.Name = fmt.Sprintf(tr("Desktop %d"), len(d.Items)+1)
 	}
@@ -52,24 +57,24 @@ func (d *MobileDesktops) Remember(raw, name string) (appmodel.MobileDesktop, err
 	return item, nil
 }
 
-func (d MobileDesktops) find(id string) (appmodel.MobileDesktop, bool) {
+func (d MobileDesktops) find(id string) (phonecache.Desktop, bool) {
 	for _, item := range d.Items {
 		if item.ID == id {
 			return item, true
 		}
 	}
-	return appmodel.MobileDesktop{}, false
+	return phonecache.Desktop{}, false
 }
 
 // A missing registry migrates the old singleton without changing its link,
 // so the desktop's existing cache remains available. An empty saved registry
 // is intentional and must not resurrect a removed legacy pairing.
-func ReadMobileDesktops(store appmodel.MobileSecretStore) (MobileDesktops, bool, error) {
+func ReadMobileDesktops(store phonecache.SecretStore) (MobileDesktops, bool, error) {
 	d := MobileDesktops{Version: 1}
 	if store == nil {
 		return d, false, nil
 	}
-	data, err := store.Get(appmodel.MobileDesktopsKey)
+	data, err := store.Get(phonecache.DesktopsKey)
 	if err == nil {
 		var saved MobileDesktops
 		if json.Unmarshal(data, &saved) != nil || saved.Version != 1 {
@@ -124,7 +129,7 @@ func (m *App) SaveDesktops() {
 		if revision != m.DesktopWrites.revision.Load() {
 			return
 		}
-		err := store.Set(appmodel.MobileDesktopsKey, data)
+		err := store.Set(phonecache.DesktopsKey, data)
 		if err == nil {
 			// Remove the singleton only after its replacement is durable.
 			err = store.Delete("desktop-link")
@@ -165,7 +170,7 @@ func (m *App) restoreDesktops(saved MobileDesktops) {
 }
 
 func (m *App) CurrentDesktopID() string {
-	id, _ := appmodel.DesktopID(m.Link)
+	id, _ := workspaces.IDFromLink(m.Link)
 	return id
 }
 
@@ -199,7 +204,7 @@ func (m *App) RemoveDesktop(id string) {
 	}
 	if !current && found && m.DataDir != "" {
 		m.cacheWork.pending.Wait()
-		_ = os.RemoveAll(filepath.Join(m.DataDir, "threads", appmodel.CacheName(item.Link)))
+		_ = os.RemoveAll(filepath.Join(m.DataDir, "threads", workspaces.CacheName(item.Link)))
 	}
 	if session, ok := m.desktopSessions[id]; ok {
 		for _, path := range session.Images {
@@ -237,11 +242,11 @@ func (m *App) ResetDesktopState() {
 	m.clearFileReferences()
 	m.clearWebServices()
 	m.WebProject, m.WebPort, m.WebManual = "", "", false
-	m.WebRef = appmodel.ThreadRef{}
+	m.WebRef = model.ThreadRef{}
 	m.WebDetails = false
 	m.ConversationMenu = false
 	m.Home()
-	m.State, m.Host, m.Selected = appmodel.PhoneState{}, "", ""
+	m.State, m.Host, m.Selected = phoneapi.State{}, "", ""
 	m.Autos = mobileAutomations{}
 	m.Memories = MobileMemory{}
 	m.Options, m.optionsAgent, m.NewAgent = nil, "", ""
@@ -271,13 +276,13 @@ func (m *App) saveDesktopSession() {
 		return
 	}
 	if m.desktopSessions == nil {
-		m.desktopSessions = map[string]appmodel.MobileDesktopSession{}
+		m.desktopSessions = map[string]phonecache.Session{}
 	}
 	thread := m.Viewer.Current()
 	if thread.ServerID != "" && len(thread.Messages) > 0 {
 		m.Remember(thread.ServerID, thread.Messages)
 	}
-	m.desktopSessions[id] = appmodel.MobileDesktopSession{Thread: appmodel.ListThread(thread), Selected: m.Selected, Agent: m.NewAgent,
+	m.desktopSessions[id] = phonecache.Session{Thread: phone.ListThread(thread), Selected: m.Selected, Agent: m.NewAgent,
 		Draft: m.Draft, Images: append([]string(nil), m.Images...), ExpandedProject: m.ExpandedProject,
 		ProjectsExpanded: m.projectsExpanded, ThreadListExpanded: m.ThreadListExpanded}
 	m.Images = nil
@@ -319,8 +324,8 @@ func (m *App) desktopForNotification(target remote.Request) string {
 	for _, desktop := range m.Desktops.Items {
 		state := m.State
 		if desktop.Link != m.Link {
-			var saved appmodel.PhoneSavedState
-			if m.DataDir == "" || appmodel.ReadGzipJSON(filepath.Join(m.DataDir, "threads", appmodel.CacheName(desktop.Link), appmodel.StateFile), &saved) != nil {
+			var saved phonecache.SavedState
+			if m.DataDir == "" || fsutil.ReadGzipJSON(filepath.Join(m.DataDir, "threads", workspaces.CacheName(desktop.Link), phonecache.StateFile), &saved) != nil {
 				continue
 			}
 			state = saved.State

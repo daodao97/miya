@@ -1,10 +1,10 @@
 package mobile
 
 import (
-	textutil "miya/internal/textutil"
-	widgets "miya/internal/widgets"
+	"github.com/egoist/mygo/ui"
 
-	ui "github.com/egoist/mygo/ui"
+	"miya/internal/textutil"
+	"miya/internal/widgets"
 )
 
 func (m *App) openDesktopManager() {

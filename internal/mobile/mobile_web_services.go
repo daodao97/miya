@@ -1,31 +1,33 @@
 package mobile
 
 import (
-	context "context"
-	json "encoding/json"
-	errors "errors"
-	fmt "fmt"
-	io "io"
-	appmodel "miya/internal/appmodel"
-	model "miya/internal/model"
-	remote "miya/internal/remote"
-	rt "miya/internal/runtime"
-	textutil "miya/internal/textutil"
-	webservice "miya/internal/webservice"
-	widgets "miya/internal/widgets"
-	net "net"
-	http "net/http"
-	url "net/url"
-	strconv "strconv"
-	time "time"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"net/url"
+	"strconv"
+	"time"
 
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui"
+
+	"miya/internal/model"
+	"miya/internal/phone"
+	"miya/internal/remote"
+	rt "miya/internal/runtime"
+	"miya/internal/runtime/tracker"
+	"miya/internal/textutil"
+	"miya/internal/webservice"
+	"miya/internal/widgets"
 )
 
 type mobileWebServices struct {
-	ref              appmodel.ThreadRef
+	ref              model.ThreadRef
 	runtimeSupported bool
-	Runtime          *appmodel.ConversationRuntime
+	Runtime          *tracker.ConversationRuntime
 	Project          string
 	conn             *remote.Conn
 	supported        bool
@@ -46,11 +48,11 @@ func (m *App) clearWebServices() {
 func (m *App) OpenWebServices(project string) {
 	m.clearWebServices()
 	m.WebProject, m.WebManual, m.WebDetails = project, false, false
-	m.WebRef = appmodel.ThreadRef{}
+	m.WebRef = model.ThreadRef{}
 	if m.Open != 0 {
 		t, p := m.find(m.Open)
 		if p.Path == project && t.ServerID != "" {
-			m.WebRef = appmodel.ThreadRef{Source: m.State.ReferenceSource, Backend: model.ThreadAgent(t), SessionID: t.ServerID}
+			m.WebRef = model.ThreadRef{Source: m.State.ReferenceSource, Backend: model.ThreadAgent(t), SessionID: t.ServerID}
 		}
 	}
 	m.Router().Push("/web")
@@ -84,10 +86,10 @@ func (m *App) requestWebServices(state *mobileWebServices) {
 	go func() {
 		defer cancel()
 		var services []webservice.Service
-		var result *appmodel.ConversationRuntime
+		var result *tracker.ConversationRuntime
 		var err error
 		if state.ref.SessionID != "" {
-			var value appmodel.ConversationRuntime
+			var value tracker.ConversationRuntime
 			value, err = FetchPhoneRuntime(ctx, state.conn.DialFiles, state.Project, state.ref)
 			services = value.Services
 			result = &value
@@ -118,7 +120,7 @@ func FetchPhoneWebServices(ctx context.Context, dial func(context.Context) (net.
 	transport := &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) { return dial(ctx) }}
 	defer transport.CloseIdleConnections()
 	client := &http.Client{Transport: transport, Timeout: 12 * time.Second}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://desktop/"+appmodel.ProjectFileID(project)+"/"+webservice.ProjectFile, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://desktop/"+phone.ProjectFileID(project)+"/"+webservice.ProjectFile, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -201,32 +203,32 @@ func (m *App) webServicesSupported() bool {
 	return m.State.WebServices
 }
 
-func FetchPhoneRuntime(ctx context.Context, dial func(context.Context) (net.Conn, error), project string, ref appmodel.ThreadRef) (appmodel.ConversationRuntime, error) {
+func FetchPhoneRuntime(ctx context.Context, dial func(context.Context) (net.Conn, error), project string, ref model.ThreadRef) (tracker.ConversationRuntime, error) {
 	transport := &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) { return dial(ctx) }}
 	defer transport.CloseIdleConnections()
 	client := &http.Client{Transport: transport, Timeout: 12 * time.Second}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://desktop/"+appmodel.ProjectFileID(project)+"/.miya-runtime?ref="+url.QueryEscape(ref.URL()), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://desktop/"+phone.ProjectFileID(project)+"/.miya-runtime?ref="+url.QueryEscape(ref.URL()), nil)
 	if err != nil {
-		return appmodel.ConversationRuntime{}, err
+		return tracker.ConversationRuntime{}, err
 	}
 	response, err := client.Do(req)
 	if err != nil {
-		return appmodel.ConversationRuntime{}, err
+		return tracker.ConversationRuntime{}, err
 	}
 	defer response.Body.Close()
 	if response.StatusCode != 200 {
-		return appmodel.ConversationRuntime{}, errors.New(tr("Conversation runtime information unavailable"))
+		return tracker.ConversationRuntime{}, errors.New(tr("Conversation runtime information unavailable"))
 	}
-	var result appmodel.ConversationRuntime
+	var result tracker.ConversationRuntime
 	if err := json.NewDecoder(io.LimitReader(response.Body, 2<<20)).Decode(&result); err != nil {
 		return result, err
 	}
-	if result.View.Key != appmodel.RuntimeKey(ref) {
-		return appmodel.ConversationRuntime{}, errors.New(tr("Conversation runtime identity mismatch"))
+	if result.View.Key != tracker.KeyOf(ref) {
+		return tracker.ConversationRuntime{}, errors.New(tr("Conversation runtime identity mismatch"))
 	}
 	for _, service := range result.Services {
 		if service.Host == "" || !webservice.ValidHost(service.Host, service.RuntimeToken) || service.Port < 1 || service.Port > 65535 || service.RuntimeToken == "" {
-			return appmodel.ConversationRuntime{}, errors.New(tr("Invalid runtime service endpoint"))
+			return tracker.ConversationRuntime{}, errors.New(tr("Invalid runtime service endpoint"))
 		}
 	}
 	return result, nil

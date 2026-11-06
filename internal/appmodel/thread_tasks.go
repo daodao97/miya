@@ -1,12 +1,14 @@
 package appmodel
 
 import (
-	fmt "fmt"
-	strings "strings"
-	time "time"
+	"fmt"
+	"strings"
+	"time"
+
+	"miya/internal/model"
 )
 
-func TaskStatusLabel(t Thread, task ThreadTask, waitingApproval bool) string {
+func TaskStatusLabel(t model.Thread, task model.ThreadTask, waitingApproval bool) string {
 	if task.Status == "active" || task.Status == "waiting" || task.Status == "running" {
 		if t.TaskStopping && task.Kind == "loop" {
 			return tr("Stopping")
@@ -40,7 +42,7 @@ func TaskStatusLabel(t Thread, task ThreadTask, waitingApproval bool) string {
 	return task.Status
 }
 
-func TaskDetail(task ThreadTask) string {
+func TaskDetail(task model.ThreadTask) string {
 	var parts []string
 	if task.Schedule != "" {
 		parts = append(parts, task.Schedule)

@@ -1,9 +1,9 @@
 package mobile
 
 import (
-	appmodel "miya/internal/appmodel"
-	model "miya/internal/model"
-	remote "miya/internal/remote"
+	"miya/internal/appmodel"
+	"miya/internal/model"
+	"miya/internal/remote"
 )
 
 func (m *App) handoffToNewThread() {
@@ -12,7 +12,7 @@ func (m *App) handoffToNewThread() {
 		return
 	}
 	source := m.Viewer.Current()
-	ref := appmodel.ThreadRef{Source: m.State.ReferenceSource, Backend: model.ThreadAgent(source), SessionID: source.ServerID}
+	ref := model.ThreadRef{Source: m.State.ReferenceSource, Backend: model.ThreadAgent(source), SessionID: source.ServerID}
 	if source.ID == 0 || !ref.Valid() {
 		m.SendErr = tr("Available once the session is created")
 		return

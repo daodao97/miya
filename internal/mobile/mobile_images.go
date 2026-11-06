@@ -1,27 +1,29 @@
 package mobile
 
 import (
-	errors "errors"
-	appmodel "miya/internal/appmodel"
-	fsutil "miya/internal/fsutil"
-	remote "miya/internal/remote"
-	thumbnail "miya/internal/thumbnail"
-	uiruntime "miya/internal/uiruntime"
-	widgets "miya/internal/widgets"
-	os "os"
-	filepath "path/filepath"
-	strings "strings"
-	time "time"
+	"errors"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
 
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui"
+
+	"miya/internal/fsutil"
+	"miya/internal/phone"
+	"miya/internal/remote"
+	"miya/internal/thumbnail"
+	"miya/internal/uiruntime"
+	"miya/internal/widgets"
+	"miya/internal/workspaces"
 )
 
 func (m *App) PreviewPath(source string) string {
 	dir := m.CacheDir
 	if dir == "" {
-		dir = filepath.Join(os.TempDir(), "miya-phone-previews", appmodel.CacheName(m.Link))
+		dir = filepath.Join(os.TempDir(), "miya-phone-previews", workspaces.CacheName(m.Link))
 	}
-	return filepath.Join(dir, "images", appmodel.CacheName(source)+".jpg")
+	return filepath.Join(dir, "images", workspaces.CacheName(source)+".jpg")
 }
 
 // A full preview queue or an expired download must not leave an empty cache
@@ -111,7 +113,7 @@ func StorePhonePreview(path string, data []byte) error {
 	widgets.ImageMu.Lock()
 	widgets.ImageCache[path] = img
 	widgets.ImageMu.Unlock()
-	appmodel.PruneOldUploads(filepath.Dir(path))
+	phone.PruneOldUploads(filepath.Dir(path))
 	return nil
 }
 

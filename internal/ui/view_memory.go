@@ -1,17 +1,18 @@
 package desktopui
 
 import (
-	json "encoding/json"
-	fmt "fmt"
-	appmodel "miya/internal/appmodel"
-	memory "miya/internal/memory"
-	manager "miya/internal/memory/manager"
-	model "miya/internal/model"
-	widgets "miya/internal/widgets"
-	strings "strings"
-	time "time"
+	"encoding/json"
+	"fmt"
+	"strings"
+	"time"
 
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui"
+
+	"miya/internal/async"
+	"miya/internal/memory"
+	"miya/internal/memory/manager"
+	"miya/internal/model"
+	"miya/internal/widgets"
 )
 
 type MemoryUI struct {
@@ -55,7 +56,7 @@ func (app *App) memoryCall(op string, r manager.Request, done func(json.RawMessa
 		return
 	}
 	v, err := cc.Memories().Op(op, r)
-	if d, ok := v.(appmodel.Deferred); ok && err == nil {
+	if d, ok := v.(async.Reply); ok && err == nil {
 		go func() { v, err := d(); cc.Dispatch(func() { finish(v, err) }) }()
 		return
 	}
@@ -518,7 +519,7 @@ func (app *App) memoryPromotionView(c *ui.Context, e memory.Entry) {
 	})
 }
 
-func (app *App) memoryNoticeView(c *ui.Context, n *appmodel.MemoryNotice) {
+func (app *App) memoryNoticeView(c *ui.Context, n *model.MemoryNotice) {
 	if n == nil || !n.Explicit {
 		return
 	}

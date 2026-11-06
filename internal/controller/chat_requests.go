@@ -1,11 +1,14 @@
 package controller
 
 import (
-	json "encoding/json"
-	fmt "fmt"
-	appmodel "miya/internal/appmodel"
-	codex "miya/internal/codex"
-	time "time"
+	"encoding/json"
+	"fmt"
+	"time"
+
+	"miya/internal/codex"
+	"miya/internal/mcpconfig"
+	"miya/internal/model"
+	"miya/internal/svcproto"
 )
 
 func (c *Controller) removeRequest(id json.RawMessage) {
@@ -37,7 +40,7 @@ func (c *Controller) ServerRequest(f codex.Frame) {
 		if c.Client != nil && c.RememberedMCPAccess(a) {
 			client := c.Client
 			go func() {
-				if err := client.Reply(a.ID, appmodel.McpAccessAccepted()); err != nil {
+				if err := client.Reply(a.ID, mcpconfig.AccessAccepted()); err != nil {
 					c.Dispatch(func() { c.SetStatus("Unable to respond to conversation approval: " + err.Error()) })
 				}
 			}()
@@ -54,7 +57,7 @@ func (c *Controller) ServerRequest(f codex.Frame) {
 func (c *Controller) Respond(a codex.Approval, result any) {
 	if c.Remote != nil {
 		c.removeRequest(a.ID)
-		c.forward("respond", appmodel.SvcRespond{ID: a.ID, Result: result})
+		c.forward("respond", svcproto.Respond{ID: a.ID, Result: result})
 		return
 	}
 	// A stale card may have been resolved by interruption while the UI was open.
@@ -67,7 +70,7 @@ func (c *Controller) Respond(a codex.Approval, result any) {
 	if !found {
 		return
 	}
-	if appmodel.IsMiyaApproval(a) {
+	if codex.IsMiyaApproval(a) {
 		c.respondMiya(a, result)
 		return
 	}
@@ -76,7 +79,7 @@ func (c *Controller) Respond(a codex.Approval, result any) {
 
 // askUser shows a card in caller's conversation and returns its id and the
 // channel its answer arrives on.
-func (c *Controller) AskUser(caller appmodel.Thread, reason, detail string) (json.RawMessage, chan bool) {
+func (c *Controller) AskUser(caller model.Thread, reason, detail string) (json.RawMessage, chan bool) {
 	c.miyaSerial++
 	id, _ := json.Marshal(fmt.Sprintf("miya:%d:%d", caller.ID, c.miyaSerial))
 	ch := make(chan bool, 1)
@@ -109,7 +112,7 @@ func (c *Controller) waitUser(id json.RawMessage, ch chan bool) bool {
 	select {
 	case ok := <-ch:
 		return ok
-	case <-time.After(appmodel.MiyaRequestTimeout):
+	case <-time.After(svcproto.CardTimeout):
 		c.Dispatch(func() {
 			delete(c.miyaPending, string(id))
 			c.removeRequest(id)
@@ -120,19 +123,19 @@ func (c *Controller) waitUser(id json.RawMessage, ch chan bool) bool {
 
 // approvalThread is the conversation an approval waits in, Codex's by its
 // thread id and Claude Code's by the conversation in its request id.
-func (c *Controller) approvalThread(a codex.Approval) (appmodel.Thread, bool) {
+func (c *Controller) approvalThread(a codex.Approval) (model.Thread, bool) {
 	if claudeApproval(a) {
 		var s string
 		_ = json.Unmarshal(a.ID, &s)
 		var id int
 		if _, err := fmt.Sscanf(s, "claude:%d:", &id); err != nil {
-			return appmodel.Thread{}, false
+			return model.Thread{}, false
 		}
 		t := c.ThreadWithID(id)
 		return t, t.ID != 0
 	}
 	if a.ThreadID == "" {
-		return appmodel.Thread{}, false
+		return model.Thread{}, false
 	}
 	for _, t := range c.Threads() {
 		if t.ServerID == a.ThreadID {
@@ -149,12 +152,12 @@ func (c *Controller) approvalThread(a codex.Approval) (appmodel.Thread, bool) {
 			}
 		}
 	}
-	return appmodel.Thread{}, false
+	return model.Thread{}, false
 }
 
 // threadAwaitsUser reports whether a conversation waits for an approval or
 // an answer.
-func (c *Controller) ThreadAwaitsUser(t appmodel.Thread) bool {
+func (c *Controller) ThreadAwaitsUser(t model.Thread) bool {
 	if c.Approvals == nil {
 		return false
 	}

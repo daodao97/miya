@@ -67,9 +67,9 @@ Agent 发起的授权窗口接管不提供解锁、保存或使用登录密码�
 go test ./...
 MIYA_DESKTOP_APPS_PROBE=1 go test ./internal/desktop -run TestApplicationsNative -count=1 -v
 MIYA_DESKTOP_DISPLAYS_PROBE=1 go test ./internal/desktop -run TestDisplaysNative -count=1 -v
-go test -race . ./internal/remote ./internal/desktop -run 'TestDesktop|TestInputValidation|TestPhoneSubscription|TestBinary|TestPhoneWebProxy|TestServiceRestartWhenIdle'
+go test -race ./tests/integration ./internal/remote ./internal/desktop -run 'TestDesktop|TestInputValidation|TestPhoneSubscription|TestBinary|TestPhoneWebProxy|TestServiceRestartWhenIdle'
 mkdir -p /tmp/miya-desktop-snapshots
-MIYA_SNAPSHOT=/tmp/miya-desktop-snapshots go test . -run 'TestDesktopMobileTakeoverEntry|TestMobileConversationActionsSheet'
+MIYA_SNAPSHOT=/tmp/miya-desktop-snapshots go test ./tests/integration -run 'TestDesktopMobileTakeoverEntry|TestMobileConversationActionsSheet'
 ./scripts/build-macos.sh -platform darwin/arm64
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer ./scripts/build-ios.sh -ios-simulator -o /tmp/miya-desktop-ios-build
 ```

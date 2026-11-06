@@ -1,17 +1,19 @@
 package mobile
 
 import (
-	json "encoding/json"
-	errors "errors"
-	appmodel "miya/internal/appmodel"
-	claude "miya/internal/claude"
-	model "miya/internal/model"
-	remote "miya/internal/remote"
-	uiruntime "miya/internal/uiruntime"
-	widgets "miya/internal/widgets"
-	time "time"
+	"encoding/json"
+	"errors"
+	"time"
 
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui"
+
+	"miya/internal/appmodel"
+	"miya/internal/claude"
+	"miya/internal/model"
+	"miya/internal/phoneapi"
+	"miya/internal/remote"
+	"miya/internal/uiruntime"
+	"miya/internal/widgets"
 )
 
 type MobileCollaborationCall struct {
@@ -93,10 +95,10 @@ func (m *App) CollaborationPane() (*widgets.CollaborationPanel, widgets.Collabor
 		return nil, widgets.CollaborationPanelView{}, false
 	}
 	t := m.Viewer.Current()
-	from := appmodel.ThreadRef{Source: m.State.ReferenceSource, Backend: model.ThreadAgent(t), SessionID: t.ServerID}.URL()
+	from := model.ThreadRef{Source: m.State.ReferenceSource, Backend: model.ThreadAgent(t), SessionID: t.ServerID}.URL()
 	p := m.Pal
 	// Running and completed turns share the same status row and task toggle.
-	v := widgets.CollaborationPanelView{Palette: widgets.TaskPalette{p.surface, p.line, p.ink, p.muted}, Capability: capability, From: from, ReadOnly: t.ReadOnly, Connected: m.Connected, Call: m.collaborationCall, OpenThread: m.openCollaborationThread, Trailing: true, ToggleElsewhere: m.View.TurnStatusVisible(t)}
+	v := widgets.CollaborationPanelView{Palette: widgets.TaskPalette{Surface: p.surface, Border: p.line, Ink: p.ink, Muted: p.muted}, Capability: capability, From: from, ReadOnly: t.ReadOnly, Connected: m.Connected, Call: m.collaborationCall, OpenThread: m.openCollaborationThread, Trailing: true, ToggleElsewhere: m.View.TurnStatusVisible(t)}
 	return m.Collaborations.Pane(from), v, true
 }
 
@@ -129,9 +131,9 @@ func (m *App) openCollaborationThread(raw string) {
 
 // Resolve the complete backend identity across projects. Numeric sidebar IDs
 // may be reused after a reconnect and must not choose the destination.
-func (m *App) referencedThread(ref appmodel.ThreadRef) (appmodel.Thread, appmodel.PhoneProject, bool) {
+func (m *App) referencedThread(ref model.ThreadRef) (model.Thread, phoneapi.Project, bool) {
 	if !ref.Valid() || ref.Source != m.State.ReferenceSource {
-		return appmodel.Thread{}, appmodel.PhoneProject{}, false
+		return model.Thread{}, phoneapi.Project{}, false
 	}
 	for _, project := range m.State.Projects {
 		for _, thread := range project.Threads {
@@ -140,5 +142,5 @@ func (m *App) referencedThread(ref appmodel.ThreadRef) (appmodel.Thread, appmode
 			}
 		}
 	}
-	return appmodel.Thread{}, appmodel.PhoneProject{}, false
+	return model.Thread{}, phoneapi.Project{}, false
 }

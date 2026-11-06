@@ -1,19 +1,26 @@
 package controller
 
 import (
-	json "encoding/json"
-	errors "errors"
-	fmt "fmt"
-	appmodel "miya/internal/appmodel"
-	model "miya/internal/model"
-	subagent "miya/internal/subagent"
-	textutil "miya/internal/textutil"
-	reflect "reflect"
-	strings "strings"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"reflect"
+	"strings"
+
+	"miya/internal/appmodel"
+	"miya/internal/async"
+	"miya/internal/claude/transcript"
+	"miya/internal/mcpconfig"
+	"miya/internal/mcpproto"
+	"miya/internal/model"
+	"miya/internal/msgfmt"
+	"miya/internal/runtime/tracker"
+	"miya/internal/subagent"
+	"miya/internal/textutil"
 )
 
 // mcpHandle answers a miya tool call the service received.
-func (c *Controller) McpHandle(op string, r appmodel.McpRequest) (any, error) {
+func (c *Controller) McpHandle(op string, r mcpproto.Request) (any, error) {
 	if op == "mcpCollaboration" {
 		return c.collaborationMCP(r)
 	}
@@ -55,11 +62,11 @@ func (c *Controller) McpHandle(op string, r appmodel.McpRequest) (any, error) {
 				t, messages, err := c.ResolveReference(ref)
 				if err != nil {
 					if c.referenceLoading[ref] {
-						return appmodel.McpReadResult{}, nil
+						return mcpproto.ReadResult{}, nil
 					}
 					return nil, err
 				}
-				return appmodel.McpReadResult{Loaded: true, Packet: threadPacket(t, messages)}, nil
+				return mcpproto.ReadResult{Loaded: true, Packet: threadPacket(t, messages)}, nil
 			}
 			return nil, errors.New("The conversation no longer exists or is unavailable")
 		}
@@ -89,8 +96,8 @@ func (c *Controller) McpHandle(op string, r appmodel.McpRequest) (any, error) {
 }
 
 // allThreads are the conversations of every project, the open one first.
-func (c *Controller) AllThreads() []appmodel.Thread {
-	out := append([]appmodel.Thread(nil), c.Threads()...)
+func (c *Controller) AllThreads() []model.Thread {
+	out := append([]model.Thread(nil), c.Threads()...)
 	for path, threads := range c.ProjectCache {
 		if path != c.Cwd {
 			out = append(out, threads...)
@@ -100,7 +107,7 @@ func (c *Controller) AllThreads() []appmodel.Thread {
 }
 
 // projectThreads are the conversations of one project.
-func (c *Controller) projectThreads(project string) []appmodel.Thread {
+func (c *Controller) projectThreads(project string) []model.Thread {
 	if project == "" || project == c.Cwd {
 		return c.Threads()
 	}
@@ -109,15 +116,15 @@ func (c *Controller) projectThreads(project string) []appmodel.Thread {
 
 // mcpCaller is the conversation making a miya tool call: the one whose
 // call of it is in progress, whichever agent runs it.
-func (c *Controller) McpCaller(tool string) (appmodel.Thread, bool) {
-	var caller appmodel.Thread
+func (c *Controller) McpCaller(tool string) (model.Thread, bool) {
+	var caller model.Thread
 	var at int64
 	found := false
 	// The caller may be in a background project.
 	for _, t := range c.AllThreads() {
 		for i := len(t.Messages) - 1; i >= 0; i-- {
 			m := t.Messages[i]
-			if (m.Status == "inProgress" || m.Status == "in_progress") && appmodel.IsMiyaToolCall(m, tool) {
+			if (m.Status == "inProgress" || m.Status == "in_progress") && mcpconfig.IsMiyaToolCall(m, tool) {
 				if !found || m.StartedAtMs > at {
 					caller, at, found = t, m.StartedAtMs, true
 				}
@@ -128,7 +135,7 @@ func (c *Controller) McpCaller(tool string) (appmodel.Thread, bool) {
 	return caller, found
 }
 
-func (c *Controller) McpThreads(r appmodel.McpRequest) appmodel.McpThreadsResult {
+func (c *Controller) McpThreads(r mcpproto.Request) mcpproto.ThreadsResult {
 	caller, ok := c.McpCaller(r.Tool)
 	project := c.Cwd
 	if ok {
@@ -137,8 +144,8 @@ func (c *Controller) McpThreads(r appmodel.McpRequest) appmodel.McpThreadsResult
 	return c.mcpThreadsFor(caller, project)
 }
 
-func (c *Controller) mcpThreadsFor(caller appmodel.Thread, project string) appmodel.McpThreadsResult {
-	res := appmodel.McpThreadsResult{Threads: []appmodel.McpThreadInfo{}}
+func (c *Controller) mcpThreadsFor(caller model.Thread, project string) mcpproto.ThreadsResult {
+	res := mcpproto.ThreadsResult{Threads: []mcpproto.ThreadInfo{}}
 	for _, t := range c.projectThreads(project) {
 		if t.ID == 0 || t.ID == caller.ID || !c.ThreadRef(t).Valid() {
 			continue
@@ -147,27 +154,27 @@ func (c *Controller) mcpThreadsFor(caller appmodel.Thread, project string) appmo
 		if t.Busy || t.Loading {
 			status = subagent.Running
 		}
-		res.Threads = append(res.Threads, appmodel.McpThreadInfo{Reference: c.ThreadRef(t).URL(), ID: t.ID, Title: appmodel.ThreadRefTitle(t), Agent: model.ThreadAgent(t), Status: status})
+		res.Threads = append(res.Threads, mcpproto.ThreadInfo{Reference: c.ThreadRef(t).URL(), ID: t.ID, Title: appmodel.ThreadRefTitle(t), Agent: model.ThreadAgent(t), Status: status})
 	}
 	return res
 }
 
-func (c *Controller) McpRead(r appmodel.McpRequest) (appmodel.McpReadResult, error) {
+func (c *Controller) McpRead(r mcpproto.Request) (mcpproto.ReadResult, error) {
 	t, messages, ok := c.resolveThreadRef(r.Thread)
 	if !ok {
-		return appmodel.McpReadResult{}, errors.New("Session not found. Use list_threads to see available session links.")
+		return mcpproto.ReadResult{}, errors.New("Session not found. Use list_threads to see available session links.")
 	}
 	loaded := t.HistoryLoaded
 	if !loaded {
 		c.prefetchThread(t.ID)
 	}
-	return appmodel.McpReadResult{Loaded: loaded, Packet: threadPacket(t, messages)}, nil
+	return mcpproto.ReadResult{Loaded: loaded, Packet: threadPacket(t, messages)}, nil
 }
 
-func (c *Controller) McpStatus(r appmodel.McpRequest) (appmodel.McpStatusResult, error) {
+func (c *Controller) McpStatus(r mcpproto.Request) (mcpproto.StatusResult, error) {
 	t, _, ok := c.resolveThreadRef(r.Thread)
 	if !ok {
-		return appmodel.McpStatusResult{}, errors.New("The conversation no longer exists or is unavailable")
+		return mcpproto.StatusResult{}, errors.New("The conversation no longer exists or is unavailable")
 	}
 	status, _ := c.HandoffState(t.ID)
 	last := -1
@@ -176,60 +183,60 @@ func (c *Controller) McpStatus(r appmodel.McpRequest) (appmodel.McpStatusResult,
 			last = i
 		}
 	}
-	return appmodel.McpStatusResult{Reference: c.ThreadRef(t).URL(), ID: t.ID, Title: appmodel.ThreadRefTitle(t), Agent: model.ThreadAgent(t), Status: status, Reply: textutil.ClipRunes(appmodel.LastReply(t.Messages[last+1:]), 4000)}, nil
+	return mcpproto.StatusResult{Reference: c.ThreadRef(t).URL(), ID: t.ID, Title: appmodel.ThreadRefTitle(t), Agent: model.ThreadAgent(t), Status: status, Reply: textutil.ClipRunes(msgfmt.LastReply(t.Messages[last+1:]), 4000)}, nil
 }
 
 // mcpDelegate sends a task to another conversation, new or existing, with
 // the caller's context as a reference, so the caller follows the work.
-func (c *Controller) McpDelegate(r appmodel.McpRequest) (appmodel.McpDelegateResult, error) {
+func (c *Controller) McpDelegate(r mcpproto.Request) (mcpproto.DelegateResult, error) {
 	caller, ok := c.McpCaller(r.Tool)
 	if !ok {
-		return appmodel.McpDelegateResult{}, errors.New(appmodel.McpCallerUnknown)
+		return mcpproto.DelegateResult{}, errors.New(mcpproto.CallerUnknown)
 	}
 	task := strings.TrimSpace(r.Task)
 	if task == "" {
-		return appmodel.McpDelegateResult{}, errors.New("task cannot be empty")
+		return mcpproto.DelegateResult{}, errors.New("task cannot be empty")
 	}
-	if c.delegationDepth(caller.ID) >= appmodel.MaxDelegationDepth {
-		return appmodel.McpDelegateResult{}, fmt.Errorf("Delegation is limited to %d levels. This conversation is itself a delegated task; complete it directly.", appmodel.MaxDelegationDepth)
+	if c.delegationDepth(caller.ID) >= mcpconfig.MaxDelegationDepth {
+		return mcpproto.DelegateResult{}, fmt.Errorf("Delegation is limited to %d levels. This conversation is itself a delegated task; complete it directly.", mcpconfig.MaxDelegationDepth)
 	}
 	if r.Thread != 0 {
 		if r.Thread == caller.ID {
-			return appmodel.McpDelegateResult{}, errors.New("Cannot delegate a task to yourself")
+			return mcpproto.DelegateResult{}, errors.New("Cannot delegate a task to yourself")
 		}
 		if c.delegatedFrom(caller.ID, r.Thread) {
-			return appmodel.McpDelegateResult{}, errors.New("The target session delegated this task to you. You cannot delegate it back.")
+			return mcpproto.DelegateResult{}, errors.New("The target session delegated this task to you. You cannot delegate it back.")
 		}
 		if _, _, ok := c.resolveThreadRef(r.Thread); !ok {
-			return appmodel.McpDelegateResult{}, errors.New("The conversation no longer exists or is unavailable")
+			return mcpproto.DelegateResult{}, errors.New("The conversation no longer exists or is unavailable")
 		}
 	}
 	agent := model.ThreadAgent(caller)
 	if r.Thread == 0 && r.Agent != "" {
 		if agent = model.NormalizeAgentID(r.Agent); agent == "" {
-			return appmodel.McpDelegateResult{}, fmt.Errorf("Agent %q not found. Choose %s or %s.", r.Agent, appmodel.AgentCodex, appmodel.AgentClaude)
+			return mcpproto.DelegateResult{}, fmt.Errorf("Agent %q not found. Choose %s or %s.", r.Agent, appmodel.AgentCodex, appmodel.AgentClaude)
 		}
 	}
 	text := task
 	if !r.NoContext {
 		ref := c.ThreadRef(caller)
 		if !ref.Valid() {
-			return appmodel.McpDelegateResult{}, errors.New("The session must be created before its context can be handed off")
+			return mcpproto.DelegateResult{}, errors.New("The session must be created before its context can be handed off")
 		}
 		text += "\n\n" + model.ReferenceText(ref, appmodel.ThreadRefTitle(caller))
 	}
-	id := c.Submit(appmodel.SendRequest{ThreadID: r.Thread, Agent: agent, Project: c.ThreadWorkspace(caller.ID), Text: text, MemoryControl: true})
+	id := c.Submit(model.SendRequest{ThreadID: r.Thread, Agent: agent, Project: c.ThreadWorkspace(caller.ID), Text: text, MemoryControl: true})
 	if id == 0 {
-		return appmodel.McpDelegateResult{}, errors.New(textutil.FirstNonEmpty(c.LastSubmitError, "Handoff failed: the target agent is not ready, or the conversation is read-only"))
+		return mcpproto.DelegateResult{}, errors.New(textutil.FirstNonEmpty(c.LastSubmitError, "Handoff failed: the target agent is not ready, or the conversation is read-only"))
 	}
-	c.noteHandoffs([]appmodel.Thread{caller}, id, appmodel.ThreadRefTask(task))
+	c.noteHandoffs([]model.Thread{caller}, id, msgfmt.ThreadRefTask(task))
 	if c.DelegationParent == nil {
 		c.DelegationParent = map[int]int{}
 	}
 	if _, ok := c.DelegationParent[id]; !ok && id != caller.ID {
 		c.DelegationParent[id] = caller.ID
 	}
-	return appmodel.McpDelegateResult{Reference: c.ThreadRef(c.ThreadWithID(id)).URL(), Thread: id, Agent: model.ThreadAgent(c.ThreadWithID(id))}, nil
+	return mcpproto.DelegateResult{Reference: c.ThreadRef(c.ThreadWithID(id)).URL(), Thread: id, Agent: model.ThreadAgent(c.ThreadWithID(id))}, nil
 }
 
 // delegationDepth is how many hand-offs led to a conversation.
@@ -261,12 +268,12 @@ func (c *Controller) delegatedFrom(id, ancestor int) bool {
 	}
 }
 
-func (c *Controller) McpRuntime(r appmodel.McpRequest) (any, error) {
-	var caller appmodel.Thread
+func (c *Controller) McpRuntime(r mcpproto.Request) (any, error) {
+	var caller model.Thread
 	count := 0
 	for _, t := range c.AllThreads() {
 		for _, message := range t.Messages {
-			if (message.Status == "inProgress" || message.Status == "in_progress") && appmodel.IsMiyaToolCall(message, "runtime_info") {
+			if (message.Status == "inProgress" || message.Status == "in_progress") && mcpconfig.IsMiyaToolCall(message, "runtime_info") {
 				caller = t
 				count++
 				break
@@ -274,7 +281,7 @@ func (c *Controller) McpRuntime(r appmodel.McpRequest) (any, error) {
 		}
 	}
 	if count == 0 {
-		return nil, errors.New(appmodel.McpCallerUnknown)
+		return nil, errors.New(mcpproto.CallerUnknown)
 	}
 	if count != 1 {
 		return nil, errors.New("Multiple conversations are querying runtime information. Unable to identify the caller uniquely. Try again shortly.")
@@ -283,35 +290,35 @@ func (c *Controller) McpRuntime(r appmodel.McpRequest) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return appmodel.Deferred(func() (any, error) {
+	return async.Reply(func() (any, error) {
 		data, err := work()
 		if err != nil {
 			return nil, err
 		}
-		return data.(appmodel.ConversationRuntime).View, nil
+		return data.(tracker.ConversationRuntime).View, nil
 	}), nil
 }
 
 // Strict identity for every memory operation, including reads: the shared
 // Codex app-server's cwd is not the caller's workspace. No time-based guess.
-func (c *Controller) McpCallerWithArguments(tool string, raw json.RawMessage) (appmodel.Thread, appmodel.Message, error) {
+func (c *Controller) McpCallerWithArguments(tool string, raw json.RawMessage) (model.Thread, model.Message, error) {
 	var want map[string]any
 	if json.Unmarshal(raw, &want) != nil || want == nil {
-		return appmodel.Thread{}, appmodel.Message{}, errors.New("Tool arguments must be an object")
+		return model.Thread{}, model.Message{}, errors.New("Tool arguments must be an object")
 	}
 	type candidate struct {
-		thread  appmodel.Thread
-		message appmodel.Message
+		thread  model.Thread
+		message model.Message
 	}
 	var matches []candidate
 	for _, t := range c.AllThreads() {
 		for _, m := range t.Messages {
-			if (m.Status != "inProgress" && m.Status != "in_progress") || !appmodel.IsMiyaToolCall(m, tool) {
+			if (m.Status != "inProgress" && m.Status != "in_progress") || !mcpconfig.IsMiyaToolCall(m, tool) {
 				continue
 			}
 			var got map[string]any
 			if strings.EqualFold(m.Kind, "claudetool") {
-				_, got = appmodel.ClaudeToolCall(m)
+				_, got = transcript.ToolCall(m)
 			} else if m.Item != nil {
 				_ = json.Unmarshal(m.Item.Arguments, &got)
 			}
@@ -321,10 +328,10 @@ func (c *Controller) McpCallerWithArguments(tool string, raw json.RawMessage) (a
 		}
 	}
 	if len(matches) == 0 {
-		return appmodel.Thread{}, appmodel.Message{}, errors.New(appmodel.McpCallerUnknown)
+		return model.Thread{}, model.Message{}, errors.New(mcpproto.CallerUnknown)
 	}
 	if len(matches) != 1 {
-		return appmodel.Thread{}, appmodel.Message{}, errors.New("The calling conversation is ambiguous. Stagger calls with identical arguments and retry.")
+		return model.Thread{}, model.Message{}, errors.New("The calling conversation is ambiguous. Stagger calls with identical arguments and retry.")
 	}
 	return matches[0].thread, matches[0].message, nil
 }

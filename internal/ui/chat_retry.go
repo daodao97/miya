@@ -1,10 +1,11 @@
 package desktopui
 
 import (
-	appmodel "miya/internal/appmodel"
+	"miya/internal/appmodel"
+	"miya/internal/model"
 )
 
-func (app *App) retryResponse(m appmodel.Message) {
+func (app *App) retryResponse(m model.Message) {
 	req := appmodel.RetryRequest{ThreadID: app.C.Current().ID, MessageID: m.ID}
 	if app.OnRetry != nil {
 		app.OnRetry(req)

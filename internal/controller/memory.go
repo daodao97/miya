@@ -1,11 +1,11 @@
 package controller
 
 import (
-	appmodel "miya/internal/appmodel"
-	claude "miya/internal/claude"
-	memory "miya/internal/memory"
-	extractor "miya/internal/memory/extractor"
-	manager "miya/internal/memory/manager"
+	"miya/internal/claude"
+	"miya/internal/memory"
+	"miya/internal/memory/extractor"
+	"miya/internal/memory/manager"
+	"miya/internal/model"
 )
 
 func NewMemoryEngine(c *Controller) *extractor.Engine {
@@ -32,11 +32,11 @@ type memoryHost struct{ c *Controller }
 
 func (h memoryHost) Dispatch(f func()) { h.c.Dispatch(f) }
 
-func (h memoryHost) Thread(id int) appmodel.Thread { return h.c.ThreadWithID(id) }
+func (h memoryHost) Thread(id int) model.Thread { return h.c.ThreadWithID(id) }
 
-func (h memoryHost) UpdateThread(id int, f func(*appmodel.Thread)) { h.c.Update(id, f) }
+func (h memoryHost) UpdateThread(id int, f func(*model.Thread)) { h.c.Update(id, f) }
 
-func (h memoryHost) ThreadRef(t appmodel.Thread) appmodel.ThreadRef { return h.c.ThreadRef(t) }
+func (h memoryHost) ThreadRef(t model.Thread) model.ThreadRef { return h.c.ThreadRef(t) }
 
 func (h memoryHost) Workspace(thread int) string { return h.c.ThreadWorkspace(thread) }
 

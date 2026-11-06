@@ -1,15 +1,16 @@
 package desktopui
 
 import (
-	appmodel "miya/internal/appmodel"
-	widgets "miya/internal/widgets"
-	time "time"
+	"time"
 
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui"
+
+	"miya/internal/svcproto"
+	"miya/internal/widgets"
 )
 
 type ServiceRestartUI struct {
-	Client     *appmodel.ServiceClient
+	Client     *svcproto.Client
 	Pid        int
 	Checking   bool
 	Confirming bool
@@ -19,7 +20,7 @@ type ServiceRestartUI struct {
 	Err        string
 }
 
-func ServiceConnected(cl *appmodel.ServiceClient) bool { return cl.Connected() }
+func ServiceConnected(cl *svcproto.Client) bool { return cl.Connected() }
 
 func (app *App) checkServiceRestart() {
 	cl := app.C.State().Remote
@@ -28,13 +29,13 @@ func (app *App) checkServiceRestart() {
 	}
 	app.ServiceRestart = ServiceRestartUI{Client: cl, Checking: true}
 	go func() {
-		var h appmodel.SvcHello
+		var h svcproto.Hello
 		err := cl.Call("hello", nil, &h)
 		app.C.Dispatch(func() {
 			s := &app.ServiceRestart
 			s.Checking = false
 			if app.C.State().Remote != cl && err == nil {
-				err = appmodel.ErrServiceClosed
+				err = svcproto.ErrClosed
 			}
 			if err != nil {
 				s.Err = err.Error()
@@ -58,7 +59,7 @@ func (app *App) sendServiceRestart(waitIdle bool) {
 		return
 	}
 	if cl != app.C.State().Remote || !ServiceConnected(cl) {
-		s.Confirming, s.Requested, s.Err = false, false, appmodel.ErrServiceClosed.Error()
+		s.Confirming, s.Requested, s.Err = false, false, svcproto.ErrClosed.Error()
 		return
 	}
 	s.Confirming, s.Checking, s.Requested, s.waitIdle, s.Err = false, true, true, waitIdle, ""
@@ -90,7 +91,7 @@ func (app *App) updateServiceRestart() {
 	}
 	s.Checking = true
 	go func() {
-		var h appmodel.SvcHello
+		var h svcproto.Hello
 		err := cl.Call("hello", nil, &h)
 		app.C.Dispatch(func() {
 			s := &app.ServiceRestart

@@ -1,13 +1,15 @@
 package mobile
 
 import (
-	fmt "fmt"
-	math "math"
-	appmodel "miya/internal/appmodel"
-	widgets "miya/internal/widgets"
-	time "time"
+	"fmt"
+	"math"
+	"time"
 
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui"
+
+	"miya/internal/appmodel"
+	"miya/internal/phoneapi"
+	"miya/internal/widgets"
 )
 
 func quotaResetLabel(unix int64) string {
@@ -20,7 +22,7 @@ func quotaResetLabel(unix int64) string {
 }
 
 func (m *App) drawerQuotas(c *ui.Context) {
-	var quotas []appmodel.PhoneAgentQuota
+	var quotas []phoneapi.AgentQuota
 	for _, q := range m.State.Quotas {
 		if len(q.Windows) > 0 {
 			quotas = append(quotas, q)

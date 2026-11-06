@@ -83,8 +83,8 @@ journalctl --user -u miya.service -n 100 --no-pager
 
 ```sh
 go test ./...
-go test -race . ./internal/remote -run 'TestServer|TestRemoteHost|TestRemoteBrowser|TestServiceRestartWhenIdle'
-MIYA_SERVER_E2E=1 go test . -run TestServerTailcatEndToEnd -count=1 -timeout=180s
+go test -race ./tests/integration ./internal/remote -run 'TestServer|TestRemoteHost|TestRemoteBrowser|TestServiceRestartWhenIdle'
+MIYA_SERVER_E2E=1 go test ./tests/integration -run TestServerTailcatEndToEnd -count=1 -timeout=180s
 ```
 
 端到端测试需要联网，使用临时配对身份和合成项目，不连接生产 Miya 后台。真实服务器安装、真实手机网络及系统登录环境须分别验收，构建成功不代表已安装或远端已切换。

@@ -1,25 +1,31 @@
 package desktopui
 
 import (
-	fmt "fmt"
-	log "log"
-	appmodel "miya/internal/appmodel"
-	codex "miya/internal/codex"
-	conversation "miya/internal/conversation"
-	uiruntime "miya/internal/uiruntime"
-	widgets "miya/internal/widgets"
-	locales "miya/locales"
-	os "os"
-	exec "os/exec"
-	filepath "path/filepath"
-	runtime "runtime"
-	strings "strings"
-	time "time"
+	"fmt"
+	"log"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"time"
 
-	mygo "github.com/egoist/mygo"
-	transfer "github.com/egoist/mygo/transfer"
-	ui "github.com/egoist/mygo/ui"
-	markdown "github.com/egoist/mygo/ui/markdown"
+	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/transfer"
+	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/markdown"
+
+	"miya/internal/account"
+	"miya/internal/appmodel"
+	"miya/internal/codex"
+	"miya/internal/composer"
+	"miya/internal/conversation"
+	"miya/internal/model"
+	"miya/internal/prefs"
+	"miya/internal/svcproto"
+	"miya/internal/uiruntime"
+	"miya/internal/widgets"
+	"miya/locales"
 )
 
 // chatApp holds what only the interface needs; conversations, connections
@@ -47,7 +53,7 @@ type App struct {
 	ProjectError                        string
 	projectBrowse                       bool
 	projectBrowseLoading                bool
-	projectDirectories                  []appmodel.HostEntry
+	projectDirectories                  []svcproto.HostEntry
 	threadListExpanded                  map[string]bool
 	desktopReadIntent                   appmodel.DesktopRead // a completed result the user chose to view
 
@@ -106,7 +112,7 @@ func NewChatAppWithController(c Host) *App {
 		forms:              map[string]string{},
 		formErrors:         map[string]string{},
 		settingDrafts:      map[string]string{},
-		Appearance:         appmodel.NormalizeAppearance(appmodel.LoadSetting("appearance")),
+		Appearance:         prefs.NormalizeAppearance(prefs.Load("appearance")),
 	}
 	app.ResolveTitle = app.desktopReferenceTitle
 	app.OnRetry = func(req appmodel.RetryRequest) {
@@ -120,7 +126,7 @@ func NewChatAppWithController(c Host) *App {
 	app.MemoryNotice = app.memoryNoticeView
 	app.PasteAttachments = app.pasteAttachmentsData
 	app.SetNotice = func(s string) { app.Notice = s }
-	app.NeedsReadFrame = func(t appmodel.Thread, state *ui.ListState, groups int) bool {
+	app.NeedsReadFrame = func(t model.Thread, state *ui.ListState, groups int) bool {
 		return !app.ProjectDialog && !app.Switcher.Open && !app.ShortcutsOpen && !app.CommandPalette.Open && !t.Busy && !t.Loading && t.HistoryLoaded && groups > 0 && c.DesktopThreadUnread(t) && state.AtEnd()
 	}
 	app.Md = markdown.Options{
@@ -223,7 +229,7 @@ func (app *App) newThread() {
 	app.focusComposer = true
 }
 
-func (app *App) SelectThread(t appmodel.Thread) {
+func (app *App) SelectThread(t model.Thread) {
 	if path := app.C.ThreadWorkspace(t.ID); path != app.C.State().Cwd {
 		if err := app.C.ChangeWorkspace(path); err != nil {
 			app.C.State().SetStatus("Project selection failed: " + err.Error())
@@ -253,10 +259,10 @@ func (app *App) SendDraft(steer bool) {
 	c := app.C
 	// In a Claude Code conversation, the commands Miya does not run itself
 	// (skills, custom commands, /compact…) go to Claude Code as messages.
-	if command, ok := appmodel.SlashCommand(c.State().Draft()); ok && !appmodel.ClaudeTakesCommand(c.CurrentAgent(), command) {
+	if command, ok := composer.SlashCommand(c.State().Draft()); ok && !appmodel.ClaudeTakesCommand(c.CurrentAgent(), command) {
 		app.Notice = ""
 		clear := func() { c.RememberDraft(""); app.menu = "" }
-		if _, goal, _ := appmodel.ParseGoalCommand("/" + command); goal {
+		if _, goal, _ := codex.ParseGoalCommand("/" + command); goal {
 			app.Notice = c.RunThreadCommand(command)
 			return
 		}
@@ -430,7 +436,7 @@ func (app *App) confirmProject() {
 	app.Section = ""
 }
 
-func (app *App) selectProject(p appmodel.Project) {
+func (app *App) selectProject(p model.Project) {
 	c := app.C
 	if p.Path == app.Workspace && app.ExpandedProject == p.Path {
 		app.ExpandedProject = ""
@@ -449,7 +455,7 @@ func (app *App) selectProject(p appmodel.Project) {
 	app.closeMenus()
 }
 
-func (app *App) newThreadIn(p appmodel.Project) {
+func (app *App) newThreadIn(p model.Project) {
 	c := app.C
 	if err := c.ChangeWorkspace(p.Path); err != nil {
 		c.State().SetStatus(err.Error())
@@ -510,4 +516,4 @@ func (app *App) Render(ctx *ui.Context) {
 }
 
 // The account view and composer quota read through the controller's client.
-var _ appmodel.AccountCaller = (*codex.Client)(nil)
+var _ account.Caller = (*codex.Client)(nil)

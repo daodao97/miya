@@ -1,24 +1,25 @@
 package desktopui
 
 import (
-	appmodel "miya/internal/appmodel"
-	widgets "miya/internal/widgets"
-	strings "strings"
+	"strings"
 
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui"
+
+	"miya/internal/widgets"
+	"miya/internal/workspaces"
 )
 
 func (app *App) workspaceSelector(c *ui.Context) {
 	m := app.EnsureDesktopWorkspaces()
 	current := m.Store.Current()
 	name := current.Name
-	if current.ID == appmodel.LocalDesktopWorkspace {
+	if current.ID == workspaces.Local {
 		name = tr("Local")
 	}
 	button := widgets.Quiet(c.Key("workspace-switcher")).Height(34).MaxWidth(136).MinWidth(0).PaddingX(8).Gap(6).Radius(6).Label(tr("Switch workspace")).Tooltip(tr("Switch workspace · ") + name)
 	button.Children(func() {
 		symbol := "device-desktop"
-		if current.ID != appmodel.LocalDesktopWorkspace {
+		if current.ID != workspaces.Local {
 			symbol = "server"
 		}
 		widgets.Icon(c, symbol, 15, widgets.Muted)
@@ -28,7 +29,7 @@ func (app *App) workspaceSelector(c *ui.Context) {
 	button.PopoverMenuButton(func(menu *ui.Menu) {
 		for _, item := range m.Store.Items {
 			label := item.Name
-			if item.ID == appmodel.LocalDesktopWorkspace {
+			if item.ID == workspaces.Local {
 				label = tr("Local")
 			}
 			if menu.Item(label).Radio(item.ID == m.Store.Active).Chosen() {
@@ -40,7 +41,7 @@ func (app *App) workspaceSelector(c *ui.Context) {
 			m.CancelConnection()
 			m.Open, m.name, m.link, m.editID, m.Err = true, "", "", "", ""
 		}
-		if current.ID != appmodel.LocalDesktopWorkspace && menu.Item(tr("Rename workspace…")).Chosen() {
+		if current.ID != workspaces.Local && menu.Item(tr("Rename workspace…")).Chosen() {
 			m.CancelConnection()
 			m.Open, m.name, m.editID, m.Err = true, current.Name, current.ID, ""
 		}

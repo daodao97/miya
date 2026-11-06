@@ -1,19 +1,22 @@
 package controller
 
 import (
-	json "encoding/json"
-	appmodel "miya/internal/appmodel"
-	os "os"
-	filepath "path/filepath"
-	sort "sort"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"sort"
+
+	"miya/internal/appmodel"
+	"miya/internal/fsutil"
+	"miya/internal/model"
 )
 
 // Fork metadata locates the original backend session after its sidebar row has
 // moved to a new session. It is not an alias to the replacement session.
 type referenceSession struct {
-	Ref     appmodel.ThreadRef `json:"ref"`
-	Title   string             `json:"title"`
-	Project string             `json:"project"`
+	Ref     model.ThreadRef `json:"ref"`
+	Title   string          `json:"title"`
+	Project string          `json:"project"`
 }
 
 func (c *Controller) LoadForkedReferences() {
@@ -25,7 +28,7 @@ func (c *Controller) LoadForkedReferences() {
 	if json.Unmarshal(data, &sessions) != nil {
 		return
 	}
-	c.ForkedReferences = map[appmodel.ThreadRef]referenceSession{}
+	c.ForkedReferences = map[model.ThreadRef]referenceSession{}
 	for _, session := range sessions {
 		if session.Ref.Valid() && session.Ref.Source == c.ReferenceSource {
 			c.ForkedReferences[session.Ref] = session
@@ -33,20 +36,20 @@ func (c *Controller) LoadForkedReferences() {
 	}
 }
 
-func (c *Controller) rememberForkedReference(t appmodel.Thread, project string) {
+func (c *Controller) rememberForkedReference(t model.Thread, project string) {
 	ref := c.ThreadRef(t)
 	if !ref.Valid() {
 		return
 	}
 	if c.ForkedReferences == nil {
-		c.ForkedReferences = map[appmodel.ThreadRef]referenceSession{}
+		c.ForkedReferences = map[model.ThreadRef]referenceSession{}
 	}
 	c.ForkedReferences[ref] = referenceSession{Ref: ref, Title: appmodel.ThreadRefTitle(t), Project: project}
 	if t.HistoryLoaded {
 		if c.threadHistory == nil {
-			c.threadHistory = map[string][]appmodel.Message{}
+			c.threadHistory = map[string][]model.Message{}
 		}
-		c.threadHistory[ref.URL()] = append([]appmodel.Message(nil), t.Messages...)
+		c.threadHistory[ref.URL()] = append([]model.Message(nil), t.Messages...)
 	}
 	if c.ReferenceDir == "" {
 		return
@@ -58,7 +61,7 @@ func (c *Controller) rememberForkedReference(t appmodel.Thread, project string) 
 	sort.Slice(sessions, func(i, j int) bool { return sessions[i].Ref.URL() < sessions[j].Ref.URL() })
 	data, err := json.Marshal(sessions)
 	if err == nil {
-		err = appmodel.AtomicWriteFile(filepath.Join(c.ReferenceDir, "reference-sessions.json"), data)
+		err = fsutil.AtomicWriteFile(filepath.Join(c.ReferenceDir, "reference-sessions.json"), data)
 	}
 	if err != nil && c.SetStatus != nil {
 		c.SetStatus("Unable to save original conversation reference: " + err.Error())

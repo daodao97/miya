@@ -1,11 +1,12 @@
 package controller
 
 import (
-	json "encoding/json"
-	errors "errors"
-	fmt "fmt"
-	appmodel "miya/internal/appmodel"
-	coordinator "miya/internal/delegation/coordinator"
+	"encoding/json"
+	"errors"
+	"fmt"
+
+	"miya/internal/appmodel"
+	"miya/internal/delegation/coordinator"
 )
 
 func (c *Controller) CollaborationUserOp(r appmodel.CollaborationRequest) (any, error) {

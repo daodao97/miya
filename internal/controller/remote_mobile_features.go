@@ -1,19 +1,23 @@
 package controller
 
 import (
-	errors "errors"
-	fmt "fmt"
-	math "math"
-	appmodel "miya/internal/appmodel"
-	remote "miya/internal/remote"
-	slices "slices"
-	strings "strings"
+	"errors"
+	"fmt"
+	"math"
+	"slices"
+	"strings"
+
+	"miya/internal/account"
+	"miya/internal/appmodel"
+	"miya/internal/model"
+	"miya/internal/phoneapi"
+	"miya/internal/remote"
 )
 
-func (c *Controller) phoneAgentOptions() []appmodel.PhoneAgentOptions {
-	var out []appmodel.PhoneAgentOptions
+func (c *Controller) phoneAgentOptions() []phoneapi.AgentOptions {
+	var out []phoneapi.AgentOptions
 	for _, b := range AgentBackends {
-		a := appmodel.PhoneAgentOptions{Agent: b.ID(), Current: remote.SendOptions{Model: b.Model(c), Effort: b.Effort(c), Policy: c.SelectedPermissionPolicy()}}
+		a := phoneapi.AgentOptions{Agent: b.ID(), Current: remote.SendOptions{Model: b.Model(c), Effort: b.Effort(c), Policy: c.SelectedPermissionPolicy()}}
 		var choices []string
 		if b.ID() == appmodel.AgentCodex && c.Models == nil {
 			if a.Current.Model != "" {
@@ -26,7 +30,7 @@ func (c *Controller) phoneAgentOptions() []appmodel.PhoneAgentOptions {
 			choices = append([]string{""}, choices...)
 		}
 		for _, value := range choices {
-			m := appmodel.PhoneModelOption{Value: value, Label: b.ModelLabel(c, value)}
+			m := phoneapi.ModelOption{Value: value, Label: b.ModelLabel(c, value)}
 			if b.ID() == appmodel.AgentClaude {
 				m.Efforts = b.EffortChoices(c)
 			} else if c.Models != nil {
@@ -51,14 +55,14 @@ func (c *Controller) phoneAgentOptions() []appmodel.PhoneAgentOptions {
 	return out
 }
 
-func (c *Controller) PhoneSendRequest(r remote.Request, paths []string, agent string) (appmodel.SendRequest, error) {
+func (c *Controller) PhoneSendRequest(r remote.Request, paths []string, agent string) (model.SendRequest, error) {
 	if agent == "" {
 		agent = appmodel.AgentCodex
 	}
 	if agent != appmodel.AgentCodex && agent != appmodel.AgentClaude {
-		return appmodel.SendRequest{}, errors.New("Unsupported agent")
+		return model.SendRequest{}, errors.New("Unsupported agent")
 	}
-	req := appmodel.SendRequest{Agent: agent, Text: r.Text, Attachments: paths, Steer: r.Steer}
+	req := model.SendRequest{Agent: agent, Text: r.Text, Attachments: paths, Steer: r.Steer}
 	if r.Options == nil {
 		return req, nil
 	}
@@ -66,7 +70,7 @@ func (c *Controller) PhoneSendRequest(r remote.Request, paths []string, agent st
 		if a.Agent != agent {
 			continue
 		}
-		var model *appmodel.PhoneModelOption
+		var model *phoneapi.ModelOption
 		for i := range a.Models {
 			if a.Models[i].Value == r.Options.Model {
 				model = &a.Models[i]
@@ -112,7 +116,7 @@ func (c *Controller) PhoneQueueAction(r remote.Request) error {
 	return nil
 }
 
-func (c *Controller) PhoneQuotas() []appmodel.PhoneAgentQuota {
+func (c *Controller) PhoneQuotas() []phoneapi.AgentQuota {
 	q := c.QuotaLimits.RateLimits
 	if v, ok := c.QuotaLimits.ByID[appmodel.CodexAccountLimitID]; ok {
 		q = &v
@@ -122,7 +126,7 @@ func (c *Controller) PhoneQuotas() []appmodel.PhoneAgentQuota {
 	}
 	windows := appmodel.ComposerQuotaWindows(c.QuotaLimits)
 	// Preserve additional account windows without using model-specific buckets.
-	for _, w := range []*appmodel.QuotaWindow{q.Primary, q.Secondary} {
+	for _, w := range []*account.QuotaWindow{q.Primary, q.Secondary} {
 		if w == nil {
 			continue
 		}
@@ -136,12 +140,12 @@ func (c *Controller) PhoneQuotas() []appmodel.PhoneAgentQuota {
 			windows = append(windows, w)
 		}
 	}
-	quota := appmodel.PhoneAgentQuota{Agent: appmodel.AgentCodex}
+	quota := phoneapi.AgentQuota{Agent: appmodel.AgentCodex}
 	for i, w := range windows {
 		if math.IsNaN(w.UsedPercent) || math.IsInf(w.UsedPercent, 0) {
 			continue
 		}
-		v := appmodel.PhoneQuotaWindow{Label: strings.TrimSuffix(appmodel.QuotaLabel(w, i), tr("Quota")), UsedPercent: math.Max(0, math.Min(100, w.UsedPercent))}
+		v := phoneapi.QuotaWindow{Label: strings.TrimSuffix(account.QuotaLabel(w, i), tr("Quota")), UsedPercent: math.Max(0, math.Min(100, w.UsedPercent))}
 		if w.ResetsAt != nil && *w.ResetsAt > 0 {
 			v.ResetsAt = *w.ResetsAt
 		}
@@ -150,5 +154,5 @@ func (c *Controller) PhoneQuotas() []appmodel.PhoneAgentQuota {
 	if len(quota.Windows) == 0 {
 		return nil
 	}
-	return []appmodel.PhoneAgentQuota{quota}
+	return []phoneapi.AgentQuota{quota}
 }

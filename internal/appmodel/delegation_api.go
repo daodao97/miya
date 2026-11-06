@@ -1,7 +1,7 @@
 package appmodel
 
 import (
-	json "encoding/json"
+	"encoding/json"
 )
 
 // The authenticated desktop/phone API shares task admission and mutation with

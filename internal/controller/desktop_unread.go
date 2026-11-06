@@ -1,14 +1,16 @@
 package controller
 
 import (
-	json "encoding/json"
-	appdir "miya/internal/appdir"
-	appmodel "miya/internal/appmodel"
-	notification "miya/internal/notification"
-	remote "miya/internal/remote"
-	uiruntime "miya/internal/uiruntime"
-	os "os"
-	filepath "path/filepath"
+	"encoding/json"
+	"os"
+	"path/filepath"
+
+	"miya/internal/appdir"
+	"miya/internal/appmodel"
+	"miya/internal/model"
+	"miya/internal/notification"
+	"miya/internal/remote"
+	"miya/internal/uiruntime"
 )
 
 func (c *Controller) LoadDesktopUnread() {
@@ -33,7 +35,7 @@ func (c *Controller) persistDesktopUnread() {
 	}
 }
 
-func (c *Controller) RecordDesktopCompletion(old, next appmodel.Thread) {
+func (c *Controller) RecordDesktopCompletion(old, next model.Thread) {
 	if c.Mirror != nil || c.DesktopUnread == nil || old.Loading {
 		return
 	}
@@ -58,13 +60,13 @@ func (c *Controller) MarkPhoneCompletionRead(r remote.Request) {
 	c.MarkDesktopRead(appmodel.DesktopRead{Key: appmodel.DesktopUnreadKey(target.Thread), Version: r.ReadCompletedAtMs})
 }
 
-func (c *Controller) DesktopThreadUnread(t appmodel.Thread) bool {
+func (c *Controller) DesktopThreadUnread(t model.Thread) bool {
 	key := appmodel.DesktopUnreadKey(t)
 	version := c.DesktopUnread[key]
 	return version > 0 && c.DesktopReadPending[key] < version
 }
 
-func (c *Controller) ReadDesktopThread(t appmodel.Thread) {
+func (c *Controller) ReadDesktopThread(t model.Thread) {
 	if !c.DesktopThreadUnread(t) || t.Busy || t.Loading {
 		return
 	}

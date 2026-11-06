@@ -1,25 +1,29 @@
 package controller
 
 import (
-	context "context"
-	json "encoding/json"
-	errors "errors"
-	fmt "fmt"
-	appmodel "miya/internal/appmodel"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+	"time"
+
+	"miya/internal/appmodel"
+	"miya/internal/async"
 	dg "miya/internal/delegation"
-	coordinator "miya/internal/delegation/coordinator"
-	model "miya/internal/model"
-	strings "strings"
-	time "time"
+	"miya/internal/delegation/coordinator"
+	"miya/internal/mcpproto"
+	"miya/internal/mcpserver"
+	"miya/internal/model"
 )
 
 func init() {
 	for _, t := range coordinator.Tools() {
-		appmodel.RegisterMCPTools(collaborationTool, true, appmodel.McpTool(t))
+		mcpserver.Register(collaborationTool, true, mcpproto.Tool(t))
 	}
 }
 
-func collaborationTool(s *appmodel.McpServer, name string, raw json.RawMessage) (string, error) {
+func collaborationTool(s *mcpserver.Server, name string, raw json.RawMessage) (string, error) {
 	a, err := coordinator.Decode(name, raw)
 	if err != nil {
 		return "", err
@@ -42,7 +46,7 @@ func collaborationTool(s *appmodel.McpServer, name string, raw json.RawMessage) 
 			}
 		}
 		var result json.RawMessage
-		if err := s.CallService("mcpCollaboration", appmodel.McpRequest{Workspace: s.Workspace(), Tool: name, Arguments: raw}, &result); err != nil {
+		if err := s.CallService("mcpCollaboration", mcpproto.Request{Workspace: s.Workspace(), Tool: name, Arguments: raw}, &result); err != nil {
 			return "", err
 		}
 		if name != "wait_task" {
@@ -71,7 +75,7 @@ func collaborationTool(s *appmodel.McpServer, name string, raw json.RawMessage) 
 	}
 }
 
-func (c *Controller) collaborationMCP(r appmodel.McpRequest) (any, error) {
+func (c *Controller) collaborationMCP(r mcpproto.Request) (any, error) {
 	if c.Collaboration == nil {
 		return nil, errors.New("Collaboration requires the Miya background service")
 	}
@@ -120,7 +124,7 @@ func (c *Controller) collaborationMCP(r appmodel.McpRequest) (any, error) {
 	return nil, errors.New("Unknown collaboration operation")
 }
 
-func (c *Controller) startCollaboration(caller appmodel.Thread, name string, a coordinator.Args) (any, error) {
+func (c *Controller) startCollaboration(caller model.Thread, name string, a coordinator.Args) (any, error) {
 	s := c.Collaboration
 	from := c.ThreadRef(caller).URL()
 	if err := s.Manager.CheckCreateRequest(from, a.RequestID); err != nil {
@@ -142,7 +146,7 @@ func (c *Controller) startCollaboration(caller appmodel.Thread, name string, a c
 		if a.Notify == "" {
 			in.Notify = s.Manager.RequestNotifies(in)
 		}
-		return appmodel.Deferred(func() (any, error) {
+		return async.Reply(func() (any, error) {
 			return s.Call(func() (any, error) {
 				task, err := s.Create(in)
 				if err != nil {
@@ -156,7 +160,7 @@ func (c *Controller) startCollaboration(caller appmodel.Thread, name string, a c
 	if err != nil {
 		return nil, err
 	}
-	return appmodel.Deferred(func() (any, error) {
+	return async.Reply(func() (any, error) {
 		return s.Call(func() (any, error) {
 			task, err := s.Create(in)
 			if err != nil {
@@ -187,7 +191,7 @@ func (c *Controller) PrepareTaskRecheck(caller, id string) (any, error) {
 	}
 	client := c.Client
 	s := c.Collaboration
-	return appmodel.Deferred(func() (any, error) {
+	return async.Reply(func() (any, error) {
 		var result struct {
 			Thread struct {
 				Turns []struct {
@@ -229,7 +233,7 @@ func (c *Controller) PrepareTaskRecheck(caller, id string) (any, error) {
 				}
 				r := dg.Result{}
 				for _, item := range turn.Items {
-					if item.Type == "agentMessage" && appmodel.CodexFinalPhase(item.Phase) && strings.TrimSpace(item.Text) != "" {
+					if item.Type == "agentMessage" && coordinator.CodexFinalPhase(item.Phase) && strings.TrimSpace(item.Text) != "" {
 						r.Text = item.Text
 					}
 				}

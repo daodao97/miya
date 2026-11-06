@@ -1,12 +1,13 @@
 package desktopui
 
 import (
-	appmodel "miya/internal/appmodel"
-	model "miya/internal/model"
-	widgets "miya/internal/widgets"
-	strings "strings"
+	"strings"
 
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui"
+
+	"miya/internal/model"
+	"miya/internal/msgfmt"
+	"miya/internal/widgets"
 )
 
 func (app *App) SidebarView(c *ui.Context) {
@@ -62,7 +63,7 @@ func (app *App) sidebarActivity(c *ui.Context) {
 	running, completed := app.SidebarActivityThreads()
 	for _, group := range []struct {
 		label   string
-		threads []appmodel.Thread
+		threads []model.Thread
 	}{{tr("In progress"), running}, {tr("Completed"), completed}} {
 		if len(group.threads) == 0 {
 			continue
@@ -76,10 +77,10 @@ func (app *App) sidebarActivity(c *ui.Context) {
 	}
 }
 
-func (app *App) SidebarActivityThreads() (running, completed []appmodel.Thread) {
+func (app *App) SidebarActivityThreads() (running, completed []model.Thread) {
 	c := app.C
 	seen := map[int]bool{}
-	add := func(threads []appmodel.Thread) {
+	add := func(threads []model.Thread) {
 		for _, t := range threads {
 			if seen[t.ID] {
 				continue
@@ -98,7 +99,7 @@ func (app *App) SidebarActivityThreads() (running, completed []appmodel.Thread) 
 			add(c.State().ProjectCache[p.Path])
 		}
 	}
-	return appmodel.DisplayedThreads(running, true), appmodel.DisplayedThreads(completed, true)
+	return msgfmt.DisplayedThreads(running, true), msgfmt.DisplayedThreads(completed, true)
 }
 
 func (app *App) nav(c *ui.Context, symbol, label string) ui.Element {
@@ -110,7 +111,7 @@ func (app *App) nav(c *ui.Context, symbol, label string) ui.Element {
 	return b
 }
 
-func (app *App) projectSection(c *ui.Context, p appmodel.Project) {
+func (app *App) projectSection(c *ui.Context, p model.Project) {
 	ui.Column(c).Gap(2).Children(func() {
 		app.projectRow(c, p)
 		if p.Path != app.ExpandedProject {
@@ -128,10 +129,10 @@ func (app *App) projectSection(c *ui.Context, p appmodel.Project) {
 				}
 			}
 			expanded := app.threadListExpanded[p.Path]
-			for _, t := range appmodel.DisplayedThreads(threads, expanded) {
+			for _, t := range msgfmt.DisplayedThreads(threads, expanded) {
 				app.threadRow(c.Key(t.ID), t)
 			}
-			if len(threads) > appmodel.CollapsedThreadCount {
+			if len(threads) > msgfmt.CollapsedThreadCount {
 				label := tr("Expand")
 				if expanded {
 					label = tr("Collapse")
@@ -145,7 +146,7 @@ func (app *App) projectSection(c *ui.Context, p appmodel.Project) {
 }
 
 // projectRow shows a project, with its actions while the pointer is on it.
-func (app *App) projectRow(c *ui.Context, p appmodel.Project) {
+func (app *App) projectRow(c *ui.Context, p model.Project) {
 	c = c.Key("row")
 	wrap := ui.Box(c).FillWidth()
 	showActions := wrap.Hovered()
@@ -186,7 +187,7 @@ func (app *App) projectRow(c *ui.Context, p appmodel.Project) {
 	})
 }
 
-func (app *App) projectMenu(m *ui.Menu, p appmodel.Project) {
+func (app *App) projectMenu(m *ui.Menu, p model.Project) {
 	// Archiving hides the project and archives its conversations while keeping
 	// the Codex project trust configuration intact.
 	if m.Item(tr("Archive project")).Chosen() {
@@ -198,7 +199,7 @@ func (app *App) projectMenu(m *ui.Menu, p appmodel.Project) {
 	}
 }
 
-func (app *App) threadMenu(m *ui.Menu, t appmodel.Thread) {
+func (app *App) threadMenu(m *ui.Menu, t model.Thread) {
 	if m.Item(tr("Archive conversation")).Chosen() {
 		app.C.ArchiveThread(t)
 	}
@@ -207,7 +208,7 @@ func (app *App) threadMenu(m *ui.Menu, t appmodel.Thread) {
 	}
 }
 
-func (app *App) threadRow(c *ui.Context, t appmodel.Thread) {
+func (app *App) threadRow(c *ui.Context, t model.Thread) {
 	wrap := ui.Box(c).FillWidth()
 	hovered := wrap.Hovered()
 	wrap.ContextMenu(func(m *ui.Menu) { app.threadMenu(m, t) })

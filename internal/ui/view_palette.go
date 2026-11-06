@@ -1,13 +1,13 @@
 package desktopui
 
 import (
-	appmodel "miya/internal/appmodel"
-	uiruntime "miya/internal/uiruntime"
-	widgets "miya/internal/widgets"
+	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/markdown"
 
-	mygo "github.com/egoist/mygo"
-	ui "github.com/egoist/mygo/ui"
-	markdown "github.com/egoist/mygo/ui/markdown"
+	"miya/internal/prefs"
+	"miya/internal/uiruntime"
+	"miya/internal/widgets"
 )
 
 func (app *App) wantsDark() bool {
@@ -30,9 +30,9 @@ func (app *App) ApplyAppearance() {
 }
 
 func (app *App) setAppearance(v string) {
-	v = appmodel.NormalizeAppearance(v)
+	v = prefs.NormalizeAppearance(v)
 	app.Appearance = v
-	appmodel.PersistSetting("appearance", v)
+	prefs.Save("appearance", v)
 	if uiruntime.CurrentWindow() != nil {
 		mygo.Theme.SetSource(widgets.ThemeSource(v))
 		widgets.SystemDark.Store(mygo.Theme.IsDark())

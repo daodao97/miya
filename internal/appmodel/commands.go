@@ -1,6 +1,8 @@
 package appmodel
 
-import "strings"
+import (
+	"strings"
+)
 
 var AppUICommands = map[string]bool{"new": true, "model": true, "permissions": true, "mention": true, "diff": true, "status": true}
 

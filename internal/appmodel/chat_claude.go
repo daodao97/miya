@@ -1,14 +1,17 @@
 package appmodel
 
 import (
-	fmt "fmt"
-	model "miya/internal/model"
-	time "time"
+	"fmt"
+	"time"
+
+	"miya/internal/claude"
+	"miya/internal/model"
+	"miya/internal/msgfmt"
 )
 
 // stalledHint tells that Claude Code has sent nothing for a while. A tool
 // that runs, or an approval the user has not answered, is not a stall.
-func StalledHint(t Thread, waitingForUser bool, now time.Time) string {
+func StalledHint(t model.Thread, waitingForUser bool, now time.Time) string {
 	if !t.Busy || model.ThreadAgent(t) != AgentClaude || t.LastOutputAtMs == 0 || waitingForUser {
 		return ""
 	}
@@ -16,8 +19,8 @@ func StalledHint(t Thread, waitingForUser bool, now time.Time) string {
 		return ""
 	}
 	quiet := now.Sub(time.UnixMilli(t.LastOutputAtMs))
-	if quiet < claudeStallAfter {
+	if quiet < claude.StallAfter {
 		return ""
 	}
-	return fmt.Sprintf("No response for %s. Check your network or proxy, or stop and try again.", FormatElapsed(quiet.Milliseconds()))
+	return fmt.Sprintf("No response for %s. Check your network or proxy, or stop and try again.", msgfmt.FormatElapsed(quiet.Milliseconds()))
 }

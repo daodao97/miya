@@ -1,8 +1,11 @@
 package controller
 
 import (
-	fmt "fmt"
-	appmodel "miya/internal/appmodel"
+	"fmt"
+
+	"miya/internal/appmodel"
+	"miya/internal/model"
+	"miya/internal/msgfmt"
 )
 
 // retryResponse retries the latest failed response. A turn that failed before
@@ -20,7 +23,7 @@ func (c *Controller) RetryResponse(req appmodel.RetryRequest) error {
 	if t.Busy || t.Loading || t.TaskPending {
 		return fmt.Errorf("This conversation is running. Try again later.")
 	}
-	if len(t.Messages) == 0 || !appmodel.RetryableError(t, t.Messages[len(t.Messages)-1]) || t.Messages[len(t.Messages)-1].ID != req.MessageID {
+	if len(t.Messages) == 0 || !msgfmt.RetryableError(t, t.Messages[len(t.Messages)-1]) || t.Messages[len(t.Messages)-1].ID != req.MessageID {
 		return fmt.Errorf("This error is no longer current. Check the latest response.")
 	}
 	for i := len(t.Messages) - 2; i >= 0; i-- {
@@ -28,11 +31,11 @@ func (c *Controller) RetryResponse(req appmodel.RetryRequest) error {
 		if m.Role != "user" {
 			continue
 		}
-		if appmodel.FailedAfterOutput(t, i) {
+		if msgfmt.FailedAfterOutput(t, i) {
 			if !BackendOf(t).Ready(c) {
 				return fmt.Errorf("Unable to retry. Check the connection or agent settings.")
 			}
-			if c.Submit(appmodel.SendRequest{ThreadID: t.ID, Text: appmodel.RetryContinuePrompt, KeepSessionSettings: true, MemoryControl: true}) == 0 {
+			if c.Submit(model.SendRequest{ThreadID: t.ID, Text: msgfmt.RetryContinuePrompt, KeepSessionSettings: true, MemoryControl: true}) == 0 {
 				return fmt.Errorf("Unable to retry. Check the connection or agent settings.")
 			}
 			return nil
@@ -40,8 +43,8 @@ func (c *Controller) RetryResponse(req appmodel.RetryRequest) error {
 		if !c.CanRewind(t, m) || !BackendOf(t).Ready(c) {
 			return fmt.Errorf("Unable to retry. Check the connection or agent settings.")
 		}
-		text := appmodel.MessagePrompt(m)
-		if text == "" && len(appmodel.MessageAttachments(m)) == 0 {
+		text := msgfmt.MessagePrompt(m)
+		if text == "" && len(msgfmt.MessageAttachments(m)) == 0 {
 			return fmt.Errorf("Original message for retry not found")
 		}
 		c.Rewind(t.ID, m.ID, text)

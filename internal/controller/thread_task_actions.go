@@ -1,14 +1,16 @@
 package controller
 
 import (
-	fmt "fmt"
-	appmodel "miya/internal/appmodel"
+	"fmt"
+
+	"miya/internal/model"
+	"miya/internal/svcproto"
 )
 
 func (c *Controller) TaskAction(threadID int, taskID, action string) string {
 	if c.Remote != nil {
 		var message string
-		if err := c.Remote.Call("task", appmodel.SvcTaskAction{Thread: threadID, Task: taskID, Action: action}, &message); err != nil {
+		if err := c.Remote.Call("task", svcproto.TaskAction{Thread: threadID, Task: taskID, Action: action}, &message); err != nil {
 			return err.Error()
 		}
 		return message
@@ -22,17 +24,17 @@ func (c *Controller) TaskAction(threadID int, taskID, action string) string {
 			continue
 		}
 		if task.Kind == "goal" && (action == "pause" || action == "resume" || action == "clear") {
-			_, message := c.CodexGoalCommand(appmodel.SendRequest{ThreadID: threadID, Text: "/goal " + action})
+			_, message := c.CodexGoalCommand(model.SendRequest{ThreadID: threadID, Text: "/goal " + action})
 			return message
 		}
 		if task.Kind == "loop" && action == "stop" {
 			if t.TaskStopping {
 				return ""
 			}
-			if c.Submit(appmodel.SendRequest{ThreadID: threadID, Steer: true, KeepSessionSettings: true, Text: "Stop all looping tasks in the current session. Cancel all scheduled tasks and end dynamic loops."}) == 0 {
+			if c.Submit(model.SendRequest{ThreadID: threadID, Steer: true, KeepSessionSettings: true, Text: "Stop all looping tasks in the current session. Cancel all scheduled tasks and end dynamic loops."}) == 0 {
 				return "Unable to stop the loop. Try again later."
 			}
-			c.Update(threadID, func(t *appmodel.Thread) { t.TaskStopping = true })
+			c.Update(threadID, func(t *model.Thread) { t.TaskStopping = true })
 			return ""
 		}
 	}

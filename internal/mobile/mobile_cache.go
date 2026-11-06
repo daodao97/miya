@@ -1,13 +1,18 @@
 package mobile
 
 import (
-	appmodel "miya/internal/appmodel"
-	remote "miya/internal/remote"
-	uiruntime "miya/internal/uiruntime"
-	os "os"
-	filepath "path/filepath"
-	sync "sync"
-	time "time"
+	"os"
+	"path/filepath"
+	"sync"
+	"time"
+
+	"miya/internal/fsutil"
+	"miya/internal/model"
+	"miya/internal/phonecache"
+	"miya/internal/remote"
+	"miya/internal/svcproto"
+	"miya/internal/uiruntime"
+	"miya/internal/workspaces"
 )
 
 type mobileCacheWork struct {
@@ -21,7 +26,7 @@ func (m *App) OpenDiskCache(link string) {
 	m.FlushCache(true)
 	dir := ""
 	if m.DataDir != "" && link != "" {
-		dir = filepath.Join(m.DataDir, "threads", appmodel.CacheName(link))
+		dir = filepath.Join(m.DataDir, "threads", workspaces.CacheName(link))
 	}
 	if dir != m.CacheDir {
 		m.MsgCache, m.msgKeys = nil, nil
@@ -30,8 +35,8 @@ func (m *App) OpenDiskCache(link string) {
 	if dir == "" || len(m.State.Projects) > 0 {
 		return
 	}
-	var saved appmodel.PhoneSavedState
-	if appmodel.ReadGzipJSON(filepath.Join(dir, appmodel.StateFile), &saved) == nil {
+	var saved phonecache.SavedState
+	if fsutil.ReadGzipJSON(filepath.Join(dir, phonecache.StateFile), &saved) == nil {
 		// Approvals may have been answered since; the desktop sends them.
 		saved.State.Approvals = nil
 		m.State = saved.State
@@ -55,12 +60,12 @@ func (m *App) DropDiskCache() {
 	}
 }
 
-func (m *App) loadDisk(serverID string) []appmodel.Message {
+func (m *App) loadDisk(serverID string) []model.Message {
 	if m.CacheDir == "" || serverID == "" {
 		return nil
 	}
-	var msgs []appmodel.Message
-	if appmodel.ReadGzipJSON(filepath.Join(m.CacheDir, appmodel.CacheName(serverID)+".json.gz"), &msgs) != nil {
+	var msgs []model.Message
+	if fsutil.ReadGzipJSON(filepath.Join(m.CacheDir, workspaces.CacheName(serverID)+".json.gz"), &msgs) != nil {
 		return nil
 	}
 	return msgs
@@ -76,12 +81,12 @@ func (m *App) persist(key string, v any) {
 	}
 	m.Dirty[key] = v
 	if m.flushTimer == nil {
-		m.flushTimer = time.AfterFunc(appmodel.CacheFlushDelay, func() { uiruntime.RunOnMain(func() { m.FlushCache(false) }) })
+		m.flushTimer = time.AfterFunc(phonecache.CacheFlushDelay, func() { uiruntime.RunOnMain(func() { m.FlushCache(false) }) })
 	}
 }
 
 func (m *App) PersistState() {
-	m.persist(appmodel.StateKey, appmodel.PhoneSavedState{Host: m.Host, State: m.State})
+	m.persist(phonecache.StateKey, phonecache.SavedState{Host: m.Host, State: m.State})
 }
 
 // flushCache writes what changed, in the background unless wait is set, as
@@ -103,13 +108,13 @@ func (m *App) FlushCache(wait bool) {
 		m.cacheWork.mu.Lock()
 		defer m.cacheWork.mu.Unlock()
 		for key, v := range dirty {
-			name := appmodel.StateFile
-			if key != appmodel.StateKey {
-				name = appmodel.CacheName(key) + ".json.gz"
+			name := phonecache.StateFile
+			if key != phonecache.StateKey {
+				name = workspaces.CacheName(key) + ".json.gz"
 			}
-			appmodel.WriteGzipJSON(filepath.Join(dir, name), v)
+			fsutil.WriteGzipJSON(filepath.Join(dir, name), v)
 		}
-		appmodel.PruneCache(dir, appmodel.PhoneDiskThreads)
+		phonecache.Prune(dir, phonecache.PhoneDiskThreads)
 	}
 	if wait {
 		write()
@@ -131,7 +136,7 @@ func (m *App) SubscribeRequestFor(serverID string, id int) (r remote.Request) {
 	}
 	if len(r.Have) == 0 {
 		for _, msg := range m.CachedMessages(serverID) {
-			r.Have = append(r.Have, remote.Seen{ID: msg.ID, FP: appmodel.MessageFingerprint(msg)})
+			r.Have = append(r.Have, remote.Seen{ID: msg.ID, FP: svcproto.MessageFingerprint(msg)})
 		}
 	}
 	return r

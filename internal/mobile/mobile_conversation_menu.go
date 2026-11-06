@@ -1,10 +1,11 @@
 package mobile
 
 import (
-	widgets "miya/internal/widgets"
-	time "time"
+	"time"
 
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui"
+
+	"miya/internal/widgets"
 )
 
 func (m *App) conversationActionsSheet(c *ui.Context) {

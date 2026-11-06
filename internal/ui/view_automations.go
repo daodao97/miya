@@ -1,19 +1,20 @@
 package desktopui
 
 import (
-	json "encoding/json"
-	fmt "fmt"
-	appmodel "miya/internal/appmodel"
-	automation "miya/internal/automation"
-	model "miya/internal/model"
-	textutil "miya/internal/textutil"
-	widgets "miya/internal/widgets"
-	filepath "path/filepath"
-	strconv "strconv"
-	strings "strings"
-	time "time"
+	"encoding/json"
+	"fmt"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
 
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui"
+
+	"miya/internal/async"
+	"miya/internal/automation"
+	"miya/internal/model"
+	"miya/internal/textutil"
+	"miya/internal/widgets"
 )
 
 // automationsUI is the Automations page's state; the automations live in
@@ -95,7 +96,7 @@ func (app *App) autoCall(op string, r automation.Request, done func(json.RawMess
 		done(raw, err)
 	}
 	res, err := c.AutomationOp(op, r)
-	if d, ok := res.(appmodel.Deferred); ok && err == nil {
+	if d, ok := res.(async.Reply); ok && err == nil {
 		go func() {
 			v, err := d()
 			c.Dispatch(func() { finish(v, err) })

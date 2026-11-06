@@ -1,13 +1,14 @@
 package widgets
 
 import (
-	appmodel "miya/internal/appmodel"
-	codex "miya/internal/codex"
-	strings "strings"
+	"strings"
+
+	"miya/internal/appmodel"
+	"miya/internal/codex"
 )
 
 func RequestAgent(a codex.Approval) string {
-	if appmodel.IsMiyaApproval(a) {
+	if codex.IsMiyaApproval(a) {
 		return "Miya"
 	}
 	if strings.Contains(string(a.ID), "claude:") {

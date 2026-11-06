@@ -1,14 +1,18 @@
 package controller
 
 import (
-	json "encoding/json"
-	errors "errors"
-	fmt "fmt"
-	appmodel "miya/internal/appmodel"
-	automation "miya/internal/automation"
-	model "miya/internal/model"
-	textutil "miya/internal/textutil"
-	strings "strings"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+
+	"miya/internal/appmodel"
+	"miya/internal/async"
+	"miya/internal/automation"
+	"miya/internal/mcpproto"
+	"miya/internal/mcpserver"
+	"miya/internal/model"
+	"miya/internal/textutil"
 )
 
 var automationToolProps = map[string]any{
@@ -26,22 +30,22 @@ func init() {
 	for k, v := range automationToolProps {
 		update[k] = v
 	}
-	appmodel.RegisterMCPTools(automationTool, false,
-		appmodel.McpTool{Name: "list_automations", Description: "List the scheduled automations in Miya: id, name, project, schedule, whether on, and the last run.",
-			InputSchema: map[string]any{"type": "object", "properties": map[string]any{}}, Annotations: appmodel.McpReadOnly},
-		appmodel.McpTool{Name: "create_automation", Description: "Create a scheduled automation in this project: on its schedule Miya starts a new conversation with the instructions. " +
+	mcpserver.Register(automationTool, false,
+		mcpproto.Tool{Name: "list_automations", Description: "List the scheduled automations in Miya: id, name, project, schedule, whether on, and the last run.",
+			InputSchema: map[string]any{"type": "object", "properties": map[string]any{}}, Annotations: mcpproto.ReadOnly},
+		mcpproto.Tool{Name: "create_automation", Description: "Create a scheduled automation in this project: on its schedule Miya starts a new conversation with the instructions. " +
 			"Miya asks the user to confirm in this conversation and creates it only if they accept.",
 			InputSchema: map[string]any{"type": "object", "properties": automationToolProps, "required": []string{"name", "schedule", "instructions"}},
 			Annotations: map[string]any{"readOnlyHint": false, "openWorldHint": false}},
-		appmodel.McpTool{Name: "update_automation", Description: "Change an automation. Turning it on or off applies at once; other changes need the user's confirmation.",
+		mcpproto.Tool{Name: "update_automation", Description: "Change an automation. Turning it on or off applies at once; other changes need the user's confirmation.",
 			InputSchema: map[string]any{"type": "object", "properties": update, "required": []string{"id"}},
 			Annotations: map[string]any{"readOnlyHint": false, "openWorldHint": false}},
 	)
 }
 
 // automationTool calls an automation tool in the service.
-func automationTool(s *appmodel.McpServer, name string, raw json.RawMessage) (string, error) {
-	var args appmodel.McpAutomationArgs
+func automationTool(s *mcpserver.Server, name string, raw json.RawMessage) (string, error) {
+	var args mcpproto.AutomationArgs
 	if len(raw) > 0 && string(raw) != "null" && json.Unmarshal(raw, &args) != nil {
 		return "", errors.New("Invalid arguments")
 	}
@@ -50,16 +54,16 @@ func automationTool(s *appmodel.McpServer, name string, raw json.RawMessage) (st
 		return "", fmt.Errorf("Unknown tool %s", name)
 	}
 	var text string
-	err := s.CallService(op, appmodel.McpRequest{Workspace: s.Workspace(), Tool: name, Auto: &args}, &text)
+	err := s.CallService(op, mcpproto.Request{Workspace: s.Workspace(), Tool: name, Auto: &args}, &text)
 	return text, err
 }
 
 // mcpAutomation answers an automation tool call in the service.
-func (c *Controller) mcpAutomation(op string, r appmodel.McpRequest) (any, error) {
+func (c *Controller) mcpAutomation(op string, r mcpproto.Request) (any, error) {
 	if c.Auto == nil {
 		return nil, errors.New("Automations require the Miya background service")
 	}
-	var args appmodel.McpAutomationArgs
+	var args mcpproto.AutomationArgs
 	if r.Auto != nil {
 		args = *r.Auto
 	}
@@ -69,7 +73,7 @@ func (c *Controller) mcpAutomation(op string, r appmodel.McpRequest) (any, error
 	case "mcpAutomationCreate":
 		caller, ok := c.McpCaller(r.Tool)
 		if !ok {
-			return nil, errors.New(appmodel.McpCallerUnknown)
+			return nil, errors.New(mcpproto.CallerUnknown)
 		}
 		a := automation.Automation{Name: args.Name, Project: c.ThreadWorkspace(caller.ID), Agent: textutil.FirstNonEmpty(args.Agent, model.ThreadAgent(caller)),
 			Instructions: args.Instructions, Schedule: args.Schedule, Check: args.Check, Rounds: args.Rounds, Enabled: true}
@@ -81,7 +85,7 @@ func (c *Controller) mcpAutomation(op string, r appmodel.McpRequest) (any, error
 		}
 		a.ID = ""
 		id, ch := c.AskUser(caller, "Create automation \""+a.Name+"\"", c.Auto.CardDetail(a, c.Auto.Now()))
-		return appmodel.Deferred(func() (any, error) {
+		return async.Reply(func() (any, error) {
 			if !c.waitUser(id, ch) {
 				return "The user did not confirm. No automation was created.", nil
 			}
@@ -104,7 +108,7 @@ func (c *Controller) mcpAutomation(op string, r appmodel.McpRequest) (any, error
 	return nil, fmt.Errorf("unknown miya call %s", op)
 }
 
-func (c *Controller) mcpUpdateAutomation(r appmodel.McpRequest, args appmodel.McpAutomationArgs) (any, error) {
+func (c *Controller) mcpUpdateAutomation(r mcpproto.Request, args mcpproto.AutomationArgs) (any, error) {
 	s := c.Auto
 	i, ok := s.Store.Find(strings.TrimSpace(args.ID))
 	if !ok {
@@ -159,10 +163,10 @@ func (c *Controller) mcpUpdateAutomation(r appmodel.McpRequest, args appmodel.Mc
 	}
 	caller, ok := c.McpCaller(r.Tool)
 	if !ok {
-		return nil, errors.New(appmodel.McpCallerUnknown)
+		return nil, errors.New(mcpproto.CallerUnknown)
 	}
 	id, ch := c.AskUser(caller, "Update automation \""+old.Name+"\"", diff)
-	return appmodel.Deferred(func() (any, error) {
+	return async.Reply(func() (any, error) {
 		if !c.waitUser(id, ch) {
 			return "The user did not confirm. The automation was not changed.", nil
 		}
@@ -174,7 +178,7 @@ func (c *Controller) mcpUpdateAutomation(r appmodel.McpRequest, args appmodel.Mc
 }
 
 func init() {
-	appmodel.RegisterMCPTools(nil, false, appmodel.McpTool{Name: "report_result",
+	mcpserver.Register(nil, false, mcpproto.Tool{Name: "report_result",
 		Description: "In a Miya automation run, report the run's structured result before finishing: a short summary, key findings, metrics, files or links produced, and whether the user needs to act. " +
 			"A later call replaces an earlier one. Only automation runs use it.",
 		InputSchema: map[string]any{"type": "object", "properties": map[string]any{
@@ -192,7 +196,7 @@ func init() {
 }
 
 // mcpReportResult keeps a reported result with the caller's run.
-func (c *Controller) mcpReportResult(r appmodel.McpRequest) (any, error) {
+func (c *Controller) mcpReportResult(r mcpproto.Request) (any, error) {
 	if c.Auto == nil {
 		return nil, errors.New("Automations require the Miya background service")
 	}
@@ -201,7 +205,7 @@ func (c *Controller) mcpReportResult(r appmodel.McpRequest) (any, error) {
 	}
 	caller, ok := c.McpCaller(r.Tool)
 	if !ok {
-		return nil, errors.New(appmodel.McpCallerUnknown)
+		return nil, errors.New(mcpproto.CallerUnknown)
 	}
 	for id, run := range c.Auto.Active {
 		if run.Thread != caller.ID {

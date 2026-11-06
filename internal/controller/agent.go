@@ -1,10 +1,15 @@
 package controller
 
 import (
-	appmodel "miya/internal/appmodel"
-	codex "miya/internal/codex"
-	model "miya/internal/model"
-	strings "strings"
+	"strings"
+
+	"miya/internal/appmodel"
+	"miya/internal/codex"
+	"miya/internal/composer"
+	"miya/internal/model"
+	"miya/internal/msgfmt"
+	"miya/internal/runtime/tracker"
+	"miya/internal/svcproto"
 )
 
 // agentCaps says which shared controls apply to an agent's conversations.
@@ -22,7 +27,7 @@ type AgentSetting struct {
 
 type agentBackend interface {
 	ID() string
-	Runtime(c *Controller, t appmodel.Thread) appmodel.RuntimeSource
+	Runtime(c *Controller, t model.Thread) tracker.SnapshotSource
 	Name() string
 	Icon() appmodel.AgentIconSpec
 	Caps() agentCaps
@@ -38,15 +43,15 @@ type agentBackend interface {
 	Reconnect(c *Controller)
 
 	// Open loads a conversation's history as it is selected.
-	Open(c *Controller, t appmodel.Thread)
+	Open(c *Controller, t model.Thread)
 	// Send starts a turn of req, which submit checked, and returns the
 	// conversation running it.
-	Send(c *Controller, req appmodel.SendRequest) int
-	Stop(c *Controller, t appmodel.Thread)
-	Archive(c *Controller, t appmodel.Thread)
-	Delete(c *Controller, t appmodel.Thread)
+	Send(c *Controller, req model.SendRequest) int
+	Stop(c *Controller, t model.Thread)
+	Archive(c *Controller, t model.Thread)
+	Delete(c *Controller, t model.Thread)
 	// Suspend runs as the app leaves the conversation's workspace or quits.
-	Suspend(c *Controller, t appmodel.Thread)
+	Suspend(c *Controller, t model.Thread)
 
 	// Owns reports whether an approval came from this agent.
 	Owns(a codex.Approval) bool
@@ -68,13 +73,13 @@ type agentBackend interface {
 	// CanRewind reports whether a user message can be edited and sent
 	// again; Rewind drops it and what followed from the agent's history,
 	// then calls finishRewind.
-	CanRewind(c *Controller, t appmodel.Thread, m appmodel.Message) bool
-	Rewind(c *Controller, t appmodel.Thread, m appmodel.Message, text string)
+	CanRewind(c *Controller, t model.Thread, m model.Message) bool
+	Rewind(c *Controller, t model.Thread, m model.Message, text string)
 
 	// Steer adds a message to the running turn of t; false when it cannot,
 	// and the message waits in the queue instead. A steer the agent refuses
 	// later goes to the queue too.
-	Steer(c *Controller, t appmodel.Thread, req appmodel.SendRequest) bool
+	Steer(c *Controller, t model.Thread, req model.SendRequest) bool
 }
 
 // agentBackends lists the agents in the order the picker shows them; the
@@ -90,7 +95,7 @@ func BackendFor(id string) agentBackend {
 	return AgentBackends[0]
 }
 
-func BackendOf(t appmodel.Thread) agentBackend { return BackendFor(model.ThreadAgent(t)) }
+func BackendOf(t model.Thread) agentBackend { return BackendFor(model.ThreadAgent(t)) }
 
 // agentStatus is an agent's state now, for features outside the controller.
 func (c *Controller) agentStatus(id string) model.AgentStatus {
@@ -119,7 +124,7 @@ func (c *Controller) agentList() map[string]any {
 }
 
 // stopAgentRun asks a conversation's agent to stop its turn.
-func (c *Controller) stopAgentRun(t appmodel.Thread) { BackendOf(t).Stop(c, t) }
+func (c *Controller) stopAgentRun(t model.Thread) { BackendOf(t).Stop(c, t) }
 
 func ApprovalOwner(a codex.Approval) agentBackend {
 	for _, b := range AgentBackends {
@@ -154,7 +159,7 @@ func (c *Controller) discoverAll() {
 
 func claudeApproval(a codex.Approval) bool { return strings.Contains(string(a.ID), "claude:") }
 
-func (c *Controller) CanRewind(t appmodel.Thread, m appmodel.Message) bool {
+func (c *Controller) CanRewind(t model.Thread, m model.Message) bool {
 	return m.Role == "user" && !t.Busy && !t.Loading && !t.ReadOnly && BackendOf(t).CanRewind(c, t, m)
 }
 
@@ -162,18 +167,18 @@ func (c *Controller) CanRewind(t appmodel.Thread, m appmodel.Message) bool {
 // it and everything after it.
 func (c *Controller) Rewind(threadID, messageID int, text string) {
 	if c.Remote != nil {
-		c.forward("rewind", appmodel.SvcRewind{Thread: threadID, Message: messageID, Text: text})
+		c.forward("rewind", svcproto.Rewind{Thread: threadID, Message: messageID, Text: text})
 		return
 	}
 	text = strings.TrimSpace(text)
 	t := c.ThreadWithID(threadID)
 	for _, m := range t.Messages {
 		if m.ID == messageID {
-			if text == "" && len(appmodel.MessageAttachments(m)) == 0 {
+			if text == "" && len(msgfmt.MessageAttachments(m)) == 0 {
 				return
 			}
 			if c.CanRewind(t, m) {
-				c.Update(t.ID, func(t *appmodel.Thread) { t.Busy = true; t.Status = tr("Rewinding conversation…") })
+				c.Update(t.ID, func(t *model.Thread) { t.Busy = true; t.Status = tr("Rewinding conversation…") })
 				BackendOf(t).Rewind(c, t, m, text)
 			}
 			return
@@ -183,9 +188,9 @@ func (c *Controller) Rewind(threadID, messageID int, text string) {
 
 // finishRewind ends an adapter's rewind: on success it drops the message and
 // what followed, lets the adapter record its new history, and sends the text.
-func (c *Controller) finishRewind(id, messageID int, text string, err error, apply func(*appmodel.Thread)) {
-	req := appmodel.SendRequest{ThreadID: id, Text: text}
-	c.Update(id, func(t *appmodel.Thread) {
+func (c *Controller) finishRewind(id, messageID int, text string, err error, apply func(*model.Thread)) {
+	req := model.SendRequest{ThreadID: id, Text: text}
+	c.Update(id, func(t *model.Thread) {
 		t.Busy = false
 		if err != nil {
 			t.Status = tr("Unable to resend: ") + err.Error()
@@ -194,7 +199,7 @@ func (c *Controller) finishRewind(id, messageID int, text string, err error, app
 		t.Status = ""
 		for i, m := range t.Messages {
 			if m.ID == messageID {
-				req.Attachments = appmodel.MessageAttachments(m)
+				req.Attachments = msgfmt.MessageAttachments(m)
 				req.MemoryControl = m.MemoryControl
 				t.Messages = t.Messages[:i]
 				break
@@ -212,9 +217,9 @@ func (c *Controller) finishRewind(id, messageID int, text string, err error, app
 	}
 }
 
-func (c *Controller) ThreadWithID(id int) appmodel.Thread {
+func (c *Controller) ThreadWithID(id int) model.Thread {
 	if id == 0 {
-		return appmodel.Thread{}
+		return model.Thread{}
 	}
 	for _, t := range c.Threads() {
 		if t.ID == id {
@@ -231,7 +236,7 @@ func (c *Controller) ThreadWithID(id int) appmodel.Thread {
 			}
 		}
 	}
-	return appmodel.Thread{}
+	return model.Thread{}
 }
 
 func (c *Controller) ThreadWorkspace(id int) string {
@@ -250,15 +255,15 @@ func (c *Controller) ThreadWorkspace(id int) string {
 
 // addThread adds a new conversation to a project's list: the open
 // project's, or a background one's, whose runs go on unseen.
-func (c *Controller) AddThread(project string, t appmodel.Thread) {
+func (c *Controller) AddThread(project string, t model.Thread) {
 	if project == "" || project == c.Cwd {
-		c.SetThreads(append([]appmodel.Thread{t}, c.Threads()...))
+		c.SetThreads(append([]model.Thread{t}, c.Threads()...))
 		return
 	}
 	if c.ProjectCache == nil {
-		c.ProjectCache = map[string][]appmodel.Thread{}
+		c.ProjectCache = map[string][]model.Thread{}
 	}
-	c.ProjectCache[project] = append([]appmodel.Thread{t}, c.ProjectCache[project]...)
+	c.ProjectCache[project] = append([]model.Thread{t}, c.ProjectCache[project]...)
 	if c.Revision != nil {
 		c.SetRevision(c.Revision() + 1)
 	}
@@ -266,7 +271,7 @@ func (c *Controller) AddThread(project string, t appmodel.Thread) {
 
 // submit sends a message without reading any window's state. It returns
 // the conversation that took it, or 0 when it cannot be sent now.
-func (c *Controller) Submit(req appmodel.SendRequest) int {
+func (c *Controller) Submit(req model.SendRequest) int {
 	c.LastSubmitError = ""
 	if model.HasAgentReferences(req.Text, req.Parts) {
 		capability := c.CollaborationCapabilities()
@@ -297,14 +302,14 @@ func (c *Controller) Submit(req appmodel.SendRequest) int {
 	_, existingSnapshots := model.SplitReferenceContext(req.Text)
 	if len(req.Parts) > 0 && len(existingSnapshots) == 0 {
 		var err error
-		req.Text, err = appmodel.PartsText(req.Parts)
+		req.Text, err = composer.PartsText(req.Parts)
 		if err != nil {
 			c.LastSubmitError = err.Error()
 			c.SetStatus(err.Error())
 			return 0
 		}
 	}
-	if _, ok, _ := appmodel.ParseGoalCommand(req.Text); ok && (req.ThreadID == 0 && req.Agent != appmodel.AgentClaude || req.ThreadID != 0 && model.ThreadAgent(c.ThreadWithID(req.ThreadID)) == appmodel.AgentCodex) {
+	if _, ok, _ := codex.ParseGoalCommand(req.Text); ok && (req.ThreadID == 0 && req.Agent != appmodel.AgentClaude || req.ThreadID != 0 && model.ThreadAgent(c.ThreadWithID(req.ThreadID)) == appmodel.AgentCodex) {
 		id, message := c.CodexGoalCommand(req)
 		if message != "" {
 			c.SetStatus(message)
@@ -314,7 +319,7 @@ func (c *Controller) Submit(req appmodel.SendRequest) int {
 	// References supply a send-time context snapshot without changing the
 	// conversations they refer to. Delegation records its own handoff.
 	own, _ := model.SplitReferenceContext(req.Text)
-	req.Parts = appmodel.MessageParts(own)
+	req.Parts = model.MessageParts(own)
 	var err error
 	req.Text, _, err = ExpandThreadRefs(req.Text, c.ThreadRef(c.ThreadWithID(req.ThreadID)), c.ResolveReference)
 	if err != nil {
@@ -326,7 +331,7 @@ func (c *Controller) Submit(req appmodel.SendRequest) int {
 }
 
 // submitExpanded starts or queues req, its references already expanded.
-func (c *Controller) SubmitExpanded(req appmodel.SendRequest) int {
+func (c *Controller) SubmitExpanded(req model.SendRequest) int {
 	req.Text = strings.TrimSpace(req.Text)
 	if req.Text == "" && len(req.Attachments) == 0 {
 		return 0

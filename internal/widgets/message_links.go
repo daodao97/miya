@@ -1,10 +1,11 @@
 package widgets
 
 import (
-	appmodel "miya/internal/appmodel"
-	filepath "path/filepath"
+	"path/filepath"
 
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui"
+
+	"miya/internal/msgfmt"
 )
 
 // Copy file destinations rather than their displayed label or URL encoding.
@@ -13,7 +14,7 @@ func MessageLinkMenu(c *ui.Context, cwd string) func(*ui.Menu, string) {
 	services := c.Services()
 	return func(m *ui.Menu, link string) {
 		label, text := tr("Copy link"), link
-		if rel, ok := appmodel.LocalFileLink(cwd, link); ok {
+		if rel, ok := msgfmt.LocalFileLink(cwd, link); ok {
 			label, text = tr("Copy path"), filepath.Clean(filepath.Join(cwd, rel))
 		}
 		if m.Item(label).Chosen() {

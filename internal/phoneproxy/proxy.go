@@ -1,20 +1,21 @@
 package phoneproxy
 
 import (
-	context "context"
-	rand "crypto/rand"
+	"context"
+	"crypto/rand"
 	cryptoSubtle "crypto/subtle"
-	hex "encoding/hex"
-	errors "errors"
-	appmodel "miya/internal/appmodel"
-	remote "miya/internal/remote"
-	net "net"
-	http "net/http"
-	httputil "net/http/httputil"
-	strings "strings"
-	sync "sync"
-	atomic "sync/atomic"
-	time "time"
+	"encoding/hex"
+	"errors"
+	"net"
+	"net/http"
+	"net/http/httputil"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"miya/internal/phone"
+	"miya/internal/remote"
 )
 
 type PhoneFileProxy struct {
@@ -44,7 +45,7 @@ func NewPhoneFileProxy(conn *remote.Conn, project string) (*PhoneFileProxy, erro
 }
 
 func (p *PhoneFileProxy) Start(project string, dial func(context.Context) (net.Conn, error)) error {
-	return p.StartProxy("/"+appmodel.ProjectFileID(project), "", dial)
+	return p.StartProxy("/"+phone.ProjectFileID(project), "", dial)
 }
 
 func (p *PhoneFileProxy) StartProxy(prefix, webOrigin string, dial func(context.Context) (net.Conn, error)) error {

@@ -1,13 +1,14 @@
 package mobile
 
 import (
-	fmt "fmt"
-	appmodel "miya/internal/appmodel"
-	remote "miya/internal/remote"
-	widgets "miya/internal/widgets"
-	strings "strings"
+	"fmt"
+	"strings"
 
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui"
+
+	"miya/internal/appmodel"
+	"miya/internal/remote"
+	"miya/internal/widgets"
 )
 
 func (m *App) queueAction(op string, id int) {

@@ -1,27 +1,34 @@
 package controller
 
 import (
-	bufio "bufio"
-	bytes "bytes"
-	context "context"
-	json "encoding/json"
-	fmt "fmt"
-	appdir "miya/internal/appdir"
-	appmodel "miya/internal/appmodel"
-	async "miya/internal/async"
-	automation "miya/internal/automation"
-	memory "miya/internal/memory"
-	manager "miya/internal/memory/manager"
-	notification "miya/internal/notification"
-	remote "miya/internal/remote"
-	uiruntime "miya/internal/uiruntime"
-	webservice "miya/internal/webservice"
-	net "net"
-	os "os"
-	filepath "path/filepath"
-	sync "sync"
-	atomic "sync/atomic"
-	time "time"
+	"bufio"
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"net"
+	"os"
+	"path/filepath"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"miya/internal/appdir"
+	"miya/internal/appmodel"
+	"miya/internal/async"
+	"miya/internal/automation"
+	"miya/internal/mcpproto"
+	"miya/internal/memory"
+	"miya/internal/memory/manager"
+	"miya/internal/model"
+	"miya/internal/notification"
+	"miya/internal/phone"
+	"miya/internal/prefs"
+	"miya/internal/remote"
+	"miya/internal/runtime/tracker"
+	"miya/internal/svcproto"
+	"miya/internal/uiruntime"
+	"miya/internal/webservice"
 )
 
 // serviceIdleTimeout is how long a service with no window and no running
@@ -74,7 +81,7 @@ func (p *SvcPeer) Write(data []byte) error {
 		}
 		p.queued.Add(-int64(len(data)))
 		p.Wire.Close()
-		return appmodel.ErrServiceClosed
+		return svcproto.ErrClosed
 	}
 	line := make([]byte, len(data)+1)
 	copy(line, data)
@@ -176,7 +183,7 @@ func (s *Service) HandleConn(p *SvcPeer) {
 			line, err = r.ReadBytes('\n')
 		}
 		if len(bytes.TrimSpace(line)) > 0 {
-			var req appmodel.SvcRequest
+			var req svcproto.Request
 			if json.Unmarshal(line, &req) == nil {
 				s.request(p, req)
 			}
@@ -187,7 +194,7 @@ func (s *Service) HandleConn(p *SvcPeer) {
 	}
 }
 
-func (s *Service) request(p *SvcPeer, req appmodel.SvcRequest) {
+func (s *Service) request(p *SvcPeer, req svcproto.Request) {
 	if req.ID == 0 {
 		s.exec.Push(func() { _, _ = s.Handle(p, req) })
 		return
@@ -197,10 +204,10 @@ func (s *Service) request(p *SvcPeer, req appmodel.SvcRequest) {
 		p.Wire.Close()
 		return
 	}
-	done := make(chan appmodel.SvcMessage, 1)
+	done := make(chan svcproto.Envelope, 1)
 	s.exec.Push(func() {
 		res, err := s.Handle(p, req)
-		if d, ok := res.(appmodel.Deferred); ok && err == nil {
+		if d, ok := res.(async.Reply); ok && err == nil {
 			// Work that waits on other programs runs off the executor.
 			go func() {
 				res, err := d()
@@ -236,8 +243,8 @@ func (s *Service) request(p *SvcPeer, req appmodel.SvcRequest) {
 }
 
 // svcReply is the reply to a request.
-func svcReply(req appmodel.SvcRequest, res any, err error) appmodel.SvcMessage {
-	msg := appmodel.SvcMessage{ID: req.ID}
+func svcReply(req svcproto.Request, res any, err error) svcproto.Envelope {
+	msg := svcproto.Envelope{ID: req.ID}
 	if err != nil {
 		msg.Error = err.Error()
 	} else if res != nil {
@@ -247,7 +254,7 @@ func svcReply(req appmodel.SvcRequest, res any, err error) appmodel.SvcMessage {
 }
 
 // handle runs a window's request on the executor.
-func (s *Service) Handle(p *SvcPeer, req appmodel.SvcRequest) (any, error) {
+func (s *Service) Handle(p *SvcPeer, req svcproto.Request) (any, error) {
 	c := s.C
 	arg := func(v any) error {
 		if len(req.Args) == 0 {
@@ -259,7 +266,7 @@ func (s *Service) Handle(p *SvcPeer, req appmodel.SvcRequest) (any, error) {
 	var value string
 	switch req.Op {
 	case "host":
-		var r appmodel.HostRequest
+		var r svcproto.HostRequest
 		if err := arg(&r); err != nil {
 			return nil, err
 		}
@@ -267,7 +274,7 @@ func (s *Service) Handle(p *SvcPeer, req appmodel.SvcRequest) (any, error) {
 	case "commands":
 		_ = arg(&value)
 		list, known := c.ClaudeCommandsFor(value)
-		return appmodel.HostCommands{Choices: list, Known: known}, nil
+		return svcproto.HostCommands{Choices: list, Known: known}, nil
 	case "notification-presence":
 		var present bool
 		if err := arg(&present); err != nil {
@@ -277,20 +284,20 @@ func (s *Service) Handle(p *SvcPeer, req appmodel.SvcRequest) (any, error) {
 			c.Push.NoteDesktopPresence(time.Now().Add(25 * time.Second))
 		}
 	case "hello":
-		return appmodel.SvcHello{Version: appmodel.ServiceVersion, Exe: s.exe, ExeTime: s.exeTime, PID: os.Getpid(), Busy: s.Busy(), Remote: s.Persistent}, nil
+		return svcproto.Hello{Version: svcproto.Version, Exe: s.exe, ExeTime: s.exeTime, PID: os.Getpid(), Busy: s.Busy(), Remote: s.Persistent}, nil
 	case "runtimeValidate":
 		var r webservice.Service
 		if err := arg(&r); err != nil {
 			return nil, err
 		}
 		manager := c.Runtimes()
-		return appmodel.Deferred(func() (any, error) {
+		return async.Reply(func() (any, error) {
 			ctx, cancel := context.WithTimeout(manager.Context(), 5*time.Second)
 			defer cancel()
 			return nil, manager.ValidateToken(ctx, r.RuntimeToken, r.Host, r.Port)
 		}), nil
 	case "runtime":
-		var r appmodel.RuntimeRequest
+		var r tracker.Request
 		if err := arg(&r); err != nil {
 			return nil, err
 		}
@@ -309,7 +316,7 @@ func (s *Service) Handle(p *SvcPeer, req appmodel.SvcRequest) (any, error) {
 		p.Sub, p.sent, p.order = id, nil, nil
 		s.MarkDirty()
 	case "mcpDesktopControl", "mcpMemory", "mcpThreads", "mcpRead", "mcpStatus", "mcpDelegate", "mcpLegacyTask", "mcpCollaboration", "mcpAutomationList", "mcpAutomationCreate", "mcpAutomationUpdate", "mcpReportResult", "mcpRuntime":
-		var r appmodel.McpRequest
+		var r mcpproto.Request
 		if err := arg(&r); err != nil {
 			return nil, err
 		}
@@ -333,13 +340,13 @@ func (s *Service) Handle(p *SvcPeer, req appmodel.SvcRequest) (any, error) {
 		}
 		return c.AutomationOp(req.Op, r)
 	case "prefetch":
-		var ref appmodel.ThreadRef
+		var ref model.ThreadRef
 		if err := arg(&ref); err != nil {
 			return nil, err
 		}
 		c.PrefetchReference(ref)
 	case "submit":
-		var r appmodel.SendRequest
+		var r model.SendRequest
 		if err := arg(&r); err != nil {
 			return nil, err
 		}
@@ -395,26 +402,26 @@ func (s *Service) Handle(p *SvcPeer, req appmodel.SvcRequest) (any, error) {
 			return nil, fmt.Errorf("Request already handled or expired")
 		}
 	case "rewind":
-		var a appmodel.SvcRewind
+		var a svcproto.Rewind
 		_ = arg(&a)
 		c.Rewind(a.Thread, a.Message, a.Text)
 	case "task":
-		var a appmodel.SvcTaskAction
+		var a svcproto.TaskAction
 		if err := json.Unmarshal(req.Args, &a); err != nil {
 			return nil, err
 		}
 		return c.TaskAction(a.Thread, a.Task, a.Action), nil
 	case "command":
-		var a appmodel.SvcCommand
+		var a svcproto.Command
 		_ = arg(&a)
 		thread, message := c.ThreadCommand(a.Thread, a.Agent, a.Command, a.Policy)
-		return appmodel.SvcCommandResult{Thread: thread, Message: message, FastMode: c.fastMode}, nil
+		return svcproto.CommandResult{Thread: thread, Message: message, FastMode: c.fastMode}, nil
 	case "workspace":
 		_ = arg(&value)
 		if err := c.ChangeWorkspace(value); err != nil {
-			return appmodel.SvcWorkspace{Error: err.Error()}, nil
+			return svcproto.WorkspaceResult{Error: err.Error()}, nil
 		}
-		return appmodel.SvcWorkspace{Cwd: c.Cwd}, nil
+		return svcproto.WorkspaceResult{Cwd: c.Cwd}, nil
 	case "connect":
 		c.Connect()
 	case "model", "effort", "policy", "locale", "claudeCommand":
@@ -432,19 +439,19 @@ func (s *Service) Handle(p *SvcPeer, req appmodel.SvcRequest) (any, error) {
 			c.SetClaudeCommand(value)
 		}
 	case "threadPolicy", "draft":
-		var a appmodel.SvcThreadValue
+		var a svcproto.ThreadValue
 		_ = arg(&a)
 		if a.Thread != 0 {
-			c.Update(a.Thread, func(t *appmodel.Thread) {
+			c.Update(a.Thread, func(t *model.Thread) {
 				if req.Op == "draft" {
 					t.Draft = a.Value
 				} else {
-					t.PermissionPolicy = appmodel.NormalizePermissionPolicy(a.Value)
+					t.PermissionPolicy = prefs.NormalizePermissionPolicy(a.Value)
 				}
 			})
 		}
 	case "renameProject", "archiveProject", "deleteProject":
-		var a appmodel.SvcProject
+		var a svcproto.ProjectRequest
 		_ = arg(&a)
 		switch req.Op {
 		case "renameProject":
@@ -459,11 +466,11 @@ func (s *Service) Handle(p *SvcPeer, req appmodel.SvcRequest) (any, error) {
 		DesktopPhone.Do(value)
 		uiruntime.Invalidate()
 	case "dequeue":
-		var a appmodel.SvcQueued
+		var a svcproto.Queued
 		_ = arg(&a)
 		c.RemoveQueued(a.Thread, a.ID)
 	case "steerQueued":
-		var a appmodel.SvcQueued
+		var a svcproto.Queued
 		_ = arg(&a)
 		c.SteerQueued(a.Thread, a.ID)
 	case "drainQueue":
@@ -517,7 +524,7 @@ func (s *Service) Busy() bool {
 		return true
 	}
 	for _, t := range s.C.Threads() {
-		if t.Busy || t.TaskPending || appmodel.ActiveThreadGoal(t) {
+		if t.Busy || t.TaskPending || model.ActiveGoal(t) {
 			return true
 		}
 	}
@@ -526,7 +533,7 @@ func (s *Service) Busy() bool {
 			continue
 		}
 		for _, t := range threads {
-			if t.Busy || t.TaskPending || appmodel.ActiveThreadGoal(t) {
+			if t.Busy || t.TaskPending || model.ActiveGoal(t) {
 				return true
 			}
 		}
@@ -580,7 +587,7 @@ func (s *Service) PublishLoop() {
 
 func (s *Service) publish() {
 	st := s.C.SnapshotState()
-	data, err := json.Marshal(appmodel.SvcMessage{Event: "state", State: &st})
+	data, err := json.Marshal(svcproto.Envelope{Event: "state", State: &st})
 	if err != nil {
 		return
 	}
@@ -602,7 +609,7 @@ func (s *Service) publishMessages(p *SvcPeer) {
 		return
 	}
 	if update, ok := p.Diff(t); ok {
-		if data, err := json.Marshal(appmodel.SvcMessage{Event: "messages", Messages: &update}); err == nil {
+		if data, err := json.Marshal(svcproto.Envelope{Event: "messages", Messages: &update}); err == nil {
 			_ = p.Write(data)
 		}
 	}
@@ -610,8 +617,8 @@ func (s *Service) publishMessages(p *SvcPeer) {
 
 // diff is the update that brings the window's copy of t up to date, and
 // whether there is one; it records the update as sent.
-func (p *SvcPeer) Diff(t appmodel.Thread) (appmodel.SvcMessages, bool) {
-	update := appmodel.SvcMessages{Thread: t.ID, Reset: p.sent == nil}
+func (p *SvcPeer) Diff(t model.Thread) (svcproto.ThreadMessages, bool) {
+	update := svcproto.ThreadMessages{Thread: t.ID, Reset: p.sent == nil}
 	if update.Reset {
 		p.sent = map[int]uint64{}
 	}
@@ -622,13 +629,13 @@ func (p *SvcPeer) Diff(t appmodel.Thread) (appmodel.SvcMessages, bool) {
 		if same && p.order[i] != m.ID {
 			same = false
 		}
-		if fp := appmodel.MessageFingerprint(m); p.sent[m.ID] != fp {
+		if fp := svcproto.MessageFingerprint(m); p.sent[m.ID] != fp {
 			p.sent[m.ID] = fp
 			update.Changed = append(update.Changed, m)
 		}
 	}
 	if !update.Reset && same && len(update.Changed) == 0 {
-		return appmodel.SvcMessages{}, false
+		return svcproto.ThreadMessages{}, false
 	}
 	p.order = update.Order
 	return update, true
@@ -637,7 +644,7 @@ func (p *SvcPeer) Diff(t appmodel.Thread) (appmodel.SvcMessages, bool) {
 // draftReturned gives a message that could not be sent to every window;
 // the one showing its conversation puts it back in its composer.
 func (s *Service) draftReturned(id int, text string, attachments []string) {
-	data, err := json.Marshal(appmodel.SvcMessage{Event: "draft", Draft: &appmodel.SvcDraft{Thread: id, Text: text, Attachments: attachments}})
+	data, err := json.Marshal(svcproto.Envelope{Event: "draft", Draft: &svcproto.Draft{Thread: id, Text: text, Attachments: attachments}})
 	if err != nil {
 		return
 	}
@@ -678,32 +685,32 @@ func (s *Service) CheckIdle() {
 }
 
 // snapshotState is the state windows show, without messages.
-func (c *Controller) SnapshotState() appmodel.SvcState {
+func (c *Controller) SnapshotState() svcproto.State {
 	busy := make(map[string]bool)
 	for _, p := range c.Projects() {
 		if c.ProjectBusy(p.Path) {
 			busy[p.Path] = true
 		}
 	}
-	threads := make([]appmodel.Thread, len(c.Threads()))
+	threads := make([]model.Thread, len(c.Threads()))
 	for i, t := range c.Threads() {
 		t.Messages = nil
 		threads[i] = t
 	}
-	projectThreads := make(map[string][]appmodel.Thread, len(c.ProjectCache))
+	projectThreads := make(map[string][]model.Thread, len(c.ProjectCache))
 	for path, cached := range c.ProjectCache {
 		if path == c.Cwd {
 			continue
 		}
-		items := make([]appmodel.Thread, len(cached))
+		items := make([]model.Thread, len(cached))
 		for i, t := range cached {
-			t = appmodel.ListThread(t)
+			t = phone.ListThread(t)
 			t.Queue = nil
 			items[i] = t
 		}
 		projectThreads[path] = items
 	}
-	return appmodel.SvcState{
+	return svcproto.State{
 		Collaboration:   c.CollaborationCapabilities(),
 		ReferenceSource: c.ReferenceSource,
 		MemoryRevision:  c.MemoryRevision,

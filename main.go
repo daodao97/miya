@@ -1,10 +1,11 @@
 package main
 
 import (
-	controller "miya/internal/controller"
-	mobile "miya/internal/mobile"
+	"runtime"
+
+	"miya/internal/controller"
+	"miya/internal/mobile"
 	desktopui "miya/internal/ui"
-	runtime "runtime"
 )
 
 func main() {

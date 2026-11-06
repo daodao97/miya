@@ -1,17 +1,20 @@
 package controller
 
 import (
-	context "context"
-	fmt "fmt"
-	appmodel "miya/internal/appmodel"
-	codex "miya/internal/codex"
-	model "miya/internal/model"
-	uiruntime "miya/internal/uiruntime"
-	filepath "path/filepath"
-	time "time"
+	"context"
+	"fmt"
+	"path/filepath"
+	"time"
+
+	"miya/internal/appmodel"
+	"miya/internal/codex"
+	threadmodel "miya/internal/model"
+	"miya/internal/prefs"
+	"miya/internal/svcproto"
+	"miya/internal/uiruntime"
 )
 
-// These commands are app-server operations, never slash text passed to a model.
+// These commands are app-server operations, never slash text passed to a threadmodel.
 // Capture settings and identity before leaving the UI thread.
 // runThreadCommand runs a command in the window's open conversation.
 func (c *Controller) RunThreadCommand(command string) string {
@@ -27,15 +30,15 @@ func (c *Controller) RunThreadCommand(command string) string {
 // it returns the conversation running it, or why it cannot run.
 func (c *Controller) ThreadCommand(threadID int, agent, command, policy string) (int, string) {
 	if c.Remote != nil {
-		var r appmodel.SvcCommandResult
-		if err := c.Remote.Call("command", appmodel.SvcCommand{Thread: threadID, Agent: agent, Command: command, Policy: policy}, &r); err != nil {
+		var r svcproto.CommandResult
+		if err := c.Remote.Call("command", svcproto.Command{Thread: threadID, Agent: agent, Command: command, Policy: policy}, &r); err != nil {
 			return 0, err.Error()
 		}
 		c.fastMode = r.FastMode
 		return r.Thread, r.Message
 	}
-	if _, ok, _ := appmodel.ParseGoalCommand("/" + command); ok && (threadID == 0 && agent != appmodel.AgentClaude || threadID != 0 && model.ThreadAgent(c.ThreadWithID(threadID)) == appmodel.AgentCodex) {
-		return c.CodexGoalCommand(appmodel.SendRequest{ThreadID: threadID, Agent: appmodel.AgentCodex, Text: "/" + command, Policy: policy, Model: c.Model(), Effort: c.Effort()})
+	if _, ok, _ := codex.ParseGoalCommand("/" + command); ok && (threadID == 0 && agent != appmodel.AgentClaude || threadID != 0 && threadmodel.ThreadAgent(c.ThreadWithID(threadID)) == appmodel.AgentCodex) {
+		return c.CodexGoalCommand(threadmodel.SendRequest{ThreadID: threadID, Agent: appmodel.AgentCodex, Text: "/" + command, Policy: policy, Model: c.Model(), Effort: c.Effort()})
 	}
 	t := c.ThreadWithID(threadID)
 	b := BackendOf(t)
@@ -46,13 +49,13 @@ func (c *Controller) ThreadCommand(threadID int, agent, command, policy string) 
 		if b.ID() != appmodel.AgentCodex {
 			return 0, tr("/fast is only supported by Codex.")
 		}
-		tier := appmodel.LoadSetting("codexServiceTier")
+		tier := prefs.Load("codexServiceTier")
 		enabled := command == "fast on" || (command == "fast" && tier != "fast")
 		tier = "default"
 		if enabled {
 			tier = "fast"
 		}
-		appmodel.PersistSetting("codexServiceTier", tier)
+		prefs.Save("codexServiceTier", tier)
 		c.fastMode = enabled
 		uiruntime.Invalidate()
 		return t.ID, ""
@@ -76,11 +79,11 @@ func (c *Controller) ThreadCommand(threadID int, agent, command, policy string) 
 		return 0, tr("Unsupported thread command.")
 	}
 	if t.ID == 0 {
-		t = appmodel.Thread{PermissionPolicy: policy, ID: c.NextID(), Title: tr("Code review"), Project: filepath.Base(c.Cwd), Age: "now", Loaded: true, HistoryLoaded: true}
-		c.SetThreads(append([]appmodel.Thread{t}, c.Threads()...))
+		t = threadmodel.Thread{PermissionPolicy: policy, ID: c.NextID(), Title: tr("Code review"), Project: filepath.Base(c.Cwd), Age: "now", Loaded: true, HistoryLoaded: true}
+		c.SetThreads(append([]threadmodel.Thread{t}, c.Threads()...))
 	}
 	client, id, cwd, model := c.Client, t.ID, c.Cwd, c.Model()
-	c.Update(id, func(t *appmodel.Thread) {
+	c.Update(id, func(t *threadmodel.Thread) {
 		t.Busy = true
 		t.Status = tr("Starting /") + command + "…"
 		t.Draft = ""
@@ -92,7 +95,7 @@ func (c *Controller) ThreadCommand(threadID int, agent, command, policy string) 
 		var err error
 		if serverID == "" || !t.Resumed {
 			method := "thread/start"
-			params := map[string]any{"cwd": cwd, "sandbox": appmodel.SandboxForPermissionPolicy(policy), "approvalPolicy": appmodel.ApprovalForPermissionPolicy(policy), "approvalsReviewer": appmodel.ReviewerForPermissionPolicy(policy)}
+			params := map[string]any{"cwd": cwd, "sandbox": prefs.SandboxForPolicy(policy), "approvalPolicy": prefs.ApprovalForPolicy(policy), "approvalsReviewer": prefs.ReviewerForPolicy(policy)}
 			if serverID != "" {
 				method = "thread/resume"
 				params["threadId"] = serverID
@@ -110,7 +113,7 @@ func (c *Controller) ThreadCommand(threadID int, agent, command, policy string) 
 					sid := serverID
 					c.Dispatch(func() {
 						if c.Client == client {
-							c.Update(id, func(t *appmodel.Thread) { t.ServerID = sid; t.Resumed = true })
+							c.Update(id, func(t *threadmodel.Thread) { t.ServerID = sid; t.Resumed = true })
 						}
 					})
 				}
@@ -132,7 +135,7 @@ func (c *Controller) ThreadCommand(threadID int, agent, command, policy string) 
 					return
 				}
 				message := "/" + command + " failed: " + err.Error()
-				c.Update(id, func(t *appmodel.Thread) { t.Busy = false; t.Status = message; t.Draft = "/" + command })
+				c.Update(id, func(t *threadmodel.Thread) { t.Busy = false; t.Status = message; t.Draft = "/" + command })
 				c.SetStatus(message)
 				c.ReturnDraft(id, "/"+command, nil)
 			})

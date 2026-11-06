@@ -1,15 +1,16 @@
 package mobile
 
 import (
-	context "context"
-	fmt "fmt"
-	desktop "miya/internal/desktop"
-	control "miya/internal/desktop/control"
-	widgets "miya/internal/widgets"
-	strings "strings"
-	time "time"
+	"context"
+	"fmt"
+	"strings"
+	"time"
 
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui"
+
+	"miya/internal/desktop"
+	"miya/internal/desktop/control"
+	"miya/internal/widgets"
 )
 
 func (m *App) DesktopChooseApps(p *MobileDesktopPage) {

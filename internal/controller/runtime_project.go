@@ -1,21 +1,22 @@
 package controller
 
 import (
-	context "context"
-	appmodel "miya/internal/appmodel"
-	async "miya/internal/async"
+	"context"
+	"sort"
+	"strconv"
+	"sync"
+
+	"miya/internal/async"
 	rt "miya/internal/runtime"
-	webservice "miya/internal/webservice"
-	sort "sort"
-	strconv "strconv"
-	sync "sync"
+	"miya/internal/runtime/tracker"
+	"miya/internal/webservice"
 )
 
 // Project overview aggregates proven session resources first. Directory-based
 // listeners remain explicitly unowned candidates, never session evidence.
 func (c *Controller) ProjectRuntimeServices(ctx context.Context, project string) ([]webservice.Service, error) {
 	type plan struct {
-		manager *appmodel.RuntimeManager
+		manager *tracker.Manager
 		keys    []rt.SessionKey
 	}
 	prepared, ok := async.OnMain(ctx, c.Dispatch, func() plan {
@@ -25,7 +26,7 @@ func (c *Controller) ProjectRuntimeServices(ctx context.Context, project string)
 			if thread.ServerID == "" {
 				continue
 			}
-			key := appmodel.RuntimeKey(c.ThreadRef(thread))
+			key := tracker.KeyOf(c.ThreadRef(thread))
 			if manager.Store().Read(key).Epoch == "" && !thread.Busy && c.ClaudeRuns[thread.ID] == nil {
 				continue
 			}
@@ -61,7 +62,7 @@ func (c *Controller) ProjectRuntimeServices(ctx context.Context, project string)
 	services := []webservice.Service{}
 	owned := map[string]bool{}
 	for i, view := range views {
-		for _, service := range appmodel.RuntimeResult(prepared.manager, prepared.keys[i], view).Services {
+		for _, service := range tracker.Result(prepared.manager, prepared.keys[i], view).Services {
 			services = append(services, service)
 			owned[service.Host+":"+strconv.Itoa(service.Port)] = true
 		}

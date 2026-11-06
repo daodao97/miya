@@ -1,18 +1,19 @@
 package desktopui
 
 import (
-	context "context"
-	fmt "fmt"
-	appmodel "miya/internal/appmodel"
-	textutil "miya/internal/textutil"
-	uiruntime "miya/internal/uiruntime"
-	webservice "miya/internal/webservice"
-	widgets "miya/internal/widgets"
-	net "net"
-	strconv "strconv"
-	time "time"
+	"context"
+	"fmt"
+	"net"
+	"strconv"
+	"time"
 
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui"
+
+	"miya/internal/model"
+	"miya/internal/textutil"
+	"miya/internal/uiruntime"
+	"miya/internal/webservice"
+	"miya/internal/widgets"
 )
 
 func (app *App) runtimeSurface(c *ui.Context, p *panelState, s *PanelSurface) {
@@ -91,7 +92,7 @@ func (app *App) runtimeSurface(c *ui.Context, p *panelState, s *PanelSurface) {
 	})
 }
 
-func (app *App) loadRuntimeSurface(s *PanelSurface, ref appmodel.ThreadRef) {
+func (app *App) loadRuntimeSurface(s *PanelSurface, ref model.ThreadRef) {
 	s.runtimeLoading = true
 	s.RuntimeAt = time.Now()
 	project := app.C.ThreadWorkspace(app.C.Current().ID)
@@ -117,7 +118,7 @@ func (app *App) loadRuntimeSurface(s *PanelSurface, ref appmodel.ThreadRef) {
 	}()
 }
 
-func (app *App) openRuntimeService(p *panelState, s *PanelSurface, ref appmodel.ThreadRef, service webservice.Service) {
+func (app *App) openRuntimeService(p *panelState, s *PanelSurface, ref model.ThreadRef, service webservice.Service) {
 	cl := app.C.State().Remote
 	go func() {
 		var err error

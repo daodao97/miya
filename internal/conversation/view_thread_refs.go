@@ -1,10 +1,10 @@
 package conversation
 
 import (
-	appmodel "miya/internal/appmodel"
+	model "miya/internal/model"
 )
 
 type threadTag struct {
-	Ref   appmodel.ThreadRef
+	Ref   model.ThreadRef
 	Title string
 }

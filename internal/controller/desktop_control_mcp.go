@@ -1,19 +1,21 @@
 package controller
 
 import (
-	json "encoding/json"
-	errors "errors"
-	appmodel "miya/internal/appmodel"
-	codex "miya/internal/codex"
-	desktop "miya/internal/desktop"
-	control "miya/internal/desktop/control"
-	strings "strings"
+	"encoding/json"
+	"errors"
+	"strings"
+
+	"miya/internal/async"
+	"miya/internal/codex"
+	"miya/internal/desktop"
+	"miya/internal/desktop/control"
+	"miya/internal/mcpproto"
 )
 
-func (c *Controller) McpDesktopControl(r appmodel.McpRequest) (any, error) {
+func (c *Controller) McpDesktopControl(r mcpproto.Request) (any, error) {
 	caller, ok := c.McpCaller(r.Tool)
 	if !ok {
-		return nil, errors.New(appmodel.McpCallerUnknown)
+		return nil, errors.New(mcpproto.CallerUnknown)
 	}
 	reason := strings.TrimSpace(r.Task)
 	if reason == "" || len(reason) > 2000 {
@@ -38,7 +40,7 @@ func (c *Controller) McpDesktopControl(r appmodel.McpRequest) (any, error) {
 	list[len(list)-1].Method = "miya/desktopControl"
 	list[len(list)-1].Payload, _ = json.Marshal(hint)
 	c.SetApprovals(list)
-	return appmodel.Deferred(func() (any, error) {
+	return async.Reply(func() (any, error) {
 		if !c.waitUser(id, ch) {
 			return "The user canceled takeover or the request timed out. Stop any steps that depend on it.", nil
 		}

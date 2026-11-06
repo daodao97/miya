@@ -1,6 +1,8 @@
 package appmodel
 
-import _ "embed"
+import (
+	_ "embed"
+)
 
 //go:embed assets/agents/codex.png
 var CodexAgentPNG []byte

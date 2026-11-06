@@ -3,22 +3,23 @@
 package controller
 
 import (
-	context "context"
-	appmodel "miya/internal/appmodel"
-	async "miya/internal/async"
-	remote "miya/internal/remote"
-	uiruntime "miya/internal/uiruntime"
-	os "os"
-	exec "os/exec"
-	syscall "syscall"
-	time "time"
+	"context"
+	"os"
+	"os/exec"
+	"syscall"
+	"time"
 
-	pty "github.com/creack/pty"
+	"github.com/creack/pty"
+
+	"miya/internal/async"
+	"miya/internal/remote"
+	"miya/internal/svcproto"
+	"miya/internal/uiruntime"
 )
 
 func (c *Controller) ServeRemoteTerminal(ctx context.Context, wire *remote.Conn) {
 	_ = wire.SetReadDeadline(time.Now().Add(15 * time.Second))
-	var open appmodel.TerminalFrame
+	var open svcproto.TerminalFrame
 	if wire.Receive(&open) != nil || open.Op != "open" {
 		return
 	}
@@ -34,7 +35,7 @@ func (c *Controller) ServeRemoteTerminal(ctx context.Context, wire *remote.Conn)
 		return known
 	})
 	if !ok || !known {
-		_ = wire.Send(appmodel.TerminalFrame{Op: "ready", Error: "Project is not in the server's project list"})
+		_ = wire.Send(svcproto.TerminalFrame{Op: "ready", Error: "Project is not in the server's project list"})
 		return
 	}
 	c.RemoteTerminals.Add(1)
@@ -48,7 +49,7 @@ func (c *Controller) ServeRemoteTerminal(ctx context.Context, wire *remote.Conn)
 	cmd.Env = append(os.Environ(), "TERM=xterm-256color", "COLORTERM=truecolor")
 	master, err := pty.StartWithSize(cmd, terminalSize(open))
 	if err != nil {
-		_ = wire.Send(appmodel.TerminalFrame{Op: "ready", Error: err.Error()})
+		_ = wire.Send(svcproto.TerminalFrame{Op: "ready", Error: err.Error()})
 		return
 	}
 	done := make(chan struct{})
@@ -58,7 +59,7 @@ func (c *Controller) ServeRemoteTerminal(ctx context.Context, wire *remote.Conn)
 		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGHUP)
 		go cmd.Wait()
 	}()
-	if wire.Send(appmodel.TerminalFrame{Op: "ready"}) != nil {
+	if wire.Send(svcproto.TerminalFrame{Op: "ready"}) != nil {
 		return
 	}
 	go func() {
@@ -72,26 +73,26 @@ func (c *Controller) ServeRemoteTerminal(ctx context.Context, wire *remote.Conn)
 		buf := make([]byte, 32<<10)
 		for {
 			n, err := master.Read(buf)
-			if n > 0 && wire.Send(appmodel.TerminalFrame{Op: "output", Data: buf[:n]}) != nil {
+			if n > 0 && wire.Send(svcproto.TerminalFrame{Op: "output", Data: buf[:n]}) != nil {
 				wire.Close()
 				return
 			}
 			if err != nil {
-				_ = wire.Send(appmodel.TerminalFrame{Op: "exit"})
+				_ = wire.Send(svcproto.TerminalFrame{Op: "exit"})
 				wire.Close()
 				return
 			}
 		}
 	}()
 	for {
-		var frame appmodel.TerminalFrame
+		var frame svcproto.TerminalFrame
 		_ = wire.SetReadDeadline(time.Now().Add(time.Minute))
 		if wire.Receive(&frame) != nil {
 			return
 		}
 		switch frame.Op {
 		case "ping":
-			if wire.Send(appmodel.TerminalFrame{Op: "pong"}) != nil {
+			if wire.Send(svcproto.TerminalFrame{Op: "pong"}) != nil {
 				return
 			}
 		case "input":
@@ -111,6 +112,6 @@ func (c *Controller) ServeRemoteTerminal(ctx context.Context, wire *remote.Conn)
 	}
 }
 
-func terminalSize(f appmodel.TerminalFrame) *pty.Winsize {
+func terminalSize(f svcproto.TerminalFrame) *pty.Winsize {
 	return &pty.Winsize{Cols: uint16(max(1, min(f.Cols, 1000))), Rows: uint16(max(1, min(f.Rows, 1000))), X: uint16(max(0, min(f.Width*f.Cols, 65535))), Y: uint16(max(0, min(f.Height*f.Rows, 65535)))}
 }

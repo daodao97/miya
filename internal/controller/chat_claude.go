@@ -1,43 +1,49 @@
 package controller
 
 import (
-	context "context"
-	json "encoding/json"
-	errors "errors"
-	fmt "fmt"
-	appmodel "miya/internal/appmodel"
-	claude "miya/internal/claude"
-	codex "miya/internal/codex"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"miya/internal/appmodel"
+	"miya/internal/claude"
+	"miya/internal/claude/transcript"
+	"miya/internal/codex"
+	"miya/internal/composer"
 	dg "miya/internal/delegation"
-	subagent "miya/internal/subagent"
-	textutil "miya/internal/textutil"
-	os "os"
-	filepath "path/filepath"
-	strings "strings"
-	time "time"
+	"miya/internal/mcpconfig"
+	"miya/internal/model"
+	"miya/internal/msgfmt"
+	"miya/internal/subagent"
+	"miya/internal/textutil"
 )
 
-func (c *Controller) LoadClaudeHistory(t appmodel.Thread) {
+func (c *Controller) LoadClaudeHistory(t model.Thread) {
 	if t.HistoryLoaded || t.Loading {
 		return
 	}
 	cwd := c.ThreadWorkspace(t.ID)
-	c.Update(t.ID, func(t *appmodel.Thread) { t.Loading = true })
+	c.Update(t.ID, func(t *model.Thread) { t.Loading = true })
 	done := make(chan struct{})
 	c.ClaudeHistoryDone = done
 	go func() {
 		defer close(done)
 		// Claude Code's own record is the truth, as the CLI may have continued
 		// the session; the app's copy remains for sessions it cannot find.
-		var stored appmodel.Thread
+		var stored model.Thread
 		var err error
-		if path := appmodel.FindClaudeSession(cwd, t.ServerID); path != "" {
-			stored.Messages, err = appmodel.ParseClaudeSession(path)
+		if path := transcript.Find(cwd, t.ServerID); path != "" {
+			stored.Messages, err = transcript.Parse(path)
 			stored.Resumed = true
 		}
 		if len(stored.Messages) == 0 {
 			var data []byte
-			data, err = os.ReadFile(appmodel.ClaudeHistoryPath(t.ServerID))
+			data, err = os.ReadFile(claude.HistoryPath(t.ServerID))
 			if err == nil {
 				err = json.Unmarshal(data, &stored)
 			}
@@ -46,7 +52,7 @@ func (c *Controller) LoadClaudeHistory(t appmodel.Thread) {
 			if c.ThreadWorkspace(t.ID) != cwd || c.ThreadWithID(t.ID).ServerID != t.ServerID {
 				return
 			}
-			c.Update(t.ID, func(t *appmodel.Thread) {
+			c.Update(t.ID, func(t *model.Thread) {
 				t.Loading = false
 				t.HistoryLoaded = true
 				if err != nil {
@@ -65,7 +71,7 @@ func (c *Controller) LoadClaudeHistory(t appmodel.Thread) {
 	}()
 }
 
-func (c *Controller) sendClaude(req appmodel.SendRequest) int {
+func (c *Controller) sendClaude(req model.SendRequest) int {
 	text, paths, policy := req.Text, req.Attachments, req.Policy
 	t := c.ThreadWithID(req.ThreadID)
 	if t.ID != 0 && !t.HistoryLoaded {
@@ -82,20 +88,20 @@ func (c *Controller) sendClaude(req appmodel.SendRequest) int {
 		if req.Project != "" {
 			cwd = req.Project
 		}
-		t = appmodel.Thread{ID: c.NextID(), Agent: appmodel.AgentClaude, PermissionPolicy: policy, ServerID: claude.NewSessionID(), Title: appmodel.ConversationTitle("", appmodel.ClaudePromptTitle(text), ""), Project: filepath.Base(cwd), Loaded: true, HistoryLoaded: true}
+		t = model.Thread{ID: c.NextID(), Agent: appmodel.AgentClaude, PermissionPolicy: policy, ServerID: claude.NewSessionID(), Title: msgfmt.ConversationTitle("", transcript.PromptTitle(text), ""), Project: filepath.Base(cwd), Loaded: true, HistoryLoaded: true}
 		c.AddThread(cwd, t)
 	}
 	id := t.ID
 	if c.ClaudeRuns[id] == nil {
 		t.MemoryEpoch++
 		epoch := t.MemoryEpoch
-		c.Update(id, func(t *appmodel.Thread) { t.MemoryEpoch = epoch })
+		c.Update(id, func(t *model.Thread) { t.MemoryEpoch = epoch })
 	}
 	pendingUserID := c.NextID()
 	localTurn := c.Memories().BeginTurn(t, req, pendingUserID)
 	now := time.Now().UnixMilli()
-	c.Update(id, func(t *appmodel.Thread) {
-		appmodel.ResetTurnOutput(t)
+	c.Update(id, func(t *model.Thread) {
+		msgfmt.ResetTurnOutput(t)
 		t.ExecutionID = req.ExecutionID
 		if !req.KeepSessionSettings {
 			t.LaunchModel, t.LaunchEffort = req.Model, req.Effort
@@ -107,11 +113,11 @@ func (c *Controller) sendClaude(req appmodel.SendRequest) int {
 		t.LastOutputAtMs = now
 		t.LastActivityAt = now
 		t.Status = "Claude Code is running…"
-		shown, images := appmodel.AttachmentDisplay(text, paths)
-		t.Messages = append(t.Messages, appmodel.Message{ID: pendingUserID, Role: "user", Content: shown, Images: images, Attachments: append([]string(nil), req.Attachments...), Parts: req.Parts, SentAtMs: now, MemoryTurnID: localTurn, MemoryControl: req.MemoryControl || req.KeepSessionSettings})
+		shown, images := msgfmt.AttachmentDisplay(text, paths)
+		t.Messages = append(t.Messages, model.Message{ID: pendingUserID, Role: "user", Content: shown, Images: images, Attachments: append([]string(nil), req.Attachments...), Parts: req.Parts, SentAtMs: now, MemoryTurnID: localTurn, MemoryControl: req.MemoryControl || req.KeepSessionSettings})
 		name, _, _ := strings.Cut(text, " ")
 		if name == "/loop" || name == "/proactive" {
-			appmodel.SetThreadTask(t, appmodel.ThreadTask{ID: "loop:pending", Kind: "loop", Title: strings.TrimSpace(strings.TrimPrefix(text, name)), Status: "starting"})
+			model.SetThreadTask(t, model.ThreadTask{ID: "loop:pending", Kind: "loop", Title: strings.TrimSpace(strings.TrimPrefix(text, name)), Status: "starting"})
 		}
 	})
 	if c.ClaudeRuns == nil {
@@ -121,7 +127,7 @@ func (c *Controller) sendClaude(req appmodel.SendRequest) int {
 	generation := c.ThreadWithID(id).ClaudeGeneration
 	if existing == nil {
 		generation++
-		c.Update(id, func(t *appmodel.Thread) { t.ClaudeGeneration = generation })
+		c.Update(id, func(t *model.Thread) { t.ClaudeGeneration = generation })
 	}
 	var executionEpoch string
 	if execution := c.Collaboration.Execution(req.ExecutionID); execution != nil {
@@ -141,7 +147,7 @@ func (c *Controller) sendClaude(req appmodel.SendRequest) int {
 				c.FinishClaude(id, cwd, err)
 				return
 			}
-			c.Update(id, func(t *appmodel.Thread) {
+			c.Update(id, func(t *model.Thread) {
 				t.Busy, t.TaskStopping = existing.Steerable(), false
 				t.Status = err.Error()
 				for i, m := range t.Messages {
@@ -150,7 +156,7 @@ func (c *Controller) sendClaude(req appmodel.SendRequest) int {
 						break
 					}
 				}
-				t.Messages = append(t.Messages, appmodel.Message{ID: c.NextID(), Role: "error", Content: err.Error()})
+				t.Messages = append(t.Messages, model.Message{ID: c.NextID(), Role: "error", Content: err.Error()})
 			})
 			if req.ExecutionID == "" {
 				c.ReturnDraft(id, text, paths)
@@ -173,10 +179,10 @@ func (c *Controller) sendClaude(req appmodel.SendRequest) int {
 	}
 	go func() {
 		beforeInput := func(ctx context.Context) error {
-			return c.persistManagedExecutionBinding(ctx, req.ExecutionID, appmodel.ThreadRef{Source: c.ReferenceSource, Backend: appmodel.AgentClaude, SessionID: t.ServerID}.URL(), executionEpoch)
+			return c.persistManagedExecutionBinding(ctx, req.ExecutionID, model.ThreadRef{Source: c.ReferenceSource, Backend: appmodel.AgentClaude, SessionID: t.ServerID}.URL(), executionEpoch)
 		}
 		mem := c.Memories().PrepareInput(t, req, cwd, c.ThreadRef(t).URL())
-		content, err := appmodel.ClaudeInput(appmodel.CollaborationTaggedInput(mem.Text(text), req.Parts), paths)
+		content, err := claude.Input(composer.CollaborationTaggedInput(mem.Text(text), req.Parts), paths)
 		if err != nil {
 			mem.Finish(false)
 			reject(err)
@@ -191,7 +197,7 @@ func (c *Controller) sendClaude(req appmodel.SendRequest) int {
 					err = existing.Send(t.ServerID, content)
 				}
 			} else {
-				err = existing.SendWithOptions(ctx, claude.Options{SessionID: t.ServerID, Content: content, Model: req.Model, Effort: req.Effort, PermissionMode: appmodel.ClaudePermissionMode(policy), BeforeInput: beforeInput})
+				err = existing.SendWithOptions(ctx, claude.Options{SessionID: t.ServerID, Content: content, Model: req.Model, Effort: req.Effort, PermissionMode: claude.PermissionMode(policy), BeforeInput: beforeInput})
 			}
 			if err != nil {
 				reject(err)
@@ -199,7 +205,7 @@ func (c *Controller) sendClaude(req appmodel.SendRequest) int {
 			mem.Finish(err == nil)
 			return
 		}
-		run, err := claude.Start(c.Ctx, claude.Options{Binary: c.ClaudeBinary, Args: append(append([]string(nil), c.ClaudeArgs...), appmodel.ClaudeMCPArgs(cwd)...), Env: append(append([]string(nil), c.ClaudeEnv...), appmodel.ClaudeMCPEnv()...), Cwd: cwd, SessionID: t.ServerID, Resume: t.Resumed, PermissionMode: appmodel.ClaudePermissionMode(policy), Model: req.Model, Effort: req.Effort, Content: content, BeforeInput: beforeInput}, func(f claude.Frame) {
+		run, err := claude.Start(c.Ctx, claude.Options{Binary: c.ClaudeBinary, Args: append(append([]string(nil), c.ClaudeArgs...), mcpconfig.ClaudeArgs(cwd)...), Env: append(append([]string(nil), c.ClaudeEnv...), mcpconfig.ClaudeEnv()...), Cwd: cwd, SessionID: t.ServerID, Resume: t.Resumed, PermissionMode: claude.PermissionMode(policy), Model: req.Model, Effort: req.Effort, Content: content, BeforeInput: beforeInput}, func(f claude.Frame) {
 			c.Dispatch(func() {
 				if c.ThreadWorkspace(id) == cwd && c.ThreadWithID(id).ClaudeGeneration == generation {
 					c.HandleClaude(id, f)
@@ -261,11 +267,11 @@ func (c *Controller) FinishClaude(id int, cwd string, err error) {
 	if here {
 		sid := c.ThreadWithID(id).ServerID
 		go func() {
-			path := appmodel.FindClaudeSession(cwd, sid)
+			path := transcript.Find(cwd, sid)
 			if path == "" {
 				return
 			}
-			session, ok := appmodel.SummarizeClaudeSession(path)
+			session, ok := transcript.Summarize(path)
 			if !ok {
 				return
 			}
@@ -273,7 +279,7 @@ func (c *Controller) FinishClaude(id int, cwd string, err error) {
 				if c.ThreadWorkspace(id) != cwd {
 					return
 				}
-				c.Update(id, func(t *appmodel.Thread) {
+				c.Update(id, func(t *model.Thread) {
 					if t.ServerID == sid {
 						t.Title = session.Title
 					}
@@ -285,7 +291,7 @@ func (c *Controller) FinishClaude(id int, cwd string, err error) {
 	if !here {
 		return
 	}
-	c.Update(id, func(t *appmodel.Thread) {
+	c.Update(id, func(t *model.Thread) {
 		t.Busy = false
 		t.TaskStopping = false
 		t.CompletedAtMs = time.Now().UnixMilli()
@@ -307,18 +313,18 @@ func (c *Controller) FinishClaude(id int, cwd string, err error) {
 		} else if err != nil || resultError != "" {
 			state = "failed"
 		}
-		appmodel.StopClaudeTasks(t, state)
+		claude.StopTasks(t, state)
 		agentState := subagent.Interrupted
 		if state == "failed" {
 			agentState = subagent.Failed
 		}
-		appmodel.InterruptClaudeAgents(t, agentState)
+		transcript.InterruptAgents(t, agentState)
 		t.Status = ""
 		if t.StopRequested {
 			t.Status = "Stopped"
 		} else if err != nil {
 			t.Status = err.Error()
-			t.Messages = append(t.Messages, appmodel.Message{ID: c.NextID(), Role: "error", Content: err.Error(), StartedAtMs: t.CompletedAtMs})
+			t.Messages = append(t.Messages, model.Message{ID: c.NextID(), Role: "error", Content: err.Error(), StartedAtMs: t.CompletedAtMs})
 		} else {
 			t.Status = resultError
 		}
@@ -332,8 +338,8 @@ func (c *Controller) FinishClaude(id int, cwd string, err error) {
 				}
 			}
 		}
-		appmodel.CompleteClaudeTiming(t)
-		appmodel.SaveClaudeHistory(*t)
+		msgfmt.CompleteClaudeTiming(t)
+		claude.SaveHistory(*t)
 	})
 	pending := []codex.Approval{}
 	prefix := fmt.Sprintf("\"claude:%d:", id)
@@ -355,7 +361,7 @@ func (c *Controller) HandleClaude(id int, f claude.Frame) {
 	if f.Type == "system" && f.Subtype == "init" {
 		c.NoteClaudeModel(f.Model)
 		if f.Model != "" {
-			c.Update(id, func(t *appmodel.Thread) { t.LaunchModel = f.Model })
+			c.Update(id, func(t *model.Thread) { t.LaunchModel = f.Model })
 		}
 	}
 	if f.Type == "control_cancel_request" {
@@ -402,16 +408,16 @@ func (c *Controller) HandleClaude(id int, f claude.Frame) {
 	// text that stays "running" until the process exits for ordinary turns, so
 	// it cannot decide whether this turn completed.
 	memoryTurnDone := false
-	c.Update(id, func(t *appmodel.Thread) {
-		defer func() { appmodel.ApplyClaudeAgentTasks(t, f.AgentTasks) }()
+	c.Update(id, func(t *model.Thread) {
+		defer func() { transcript.ApplyAgentTasks(t, f.AgentTasks) }()
 		now := time.Now().UnixMilli()
 		t.LastOutputAtMs = now
 		if f.SchedulesKnown {
-			appmodel.ApplyClaudeSchedules(t, f.Schedules)
+			claude.ApplySchedules(t, f.Schedules)
 		}
 		if f.Type == "command_lifecycle" && f.CommandState == "started" {
 			if !t.Busy {
-				appmodel.ResetTurnOutput(t)
+				msgfmt.ResetTurnOutput(t)
 				t.StartedAtMs = now
 			}
 			t.Busy, t.StopRequested = true, false
@@ -423,14 +429,14 @@ func (c *Controller) HandleClaude(id int, f claude.Frame) {
 			t.Resumed = true
 		}
 		if f.Type == "system" && strings.HasPrefix(f.Subtype, "task_") {
-			appmodel.ClaudeTaskFrame(t, f)
+			transcript.TaskFrame(t, f)
 			return
 		}
 		// A sub-agent's own frames are steps of its Task call, not messages
 		// of the conversation.
 		if f.ParentToolUseID != "" {
 			if f.Type == "assistant" {
-				appmodel.ClaudeSubAgentStep(t, f.ParentToolUseID, f.Message.Content)
+				transcript.SubAgentStep(t, f.ParentToolUseID, f.Message.Content)
 			}
 			return
 		}
@@ -448,10 +454,10 @@ func (c *Controller) HandleClaude(id int, f claude.Frame) {
 			}
 			if e.Type == "message_start" {
 				t.ClaudeMessageID = e.Message.ID
-				appmodel.RecordClaudeOutput(t, e.Message.ID, e.Message.Usage)
+				msgfmt.RecordClaudeOutput(t, e.Message.ID, e.Message.Usage)
 			}
 			if e.Type == "message_delta" {
-				appmodel.RecordClaudeOutput(t, t.ClaudeMessageID, e.Usage)
+				msgfmt.RecordClaudeOutput(t, t.ClaudeMessageID, e.Usage)
 			}
 			if e.Type == "content_block_delta" && e.Delta.Type == "text_delta" {
 				key := fmt.Sprintf("%s:%d", t.ClaudeMessageID, e.Index)
@@ -461,17 +467,17 @@ func (c *Controller) HandleClaude(id int, f claude.Frame) {
 						return
 					}
 				}
-				t.Messages = append(t.Messages, appmodel.Message{ID: c.NextID(), Role: "assistant", Kind: "agentMessage", ItemID: key, Content: e.Delta.Text, SentAtMs: now, StartedAtMs: now})
+				t.Messages = append(t.Messages, model.Message{ID: c.NextID(), Role: "assistant", Kind: "agentMessage", ItemID: key, Content: e.Delta.Text, SentAtMs: now, StartedAtMs: now})
 			}
 		case "assistant":
-			appmodel.RecordClaudeOutput(t, f.Message.ID, f.Message.Usage)
+			msgfmt.RecordClaudeOutput(t, f.Message.ID, f.Message.Usage)
 			for i, b := range f.Message.Content {
 				if b.Type == "text" {
-					key := appmodel.ClaudeTextKey(t, f.Message.ID, i, b.Text)
-					c.upsert(t, appmodel.Message{Role: "assistant", Kind: "agentMessage", ItemID: key, Content: b.Text, SentAtMs: now, StartedAtMs: now})
+					key := claude.TextKey(t, f.Message.ID, i, b.Text)
+					c.upsert(t, model.Message{Role: "assistant", Kind: "agentMessage", ItemID: key, Content: b.Text, SentAtMs: now, StartedAtMs: now})
 				}
 				if b.Type == "tool_use" {
-					m := appmodel.Message{Role: "tool", Kind: "claudeTool", ItemID: b.ID, Content: b.Name + "\n" + string(b.Input), Status: "inProgress", Agents: appmodel.ClaudeSubAgent(b.ID, b.Name, b.Input, "inProgress")}
+					m := model.Message{Role: "tool", Kind: "claudeTool", ItemID: b.ID, Content: b.Name + "\n" + string(b.Input), Status: "inProgress", Agents: transcript.SubAgents(b.ID, b.Name, b.Input, "inProgress")}
 					subagent.Keep(t, &m)
 					c.upsert(t, m)
 				}
@@ -485,11 +491,11 @@ func (c *Controller) HandleClaude(id int, f claude.Frame) {
 							if b.IsError {
 								t.Messages[i].Status = "failed"
 							}
-							output := appmodel.ClaudeVisibleText(appmodel.ClaudeBlocks(b.Content))
-							if shown := appmodel.ClaudeToolOutput(t.Messages[i], output); shown != "" {
+							output := transcript.VisibleText(transcript.Blocks(b.Content))
+							if shown := transcript.ToolOutput(t.Messages[i], output); shown != "" {
 								t.Messages[i].Content += "\n" + textutil.Bounded(shown)
 							}
-							appmodel.ClaudeFinishSubAgents(&t.Messages[i], output, f.ToolUseResult)
+							transcript.FinishSubAgents(&t.Messages[i], output, f.ToolUseResult)
 						}
 					}
 				}
@@ -502,10 +508,10 @@ func (c *Controller) HandleClaude(id int, f claude.Frame) {
 			if t.StopRequested {
 				return
 			}
-			hadOutput := appmodel.TurnHasOutput(t.Messages)
+			hadOutput := claude.TurnHasOutput(t.Messages)
 			emptyResult := !f.IsError && !f.KeepingAlive && !hadOutput && strings.TrimSpace(f.Result) == ""
 			if f.IsError || emptyResult {
-				appmodel.StopClaudeTasks(t, "failed")
+				claude.StopTasks(t, "failed")
 			}
 			if f.KeepingAlive {
 				t.Busy = f.WaitingForAgents
@@ -528,16 +534,16 @@ func (c *Controller) HandleClaude(id int, f claude.Frame) {
 				if emptyResult {
 					message = "Claude Code finished the turn without returning a response."
 				}
-				message = appmodel.ClaudeErrorMessage(message, hadOutput, c.ClaudeCommand != "")
+				message = claude.ErrorMessage(message, hadOutput, c.ClaudeCommand != "")
 				t.Status = message
-				t.Messages = append(t.Messages, appmodel.Message{ID: c.NextID(), Role: "error", Content: message, StartedAtMs: now})
+				t.Messages = append(t.Messages, model.Message{ID: c.NextID(), Role: "error", Content: message, StartedAtMs: now})
 			} else if !hadOutput && strings.TrimSpace(f.Result) != "" {
 				// Some CLI transports only provide the final result text.
-				t.Messages = append(t.Messages, appmodel.Message{ID: c.NextID(), Role: "assistant", Kind: "agentMessage", Content: f.Result, SentAtMs: now, StartedAtMs: now})
+				t.Messages = append(t.Messages, model.Message{ID: c.NextID(), Role: "assistant", Kind: "agentMessage", Content: f.Result, SentAtMs: now, StartedAtMs: now})
 			}
 			if f.KeepingAlive && !f.WaitingForAgents {
-				appmodel.CompleteClaudeTiming(t)
-				appmodel.SaveClaudeHistory(*t)
+				msgfmt.CompleteClaudeTiming(t)
+				claude.SaveHistory(*t)
 			}
 			memoryTurnDone = !f.IsError && !emptyResult && !f.WaitingForAgents
 		}

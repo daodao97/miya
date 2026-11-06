@@ -1,15 +1,16 @@
 package mobile
 
 import (
-	context "context"
-	fmt "fmt"
-	desktop "miya/internal/desktop"
-	control "miya/internal/desktop/control"
-	textutil "miya/internal/textutil"
-	widgets "miya/internal/widgets"
-	time "time"
+	"context"
+	"fmt"
+	"time"
 
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui"
+
+	"miya/internal/desktop"
+	"miya/internal/desktop/control"
+	"miya/internal/textutil"
+	"miya/internal/widgets"
 )
 
 func (p *MobileDesktopPage) InvalidateTarget() {

@@ -1,13 +1,14 @@
 package mobile
 
 import (
-	fmt "fmt"
-	appmodel "miya/internal/appmodel"
-	textutil "miya/internal/textutil"
-	widgets "miya/internal/widgets"
+	"fmt"
 
-	i18n "github.com/egoist/mygo/i18n"
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/i18n"
+	"github.com/egoist/mygo/ui"
+
+	"miya/internal/prefs"
+	"miya/internal/textutil"
+	"miya/internal/widgets"
 )
 
 func (m *App) settingsView(c *ui.Context) {
@@ -70,7 +71,7 @@ func (m *App) settingsView(c *ui.Context) {
 func (m *App) languageSettings(c *ui.Context) {
 	ui.Column(c).FillWidth().Gap(8).Children(func() {
 		ui.Text(c, tr("Language")).FontSize(m.Font(13)).TextColor(m.Pal.muted).PaddingX(12)
-		selected := appmodel.NormalizeInterfaceLanguage(appmodel.LoadSetting("interfaceLanguage"))
+		selected := prefs.NormalizeInterfaceLanguage(prefs.Load("interfaceLanguage"))
 		ui.Column(c).FillWidth().Padding(6).Radius(16).Background(m.Pal.surface).Role(ui.RoleRadioGroup).Label(tr("Interface language")).Children(func() {
 			for _, choice := range []struct{ tag, label string }{{"", tr("Follow system")}, {"zh-Hans", i18n.Autonym("zh-Hans")}, {"en", i18n.Autonym("en")}} {
 				row := m.phoneButton(c.Key(choice.tag)).FillWidth().MinWidth(0).Padding(12).Gap(12).
@@ -97,7 +98,7 @@ func (m *App) setPushEnabled(enabled bool) {
 	if enabled {
 		value = "on"
 	}
-	appmodel.PersistSetting("phone-notifications", value)
+	prefs.Save("phone-notifications", value)
 	m.syncPush()
 	if enabled {
 		m.requestPush()

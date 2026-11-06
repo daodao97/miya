@@ -1,7 +1,7 @@
 package appmodel
 
 import (
-	locales "miya/locales"
+	"miya/locales"
 )
 
 // tr translates English interface copy; see locales.T.

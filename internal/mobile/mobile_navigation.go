@@ -1,11 +1,11 @@
 package mobile
 
 import (
-	model "miya/internal/model"
-	widgets "miya/internal/widgets"
+	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/ui"
 
-	mygo "github.com/egoist/mygo"
-	ui "github.com/egoist/mygo/ui"
+	"miya/internal/model"
+	"miya/internal/widgets"
 )
 
 // Primary destinations belong to the drawer; only their child pages pop

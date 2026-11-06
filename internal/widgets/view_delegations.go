@@ -1,21 +1,22 @@
 package widgets
 
 import (
-	fmt "fmt"
-	appmodel "miya/internal/appmodel"
-	dg "miya/internal/delegation"
-	model "miya/internal/model"
-	textutil "miya/internal/textutil"
-	slices "slices"
-	strings "strings"
-	time "time"
+	"fmt"
+	"slices"
+	"strings"
+	"time"
 
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui"
+
+	dg "miya/internal/delegation"
+	"miya/internal/model"
+	"miya/internal/msgfmt"
+	"miya/internal/textutil"
 )
 
 type CollaborationPanelView struct {
 	Palette             TaskPalette
-	Capability          *appmodel.CollaborationStatus
+	Capability          *model.CollaborationStatus
 	From                string
 	ReadOnly, Connected bool
 	// trailing aligns the toggle to the right edge instead of filling the row.
@@ -101,10 +102,10 @@ func (p *CollaborationPanel) drawContent(c *ui.Context, v CollaborationPanelView
 					b := ui.ButtonBase(c.Key(task.ID)).FillWidth().MinWidth(0).Padding(9).Radius(9).Border(1, pals.Border).Label(task.Title)
 					b.Children(func() {
 						ui.Column(c).FillWidth().MinWidth(0).Gap(4).Children(func() {
-							ui.Text(c, appmodel.NativeText(task.Title)).FontSize(13).FontWeight(600).TextColor(pals.Ink).SingleLine().Ellipsis("…").FillWidth()
+							ui.Text(c, msgfmt.NativeText(task.Title)).FontSize(13).FontWeight(600).TextColor(pals.Ink).SingleLine().Ellipsis("…").FillWidth()
 							ui.Text(c, model.AgentName(task.Agent)+" · "+collaborationStateLabel(task.State)).FontSize(11).TextColor(pals.Muted)
 							if text := textutil.FirstNonEmpty(task.ResultSummary, task.Progress); text != "" {
-								ui.Text(c, appmodel.NativeText(text)).FontSize(12).TextColor(pals.Muted).FillWidth().SingleLine().Ellipsis("…")
+								ui.Text(c, msgfmt.NativeText(text)).FontSize(12).TextColor(pals.Muted).FillWidth().SingleLine().Ellipsis("…")
 							}
 							if notice := collaborationNotificationLabel(task.Notification); notice != "" {
 								ui.Text(c, notice).FontSize(11).TextColor(pals.Muted)
@@ -201,7 +202,7 @@ func (p *CollaborationPanel) drawDetail(c *ui.Context, v CollaborationPanelView,
 		}
 		return
 	}
-	ui.Text(c, appmodel.NativeText(task.Title)).FontSize(13).FontWeight(600).TextColor(pals.Ink).SingleLine().Ellipsis("…").FillWidth()
+	ui.Text(c, msgfmt.NativeText(task.Title)).FontSize(13).FontWeight(600).TextColor(pals.Ink).SingleLine().Ellipsis("…").FillWidth()
 	ui.Text(c, model.AgentName(task.Agent)+" · "+collaborationStateLabel(task.State)).FontSize(12).TextColor(pals.Muted)
 	ui.Text(c, tr("Shared workspace: ")+task.Workspace).FontSize(11).TextColor(pals.Muted).SingleLine().Ellipsis("…").FillWidth().Tooltip(task.Workspace)
 	if task.Resolution == "abandoned" {
@@ -226,7 +227,7 @@ func (p *CollaborationPanel) drawDetail(c *ui.Context, v CollaborationPanelView,
 				text = task.Progress
 			}
 			if text != "" {
-				ui.Text(c, appmodel.NativeText(text)).FontSize(12).TextColor(pals.Ink).LineHeight(1.5).FillWidth().Wrap().Selectable()
+				ui.Text(c, msgfmt.NativeText(text)).FontSize(12).TextColor(pals.Ink).LineHeight(1.5).FillWidth().Wrap().Selectable()
 			}
 			if task.Result.Error != "" {
 				ui.Text(c, task.Result.Error).FontSize(12).TextColor(Danger).Wrap().FillWidth().Selectable()

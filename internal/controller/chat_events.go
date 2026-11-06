@@ -1,13 +1,15 @@
 package controller
 
 import (
-	json "encoding/json"
-	appmodel "miya/internal/appmodel"
-	codex "miya/internal/codex"
-	model "miya/internal/model"
-	textutil "miya/internal/textutil"
-	strings "strings"
-	time "time"
+	"encoding/json"
+	"strings"
+	"time"
+
+	"miya/internal/appmodel"
+	"miya/internal/codex"
+	"miya/internal/model"
+	"miya/internal/msgfmt"
+	"miya/internal/textutil"
 )
 
 func (c *Controller) Handle(f codex.Frame) {
@@ -29,7 +31,7 @@ func (c *Controller) Handle(f codex.Frame) {
 		return
 	}
 
-	var target appmodel.Thread
+	var target model.Thread
 	for _, t := range c.Threads() {
 		if t.ServerID != "" && t.ServerID == e.ThreadID {
 			target = t
@@ -59,7 +61,7 @@ func (c *Controller) Handle(f codex.Frame) {
 		c.noteRuntime(target)
 	}
 	completedMemory := false
-	c.Update(target.ID, func(t *appmodel.Thread) {
+	c.Update(target.ID, func(t *model.Thread) {
 		// Only fresh model output proves an upstream reconnection succeeded.
 		// Commands may still produce output while the model stream retries.
 		if t.Busy && strings.HasPrefix(t.Status, "Retrying: ") && (e.TurnID == "" || e.TurnID == t.TurnID) {
@@ -76,12 +78,12 @@ func (c *Controller) Handle(f codex.Frame) {
 		switch f.Method {
 		case "thread/goal/updated":
 			t.GoalRevision++
-			appmodel.ApplyCodexGoal(t, e.Goal)
+			model.ApplyCodexGoal(t, e.Goal)
 		case "thread/goal/cleared":
 			t.GoalRevision++
-			appmodel.ApplyCodexGoal(t, nil)
+			model.ApplyCodexGoal(t, nil)
 		case "thread/closed":
-			appmodel.ResetCodexSession(t)
+			model.ResetCodexSession(t)
 			t.Status = ""
 		case "thread/name/updated", "thread/updated":
 			if strings.TrimSpace(e.Name) != "" {
@@ -89,7 +91,7 @@ func (c *Controller) Handle(f codex.Frame) {
 			}
 		case "turn/started":
 			if t.TurnID != e.Turn.ID {
-				appmodel.ResetTurnOutput(t)
+				msgfmt.ResetTurnOutput(t)
 			}
 			now := time.Now().UnixMilli()
 			t.LastActivityAt = now
@@ -97,7 +99,7 @@ func (c *Controller) Handle(f codex.Frame) {
 			t.Busy = true
 			t.Status = "Working…"
 			t.StartedAtMs = now
-			if start, _ := appmodel.CodexTurnTimes(e.Turn); start > 0 {
+			if start, _ := msgfmt.CodexTurnTimes(e.Turn); start > 0 {
 				t.StartedAtMs = start
 			}
 			t.CompletedAtMs = 0
@@ -130,7 +132,7 @@ func (c *Controller) Handle(f codex.Frame) {
 				}
 			}
 			now := time.Now().UnixMilli()
-			t.Messages = append(t.Messages, appmodel.Message{ID: c.NextID(), Role: role, Kind: kind, Status: "inProgress", Content: e.Delta, ItemID: e.ItemID, TurnID: e.TurnID, SentAtMs: now, StartedAtMs: now})
+			t.Messages = append(t.Messages, model.Message{ID: c.NextID(), Role: role, Kind: kind, Status: "inProgress", Content: e.Delta, ItemID: e.ItemID, TurnID: e.TurnID, SentAtMs: now, StartedAtMs: now})
 		case "item/started", "item/completed":
 			if f.Method == "item/completed" && strings.EqualFold(e.Item.Type, "contextCompaction") {
 				t.MemoryEpoch++
@@ -147,7 +149,7 @@ func (c *Controller) Handle(f codex.Frame) {
 					}
 				}
 			}
-			m, ok := appmodel.ItemMessage(e.Item)
+			m, ok := msgfmt.ItemMessage(e.Item)
 			if !ok {
 				return
 			}
@@ -183,14 +185,14 @@ func (c *Controller) Handle(f codex.Frame) {
 			for _, step := range e.Plan {
 				content += "\n" + step.Status + " · " + step.Step
 			}
-			c.upsert(t, appmodel.Message{Role: "activity", Kind: "plan", Plan: e.Plan, Content: strings.TrimSpace(content), ItemID: "turn-plan", TurnID: e.TurnID})
+			c.upsert(t, model.Message{Role: "activity", Kind: "plan", Plan: e.Plan, Content: strings.TrimSpace(content), ItemID: "turn-plan", TurnID: e.TurnID})
 		case "turn/diff/updated":
 			stats := model.CountDiffLines(e.Diff)
-			c.upsert(t, appmodel.Message{Role: "tool", Kind: "diff", Content: textutil.Bounded(e.Diff), DiffStats: &stats, ItemID: "turn-diff", TurnID: e.TurnID})
+			c.upsert(t, model.Message{Role: "tool", Kind: "diff", Content: textutil.Bounded(e.Diff), DiffStats: &stats, ItemID: "turn-diff", TurnID: e.TurnID})
 		case "thread/tokenUsage/updated":
 			if e.TokenUsage != nil {
 				if e.TurnID == "" || e.TurnID == t.TurnID {
-					appmodel.RecordCodexOutput(t, e.TokenUsage)
+					msgfmt.RecordCodexOutput(t, e.TokenUsage)
 				}
 				t.Usage = e.TokenUsage
 				t.Tokens = e.TokenUsage.Last.TotalTokens
@@ -201,7 +203,7 @@ func (c *Controller) Handle(f codex.Frame) {
 			}
 			completedMemory = e.Turn.Status == "completed" && !t.StopRequested && e.Turn.Error == nil
 			t.CompletedAtMs = time.Now().UnixMilli()
-			start, end := appmodel.CodexTurnTimes(e.Turn)
+			start, end := msgfmt.CodexTurnTimes(e.Turn)
 			if start > 0 {
 				t.StartedAtMs = start
 			}
@@ -240,9 +242,9 @@ func (c *Controller) Handle(f codex.Frame) {
 			}
 			if e.Turn.Error != nil {
 				t.Status = e.Turn.Error.Message
-				c.upsert(t, appmodel.Message{Role: "error", Kind: "error", Content: e.Turn.Error.Message, TurnID: e.Turn.ID, ItemID: "turn-error", Status: "failed"})
+				c.upsert(t, model.Message{Role: "error", Kind: "error", Content: e.Turn.Error.Message, TurnID: e.Turn.ID, ItemID: "turn-error", Status: "failed"})
 			} else if e.Turn.Status == "failed" {
-				c.upsert(t, appmodel.Message{Role: "error", Kind: "error", Content: t.Status, TurnID: e.Turn.ID, ItemID: "turn-error", Status: "failed"})
+				c.upsert(t, model.Message{Role: "error", Kind: "error", Content: t.Status, TurnID: e.Turn.ID, ItemID: "turn-error", Status: "failed"})
 			}
 			c.clearApprovals(e.ThreadID, e.Turn.ID)
 		case "error":
@@ -258,7 +260,7 @@ func (c *Controller) Handle(f codex.Frame) {
 					if turnID == "" {
 						turnID = t.TurnID
 					}
-					c.upsert(t, appmodel.Message{Role: "error", Kind: "error", Content: e.Error.Message, TurnID: turnID, ItemID: "turn-error", Status: "failed"})
+					c.upsert(t, model.Message{Role: "error", Kind: "error", Content: e.Error.Message, TurnID: turnID, ItemID: "turn-error", Status: "failed"})
 				}
 			}
 		}
@@ -279,7 +281,7 @@ func (c *Controller) clearApprovals(thread, turn string) {
 	c.SetApprovals(out)
 }
 
-func (c *Controller) upsert(t *appmodel.Thread, m appmodel.Message) {
+func (c *Controller) upsert(t *model.Thread, m model.Message) {
 	if m.ExecutionID == "" {
 		m.ExecutionID = t.ExecutionID
 	}

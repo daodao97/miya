@@ -1,31 +1,32 @@
 package controller
 
 import (
-	context "context"
-	errors "errors"
-	fmt "fmt"
-	appmodel "miya/internal/appmodel"
+	"context"
+	"errors"
+	"fmt"
+	"slices"
+	"strings"
+
+	"miya/internal/appmodel"
 	dg "miya/internal/delegation"
-	coordinator "miya/internal/delegation/coordinator"
-	model "miya/internal/model"
-	slices "slices"
-	strings "strings"
+	"miya/internal/delegation/coordinator"
+	"miya/internal/model"
 )
 
-func (c *Controller) ThreadByReference(raw string) (appmodel.Thread, bool) {
+func (c *Controller) ThreadByReference(raw string) (model.Thread, bool) {
 	ref, ok := model.ParseThreadURL(raw)
 	if !ok || ref.Source != c.ReferenceSource {
-		return appmodel.Thread{}, false
+		return model.Thread{}, false
 	}
 	for _, t := range c.AllThreads() {
 		if c.ThreadRef(t) == ref {
 			return t, true
 		}
 	}
-	return appmodel.Thread{}, false
+	return model.Thread{}, false
 }
 
-func (c *Controller) prepareDelegation(caller appmodel.Thread, a coordinator.Args) (dg.StartInput, error) {
+func (c *Controller) prepareDelegation(caller model.Thread, a coordinator.Args) (dg.StartInput, error) {
 	from := c.ThreadRef(caller).URL()
 	if from == "" {
 		return dg.StartInput{}, errors.New("CALLER_UNAVAILABLE: The initiating session is not created yet")
@@ -37,7 +38,7 @@ func (c *Controller) prepareDelegation(caller appmodel.Thread, a coordinator.Arg
 	if agent = model.NormalizeAgentID(agent); agent == "" || !registeredBackend(agent) {
 		return dg.StartInput{}, errors.New("INVALID_ARGUMENT: Unknown agent")
 	}
-	var target appmodel.Thread
+	var target model.Thread
 	if a.Thread != "" {
 		var ok bool
 		target, ok = c.ThreadByReference(a.Thread)

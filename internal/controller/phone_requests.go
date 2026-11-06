@@ -1,24 +1,27 @@
 package controller
 
 import (
-	context "context"
-	json "encoding/json"
-	fmt "fmt"
-	appdir "miya/internal/appdir"
-	appmodel "miya/internal/appmodel"
-	async "miya/internal/async"
-	automation "miya/internal/automation"
-	desktop "miya/internal/desktop"
-	control "miya/internal/desktop/control"
-	manager "miya/internal/memory/manager"
-	model "miya/internal/model"
-	notification "miya/internal/notification"
-	remote "miya/internal/remote"
-	thumbnail "miya/internal/thumbnail"
-	strings "strings"
-	time "time"
+	"context"
+	"encoding/json"
+	"fmt"
+	"strings"
+	"time"
 
-	apns "github.com/egoist/mygo/push/apns"
+	"github.com/egoist/mygo/push/apns"
+
+	"miya/internal/appdir"
+	"miya/internal/appmodel"
+	"miya/internal/async"
+	"miya/internal/automation"
+	"miya/internal/desktop"
+	"miya/internal/desktop/control"
+	"miya/internal/memory/manager"
+	"miya/internal/model"
+	"miya/internal/notification"
+	"miya/internal/phone"
+	"miya/internal/phoneapi"
+	"miya/internal/remote"
+	"miya/internal/thumbnail"
 )
 
 // phoneSession is one phone connection's state, shared by servePhoneConnection
@@ -33,11 +36,11 @@ type phoneSession struct {
 	previews          chan previewRequest
 	deviceID          string
 	lastState         []byte
-	sync              *appmodel.PhoneThreadSync
+	sync              *phone.ThreadSync
 	sub               int
 	subscription      remote.Request
 	lastRevision      int
-	read              *appmodel.Thread
+	read              *model.Thread
 	fetched           bool
 	pending           *PhoneSendReq
 	cmdWant           string
@@ -106,7 +109,7 @@ func (ps *phoneSession) onDesktopOpen(r remote.Request) bool {
 	if !ok {
 		return false
 	}
-	reply := appmodel.PhoneDesktopReply{RequestID: r.RequestID}
+	reply := phoneapi.DesktopReply{RequestID: r.RequestID}
 	var err error
 	if !desktop.Available() {
 		err = fmt.Errorf("Remote desktop requires macOS 14 or later")
@@ -189,10 +192,10 @@ func (ps *phoneSession) onMemory(r remote.Request) bool {
 		return false
 	}
 	result, err := pending.result, pending.err
-	if d, ok := result.(appmodel.Deferred); ok && err == nil {
+	if d, ok := result.(async.Reply); ok && err == nil {
 		result, err = d()
 	}
-	reply := appmodel.PhoneMemoryResult{Revision: pending.revision, Project: r.Project, Scope: r.MemoryScope}
+	reply := phoneapi.MemoryResult{Revision: pending.revision, Project: r.Project, Scope: r.MemoryScope}
 	frame := remote.Frame{Type: "memory"}
 	if err != nil {
 		frame.Error = err.Error()
@@ -243,7 +246,7 @@ func (ps *phoneSession) onAutomationCreate(r remote.Request) bool {
 func (ps *phoneSession) onAutomationRun(r remote.Request) bool {
 	frame, ok := async.OnMain(ps.ctx, ps.c.Dispatch, func() remote.Frame {
 		_, err := ps.c.AutomationOp("automationRunNow", automation.Request{ID: r.AutomationID})
-		result := appmodel.PhoneAutomationRunResult{RequestID: r.RequestID}
+		result := phoneapi.AutomationRunResult{RequestID: r.RequestID}
 		list, _ := ps.c.AutomationOp("automationList", automation.Request{})
 		result.List, _ = list.([]automation.View)
 		data, _ := json.Marshal(result)
@@ -350,7 +353,7 @@ func (ps *phoneSession) onSubscribe(r remote.Request) bool {
 	// while the desktop was still reconnecting.
 	ps.subscription = r
 	ps.sub, ps.lastRevision, ps.read, ps.fetched = r.Thread, -1, nil, false
-	ps.sync = appmodel.NewPhoneThreadSync(r.Have)
+	ps.sync = phone.NewThreadSync(r.Have)
 	return true
 }
 
@@ -361,7 +364,7 @@ func (ps *phoneSession) onSend(r remote.Request) bool {
 			return false
 		}
 	} else {
-		paths, err := appmodel.SavePhoneImages(r.Images)
+		paths, err := phone.SaveImages(r.Images)
 		r.Images = nil
 		if err != nil {
 			if !ps.send(remote.Frame{Type: "sent", Error: err.Error()}) {
@@ -452,7 +455,7 @@ func (ps *phoneSession) onRespond(r remote.Request) bool {
 		}
 		return ""
 	})
-	data, _ := json.Marshal(appmodel.PhoneApprovalReply{ID: r.Approval})
+	data, _ := json.Marshal(phoneapi.ApprovalReply{ID: r.Approval})
 	if !ps.send(remote.Frame{Type: "responded", Data: data, Error: message}) {
 		return false
 	}

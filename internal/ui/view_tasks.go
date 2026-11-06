@@ -1,14 +1,14 @@
 package desktopui
 
 import (
-	appmodel "miya/internal/appmodel"
-	widgets "miya/internal/widgets"
+	"github.com/egoist/mygo/ui"
 
-	ui "github.com/egoist/mygo/ui"
+	"miya/internal/model"
+	"miya/internal/widgets"
 )
 
-func (app *App) taskStatus(c *ui.Context, t appmodel.Thread) {
-	widgets.TaskStatusBar(c, t, app.C.TaskWaitingApproval(t), widgets.TaskPalette{widgets.Panel, widgets.Line, widgets.Ink, widgets.Muted}, func(id, action string) {
+func (app *App) taskStatus(c *ui.Context, t model.Thread) {
+	widgets.TaskStatusBar(c, t, app.C.TaskWaitingApproval(t), widgets.TaskPalette{Surface: widgets.Panel, Border: widgets.Line, Ink: widgets.Ink, Muted: widgets.Muted}, func(id, action string) {
 		app.Notice = app.C.TaskAction(t.ID, id, action)
 	})
 }

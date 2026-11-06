@@ -1,9 +1,9 @@
 package widgets
 
 import (
-	fmt "fmt"
+	"fmt"
 
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui"
 )
 
 // settingsGroup is a titled card of settings rows split by hairlines, with

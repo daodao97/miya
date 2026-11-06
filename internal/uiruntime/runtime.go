@@ -1,9 +1,10 @@
 package uiruntime
 
 import (
-mygo "github.com/egoist/mygo"
-sync "sync"
-atomic "sync/atomic"
+	"sync"
+	"sync/atomic"
+
+	"github.com/egoist/mygo"
 )
 
 // The controller was written against getter/setter pairs. In MyGo's
@@ -19,7 +20,7 @@ func CreateSignal[T any](initial T) (func() T, func(T)) {
 	}
 }
 
-var WindowMu  sync.Mutex
+var WindowMu sync.Mutex
 
 var appWindow *mygo.Window
 
@@ -99,7 +100,7 @@ func Invalidate() {
 // cleanups run once as the app quits, in place of component cleanups.
 var cleanupMu sync.Mutex
 
-var cleanups  []func()
+var cleanups []func()
 
 func OnCleanup(f func()) {
 	cleanupMu.Lock()
@@ -116,4 +117,3 @@ func RunCleanups() {
 		fns[i]()
 	}
 }
-

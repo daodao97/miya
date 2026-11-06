@@ -1,11 +1,14 @@
 package controller
 
 import (
-	appmodel "miya/internal/appmodel"
-	codex "miya/internal/codex"
-	textutil "miya/internal/textutil"
-	uiruntime "miya/internal/uiruntime"
-	slices "slices"
+	"slices"
+
+	"miya/internal/appmodel"
+	"miya/internal/claude"
+	"miya/internal/codex"
+	"miya/internal/prefs"
+	"miya/internal/textutil"
+	"miya/internal/uiruntime"
 )
 
 func (CodexBackend) ModelChoices(c *Controller) []string { return c.modelNames() }
@@ -50,10 +53,10 @@ func (claudeBackend) ModelChoices(c *Controller) []string {
 // ModelLabel names the default by the model Claude Code last reported.
 func (claudeBackend) ModelLabel(c *Controller, v string) string {
 	if v != "" {
-		return appmodel.ClaudeModelName(v)
+		return claude.ModelName(v)
 	}
 	if c.claudeDefaultModel != "" {
-		return tr("Default · ") + appmodel.ClaudeModelName(c.claudeDefaultModel)
+		return tr("Default · ") + claude.ModelName(c.claudeDefaultModel)
 	}
 	return tr("Default model")
 }
@@ -64,7 +67,7 @@ func (c *Controller) NoteClaudeModel(model string) {
 		return
 	}
 	c.claudeDefaultModel = model
-	appmodel.PersistSetting("claudeDefaultModel", model)
+	prefs.Save("claudeDefaultModel", model)
 	uiruntime.Invalidate()
 }
 
@@ -85,7 +88,7 @@ func (c *Controller) setClaudeModel(v string) {
 		uiruntime.Invalidate()
 		return
 	}
-	appmodel.PersistSetting("claudeModel", v)
+	prefs.Save("claudeModel", v)
 	uiruntime.Invalidate()
 }
 
@@ -96,19 +99,19 @@ func (c *Controller) setClaudeEffort(v string) {
 		uiruntime.Invalidate()
 		return
 	}
-	appmodel.PersistSetting("claudeEffort", v)
+	prefs.Save("claudeEffort", v)
 	uiruntime.Invalidate()
 }
 
 func (c *Controller) setCodexEffort(v string) {
 	c.SetEffort(v)
 	if c.Remote == nil {
-		appmodel.PersistSetting("codexEffort:"+c.Model(), v)
+		prefs.Save("codexEffort:"+c.Model(), v)
 	}
 }
 
 func SavedCodexEffort(m codex.Model) string {
-	saved := appmodel.LoadSetting("codexEffort:" + m.Model)
+	saved := prefs.Load("codexEffort:" + m.Model)
 	for _, option := range m.SupportedReasoningEfforts {
 		if option.ReasoningEffort == saved {
 			return saved

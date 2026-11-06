@@ -1,17 +1,18 @@
 package desktopui
 
 import (
-	fmt "fmt"
-	appmodel "miya/internal/appmodel"
-	model "miya/internal/model"
-	widgets "miya/internal/widgets"
-	strings "strings"
+	"fmt"
+	"strings"
 
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui"
+
+	"miya/internal/appmodel"
+	"miya/internal/model"
+	"miya/internal/widgets"
 )
 
 // queueView lists the messages waiting for the running turn to end.
-func (app *App) queueView(c *ui.Context, t appmodel.Thread) {
+func (app *App) queueView(c *ui.Context, t model.Thread) {
 	if len(t.Queue) == 0 {
 		return
 	}
@@ -54,7 +55,7 @@ func (app *App) queueView(c *ui.Context, t appmodel.Thread) {
 
 // editQueued takes a message out of the queue and back into the composer,
 // before what is already being written there.
-func (app *App) editQueued(threadID int, q appmodel.QueuedMessage) {
+func (app *App) editQueued(threadID int, q model.QueuedMessage) {
 	cc := app.C
 	cc.RemoveQueued(threadID, q.ID)
 	text, _ := model.SplitReferenceContext(q.Text)

@@ -12,4 +12,4 @@
 
 旧桌面的通知通过持久会话标识匹配已保存桌面的缓存。无法确定来源的旧通知会打开桌面列表让用户选择，避免仅按数字会话 ID 打开另一台桌面的对话。
 
-验证：`go test -race . -run 'TestMobile(Desktop|NotificationsSelect|Disk)'` 覆盖迁移、持久化、缓存隔离、移除、草稿附件与通知归属。`MIYA_SNAPSHOT=/tmp/miya-desktops go test . -run TestMobileDesktopManagerNavigationAndSwitch` 可导出桌面列表截图。
+验证：`go test -race ./tests/integration -run 'TestMobile(Desktop|NotificationsSelect|Disk)'` 覆盖迁移、持久化、缓存隔离、移除、草稿附件与通知归属。`MIYA_SNAPSHOT=/tmp/miya-desktops go test ./tests/integration -run TestMobileDesktopManagerNavigationAndSwitch` 可导出桌面列表截图。

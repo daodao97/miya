@@ -1,19 +1,22 @@
 package mobile
 
 import (
-	json "encoding/json"
-	fmt "fmt"
-	appmodel "miya/internal/appmodel"
-	automation "miya/internal/automation"
-	model "miya/internal/model"
-	remote "miya/internal/remote"
-	textutil "miya/internal/textutil"
-	widgets "miya/internal/widgets"
-	filepath "path/filepath"
-	strings "strings"
-	time "time"
+	"encoding/json"
+	"fmt"
+	"path/filepath"
+	"strings"
+	"time"
 
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui"
+
+	"miya/internal/appmodel"
+	"miya/internal/automation"
+	"miya/internal/model"
+	"miya/internal/msgfmt"
+	"miya/internal/phoneapi"
+	"miya/internal/remote"
+	"miya/internal/textutil"
+	"miya/internal/widgets"
 )
 
 type mobileAutomations struct {
@@ -58,7 +61,7 @@ func (m *App) runPhoneAutomation(id string) {
 }
 
 func (m *App) ReceiveAutomationRun(data json.RawMessage, message string) {
-	var result appmodel.PhoneAutomationRunResult
+	var result phoneapi.AutomationRunResult
 	if json.Unmarshal(data, &result) != nil || result.RequestID == "" || result.RequestID != m.Autos.RunRequest {
 		return
 	}
@@ -337,7 +340,7 @@ func (m *App) automationPhoneDetail(c *ui.Context, v automation.View) {
 		} else {
 			ui.Text(c, tr("Task instructions")).FontSize(m.Font(16)).FontWeight(600).Margin(8, 0, 0, 0)
 		}
-		body := ui.Text(c, appmodel.NativeText(v.Instructions)).FontSize(m.Font(15)).LineHeight(1.6).Selectable()
+		body := ui.Text(c, msgfmt.NativeText(v.Instructions)).FontSize(m.Font(15)).LineHeight(1.6).Selectable()
 		if long && !m.Autos.InstructionsOpen {
 			body.MaxLines(3)
 		}
@@ -410,7 +413,7 @@ func (m *App) automationPhoneRun(c *ui.Context, v automation.View, r automation.
 			ui.Text(c, label).FontSize(m.Font(13)).TextColor(p.muted)
 		})
 		if summary != "" {
-			t := ui.Text(c, appmodel.NativeText(summary)).FontSize(m.Font(15)).LineHeight(1.5).Selectable()
+			t := ui.Text(c, msgfmt.NativeText(summary)).FontSize(m.Font(15)).LineHeight(1.5).Selectable()
 			if expandable && !expanded {
 				t.MaxLines(2)
 			}
@@ -418,19 +421,19 @@ func (m *App) automationPhoneRun(c *ui.Context, v automation.View, r automation.
 		if expanded && r.Report != nil {
 			report := r.Report
 			if report.Summary != "" && strings.TrimSpace(report.Summary) != strings.TrimSpace(summary) {
-				ui.Text(c, appmodel.NativeText(report.Summary)).FontSize(m.Font(14)).LineHeight(1.6).Selectable()
+				ui.Text(c, msgfmt.NativeText(report.Summary)).FontSize(m.Font(14)).LineHeight(1.6).Selectable()
 			}
 			for _, finding := range report.Findings {
 				ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Start).Children(func() {
 					ui.Text(c, "•").FontSize(m.Font(14)).TextColor(p.muted)
-					ui.Text(c, appmodel.NativeText(finding)).Grow(1).MinWidth(0).FontSize(m.Font(14)).LineHeight(1.6).Selectable()
+					ui.Text(c, msgfmt.NativeText(finding)).Grow(1).MinWidth(0).FontSize(m.Font(14)).LineHeight(1.6).Selectable()
 				})
 			}
 			for _, metric := range report.Metrics {
-				ui.Text(c, appmodel.NativeText(metric.Text())).FontSize(m.Font(14)).Selectable()
+				ui.Text(c, msgfmt.NativeText(metric.Text())).FontSize(m.Font(14)).Selectable()
 			}
 			for _, artifact := range report.Artifacts {
-				ui.Text(c, appmodel.NativeText(artifact)).FontSize(m.Font(14)).TextColor(p.muted).Selectable()
+				ui.Text(c, msgfmt.NativeText(artifact)).FontSize(m.Font(14)).TextColor(p.muted).Selectable()
 			}
 			if report.NeedsUser {
 				ui.Text(c, tr("Needs your attention")).FontSize(m.Font(14)).TextColor(p.warn)
@@ -470,7 +473,7 @@ func (m *App) automationPhoneRun(c *ui.Context, v automation.View, r automation.
 	})
 }
 
-func (m *App) AutomationRunThread(v automation.View, r automation.Run) (appmodel.Thread, bool) {
+func (m *App) AutomationRunThread(v automation.View, r automation.Run) (model.Thread, bool) {
 	for _, p := range m.State.Projects {
 		if p.Path != v.Project {
 			continue
@@ -484,5 +487,5 @@ func (m *App) AutomationRunThread(v automation.View, r automation.Run) (appmodel
 			}
 		}
 	}
-	return appmodel.Thread{}, false
+	return model.Thread{}, false
 }

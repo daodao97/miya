@@ -4,10 +4,11 @@ package controller
 
 import (
 	"context"
-	"miya/internal/appmodel"
+
 	"miya/internal/remote"
+	"miya/internal/svcproto"
 )
 
 func (c *Controller) ServeRemoteTerminal(ctx context.Context, wire *remote.Conn) {
-	_ = wire.Send(appmodel.TerminalFrame{Op: "ready", Error: "Server terminal is not supported on this platform"})
+	_ = wire.Send(svcproto.TerminalFrame{Op: "ready", Error: "Server terminal is not supported on this platform"})
 }

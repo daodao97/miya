@@ -1,13 +1,15 @@
 package desktopui
 
 import (
-	fmt "fmt"
-	appmodel "miya/internal/appmodel"
-	model "miya/internal/model"
-	widgets "miya/internal/widgets"
-	strings "strings"
+	"fmt"
+	"strings"
 
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui"
+
+	"miya/internal/appmodel"
+	"miya/internal/model"
+	"miya/internal/widgets"
+	"miya/internal/workspaces"
 )
 
 type desktopCommandPalette struct {
@@ -26,7 +28,7 @@ func (item desktopPaletteItem) displayTitle() string {
 	}
 	if strings.HasPrefix(item.id, "workspace:") {
 		name := strings.TrimPrefix(item.title, "Switch workspace: ")
-		if item.id == "workspace:"+appmodel.LocalDesktopWorkspace {
+		if item.id == "workspace:"+workspaces.Local {
 			name = tr("Local")
 		}
 		return fmt.Sprintf(tr("Switch workspace: %s"), name)

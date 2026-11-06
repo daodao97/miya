@@ -1,12 +1,13 @@
 package appmodel
 
 import (
-	model "miya/internal/model"
-	textutil "miya/internal/textutil"
-	strings "strings"
+	"strings"
+
+	"miya/internal/model"
+	"miya/internal/textutil"
 )
 
-func ThreadRefTitle(t Thread) string {
+func ThreadRefTitle(t model.Thread) string {
 	return textutil.FirstNonEmpty(strings.TrimSpace(t.Title), t.ServerID, tr("New conversation"))
 }
 

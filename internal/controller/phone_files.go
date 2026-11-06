@@ -1,21 +1,24 @@
 package controller
 
 import (
-	context "context"
-	appmodel "miya/internal/appmodel"
-	async "miya/internal/async"
-	control "miya/internal/desktop/control"
-	webservice "miya/internal/webservice"
-	http "net/http"
-	filepath "path/filepath"
-	strings "strings"
+	"context"
+	"net/http"
+	"path/filepath"
+	"strings"
+
+	"miya/internal/async"
+	"miya/internal/desktop/control"
+	"miya/internal/model"
+	"miya/internal/phone"
+	"miya/internal/runtime/tracker"
+	"miya/internal/webservice"
 )
 
 func (c *Controller) FileServer() http.Handler {
-	files := appmodel.DesktopFileServer{Runtime: c.ReadRuntime, WebServices: c.ProjectRuntimeServices, Projects: func(ctx context.Context) ([]appmodel.FileProject, error) {
-		reply := make(chan []appmodel.FileProject, 1)
+	files := phone.DesktopFileServer{Runtime: c.ReadRuntime, WebServices: c.ProjectRuntimeServices, Projects: func(ctx context.Context) ([]phone.FileProject, error) {
+		reply := make(chan []phone.FileProject, 1)
 		c.Dispatch(func() {
-			projects := append([]appmodel.Project(nil), c.Projects()...)
+			projects := append([]model.Project(nil), c.Projects()...)
 			found := false
 			for _, p := range projects {
 				if p.Path == c.Cwd {
@@ -23,12 +26,12 @@ func (c *Controller) FileServer() http.Handler {
 				}
 			}
 			if !found && c.Cwd != "" && filepath.Dir(c.Cwd) != c.Cwd {
-				projects = append(projects, appmodel.Project{Name: filepath.Base(c.Cwd), Path: c.Cwd})
+				projects = append(projects, model.Project{Name: filepath.Base(c.Cwd), Path: c.Cwd})
 			}
-			var out []appmodel.FileProject
+			var out []phone.FileProject
 			for _, p := range projects {
 				if p.Path != "" {
-					out = append(out, appmodel.FileProject{ID: appmodel.ProjectFileID(p.Path), Name: p.Name, Path: p.Path})
+					out = append(out, phone.FileProject{ID: phone.ProjectFileID(p.Path), Name: p.Name, Path: p.Path})
 				}
 			}
 			reply <- out
@@ -43,7 +46,7 @@ func (c *Controller) FileServer() http.Handler {
 		}
 	}}
 	web := webservice.Server(func(ctx context.Context, token, host string, port int) error {
-		manager, ok := async.OnMain(ctx, c.Dispatch, func() *appmodel.RuntimeManager { return c.Runtimes() })
+		manager, ok := async.OnMain(ctx, c.Dispatch, func() *tracker.Manager { return c.Runtimes() })
 		if !ok {
 			return ctx.Err()
 		}

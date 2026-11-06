@@ -1,11 +1,14 @@
 package appmodel
 
 import (
-	codex "miya/internal/codex"
-	strings "strings"
+	"strings"
+
+	"miya/internal/codex"
+	"miya/internal/model"
+	"miya/internal/msgfmt"
 )
 
-func ApprovalDetail(threads []Thread, a codex.Approval) string {
+func ApprovalDetail(threads []model.Thread, a codex.Approval) string {
 	text := a.Reason + "\n" + a.Command
 	if a.Cwd != "" {
 		text += "\nDirectory: " + a.Cwd
@@ -14,7 +17,7 @@ func ApprovalDetail(threads []Thread, a codex.Approval) string {
 		text += "\nRequested root: " + a.GrantRoot
 	}
 	if len(a.Permissions) > 0 {
-		text += "\n" + JsonText(a.Permissions)
+		text += "\n" + msgfmt.JsonText(a.Permissions)
 	}
 	for _, t := range threads {
 		if t.ServerID == a.ThreadID {

@@ -1,31 +1,34 @@
 package conversation
 
 import (
-	fmt "fmt"
-	appmodel "miya/internal/appmodel"
-	codex "miya/internal/codex"
-	model "miya/internal/model"
-	subagent "miya/internal/subagent"
-	textutil "miya/internal/textutil"
-	uiruntime "miya/internal/uiruntime"
-	widgets "miya/internal/widgets"
-	strconv "strconv"
-	strings "strings"
-	time "time"
+	"fmt"
+	"strconv"
+	"strings"
+	"time"
 
-	transfer "github.com/egoist/mygo/transfer"
-	ui "github.com/egoist/mygo/ui"
-	markdown "github.com/egoist/mygo/ui/markdown"
-	parser "github.com/egoist/mygo/ui/markdown/parser"
-	richtext "github.com/egoist/mygo/ui/richtext"
+	"github.com/egoist/mygo/transfer"
+	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/markdown"
+	"github.com/egoist/mygo/ui/markdown/parser"
+	"github.com/egoist/mygo/ui/richtext"
+
+	"miya/internal/appmodel"
+	"miya/internal/claude/transcript"
+	"miya/internal/codex"
+	"miya/internal/model"
+	"miya/internal/msgfmt"
+	"miya/internal/subagent"
+	"miya/internal/textutil"
+	"miya/internal/uiruntime"
+	"miya/internal/widgets"
 )
 
 // conversationHost is the state a conversation renderer reads. It owns no agent or desktop state.
 type Host interface {
-	ViewThread() appmodel.Thread
+	ViewThread() model.Thread
 	ViewRevision() int
 	ViewApprovals() []codex.Approval
-	ViewSelectThread(appmodel.Thread)
+	ViewSelectThread(model.Thread)
 }
 
 // conversationView owns presentation state shared by desktop and phone.
@@ -35,15 +38,15 @@ type View struct {
 	Md               markdown.Options
 	Mobile           bool
 	ImagePreview     func(string) ui.ImageSource
-	ReferenceThread  func(appmodel.ThreadRef) (appmodel.Thread, bool)
-	ResolveTitle     func(appmodel.ThreadRef) string
+	ReferenceThread  func(model.ThreadRef) (model.Thread, bool)
+	ResolveTitle     func(model.ThreadRef) string
 	OnRetry          func(appmodel.RetryRequest)
 	OnHandoff        func()
 	WorkingAccessory func(*ui.Context)
-	DesktopAccessory func(*ui.Context, appmodel.Thread)
-	UserGroup        func(*ui.Context, appmodel.MessageGroup)
-	MemoryNotice     func(*ui.Context, *appmodel.MemoryNotice)
-	NeedsReadFrame   func(appmodel.Thread, *ui.ListState, int) bool
+	DesktopAccessory func(*ui.Context, model.Thread)
+	UserGroup        func(*ui.Context, msgfmt.MessageGroup)
+	MemoryNotice     func(*ui.Context, *model.MemoryNotice)
+	NeedsReadFrame   func(model.Thread, *ui.ListState, int) bool
 	PasteAttachments func(transfer.Data) bool
 	SetNotice        func(string)
 	Lists            map[int]*ui.ListState
@@ -55,7 +58,7 @@ func NewConversationView(host Host) *View {
 	return &View{C: host, Theme: widgets.AppTheme(), Lists: map[int]*ui.ListState{}, Copied: map[int]bool{}, Open: map[int]bool{}}
 }
 
-func (app *View) ReferenceTitle(ref appmodel.ThreadRef) string {
+func (app *View) ReferenceTitle(ref model.ThreadRef) string {
 	if app.ReferenceThread != nil {
 		if t, ok := app.ReferenceThread(ref); ok {
 			return appmodel.ThreadRefTitle(t)
@@ -76,12 +79,12 @@ func (app *View) ListFor(id int) *ui.ListState {
 	return s
 }
 
-func (app *View) MessageList(c *ui.Context, t appmodel.Thread) {
+func (app *View) MessageList(c *ui.Context, t model.Thread) {
 	c = c.Key(t.ID)
 	groups := app.Groups.ofThread(t, app.C.ViewRevision())
 	status, completedGroup := currentTurnStatus(t, groups)
 	state := app.ListFor(t.ID)
-	state.Key = func(i int) any { return appmodel.MessageViewKey(groups[i].Messages[0]) }
+	state.Key = func(i int) any { return msgfmt.MessageViewKey(groups[i].Messages[0]) }
 	if t.Busy {
 		// The elapsed time of the running turn counts up.
 		c.After(time.Second)
@@ -141,7 +144,7 @@ func (app *View) MessageList(c *ui.Context, t appmodel.Thread) {
 			}
 			row.Children(func() {
 				phoneHint, desktopHint := "", false
-				if label := appmodel.ThreadReconnectLabel(t); t.Busy && label != "" {
+				if label := msgfmt.ThreadReconnectLabel(t); t.Busy && label != "" {
 					ui.Row(c.Key("reconnecting")).Gap(8).AlignItems(ui.Center).Label(label).Children(func() {
 						ui.Spinner(c).FontSize(13).TextColor(widgets.WarnInk)
 						ui.Text(c, label).FontSize(12).TextColor(widgets.WarnInk).Tooltip(t.Status)
@@ -151,7 +154,7 @@ func (app *View) MessageList(c *ui.Context, t appmodel.Thread) {
 					if t.Busy {
 						label.Tooltip(tr("Average output speed for this turn, including wait time."))
 					} else if completedGroup >= 0 {
-						label.Tooltip(appmodel.FormatMessageTimestamp(groups[completedGroup].Timestamp))
+						label.Tooltip(msgfmt.FormatMessageTimestamp(groups[completedGroup].Timestamp))
 					}
 					if hint := appmodel.StalledHint(t, len(app.C.ViewApprovals()) > 0, time.Now()); t.Busy && hint != "" {
 						if app.Mobile {
@@ -191,21 +194,27 @@ func (app *View) MessageList(c *ui.Context, t appmodel.Thread) {
 	}
 }
 
-func (app *View) TurnStatusVisible(t appmodel.Thread) bool {
+func (app *View) TurnStatusVisible(t model.Thread) bool {
 	label, completedGroup := currentTurnStatus(t, app.Groups.ofThread(t, app.C.ViewRevision()))
 	return label != "" || completedGroup >= 0
 }
 
-func (app *View) GroupView(c *ui.Context, g appmodel.MessageGroup) {
+func (app *View) GroupView(c *ui.Context, g msgfmt.MessageGroup) {
 	app.groupViewWithFooter(c, g, true)
 }
 
-func (app *View) groupViewWithFooter(c *ui.Context, g appmodel.MessageGroup, inlineFooter bool) {
+func (app *View) groupViewWithFooter(c *ui.Context, g msgfmt.MessageGroup, inlineFooter bool) {
 	if g.User {
 		if app.UserGroup != nil {
 			app.UserGroup(c, g)
 		} else {
-			app.MessageView(c, g.Messages[0], false)
+			ui.Column(c).FillWidth().Gap(4).Children(func() {
+				if g.ShowTimestamp {
+					ui.Text(c, msgfmt.FormatMessageTimestamp(g.Timestamp)).AlignSelf(ui.End).TextColor(widgets.Muted).FontSize(11)
+				}
+				m := g.Messages[0]
+				app.MessageView(c.Key(msgfmt.MessageViewKey(m)), m, false)
+			})
 		}
 		return
 	}
@@ -213,10 +222,10 @@ func (app *View) groupViewWithFooter(c *ui.Context, g appmodel.MessageGroup, inl
 	hovered := group.Hovered()
 	group.Children(func() {
 		if g.ShowTimestamp {
-			ui.Text(c, appmodel.FormatMessageTimestamp(g.Timestamp)).AlignSelf(ui.Start).TextColor(widgets.Muted).FontSize(11)
+			ui.Text(c, msgfmt.FormatMessageTimestamp(g.Timestamp)).AlignSelf(ui.Start).TextColor(widgets.Muted).FontSize(11)
 		}
-		for _, run := range appmodel.ActivityRuns(g.Messages) {
-			app.activityRunView(c.Key(appmodel.MessageViewKey(run.Messages[0])), run, g.Streaming)
+		for _, run := range msgfmt.ActivityRuns(g.Messages) {
+			app.activityRunView(c.Key(msgfmt.MessageViewKey(run.Messages[0])), run, g.Streaming)
 		}
 		if g.Streaming {
 			return
@@ -229,9 +238,9 @@ func (app *View) groupViewWithFooter(c *ui.Context, g appmodel.MessageGroup, inl
 			size = 44
 		}
 		ui.Row(c).AlignItems(ui.Center).Gap(8).Height(size).Children(func() {
-			elapsed := appmodel.TurnElapsedLabel(g.Messages, false)
+			elapsed := msgfmt.TurnElapsedLabel(g.Messages, false)
 			if elapsed != "" {
-				ui.Text(c, elapsed).TextColor(widgets.Muted).FontSize(11).Tooltip(appmodel.FormatMessageTimestamp(g.Timestamp))
+				ui.Text(c, elapsed).TextColor(widgets.Muted).FontSize(11).Tooltip(msgfmt.FormatMessageTimestamp(g.Timestamp))
 			}
 			if stats := g.DiffStats; stats.Added > 0 || stats.Deleted > 0 {
 				ui.Row(c.Key("diff-stats")).Gap(4).AlignItems(ui.Center).Children(func() {
@@ -250,7 +259,7 @@ func (app *View) groupViewWithFooter(c *ui.Context, g appmodel.MessageGroup, inl
 	})
 }
 
-func (app *View) responseActions(c *ui.Context, g appmodel.MessageGroup) {
+func (app *View) responseActions(c *ui.Context, g msgfmt.MessageGroup) {
 	size, gap := float32(28), float32(8)
 	copyAlign, handoffAlign := ui.Center, ui.Center
 	if app.Mobile {
@@ -264,7 +273,7 @@ func (app *View) responseActions(c *ui.Context, g appmodel.MessageGroup) {
 		b := widgets.Quiet(c.Key("copy")).Size(size, size).PaddingX(6).Justify(copyAlign).Label(tr("Copy response")).Tooltip(tr("Copy response"))
 		b.Children(func() { widgets.Icon(c, name, 15, widgets.Muted) })
 		if b.Clicked() {
-			c.WriteClipboard(appmodel.MessageGroupText(g))
+			c.WriteClipboard(msgfmt.MessageGroupText(g))
 			app.Copied[g.ID] = true
 		}
 		h := widgets.Quiet(c.Key("handoff")).Size(size, size).PaddingX(6).Justify(handoffAlign).Label(tr("Hand off to a new conversation")).Tooltip(tr("Hand off to a new conversation"))
@@ -277,13 +286,13 @@ func (app *View) responseActions(c *ui.Context, g appmodel.MessageGroup) {
 	})
 }
 
-func (app *View) activityRunView(c *ui.Context, run appmodel.ActivityRun, streaming bool) {
+func (app *View) activityRunView(c *ui.Context, run msgfmt.ActivityRun, streaming bool) {
 	if !run.Activity {
 		app.MessageView(c, run.Messages[0], streaming)
 		return
 	}
 	if len(run.Messages) == 1 {
-		app.MessageView(c.Key(appmodel.MessageViewKey(run.Messages[0])), run.Messages[0], streaming)
+		app.MessageView(c.Key(msgfmt.MessageViewKey(run.Messages[0])), run.Messages[0], streaming)
 		return
 	}
 	expanded := app.Open[-run.ID]
@@ -309,7 +318,7 @@ func (app *View) activityRunView(c *ui.Context, run appmodel.ActivityRun, stream
 		// Collapsed activity details are not built at all.
 		if expanded {
 			for _, m := range run.Messages {
-				app.MessageView(c.Key(appmodel.MessageViewKey(m)), m, streaming)
+				app.MessageView(c.Key(msgfmt.MessageViewKey(m)), m, streaming)
 			}
 		}
 	})
@@ -320,7 +329,7 @@ func (app *View) Chevron(c *ui.Context, open bool) {
 	ch.Rotate(ch.Animate("open", map[bool]float32{false: 0, true: 180}[open], 150*time.Millisecond))
 }
 
-func (app *View) MessageView(c *ui.Context, m appmodel.Message, streaming bool) {
+func (app *View) MessageView(c *ui.Context, m model.Message, streaming bool) {
 	switch m.Role {
 	case "memory":
 		if app.MemoryNotice != nil {
@@ -332,8 +341,8 @@ func (app *View) MessageView(c *ui.Context, m appmodel.Message, streaming bool) 
 	case "error":
 		ui.Row(c).FillWidth().AlignItems(ui.Center).Padding(16).Gap(10).Border(1, widgets.Line).Radius(16).Children(func() {
 			widgets.Icon(c, "alert-circle", 16, widgets.WarnInk)
-			ui.Text(c, appmodel.NativeText(tr(m.Content))).Grow(1).MinWidth(0).Selectable()
-			if t := app.C.ViewThread(); appmodel.RetryableError(t, m) {
+			ui.Text(c, msgfmt.NativeText(tr(m.Content))).Grow(1).MinWidth(0).Selectable()
+			if t := app.C.ViewThread(); msgfmt.RetryableError(t, m) {
 				size := float32(28)
 				if app.Mobile {
 					size = 44
@@ -385,13 +394,13 @@ func (app *View) MessageView(c *ui.Context, m appmodel.Message, streaming bool) 
 	isReasoning := strings.EqualFold(m.Kind, "reasoning")
 	expanded := app.Open[m.ID] && !isReasoning
 	ui.Column(c).FillWidth().Gap(6).Children(func() {
-		title := appmodel.NativeText(ActivityTitle(m))
+		title := msgfmt.NativeText(ActivityTitle(m))
 		if s := subagent.Summary(m.Agents); s != "" {
-			title += " · " + appmodel.NativeText(s)
+			title += " · " + msgfmt.NativeText(s)
 		}
 		header := widgets.Quiet(c.Key("header")).FillWidth().Height(28).PaddingX(0).Label(title)
 		header.Children(func() {
-			widgets.Icon(c, appmodel.ActivityIcon(m), 14, widgets.Muted)
+			widgets.Icon(c, msgfmt.ActivityIcon(m), 14, widgets.Muted)
 			color := widgets.Muted
 			if m.Status == "failed" && !isReasoning {
 				color = widgets.Failed
@@ -415,7 +424,7 @@ func (app *View) MessageView(c *ui.Context, m appmodel.Message, streaming bool) 
 	})
 }
 
-func (app *View) markdown(c *ui.Context, m appmodel.Message, streaming bool) {
+func (app *View) markdown(c *ui.Context, m model.Message, streaming bool) {
 	content := model.ImagePlaceholder.ReplaceAllString(m.Content, "")
 	ui.Column(c).FillWidth().MinWidth(0).Children(func() {
 		if streaming {
@@ -426,7 +435,7 @@ func (app *View) markdown(c *ui.Context, m appmodel.Message, streaming bool) {
 	})
 }
 
-func (app *View) activityDetail(c *ui.Context, m appmodel.Message) {
+func (app *View) activityDetail(c *ui.Context, m model.Message) {
 	if len(m.Plan) > 0 {
 		ui.Column(c).Gap(8).Padding(12).Background(widgets.Subtle).Radius(8).Children(func() {
 			for i, p := range m.Plan {
@@ -457,7 +466,7 @@ func (app *View) activityDetail(c *ui.Context, m appmodel.Message) {
 	app.activityBody(c, m)
 }
 
-func (app *View) activityBody(c *ui.Context, m appmodel.Message) {
+func (app *View) activityBody(c *ui.Context, m model.Message) {
 	kind := strings.ToLower(m.Kind)
 	switch {
 	case kind == "reasoning" || kind == "plan":
@@ -475,7 +484,7 @@ func (app *View) activityBody(c *ui.Context, m appmodel.Message) {
 		diffView(c, m.Content)
 	default:
 		ui.Column(c).FillWidth().MinWidth(0).Background(widgets.CodeBg).Radius(8).Padding(12).Children(func() {
-			ui.Text(c, appmodel.NativeText(m.Content)).Font(widgets.MonoFont).FontSize(12).LineHeight(1.5).TextColor(widgets.CodeInk).Selectable()
+			ui.Text(c, msgfmt.NativeText(m.Content)).Font(widgets.MonoFont).FontSize(12).LineHeight(1.5).TextColor(widgets.CodeInk).Selectable()
 		})
 	}
 }
@@ -597,7 +606,7 @@ func (app *View) ThreadInput(c *ui.Context, state *InlineThreadInput, raw, owner
 
 func (app *View) ThreadReferenceContent(text string) (string, []threadTag) {
 	own, _ := model.SplitReferenceContext(text)
-	seen := map[appmodel.ThreadRef]bool{}
+	seen := map[model.ThreadRef]bool{}
 	var tags []threadTag
 	for _, m := range model.ThreadMentions(own) {
 		if seen[m.Ref] {
@@ -613,9 +622,9 @@ func (app *View) ThreadReferenceContent(text string) (string, []threadTag) {
 	return own, tags
 }
 
-func (app *View) threadMessage(c *ui.Context, message appmodel.Message) {
+func (app *View) threadMessage(c *ui.Context, message model.Message) {
 	if message.Role == "user" {
-		message.Content = appmodel.ClaudeCommandText(message.Content)
+		message.Content = transcript.CommandText(message.Content)
 	}
 	content, tags := app.ThreadReferenceContent(message.Content)
 	if len(tags) == 0 {

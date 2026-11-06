@@ -1,14 +1,17 @@
 package controller
 
 import (
-	errors "errors"
-	appmodel "miya/internal/appmodel"
-	claude "miya/internal/claude"
-	codex "miya/internal/codex"
-	model "miya/internal/model"
-	uiruntime "miya/internal/uiruntime"
-	strings "strings"
-	time "time"
+	"errors"
+	"strings"
+	"time"
+
+	"miya/internal/appmodel"
+	"miya/internal/claude"
+	"miya/internal/claude/transcript"
+	"miya/internal/codex"
+	"miya/internal/model"
+	"miya/internal/msgfmt"
+	"miya/internal/uiruntime"
 )
 
 // claudeBackend runs the Claude Code CLI over stream-json, one process per
@@ -33,28 +36,28 @@ func (claudeBackend) Problem(c *Controller) (string, bool) { return c.ClaudeErro
 
 func (claudeBackend) Reconnect(*Controller) {}
 
-func (claudeBackend) Open(c *Controller, t appmodel.Thread) { c.LoadClaudeHistory(t) }
+func (claudeBackend) Open(c *Controller, t model.Thread) { c.LoadClaudeHistory(t) }
 
-func (claudeBackend) Send(c *Controller, req appmodel.SendRequest) int { return c.sendClaude(req) }
+func (claudeBackend) Send(c *Controller, req model.SendRequest) int { return c.sendClaude(req) }
 
-func (claudeBackend) Stop(c *Controller, t appmodel.Thread) {
+func (claudeBackend) Stop(c *Controller, t model.Thread) {
 	if run := c.ClaudeRuns[t.ID]; run != nil {
 		go run.Stop()
 	}
 }
 
 // Archive and delete forget the app's entry; Claude Code keeps its session.
-func (b claudeBackend) Archive(c *Controller, t appmodel.Thread) {
+func (b claudeBackend) Archive(c *Controller, t model.Thread) {
 	b.Stop(c, t)
 	c.removeThreadLocal(t.ID, t.ServerID)
 }
 
-func (b claudeBackend) Delete(c *Controller, t appmodel.Thread) { b.Archive(c, t) }
+func (b claudeBackend) Delete(c *Controller, t model.Thread) { b.Archive(c, t) }
 
-func (b claudeBackend) Suspend(c *Controller, t appmodel.Thread) {
+func (b claudeBackend) Suspend(c *Controller, t model.Thread) {
 	b.Stop(c, t)
 	t.Busy = false
-	appmodel.SaveClaudeHistory(t)
+	claude.SaveHistory(t)
 }
 
 func (claudeBackend) Owns(a codex.Approval) bool { return claudeApproval(a) }
@@ -84,11 +87,11 @@ func (claudeBackend) Settings() []AgentSetting {
 // Claude Code rewinds by writing the session's history before the message
 // as a new session, which the next turn resumes; the old one is left as it
 // is and no longer listed.
-func (claudeBackend) CanRewind(c *Controller, t appmodel.Thread, m appmodel.Message) bool {
+func (claudeBackend) CanRewind(c *Controller, t model.Thread, m model.Message) bool {
 	return t.ServerID != "" && c.ClaudeBinary != ""
 }
 
-func (claudeBackend) Rewind(c *Controller, t appmodel.Thread, m appmodel.Message, text string) {
+func (claudeBackend) Rewind(c *Controller, t model.Thread, m model.Message, text string) {
 	prompt := 0
 	for _, x := range t.Messages {
 		if x.ID == m.ID {
@@ -103,17 +106,17 @@ func (claudeBackend) Rewind(c *Controller, t appmodel.Thread, m appmodel.Message
 		var forked string
 		var err error
 		if prompt > 0 {
-			if path := appmodel.FindClaudeSession(cwd, old); path == "" {
+			if path := transcript.Find(cwd, old); path == "" {
 				err = errors.New(tr("Claude Code conversation history not found"))
 			} else {
-				forked, err = appmodel.ForkClaudeSessionBefore(path, prompt)
+				forked, err = transcript.ForkBefore(path, prompt)
 			}
 		}
 		if err == nil {
-			appmodel.MarkClaudeSuperseded(old)
+			transcript.MarkSuperseded(old)
 		}
 		c.Dispatch(func() {
-			c.finishRewind(t.ID, m.ID, text, err, func(t *appmodel.Thread) {
+			c.finishRewind(t.ID, m.ID, text, err, func(t *model.Thread) {
 				t.HistoryLoaded = true
 				if forked == "" {
 					// The first message: a new session.
@@ -128,30 +131,30 @@ func (claudeBackend) Rewind(c *Controller, t appmodel.Thread, m appmodel.Message
 
 // Claude Code steers by a user message written to the running turn's
 // input, which it folds into the turn.
-func (claudeBackend) Steer(c *Controller, t appmodel.Thread, req appmodel.SendRequest) bool {
+func (claudeBackend) Steer(c *Controller, t model.Thread, req model.SendRequest) bool {
 	run := c.ClaudeRuns[t.ID]
 	if run == nil || !run.Steerable() {
 		return false
 	}
-	shown, images := appmodel.AttachmentDisplay(req.Text, req.Attachments)
+	shown, images := msgfmt.AttachmentDisplay(req.Text, req.Attachments)
 	now := time.Now().UnixMilli()
 	pending := c.NextID()
 	localTurn := c.Memories().BeginTurn(t, req, pending)
-	c.Update(t.ID, func(t *appmodel.Thread) {
+	c.Update(t.ID, func(t *model.Thread) {
 		t.LastOutputAtMs, t.LastActivityAt = now, now
-		t.Messages = append(t.Messages, appmodel.Message{ID: pending, Role: "user", Content: shown, Images: images, Attachments: append([]string(nil), req.Attachments...), Parts: req.Parts, SentAtMs: now, MemoryTurnID: localTurn, MemoryControl: req.MemoryControl || req.KeepSessionSettings})
+		t.Messages = append(t.Messages, model.Message{ID: pending, Role: "user", Content: shown, Images: images, Attachments: append([]string(nil), req.Attachments...), Parts: req.Parts, SentAtMs: now, MemoryTurnID: localTurn, MemoryControl: req.MemoryControl || req.KeepSessionSettings})
 	})
 	project, session := c.ThreadWorkspace(t.ID), c.ThreadRef(t).URL()
 	go func() {
 		mem := c.Memories().PrepareInput(t, req, project, session)
-		content, err := appmodel.ClaudeInput(mem.Text(req.Text), req.Attachments)
+		content, err := claude.Input(mem.Text(req.Text), req.Attachments)
 		if err == nil {
 			err = run.Steer(t.ServerID, content)
 		}
 		mem.Finish(err == nil)
 		if err != nil {
 			c.Dispatch(func() {
-				c.Update(t.ID, func(t *appmodel.Thread) {
+				c.Update(t.ID, func(t *model.Thread) {
 					for i, m := range t.Messages {
 						if m.ID == pending {
 							t.Messages = append(t.Messages[:i:i], t.Messages[i+1:]...)

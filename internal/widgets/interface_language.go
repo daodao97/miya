@@ -1,29 +1,29 @@
 package widgets
 
 import (
-	appmodel "miya/internal/appmodel"
-	locales "miya/locales"
+	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/i18n"
+	"github.com/egoist/mygo/ui"
 
-	mygo "github.com/egoist/mygo"
-	i18n "github.com/egoist/mygo/i18n"
-	ui "github.com/egoist/mygo/ui"
+	"miya/internal/prefs"
+	"miya/locales"
 )
 
 var ApplyInterfaceLanguage = func(tag string) { mygo.App.SetLocale(tag) }
 
 func ConfigureInterfaceLanguage() {
-	if saved := appmodel.LoadSetting("interfaceLanguage"); saved != "" {
-		ApplyInterfaceLanguage(appmodel.NormalizeInterfaceLanguage(saved))
+	if saved := prefs.Load("interfaceLanguage"); saved != "" {
+		ApplyInterfaceLanguage(prefs.NormalizeInterfaceLanguage(saved))
 	}
 }
 
 func SetInterfaceLanguage(tag string) {
-	tag = appmodel.NormalizeInterfaceLanguage(tag)
+	tag = prefs.NormalizeInterfaceLanguage(tag)
 	saved := tag
 	if saved == "" {
 		saved = "system"
 	}
-	appmodel.PersistSetting("interfaceLanguage", saved)
+	prefs.Save("interfaceLanguage", saved)
 	ApplyInterfaceLanguage(tag)
 }
 
@@ -38,7 +38,7 @@ func LanguageSettings(c *ui.Context) {
 func languageOptions(c *ui.Context) {
 	ids := []string{"", "zh-Hans", "en"}
 	selected := 0
-	saved := appmodel.NormalizeInterfaceLanguage(appmodel.LoadSetting("interfaceLanguage"))
+	saved := prefs.NormalizeInterfaceLanguage(prefs.Load("interfaceLanguage"))
 	for i, tag := range ids {
 		if tag == saved {
 			selected = i

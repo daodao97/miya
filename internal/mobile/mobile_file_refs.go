@@ -1,23 +1,25 @@
 package mobile
 
 import (
-	context "context"
-	json "encoding/json"
-	errors "errors"
-	io "io"
-	appmodel "miya/internal/appmodel"
-	remote "miya/internal/remote"
-	net "net"
-	http "net/http"
-	url "net/url"
-	time "time"
+	"context"
+	"encoding/json"
+	"errors"
+	"io"
+	"net"
+	"net/http"
+	"net/url"
+	"time"
+
+	"miya/internal/model"
+	"miya/internal/phone"
+	"miya/internal/remote"
 )
 
 type MobileFileReferences struct {
 	Project, Query string
 	conn           *remote.Conn
 	Cancel         context.CancelFunc
-	Choices        []appmodel.ComposerChoice
+	Choices        []model.ComposerChoice
 	Loading        bool
 	Supported      bool
 	err            string
@@ -71,11 +73,11 @@ func (m *App) SearchFileReferences(project, query string) *MobileFileReferences 
 	return s
 }
 
-func FetchPhoneFileReferences(ctx context.Context, dial func(context.Context) (net.Conn, error), project, query string) ([]appmodel.ComposerChoice, error) {
+func FetchPhoneFileReferences(ctx context.Context, dial func(context.Context) (net.Conn, error), project, query string) ([]model.ComposerChoice, error) {
 	transport := &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) { return dial(ctx) }}
 	defer transport.CloseIdleConnections()
 	client := &http.Client{Transport: transport, Timeout: 8 * time.Second}
-	req, err := http.NewRequestWithContext(ctx, "GET", "http://desktop/"+appmodel.ProjectFileID(project)+"/.miya-references?q="+url.QueryEscape(query), nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", "http://desktop/"+phone.ProjectFileID(project)+"/.miya-references?q="+url.QueryEscape(query), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +89,7 @@ func FetchPhoneFileReferences(ctx context.Context, dial func(context.Context) (n
 	if response.StatusCode != http.StatusOK {
 		return nil, errors.New("project file search unavailable")
 	}
-	var choices []appmodel.ComposerChoice
+	var choices []model.ComposerChoice
 	err = json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&choices)
 	return choices, err
 }

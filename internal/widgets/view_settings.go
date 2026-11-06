@@ -1,12 +1,12 @@
 package widgets
 
 import (
-	fmt "fmt"
-	math "math"
-	strings "strings"
-	sync "sync"
+	"fmt"
+	"math"
+	"strings"
+	"sync"
 
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui"
 )
 
 var ringMu sync.Mutex

@@ -1,16 +1,19 @@
 package controller
 
 import (
-	json "encoding/json"
-	errors "errors"
-	appmodel "miya/internal/appmodel"
-	claude "miya/internal/claude"
-	coordinator "miya/internal/delegation/coordinator"
+	"encoding/json"
+	"errors"
+
+	"miya/internal/async"
+	"miya/internal/claude"
+	"miya/internal/delegation/coordinator"
+	"miya/internal/mcpproto"
+	"miya/internal/model"
 )
 
 // Older tools keep their default wait and context choices. Their result lookup
 // is still pinned to the accepted TaskID, never the target's latest turn.
-func (c *Controller) LegacyDelegate(r appmodel.McpRequest, caller appmodel.Thread) (any, error) {
+func (c *Controller) LegacyDelegate(r mcpproto.Request, caller model.Thread) (any, error) {
 	if c.Collaboration == nil || c.Collaboration.LoadError != nil || c.Collaboration.Manager == nil {
 		return nil, errors.New("STORAGE_UNAVAILABLE: Collaboration storage is unavailable")
 	}
@@ -32,18 +35,18 @@ func (c *Controller) LegacyDelegate(r appmodel.McpRequest, caller appmodel.Threa
 		return nil, err
 	}
 	s := c.Collaboration
-	return appmodel.Deferred(func() (any, error) {
+	return async.Reply(func() (any, error) {
 		return s.Call(func() (any, error) {
 			task, err := s.Create(in)
 			if err != nil {
 				return nil, err
 			}
-			return appmodel.McpDelegateResult{TaskID: task.ID, Reference: task.Target, Agent: task.Agent}, nil
+			return mcpproto.DelegateResult{TaskID: task.ID, Reference: task.Target, Agent: task.Agent}, nil
 		})
 	}), nil
 }
 
-func (c *Controller) LegacyTaskRead(r appmodel.McpRequest, caller appmodel.Thread) (any, error) {
+func (c *Controller) LegacyTaskRead(r mcpproto.Request, caller model.Thread) (any, error) {
 	if c.Collaboration == nil {
 		return nil, errors.New("EXECUTION_ASSOCIATION_LOST: Original task identity cannot be recovered")
 	}

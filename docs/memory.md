@@ -30,9 +30,9 @@
 
 现有代码提供了以下接入基础：
 
-- [agent.go](../agent.go) 的 `submit` / `submitExpanded` 统一路由、排队和发送请求，两个后端通过 `agentBackend` 适配；`sendRequest` 已有 `Text` 与结构化 `Parts`。
-- [handoff.go](../handoff.go) 已能从规范化消息生成有界上下文；[会话引用设计](thread-references.md) 已定义来源、后端、会话身份和发送快照，`ThreadRef` 位于 [thread_reference.go](../thread_reference.go)。
-- [mcp_host.go](../mcp_host.go) 已能把 MCP 调用解析到发起会话及其项目（见「MCP 调用者身份」）。
+- [agent.go](../internal/controller/agent.go) 的 `submit` / `submitExpanded` 统一路由、排队和发送请求，两个后端通过 `agentBackend` 适配；`sendRequest` 已有 `Text` 与结构化 `Parts`。
+- [handoff.go](../internal/controller/handoff.go) 已能从规范化消息生成有界上下文；[会话引用设计](thread-references.md) 已定义来源、后端、会话身份和发送快照，`ThreadRef` 位于 [thread_reference.go](../internal/model/ref.go)。
+- [mcp_host.go](../internal/controller/mcp_host.go) 已能把 MCP 调用解析到发起会话及其项目（见「MCP 调用者身份」）。
 - [internal/automation/draft.go](../internal/automation/draft.go) 已通过独立 Agent 调用获取结构化结果：Claude 使用 `--tools ""` 禁用工具；Codex 使用 `exec --sandbox read-only`，仍可执行命令和读取磁盘，不等于禁用工具。
 
 这些能力尚不构成记忆系统。我们还需要定义哪些信息可以保存、怎样纠正、什么时候注入，以及如何避免后台旧任务把删除的信息写回来。
@@ -217,7 +217,7 @@ Go 代码逐项检查：作用域是否允许、来源是否属于本轮、引�
 
 ### MCP 调用者身份是第一阶段的前置条件
 
-工具进程通过现有 MCP → 服务通道访问。服务不相信客户端声明的项目路径、用户身份或消息来源。当前机制（[mcp_host.go](../mcp_host.go) 的 `mcpCaller`）如下：
+工具进程通过现有 MCP → 服务通道访问。服务不相信客户端声明的项目路径、用户身份或消息来源。当前机制（[mcp_host.go](../internal/controller/mcp_host.go) 的 `mcpCaller`）如下：
 
 - MCP 进程传来的工作区参数不受信任，因为 Codex 的一个 app-server 服务所有项目。
 - 服务在所有项目的会话中查找「状态为进行中、名称匹配」的 Miya 工具调用，取开始时间最晚的那一个作为调用者，再由该会话推出项目。
@@ -286,13 +286,13 @@ Go 代码逐项检查：作用域是否允许、来源是否属于本轮、引�
 | `internal/memory/`（新增） | 数据类型、作用域存储、原子提交、版本合并、删除屏障、检索、派生索引接口 | 1a |
 | `memory_mcp.go`（新增） | 记忆工具、调用者作用域、服务操作和结果；服务端处理现位于 `internal/memory/manager` | 1a |
 | `view_memory.go`（新增） | 记忆管理界面、可撤销提示、提升到项目文件 | 1a |
-| [mcp_host.go](../mcp_host.go) | 写工具的调用者消歧：参数比对、多候选时失败 | 1a |
-| [internal/mcpserver](../internal/mcpserver/mcpserver.go)、[service_server.go](../service_server.go) | 注册工具、串行提交，协调服务退出与恢复 | 1a |
+| [mcp_host.go](../internal/controller/mcp_host.go) | 写工具的调用者消歧：参数比对、多候选时失败 | 1a |
+| [internal/mcpserver](../internal/mcpserver/mcpserver.go)、[service_server.go](../internal/controller/service_server.go) | 注册工具、串行提交，协调服务退出与恢复 | 1a |
 | `internal/memory/manager/input.go`（原 `memory_context.go`） | 从实际发送请求构造有界记忆块、按会话计算增量、记录注入快照 | 1b |
-| [agent.go](../agent.go)、[queue.go](../queue.go) | `sendRequest` 原文与上下文分离，普通发送、排队、引导、编辑重发的共同接入 | 1b |
-| [chat_controller.go](../chat_controller.go)、[agent_codex.go](../agent_codex.go)、[chat_claude.go](../chat_claude.go) | 组合实际后端输入；覆盖 Codex steer、Claude 保活发送和后台项目 | 1b |
+| [agent.go](../internal/controller/agent.go)、[queue.go](../internal/controller/queue.go) | `sendRequest` 原文与上下文分离，普通发送、排队、引导、编辑重发的共同接入 | 1b |
+| [chat_controller.go](../internal/controller/chat_controller.go)、[agent_codex.go](../internal/controller/agent_codex.go)、[chat_claude.go](../internal/controller/chat_claude.go) | 组合实际后端输入；覆盖 Codex steer、Claude 保活发送和后台项目 | 1b |
 | `internal/memory/manager/turns.go`（原 `memory_extract.go`） | 规范化完成事件、来源消息快照、提取队列；提炼调用和结构化输出校验现位于 `internal/memory/extractor` | 2 |
-| [chat_events.go](../chat_events.go)、[chat_claude.go](../chat_claude.go) | 后端原始完成信号、持久回合标识、去重，不依赖界面通知 | 2 |
+| [chat_events.go](../internal/controller/chat_events.go)、[chat_claude.go](../internal/controller/chat_claude.go) | 后端原始完成信号、持久回合标识、去重，不依赖界面通知 | 2 |
 | [internal/automation/draft.go](../internal/automation/draft.go) | 抽取可复用的结构化调用基础；不直接复用自动化的提示词、权限或 schema | 2 |
 
 阶段 1a 的存储、MCP、服务接口与管理界面已实现。来源保存现有 `ThreadRef.URL()`，复用其来源实例、后端与持久会话身份。阶段 1b 与 2 已接入普通发送、引导、队列和两种 Agent 的顶层回合完成事件；阶段 3 的向量与混合检索仍未实现。

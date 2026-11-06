@@ -1,24 +1,25 @@
 package mobile
 
 import (
-	appmodel "miya/internal/appmodel"
-	conversation "miya/internal/conversation"
-	os "os"
-	time "time"
+	"os"
+	"time"
 
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui"
+
+	"miya/internal/conversation"
+	"miya/internal/model"
 )
 
 // A new conversation has no desktop ID until sent arrives. Keep its first
 // message outside the synchronized history so it cannot enter Have or caches.
 type mobileNewSend struct {
-	Message appmodel.Message
+	Message model.Message
 	thread  int
 }
 
 func (m *App) BeginNewSend(text string, images []string) {
 	m.clearNewSend()
-	m.NewSend = &mobileNewSend{Message: appmodel.Message{
+	m.NewSend = &mobileNewSend{Message: model.Message{
 		ID: -1, Role: "user", Content: text,
 		Images: append([]string(nil), images...), SentAtMs: time.Now().UnixMilli(),
 	}}
@@ -40,7 +41,7 @@ func (m *App) failNewSend() {
 	}
 }
 
-func (m *App) receiveNewSend(t appmodel.Thread) {
+func (m *App) receiveNewSend(t model.Thread) {
 	if m.NewSend == nil || m.NewSend.thread == 0 || m.NewSend.thread != t.ID {
 		return
 	}
@@ -52,15 +53,15 @@ func (m *App) receiveNewSend(t appmodel.Thread) {
 	}
 }
 
-func (m *App) NewSendThread(cur appmodel.Thread) (appmodel.Thread, bool) {
+func (m *App) NewSendThread(cur model.Thread) (model.Thread, bool) {
 	p := m.NewSend
 	if p == nil || p.thread != m.Open || m.Open != 0 && cur.ID != m.Open {
-		return appmodel.Thread{}, false
+		return model.Thread{}, false
 	}
 	if m.Open == 0 {
-		cur = appmodel.Thread{ID: -1, Agent: m.NewAgent}
+		cur = model.Thread{ID: -1, Agent: m.NewAgent}
 	}
-	cur.Messages = []appmodel.Message{p.Message}
+	cur.Messages = []model.Message{p.Message}
 	cur.Busy = false
 	return cur, true
 }

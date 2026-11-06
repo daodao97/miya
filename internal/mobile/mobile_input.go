@@ -1,10 +1,11 @@
 package mobile
 
 import (
-	widgets "miya/internal/widgets"
-	strings "strings"
+	"strings"
 
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui"
+
+	"miya/internal/widgets"
 )
 
 // mobileTextField supplies a visible paste action for the custom-drawn
@@ -45,7 +46,7 @@ func (f *mobileTextField) paste(c *ui.Context, input ui.Element, value *string, 
 func (m *App) taskStatus(c *ui.Context) {
 	t := m.Viewer.Current()
 	p := m.Pal
-	widgets.TaskStatusBar(c, t, len(m.ApprovalsFor(t.ServerID)) > 0, widgets.TaskPalette{p.surface, p.line, p.ink, p.muted}, func(id, action string) {
+	widgets.TaskStatusBar(c, t, len(m.ApprovalsFor(t.ServerID)) > 0, widgets.TaskPalette{Surface: p.surface, Border: p.line, Ink: p.ink, Muted: p.muted}, func(id, action string) {
 		if m.Conn == nil || !m.Connected {
 			m.SendErr = tr("Not connected to desktop")
 			return

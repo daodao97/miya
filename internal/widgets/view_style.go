@@ -1,16 +1,17 @@
 package widgets
 
 import (
-	embed "embed"
-	base64 "encoding/base64"
-	appmodel "miya/internal/appmodel"
-	uiruntime "miya/internal/uiruntime"
-	url "net/url"
-	os "os"
-	strings "strings"
-	sync "sync"
+	"embed"
+	"encoding/base64"
+	"net/url"
+	"os"
+	"strings"
+	"sync"
 
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui"
+
+	"miya/internal/appmodel"
+	"miya/internal/uiruntime"
 )
 
 //go:embed assets/icons/*.svg

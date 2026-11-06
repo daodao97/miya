@@ -1,17 +1,19 @@
 package desktopui
 
 import (
-	fmt "fmt"
-	math "math"
-	appmodel "miya/internal/appmodel"
-	codex "miya/internal/codex"
-	textutil "miya/internal/textutil"
-	widgets "miya/internal/widgets"
-	sort "sort"
-	strings "strings"
-	time "time"
+	"fmt"
+	"math"
+	"sort"
+	"strings"
+	"time"
 
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui"
+
+	"miya/internal/account"
+	"miya/internal/appmodel"
+	"miya/internal/codex"
+	"miya/internal/textutil"
+	"miya/internal/widgets"
 )
 
 func (app *App) settingsView(c *ui.Context) {
@@ -84,7 +86,7 @@ func badge(c *ui.Context, value string) {
 	ui.Text(c, value).FontSize(11).TextColor(widgets.Muted).Padding(3, 6).Background(widgets.Bubble).Radius(4)
 }
 
-func AccountDetails(c *ui.Context, data appmodel.AccountDisplay) {
+func AccountDetails(c *ui.Context, data account.Display) {
 	widgets.SettingsCard(c).Children(func() {
 		if data.Notice != "" {
 			widgets.MutedText(c, data.Notice)
@@ -131,7 +133,7 @@ func AccountDetails(c *ui.Context, data appmodel.AccountDisplay) {
 		if data.UsageError != "" {
 			ui.Text(c, data.UsageError).TextColor(widgets.Muted)
 		}
-		var snapshots []appmodel.QuotaSnapshot
+		var snapshots []account.QuotaSnapshot
 		keys := make([]string, 0, len(data.Limits.ByID))
 		for key := range data.Limits.ByID {
 			keys = append(keys, key)
@@ -150,8 +152,8 @@ func AccountDetails(c *ui.Context, data appmodel.AccountDisplay) {
 		count := 0
 		ui.Row(c).Wrap().Gap(12).Children(func() {
 			for i, q := range snapshots {
-				windows := []*appmodel.QuotaWindow{}
-				for _, w := range []*appmodel.QuotaWindow{q.Primary, q.Secondary} {
+				windows := []*account.QuotaWindow{}
+				for _, w := range []*account.QuotaWindow{q.Primary, q.Secondary} {
 					if w != nil {
 						windows = append(windows, w)
 					}
@@ -175,7 +177,7 @@ func AccountDetails(c *ui.Context, data appmodel.AccountDisplay) {
 						if q.Credits.Unlimited {
 							text = tr("Unlimited")
 						} else if q.Credits.Balance != nil {
-							text = appmodel.FormatCreditBalance(*q.Credits.Balance)
+							text = account.FormatBalance(*q.Credits.Balance)
 						} else if q.Credits.HasCredits {
 							text = tr("Credits available")
 						}
@@ -199,7 +201,7 @@ func progressBar(c *ui.Context, used float64, color ui.Color) {
 	})
 }
 
-func quotaBar(c *ui.Context, w *appmodel.QuotaWindow, index int) {
+func quotaBar(c *ui.Context, w *account.QuotaWindow, index int) {
 	used := math.Max(0, math.Min(100, w.UsedPercent))
 	color := widgets.Ink
 	if used >= 90 {
@@ -207,7 +209,7 @@ func quotaBar(c *ui.Context, w *appmodel.QuotaWindow, index int) {
 	}
 	ui.Column(c).Grow(1).Basis(230).MinWidth(0).Gap(4).Children(func() {
 		ui.Row(c).Wrap().AlignItems(ui.Center).Gap(4).Children(func() {
-			ui.Text(c, appmodel.QuotaLabel(w, index)).FontSize(12).Grow(1)
+			ui.Text(c, account.QuotaLabel(w, index)).FontSize(12).Grow(1)
 			ui.Text(c, fmt.Sprintf(tr("%.0f%% used · %.0f%% remaining"), used, 100-used)).FontSize(11).TextColor(widgets.Muted)
 		})
 		progressBar(c, used, color)
@@ -217,7 +219,7 @@ func quotaBar(c *ui.Context, w *appmodel.QuotaWindow, index int) {
 	})
 }
 
-func ResetCreditCard(c *ui.Context, data appmodel.AccountDisplay, action appmodel.AccountResetAction, connected bool, ask, cancel, use func()) {
+func ResetCreditCard(c *ui.Context, data account.Display, action account.ResetAction, connected bool, ask, cancel, use func()) {
 	summary := data.Limits.ResetCredits
 	credit := summary.Next()
 	retry := action.Attempt != nil && action.Attempt.Submitted && action.Attempt.Matches(data)
@@ -251,7 +253,7 @@ func ResetCreditCard(c *ui.Context, data appmodel.AccountDisplay, action appmode
 				}
 			})
 			ui.Row(c).Wrap().AlignItems(ui.Center).Gap(12).Children(func() {
-				ui.Text(c, appmodel.ResetExpiryText(*credit)).FontSize(11).TextColor(widgets.Muted)
+				ui.Text(c, account.ResetExpiryText(*credit)).FontSize(11).TextColor(widgets.Muted)
 				if credit.GrantedAt > 0 {
 					ui.Text(c, tr("Received ")+time.Unix(credit.GrantedAt, 0).Local().Format("2006-01-02 15:04")).FontSize(11).TextColor(widgets.Muted)
 				}
@@ -279,7 +281,7 @@ func ResetCreditCard(c *ui.Context, data appmodel.AccountDisplay, action appmode
 					}
 				})
 				ui.Text(c, who+tr(" quota windows will reset immediately. This cannot be undone.")).FontSize(11).TextColor(widgets.Muted)
-				ui.Text(c, appmodel.ResetExpiryText(action.Attempt.Credit)).FontSize(11).TextColor(widgets.Muted)
+				ui.Text(c, account.ResetExpiryText(action.Attempt.Credit)).FontSize(11).TextColor(widgets.Muted)
 			})
 		}
 		if action.Notice != "" {

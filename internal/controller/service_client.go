@@ -1,41 +1,42 @@
 package controller
 
 import (
-	errors "errors"
-	appmodel "miya/internal/appmodel"
-	time "time"
+	"errors"
+	"time"
+
+	"miya/internal/svcproto"
 )
 
 // connectService connects to the service, starting it when none runs, and
 // replaces one built from another executable once it is idle.
-func connectService(workspace string) (*appmodel.ServiceClient, appmodel.SvcState, error) {
-	sock := appmodel.ServiceSocket()
-	cl, err := appmodel.DialService(sock)
+func connectService(workspace string) (*svcproto.Client, svcproto.State, error) {
+	sock := svcproto.Socket()
+	cl, err := svcproto.Dial(sock)
 	if err != nil {
 		if cl, err = startService(sock, workspace); err != nil {
-			return nil, appmodel.SvcState{}, err
+			return nil, svcproto.State{}, err
 		}
 	}
 	exe, exeTime := executableInfo()
-	var h appmodel.SvcHello
+	var h svcproto.Hello
 	if err := cl.Call("hello", nil, &h); err != nil {
 		cl.Close()
-		return nil, appmodel.SvcState{}, err
+		return nil, svcproto.State{}, err
 	}
-	if h.Remote && h.Version != appmodel.ServiceVersion {
+	if h.Remote && h.Version != svcproto.Version {
 		cl.Close()
-		return nil, appmodel.SvcState{}, errors.New("Incompatible server version. Update using the server installation process.")
+		return nil, svcproto.State{}, errors.New("Incompatible server version. Update using the server installation process.")
 	}
-	if !h.Remote && (h.Version != appmodel.ServiceVersion || h.Exe != exe || !h.ExeTime.Equal(exeTime)) {
+	if !h.Remote && (h.Version != svcproto.Version || h.Exe != exe || !h.ExeTime.Equal(exeTime)) {
 		switch {
 		case !h.Busy:
 			_ = cl.Call("quit", nil, nil)
 			cl.Close()
 			waitProcessGone(h.PID, 3*time.Second)
 			if cl, err = startService(sock, workspace); err != nil {
-				return nil, appmodel.SvcState{}, err
+				return nil, svcproto.State{}, err
 			}
-		case h.Version == appmodel.ServiceVersion:
+		case h.Version == svcproto.Version:
 			// A turn runs in the older service: use it, and let it end once idle.
 			cl.Notify("quitWhenIdle", nil)
 		default:
@@ -43,25 +44,25 @@ func connectService(workspace string) (*appmodel.ServiceClient, appmodel.SvcStat
 			// window start the new service. Never create a second writer.
 			cl.Notify("quitWhenIdle", nil)
 			cl.Close()
-			return nil, appmodel.SvcState{}, errors.New("Incompatible background service version; conversations are running")
+			return nil, svcproto.State{}, errors.New("Incompatible background service version; conversations are running")
 		}
 	}
-	var st appmodel.SvcState
+	var st svcproto.State
 	if err := cl.Call("state", nil, &st); err != nil {
 		cl.Close()
-		return nil, appmodel.SvcState{}, err
+		return nil, svcproto.State{}, err
 	}
 	return cl, st, nil
 }
 
-func startService(sock, workspace string) (*appmodel.ServiceClient, error) {
+func startService(sock, workspace string) (*svcproto.Client, error) {
 	if err := spawnService(workspace); err != nil {
 		return nil, err
 	}
 	deadline := time.Now().Add(5 * time.Second)
 	for {
 		time.Sleep(30 * time.Millisecond)
-		cl, err := appmodel.DialService(sock)
+		cl, err := svcproto.Dial(sock)
 		if err == nil {
 			return cl, nil
 		}

@@ -1,30 +1,38 @@
 package controller
 
 import (
-	context "context"
-	errors "errors"
-	fmt "fmt"
-	mime "mime"
-	appdir "miya/internal/appdir"
-	appmodel "miya/internal/appmodel"
-	automation "miya/internal/automation"
-	claude "miya/internal/claude"
-	codex "miya/internal/codex"
+	"context"
+	"errors"
+	"fmt"
+	"mime"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"miya/internal/account"
+	"miya/internal/appdir"
+	"miya/internal/appmodel"
+	"miya/internal/automation"
+	"miya/internal/claude"
+	"miya/internal/codex"
+	"miya/internal/composer"
 	dg "miya/internal/delegation"
-	control "miya/internal/desktop/control"
-	manager "miya/internal/memory/manager"
-	model "miya/internal/model"
-	notification "miya/internal/notification"
-	textutil "miya/internal/textutil"
-	threadlist "miya/internal/threadlist"
-	uiruntime "miya/internal/uiruntime"
-	os "os"
-	filepath "path/filepath"
-	sort "sort"
-	strings "strings"
-	sync "sync"
-	atomic "sync/atomic"
-	time "time"
+	"miya/internal/desktop/control"
+	"miya/internal/mcpconfig"
+	"miya/internal/memory/manager"
+	"miya/internal/model"
+	"miya/internal/msgfmt"
+	"miya/internal/notification"
+	"miya/internal/prefs"
+	"miya/internal/runtime/tracker"
+	"miya/internal/svcproto"
+	"miya/internal/textutil"
+	"miya/internal/threadlist"
+	"miya/internal/uiruntime"
 )
 
 type Controller struct {
@@ -34,7 +42,7 @@ type Controller struct {
 	Desktop     *control.Server
 	runtimeMu   sync.Mutex
 	runtimePath string
-	runtime     *appmodel.RuntimeManager
+	runtime     *tracker.Manager
 	mem         manager.Manager // memory state; reach it through memories
 
 	// auto is the automations, in the controller that runs them.
@@ -43,18 +51,18 @@ type Controller struct {
 	miyaPending map[string]chan bool
 	miyaSerial  int
 	// threadHistory holds referenced conversations' prefetched messages.
-	threadHistory map[string][]appmodel.Message
+	threadHistory map[string][]model.Message
 
-	referenceLoading map[appmodel.ThreadRef]bool
+	referenceLoading map[model.ThreadRef]bool
 
 	ReferenceDir     string
-	ForkedReferences map[appmodel.ThreadRef]referenceSession
+	ForkedReferences map[model.ThreadRef]referenceSession
 	// handoffs track work explicitly delegated to another conversation.
 	Handoffs []handoff
 	// delegationParent is the conversation that handed each its work.
 	DelegationParent      map[int]int
 	Collaboration         *collaborationState
-	CollaborationRemote   *appmodel.CollaborationStatus
+	CollaborationRemote   *model.CollaborationStatus
 	mcpSessionAccess      map[string]bool
 	fastMode              bool
 	Push                  *notification.Hub
@@ -69,35 +77,29 @@ type Controller struct {
 
 	ClaudeRuns map[int]*claude.Client
 	// claudeCmdCache keeps Claude Code\'s slash commands, by project.
-	ClaudeCmdCache   map[string]ClaudeCommandList
-	claudeCmdLoading map[string]bool
-	// commandsChanged hears a project\'s Claude Code commands arrive.
-
+	ClaudeCmdCache    map[string]ClaudeCommandList
+	claudeCmdLoading  map[string]bool
 	ClaudeHistoryDone chan struct{}
 	// onDraftReturned gives a message that could not be sent back to the window.
 	OnDraftReturned func(id int, text string, attachments []string)
-	// remote is the service a window's controller mirrors, nil when the
-	// controller runs the agents itself.
-
-	Mirror *mirrorState
+	Mirror          *mirrorState
 	// run runs dispatched work; nil uses runOnMain.
 	Run          func(func())
-	AccountCache appmodel.AccountDisplay
+	AccountCache account.Display
 
-	// accountState is what the account page shows; quota* the composer's ring.
-
+	// Account display lives in WindowState; quota* tracks composer refreshes.
 	accountVersion     int
 	accountCancel      context.CancelFunc
-	QuotaLimits        appmodel.AccountLimits
+	QuotaLimits        account.Limits
 	quotaStatus        string
 	quotaVersion       int
 	quotaCancel        context.CancelFunc
 	DraftPermission    func() string
 	SetDraftPermission func(string)
 
-	SetProjects func([]appmodel.Project)
+	SetProjects func([]model.Project)
 
-	SetThreads func([]appmodel.Thread)
+	SetThreads func([]model.Thread)
 
 	SetDraft func(string)
 
@@ -139,39 +141,39 @@ const (
 )
 
 func newChatController() *Controller {
-	c := &Controller{WindowState: appmodel.WindowState{ProjectCache: make(map[string][]appmodel.Thread)}, fastMode: appmodel.LoadSetting("codexServiceTier") == "fast"}
-	c.ReferenceSource, c.LastSubmitError = appmodel.ReferenceSourceForService()
+	c := &Controller{WindowState: appmodel.WindowState{ProjectCache: make(map[string][]model.Thread)}, fastMode: prefs.Load("codexServiceTier") == "fast"}
+	c.ReferenceSource, c.LastSubmitError = model.ReferenceSourceForService()
 	c.ReferenceDir = appdir.Dir()
 	c.LoadForkedReferences()
-	var setProjects func([]appmodel.Project)
-	c.Projects, setProjects = uiruntime.CreateSignal([]appmodel.Project{})
-	c.SetProjects = func(projects []appmodel.Project) { setProjects(projects); appmodel.PersistProjectOrder(projects) }
-	c.Threads, c.SetThreads = uiruntime.CreateSignal([]appmodel.Thread{})
+	var setProjects func([]model.Project)
+	c.Projects, setProjects = uiruntime.CreateSignal([]model.Project{})
+	c.SetProjects = func(projects []model.Project) { setProjects(projects); prefs.SaveProjectOrder(projects) }
+	c.Threads, c.SetThreads = uiruntime.CreateSignal([]model.Thread{})
 	c.InstallNotifications()
 	c.Active, c.SetActive = uiruntime.CreateSignal(0)
 	c.Agent, c.SetAgent = uiruntime.CreateSignal("codex")
 	c.applyClaudeCommand(claude.LoadCommand())
-	c.ClaudeModel, c.ClaudeEffort = appmodel.LoadSetting("claudeModel"), appmodel.LoadSetting("claudeEffort")
-	c.claudeDefaultModel = appmodel.LoadSetting("claudeDefaultModel")
+	c.ClaudeModel, c.ClaudeEffort = prefs.Load("claudeModel"), prefs.Load("claudeEffort")
+	c.claudeDefaultModel = prefs.Load("claudeDefaultModel")
 	c.Draft, c.SetDraft = uiruntime.CreateSignal("")
 	c.Model, c.SetModel = uiruntime.CreateSignal("")
 	c.Effort, c.SetEffort = uiruntime.CreateSignal("")
 	c.DraftPermission, c.SetDraftPermission = uiruntime.CreateSignal("")
-	initialPermissionPolicy := appmodel.LoadPermissionPolicy()
+	initialPermissionPolicy := prefs.LoadPermissionPolicy()
 	var setPermissionPolicy func(string)
 	c.PermissionPolicy, setPermissionPolicy = uiruntime.CreateSignal(initialPermissionPolicy)
 	c.SetPermissionPolicy = func(policy string) {
-		policy = appmodel.NormalizePermissionPolicy(policy)
+		policy = prefs.NormalizePermissionPolicy(policy)
 		setPermissionPolicy(policy)
-		appmodel.PersistPermissionPolicy(policy)
+		prefs.SavePermissionPolicy(policy)
 	}
-	initialLocale := appmodel.LoadLocale()
+	initialLocale := prefs.LoadLocale()
 	var setLocale func(string)
 	c.Locale, setLocale = uiruntime.CreateSignal(initialLocale)
 	c.SetLocale = func(locale string) {
-		locale = appmodel.NormalizeLocale(locale)
+		locale = prefs.NormalizeLocale(locale)
 		setLocale(locale)
-		appmodel.PersistLocale(locale)
+		prefs.SaveLocale(locale)
 	}
 	c.Models, c.SetModels = uiruntime.CreateSignal([]codex.Model{})
 	c.Attachments, c.SetAttachments = uiruntime.CreateSignal([]string{})
@@ -188,10 +190,10 @@ func newChatController() *Controller {
 		c.Cwd, _ = os.Getwd()
 	}
 	c.Cwd, _ = filepath.Abs(c.Cwd)
-	c.ProjectCache = appmodel.LoadThreadListCache()
+	c.ProjectCache = threadlist.Load()
 	c.LoadDesktopUnread()
 	c.AssignCachedThreadIDs()
-	projects := appmodel.LoadProjects(c.Cwd)
+	projects := threadlist.LoadProjects(c.Cwd)
 	cachedPaths := make([]string, 0, len(c.ProjectCache))
 	for path := range c.ProjectCache {
 		cachedPaths = append(cachedPaths, path)
@@ -206,10 +208,10 @@ func newChatController() *Controller {
 			}
 		}
 		if !found {
-			projects = append(projects, appmodel.Project{Name: filepath.Base(path), Path: path})
+			projects = append(projects, model.Project{Name: filepath.Base(path), Path: path})
 		}
 	}
-	c.SetProjects(appmodel.RestoreProjectOrder(projects))
+	c.SetProjects(prefs.RestoreProjectOrder(projects))
 	if cached := c.ProjectCache[c.Cwd]; len(cached) > 0 {
 		c.SetThreads(cached)
 		c.SetHistoryStatus("")
@@ -233,17 +235,17 @@ func (c *Controller) SelectedPermissionPolicy() string {
 	if c.PermissionPolicy == nil {
 		return "on-request"
 	}
-	return appmodel.NormalizePermissionPolicy(c.PermissionPolicy())
+	return prefs.NormalizePermissionPolicy(c.PermissionPolicy())
 }
 
 func (c *Controller) rememberProject(path string) {
-	items := append([]appmodel.Project(nil), c.Projects()...)
+	items := append([]model.Project(nil), c.Projects()...)
 	for _, p := range items {
 		if p.Path == path {
 			return
 		}
 	}
-	items = append([]appmodel.Project{{Name: filepath.Base(path), Path: path}}, items...)
+	items = append([]model.Project{{Name: filepath.Base(path), Path: path}}, items...)
 	c.SetProjects(items)
 	if home, err := os.UserHomeDir(); err == nil {
 		configPath := filepath.Join(home, ".codex", "config.toml")
@@ -259,10 +261,10 @@ func (c *Controller) rememberProject(path string) {
 
 func (c *Controller) RenameProject(path, name string) {
 	if c.Remote != nil {
-		c.forward("renameProject", appmodel.SvcProject{Path: path, Name: name})
+		c.forward("renameProject", svcproto.ProjectRequest{Path: path, Name: name})
 		return
 	}
-	items := append([]appmodel.Project(nil), c.Projects()...)
+	items := append([]model.Project(nil), c.Projects()...)
 	for i := range items {
 		if items[i].Path == path {
 			items[i].Name = name
@@ -277,8 +279,8 @@ func (c *Controller) RenameProject(path, name string) {
 // can also remove locally-created threads that have no server ID yet.
 func (c *Controller) removeThreadLocal(id int, serverID string) {
 	project := c.ThreadWorkspace(id)
-	withoutThread := func(items []appmodel.Thread) []appmodel.Thread {
-		filtered := make([]appmodel.Thread, 0, len(items))
+	withoutThread := func(items []model.Thread) []model.Thread {
+		filtered := make([]model.Thread, 0, len(items))
 		for _, item := range items {
 			if item.ID == id || (serverID != "" && item.ServerID == serverID) {
 				continue
@@ -308,7 +310,7 @@ func (c *Controller) removeThreadLocal(id int, serverID string) {
 	c.RefreshProjectOrder()
 }
 
-func (c *Controller) ArchiveThread(t appmodel.Thread) {
+func (c *Controller) ArchiveThread(t model.Thread) {
 	if c.Remote != nil {
 		c.forward("archive", t.ID)
 		return
@@ -316,7 +318,7 @@ func (c *Controller) ArchiveThread(t appmodel.Thread) {
 	BackendOf(t).Archive(c, t)
 }
 
-func (c *Controller) archiveCodexThread(t appmodel.Thread) {
+func (c *Controller) archiveCodexThread(t model.Thread) {
 	client := c.Client
 	if client == nil || t.ServerID == "" {
 		c.removeThreadLocal(t.ID, t.ServerID)
@@ -339,7 +341,7 @@ func (c *Controller) archiveCodexThread(t appmodel.Thread) {
 // deleteThread removes the local entry immediately. Codex currently exposes
 // archive as the server-side removal operation, so synchronize that state when
 // a server-backed thread is deleted as well.
-func (c *Controller) DeleteThread(t appmodel.Thread) {
+func (c *Controller) DeleteThread(t model.Thread) {
 	if c.Remote != nil {
 		c.forward("delete", t.ID)
 		return
@@ -347,7 +349,7 @@ func (c *Controller) DeleteThread(t appmodel.Thread) {
 	BackendOf(t).Delete(c, t)
 }
 
-func (c *Controller) deleteCodexThread(t appmodel.Thread) {
+func (c *Controller) deleteCodexThread(t model.Thread) {
 	c.removeThreadLocal(t.ID, t.ServerID)
 	if c.Client == nil || t.ServerID == "" {
 		return
@@ -364,7 +366,7 @@ func (c *Controller) deleteCodexThread(t appmodel.Thread) {
 
 func (c *Controller) removeProject(path string, deleteConfig bool) {
 	path, _ = filepath.Abs(path)
-	items := append([]appmodel.Project(nil), c.Projects()...)
+	items := append([]model.Project(nil), c.Projects()...)
 	projects := items[:0]
 	for _, project := range items {
 		if project.Path != path {
@@ -396,10 +398,10 @@ func (c *Controller) removeProject(path string, deleteConfig bool) {
 
 func (c *Controller) ArchiveProject(path string) {
 	if c.Remote != nil {
-		c.forward("archiveProject", appmodel.SvcProject{Path: path})
+		c.forward("archiveProject", svcproto.ProjectRequest{Path: path})
 		return
 	}
-	for _, thread := range append([]appmodel.Thread(nil), c.ProjectCache[path]...) {
+	for _, thread := range append([]model.Thread(nil), c.ProjectCache[path]...) {
 		c.ArchiveThread(thread)
 	}
 	c.removeProject(path, false)
@@ -407,10 +409,10 @@ func (c *Controller) ArchiveProject(path string) {
 
 func (c *Controller) DeleteProject(path string) {
 	if c.Remote != nil {
-		c.forward("deleteProject", appmodel.SvcProject{Path: path})
+		c.forward("deleteProject", svcproto.ProjectRequest{Path: path})
 		return
 	}
-	for _, thread := range append([]appmodel.Thread(nil), c.ProjectCache[path]...) {
+	for _, thread := range append([]model.Thread(nil), c.ProjectCache[path]...) {
 		c.DeleteThread(thread)
 	}
 	c.removeProject(path, true)
@@ -454,13 +456,13 @@ func (c *Controller) AssignCachedThreadIDs() {
 	}
 }
 
-func (c *Controller) Current() appmodel.Thread {
+func (c *Controller) Current() model.Thread {
 	for _, t := range c.Threads() {
 		if t.ID == c.Active() {
 			return t
 		}
 	}
-	return appmodel.Thread{Title: tr("New thread"), Project: filepath.Base(c.Cwd)}
+	return model.Thread{Title: tr("New thread"), Project: filepath.Base(c.Cwd)}
 }
 
 func (c *Controller) ProjectBusy(path string) bool {
@@ -478,14 +480,14 @@ func (c *Controller) ProjectBusy(path string) bool {
 	return false
 }
 
-func (c *Controller) Update(id int, fn func(*appmodel.Thread)) {
-	items := append([]appmodel.Thread(nil), c.Threads()...)
+func (c *Controller) Update(id int, fn func(*model.Thread)) {
+	items := append([]model.Thread(nil), c.Threads()...)
 	for i := range items {
 		if items[i].ID == id {
-			items[i].Messages = append([]appmodel.Message(nil), items[i].Messages...)
-			items[i].Tasks = append([]appmodel.ThreadTask(nil), items[i].Tasks...)
+			items[i].Messages = append([]model.Message(nil), items[i].Messages...)
+			items[i].Tasks = append([]model.ThreadTask(nil), items[i].Tasks...)
 			old := items[i]
-			before := appmodel.ThreadMetaOf(items[i])
+			before := threadlist.MetaOf(items[i])
 			wasBusy := items[i].Busy
 			fn(&items[i])
 			if items[i].ExecutionID != "" && len(items[i].Messages) >= len(old.Messages) {
@@ -501,11 +503,11 @@ func (c *Controller) Update(id int, fn func(*appmodel.Thread)) {
 			}
 			c.SetThreads(items)
 			if c.ProjectCache != nil && c.Cwd != "" {
-				c.ProjectCache[c.Cwd] = append([]appmodel.Thread(nil), items...)
+				c.ProjectCache[c.Cwd] = append([]model.Thread(nil), items...)
 			}
 			// Streamed text changes no metadata: reorder and write the sidebar's
 			// cache only when what it keeps changed, not for every delta.
-			if appmodel.ThreadMetaOf(items[i]) != before {
+			if threadlist.MetaOf(items[i]) != before {
 				c.RefreshProjectOrder()
 				threadlist.Persist(c.ProjectCache)
 			}
@@ -532,10 +534,10 @@ func (c *Controller) Update(id int, fn func(*appmodel.Thread)) {
 			if cached[i].ID != id {
 				continue
 			}
-			items := append([]appmodel.Thread(nil), cached...)
+			items := append([]model.Thread(nil), cached...)
 			old := items[i]
-			items[i].Messages = append([]appmodel.Message(nil), old.Messages...)
-			items[i].Tasks = append([]appmodel.ThreadTask(nil), old.Tasks...)
+			items[i].Messages = append([]model.Message(nil), old.Messages...)
+			items[i].Tasks = append([]model.ThreadTask(nil), old.Tasks...)
 			fn(&items[i])
 			if items[i].ExecutionID != "" && len(items[i].Messages) >= len(old.Messages) {
 				for j := len(old.Messages); j < len(items[i].Messages); j++ {
@@ -550,7 +552,7 @@ func (c *Controller) Update(id int, fn func(*appmodel.Thread)) {
 			}
 			c.ProjectCache[path] = items
 			c.RecordDesktopCompletion(old, items[i])
-			if appmodel.ThreadMetaOf(items[i]) != appmodel.ThreadMetaOf(old) {
+			if threadlist.MetaOf(items[i]) != threadlist.MetaOf(old) {
 				c.RefreshProjectOrder()
 				threadlist.Persist(c.ProjectCache)
 			}
@@ -572,7 +574,7 @@ func (c *Controller) RefreshProjectOrder() {
 	if c.Projects == nil || c.SetProjects == nil {
 		return
 	}
-	projects := append([]appmodel.Project(nil), c.Projects()...)
+	projects := append([]model.Project(nil), c.Projects()...)
 	latest := func(path string) int64 {
 		var result int64
 		for _, t := range c.ProjectCache[path] {
@@ -618,7 +620,7 @@ func (c *Controller) Connect() {
 	c.SetHistoryStatus("Loading conversations…")
 	go func() {
 		ctx, done := context.WithTimeout(connectionCtx, 15*time.Second)
-		client, err := codex.Start(ctx, "", cwd, appmodel.CodexMCPArgs(cwd)...)
+		client, err := codex.Start(ctx, "", cwd, mcpconfig.CodexArgs(cwd)...)
 		done()
 		if err != nil {
 			c.Dispatch(func() {
@@ -647,7 +649,7 @@ func (c *Controller) Connect() {
 			c.Connecting = false
 			c.SetReady(true)
 			c.SetStatus("Connected · Codex app-server")
-			c.QuotaLimits = appmodel.AccountLimits{}
+			c.QuotaLimits = account.Limits{}
 			c.refreshQuota()
 			c.loadThreadList(connectionCtx, client, c.Cwd, generation)
 			c.loadModels(connectionCtx, client, generation)
@@ -705,7 +707,7 @@ func (c *Controller) loadThreadList(ctx context.Context, client *codex.Client, c
 				firstErr = result.err
 			}
 			if c.ProjectCache == nil {
-				c.ProjectCache = make(map[string][]appmodel.Thread)
+				c.ProjectCache = make(map[string][]model.Thread)
 			}
 
 			// Merge this project as soon as its own request completes. The active
@@ -713,7 +715,7 @@ func (c *Controller) loadThreadList(ctx context.Context, client *codex.Client, c
 			projectPath, _ := filepath.Abs(result.cwd)
 			items := c.ProjectCache[projectPath]
 			if projectPath == c.Cwd {
-				items = append([]appmodel.Thread(nil), c.Threads()...)
+				items = append([]model.Thread(nil), c.Threads()...)
 				for _, local := range c.ProjectCache[projectPath] {
 					found := false
 					for _, item := range items {
@@ -732,20 +734,20 @@ func (c *Controller) loadThreadList(ctx context.Context, client *codex.Client, c
 				for i := range items {
 					if model.ThreadAgent(items[i]) == appmodel.AgentCodex && items[i].ServerID == remote.ID {
 						found = true
-						items[i].Title = appmodel.ConversationTitle(remote.Name, remote.Preview, items[i].Title)
+						items[i].Title = msgfmt.ConversationTitle(remote.Name, remote.Preview, items[i].Title)
 						items[i].Age = time.Unix(remote.UpdatedAt, 0).Format("Jan 2")
 						items[i].LastActivityAt = max(items[i].LastActivityAt, remote.UpdatedAt*1000)
 						break
 					}
 				}
 				if !found {
-					items = append(items, appmodel.Thread{ID: c.NextID(), ServerID: remote.ID, Title: appmodel.ConversationTitle(remote.Name, remote.Preview, ""), Project: filepath.Base(projectPath), Age: time.Unix(remote.UpdatedAt, 0).Format("Jan 2"), LastActivityAt: remote.UpdatedAt * 1000})
+					items = append(items, model.Thread{ID: c.NextID(), ServerID: remote.ID, Title: msgfmt.ConversationTitle(remote.Name, remote.Preview, ""), Project: filepath.Base(projectPath), Age: time.Unix(remote.UpdatedAt, 0).Format("Jan 2"), LastActivityAt: remote.UpdatedAt * 1000})
 				}
 			}
 			if len(items) > maxVisibleThreads {
 				items = items[:maxVisibleThreads]
 			}
-			c.ProjectCache[projectPath] = append([]appmodel.Thread(nil), items...)
+			c.ProjectCache[projectPath] = append([]model.Thread(nil), items...)
 			if projectPath == c.Cwd {
 				c.SetThreads(items)
 			}
@@ -829,7 +831,7 @@ func (c *Controller) loadModels(ctx context.Context, client *codex.Client, gener
 	}()
 }
 
-func (c *Controller) readHistory(t appmodel.Thread) {
+func (c *Controller) readHistory(t model.Thread) {
 	c.Resume(t, nil)
 }
 
@@ -861,9 +863,9 @@ func (c *Controller) ChangeWorkspace(path string) error {
 	}
 
 	if c.ProjectCache == nil {
-		c.ProjectCache = make(map[string][]appmodel.Thread)
+		c.ProjectCache = make(map[string][]model.Thread)
 	}
-	cached := append([]appmodel.Thread(nil), c.Threads()...)
+	cached := append([]model.Thread(nil), c.Threads()...)
 	for i := range cached {
 		// A running conversation goes on in the background, as Codex's do;
 		// its frames follow it to the project it stays in.
@@ -881,7 +883,7 @@ func (c *Controller) ChangeWorkspace(path string) error {
 	c.ProjectCache[c.Cwd] = cached
 	c.Cwd = abs
 	c.rememberProject(abs)
-	cachedThreads := append([]appmodel.Thread(nil), c.ProjectCache[abs]...)
+	cachedThreads := append([]model.Thread(nil), c.ProjectCache[abs]...)
 	c.SetThreads(cachedThreads)
 	if len(cachedThreads) > 0 {
 		c.SetHistoryStatus("")
@@ -964,11 +966,11 @@ func (c *Controller) RememberDraft(value string) {
 				}
 				c.Mirror.Drafts[c.Active()] = value
 			}
-			c.forward("draft", appmodel.SvcThreadValue{Thread: c.Active(), Value: value})
+			c.forward("draft", svcproto.ThreadValue{Thread: c.Active(), Value: value})
 		}
 		return
 	}
-	c.Update(c.Active(), func(t *appmodel.Thread) { t.Draft = value })
+	c.Update(c.Active(), func(t *model.Thread) { t.Draft = value })
 }
 
 func (c *Controller) AddAttachments(paths []string) {
@@ -1009,7 +1011,7 @@ func (c *Controller) AttachmentInputs(paths []string) []map[string]any {
 	return inputs
 }
 
-func (c *Controller) SelectThread(t appmodel.Thread) {
+func (c *Controller) SelectThread(t model.Thread) {
 	// Viewing history does not count as conversation activity.
 	if latest := c.ThreadWithID(t.ID); latest.ID != 0 {
 		t = latest
@@ -1031,7 +1033,7 @@ func (c *Controller) SelectThread(t appmodel.Thread) {
 }
 
 // resume continues a Codex thread, then submits after, when given.
-func (c *Controller) Resume(t appmodel.Thread, after *appmodel.SendRequest) {
+func (c *Controller) Resume(t model.Thread, after *model.SendRequest) {
 	if c.Remote != nil {
 		c.forward("resume", t.ID)
 		return
@@ -1040,7 +1042,7 @@ func (c *Controller) Resume(t appmodel.Thread, after *appmodel.SendRequest) {
 	cwd := c.ThreadWorkspace(t.ID)
 	policy := c.permissionForThread(t)
 	if client == nil {
-		c.Update(t.ID, func(t *appmodel.Thread) {
+		c.Update(t.ID, func(t *model.Thread) {
 			t.Busy = false
 			t.Loading = false
 			t.Status = "Codex is reconnecting…"
@@ -1054,7 +1056,7 @@ func (c *Controller) Resume(t appmodel.Thread, after *appmodel.SendRequest) {
 		}
 		return
 	}
-	c.Update(t.ID, func(t *appmodel.Thread) {
+	c.Update(t.ID, func(t *model.Thread) {
 		t.Busy = true
 		t.Loading = true
 		t.Status = "Loading conversation…"
@@ -1063,8 +1065,8 @@ func (c *Controller) Resume(t appmodel.Thread, after *appmodel.SendRequest) {
 		ctx, cancel := context.WithTimeout(c.Ctx, 30*time.Second)
 		defer cancel()
 		var result codex.ThreadResponse
-		err := client.Call(ctx, "thread/resume", map[string]any{"threadId": t.ServerID, "cwd": cwd, "sandbox": appmodel.SandboxForPermissionPolicy(policy), "approvalPolicy": appmodel.ApprovalForPermissionPolicy(policy), "approvalsReviewer": appmodel.ReviewerForPermissionPolicy(policy)}, &result)
-		readOnly := appmodel.IsWriterConflict(err)
+		err := client.Call(ctx, "thread/resume", map[string]any{"threadId": t.ServerID, "cwd": cwd, "sandbox": prefs.SandboxForPolicy(policy), "approvalPolicy": prefs.ApprovalForPolicy(policy), "approvalsReviewer": prefs.ReviewerForPolicy(policy)}, &result)
+		readOnly := codex.IsWriterConflict(err)
 		if readOnly {
 			// Another Codex process owns the writer. Read the persisted rollout through
 			// thread/read so this client can still act as a conversation viewer.
@@ -1077,14 +1079,14 @@ func (c *Controller) Resume(t appmodel.Thread, after *appmodel.SendRequest) {
 		}
 		// Decode attachments and normalize the complete rollout off the UI thread.
 		// Runtime IDs are assigned only after returning to the UI owner.
-		var messages []appmodel.Message
+		var messages []model.Message
 		if err == nil {
-			messages = appmodel.PrepareHistoryMessages(result.Thread)
+			messages = msgfmt.HistoryMessages(result.Thread)
 		}
 
 		c.Dispatch(func() {
 			if c.Client != client {
-				c.Update(t.ID, func(t *appmodel.Thread) {
+				c.Update(t.ID, func(t *model.Thread) {
 					t.Loading = false
 					t.Busy = false
 					t.Status = "Connection changed while loading. Click to retry."
@@ -1098,14 +1100,14 @@ func (c *Controller) Resume(t appmodel.Thread, after *appmodel.SendRequest) {
 				}
 				return
 			}
-			c.Update(t.ID, func(t *appmodel.Thread) {
+			c.Update(t.ID, func(t *model.Thread) {
 				t.Busy = false
 				t.Loading = false
 				t.ReadOnly = readOnly
 				t.Resumed = err == nil && !readOnly
 				if err != nil {
 					t.Status = err.Error()
-					c.upsert(t, appmodel.Message{Role: "error", Kind: "error", Status: "failed", Content: "Unable to load conversation: " + err.Error(), ItemID: "resume-error"})
+					c.upsert(t, model.Message{Role: "error", Kind: "error", Status: "failed", Content: "Unable to load conversation: " + err.Error(), ItemID: "resume-error"})
 					return
 				}
 				t.Loaded = true
@@ -1117,7 +1119,7 @@ func (c *Controller) Resume(t appmodel.Thread, after *appmodel.SendRequest) {
 				} else {
 					t.Status = ""
 				}
-				t.Title = appmodel.ConversationTitle(result.Thread.Name, result.Thread.Preview, t.Title)
+				t.Title = msgfmt.ConversationTitle(result.Thread.Name, result.Thread.Preview, t.Title)
 				for i := range messages {
 					messages[i].ID = c.NextID()
 				}
@@ -1126,7 +1128,7 @@ func (c *Controller) Resume(t appmodel.Thread, after *appmodel.SendRequest) {
 					if turn.Status == "inProgress" && !readOnly {
 						t.Busy = true
 						t.TurnID = turn.ID
-						t.StartedAtMs, t.CompletedAtMs = appmodel.CodexTurnTimes(turn)
+						t.StartedAtMs, t.CompletedAtMs = msgfmt.CodexTurnTimes(turn)
 						t.Status = "Working…"
 					}
 				}
@@ -1150,8 +1152,8 @@ func (c *Controller) Resume(t appmodel.Thread, after *appmodel.SendRequest) {
 	}()
 }
 
-func (c *Controller) HistoryMessages(remote codex.Thread) []appmodel.Message {
-	out := appmodel.PrepareHistoryMessages(remote)
+func (c *Controller) HistoryMessages(remote codex.Thread) []model.Message {
+	out := msgfmt.HistoryMessages(remote)
 	for i := range out {
 		out[i].ID = c.NextID()
 	}
@@ -1164,7 +1166,7 @@ func (c *Controller) Send() { c.SendDraft(false) }
 // sendDraft submits the window's draft; in a running turn it steers the
 // turn, or waits in the queue when steer is false.
 func (c *Controller) SendDraft(steer bool) int {
-	req := appmodel.SendRequest{Steer: steer, ThreadID: c.Current().ID, Text: c.Draft(), Attachments: append([]string(nil), c.Attachments()...), Agent: c.CurrentAgent(), Model: c.CurrentBackend().Model(c), Effort: c.CurrentBackend().Effort(c), Policy: c.CurrentPermissionPolicy()}
+	req := model.SendRequest{Steer: steer, ThreadID: c.Current().ID, Text: c.Draft(), Attachments: append([]string(nil), c.Attachments()...), Agent: c.CurrentAgent(), Model: c.CurrentBackend().Model(c), Effort: c.CurrentBackend().Effort(c), Policy: c.CurrentPermissionPolicy()}
 	id := c.Submit(req)
 	if id != 0 {
 		c.SetActive(id)
@@ -1174,7 +1176,7 @@ func (c *Controller) SendDraft(steer bool) int {
 	return id
 }
 
-func (c *Controller) sendCodex(req appmodel.SendRequest) int {
+func (c *Controller) sendCodex(req model.SendRequest) int {
 	if !c.Ready() {
 		return 0
 	}
@@ -1187,13 +1189,13 @@ func (c *Controller) sendCodex(req appmodel.SendRequest) int {
 	if t.ID == 0 {
 		// Use the first request until the agent supplies a named title.
 		project := textutil.FirstNonEmpty(req.Project, c.Cwd)
-		t = appmodel.Thread{PermissionPolicy: req.Policy, ID: c.NextID(), Title: appmodel.ConversationTitle("", text, ""), Project: filepath.Base(project), Age: "now", Loaded: true, HistoryLoaded: true}
+		t = model.Thread{PermissionPolicy: req.Policy, ID: c.NextID(), Title: msgfmt.ConversationTitle("", text, ""), Project: filepath.Base(project), Age: "now", Loaded: true, HistoryLoaded: true}
 		c.AddThread(project, t)
 	}
 	id := t.ID
 	client := c.Client
 	if client == nil {
-		c.Update(id, func(t *appmodel.Thread) {
+		c.Update(id, func(t *model.Thread) {
 			t.Busy = false
 			t.Status = "Codex is reconnecting…"
 		})
@@ -1202,12 +1204,12 @@ func (c *Controller) sendCodex(req appmodel.SendRequest) int {
 	}
 	cwd := c.ThreadWorkspace(id)
 	modelID, effort, policy := req.Model, req.Effort, req.Policy
-	serviceTier := appmodel.LoadSetting("codexServiceTier")
+	serviceTier := prefs.Load("codexServiceTier")
 	sentAt := time.Now().UnixMilli()
 	pendingUserID := c.NextID()
 	localTurn := c.Memories().BeginTurn(t, req, pendingUserID)
-	c.Update(id, func(t *appmodel.Thread) {
-		appmodel.ResetTurnOutput(t)
+	c.Update(id, func(t *model.Thread) {
+		msgfmt.ResetTurnOutput(t)
 		t.ExecutionID = req.ExecutionID
 		if !req.KeepSessionSettings {
 			t.LaunchModel, t.LaunchEffort = req.Model, req.Effort
@@ -1217,8 +1219,8 @@ func (c *Controller) sendCodex(req appmodel.SendRequest) int {
 		t.Status = "Starting…"
 		t.Draft = ""
 		t.StopRequested = false
-		content, images := appmodel.AttachmentDisplay(text, attachments)
-		t.Messages = append(t.Messages, appmodel.Message{ID: pendingUserID, Role: "user", Content: content, Images: images, Attachments: append([]string(nil), req.Attachments...), Parts: req.Parts, ItemID: "pending-user", SentAtMs: sentAt, MemoryTurnID: localTurn, MemoryControl: req.MemoryControl || req.KeepSessionSettings})
+		content, images := msgfmt.AttachmentDisplay(text, attachments)
+		t.Messages = append(t.Messages, model.Message{ID: pendingUserID, Role: "user", Content: content, Images: images, Attachments: append([]string(nil), req.Attachments...), Parts: req.Parts, ItemID: "pending-user", SentAtMs: sentAt, MemoryTurnID: localTurn, MemoryControl: req.MemoryControl || req.KeepSessionSettings})
 	})
 	go func() {
 		ctx, cancel := context.WithTimeout(c.Ctx, 45*time.Second)
@@ -1229,7 +1231,7 @@ func (c *Controller) sendCodex(req appmodel.SendRequest) int {
 		mayHaveStarted := false
 		if serverID == "" {
 			var r codex.ThreadResponse
-			params := map[string]any{"cwd": cwd, "sandbox": appmodel.SandboxForPermissionPolicy(policy), "approvalPolicy": appmodel.ApprovalForPermissionPolicy(policy), "approvalsReviewer": appmodel.ReviewerForPermissionPolicy(policy)}
+			params := map[string]any{"cwd": cwd, "sandbox": prefs.SandboxForPolicy(policy), "approvalPolicy": prefs.ApprovalForPolicy(policy), "approvalsReviewer": prefs.ReviewerForPolicy(policy)}
 			if modelID != "" {
 				params["model"] = modelID
 			}
@@ -1242,7 +1244,7 @@ func (c *Controller) sendCodex(req appmodel.SendRequest) int {
 					sid := serverID
 					serverName := strings.TrimSpace(r.Thread.Name)
 					c.Dispatch(func() {
-						c.Update(id, func(t *appmodel.Thread) {
+						c.Update(id, func(t *model.Thread) {
 							t.ServerID = sid
 							t.Resumed = true
 							if serverName != "" {
@@ -1257,15 +1259,15 @@ func (c *Controller) sendCodex(req appmodel.SendRequest) int {
 			Turn codex.Turn `json:"turn"`
 		}
 		if err == nil {
-			err = c.persistManagedBinding(ctx, req.ExecutionID, appmodel.ThreadRef{Source: c.ReferenceSource, Backend: appmodel.AgentCodex, SessionID: serverID}.URL())
+			err = c.persistManagedBinding(ctx, req.ExecutionID, model.ThreadRef{Source: c.ReferenceSource, Backend: appmodel.AgentCodex, SessionID: serverID}.URL())
 		}
 		if err == nil {
-			mem := c.Memories().PrepareInput(t, req, cwd, c.ThreadRef(appmodel.Thread{ServerID: serverID}).URL())
-			input := []map[string]any{{"type": "text", "text": appmodel.CollaborationTaggedInput(mem.Text(text), req.Parts), "text_elements": []any{}}}
+			mem := c.Memories().PrepareInput(t, req, cwd, c.ThreadRef(model.Thread{ServerID: serverID}).URL())
+			input := []map[string]any{{"type": "text", "text": composer.CollaborationTaggedInput(mem.Text(text), req.Parts), "text_elements": []any{}}}
 			own, _ := model.SplitReferenceContext(text)
-			input = append(input, appmodel.FileMentionInputs(own, cwd)...)
+			input = append(input, composer.FileMentionInputs(own, cwd)...)
 			input = append(input, c.AttachmentInputs(attachments)...)
-			params := map[string]any{"threadId": serverID, "cwd": cwd, "input": input, "approvalPolicy": appmodel.ApprovalForPermissionPolicy(policy), "approvalsReviewer": appmodel.ReviewerForPermissionPolicy(policy), "sandboxPolicy": appmodel.TurnSandboxForPermissionPolicy(policy)}
+			params := map[string]any{"threadId": serverID, "cwd": cwd, "input": input, "approvalPolicy": prefs.ApprovalForPolicy(policy), "approvalsReviewer": prefs.ReviewerForPolicy(policy), "sandboxPolicy": prefs.TurnSandboxForPolicy(policy)}
 			if modelID != "" {
 				params["model"] = modelID
 			}
@@ -1277,14 +1279,14 @@ func (c *Controller) sendCodex(req appmodel.SendRequest) int {
 			}
 			mayHaveStarted = true
 			err = client.Call(ctx, "turn/start", params, &result)
-			if appmodel.IsMissingCodexThread(err, serverID) {
+			if codex.IsMissingThread(err, serverID) {
 				// The server explicitly rejected this turn before accepting input.
 				// Restore the same thread and retry once, without another user bubble.
 				missingThread = true
 				mayHaveStarted = false
-				err = client.Call(ctx, "thread/resume", map[string]any{"threadId": serverID, "cwd": cwd, "sandbox": appmodel.SandboxForPermissionPolicy(policy), "approvalPolicy": appmodel.ApprovalForPermissionPolicy(policy), "approvalsReviewer": appmodel.ReviewerForPermissionPolicy(policy)}, nil)
+				err = client.Call(ctx, "thread/resume", map[string]any{"threadId": serverID, "cwd": cwd, "sandbox": prefs.SandboxForPolicy(policy), "approvalPolicy": prefs.ApprovalForPolicy(policy), "approvalsReviewer": prefs.ReviewerForPolicy(policy)}, nil)
 				if err == nil {
-					input[0]["text"] = appmodel.CollaborationTaggedInput(mem.Text(text), req.Parts)
+					input[0]["text"] = composer.CollaborationTaggedInput(mem.Text(text), req.Parts)
 					mayHaveStarted = true
 					err = client.Call(ctx, "turn/start", params, &result)
 				}
@@ -1298,13 +1300,13 @@ func (c *Controller) sendCodex(req appmodel.SendRequest) int {
 			}
 			c.ManagedCodexAccepted(req.ExecutionID, result.Turn.ID, client.RuntimeEpoch(), err, mayHaveStarted)
 			if err != nil {
-				c.Update(id, func(t *appmodel.Thread) {
+				c.Update(id, func(t *model.Thread) {
 					t.Busy = false
 					if missingThread {
 						t.Resumed = false
 					}
 					t.Status = "Send failed: " + err.Error()
-					c.upsert(t, appmodel.Message{Role: "error", Kind: "error", Status: "failed", Content: "Send failed: " + err.Error(), ItemID: "send-error-" + fmt.Sprint(c.NextID())})
+					c.upsert(t, model.Message{Role: "error", Kind: "error", Status: "failed", Content: "Send failed: " + err.Error(), ItemID: "send-error-" + fmt.Sprint(c.NextID())})
 					if req.ExecutionID == "" {
 						t.Draft = text
 					}
@@ -1315,7 +1317,7 @@ func (c *Controller) sendCodex(req appmodel.SendRequest) int {
 				}
 				return
 			}
-			c.Update(id, func(t *appmodel.Thread) {
+			c.Update(id, func(t *model.Thread) {
 				if t.Busy {
 					t.TurnID = result.Turn.ID
 					t.Status = "Working…"
@@ -1346,14 +1348,14 @@ func (c *Controller) StopThread(id int) {
 	if !t.Busy && c.ClaudeRuns[t.ID] == nil {
 		return
 	}
-	c.Update(t.ID, func(t *appmodel.Thread) { t.StopRequested = true; t.Status = "Stopping…" })
+	c.Update(t.ID, func(t *model.Thread) { t.StopRequested = true; t.Status = "Stopping…" })
 	BackendOf(t).Stop(c, t)
 }
 
-func (c *Controller) interrupt(t appmodel.Thread) {
+func (c *Controller) interrupt(t model.Thread) {
 	client := c.Client
 	if client == nil {
-		c.Update(t.ID, func(t *appmodel.Thread) { t.StopRequested = false; t.Status = "Codex is reconnecting…" })
+		c.Update(t.ID, func(t *model.Thread) { t.StopRequested = false; t.Status = "Codex is reconnecting…" })
 		return
 	}
 	go func() {
@@ -1361,14 +1363,14 @@ func (c *Controller) interrupt(t appmodel.Thread) {
 		defer cancel()
 		err := client.Call(ctx, "turn/interrupt", map[string]string{"threadId": t.ServerID, "turnId": t.TurnID}, nil)
 		if err != nil {
-			c.Dispatch(func() { c.Update(t.ID, func(t *appmodel.Thread) { t.Status = "Stop failed: " + err.Error() }) })
+			c.Dispatch(func() { c.Update(t.ID, func(t *model.Thread) { t.Status = "Stop failed: " + err.Error() }) })
 		}
 	}()
 }
 
-func (c *Controller) permissionForThread(t appmodel.Thread) string {
+func (c *Controller) permissionForThread(t model.Thread) string {
 	if t.PermissionPolicy != "" {
-		return appmodel.NormalizePermissionPolicy(t.PermissionPolicy)
+		return prefs.NormalizePermissionPolicy(t.PermissionPolicy)
 	}
 	return c.SelectedPermissionPolicy()
 }
@@ -1376,13 +1378,13 @@ func (c *Controller) permissionForThread(t appmodel.Thread) string {
 func (c *Controller) CurrentPermissionPolicy() string {
 	t := c.Current()
 	if t.ID == 0 && c.DraftPermission != nil && c.DraftPermission() != "" {
-		return appmodel.NormalizePermissionPolicy(c.DraftPermission())
+		return prefs.NormalizePermissionPolicy(c.DraftPermission())
 	}
 	return c.permissionForThread(t)
 }
 
 func (c *Controller) SetCurrentPermissionPolicy(policy string) {
-	policy = appmodel.NormalizePermissionPolicy(policy)
+	policy = prefs.NormalizePermissionPolicy(policy)
 	if c.Current().ID == 0 {
 		if c.SetDraftPermission != nil {
 			c.SetDraftPermission(policy)
@@ -1390,10 +1392,10 @@ func (c *Controller) SetCurrentPermissionPolicy(policy string) {
 		return
 	}
 	if c.Remote != nil {
-		c.forward("threadPolicy", appmodel.SvcThreadValue{Thread: c.Active(), Value: policy})
+		c.forward("threadPolicy", svcproto.ThreadValue{Thread: c.Active(), Value: policy})
 		return
 	}
-	c.Update(c.Active(), func(t *appmodel.Thread) { t.PermissionPolicy = policy })
+	c.Update(c.Active(), func(t *model.Thread) { t.PermissionPolicy = policy })
 }
 
 // onMain runs f on the main thread and waits for it.

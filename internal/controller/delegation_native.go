@@ -1,11 +1,13 @@
 package controller
 
 import (
-	errors "errors"
-	appmodel "miya/internal/appmodel"
-	codex "miya/internal/codex"
+	"errors"
+	"strings"
+
+	"miya/internal/codex"
 	dg "miya/internal/delegation"
-	strings "strings"
+	"miya/internal/delegation/coordinator"
+	"miya/internal/model"
 )
 
 func (c *Controller) ManagedCodexAccepted(id, turn, epoch string, err error, mayHaveStarted bool) {
@@ -26,7 +28,7 @@ func (c *Controller) ManagedCodexAccepted(id, turn, epoch string, err error, may
 		if err != nil {
 			reason = err.Error()
 			outcome = "unknown"
-			if !mayHaveStarted || appmodel.ProvenCodexRejection(err) {
+			if !mayHaveStarted || coordinator.ProvenCodexRejection(err) {
 				outcome = "not_started"
 			}
 		}
@@ -40,7 +42,7 @@ func (c *Controller) ManagedCodexAccepted(id, turn, epoch string, err error, may
 	}
 	if err != nil {
 		state := dg.NeedsAttention
-		if !mayHaveStarted || appmodel.ProvenCodexRejection(err) {
+		if !mayHaveStarted || coordinator.ProvenCodexRejection(err) {
 			state = dg.Failed
 		}
 		if errors.Is(err, errManagedCancelled) {
@@ -51,7 +53,7 @@ func (c *Controller) ManagedCodexAccepted(id, turn, epoch string, err error, may
 	}
 	run.Turn, run.Epoch = turn, epoch
 	if task, readErr := c.Collaboration.Manager.Read(id); readErr == nil && task.CancelRequested {
-		c.Update(run.Thread, func(t *appmodel.Thread) { t.StopRequested = true })
+		c.Update(run.Thread, func(t *model.Thread) { t.StopRequested = true })
 	}
 	state := dg.Running
 	if run.PendingOverflow {
@@ -64,7 +66,7 @@ func (c *Controller) ManagedCodexAccepted(id, turn, epoch string, err error, may
 	run.Pending = nil
 }
 
-func (c *Controller) ManagedCodexOutput(before appmodel.Thread, method string, e codex.Event) {
+func (c *Controller) ManagedCodexOutput(before model.Thread, method string, e codex.Event) {
 	id := before.ExecutionID
 	if id == "" || c.Collaboration == nil {
 		return
@@ -95,13 +97,13 @@ func (c *Controller) ManagedCodexOutput(before appmodel.Thread, method string, e
 		default:
 			return
 		}
-		var messages []appmodel.Message
+		var messages []model.Message
 		for _, m := range c.ThreadWithID(before.ID).Messages {
 			if m.TurnID == turn {
 				messages = append(messages, m)
 			}
 		}
-		event.Result = appmodel.ManagedResult(messages, true)
+		event.Result = coordinator.NativeResult(messages, true)
 		if e.Turn.Error != nil {
 			event.Result.Error = e.Turn.Error.Message
 		}
@@ -147,13 +149,13 @@ func (c *Controller) managedClaudeResult(id int, state dg.State, nativeResultID 
 	if t.ExecutionID == "" || c.Collaboration == nil {
 		return
 	}
-	var messages []appmodel.Message
+	var messages []model.Message
 	for _, m := range t.Messages {
 		if m.ExecutionID == t.ExecutionID {
 			messages = append(messages, m)
 		}
 	}
-	result := appmodel.ManagedResult(messages, false)
+	result := coordinator.NativeResult(messages, false)
 	if result.Error != "" && state == dg.Completed {
 		state = dg.Failed
 	}
@@ -171,7 +173,7 @@ func (c *Controller) managedClaudeStarted(id int) {
 		return
 	}
 	if task, err := c.Collaboration.Manager.Read(t.ExecutionID); err == nil && task.CancelRequested {
-		c.Update(id, func(t *appmodel.Thread) { t.StopRequested = true })
+		c.Update(id, func(t *model.Thread) { t.StopRequested = true })
 		if c.ClaudeRuns[id] != nil {
 			c.stopAgentRun(t)
 		}
@@ -180,8 +182,8 @@ func (c *Controller) managedClaudeStarted(id int) {
 	c.ManagedEvent(t.ExecutionID, dg.Event{Target: c.ThreadRef(t).URL(), SessionEpoch: run.Epoch, State: dg.Running})
 }
 
-func (c *Controller) managedTargetUnavailable(t appmodel.Thread) bool {
-	if appmodel.ManagedLongRunning(t) {
+func (c *Controller) managedTargetUnavailable(t model.Thread) bool {
+	if coordinator.LongRunning(t) {
 		return true
 	}
 	// A Claude process held open after the root reply owns native background

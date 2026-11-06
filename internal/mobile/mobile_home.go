@@ -1,12 +1,13 @@
 package mobile
 
 import (
-	appmodel "miya/internal/appmodel"
-	model "miya/internal/model"
-	textutil "miya/internal/textutil"
-	widgets "miya/internal/widgets"
+	"github.com/egoist/mygo/ui"
 
-	ui "github.com/egoist/mygo/ui"
+	"miya/internal/model"
+	"miya/internal/msgfmt"
+	"miya/internal/phoneapi"
+	"miya/internal/textutil"
+	"miya/internal/widgets"
 )
 
 func (m *App) HomeBackground() ui.Color {
@@ -56,7 +57,7 @@ func (m *App) StartConversation(project, agent string) {
 	}
 }
 
-func (m *App) drawerProject(c *ui.Context, project appmodel.PhoneProject) {
+func (m *App) drawerProject(c *ui.Context, project phoneapi.Project) {
 	p := m.Pal
 	expanded := m.ExpandedProject == project.Path
 	ui.Column(c).FillWidth().Children(func() {
@@ -94,10 +95,10 @@ func (m *App) drawerProject(c *ui.Context, project appmodel.PhoneProject) {
 				ui.Text(c, tr("No conversations yet")).Padding(8, 0).FontSize(m.Font(14)).TextColor(p.muted)
 			}
 			more := m.ThreadListExpanded[project.Path]
-			for _, thread := range appmodel.DisplayedThreads(project.Threads, more) {
+			for _, thread := range msgfmt.DisplayedThreads(project.Threads, more) {
 				m.drawerThread(c.Key(thread.ID), thread)
 			}
-			if len(project.Threads) > appmodel.CollapsedThreadCount {
+			if len(project.Threads) > msgfmt.CollapsedThreadCount {
 				label := tr("Expand")
 				if more {
 					label = tr("Collapse")
@@ -115,10 +116,10 @@ func (m *App) drawerProject(c *ui.Context, project appmodel.PhoneProject) {
 	})
 }
 
-func (m *App) drawerThread(c *ui.Context, thread appmodel.Thread) {
+func (m *App) drawerThread(c *ui.Context, thread model.Thread) {
 	p := m.Pal
 	title := textutil.FirstNonEmpty(thread.Title, tr("Untitled conversation"))
-	row := m.phoneButton(c).FillWidth().MinHeight(48).Padding(0).Gap(10).Radius(10).Background(ui.Transparent).Label(appmodel.NativeText(title))
+	row := m.phoneButton(c).FillWidth().MinHeight(48).Padding(0).Gap(10).Radius(10).Background(ui.Transparent).Label(msgfmt.NativeText(title))
 	if thread.ID == m.Open || row.Pressed() {
 		row.Background(p.surface)
 	}
@@ -127,11 +128,11 @@ func (m *App) drawerThread(c *ui.Context, thread appmodel.Thread) {
 		if m.textScale > 1.3 {
 			row.Padding(8, 0)
 			ui.Column(c).Grow(1).MinWidth(0).Gap(4).Children(func() {
-				ui.Text(c, appmodel.NativeText(title)).FontSize(m.Font(16)).FontWeight(400).MaxLines(3).Ellipsis("…")
+				ui.Text(c, msgfmt.NativeText(title)).FontSize(m.Font(16)).FontWeight(400).MaxLines(3).Ellipsis("…")
 				m.threadStatus(c, thread)
 			})
 		} else {
-			ui.Text(c, appmodel.NativeText(title)).FontSize(m.Font(16)).FontWeight(400).Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
+			ui.Text(c, msgfmt.NativeText(title)).FontSize(m.Font(16)).FontWeight(400).Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
 			m.threadStatus(c, thread)
 		}
 	})

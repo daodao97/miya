@@ -1,17 +1,18 @@
 package controller
 
 import (
-	bytes "bytes"
-	fmt "fmt"
-	log "log"
-	appdir "miya/internal/appdir"
-	appmodel "miya/internal/appmodel"
-	os "os"
-	exec "os/exec"
-	filepath "path/filepath"
-	runtime "runtime"
-	strings "strings"
-	testing "testing"
+	"bytes"
+	"fmt"
+	"log"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"testing"
+
+	"miya/internal/appdir"
+	"miya/internal/automation"
 )
 
 // syncAutomationLaunchAgent installs the agent while an automation is on and
@@ -26,7 +27,7 @@ func syncAutomationLaunchAgent(enabled bool) {
 	if enabled {
 		err = installAutomationAgent()
 	} else {
-		err = appmodel.RemoveAutomationAgent()
+		err = automation.RemoveLaunchAgent()
 	}
 	if err != nil {
 		log.Printf("miya: automation login item: %v", err)
@@ -38,9 +39,9 @@ func installAutomationAgent() error {
 	if exe == "" {
 		return fmt.Errorf("no executable")
 	}
-	path := appmodel.AutomationAgentPath()
-	data := appmodel.AutomationAgentPlist(exe)
-	service := appmodel.LaunchdTarget() + "/" + appmodel.AutomationAgentLabel
+	path := automation.LaunchAgentPath()
+	data := automation.LaunchAgentPlist(exe)
+	service := automation.LaunchdTarget() + "/" + automation.LaunchAgentLabel
 	loaded := exec.Command("/bin/launchctl", "print", service).Run() == nil
 	if old, err := os.ReadFile(path); err == nil && bytes.Equal(old, data) && loaded {
 		return nil
@@ -56,7 +57,7 @@ func installAutomationAgent() error {
 	}
 	// Bootstrapping runs the agent now; the running service holds the lock,
 	// so the new one exits at once.
-	if out, err := exec.Command("/bin/launchctl", "bootstrap", appmodel.LaunchdTarget(), path).CombinedOutput(); err != nil {
+	if out, err := exec.Command("/bin/launchctl", "bootstrap", automation.LaunchdTarget(), path).CombinedOutput(); err != nil {
 		return fmt.Errorf("launchctl bootstrap: %v: %s", err, strings.TrimSpace(string(out)))
 	}
 	return nil

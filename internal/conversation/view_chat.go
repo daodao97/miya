@@ -1,13 +1,16 @@
 package conversation
 
 import (
-	fmt "fmt"
-	appmodel "miya/internal/appmodel"
-	textutil "miya/internal/textutil"
-	widgets "miya/internal/widgets"
-	strings "strings"
+	"fmt"
+	"strings"
 
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui"
+
+	"miya/internal/claude/transcript"
+	"miya/internal/model"
+	"miya/internal/msgfmt"
+	"miya/internal/textutil"
+	"miya/internal/widgets"
 )
 
 // groupCache keeps the presentation groups of the open conversation until
@@ -17,38 +20,38 @@ type GroupCache struct {
 	Busy                    bool
 	turn                    string
 	CompletedAt             int64
-	Groups                  []appmodel.MessageGroup
+	Groups                  []msgfmt.MessageGroup
 }
 
-func (g *GroupCache) Of(c Host) []appmodel.MessageGroup {
+func (g *GroupCache) Of(c Host) []msgfmt.MessageGroup {
 	return g.ofThread(c.ViewThread(), c.ViewRevision())
 }
 
-func (g *GroupCache) ofThread(t appmodel.Thread, revision int) []appmodel.MessageGroup {
+func (g *GroupCache) ofThread(t model.Thread, revision int) []msgfmt.MessageGroup {
 	if g.Groups != nil && g.Thread == t.ID && g.Revision == revision && g.Count == len(t.Messages) && g.Busy == t.Busy && g.turn == t.TurnID && g.CompletedAt == t.CompletedAtMs {
 		return g.Groups
 	}
 	*g = GroupCache{Thread: t.ID, Revision: revision, Count: len(t.Messages), Busy: t.Busy, turn: t.TurnID, CompletedAt: t.CompletedAtMs}
-	g.Groups = appmodel.ThreadMessageGroups(t, appmodel.GroupMessages(t.Messages))
+	g.Groups = msgfmt.ThreadMessageGroups(t, msgfmt.GroupMessages(t.Messages))
 	if g.Groups == nil {
-		g.Groups = []appmodel.MessageGroup{}
+		g.Groups = []msgfmt.MessageGroup{}
 	}
 	return g.Groups
 }
 
 // Keep the current turn above the composer in both states. Older responses
 // retain their historical timing; the latest completed response uses this row.
-func currentTurnStatus(t appmodel.Thread, groups []appmodel.MessageGroup) (string, int) {
+func currentTurnStatus(t model.Thread, groups []msgfmt.MessageGroup) (string, int) {
 	if t.Busy {
-		return appmodel.ThreadWorkingLabel(t), -1
+		return msgfmt.ThreadWorkingLabel(t), -1
 	}
 	if last := len(groups) - 1; last >= 0 && !groups[last].User {
-		return appmodel.TurnElapsedLabel(groups[last].Messages, false), last
+		return msgfmt.TurnElapsedLabel(groups[last].Messages, false), last
 	}
 	return "", -1
 }
 
-func responseDiffStats(c *ui.Context, stats appmodel.DiffLineStats) {
+func responseDiffStats(c *ui.Context, stats model.DiffLineStats) {
 	if stats.Added == 0 && stats.Deleted == 0 {
 		return
 	}
@@ -58,11 +61,11 @@ func responseDiffStats(c *ui.Context, stats appmodel.DiffLineStats) {
 	})
 }
 
-func ActivityTitle(m appmodel.Message) string {
+func ActivityTitle(m model.Message) string {
 	active := m.Status == "inProgress" || m.Status == "in_progress"
 	switch strings.ToLower(m.Kind) {
 	case "claudetool":
-		return appmodel.ClaudeToolTitle(m)
+		return transcript.ToolTitle(m)
 	case "handoff":
 		if m.HandoffTitle != "" {
 			return tr("Handed off to conversation \"") + m.HandoffTitle + "\""
@@ -139,7 +142,7 @@ func ActivityTitle(m appmodel.Message) string {
 	case "diff":
 		return tr("Changes in this turn")
 	}
-	return appmodel.MessageLabel(m.Kind)
+	return transcript.MessageLabel(m.Kind)
 }
 
 func diffView(c *ui.Context, diff string) {

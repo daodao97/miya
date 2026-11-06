@@ -1,12 +1,14 @@
 package controller
 
 import (
-	context "context"
-	json "encoding/json"
-	appmodel "miya/internal/appmodel"
-	codex "miya/internal/codex"
-	uiruntime "miya/internal/uiruntime"
-	time "time"
+	"context"
+	"encoding/json"
+	"time"
+
+	"miya/internal/account"
+	"miya/internal/appmodel"
+	"miya/internal/codex"
+	"miya/internal/uiruntime"
 )
 
 func (c *Controller) parentContext() context.Context {
@@ -35,13 +37,13 @@ func (c *Controller) RefreshAccount() {
 			cached.Notice = tr("Codex is not connected. Showing the last result.")
 			c.AccountState = cached
 		} else {
-			c.AccountState = appmodel.AccountDisplay{Error: tr("Connect to Codex and try again.")}
+			c.AccountState = account.Display{Error: tr("Connect to Codex and try again.")}
 		}
 		uiruntime.Invalidate()
 		return
 	}
 	if cached.Updated.IsZero() {
-		c.AccountState = appmodel.AccountDisplay{Loading: true}
+		c.AccountState = account.Display{Loading: true}
 	} else {
 		cached.Refreshing = true
 		cached.Notice = ""
@@ -52,7 +54,7 @@ func (c *Controller) RefreshAccount() {
 	c.accountCancel = stop
 	go func() {
 		defer stop()
-		result, readOK := appmodel.ReadAccountDisplay(ctx, client, cached)
+		result, readOK := account.ReadDisplay(ctx, client, cached)
 		c.Dispatch(func() {
 			if c.accountVersion != request || c.Client != client {
 				return
@@ -88,7 +90,7 @@ func (c *Controller) refreshQuota() {
 	c.quotaCancel = stop
 	go func() {
 		defer stop()
-		var result appmodel.AccountLimits
+		var result account.Limits
 		err := client.Call(ctx, "account/rateLimits/read", map[string]any{}, &result)
 		c.Dispatch(func() {
 			if request != c.quotaVersion || client != c.Client {
@@ -106,11 +108,11 @@ func (c *Controller) refreshQuota() {
 // quotaFrame applies Codex's account notifications to the ring.
 func (c *Controller) quotaFrame(f codex.Frame) {
 	if f.Method == "account/updated" {
-		c.QuotaLimits = appmodel.AccountLimits{}
+		c.QuotaLimits = account.Limits{}
 		c.refreshQuota()
 		return
 	}
-	var data appmodel.AccountLimits
+	var data account.Limits
 	if json.Unmarshal(f.Params, &data) != nil || data.RateLimits == nil {
 		return
 	}

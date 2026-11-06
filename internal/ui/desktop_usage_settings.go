@@ -1,10 +1,12 @@
 package desktopui
 
 import (
-	appmodel "miya/internal/appmodel"
-	widgets "miya/internal/widgets"
+	"github.com/egoist/mygo/ui"
 
-	ui "github.com/egoist/mygo/ui"
+	"miya/internal/agentusage"
+	"miya/internal/appmodel"
+	"miya/internal/prefs"
+	"miya/internal/widgets"
 )
 
 func (app *App) usageSettings(c *ui.Context) {
@@ -29,7 +31,7 @@ func (app *App) usageSettings(c *ui.Context) {
 						if !show {
 							value = "off"
 						}
-						appmodel.PersistSetting("usageTray", value)
+						prefs.Save("usageTray", value)
 						app.syncUsageTray()
 					}
 				})
@@ -44,7 +46,7 @@ func (app *App) usageSettings(c *ui.Context) {
 					}
 					if ui.Segmented(c, &index, tr("Automatic"), "Codex", "Claude").Label(tr("Tray account")).Changed() {
 						d.Prefs.Agent = agents[index]
-						appmodel.PersistSetting("usageTrayAgent", d.Prefs.Agent)
+						prefs.Save("usageTrayAgent", d.Prefs.Agent)
 						app.syncUsageTray()
 					}
 				})
@@ -61,7 +63,7 @@ func (app *App) usageSettings(c *ui.Context) {
 						if d.Prefs.AgentIcon {
 							value = "agent"
 						}
-						appmodel.PersistSetting("usageTrayIcon", value)
+						prefs.Save("usageTrayIcon", value)
 						app.syncUsageTray()
 					}
 				})
@@ -79,7 +81,7 @@ func (app *App) usageSettings(c *ui.Context) {
 								name = appmodel.AgentClaude
 							}
 							widgets.AgentIcon(c, name, 18)
-							ui.Text(c, appmodel.UsageAgentName(agent)).Grow(1).FontSize(14).FontWeight(600)
+							ui.Text(c, agentusage.AgentName(agent)).Grow(1).FontSize(14).FontWeight(600)
 							if r.Plan != "" {
 								badge(c, r.Plan)
 							}

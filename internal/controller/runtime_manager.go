@@ -1,14 +1,14 @@
 package controller
 
 import (
-	appmodel "miya/internal/appmodel"
+	tracker "miya/internal/runtime/tracker"
 )
 
-func (c *Controller) Runtimes() *appmodel.RuntimeManager {
+func (c *Controller) Runtimes() *tracker.Manager {
 	c.runtimeMu.Lock()
 	defer c.runtimeMu.Unlock()
 	if c.runtime == nil {
-		c.runtime = appmodel.NewRuntimeManager(c.Ctx, c.runtimePath)
+		c.runtime = tracker.NewManager(c.Ctx, c.runtimePath)
 		if c.Cancel != nil {
 			cancel := c.Cancel
 			manager := c.runtime

@@ -1,8 +1,8 @@
 package desktopui
 
 import (
-	os "os"
-	runtime "runtime"
+	"os"
+	"runtime"
 )
 
 // Carbon delivers the recovery hotkey on the startup thread. Bind it during

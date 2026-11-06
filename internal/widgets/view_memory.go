@@ -1,7 +1,7 @@
 package widgets
 
 import (
-	time "time"
+	"time"
 )
 
 func MemoryKindLabel(kind string) string {

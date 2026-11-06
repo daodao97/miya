@@ -1,14 +1,16 @@
 package mobile
 
 import (
-	appmodel "miya/internal/appmodel"
-	conversation "miya/internal/conversation"
-	model "miya/internal/model"
-	remote "miya/internal/remote"
-	widgets "miya/internal/widgets"
-	strconv "strconv"
+	"strconv"
 
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui"
+
+	"miya/internal/appmodel"
+	"miya/internal/composer"
+	"miya/internal/conversation"
+	"miya/internal/model"
+	"miya/internal/remote"
+	"miya/internal/widgets"
 )
 
 // threadMenu offers conversations and files from the composer's project.
@@ -18,7 +20,7 @@ func (m *App) threadMenu(c *ui.Context, project string) {
 		_, caret := m.InlineInput.Doc.Selection()
 		end = len(conversation.InlineThreadRaw(m.InlineInput.Doc.Text().Slice(0, caret)))
 	}
-	token := appmodel.ComposerTokenAt(m.Draft, end)
+	token := composer.ComposerTokenAt(m.Draft, end)
 	if token.Kind == '#' {
 		m.clearFileReferences()
 		if m.State.Collaboration == nil || m.State.Collaboration.Version < 1 {
@@ -28,11 +30,11 @@ func (m *App) threadMenu(c *ui.Context, project string) {
 		p := m.Pal
 		ui.Column(c.Key("agent-refs")).FillWidth().Background(p.surface).Radius(18).Padding(6).Children(func() {
 			ui.Text(c, tr("Agents")).FontSize(m.Font(12)).TextColor(p.muted).Padding(8)
-			for _, choice := range appmodel.AgentChoices(token.Query, allowed) {
+			for _, choice := range composer.AgentChoices(token.Query, allowed) {
 				row := m.phoneButton(c.Key(choice.Agent)).FillWidth().MinHeight(44).Padding(0, 10).Label("#" + choice.Name)
 				row.Children(func() { ui.Text(c, "#"+choice.Name).FontSize(m.Font(14)).TextColor(p.ink) })
 				if row.Clicked() {
-					m.Draft = appmodel.InsertAgentReference(m.Draft, token, choice.Agent, choice.Name)
+					m.Draft = composer.InsertAgentReference(m.Draft, token, choice.Agent, choice.Name)
 				}
 			}
 		})
@@ -42,9 +44,9 @@ func (m *App) threadMenu(c *ui.Context, project string) {
 		m.clearFileReferences()
 		return
 	}
-	var agents []appmodel.ComposerChoice
+	var agents []model.ComposerChoice
 	if m.State.Collaboration != nil && m.State.Collaboration.Version >= 1 {
-		agents = appmodel.AgentChoices(token.Query, m.delegationAgents())
+		agents = composer.AgentChoices(token.Query, m.delegationAgents())
 	}
 	var shown []appmodel.ThreadReference
 	if m.State.ReferenceSource != "" {
@@ -68,7 +70,7 @@ func (m *App) threadMenu(c *ui.Context, project string) {
 						})
 					})
 					if item.Clicked() {
-						m.Draft = appmodel.InsertAgentReference(m.Draft, token, choice.Agent, choice.Name)
+						m.Draft = composer.InsertAgentReference(m.Draft, token, choice.Agent, choice.Name)
 					}
 				}
 				if len(shown) > 0 {
@@ -89,8 +91,8 @@ func (m *App) threadMenu(c *ui.Context, project string) {
 						})
 					})
 					if item.Clicked() {
-						ref := appmodel.ThreadRef{Source: m.State.ReferenceSource, Backend: model.ThreadAgent(t), SessionID: t.ServerID}
-						m.Draft = appmodel.InsertThreadReference(m.Draft, token, ref, title)
+						ref := model.ThreadRef{Source: m.State.ReferenceSource, Backend: model.ThreadAgent(t), SessionID: t.ServerID}
+						m.Draft = composer.InsertThreadReference(m.Draft, token, ref, title)
 						if m.Conn != nil {
 							m.sendPhoneAction(remote.Request{Op: "prefetch", Reference: ref.URL()})
 						}
@@ -117,7 +119,7 @@ func (m *App) threadMenu(c *ui.Context, project string) {
 						ui.Text(c, choice.Name).FontSize(m.Font(14)).MinWidth(0).Shrink(1).SingleLine().Ellipsis("…")
 					})
 					if item.Clicked() {
-						m.Draft = appmodel.InsertFileReference(m.Draft, token, choice.Name)
+						m.Draft = composer.InsertFileReference(m.Draft, token, choice.Name)
 					}
 				}
 			})

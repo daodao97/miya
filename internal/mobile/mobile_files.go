@@ -1,11 +1,12 @@
 package mobile
 
 import (
-	context "context"
-	errors "errors"
-	phoneproxy "miya/internal/phoneproxy"
+	"context"
+	"errors"
 
-	mygo "github.com/egoist/mygo"
+	"github.com/egoist/mygo"
+
+	"miya/internal/phoneproxy"
 )
 
 func (m *App) openProjectFiles(project string) {

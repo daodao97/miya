@@ -1,16 +1,19 @@
 package controller
 
 import (
-	context "context"
-	json "encoding/json"
-	errors "errors"
-	appmodel "miya/internal/appmodel"
-	automation "miya/internal/automation"
-	claude "miya/internal/claude"
-	model "miya/internal/model"
-	notification "miya/internal/notification"
-	textutil "miya/internal/textutil"
-	strings "strings"
+	"context"
+	"encoding/json"
+	"errors"
+	"strings"
+
+	"miya/internal/appmodel"
+	"miya/internal/async"
+	"miya/internal/automation"
+	"miya/internal/claude"
+	"miya/internal/model"
+	"miya/internal/msgfmt"
+	"miya/internal/notification"
+	"miya/internal/textutil"
 )
 
 var automationOps = map[string]bool{"automationList": true, "automationDraft": true, "automationSave": true,
@@ -27,7 +30,7 @@ func (c *Controller) AutomationCall(op string, r automation.Request, out any) er
 	if err != nil {
 		return err
 	}
-	if d, ok := res.(appmodel.Deferred); ok {
+	if d, ok := res.(async.Reply); ok {
 		if res, err = d(); err != nil {
 			return err
 		}
@@ -100,7 +103,7 @@ func (c *Controller) AutomationOp(op string, r automation.Request) (any, error) 
 }
 
 // Capture configuration on the main thread; run the returned work elsewhere.
-func (c *Controller) prepareAutomationDraft(ctx context.Context, r automation.Request) (appmodel.Deferred, error) {
+func (c *Controller) prepareAutomationDraft(ctx context.Context, r automation.Request) (async.Reply, error) {
 	if c.Auto == nil {
 		return nil, errors.New("Automations require the Miya background service")
 	}
@@ -113,7 +116,7 @@ func (c *Controller) prepareAutomationDraft(ctx context.Context, r automation.Re
 		return nil, errors.New("Agent must be codex or claude-code")
 	}
 	cfg, now := claude.CLI{Binary: c.ClaudeBinary, Args: c.ClaudeArgs, Env: c.ClaudeEnv}, c.Auto.Now()
-	return appmodel.Deferred(func() (any, error) {
+	return async.Reply(func() (any, error) {
 		d, err := automation.DraftFor(ctx, cfg, agent, project, request, now)
 		if err != nil {
 			return nil, err
@@ -133,17 +136,17 @@ type automationHost struct{ c *Controller }
 
 func (h automationHost) Dispatch(f func()) { h.c.Dispatch(f) }
 
-func (h automationHost) Submit(r appmodel.SendRequest) int { return h.c.Submit(r) }
+func (h automationHost) Submit(r model.SendRequest) int { return h.c.Submit(r) }
 
-func (h automationHost) Thread(id int) appmodel.Thread { return h.c.ThreadWithID(id) }
+func (h automationHost) Thread(id int) model.Thread { return h.c.ThreadWithID(id) }
 
-func (h automationHost) UpdateThread(id int, f func(*appmodel.Thread)) { h.c.Update(id, f) }
+func (h automationHost) UpdateThread(id int, f func(*model.Thread)) { h.c.Update(id, f) }
 
-func (h automationHost) AwaitsUser(t appmodel.Thread) bool { return h.c.ThreadAwaitsUser(t) }
+func (h automationHost) AwaitsUser(t model.Thread) bool { return h.c.ThreadAwaitsUser(t) }
 
 func (h automationHost) Outcome(id int) (string, string) { return h.c.HandoffState(id) }
 
-func (h automationHost) AutoReport(t appmodel.Thread) *automation.Report { return autoRunReport(t) }
+func (h automationHost) AutoReport(t model.Thread) *automation.Report { return autoRunReport(t) }
 
 func (h automationHost) Deliver(n notification.Notice) { h.c.deliverNotice(n, "completion") }
 
@@ -168,9 +171,9 @@ func (c *Controller) StartAutomations(path string, schedule bool) {
 
 // autoRunReport is the result of a run whose agent reported none: its last
 // reply and the files it changed.
-func autoRunReport(t appmodel.Thread) *automation.Report {
-	reply := appmodel.LastReply(t.Messages)
-	files := appmodel.ChangedFiles(t.Messages)
+func autoRunReport(t model.Thread) *automation.Report {
+	reply := msgfmt.LastReply(t.Messages)
+	files := msgfmt.ChangedFiles(t.Messages)
 	if reply == "" && len(files) == 0 {
 		return nil
 	}

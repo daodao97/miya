@@ -1,19 +1,20 @@
 package controller
 
 import (
-	context "context"
-	hex "encoding/hex"
-	json "encoding/json"
-	errors "errors"
-	appmodel "miya/internal/appmodel"
-	async "miya/internal/async"
-	automation "miya/internal/automation"
-	remote "miya/internal/remote"
-	time "time"
+	"context"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"time"
+
+	"miya/internal/async"
+	"miya/internal/automation"
+	"miya/internal/phoneapi"
+	"miya/internal/remote"
 )
 
 func phoneAutomationFormFrame(r remote.Request, view *automation.View, err error) remote.Frame {
-	data, _ := json.Marshal(appmodel.PhoneAutomationFormResult{RequestID: r.RequestID, View: view})
+	data, _ := json.Marshal(phoneapi.AutomationFormResult{RequestID: r.RequestID, View: view})
 	f := remote.Frame{Type: r.Op, Data: data}
 	if err != nil {
 		f.Error = err.Error()
@@ -23,7 +24,7 @@ func phoneAutomationFormFrame(r remote.Request, view *automation.View, err error
 
 func (c *Controller) phoneAutomationDraft(ctx context.Context, r remote.Request) remote.Frame {
 	type pendingDraft struct {
-		work appmodel.Deferred
+		work async.Reply
 		err  error
 	}
 	pending, ok := async.OnMain(ctx, c.Dispatch, func() pendingDraft {

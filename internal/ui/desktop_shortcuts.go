@@ -1,15 +1,17 @@
 package desktopui
 
 import (
-	appmodel "miya/internal/appmodel"
-	model "miya/internal/model"
-	textutil "miya/internal/textutil"
-	widgets "miya/internal/widgets"
-	filepath "path/filepath"
-	sort "sort"
-	strings "strings"
+	"path/filepath"
+	"sort"
+	"strings"
 
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui"
+
+	"miya/internal/appmodel"
+	"miya/internal/model"
+	"miya/internal/msgfmt"
+	"miya/internal/textutil"
+	"miya/internal/widgets"
 )
 
 type desktopShortcut struct {
@@ -91,7 +93,7 @@ func ShortcutKeys(mods ui.Modifiers, key string) string {
 }
 
 func (app *App) cycleConversation(step int) {
-	threads := appmodel.DisplayedThreads(app.C.State().Threads(), true)
+	threads := msgfmt.DisplayedThreads(app.C.State().Threads(), true)
 	if len(threads) == 0 {
 		return
 	}

@@ -1,8 +1,8 @@
 package widgets
 
 import (
-	appmodel "miya/internal/appmodel"
 	rt "miya/internal/runtime"
+	"miya/internal/runtime/tracker"
 )
 
 func RuntimeStatus(status string) string {
@@ -22,7 +22,7 @@ func RuntimeStatus(status string) string {
 	}
 }
 
-func RuntimeObservationLost(result *appmodel.ConversationRuntime) {
+func RuntimeObservationLost(result *tracker.ConversationRuntime) {
 	result.Services = nil
 	result.View.Endpoints = nil
 	result.View.TasksKnown = false

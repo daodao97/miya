@@ -1,15 +1,17 @@
 package controller
 
 import (
-	context "context"
-	json "encoding/json"
-	errors "errors"
-	appmodel "miya/internal/appmodel"
-	async "miya/internal/async"
-	desktop "miya/internal/desktop"
-	control "miya/internal/desktop/control"
-	remote "miya/internal/remote"
-	time "time"
+	"context"
+	"encoding/json"
+	"errors"
+	"time"
+
+	"miya/internal/async"
+	"miya/internal/desktop"
+	"miya/internal/desktop/control"
+	"miya/internal/phone"
+	"miya/internal/phoneapi"
+	"miya/internal/remote"
 )
 
 func (c *Controller) desktopControls() *control.Server {
@@ -139,7 +141,7 @@ func (c *Controller) PhoneDesktopApproval(r remote.Request) bool {
 		return false
 	}
 	for _, a := range c.Approvals() {
-		if a.ThreadID == r.ServerID && appmodel.SameJSON(a.ID, r.Approval) && appmodel.ApprovalFingerprint(a) == r.ApprovalVersion {
+		if a.ThreadID == r.ServerID && phone.SameJSON(a.ID, r.Approval) && phoneapi.ApprovalFingerprint(a) == r.ApprovalVersion {
 			return true
 		}
 	}
@@ -151,7 +153,7 @@ func (c *Controller) phoneDesktopHint(r remote.Request) control.WindowHint {
 		return control.WindowHint{Window: &desktop.Window{ID: r.WindowID, PID: r.WindowPID}}
 	}
 	for _, a := range c.Approvals() {
-		if a.Method == "miya/desktopControl" && appmodel.SameJSON(a.ID, r.Approval) {
+		if a.Method == "miya/desktopControl" && phone.SameJSON(a.ID, r.Approval) {
 			var hint control.WindowHint
 			_ = json.Unmarshal(a.Payload, &hint)
 			return hint
@@ -165,7 +167,7 @@ func (c *Controller) CompleteDesktopAction(r remote.Request, action desktop.Acti
 		return
 	}
 	for _, a := range c.Approvals() {
-		if appmodel.SameJSON(a.ID, r.Approval) && a.Method == "miya/desktopControl" {
+		if phone.SameJSON(a.ID, r.Approval) && a.Method == "miya/desktopControl" {
 			_ = c.PhoneApprovalResponse(remote.Request{Approval: a.ID, ApprovalVersion: r.ApprovalVersion, Allow: !action.Cancel})
 			return
 		}

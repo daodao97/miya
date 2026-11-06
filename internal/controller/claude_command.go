@@ -1,11 +1,12 @@
 package controller
 
 import (
-	appmodel "miya/internal/appmodel"
-	claude "miya/internal/claude"
-	transcript "miya/internal/claude/transcript"
-	uiruntime "miya/internal/uiruntime"
-	strings "strings"
+	"strings"
+
+	"miya/internal/claude"
+	"miya/internal/claude/transcript"
+	"miya/internal/prefs"
+	"miya/internal/uiruntime"
 )
 
 // applyClaudeCommand resolves a command for the runs that start after it.
@@ -35,7 +36,7 @@ func (c *Controller) SetClaudeCommand(line string) {
 		return
 	}
 	c.applyClaudeCommand(line)
-	appmodel.PersistClaudeCommand(c.ClaudeCommand)
+	prefs.SaveClaudeCommand(c.ClaudeCommand)
 	if c.Threads != nil {
 		c.loadClaudeSessions()
 	}

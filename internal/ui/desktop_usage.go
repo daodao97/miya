@@ -1,18 +1,20 @@
 package desktopui
 
 import (
-	context "context"
-	fmt "fmt"
-	log "log"
-	agentusage "miya/internal/agentusage"
-	appmodel "miya/internal/appmodel"
-	uiruntime "miya/internal/uiruntime"
-	runtime "runtime"
-	strings "strings"
-	sync "sync"
-	time "time"
+	"context"
+	"fmt"
+	"log"
+	"runtime"
+	"strings"
+	"sync"
+	"time"
 
-	mygo "github.com/egoist/mygo"
+	"github.com/egoist/mygo"
+
+	"miya/internal/agentusage"
+	"miya/internal/prefs"
+	"miya/internal/svcproto"
+	"miya/internal/uiruntime"
 )
 
 type UsagePreferences struct {
@@ -21,7 +23,7 @@ type UsagePreferences struct {
 }
 
 func LoadUsagePreferences() UsagePreferences {
-	p := UsagePreferences{Hidden: appmodel.LoadSetting("usageTray") == "off", AgentIcon: appmodel.LoadSetting("usageTrayIcon") == "agent", Agent: appmodel.LoadSetting("usageTrayAgent")}
+	p := UsagePreferences{Hidden: prefs.Load("usageTray") == "off", AgentIcon: prefs.Load("usageTrayIcon") == "agent", Agent: prefs.Load("usageTrayAgent")}
 	if p.Agent != "codex" && p.Agent != "claude" {
 		p.Agent = ""
 	}
@@ -94,7 +96,7 @@ func (app *App) refreshUsage() {
 	app.invalidateUsageViews()
 	ctx, cancel := context.WithCancel(context.Background())
 	d.cancel = cancel
-	var cl *appmodel.ServiceClient
+	var cl *svcproto.Client
 	if app.C.RemoteHost() {
 		cl = app.C.State().Remote
 	}
@@ -102,7 +104,7 @@ func (app *App) refreshUsage() {
 		defer cancel()
 		readings := make([]agentusage.Reading, 2)
 		if cl != nil {
-			if err := cl.Call("host", appmodel.HostRequest{Action: "usage"}, &readings); err != nil {
+			if err := cl.Call("host", svcproto.HostRequest{Action: "usage"}, &readings); err != nil {
 				readings = []agentusage.Reading{{Agent: "codex", Error: err.Error()}, {Agent: "claude", Error: err.Error()}}
 			}
 		} else {
@@ -129,9 +131,9 @@ func usageTrayTip(r *agentusage.Reading) string {
 	if r == nil {
 		return tr("Miya · No usage data\nClick to view")
 	}
-	lines := []string{"Miya · " + appmodel.UsageAgentName(r.Agent)}
+	lines := []string{"Miya · " + agentusage.AgentName(r.Agent)}
 	for _, w := range r.Windows {
-		text := fmt.Sprintf(tr("%s · %d%% remaining"), w.Name, appmodel.RemainingUsage(w.Used))
+		text := fmt.Sprintf(tr("%s · %d%% remaining"), w.Name, agentusage.RemainingUsage(w.Used))
 		if w.Reset != "" {
 			text += " · " + w.Reset + tr(" reset")
 		}
@@ -160,7 +162,7 @@ func (app *App) syncUsageTray() {
 		d.trayKey = ""
 		return
 	}
-	r := appmodel.SelectedUsage(d.Readings, d.Prefs.Agent)
+	r := agentusage.SelectedUsage(d.Readings, d.Prefs.Agent)
 	agent := ""
 	if d.Prefs.AgentIcon {
 		agent = d.Prefs.Agent
@@ -171,7 +173,7 @@ func (app *App) syncUsageTray() {
 			agent = "codex"
 		}
 	}
-	tip, title := usageTrayTip(r), appmodel.UsageTrayTitle(r)
+	tip, title := usageTrayTip(r), agentusage.TrayTitle(r)
 	key := agent + "\x00" + title + "\x00" + tip + "\x00" + tr("Usage")
 	if d.tray != nil && d.trayKey == key {
 		return

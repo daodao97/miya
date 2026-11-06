@@ -1,5 +1,9 @@
 package appmodel
 
+import (
+	model "miya/internal/model"
+)
+
 func AgentName(agent string) string {
 	if agent == AgentClaude {
 		return "Claude Code"
@@ -7,7 +11,7 @@ func AgentName(agent string) string {
 	return "Codex"
 }
 
-func SameMessageOrder(messages []Message, order []int) bool {
+func SameMessageOrder(messages []model.Message, order []int) bool {
 	if len(messages) != len(order) {
 		return false
 	}

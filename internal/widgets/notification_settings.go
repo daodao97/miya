@@ -1,9 +1,9 @@
 package widgets
 
 import (
-	appmodel "miya/internal/appmodel"
+	"github.com/egoist/mygo/ui"
 
-	ui "github.com/egoist/mygo/ui"
+	"miya/internal/prefs"
 )
 
 func NotificationSettings(c *ui.Context, _ bool) {
@@ -16,7 +16,7 @@ func NotificationSettings(c *ui.Context, _ bool) {
 		option := option
 		rows = append(rows, func() {
 			label := option.en
-			enabled := appmodel.LoadSetting("notifications-"+option.key) != "off"
+			enabled := prefs.Load("notifications-"+option.key) != "off"
 			SettingRow(c, label, option.enHelp, func() {
 				on := enabled
 				ui.Switch(c.Key(option.key), &on).Label(label)
@@ -25,7 +25,7 @@ func NotificationSettings(c *ui.Context, _ bool) {
 					if on {
 						value = "on"
 					}
-					appmodel.PersistSetting("notifications-"+option.key, value)
+					prefs.Save("notifications-"+option.key, value)
 				}
 			})
 		})

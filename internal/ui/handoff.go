@@ -1,20 +1,20 @@
 package desktopui
 
 import (
-	appmodel "miya/internal/appmodel"
-	model "miya/internal/model"
+	"miya/internal/appmodel"
+	"miya/internal/model"
 )
 
 // Conversation choices carry their identity separately from their label.
-func (app *App) ThreadChoices(query string) []appmodel.ComposerChoice {
-	var out []appmodel.ComposerChoice
+func (app *App) ThreadChoices(query string) []model.ComposerChoice {
+	var out []model.ComposerChoice
 	for _, match := range appmodel.MatchingThreadRefs(app.C.ThreadRefProjects(), app.C.State().Active(), query) {
 		t := match.Thread
 		ref := app.C.ThreadRef(t)
 		if !ref.Valid() {
 			continue
 		}
-		out = append(out, appmodel.ComposerChoice{Name: appmodel.ThreadRefTitle(t), Detail: tr("Conversation · ") + model.AgentName(model.ThreadAgent(t)) + " · " + match.ProjectName, Ref: &ref})
+		out = append(out, model.ComposerChoice{Name: appmodel.ThreadRefTitle(t), Detail: tr("Conversation · ") + model.AgentName(model.ThreadAgent(t)) + " · " + match.ProjectName, Ref: &ref})
 	}
 	return out
 }

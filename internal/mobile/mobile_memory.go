@@ -1,15 +1,16 @@
 package mobile
 
 import (
-	json "encoding/json"
-	appmodel "miya/internal/appmodel"
-	manager "miya/internal/memory/manager"
-	model "miya/internal/model"
-	remote "miya/internal/remote"
-	widgets "miya/internal/widgets"
-	time "time"
+	"encoding/json"
+	"time"
 
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui"
+
+	"miya/internal/memory/manager"
+	"miya/internal/model"
+	"miya/internal/phoneapi"
+	"miya/internal/remote"
+	"miya/internal/widgets"
 )
 
 type MobileMemory struct {
@@ -42,7 +43,7 @@ func (m *App) loadPhoneMemory() {
 }
 
 func (m *App) ReceiveMemory(raw json.RawMessage, message string) {
-	var result appmodel.PhoneMemoryResult
+	var result phoneapi.MemoryResult
 	if err := json.Unmarshal(raw, &result); err != nil {
 		m.Memories.loading = false
 		m.Memories.err = tr("Failed to load memory")
@@ -141,7 +142,7 @@ func (m *App) memoryPage(c *ui.Context) {
 							}
 							for _, project := range m.State.Projects {
 								for _, thread := range project.Threads {
-									if (appmodel.ThreadRef{Source: m.State.ReferenceSource, Backend: model.ThreadAgent(thread), SessionID: thread.ServerID}) != ref {
+									if (model.ThreadRef{Source: m.State.ReferenceSource, Backend: model.ThreadAgent(thread), SessionID: thread.ServerID}) != ref {
 										continue
 									}
 									if m.phoneButton(c.Key("source")).MinHeight(44).Label(tr("Source conversation")).Children(func() { ui.Text(c, tr("Source conversation")).FontSize(m.Font(14)) }).Clicked() {

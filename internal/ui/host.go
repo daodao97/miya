@@ -2,11 +2,16 @@ package desktopui
 
 import (
 	"context"
+
 	"miya/internal/appmodel"
 	"miya/internal/automation"
 	"miya/internal/codex"
 	"miya/internal/conversation"
 	"miya/internal/memory/manager"
+	"miya/internal/model"
+	"miya/internal/phoneapi"
+	"miya/internal/runtime/tracker"
+	"miya/internal/svcproto"
 )
 
 // Host is the controller contract for one desktop workspace. UI state stays in App.
@@ -16,41 +21,41 @@ type Host interface {
 	AddAttachments(paths []string)
 	AgentSettings() []appmodel.SettingControls
 	AgentSpeedBadge(agent string) string
-	AllThreads() []appmodel.Thread
+	AllThreads() []model.Thread
 	ApprovalDetail(a codex.Approval) string
 	ArchiveProject(path string)
-	ArchiveThread(t appmodel.Thread)
+	ArchiveThread(t model.Thread)
 	AskAccountReset()
-	AttachService(cl *appmodel.ServiceClient, st appmodel.SvcState)
+	AttachService(cl *svcproto.Client, st svcproto.State)
 	AutomationOp(op string, r automation.Request) (any, error)
 	BackendReady() bool
-	CanRewind(t appmodel.Thread, m appmodel.Message) bool
+	CanRewind(t model.Thread, m model.Message) bool
 	CancelAccountReset()
 	ChangeWorkspace(path string) error
-	ClaudeCommandsFor(cwd string) ([]appmodel.ComposerChoice, bool)
-	CollaborationCapabilities() *appmodel.CollaborationStatus
+	ClaudeCommandsFor(cwd string) ([]model.ComposerChoice, bool)
+	CollaborationCapabilities() *model.CollaborationStatus
 	CollaborationUserOp(r appmodel.CollaborationRequest) (any, error)
-	ConfigureMirror(remote bool, reconnect func() (*appmodel.ServiceClient, appmodel.SvcState, error))
+	ConfigureMirror(remote bool, reconnect func() (*svcproto.Client, svcproto.State, error))
 	ConfirmAccountReset()
 	Connect()
-	Current() appmodel.Thread
+	Current() model.Thread
 	CurrentAgent() string
 	CurrentAgentControls() appmodel.AgentControls
 	CurrentPermissionPolicy() string
 	DeleteProject(path string)
-	DeleteThread(t appmodel.Thread)
-	DesktopThreadUnread(t appmodel.Thread) bool
+	DeleteThread(t model.Thread)
+	DesktopThreadUnread(t model.Thread) bool
 	Dispatch(f func())
 	EnsurePhoneHost()
-	KnownClaudeCommands(cwd string) []appmodel.ComposerChoice
+	KnownClaudeCommands(cwd string) []model.ComposerChoice
 	Memories() *manager.Manager
 	MirroredHistory(id int) bool
 	NewThread()
-	PhoneControls() (st appmodel.PhoneStatus, act func(string), ok bool)
-	PrefetchReference(ref appmodel.ThreadRef)
+	PhoneControls() (st svcproto.PhoneStatus, act func(string), ok bool)
+	PrefetchReference(ref model.ThreadRef)
 	ProjectBusy(path string) bool
-	ReadDesktopThread(t appmodel.Thread)
-	ReadRuntime(ctx context.Context, ref appmodel.ThreadRef, project string) (appmodel.ConversationRuntime, error)
+	ReadDesktopThread(t model.Thread)
+	ReadRuntime(ctx context.Context, ref model.ThreadRef, project string) (tracker.ConversationRuntime, error)
 	RefreshAccount()
 	RememberDraft(value string)
 	RemoteHost() bool
@@ -59,24 +64,24 @@ type Host interface {
 	RenameProject(path string, name string)
 	Respond(a codex.Approval, result any)
 	RespondMCPAlways(a codex.Approval) error
-	Resume(t appmodel.Thread, after *appmodel.SendRequest)
+	Resume(t model.Thread, after *model.SendRequest)
 	ResumeQueue(id int)
 	RetryResponse(req appmodel.RetryRequest) error
 	Rewind(threadID int, messageID int, text string)
 	RunThreadCommand(command string) string
-	Runtimes() *appmodel.RuntimeManager
-	SavedReferenceTitle(ref appmodel.ThreadRef) (string, bool)
-	SelectThread(t appmodel.Thread)
+	Runtimes() *tracker.Manager
+	SavedReferenceTitle(ref model.ThreadRef) (string, bool)
+	SelectThread(t model.Thread)
 	SelectedPermissionPolicy() string
 	SendDraft(steer bool) int
 	SetCurrentPermissionPolicy(policy string)
 	SteerQueued(threadID int, queuedID int)
 	Stop()
 	TaskAction(threadID int, taskID string, action string) string
-	TaskWaitingApproval(t appmodel.Thread) bool
-	ThreadRef(t appmodel.Thread) appmodel.ThreadRef
-	ThreadRefProjects() []appmodel.PhoneProject
-	ThreadWithID(id int) appmodel.Thread
+	TaskWaitingApproval(t model.Thread) bool
+	ThreadRef(t model.Thread) model.ThreadRef
+	ThreadRefProjects() []phoneapi.Project
+	ThreadWithID(id int) model.Thread
 	ThreadWorkspace(id int) string
 	WorkspaceFiles() appmodel.WorkspaceFiles
 }
@@ -86,7 +91,7 @@ type Environment struct {
 	NewWindow       func() Host
 	NewLocal        func() Host
 	NewMirror       func() Host
-	LocalConnection func() (*appmodel.ServiceClient, appmodel.SvcState, error)
+	LocalConnection func() (*svcproto.Client, svcproto.State, error)
 }
 
 var environment Environment

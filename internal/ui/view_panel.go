@@ -1,28 +1,31 @@
 package desktopui
 
 import (
-	context "context"
-	fmt "fmt"
-	appmodel "miya/internal/appmodel"
-	fsutil "miya/internal/fsutil"
-	phoneproxy "miya/internal/phoneproxy"
-	uiruntime "miya/internal/uiruntime"
-	webservice "miya/internal/webservice"
-	widgets "miya/internal/widgets"
-	worktree "miya/internal/worktree"
-	url "net/url"
-	os "os"
-	path "path"
-	filepath "path/filepath"
-	strconv "strconv"
-	strings "strings"
-	time "time"
+	"context"
+	"fmt"
+	"net/url"
+	"os"
+	"path"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
 
-	mygo "github.com/egoist/mygo"
-	terminal "github.com/egoist/mygo/plugins/terminal"
-	ui "github.com/egoist/mygo/ui"
-	editor "github.com/egoist/mygo/ui/editor"
-	markdown "github.com/egoist/mygo/ui/markdown"
+	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/plugins/terminal"
+	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/editor"
+	"github.com/egoist/mygo/ui/markdown"
+
+	"miya/internal/fsutil"
+	"miya/internal/model"
+	"miya/internal/phoneproxy"
+	"miya/internal/runtime/tracker"
+	"miya/internal/svcproto"
+	"miya/internal/uiruntime"
+	"miya/internal/webservice"
+	"miya/internal/widgets"
+	"miya/internal/worktree"
 )
 
 // The right panel follows Waku's: each conversation keeps its own tabs of
@@ -59,10 +62,10 @@ func (k surfaceKind) single() bool {
 }
 
 type PanelSurface struct {
-	RuntimeData    *appmodel.ConversationRuntime
+	RuntimeData    *tracker.ConversationRuntime
 	runtimeLoading bool
 	runtimeErr     string
-	RuntimeRef     appmodel.ThreadRef
+	RuntimeRef     model.ThreadRef
 	RuntimeAt      time.Time
 	Id             int
 	Kind           surfaceKind
@@ -708,7 +711,7 @@ func (app *App) saveFile(p *panelState, rel string, ed *fileEditor) {
 		text, root, cl := buf.String(), p.Cwd, app.C.State().Remote
 		ed.saving, ed.saveErr = true, ""
 		uiruntime.GoAsync(func() {
-			err := cl.Call("host", appmodel.HostRequest{Action: "write", Project: root, Path: rel, Text: text}, nil)
+			err := cl.Call("host", svcproto.HostRequest{Action: "write", Project: root, Path: rel, Text: text}, nil)
 			app.C.Dispatch(func() {
 				ed.saving = false
 				if p.Cwd != root {

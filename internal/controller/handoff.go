@@ -1,32 +1,34 @@
 package controller
 
 import (
-	context "context"
-	json "encoding/json"
-	fmt "fmt"
-	appmodel "miya/internal/appmodel"
-	model "miya/internal/model"
-	subagent "miya/internal/subagent"
-	textutil "miya/internal/textutil"
-	strconv "strconv"
-	strings "strings"
+	"context"
+	"encoding/json"
+	"fmt"
+	"strconv"
+	"strings"
+
+	"miya/internal/appmodel"
+	"miya/internal/model"
+	"miya/internal/msgfmt"
+	"miya/internal/subagent"
+	"miya/internal/textutil"
 )
 
 // Keep the exact reference tokens. Titles never need to be reversed into IDs.
 // An envelope is a send-time snapshot; replaying a queued request preserves it.
-func ExpandThreadRefs(text string, self appmodel.ThreadRef, resolve func(appmodel.ThreadRef) (appmodel.Thread, []appmodel.Message, error)) (string, []appmodel.Thread, error) {
+func ExpandThreadRefs(text string, self model.ThreadRef, resolve func(model.ThreadRef) (model.Thread, []model.Message, error)) (string, []model.Thread, error) {
 	own, snapshots := model.SplitReferenceContext(text)
 	if len(snapshots) > 0 {
 		return text, nil, nil
 	}
-	var sources []appmodel.Thread
-	titles := map[appmodel.ThreadRef]string{}
+	var sources []model.Thread
+	titles := map[model.ThreadRef]string{}
 	for _, m := range model.ThreadMentions(own) {
 		if _, ok := titles[m.Ref]; !ok {
 			titles[m.Ref] = m.Title
 		}
 	}
-	for _, ref := range appmodel.ThreadRefs(own) {
+	for _, ref := range msgfmt.ThreadRefs(own) {
 		if ref == self {
 			return text, nil, fmt.Errorf(tr("Cannot reference the current session: %s"), titles[ref])
 		}
@@ -53,13 +55,13 @@ func ExpandThreadRefs(text string, self appmodel.ThreadRef, resolve func(appmode
 // threadPacket is a conversation's context as another agent reads it: its
 // first and latest requests, its latest conclusions, the files it changed
 // and its sub-agents, each bounded, without its tool output.
-func threadPacket(t appmodel.Thread, messages []appmodel.Message) string {
+func threadPacket(t model.Thread, messages []model.Message) string {
 	title := appmodel.ThreadRefTitle(t)
 	var b strings.Builder
 	fmt.Fprintf(&b, tr("Session ID: %s\nBackend: %s\n"), t.ServerID, model.ThreadAgent(t))
 	fmt.Fprintf(&b, tr("The following context from conversation \"%s\" (%s) was compiled by Miya from its history for reference.\n"), title, BackendOf(t).Name())
 	var requests []string
-	var turns [][]appmodel.Message
+	var turns [][]model.Message
 	for _, m := range messages {
 		if m.Role == "user" {
 			requests = append(requests, strings.TrimSpace(appmodel.ThreadContextDisplay(m.Content)))
@@ -76,25 +78,25 @@ func threadPacket(t appmodel.Thread, messages []appmodel.Message) string {
 		}
 	}
 	if len(requests) > 0 {
-		appmodel.PacketSection(&b, tr("Original request"), textutil.ClipRunes(requests[0], 800))
+		msgfmt.PacketSection(&b, tr("Original request"), textutil.ClipRunes(requests[0], 800))
 		if len(requests) > 1 {
-			appmodel.PacketSection(&b, tr("Latest request"), textutil.ClipRunes(requests[len(requests)-1], 800))
+			msgfmt.PacketSection(&b, tr("Latest request"), textutil.ClipRunes(requests[len(requests)-1], 800))
 		}
 	}
 	var conclusions []string
 	for i := max(0, len(turns)-2); i < len(turns); i++ {
-		if reply := appmodel.LastReply(turns[i]); reply != "" {
+		if reply := msgfmt.LastReply(turns[i]); reply != "" {
 			conclusions = append(conclusions, textutil.ClipRunes(reply, 1500))
 		}
 	}
 	if len(conclusions) > 0 {
-		appmodel.PacketSection(&b, tr("Latest conclusions"), strings.Join(conclusions, "\n\n---\n\n"))
+		msgfmt.PacketSection(&b, tr("Latest conclusions"), strings.Join(conclusions, "\n\n---\n\n"))
 	}
-	if files := appmodel.ChangedFiles(messages); len(files) > 0 {
+	if files := msgfmt.ChangedFiles(messages); len(files) > 0 {
 		if len(files) > 30 {
 			files = append(files[:30], fmt.Sprintf(tr("…and %d more files"), len(files)-30))
 		}
-		appmodel.PacketSection(&b, tr("Changed files"), "- "+strings.Join(files, "\n- "))
+		msgfmt.PacketSection(&b, tr("Changed files"), "- "+strings.Join(files, "\n- "))
 	}
 	if agents := subagent.Latest(messages); len(agents) > 0 {
 		var lines []string
@@ -108,7 +110,7 @@ func threadPacket(t appmodel.Thread, messages []appmodel.Message) string {
 				break
 			}
 		}
-		appmodel.PacketSection(&b, tr("Subtasks"), "- "+strings.Join(lines, "\n- "))
+		msgfmt.PacketSection(&b, tr("Subtasks"), "- "+strings.Join(lines, "\n- "))
 	}
 	return b.String()
 }
@@ -121,15 +123,15 @@ type handoff struct {
 }
 
 // threadRef returns no public identity until the backend session exists.
-func (c *Controller) ThreadRef(t appmodel.Thread) appmodel.ThreadRef {
-	return appmodel.ThreadRef{Source: c.ReferenceSource, Backend: model.ThreadAgent(t), SessionID: t.ServerID}
+func (c *Controller) ThreadRef(t model.Thread) model.ThreadRef {
+	return model.ThreadRef{Source: c.ReferenceSource, Backend: model.ThreadAgent(t), SessionID: t.ServerID}
 }
 
 // Local numeric lookup is retained only for internal controls and MCP routing.
-func (c *Controller) resolveThreadRef(id int) (appmodel.Thread, []appmodel.Message, bool) {
+func (c *Controller) resolveThreadRef(id int) (model.Thread, []model.Message, bool) {
 	t, _, ok := c.findThread(id)
 	if !ok {
-		return appmodel.Thread{}, nil, false
+		return model.Thread{}, nil, false
 	}
 	messages := t.Messages
 	if !t.HistoryLoaded {
@@ -141,12 +143,12 @@ func (c *Controller) resolveThreadRef(id int) (appmodel.Thread, []appmodel.Messa
 	return t, messages, true
 }
 
-func (c *Controller) ResolveReference(ref appmodel.ThreadRef) (appmodel.Thread, []appmodel.Message, error) {
+func (c *Controller) ResolveReference(ref model.ThreadRef) (model.Thread, []model.Message, error) {
 	if !ref.Valid() {
-		return appmodel.Thread{}, nil, fmt.Errorf("%s", tr("Invalid session identity"))
+		return model.Thread{}, nil, fmt.Errorf("%s", tr("Invalid session identity"))
 	}
 	if ref.Source != c.ReferenceSource {
-		return appmodel.Thread{}, nil, fmt.Errorf("%s", tr("This reference belongs to another desktop. Connect to its source and try again."))
+		return model.Thread{}, nil, fmt.Errorf("%s", tr("This reference belongs to another desktop. Connect to its source and try again."))
 	}
 	for _, project := range c.ThreadRefProjects() {
 		for _, t := range project.Threads {
@@ -161,24 +163,24 @@ func (c *Controller) ResolveReference(ref appmodel.ThreadRef) (appmodel.Thread, 
 				return t, messages, nil
 			}
 			c.PrefetchReference(ref)
-			return appmodel.Thread{}, nil, fmt.Errorf("%s", tr("Context is loading. Try again; if loading fails, select the reference again or remove it."))
+			return model.Thread{}, nil, fmt.Errorf("%s", tr("Context is loading. Try again; if loading fails, select the reference again or remove it."))
 		}
 	}
 	if session, ok := c.ForkedReferences[ref]; ok {
-		t := appmodel.Thread{ServerID: ref.SessionID, Agent: ref.Backend, Title: session.Title}
+		t := model.Thread{ServerID: ref.SessionID, Agent: ref.Backend, Title: session.Title}
 		if messages, loaded := c.threadHistory[ref.URL()]; loaded {
 			t.HistoryLoaded = true
 			return t, messages, nil
 		}
 		c.PrefetchReference(ref)
-		return appmodel.Thread{}, nil, fmt.Errorf("%s", tr("The source conversation is loading. Try again."))
+		return model.Thread{}, nil, fmt.Errorf("%s", tr("The source conversation is loading. Try again."))
 	}
-	return appmodel.Thread{}, nil, fmt.Errorf("%s", tr("The conversation no longer exists or is unavailable"))
+	return model.Thread{}, nil, fmt.Errorf("%s", tr("The conversation no longer exists or is unavailable"))
 }
 
 // findThread is a conversation of the open project or of one in the
 // background, and its project's path.
-func (c *Controller) findThread(id int) (appmodel.Thread, string, bool) {
+func (c *Controller) findThread(id int) (model.Thread, string, bool) {
 	for _, t := range c.Threads() {
 		if t.ID == id {
 			return t, c.Cwd, true
@@ -194,7 +196,7 @@ func (c *Controller) findThread(id int) (appmodel.Thread, string, bool) {
 			}
 		}
 	}
-	return appmodel.Thread{}, "", false
+	return model.Thread{}, "", false
 }
 
 func (c *Controller) prefetchThread(id int) {
@@ -204,7 +206,7 @@ func (c *Controller) prefetchThread(id int) {
 }
 
 // Cache by backend identity. A fork or reused UI number cannot inherit history.
-func (c *Controller) PrefetchReference(ref appmodel.ThreadRef) {
+func (c *Controller) PrefetchReference(ref model.ThreadRef) {
 	if !ref.Valid() {
 		return
 	}
@@ -219,7 +221,7 @@ func (c *Controller) PrefetchReference(ref appmodel.ThreadRef) {
 		return
 	}
 	if c.referenceLoading == nil {
-		c.referenceLoading = map[appmodel.ThreadRef]bool{}
+		c.referenceLoading = map[model.ThreadRef]bool{}
 	}
 	if c.referenceLoading[ref] {
 		return
@@ -237,7 +239,7 @@ func (c *Controller) PrefetchReference(ref appmodel.ThreadRef) {
 	}
 	if !pt.Found {
 		if session, ok := c.ForkedReferences[ref]; ok {
-			pt = phoneThread{Thread: appmodel.Thread{ServerID: ref.SessionID, Agent: ref.Backend, Title: session.Title}, Found: true, cwd: session.Project, client: c.Client}
+			pt = phoneThread{Thread: model.Thread{ServerID: ref.SessionID, Agent: ref.Backend, Title: session.Title}, Found: true, cwd: session.Project, client: c.Client}
 		}
 	}
 	if !pt.Found {
@@ -257,7 +259,7 @@ func (c *Controller) PrefetchReference(ref appmodel.ThreadRef) {
 				return
 			}
 			if c.threadHistory == nil {
-				c.threadHistory = map[string][]appmodel.Message{}
+				c.threadHistory = map[string][]model.Message{}
 			}
 			c.threadHistory[ref.URL()] = messages
 			c.SetStatus(tr("Reference context loaded. Send again."))
@@ -266,7 +268,7 @@ func (c *Controller) PrefetchReference(ref appmodel.ThreadRef) {
 }
 
 // noteHandoffs records explicit delegation, independently of context references.
-func (c *Controller) noteHandoffs(sources []appmodel.Thread, target int, task string) {
+func (c *Controller) noteHandoffs(sources []model.Thread, target int, task string) {
 	for _, src := range sources {
 		if src.ID == 0 || src.ID == target {
 			continue
@@ -274,11 +276,11 @@ func (c *Controller) noteHandoffs(sources []appmodel.Thread, target int, task st
 		item := fmt.Sprintf("handoff:%d:%d", target, len(c.Handoffs))
 		c.Handoffs = append(c.Handoffs, handoff{From: src.ID, To: target, Item: item})
 		status, detail := c.HandoffState(target)
-		agent := appmodel.SubAgent{ID: "thread:" + strconv.Itoa(target), Name: textutil.FirstNonEmpty(task, tr("Handoff task")), Status: textutil.FirstNonEmpty(status, subagent.Pending), Detail: detail}
+		agent := model.SubAgent{ID: "thread:" + strconv.Itoa(target), Name: textutil.FirstNonEmpty(task, tr("Handoff task")), Status: textutil.FirstNonEmpty(status, subagent.Pending), Detail: detail}
 		title := appmodel.ThreadRefTitle(c.ThreadWithID(target))
-		c.Update(src.ID, func(t *appmodel.Thread) {
+		c.Update(src.ID, func(t *model.Thread) {
 			// The agents list says it all; the title names the target.
-			t.Messages = append(t.Messages, appmodel.Message{ID: c.NextID(), Role: "activity", Kind: "handoff", HandoffTitle: title, Status: "completed", ItemID: item, Agents: []appmodel.SubAgent{agent}})
+			t.Messages = append(t.Messages, model.Message{ID: c.NextID(), Role: "activity", Kind: "handoff", HandoffTitle: title, Status: "completed", ItemID: item, Agents: []model.SubAgent{agent}})
 		})
 	}
 }
@@ -326,19 +328,19 @@ func (c *Controller) refreshHandoffs(target int) {
 		if a, ok := c.handoffAgent(h); !ok || a.Status == status && a.Detail == detail {
 			continue
 		}
-		c.Update(h.From, func(t *appmodel.Thread) {
+		c.Update(h.From, func(t *model.Thread) {
 			for i := range t.Messages {
 				if t.Messages[i].ItemID == h.Item && len(t.Messages[i].Agents) > 0 {
 					a := t.Messages[i].Agents[0]
 					a.Status, a.Detail = status, detail
-					t.Messages[i].Agents = []appmodel.SubAgent{a}
+					t.Messages[i].Agents = []model.SubAgent{a}
 				}
 			}
 		})
 	}
 }
 
-func (c *Controller) handoffAgent(h handoff) (appmodel.SubAgent, bool) {
+func (c *Controller) handoffAgent(h handoff) (model.SubAgent, bool) {
 	for _, t := range c.Threads() {
 		if t.ID != h.From {
 			continue
@@ -349,5 +351,5 @@ func (c *Controller) handoffAgent(h handoff) (appmodel.SubAgent, bool) {
 			}
 		}
 	}
-	return appmodel.SubAgent{}, false
+	return model.SubAgent{}, false
 }

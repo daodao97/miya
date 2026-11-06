@@ -1,16 +1,17 @@
 package desktopui
 
 import (
-	appmodel "miya/internal/appmodel"
-	async "miya/internal/async"
-	uiruntime "miya/internal/uiruntime"
-	widgets "miya/internal/widgets"
-	url "net/url"
-	strings "strings"
-	sync "sync"
-	time "time"
+	"net/url"
+	"strings"
+	"sync"
+	"time"
 
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui"
+
+	"miya/internal/async"
+	"miya/internal/svcproto"
+	"miya/internal/uiruntime"
+	"miya/internal/widgets"
 )
 
 type remoteImageResult struct {
@@ -28,7 +29,7 @@ func (app *App) remoteImage(src string) *remoteImageResult {
 	return remoteImageFor(c.State().Remote, c.State().ReferenceSource, src)
 }
 
-func remoteImageFor(cl *appmodel.ServiceClient, source, src string) *remoteImageResult {
+func remoteImageFor(cl *svcproto.Client, source, src string) *remoteImageResult {
 	key := source + "\x00" + src
 	next := &remoteImageResult{done: make(chan struct{})}
 	actual, loaded := desktopRemoteImages.LoadOrStore(key, next)
@@ -36,7 +37,7 @@ func remoteImageFor(cl *appmodel.ServiceClient, source, src string) *remoteImage
 	if !loaded {
 		go func() {
 			var data []byte
-			entry.err = cl.Call("host", appmodel.HostRequest{Action: "preview", Path: src}, &data)
+			entry.err = cl.Call("host", svcproto.HostRequest{Action: "preview", Path: src}, &data)
 			if entry.err == nil {
 				entry.image, entry.err = ui.DecodeImage(data)
 			}
@@ -69,7 +70,7 @@ func (app *App) loadRemoteImage(src string) (ui.ImageSource, error) {
 	}
 	c := app.C
 	type imageHost struct {
-		client *appmodel.ServiceClient
+		client *svcproto.Client
 		source string
 	}
 	host, ok := async.OnMain(c.State().Ctx, c.Dispatch, func() imageHost { return imageHost{c.State().Remote, c.State().ReferenceSource} })

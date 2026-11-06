@@ -1,16 +1,18 @@
 package mobile
 
 import (
-	appmodel "miya/internal/appmodel"
-	notification "miya/internal/notification"
-	remote "miya/internal/remote"
-	uiruntime "miya/internal/uiruntime"
-	strconv "strconv"
+	"strconv"
 
-	mygo "github.com/egoist/mygo"
+	"github.com/egoist/mygo"
+
+	"miya/internal/appmodel"
+	"miya/internal/model"
+	"miya/internal/notification"
+	"miya/internal/remote"
+	"miya/internal/uiruntime"
 )
 
-func (m *App) unreadFor(t appmodel.Thread) (notification.Unread, bool) {
+func (m *App) unreadFor(t model.Thread) (notification.Unread, bool) {
 	for _, u := range m.State.Notifications.Unread {
 		if u.Matches(t) {
 			return u, true

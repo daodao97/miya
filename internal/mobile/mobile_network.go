@@ -1,9 +1,9 @@
 package mobile
 
 import (
-	time "time"
+	"time"
 
-	mygo "github.com/egoist/mygo"
+	"github.com/egoist/mygo"
 )
 
 // pathProbeTimeout bounds the wait for the desktop's next frame after the

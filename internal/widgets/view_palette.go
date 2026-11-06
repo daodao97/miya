@@ -1,11 +1,12 @@
 package widgets
 
 import (
-	uiruntime "miya/internal/uiruntime"
-	atomic "sync/atomic"
+	"sync/atomic"
 
-	mygo "github.com/egoist/mygo"
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/ui"
+
+	"miya/internal/uiruntime"
 )
 
 // Colors the desktop views share beyond those in view_style.go, set with

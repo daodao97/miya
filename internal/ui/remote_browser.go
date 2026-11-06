@@ -1,14 +1,15 @@
 package desktopui
 
 import (
-	fmt "fmt"
-	appmodel "miya/internal/appmodel"
-	phoneproxy "miya/internal/phoneproxy"
-	webservice "miya/internal/webservice"
-	net "net"
-	url "net/url"
-	strconv "strconv"
-	strings "strings"
+	"fmt"
+	"net"
+	"net/url"
+	"strconv"
+	"strings"
+
+	"miya/internal/phoneproxy"
+	"miya/internal/svcproto"
+	"miya/internal/webservice"
 )
 
 // Only localhost URLs change meaning when the workspace is remote. Public
@@ -68,7 +69,7 @@ func (app *App) navigateRemoteBrowser(s *PanelSurface, target string, service we
 	}
 	cl := app.C.State().Remote
 	if cl == nil || cl.Wire() == nil {
-		s.webErr = appmodel.ErrServiceClosed.Error()
+		s.webErr = svcproto.ErrClosed.Error()
 		return
 	}
 	go func() {

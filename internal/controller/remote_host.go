@@ -1,25 +1,30 @@
 package controller
 
 import (
-	bytes "bytes"
-	context "context"
-	json "encoding/json"
-	fmt "fmt"
-	appmodel "miya/internal/appmodel"
-	async "miya/internal/async"
-	codex "miya/internal/codex"
-	desktop "miya/internal/desktop"
-	model "miya/internal/model"
-	phone "miya/internal/phone"
-	remote "miya/internal/remote"
-	thumbnail "miya/internal/thumbnail"
-	uiruntime "miya/internal/uiruntime"
-	http "net/http"
-	os "os"
-	filepath "path/filepath"
-	strings "strings"
-	atomic "sync/atomic"
-	time "time"
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync/atomic"
+	"time"
+
+	"miya/internal/appmodel"
+	"miya/internal/async"
+	"miya/internal/claude"
+	"miya/internal/claude/transcript"
+	"miya/internal/codex"
+	"miya/internal/desktop"
+	"miya/internal/model"
+	"miya/internal/msgfmt"
+	"miya/internal/phone"
+	"miya/internal/phoneapi"
+	"miya/internal/remote"
+	"miya/internal/thumbnail"
+	"miya/internal/uiruntime"
 )
 
 // The desktop shows its state to phones; nothing a phone sends changes it.
@@ -31,8 +36,8 @@ const (
 	phonePingInterval = 15 * time.Second
 )
 
-func (c *Controller) PhoneSnapshot() appmodel.PhoneState {
-	s := appmodel.PhoneState{DesktopControl: desktop.Available(), ReferenceSource: c.ReferenceSource, MemoryRevision: c.MemoryRevision, Memory: c.Memories().Store != nil, Files: true, WebPorts: true, WebServices: true, Runtime: true, FileReferences: true, Automations: c.Auto != nil, Status: c.Status(), Approvals: c.Approvals(), Agents: c.phoneAgentOptions(), Quotas: c.PhoneQuotas()}
+func (c *Controller) PhoneSnapshot() phoneapi.State {
+	s := phoneapi.State{DesktopControl: desktop.Available(), ReferenceSource: c.ReferenceSource, MemoryRevision: c.MemoryRevision, Memory: c.Memories().Store != nil, Files: true, WebPorts: true, WebServices: true, Runtime: true, FileReferences: true, Automations: c.Auto != nil, Status: c.Status(), Approvals: c.Approvals(), Agents: c.phoneAgentOptions(), Quotas: c.PhoneQuotas()}
 	s.Collaboration = c.CollaborationCapabilities()
 	s.DesktopWindows = s.DesktopControl
 	s.AutomationRun = c.Auto != nil
@@ -54,25 +59,25 @@ func (c *Controller) PhoneSnapshot() appmodel.PhoneState {
 		}
 	}
 	if !found {
-		projects = append([]appmodel.Project{{Name: filepath.Base(c.Cwd), Path: c.Cwd}}, projects...)
+		projects = append([]model.Project{{Name: filepath.Base(c.Cwd), Path: c.Cwd}}, projects...)
 	}
 	for _, p := range projects {
 		threads := c.ProjectCache[p.Path]
 		if p.Path == c.Cwd {
 			threads = c.Threads()
 		}
-		pp := appmodel.PhoneProject{Name: p.Name, Path: p.Path, Current: p.Path == c.Cwd, Threads: make([]appmodel.Thread, 0, len(threads))}
+		pp := phoneapi.Project{Name: p.Name, Path: p.Path, Current: p.Path == c.Cwd, Threads: make([]model.Thread, 0, len(threads))}
 		for _, t := range threads {
-			pp.Threads = append(pp.Threads, appmodel.ListThread(t))
+			pp.Threads = append(pp.Threads, phone.ListThread(t))
 		}
-		pp.Threads = appmodel.DisplayedThreads(pp.Threads, true)
+		pp.Threads = msgfmt.DisplayedThreads(pp.Threads, true)
 		s.Projects = append(s.Projects, pp)
 	}
 	return s
 }
 
 type phoneThread struct {
-	Thread appmodel.Thread
+	Thread model.Thread
 	Found  bool
 	cwd    string
 	client *codex.Client
@@ -99,7 +104,7 @@ func (c *Controller) PhoneThreadFor(r remote.Request) phoneThread {
 	if r.ServerID == "" {
 		return c.phoneThread(r.Thread)
 	}
-	match := func(t appmodel.Thread, path string) bool {
+	match := func(t model.Thread, path string) bool {
 		return t.ServerID == r.ServerID && (r.Agent == "" || model.ThreadAgent(t) == r.Agent) &&
 			(r.Project == "" || path == r.Project)
 	}
@@ -137,7 +142,7 @@ func (c *Controller) SendPhonePreview(ctx context.Context, conn phoneConnection,
 		}
 		if target.Found {
 			messages := target.Thread.Messages
-			if !appmodel.HasHistory(target.Thread) {
+			if !phone.HasHistory(target.Thread) {
 				messages, _ = readOnlyHistory(ctx, target)
 			}
 			for _, message := range messages {
@@ -286,7 +291,7 @@ func (c *Controller) ServePhoneConnection(ctx context.Context, conn phoneConnect
 	defer ticker.Stop()
 	ps := &phoneSession{c: c, ctx: ctx, send: send, collaborationJobs: collaborationJobs, drafts: drafts, previews: previews, lastRevision: -1}
 	type snapshot struct {
-		state    appmodel.PhoneState
+		state    phoneapi.State
 		revision int
 		t        phoneThread
 		loading  bool
@@ -328,24 +333,24 @@ func (c *Controller) ServePhoneConnection(ctx context.Context, conn phoneConnect
 			t := s.t.Thread
 			switch {
 			case !s.t.Found:
-				t = appmodel.Thread{ID: ps.sub, ServerID: ps.subscription.ServerID, Agent: ps.subscription.Agent, Status: "Conversation is no longer on the desktop"}
+				t = model.Thread{ID: ps.sub, ServerID: ps.subscription.ServerID, Agent: ps.subscription.Agent, Status: "Conversation is no longer on the desktop"}
 				if s.loading {
 					t.Loading, t.Status = true, "Loading conversation…"
 				}
-			case appmodel.HasHistory(t) || t.Loading:
+			case phone.HasHistory(t) || t.Loading:
 				// The desktop's own copy is live; prefer it.
 			case ps.read != nil:
 				t.Messages, t.HistoryLoaded, t.Status = ps.read.Messages, true, ps.read.Status
 			case !ps.fetched:
 				ps.fetched = true
 				messages, status := readOnlyHistory(ctx, s.t)
-				ps.read = &appmodel.Thread{Messages: messages, Status: status}
+				ps.read = &model.Thread{Messages: messages, Status: status}
 				t.Messages, t.HistoryLoaded, t.Status = messages, true, status
 				// Read again next poll, should the desktop change meanwhile.
 				ps.lastRevision = -1
 			}
 			if ps.sync == nil {
-				ps.sync = appmodel.NewPhoneThreadSync(nil)
+				ps.sync = phone.NewThreadSync(nil)
 			}
 			if d, changed := ps.sync.Update(t); changed {
 				if data, err := json.Marshal(d); err == nil {
@@ -374,7 +379,7 @@ func (c *Controller) ServePhoneConnection(ctx context.Context, conn phoneConnect
 		if ps.cmdWant != "" {
 			project := ps.cmdWant
 			type known struct {
-				list []appmodel.ComposerChoice
+				list []model.ComposerChoice
 				ok   bool
 			}
 			k, ok := async.OnMain(ctx, c.Dispatch, func() known { l, ok := c.ClaudeCommandsFor(project); return known{l, ok} })
@@ -383,7 +388,7 @@ func (c *Controller) ServePhoneConnection(ctx context.Context, conn phoneConnect
 			}
 			if k.ok {
 				ps.cmdWant = ""
-				data, _ := json.Marshal(appmodel.PhoneCommands{Project: project, Commands: k.list})
+				data, _ := json.Marshal(phoneapi.Commands{Project: project, Commands: k.list})
 				if !send(remote.Frame{Type: "commands", Data: data}) {
 					return
 				}
@@ -412,17 +417,17 @@ func (c *Controller) ServePhoneConnection(ctx context.Context, conn phoneConnect
 // readOnlyHistory reads a conversation without resuming it: thread/read for
 // Codex, the session files for Claude Code. Resuming would make this desktop
 // the conversation's writer, a change the phone must never cause.
-func readOnlyHistory(ctx context.Context, t phoneThread) ([]appmodel.Message, string) {
+func readOnlyHistory(ctx context.Context, t phoneThread) ([]model.Message, string) {
 	th := t.Thread
-	var messages []appmodel.Message
+	var messages []model.Message
 	var err error
 	if th.Agent == "claude-code" {
-		if path := appmodel.FindClaudeSession(t.cwd, th.ServerID); path != "" {
-			messages, err = appmodel.ParseClaudeSession(path)
+		if path := transcript.Find(t.cwd, th.ServerID); path != "" {
+			messages, err = transcript.Parse(path)
 		}
 		if len(messages) == 0 {
-			var stored appmodel.Thread
-			data, rerr := os.ReadFile(appmodel.ClaudeHistoryPath(th.ServerID))
+			var stored model.Thread
+			data, rerr := os.ReadFile(claude.HistoryPath(th.ServerID))
 			if rerr == nil {
 				rerr = json.Unmarshal(data, &stored)
 			}
@@ -440,7 +445,7 @@ func readOnlyHistory(ctx context.Context, t phoneThread) ([]appmodel.Message, st
 		var result codex.ThreadResponse
 		err = t.client.Call(cctx, "thread/read", map[string]any{"threadId": th.ServerID, "includeTurns": true}, &result)
 		if err == nil {
-			messages = appmodel.PrepareHistoryMessages(result.Thread)
+			messages = msgfmt.HistoryMessages(result.Thread)
 		}
 	}
 	if err != nil && len(messages) == 0 {
@@ -450,7 +455,7 @@ func readOnlyHistory(ctx context.Context, t phoneThread) ([]appmodel.Message, st
 		messages[i].ID = i + 1
 		if messages[i].Role == "user" {
 			own, _ := model.SplitReferenceContext(messages[i].Content)
-			messages[i].Parts = appmodel.MessageParts(own)
+			messages[i].Parts = model.MessageParts(own)
 		}
 	}
 	return messages, ""
@@ -466,7 +471,7 @@ var DesktopPhone *phoneHost
 func NewPhoneHost(c *Controller) *phoneHost {
 	p := phone.NewPairing(phoneHostOf{c})
 	uiruntime.OnCleanup(p.Close)
-	if appmodel.LoadPhoneEnabled() && !servingRemote {
+	if phone.LoadEnabled() && !servingRemote {
 		p.Start()
 	}
 	return p
@@ -545,7 +550,7 @@ func (c *Controller) PhoneSend(r remote.Request, paths []string) phoneSendResult
 			}
 			req.ThreadID = t.ID
 			if req.ExplicitSettings && req.Policy != "" {
-				c.Update(t.ID, func(th *appmodel.Thread) { th.PermissionPolicy = req.Policy })
+				c.Update(t.ID, func(th *model.Thread) { th.PermissionPolicy = req.Policy })
 			}
 			id := c.Submit(req)
 			return phoneSendResult{Thread: id, Err: c.LastSubmitError}

@@ -1,11 +1,13 @@
 package controller
 
 import (
-	appmodel "miya/internal/appmodel"
-	model "miya/internal/model"
-	threadlist "miya/internal/threadlist"
-	filepath "path/filepath"
-	sort "sort"
+	"path/filepath"
+	"sort"
+
+	"miya/internal/appmodel"
+	"miya/internal/claude/transcript"
+	"miya/internal/model"
+	"miya/internal/threadlist"
 )
 
 // loadClaudeSessions merges the CLI's sessions of the workspace into its
@@ -22,7 +24,7 @@ func (c *Controller) LoadClaudeSessionsSync() {
 
 func (c *Controller) loadClaudeSessionsAt(cwd string) {
 	{
-		sessions := appmodel.ListClaudeSessions(cwd)
+		sessions := transcript.List(cwd)
 		if len(sessions) == 0 {
 			return
 		}
@@ -30,7 +32,7 @@ func (c *Controller) loadClaudeSessionsAt(cwd string) {
 			if c.Cwd != cwd {
 				return
 			}
-			items := append([]appmodel.Thread(nil), c.Threads()...)
+			items := append([]model.Thread(nil), c.Threads()...)
 			known := map[string]int{}
 			for i, t := range items {
 				if model.ThreadAgent(t) == appmodel.AgentClaude && t.ServerID != "" {
@@ -51,7 +53,7 @@ func (c *Controller) loadClaudeSessionsAt(cwd string) {
 					}
 					continue
 				}
-				items = append(items, appmodel.Thread{
+				items = append(items, model.Thread{
 					ID: c.NextID(), Agent: "claude-code", ServerID: s.ID, Title: s.Title,
 					Project: filepath.Base(cwd), Age: s.UpdatedAt.Format("Jan 2"), LastActivityAt: at, Resumed: true,
 				})
@@ -62,9 +64,9 @@ func (c *Controller) loadClaudeSessionsAt(cwd string) {
 			}
 			c.SetThreads(items)
 			if c.ProjectCache == nil {
-				c.ProjectCache = map[string][]appmodel.Thread{}
+				c.ProjectCache = map[string][]model.Thread{}
 			}
-			c.ProjectCache[cwd] = append([]appmodel.Thread(nil), items...)
+			c.ProjectCache[cwd] = append([]model.Thread(nil), items...)
 			threadlist.Persist(c.ProjectCache)
 			c.RefreshProjectOrder()
 		})

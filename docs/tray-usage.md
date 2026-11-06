@@ -26,8 +26,8 @@ Codex 返回重置卡字段时显示可用数量和到期信息。数量来自 `
 
 ```sh
 go test ./internal/agentusage -race
-go test . -run TestUsage
-MIYA_SNAPSHOT=/tmp/miya-usage-snapshots go test . -run TestUsage
+go test ./tests/integration -run TestUsage
+MIYA_SNAPSHOT=/tmp/miya-usage-snapshots go test ./tests/integration -run TestUsage
 ```
 
 测试使用 CLI 替身，不访问真实账户，也不消耗重置卡。截图覆盖明暗主题、读取失败、多周期滚动和重置卡确认页。

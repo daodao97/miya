@@ -1,9 +1,9 @@
 package conversation
 
 import (
-	time "time"
+	"time"
 
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui"
 )
 
 type messageScroll struct {

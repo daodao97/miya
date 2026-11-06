@@ -1,22 +1,23 @@
 package mobile
 
 import (
-	context "context"
-	sha256 "crypto/sha256"
-	fmt "fmt"
-	math "math"
-	desktop "miya/internal/desktop"
-	control "miya/internal/desktop/control"
-	remote "miya/internal/remote"
-	textutil "miya/internal/textutil"
-	uiruntime "miya/internal/uiruntime"
-	widgets "miya/internal/widgets"
-	filepath "path/filepath"
-	runtime "runtime"
-	strings "strings"
-	time "time"
+	"context"
+	"crypto/sha256"
+	"fmt"
+	"math"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"time"
 
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui"
+
+	"miya/internal/desktop"
+	"miya/internal/desktop/control"
+	"miya/internal/remote"
+	"miya/internal/textutil"
+	"miya/internal/uiruntime"
+	"miya/internal/widgets"
 )
 
 type DesktopPoint struct{ X, Y float64 }

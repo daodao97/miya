@@ -1,20 +1,23 @@
 package controller
 
 import (
-	json "encoding/json"
-	errors "errors"
-	fmt "fmt"
-	appmodel "miya/internal/appmodel"
-	remote "miya/internal/remote"
-	strings "strings"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+
+	"miya/internal/codex"
+	"miya/internal/phone"
+	"miya/internal/phoneapi"
+	"miya/internal/remote"
 )
 
 func (c *Controller) PhoneApprovalResponse(r remote.Request) error {
 	for _, a := range c.Approvals() {
-		if !appmodel.SameJSON(a.ID, r.Approval) {
+		if !phone.SameJSON(a.ID, r.Approval) {
 			continue
 		}
-		if r.ApprovalVersion != "" && r.ApprovalVersion != appmodel.ApprovalFingerprint(a) {
+		if r.ApprovalVersion != "" && r.ApprovalVersion != phoneapi.ApprovalFingerprint(a) {
 			return errors.New("Request changed. Confirm again.")
 		}
 		if r.Remember {
@@ -58,7 +61,7 @@ func (c *Controller) PhoneApprovalResponse(r remote.Request) error {
 					if v.Content == nil {
 						return errors.New("Complete the form")
 					}
-					if err := appmodel.ValidateForm(a.RequestedSchema, v.Content); err != nil {
+					if err := codex.ValidateForm(a.RequestedSchema, v.Content); err != nil {
 						return err
 					}
 				}
@@ -68,7 +71,7 @@ func (c *Controller) PhoneApprovalResponse(r remote.Request) error {
 			}
 			result = v
 		default:
-			result = appmodel.ApprovalResult(a, r.Allow)
+			result = codex.ApprovalResult(a, r.Allow)
 		}
 		c.Respond(a, result)
 		return nil

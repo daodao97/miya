@@ -1,11 +1,12 @@
 package controller
 
 import (
-	fmt "fmt"
-	log "log"
-	appmodel "miya/internal/appmodel"
-	desktop "miya/internal/desktop"
-	os "os"
+	"fmt"
+	"log"
+	"os"
+
+	"miya/internal/desktop"
+	"miya/internal/workspaces"
 )
 
 func RunCommands() bool {
@@ -53,7 +54,7 @@ func RunCommands() bool {
 		if len(os.Args) != 3 {
 			log.Fatal("usage: miya -connect <miya://connect link>")
 		}
-		if err := appmodel.SaveRemoteServer(os.Args[2]); err != nil {
+		if err := workspaces.SaveRemoteServer(os.Args[2]); err != nil {
 			log.Fatal(err)
 		}
 		os.Args = os.Args[:1]

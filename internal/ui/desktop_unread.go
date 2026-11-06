@@ -1,13 +1,14 @@
 package desktopui
 
 import (
-	appmodel "miya/internal/appmodel"
-	uiruntime "miya/internal/uiruntime"
+	"miya/internal/appmodel"
+	"miya/internal/model"
+	"miya/internal/uiruntime"
 )
 
 // Selecting a completed conversation explicitly acknowledges it once its
 // history arrives. Results already open also become read when displayed below.
-func (app *App) RequestDesktopRead(t appmodel.Thread) {
+func (app *App) RequestDesktopRead(t model.Thread) {
 	app.desktopReadIntent = appmodel.DesktopRead{}
 	if !app.C.DesktopThreadUnread(t) || t.Busy && !t.Loading {
 		return

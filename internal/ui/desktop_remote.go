@@ -1,10 +1,11 @@
 package desktopui
 
 import (
-	appmodel "miya/internal/appmodel"
-	filepath "path/filepath"
+	"path/filepath"
 
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui"
+
+	"miya/internal/svcproto"
 )
 
 func (app *App) browseServerProject(path string) {
@@ -14,8 +15,8 @@ func (app *App) browseServerProject(path string) {
 	app.projectBrowse, app.projectBrowseLoading, app.ProjectError = true, true, ""
 	cl := app.C.State().Remote
 	go func() {
-		var dirs []appmodel.HostEntry
-		err := cl.Call("host", appmodel.HostRequest{Action: "browse", Path: path}, &dirs)
+		var dirs []svcproto.HostEntry
+		err := cl.Call("host", svcproto.HostRequest{Action: "browse", Path: path}, &dirs)
 		app.C.Dispatch(func() {
 			app.projectBrowseLoading = false
 			if err != nil {

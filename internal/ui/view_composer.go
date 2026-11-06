@@ -1,19 +1,22 @@
 package desktopui
 
 import (
-	context "context"
-	fmt "fmt"
-	mime "mime"
-	appmodel "miya/internal/appmodel"
-	conversation "miya/internal/conversation"
-	model "miya/internal/model"
-	textutil "miya/internal/textutil"
-	widgets "miya/internal/widgets"
-	filepath "path/filepath"
-	strings "strings"
-	time "time"
+	"context"
+	"fmt"
+	"mime"
+	"path/filepath"
+	"strings"
+	"time"
 
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui"
+
+	"miya/internal/appmodel"
+	"miya/internal/composer"
+	"miya/internal/conversation"
+	"miya/internal/model"
+	"miya/internal/svcproto"
+	"miya/internal/textutil"
+	"miya/internal/widgets"
 )
 
 func (app *App) composerArea(c *ui.Context) {
@@ -184,10 +187,10 @@ func (app *App) attachmentPreview(c *ui.Context, path string) {
 type completion struct {
 	Input      conversation.InlineThreadInput
 	Open       bool
-	Choices    []appmodel.ComposerChoice
+	Choices    []model.ComposerChoice
 	selected   int
 	state      string
-	Token      appmodel.ComposerToken
+	Token      composer.ComposerToken
 	Source     string
 	cancel     context.CancelFunc
 	generation int
@@ -210,7 +213,7 @@ func (m *completion) visible(app *App) bool {
 // edit records an edit of the draft and opens the menu for the token at the
 // caret: commands after a leading slash, files after an at sign.
 func (m *completion) edit(app *App, value string) {
-	m.editAt(app, value, appmodel.ComposerEditEnd(app.C.State().Draft(), value))
+	m.editAt(app, value, composer.ComposerEditEnd(app.C.State().Draft(), value))
 }
 
 func (m *completion) editAt(app *App, value string, end int) {
@@ -219,10 +222,10 @@ func (m *completion) editAt(app *App, value string, end int) {
 	app.Notice = ""
 	app.closeMenus()
 	m.Close()
-	m.Token = appmodel.ComposerTokenAt(value, end)
+	m.Token = composer.ComposerTokenAt(value, end)
 	if m.Token.Kind == '/' && m.Input.Doc != nil && m.Input.Doc.Text().Len() > 0 && m.Input.Doc.Text().AttributesAt(0).Tag == conversation.ComposerCommandTag {
 		// Undo or a caret at the chip's edge edits an already selected command.
-		m.Token = appmodel.ComposerToken{}
+		m.Token = composer.ComposerToken{}
 	}
 	m.Source = value
 	m.selected = 0
@@ -241,22 +244,22 @@ func (m *completion) editAt(app *App, value string, end int) {
 			m.Close()
 			return
 		}
-		m.Choices = appmodel.AgentChoices(m.Token.Query, nil)
+		m.Choices = composer.AgentChoices(m.Token.Query, nil)
 		return
 	}
 	m.state = tr("Searching project files…")
 	// Agents to delegate to come first, then conversations of the workspace;
 	// files follow as found.
-	var refs []appmodel.ComposerChoice
+	var refs []model.ComposerChoice
 	if capability := c.CollaborationCapabilities(); capability != nil && capability.Version >= 1 {
-		refs = appmodel.AgentChoices(m.Token.Query, nil)
+		refs = composer.AgentChoices(m.Token.Query, nil)
 	}
 	refs = append(refs, app.ThreadChoices(m.Token.Query)...)
 	m.Choices = refs
 	ctx, stop := context.WithTimeout(c.State().Ctx, 4*time.Second)
 	m.cancel = stop
 	version, root, query := m.generation, c.State().Cwd, m.Token.Query
-	var host *appmodel.ServiceClient
+	var host *svcproto.Client
 	if c.RemoteHost() {
 		host = c.State().Remote
 	}
@@ -272,11 +275,11 @@ func (m *completion) editAt(app *App, value string, end int) {
 		var files []string
 		var err error
 		if host == nil {
-			files, err = appmodel.IndexProjectFiles(ctx, root)
+			files, err = composer.IndexProjectFiles(ctx, root)
 		} else {
-			err = host.Call("host", appmodel.HostRequest{Action: "index", Project: root}, &files)
+			err = host.Call("host", svcproto.HostRequest{Action: "index", Project: root}, &files)
 		}
-		results := appmodel.FileChoices(files, query)
+		results := composer.FileChoices(files, query)
 		c.Dispatch(func() {
 			if m.generation != version || c.State().Cwd != root {
 				return
@@ -285,7 +288,7 @@ func (m *completion) editAt(app *App, value string, end int) {
 				m.state = tr("Unable to search files: ") + err.Error()
 				return
 			}
-			m.Choices = append(append([]appmodel.ComposerChoice(nil), refs...), results...)
+			m.Choices = append(append([]model.ComposerChoice(nil), refs...), results...)
 			m.state = tr("No matching files")
 		})
 	}()
@@ -300,20 +303,20 @@ func (m *completion) choose(app *App, index int) {
 	choice, token, value := m.Choices[index], m.Token, m.Source
 	m.Close()
 	if token.Kind == '#' {
-		c.RememberDraft(appmodel.InsertAgentReference(value, token, choice.Agent, choice.Name))
+		c.RememberDraft(composer.InsertAgentReference(value, token, choice.Agent, choice.Name))
 		return
 	}
 	if token.Kind == '@' {
 		if choice.Agent != "" {
-			c.RememberDraft(appmodel.InsertAgentReference(value, token, choice.Agent, choice.Name))
+			c.RememberDraft(composer.InsertAgentReference(value, token, choice.Agent, choice.Name))
 			return
 		}
 		if choice.Ref != nil {
-			c.RememberDraft(appmodel.InsertThreadReference(value, token, *choice.Ref, choice.Name))
+			c.RememberDraft(composer.InsertThreadReference(value, token, *choice.Ref, choice.Name))
 			c.PrefetchReference(*choice.Ref)
 			return
 		}
-		c.RememberDraft(appmodel.InsertFileReference(value, token, choice.Name))
+		c.RememberDraft(composer.InsertFileReference(value, token, choice.Name))
 		return
 	}
 	if choice.Name == "mention" {

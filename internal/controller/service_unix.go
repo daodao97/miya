@@ -3,23 +3,24 @@
 package controller
 
 import (
-	context "context"
-	errors "errors"
-	log "log"
-	appdir "miya/internal/appdir"
-	appmodel "miya/internal/appmodel"
-	async "miya/internal/async"
-	automation "miya/internal/automation"
-	mcpconfig "miya/internal/mcpconfig"
-	remote "miya/internal/remote"
-	uiruntime "miya/internal/uiruntime"
-	net "net"
-	os "os"
-	exec "os/exec"
-	signal "os/signal"
-	filepath "path/filepath"
-	syscall "syscall"
-	time "time"
+	"context"
+	"errors"
+	"log"
+	"net"
+	"os"
+	"os/exec"
+	"os/signal"
+	"path/filepath"
+	"syscall"
+	"time"
+
+	"miya/internal/appdir"
+	"miya/internal/async"
+	"miya/internal/automation"
+	"miya/internal/mcpconfig"
+	"miya/internal/remote"
+	"miya/internal/svcproto"
+	"miya/internal/uiruntime"
 )
 
 // runService is the executable run with -server: it owns the agents until
@@ -42,7 +43,7 @@ func runServiceWithOptions(options serverOptions) error {
 	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		return errors.New("miya: a service already runs")
 	}
-	sock := appmodel.ServiceSocket()
+	sock := svcproto.Socket()
 	os.Remove(sock)
 	ln, err := net.Listen("unix", sock)
 	if err != nil {

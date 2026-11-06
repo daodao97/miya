@@ -1,18 +1,20 @@
 package desktopui
 
 import (
-	appmodel "miya/internal/appmodel"
-	model "miya/internal/model"
-	widgets "miya/internal/widgets"
-	strconv "strconv"
-	strings "strings"
+	"strconv"
+	"strings"
 
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui"
+
+	"miya/internal/claude/transcript"
+	"miya/internal/model"
+	"miya/internal/msgfmt"
+	"miya/internal/widgets"
 )
 
 // userGroupView shows a user message, with an edit button while the pointer
 // is on it when its agent can send it again.
-func (app *App) userGroupView(c *ui.Context, g appmodel.MessageGroup) {
+func (app *App) userGroupView(c *ui.Context, g msgfmt.MessageGroup) {
 	m := g.Messages[0]
 	// The phone holds no agent to rewind with.
 	editable := !app.Mobile && app.C.CanRewind(app.C.Current(), m)
@@ -20,13 +22,13 @@ func (app *App) userGroupView(c *ui.Context, g appmodel.MessageGroup) {
 	hovered := col.Hovered()
 	col.Children(func() {
 		if g.ShowTimestamp {
-			ui.Text(c, appmodel.FormatMessageTimestamp(g.Timestamp)).AlignSelf(ui.End).TextColor(widgets.Muted).FontSize(11)
+			ui.Text(c, msgfmt.FormatMessageTimestamp(g.Timestamp)).AlignSelf(ui.End).TextColor(widgets.Muted).FontSize(11)
 		}
 		if app.Editing == m.ID && editable {
 			app.editMessageView(c.Key("edit"), m)
 			return
 		}
-		app.MessageView(c.Key(appmodel.MessageViewKey(m)), m, false)
+		app.MessageView(c.Key(msgfmt.MessageViewKey(m)), m, false)
 		if !editable {
 			return
 		}
@@ -45,8 +47,8 @@ func (app *App) userGroupView(c *ui.Context, g appmodel.MessageGroup) {
 
 // startEdit edits a message's text, without the attachment lines the
 // composer added to it.
-func (app *App) StartEdit(m appmodel.Message) {
-	m.Content = appmodel.ClaudeCommandText(m.Content)
+func (app *App) StartEdit(m model.Message) {
+	m.Content = transcript.CommandText(m.Content)
 	var keep []string
 	for _, l := range strings.Split(model.ImagePlaceholder.ReplaceAllString(m.Content, ""), "\n") {
 		if !strings.HasPrefix(l, "📎 ") {
@@ -57,7 +59,7 @@ func (app *App) StartEdit(m appmodel.Message) {
 	app.Editing, app.EditText = m.ID, body
 }
 
-func (app *App) submitEdit(m appmodel.Message) {
+func (app *App) submitEdit(m model.Message) {
 	if strings.TrimSpace(app.EditText) == "" {
 		return
 	}
@@ -65,7 +67,7 @@ func (app *App) submitEdit(m appmodel.Message) {
 	app.C.Rewind(app.C.Current().ID, m.ID, app.EditText)
 }
 
-func (app *App) editMessageView(c *ui.Context, m appmodel.Message) {
+func (app *App) editMessageView(c *ui.Context, m model.Message) {
 	ui.Column(c).AlignSelf(ui.End).FillWidth().MaxWidth(560).Background(widgets.Bubble).Radius(16).Padding(12).Gap(8).Children(func() {
 		in := app.ThreadInput(c.Key("input"), &app.editInput, app.EditText, strconv.Itoa(m.ID), tr("Edit message"), "", 13, 536, 1, 12, func(text string) { app.EditText = text }).AutoFocus()
 		if in.Shortcut(0, ui.KeyEnter) {

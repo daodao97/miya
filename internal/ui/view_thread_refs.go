@@ -1,11 +1,11 @@
 package desktopui
 
 import (
-	appmodel "miya/internal/appmodel"
-	model "miya/internal/model"
+	"miya/internal/appmodel"
+	"miya/internal/model"
 )
 
-func (app *App) desktopReferenceTitle(ref appmodel.ThreadRef) string {
+func (app *App) desktopReferenceTitle(ref model.ThreadRef) string {
 	if app.ReferenceThread != nil {
 		if t, ok := app.ReferenceThread(ref); ok {
 			return appmodel.ThreadRefTitle(t)

@@ -1,15 +1,17 @@
 package widgets
 
 import (
-	appmodel "miya/internal/appmodel"
+	"github.com/egoist/mygo/ui"
 
-	ui "github.com/egoist/mygo/ui"
+	"miya/internal/appmodel"
+	"miya/internal/model"
+	"miya/internal/msgfmt"
 )
 
 type TaskPalette struct{ Surface, Border, Ink, Muted ui.Color }
 
 // taskStatusBar is shared by the desktop and phone composers.
-func TaskStatusBar(c *ui.Context, t appmodel.Thread, approval bool, p TaskPalette, action func(string, string)) {
+func TaskStatusBar(c *ui.Context, t model.Thread, approval bool, p TaskPalette, action func(string, string)) {
 	if len(t.Tasks) == 0 {
 		return
 	}
@@ -31,10 +33,10 @@ func TaskStatusBar(c *ui.Context, t appmodel.Thread, approval bool, p TaskPalett
 									kind = tr("Loop")
 								}
 								ui.Text(c, kind+" · "+label).FontSize(12).FontWeight(600).TextColor(p.Ink).Shrink(0)
-								ui.Text(c, appmodel.NativeText(task.Title)).FontSize(12).TextColor(p.Ink).SingleLine().Ellipsis("…").Tooltip(task.Title).Grow(1).MinWidth(0)
+								ui.Text(c, msgfmt.NativeText(task.Title)).FontSize(12).TextColor(p.Ink).SingleLine().Ellipsis("…").Tooltip(task.Title).Grow(1).MinWidth(0)
 							})
 							if detail := appmodel.TaskDetail(task); detail != "" {
-								ui.Text(c, appmodel.NativeText(detail)).FontSize(11).TextColor(p.Muted).SingleLine().Ellipsis("…").Tooltip(detail)
+								ui.Text(c, msgfmt.NativeText(detail)).FontSize(11).TextColor(p.Muted).SingleLine().Ellipsis("…").Tooltip(detail)
 							}
 						})
 						// glyph turns the button into a square icon button; name stays

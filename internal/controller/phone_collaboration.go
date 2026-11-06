@@ -1,19 +1,21 @@
 package controller
 
 import (
-	bytes "bytes"
-	context "context"
-	json "encoding/json"
-	errors "errors"
-	io "io"
-	appmodel "miya/internal/appmodel"
-	async "miya/internal/async"
-	remote "miya/internal/remote"
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"io"
+
+	"miya/internal/appmodel"
+	"miya/internal/async"
+	"miya/internal/phoneapi"
+	"miya/internal/remote"
 )
 
 func collaborationPhoneFrame(requestID string, result any, err error) remote.Frame {
 	frame := remote.Frame{Type: "collaboration"}
-	frame.Data, _ = json.Marshal(appmodel.PhoneCollaborationResult{RequestID: requestID, Result: result})
+	frame.Data, _ = json.Marshal(phoneapi.CollaborationResult{RequestID: requestID, Result: result})
 	if err != nil {
 		frame.Error = err.Error()
 	}
@@ -44,7 +46,7 @@ func (c *Controller) PhoneCollaboration(ctx context.Context, r remote.Request) r
 	if !ok {
 		return collaborationPhoneFrame(r.RequestID, nil, ctx.Err())
 	}
-	if work, ok := prepared.value.(appmodel.Deferred); ok && prepared.err == nil {
+	if work, ok := prepared.value.(async.Reply); ok && prepared.err == nil {
 		// Disconnecting the observer releases this connection's worker while the
 		// already accepted task can finish. Its request ID remains safe to retry.
 		done := make(chan pending, 1)

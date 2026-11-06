@@ -1,14 +1,15 @@
 package mobile
 
 import (
-	json "encoding/json"
-	log "log"
-	model "miya/internal/model"
-	notification "miya/internal/notification"
-	remote "miya/internal/remote"
-	uiruntime "miya/internal/uiruntime"
+	"encoding/json"
+	"log"
 
-	mygo "github.com/egoist/mygo"
+	"github.com/egoist/mygo"
+
+	"miya/internal/model"
+	"miya/internal/notification"
+	"miya/internal/remote"
+	"miya/internal/uiruntime"
 )
 
 func (m *App) setupPush() {

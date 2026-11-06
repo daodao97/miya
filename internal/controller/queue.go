@@ -1,25 +1,26 @@
 package controller
 
 import (
-	appmodel "miya/internal/appmodel"
-	model "miya/internal/model"
-	strings "strings"
+	"strings"
+
+	"miya/internal/model"
+	"miya/internal/svcproto"
 )
 
-func (c *Controller) enqueue(id int, req appmodel.SendRequest) int {
+func (c *Controller) enqueue(id int, req model.SendRequest) int {
 	req.ThreadID, req.Steer = id, false
-	q := appmodel.QueuedMessage{ID: c.NextID(), SendRequest: req}
-	c.Update(id, func(t *appmodel.Thread) { t.Queue = append(append([]appmodel.QueuedMessage(nil), t.Queue...), q) })
+	q := model.QueuedMessage{ID: c.NextID(), SendRequest: req}
+	c.Update(id, func(t *model.Thread) { t.Queue = append(append([]model.QueuedMessage(nil), t.Queue...), q) })
 	return id
 }
 
 func (c *Controller) RemoveQueued(threadID, queuedID int) {
 	if c.Remote != nil {
-		c.forward("dequeue", appmodel.SvcQueued{Thread: threadID, ID: queuedID})
+		c.forward("dequeue", svcproto.Queued{Thread: threadID, ID: queuedID})
 		return
 	}
-	c.Update(threadID, func(t *appmodel.Thread) {
-		out := make([]appmodel.QueuedMessage, 0, len(t.Queue))
+	c.Update(threadID, func(t *model.Thread) {
+		out := make([]model.QueuedMessage, 0, len(t.Queue))
 		for _, q := range t.Queue {
 			if q.ID != queuedID {
 				out = append(out, q)
@@ -35,7 +36,7 @@ func (c *Controller) ResumeQueue(id int) {
 		c.forward("drainQueue", id)
 		return
 	}
-	c.Update(id, func(t *appmodel.Thread) { t.StopRequested = false })
+	c.Update(id, func(t *model.Thread) { t.StopRequested = false })
 	c.drainQueue(id)
 }
 
@@ -54,7 +55,7 @@ func (c *Controller) drainQueue(id int) {
 	if t.ID == 0 || len(t.Queue) == 0 || t.Busy || t.Loading || t.ReadOnly || t.StopRequested {
 		return
 	}
-	queue := append([]appmodel.QueuedMessage(nil), t.Queue...)
+	queue := append([]model.QueuedMessage(nil), t.Queue...)
 	req := queue[len(queue)-1].SendRequest
 	req.ThreadID, req.Steer, req.Attachments = id, false, nil
 	req.MemoryControl = false
@@ -68,17 +69,17 @@ func (c *Controller) drainQueue(id int) {
 	}
 	req.Text = model.JoinReferenceMessages(texts)
 	own, _ := model.SplitReferenceContext(req.Text)
-	req.Parts = appmodel.MessageParts(own)
-	c.Update(id, func(t *appmodel.Thread) { t.Queue = nil })
+	req.Parts = model.MessageParts(own)
+	c.Update(id, func(t *model.Thread) { t.Queue = nil })
 	if c.Submit(req) == 0 {
-		c.Update(id, func(t *appmodel.Thread) { t.Queue = append(queue, t.Queue...) })
+		c.Update(id, func(t *model.Thread) { t.Queue = append(queue, t.Queue...) })
 	}
 }
 
 // steerQueued moves a queued message into the running turn.
 func (c *Controller) SteerQueued(threadID, queuedID int) {
 	if c.Remote != nil {
-		c.forward("steerQueued", appmodel.SvcQueued{Thread: threadID, ID: queuedID})
+		c.forward("steerQueued", svcproto.Queued{Thread: threadID, ID: queuedID})
 		return
 	}
 	t := c.ThreadWithID(threadID)

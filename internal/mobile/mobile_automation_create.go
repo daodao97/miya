@@ -1,16 +1,18 @@
 package mobile
 
 import (
-	json "encoding/json"
-	appmodel "miya/internal/appmodel"
-	automation "miya/internal/automation"
-	model "miya/internal/model"
-	remote "miya/internal/remote"
-	widgets "miya/internal/widgets"
-	strings "strings"
-	time "time"
+	"encoding/json"
+	"strings"
+	"time"
 
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui"
+
+	"miya/internal/appmodel"
+	"miya/internal/automation"
+	"miya/internal/model"
+	"miya/internal/phoneapi"
+	"miya/internal/remote"
+	"miya/internal/widgets"
 )
 
 type mobileAutomationForm struct {
@@ -79,7 +81,7 @@ func (m *App) sendAutomationForm(op string) {
 
 func (m *App) ReceiveAutomationForm(op string, raw json.RawMessage, message string) {
 	f := &m.Autos.Form
-	var result appmodel.PhoneAutomationFormResult
+	var result phoneapi.AutomationFormResult
 	if json.Unmarshal(raw, &result) != nil || result.RequestID == "" || result.RequestID != f.Pending || op != f.Op {
 		return
 	}

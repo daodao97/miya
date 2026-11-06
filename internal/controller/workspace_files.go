@@ -1,11 +1,13 @@
 package controller
 
 import (
-	context "context"
-	io "io"
-	appmodel "miya/internal/appmodel"
-	worktree "miya/internal/worktree"
-	filepath "path/filepath"
+	"context"
+	"io"
+	"path/filepath"
+
+	"miya/internal/appmodel"
+	"miya/internal/svcproto"
+	"miya/internal/worktree"
 )
 
 // workspaceFiles reads a project's files and changes and opens its
@@ -50,11 +52,11 @@ func (localFiles) Terminal(string) (io.ReadWriteCloser, error) { return nil, nil
 
 // serverFiles are a remote server workspace, reached through the server's
 // "host" requests. Each call has the service client's own timeout.
-type serverFiles struct{ cl *appmodel.ServiceClient }
+type serverFiles struct{ cl *svcproto.Client }
 
 func (s serverFiles) ReadDir(root, rel string) ([]worktree.FileEntry, error) {
-	var rows []appmodel.HostEntry
-	err := s.cl.Call("host", appmodel.HostRequest{Action: "dir", Project: root, Path: rel}, &rows)
+	var rows []svcproto.HostEntry
+	err := s.cl.Call("host", svcproto.HostRequest{Action: "dir", Project: root, Path: rel}, &rows)
 	var entries []worktree.FileEntry
 	for _, e := range rows {
 		entries = append(entries, worktree.FileEntry{Name: e.Name, Rel: e.Path, Dir: e.Dir})
@@ -64,28 +66,28 @@ func (s serverFiles) ReadDir(root, rel string) ([]worktree.FileEntry, error) {
 
 func (s serverFiles) ReadImage(root, rel string) ([]byte, error) {
 	var data []byte
-	err := s.cl.Call("host", appmodel.HostRequest{Action: "image", Project: root, Path: rel}, &data)
+	err := s.cl.Call("host", svcproto.HostRequest{Action: "image", Project: root, Path: rel}, &data)
 	return data, err
 }
 
 func (s serverFiles) ReadText(root, rel string) (string, error) {
 	var text string
-	err := s.cl.Call("host", appmodel.HostRequest{Action: "read", Project: root, Path: rel}, &text)
+	err := s.cl.Call("host", svcproto.HostRequest{Action: "read", Project: root, Path: rel}, &text)
 	return text, err
 }
 
 func (s serverFiles) Diff(_ context.Context, root string, src worktree.DiffSource) (worktree.DiffSnapshot, error) {
 	var snap worktree.DiffSnapshot
-	err := s.cl.Call("host", appmodel.HostRequest{Action: "diff", Project: root, Source: src}, &snap)
+	err := s.cl.Call("host", svcproto.HostRequest{Action: "diff", Project: root, Source: src}, &snap)
 	return snap, err
 }
 
 func (s serverFiles) Sides(_ context.Context, root string, snap worktree.DiffSnapshot, f worktree.ChangedFile) (string, string, error) {
-	var sides appmodel.HostSides
-	err := s.cl.Call("host", appmodel.HostRequest{Action: "sides", Project: root, Snapshot: snap, File: f}, &sides)
+	var sides svcproto.HostSides
+	err := s.cl.Call("host", svcproto.HostRequest{Action: "sides", Project: root, Snapshot: snap, File: f}, &sides)
 	return sides.Old, sides.New, err
 }
 
 func (s serverFiles) Terminal(dir string) (io.ReadWriteCloser, error) {
-	return appmodel.OpenRemoteTerminal(s.cl, dir)
+	return svcproto.OpenTerminal(s.cl, dir)
 }

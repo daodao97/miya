@@ -1,16 +1,17 @@
 package desktopui
 
 import (
-	context "context"
-	fmt "fmt"
-	agentusage "miya/internal/agentusage"
-	appmodel "miya/internal/appmodel"
-	widgets "miya/internal/widgets"
-	strings "strings"
-	time "time"
+	"context"
+	"fmt"
+	"strings"
+	"time"
 
-	mygo "github.com/egoist/mygo"
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/ui"
+
+	"miya/internal/agentusage"
+	"miya/internal/svcproto"
+	"miya/internal/widgets"
 )
 
 func usageResetExpiryText(r *agentusage.ResetCredits) (string, string) {
@@ -160,7 +161,7 @@ func (a *App) consumeUsageReset() {
 	ctx, cancel := context.WithCancel(context.Background())
 	d.cancel = cancel
 	a.invalidateUsageViews()
-	var cl *appmodel.ServiceClient
+	var cl *svcproto.Client
 	if a.C.RemoteHost() {
 		cl = a.C.State().Remote
 	}
@@ -171,7 +172,7 @@ func (a *App) consumeUsageReset() {
 		if cl == nil {
 			result, err = agentusage.UseCodexReset(ctx, attempt)
 		} else {
-			err = cl.Call("host", appmodel.HostRequest{Action: "usage-reset", Reset: &attempt}, &result)
+			err = cl.Call("host", svcproto.HostRequest{Action: "usage-reset", Reset: &attempt}, &result)
 		}
 		mygo.RunOnMain(func() {
 			if d.closed {

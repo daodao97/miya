@@ -1,18 +1,21 @@
 package mobile
 
 import (
-	json "encoding/json"
-	fmt "fmt"
-	appmodel "miya/internal/appmodel"
-	codex "miya/internal/codex"
-	remote "miya/internal/remote"
-	textutil "miya/internal/textutil"
-	widgets "miya/internal/widgets"
-	slices "slices"
-	sort "sort"
-	strings "strings"
+	"encoding/json"
+	"fmt"
+	"slices"
+	"sort"
+	"strings"
 
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui"
+
+	"miya/internal/codex"
+	"miya/internal/mcpconfig"
+	"miya/internal/phone"
+	"miya/internal/phoneapi"
+	"miya/internal/remote"
+	"miya/internal/textutil"
+	"miya/internal/widgets"
 )
 
 func (m *App) FieldsFor(a codex.Approval) map[string]string {
@@ -46,7 +49,7 @@ func (m *App) submitApproval(a codex.Approval, result any, allow, remember bool)
 	m.ApprovalPending[id] = true
 	delete(m.FormErrors, id)
 	conn, gen := m.Conn, m.Generation
-	r := remote.Request{ApprovalVersion: appmodel.ApprovalFingerprint(a), Op: "respond", Approval: a.ID, Result: raw, Allow: allow, Remember: remember}
+	r := remote.Request{ApprovalVersion: phoneapi.ApprovalFingerprint(a), Op: "respond", Approval: a.ID, Result: raw, Allow: allow, Remember: remember}
 	go func() {
 		if err := conn.Send(r); err != nil {
 			m.onMain(gen, func() {
@@ -69,14 +72,14 @@ func (m *App) ApprovalAnswered(id json.RawMessage, message string) {
 	delete(m.FormErrors, key)
 	out := make([]codex.Approval, 0, len(m.State.Approvals))
 	for _, a := range m.State.Approvals {
-		if !appmodel.SameJSON(a.ID, id) {
+		if !phone.SameJSON(a.ID, id) {
 			out = append(out, a)
 		}
 	}
 	m.State.Approvals = out
 	m.Viewer.setApprovals(out)
 	m.CloseResolvedDesktopControl(out)
-	if m.Router().Path() == "/approval" && appmodel.SameJSON(m.approvalID, id) {
+	if m.Router().Path() == "/approval" && phone.SameJSON(m.approvalID, id) {
 		m.Router().Back()
 	}
 }
@@ -156,11 +159,11 @@ func inlineMCPConfirmation(a codex.Approval) bool {
 	if a.Method != "mcpServer/elicitation/request" || a.Mode != "" && a.Mode != "form" {
 		return false
 	}
-	var schema appmodel.PhoneFormSchema
+	var schema phoneapi.FormSchema
 	if json.Unmarshal(a.RequestedSchema, &schema) != nil || schema.Type != "object" || len(schema.Properties) != 0 {
 		return false
 	}
-	_, err := appmodel.ValidateMobileForm(a, nil)
+	_, err := phoneapi.ValidateMobileForm(a, nil)
 	return err == nil
 }
 
@@ -173,7 +176,7 @@ func (m *App) approvalPage(c *ui.Context) {
 	})
 	var approval *codex.Approval
 	for _, a := range m.State.Approvals {
-		if appmodel.SameJSON(a.ID, m.approvalID) {
+		if phone.SameJSON(a.ID, m.approvalID) {
 			copy := a
 			approval = &copy
 			break
@@ -279,7 +282,7 @@ func (m *App) elicitationFields(c *ui.Context, a codex.Approval) {
 		ui.Text(c, tr("Complete the action in your browser, then return here to confirm.")).FontSize(m.Font(13)).TextColor(p.muted)
 		ui.Link(c, a.URL, a.URL).FontSize(m.Font(14))
 	} else {
-		var schema appmodel.PhoneFormSchema
+		var schema phoneapi.FormSchema
 		_ = json.Unmarshal(a.RequestedSchema, &schema)
 		keys := make([]string, 0, len(schema.Properties))
 		for key := range schema.Properties {
@@ -330,14 +333,14 @@ func (m *App) elicitationActions(c *ui.Context, a codex.Approval) {
 	fields := m.FieldsFor(a)
 	pending := m.ApprovalPending[id]
 	label := tr("Confirm")
-	if appmodel.RememberableMCPAccess(a) {
+	if mcpconfig.RememberableMCPAccess(a) {
 		label = tr("Allow once")
 	}
 	ui.Row(c).FillWidth().Gap(10).Children(func() {
 		if m.ApprovalButton(c, "confirm", label, true, pending).Grow(1).Clicked() {
 			result := map[string]any{"action": "accept"}
 			if a.Mode != "url" {
-				content, err := appmodel.ValidateMobileForm(a, fields)
+				content, err := phoneapi.ValidateMobileForm(a, fields)
 				if err != nil {
 					m.FormErrors[id] = err.Error()
 					return
@@ -351,7 +354,7 @@ func (m *App) elicitationActions(c *ui.Context, a codex.Approval) {
 		}
 	})
 	ui.Row(c).FillWidth().Wrap().Gap(10).Children(func() {
-		if appmodel.RememberableMCPAccess(a) && m.ApprovalButton(c, "remember", tr("Always allow in this conversation"), false, pending).Clicked() {
+		if mcpconfig.RememberableMCPAccess(a) && m.ApprovalButton(c, "remember", tr("Always allow in this conversation"), false, pending).Clicked() {
 			m.submitApproval(a, nil, false, true)
 		}
 		if m.ApprovalButton(c, "cancel", tr("Cancel request"), false, pending).Clicked() {

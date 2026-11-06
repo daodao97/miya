@@ -1,18 +1,20 @@
 package controller
 
 import (
-	sha256 "crypto/sha256"
-	fmt "fmt"
-	log "log"
-	appmodel "miya/internal/appmodel"
-	codex "miya/internal/codex"
-	model "miya/internal/model"
-	notification "miya/internal/notification"
-	uiruntime "miya/internal/uiruntime"
-	strconv "strconv"
-	time "time"
+	"crypto/sha256"
+	"fmt"
+	"log"
+	"strconv"
+	"time"
 
-	mygo "github.com/egoist/mygo"
+	"github.com/egoist/mygo"
+
+	"miya/internal/codex"
+	"miya/internal/model"
+	"miya/internal/notification"
+	"miya/internal/prefs"
+	"miya/internal/svcproto"
+	"miya/internal/uiruntime"
 )
 
 func (c *Controller) InstallNotifications() {
@@ -61,7 +63,7 @@ func (c *Controller) installApprovalNotifications() {
 }
 
 func (c *Controller) deliverNotice(n notification.Notice, kind string) {
-	if appmodel.LoadSetting("notifications-"+kind) == "off" {
+	if prefs.Load("notifications-"+kind) == "off" {
 		return
 	}
 	if c.Push != nil {
@@ -107,7 +109,7 @@ func (c *Controller) deliverNotice(n notification.Notice, kind string) {
 	}
 }
 
-func (c *Controller) StartNotificationPresence(cl *appmodel.ServiceClient) <-chan struct{} {
+func (c *Controller) StartNotificationPresence(cl *svcproto.Client) <-chan struct{} {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)

@@ -1,16 +1,21 @@
 package controller
 
 import (
-	context "context"
-	errors "errors"
-	log "log"
-	appmodel "miya/internal/appmodel"
-	codex "miya/internal/codex"
-	uiruntime "miya/internal/uiruntime"
-	os "os"
-	filepath "path/filepath"
-	runtime "runtime"
-	time "time"
+	"context"
+	"errors"
+	"log"
+	"os"
+	"path/filepath"
+	"runtime"
+	"time"
+
+	"miya/internal/appmodel"
+	"miya/internal/codex"
+	"miya/internal/model"
+	"miya/internal/prefs"
+	"miya/internal/svcproto"
+	"miya/internal/uiruntime"
+	"miya/internal/workspaces"
 )
 
 // A window's controller mirrors the service: its signals hold the state the
@@ -20,7 +25,7 @@ import (
 type mirrorState struct {
 	RemoteHost  bool
 	projectBusy map[string]bool
-	Messages    map[int][]appmodel.Message
+	Messages    map[int][]model.Message
 	// Draft edits belong to this window, including explicit clears after a
 	// send. Older service snapshots must not replace them during navigation.
 	Drafts    map[int]string
@@ -29,24 +34,24 @@ type mirrorState struct {
 	setPolicy func(string)
 	SetLocale func(string)
 	// reconnect connects again after the service went away; nil does not.
-	Reconnect func() (*appmodel.ServiceClient, appmodel.SvcState, error)
+	Reconnect func() (*svcproto.Client, svcproto.State, error)
 	// phone is the service's phone connection, for the settings.
-	phone appmodel.PhoneStatus
+	phone svcproto.PhoneStatus
 }
 
 // Service-backed windows never run agents themselves when a connection fails.
 // Standalone operation is explicit, or used on platforms without the service.
 func NewWindowController() *Controller {
-	store, err := appmodel.LoadDesktopWorkspaces()
+	store, err := workspaces.Load()
 	if err != nil {
 		c := NewMirrorController()
-		c.Remote = appmodel.NewClosedServiceClient()
+		c.Remote = svcproto.NewClosedClient()
 		c.SetStatus(err.Error())
 		uiruntime.OnCleanup(func() { c.Cancel(); c.Remote.Close() })
 		return c
 	}
 	if link := store.Current().Link; link != "" {
-		c := NewServiceWindow("", func() (*appmodel.ServiceClient, appmodel.SvcState, error) { return appmodel.ConnectRemoteService(link) })
+		c := NewServiceWindow("", func() (*svcproto.Client, svcproto.State, error) { return workspaces.ConnectRemoteService(link) })
 		c.Mirror.RemoteHost = true
 		uiruntime.OnCleanup(func() { c.Cancel(); c.Remote.Close() })
 		return c
@@ -64,11 +69,11 @@ func localWindowWorkspace() (workspace, explicit string) {
 	return
 }
 
-func LocalWindowConnection() (*appmodel.ServiceClient, appmodel.SvcState, error) {
+func LocalWindowConnection() (*svcproto.Client, svcproto.State, error) {
 	workspace, explicit := localWindowWorkspace()
 	cl, st, err := connectService(workspace)
 	if err == nil && explicit != "" && st.Cwd != workspace {
-		var result appmodel.SvcWorkspace
+		var result svcproto.WorkspaceResult
 		if err = cl.Call("workspace", workspace, &result); err == nil && result.Error != "" {
 			err = errors.New(result.Error)
 		}
@@ -92,7 +97,7 @@ func NewLocalWindowController() *Controller {
 	return newChatController()
 }
 
-func NewServiceWindow(workspace string, connect func() (*appmodel.ServiceClient, appmodel.SvcState, error)) *Controller {
+func NewServiceWindow(workspace string, connect func() (*svcproto.Client, svcproto.State, error)) *Controller {
 	c := NewMirrorController()
 	c.Cwd = workspace
 	c.Mirror.Reconnect = connect
@@ -104,19 +109,19 @@ func NewServiceWindow(workspace string, connect func() (*appmodel.ServiceClient,
 	log.Printf("miya: waiting for background service: %v", err)
 	// A closed transport keeps every action on the remote path. A nil remote
 	// would make a mirror fall through to the local agent implementations.
-	c.Remote = appmodel.NewClosedServiceClient()
+	c.Remote = svcproto.NewClosedClient()
 	c.SetStatus("Waiting for background service: " + err.Error())
 	c.watchService(c.Remote)
 	return c
 }
 
 func NewMirrorController() *Controller {
-	c := &Controller{WindowState: appmodel.WindowState{ProjectCache: map[string][]appmodel.Thread{}}, Mirror: &mirrorState{Messages: map[int][]appmodel.Message{}, Drafts: map[int]string{}}}
+	c := &Controller{WindowState: appmodel.WindowState{ProjectCache: map[string][]model.Thread{}}, Mirror: &mirrorState{Messages: map[int][]model.Message{}, Drafts: map[int]string{}}}
 	c.Ctx, c.Cancel = context.WithCancel(context.Background())
 	c.Agent, c.SetAgent = uiruntime.CreateSignal(AgentBackends[0].ID())
 	c.DraftPermission, c.SetDraftPermission = uiruntime.CreateSignal("")
-	c.Projects, c.SetProjects = uiruntime.CreateSignal([]appmodel.Project{})
-	c.Threads, c.SetThreads = uiruntime.CreateSignal([]appmodel.Thread{})
+	c.Projects, c.SetProjects = uiruntime.CreateSignal([]model.Project{})
+	c.Threads, c.SetThreads = uiruntime.CreateSignal([]model.Thread{})
 	c.InstallNotifications()
 	c.Active, c.Mirror.setActive = uiruntime.CreateSignal(0)
 	c.SetActive = func(id int) {
@@ -131,17 +136,17 @@ func NewMirrorController() *Controller {
 	c.SetEffort = func(v string) { c.Mirror.setEffort(v); c.forward("effort", v) }
 	c.PermissionPolicy, c.Mirror.setPolicy = uiruntime.CreateSignal("on-request")
 	c.SetPermissionPolicy = func(v string) {
-		v = appmodel.NormalizePermissionPolicy(v)
+		v = prefs.NormalizePermissionPolicy(v)
 		c.Mirror.setPolicy(v)
 		c.forward("policy", v)
 	}
 	locale, setLocale := uiruntime.CreateSignal("en")
 	c.Locale = locale
 	c.Mirror.SetLocale = func(v string) {
-		v = appmodel.NormalizeLocale(v)
+		v = prefs.NormalizeLocale(v)
 		setLocale(v)
 	}
-	c.SetLocale = func(v string) { c.Mirror.SetLocale(v); c.forward("locale", appmodel.NormalizeLocale(v)) }
+	c.SetLocale = func(v string) { c.Mirror.SetLocale(v); c.forward("locale", prefs.NormalizeLocale(v)) }
 	c.Models, c.SetModels = uiruntime.CreateSignal([]codex.Model{})
 	c.Attachments, c.SetAttachments = uiruntime.CreateSignal([]string{})
 	c.Status, c.SetStatus = uiruntime.CreateSignal("")
@@ -157,16 +162,16 @@ func NewMirrorController() *Controller {
 func (c *Controller) forward(op string, args any) { c.Remote.Notify(op, args) }
 
 // attachService starts mirroring a connected service.
-func (c *Controller) AttachService(cl *appmodel.ServiceClient, st appmodel.SvcState) {
+func (c *Controller) AttachService(cl *svcproto.Client, st svcproto.State) {
 	c.Remote = cl
 	c.DesktopReadPending = nil
-	c.Mirror.Messages = map[int][]appmodel.Message{}
+	c.Mirror.Messages = map[int][]model.Message{}
 	c.ApplyState(st)
 	// While a conversation streams the service pushes every few tens of
 	// milliseconds; events that arrive before the main thread runs are
 	// applied together, in one dispatch.
-	inbox := &appmodel.ServiceInbox{}
-	cl.SetEvents(func(m appmodel.SvcMessage) {
+	inbox := &svcproto.Inbox{}
+	cl.SetEvents(func(m svcproto.Envelope) {
 		if inbox.Push(m) {
 			c.Dispatch(func() {
 				for _, m := range inbox.Take() {
@@ -180,7 +185,7 @@ func (c *Controller) AttachService(cl *appmodel.ServiceClient, st appmodel.SvcSt
 	c.StartNotificationPresence(cl)
 }
 
-func (c *Controller) serviceEvent(cl *appmodel.ServiceClient, m appmodel.SvcMessage) {
+func (c *Controller) serviceEvent(cl *svcproto.Client, m svcproto.Envelope) {
 	if c.Remote != cl {
 		return
 	}
@@ -196,7 +201,7 @@ func (c *Controller) serviceEvent(cl *appmodel.ServiceClient, m appmodel.SvcMess
 
 // watchService reconnects after the service went away, as when it was
 // replaced by a newer build; conversations it ran keep their state there.
-func (c *Controller) watchService(cl *appmodel.ServiceClient) {
+func (c *Controller) watchService(cl *svcproto.Client) {
 	reconnect := c.Mirror.Reconnect
 	if reconnect == nil {
 		return
@@ -237,7 +242,7 @@ func (c *Controller) watchService(cl *appmodel.ServiceClient) {
 	}()
 }
 
-func (c *Controller) ApplyState(s appmodel.SvcState) {
+func (c *Controller) ApplyState(s svcproto.State) {
 	active := c.Active()
 	hadActive := c.ThreadWithID(active).ID != 0
 	c.CollaborationRemote = s.Collaboration
@@ -253,7 +258,7 @@ func (c *Controller) ApplyState(s appmodel.SvcState) {
 		}
 	}
 	c.Mirror.projectBusy = s.ProjectBusy
-	threads := append([]appmodel.Thread(nil), s.Threads...)
+	threads := append([]model.Thread(nil), s.Threads...)
 	for i := range threads {
 		if draft, ok := c.Mirror.Drafts[threads[i].ID]; ok {
 			threads[i].Draft = draft
@@ -297,13 +302,13 @@ func (c *Controller) ApplyState(s appmodel.SvcState) {
 	// itself. Bumping here regrouped the open conversation at every push.
 }
 
-func (c *Controller) applyMessages(m appmodel.SvcMessages) {
+func (c *Controller) applyMessages(m svcproto.ThreadMessages) {
 	if m.Thread != c.Active() {
 		return // for a conversation the window has left
 	}
-	known := map[int]appmodel.Message{}
+	known := map[int]model.Message{}
 	if m.Reset {
-		c.Mirror.Messages = map[int][]appmodel.Message{}
+		c.Mirror.Messages = map[int][]model.Message{}
 	} else {
 		for _, x := range c.Mirror.Messages[m.Thread] {
 			known[x.ID] = x
@@ -312,14 +317,14 @@ func (c *Controller) applyMessages(m appmodel.SvcMessages) {
 	for _, x := range m.Changed {
 		known[x.ID] = x
 	}
-	list := make([]appmodel.Message, 0, len(m.Order))
+	list := make([]model.Message, 0, len(m.Order))
 	for _, id := range m.Order {
 		if x, ok := known[id]; ok {
 			list = append(list, x)
 		}
 	}
 	c.Mirror.Messages[m.Thread] = list
-	items := append([]appmodel.Thread(nil), c.Threads()...)
+	items := append([]model.Thread(nil), c.Threads()...)
 	for i := range items {
 		if items[i].ID == m.Thread {
 			items[i].Messages = list
@@ -330,7 +335,7 @@ func (c *Controller) applyMessages(m appmodel.SvcMessages) {
 }
 
 func (c *Controller) remoteWorkspace(path string) error {
-	var res appmodel.SvcWorkspace
+	var res svcproto.WorkspaceResult
 	if err := c.Remote.Call("workspace", path, &res); err != nil {
 		return err
 	}
@@ -338,7 +343,7 @@ func (c *Controller) remoteWorkspace(path string) error {
 		return errors.New(res.Error)
 	}
 	c.Cwd = res.Cwd
-	c.Mirror.Messages = map[int][]appmodel.Message{}
+	c.Mirror.Messages = map[int][]model.Message{}
 	c.SetActive(0)
 	c.SetDraft("")
 	return nil
@@ -357,12 +362,12 @@ func (c *Controller) MirroredHistory(id int) bool {
 // phoneControls are the phone connection the settings show and the action
 // that changes it: this Mac's bridge, or a remote server's through its
 // service. ok is false where neither applies.
-func (c *Controller) PhoneControls() (st appmodel.PhoneStatus, act func(string), ok bool) {
+func (c *Controller) PhoneControls() (st svcproto.PhoneStatus, act func(string), ok bool) {
 	switch {
 	case DesktopPhone != nil && !c.RemoteHost():
 		return DesktopPhone.Status(), DesktopPhone.Do, true
 	case c.Remote != nil && c.Mirror != nil:
 		return c.Mirror.phone, func(a string) { c.forward("phone", a) }, true
 	}
-	return appmodel.PhoneStatus{}, nil, false
+	return svcproto.PhoneStatus{}, nil, false
 }

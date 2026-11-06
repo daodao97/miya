@@ -1,13 +1,15 @@
 package widgets
 
 import (
-	json "encoding/json"
-	fmt "fmt"
-	appmodel "miya/internal/appmodel"
-	claude "miya/internal/claude"
+	"encoding/json"
+	"fmt"
+	"strings"
+	"time"
+
+	"miya/internal/appmodel"
+	"miya/internal/claude"
 	dg "miya/internal/delegation"
-	strings "strings"
-	time "time"
+	"miya/internal/model"
 )
 
 type CollaborationTaskView struct {
@@ -87,7 +89,7 @@ func (u *CollaborationUI) Pane(from string) *CollaborationPanel {
 
 func CollaborationArgsJSON(v any) json.RawMessage { data, _ := json.Marshal(v); return data }
 
-func (p *CollaborationPanel) Refresh(cap *appmodel.CollaborationStatus, call collaborationCall, more bool) {
+func (p *CollaborationPanel) Refresh(cap *model.CollaborationStatus, call collaborationCall, more bool) {
 	if p.From == "" || p.loading {
 		return
 	}

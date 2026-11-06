@@ -1,12 +1,13 @@
 package mobile
 
 import (
-	context "context"
-	control "miya/internal/desktop/control"
-	widgets "miya/internal/widgets"
-	time "time"
+	"context"
+	"time"
 
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui"
+
+	"miya/internal/desktop/control"
+	"miya/internal/widgets"
 )
 
 type mobileDesktopPrivacy struct {

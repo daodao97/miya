@@ -1,11 +1,11 @@
 package mobile
 
 import (
-	runtime "runtime"
-	time "time"
+	"runtime"
+	"time"
 
-	mygo "github.com/egoist/mygo"
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/ui"
 )
 
 func (m *App) Font(size float32) float32 {

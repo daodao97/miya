@@ -37,4 +37,4 @@ Loop 仍遵循 Claude 的会话生命周期和过期规则。服务退出或进�
 
 ## 验证
 
-常规 `go test ./...` 包含原生 RPC、调度跨轮存活、普通消息复用、取消结果、后台项目路由、手机任务元数据增量和桌面/手机布局测试。可用 `MIYA_TASK_SNAPSHOT=/tmp/miya-tasks go test -run TestTaskBarDesktopAndMobile` 导出渲染快照。
+常规 `go test ./...` 包含原生 RPC、调度跨轮存活、普通消息复用、取消结果、后台项目路由、手机任务元数据增量和桌面/手机布局测试。可用 `MIYA_TASK_SNAPSHOT=/tmp/miya-tasks go test ./tests/integration -run TestTaskBarDesktopAndMobile` 导出渲染快照。

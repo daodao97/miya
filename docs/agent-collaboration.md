@@ -1,4 +1,6 @@
 Title: 让不同 Agent 在独立会话中并行执行任务并向发起会话回传结果
+
+当前跨模块测试入口为 `go test ./tests/integration`；下文历史验收记录保留当时的根包命令。界面包边界见 [桌面、手机与控制器边界](ui-boundaries.md)。
 Author(s): Miya maintainers / Codex
 Last updated: 2026-11-05
 Discussion: 跨 Agent 协作设计；现有引用行为见 [会话引用](thread-references.md)，实施与验收见本文 Implementation
@@ -18,9 +20,9 @@ Status: Draft
 
 ### Miya 已经能够委派任务
 
-现有 [agentBackend](../agent.go) 提供 Agent 注册、创建、发送、停止和恢复操作。[internal/mcpserver](../internal/mcpserver/mcpserver.go) 暴露 `list_threads`、`read_thread`、`thread_status` 和 `delegate`；[mcp_host.go](../mcp_host.go) 在后台调用 `submit`，向新会话或已有会话发送任务。[handoff.go](../handoff.go) 在发起方显示交接活动并跟踪目标进度。
+现有 [agentBackend](../internal/controller/agent.go) 提供 Agent 注册、创建、发送、停止和恢复操作。[internal/mcpserver](../internal/mcpserver/mcpserver.go) 暴露 `list_threads`、`read_thread`、`thread_status` 和 `delegate`；[mcp_host.go](../internal/controller/mcp_host.go) 在后台调用 `submit`，向新会话或已有会话发送任务。[handoff.go](../internal/controller/handoff.go) 在发起方显示交接活动并跟踪目标进度。
 
-[后台服务](../internal/svcproto/svcproto.go) 持有 Codex app-server、Claude 执行进程和项目会话，窗口只镜像状态。现有架构已经支持多个会话执行，无需另建进程管理器。[ThreadRef](../thread_reference.go) 还提供来源、后端、原生会话 ID 组成的稳定身份。
+[后台服务](../internal/svcproto/svcproto.go) 持有 Codex app-server、Claude 执行进程和项目会话，窗口只镜像状态。现有架构已经支持多个会话执行，无需另建进程管理器。[ThreadRef](../internal/model/ref.go) 还提供来源、后端、原生会话 ID 组成的稳定身份。
 
 ### 改造前的记录混用了会话身份和任务边界
 
@@ -30,7 +32,7 @@ Status: Draft
 
 `handoffs` 和 `delegationParent` 保存在 controller 内存并使用本地数字编号，不能承担跨重启的任务关系。`delegate` 默认等待 300 秒；主 Agent 顺序调用多个委派时，前一个等待会推迟后续任务启动。
 
-另一个约束来自 [queue.go](../queue.go)：普通排队消息会合并为下一轮输入。两个需要分别验收的委派不能被这种合并改变执行边界。
+另一个约束来自 [queue.go](../internal/controller/queue.go)：普通排队消息会合并为下一轮输入。两个需要分别验收的委派不能被这种合并改变执行边界。
 
 ## Design / 设计
 
@@ -73,7 +75,7 @@ flowchart TD
 
 `delegationManager` 管理任务、去重、调度、结果、通知和恢复，不解析具体 Agent 的原生报文。具体启动、恢复、取消和事件解释仍放在各 Agent 适配代码。
 
-会话检查、目标预留与原生状态投影由现有后台 executor 串行处理；任务状态事务和文件写入由独立的协作 worker 按序完成。两者通过不可变请求、快照和完成回调交接，不共享可变 map。后台 executor 不同步等待协作 worker，worker 等待 executor 回调时也不能持有后者需要的锁。原生 RPC 与有界等待不阻塞这两个串行队列，复用 [service.request](../service_server.go) 已有的 `deferred` 模式，保持手机心跳、审批和停止可用。
+会话检查、目标预留与原生状态投影由现有后台 executor 串行处理；任务状态事务和文件写入由独立的协作 worker 按序完成。两者通过不可变请求、快照和完成回调交接，不共享可变 map。后台 executor 不同步等待协作 worker，worker 等待 executor 回调时也不能持有后者需要的锁。原生 RPC 与有界等待不阻塞这两个串行队列，复用 [service.request](../internal/controller/service_server.go) 已有的 `deferred` 模式，保持手机心跳、审批和停止可用。
 
 ### 会话身份和任务身份分别记录
 
@@ -184,7 +186,7 @@ type DelegationTask struct {
 
 共享 Codex app-server 的工作目录和 MCP 进程身份不能唯一确定调用会话。新协作入口不使用 `mcpCaller()` 的时间排序，也不把模型填写的会话 ID 当作调用凭证。
 
-第一阶段从 [mcpCallerWithArguments](../mcp_host.go) 抽取通用的严格匹配逻辑：
+第一阶段从 [mcpCallerWithArguments](../internal/controller/mcp_host.go) 抽取通用的严格匹配逻辑：
 
 1. MCP 桥接进程保留原始工具参数，服务端严格解析并拒绝未知字段。
 2. 后台按工具名称及完整参数匹配已收到的原生工具调用记录。
@@ -598,14 +600,14 @@ P0 与 P1 可以在同一开发阶段完成。只有单独交付 P0 时，才允
 
 ## Appendix / 实现依据
 
-- [agent.go](../agent.go)：Agent 注册、sendRequest、submit 与 submitExpanded。
+- [agent.go](../internal/controller/agent.go)：Agent 注册、sendRequest、submit 与 submitExpanded。
 - [internal/mcpserver](../internal/mcpserver/mcpserver.go)：既有工具定义、默认等待和 MCP 到服务的桥接。
-- [mcp_host.go](../mcp_host.go)：调用方推断、delegate、现有嵌套限制。
-- [mcp_host.go](../mcp_host.go)：按原生工具名称和完整参数识别调用方。
-- [handoff.go](../handoff.go)：上下文摘要、内存 handoff 和会话最新轮次状态。
-- [chat_events.go](../chat_events.go)、[chat_claude.go](../chat_claude.go)：原生轮次、消息与进程生命周期。
-- [queue.go](../queue.go)：普通排队消息合并与 Stop 后暂停。
-- [service_server.go](../service_server.go)、[internal/svcproto/client.go](../internal/svcproto/client.go)：executor、deferred、busy 与调用超时。
+- [mcp_host.go](../internal/controller/mcp_host.go)：调用方推断、delegate、现有嵌套限制。
+- [mcp_host.go](../internal/controller/mcp_host.go)：按原生工具名称和完整参数识别调用方。
+- [handoff.go](../internal/controller/handoff.go)：上下文摘要、内存 handoff 和会话最新轮次状态。
+- [chat_events.go](../internal/controller/chat_events.go)、[chat_claude.go](../internal/controller/chat_claude.go)：原生轮次、消息与进程生命周期。
+- [queue.go](../internal/controller/queue.go)：普通排队消息合并与 Stop 后暂停。
+- [service_server.go](../internal/controller/service_server.go)、[internal/svcproto/client.go](../internal/svcproto/client.go)：executor、deferred、busy 与调用超时。
 - [会话引用](thread-references.md)、[原生任务](native-tasks.md)、[会话运行态](conversation-runtime.md)、[服务器版](server.md)：稳定身份、原生长期执行与远程归属约定。
 - codex-host 参考实现：`harness-delegation-coordinator.ts` 的独立会话创建、`delegation-snapshot.ts` 的执行结果投影、`delegation-watch.ts` 的一次性通知。Miya 复用其任务与通知分离的思路，具体传输与生命周期沿用本项目现有后台架构。
 

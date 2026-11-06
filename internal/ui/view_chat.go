@@ -1,9 +1,9 @@
 package desktopui
 
 import (
-	widgets "miya/internal/widgets"
+	"github.com/egoist/mygo/ui"
 
-	ui "github.com/egoist/mygo/ui"
+	"miya/internal/widgets"
 )
 
 func (app *App) chatView(c *ui.Context) {

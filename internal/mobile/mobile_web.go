@@ -1,15 +1,16 @@
 package mobile
 
 import (
-	phoneproxy "miya/internal/phoneproxy"
-	textutil "miya/internal/textutil"
-	webservice "miya/internal/webservice"
-	widgets "miya/internal/widgets"
-	strings "strings"
-	time "time"
+	"strings"
+	"time"
 
-	mygo "github.com/egoist/mygo"
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/ui"
+
+	"miya/internal/phoneproxy"
+	"miya/internal/textutil"
+	"miya/internal/webservice"
+	"miya/internal/widgets"
 )
 
 func (m *App) openWebPort(port int) {

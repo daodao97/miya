@@ -1,17 +1,17 @@
 package desktopui
 
 import (
-	fmt "fmt"
-	math "math"
-	agentusage "miya/internal/agentusage"
-	appmodel "miya/internal/appmodel"
-	uiruntime "miya/internal/uiruntime"
-	widgets "miya/internal/widgets"
-	runtime "runtime"
-	time "time"
+	"fmt"
+	"math"
+	"runtime"
+	"time"
 
-	mygo "github.com/egoist/mygo"
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/ui"
+
+	"miya/internal/agentusage"
+	"miya/internal/uiruntime"
+	"miya/internal/widgets"
 )
 
 const UsagePanelWidth, UsagePanelHeader, UsagePanelFooter = 320, 54, 44
@@ -66,7 +66,7 @@ func (app *App) toggleUsagePanel() {
 	}
 	if d.PanelAgent == "" {
 		d.PanelAgent = d.Prefs.Agent
-		if r := appmodel.SelectedUsage(d.Readings, d.Prefs.Agent); r != nil {
+		if r := agentusage.SelectedUsage(d.Readings, d.Prefs.Agent); r != nil {
 			d.PanelAgent = r.Agent
 		}
 		if d.PanelAgent == "" {
@@ -161,7 +161,7 @@ func (app *App) UsagePanelView(c *ui.Context) {
 			tabs := ui.TabsBase(c, &selected, 2)
 			tabs.List.Gap(4).Children(func() {
 				for i, agent := range agents {
-					tab := tabs.Tab(i).Height(30).Padding(0, 10).Gap(6).Radius(6).AlignItems(ui.Center).Label(tr("View ") + appmodel.UsageAgentName(agent) + tr(" usage"))
+					tab := tabs.Tab(i).Height(30).Padding(0, 10).Gap(6).Radius(6).AlignItems(ui.Center).Label(tr("View ") + agentusage.AgentName(agent) + tr(" usage"))
 					color := t.TextMuted
 					if i == selected {
 						tab.Background(t.SurfaceHover)
@@ -175,7 +175,7 @@ func (app *App) UsagePanelView(c *ui.Context) {
 							glyph = "claude-code"
 						}
 						widgets.Icon(c, glyph, 14, color)
-						ui.Text(c, appmodel.UsageAgentName(agent)).FontSize(12).FontWeight(500).TextColor(color)
+						ui.Text(c, agentusage.AgentName(agent)).FontSize(12).FontWeight(500).TextColor(color)
 					})
 				}
 			})
@@ -219,13 +219,13 @@ func (app *App) UsagePanelView(c *ui.Context) {
 
 func usagePanelWindow(c *ui.Context, w agentusage.Window, p widgets.DesktopPalette) {
 	color := p.Ink
-	if appmodel.RemainingUsage(w.Used) <= 20 {
+	if agentusage.RemainingUsage(w.Used) <= 20 {
 		color = p.WarnInk
 	}
-	if appmodel.RemainingUsage(w.Used) == 0 {
+	if agentusage.RemainingUsage(w.Used) == 0 {
 		color = p.Danger
 	}
-	elapsed, timed := appmodel.UsageTimeProgress(w, c.Now())
+	elapsed, timed := agentusage.TimeProgress(w, c.Now())
 	used := agentusage.Percent(w.Used)
 	ui.Column(c).FillWidth().Gap(6).Children(func() {
 		ui.Row(c).FillWidth().Height(30).Gap(6).AlignItems(ui.Center).Children(func() {
@@ -274,7 +274,7 @@ func usagePanelEmpty(c *ui.Context, r agentusage.Reading, busy bool) {
 		title, message = tr("Failed to load"), r.Error
 	}
 	if busy {
-		title, message = tr("Loading"), tr("Checking ")+appmodel.UsageAgentName(r.Agent)+tr(" account.")
+		title, message = tr("Loading"), tr("Checking ")+agentusage.AgentName(r.Agent)+tr(" account.")
 	}
 	ui.Column(c).FillWidth().Gap(8).Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {

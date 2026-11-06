@@ -1,12 +1,13 @@
 package desktopui
 
 import (
-	fmt "fmt"
-	math "math"
-	widgets "miya/internal/widgets"
+	"fmt"
+	"math"
 
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui"
 	qrcode "github.com/skip2/go-qrcode"
+
+	"miya/internal/widgets"
 )
 
 // phoneSettings shows the QR code a phone scans to watch this desktop. With

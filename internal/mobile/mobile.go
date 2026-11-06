@@ -1,33 +1,41 @@
 package mobile
 
 import (
-	context "context"
-	rand "crypto/rand"
-	json "encoding/json"
-	errors "errors"
-	fmt "fmt"
-	log "log"
-	appmodel "miya/internal/appmodel"
-	codex "miya/internal/codex"
-	conversation "miya/internal/conversation"
-	control "miya/internal/desktop/control"
-	manager "miya/internal/memory/manager"
-	model "miya/internal/model"
-	notification "miya/internal/notification"
-	phoneproxy "miya/internal/phoneproxy"
-	remote "miya/internal/remote"
-	textutil "miya/internal/textutil"
-	thumbnail "miya/internal/thumbnail"
-	uiruntime "miya/internal/uiruntime"
-	widgets "miya/internal/widgets"
-	os "os"
-	filepath "path/filepath"
-	strings "strings"
-	time "time"
+	"context"
+	"crypto/rand"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
 
-	mygo "github.com/egoist/mygo"
-	ui "github.com/egoist/mygo/ui"
-	markdown "github.com/egoist/mygo/ui/markdown"
+	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/markdown"
+
+	"miya/internal/appmodel"
+	"miya/internal/codex"
+	"miya/internal/composer"
+	"miya/internal/conversation"
+	"miya/internal/desktop/control"
+	"miya/internal/memory/manager"
+	"miya/internal/model"
+	"miya/internal/msgfmt"
+	"miya/internal/notification"
+	"miya/internal/phone"
+	"miya/internal/phoneapi"
+	"miya/internal/phonecache"
+	"miya/internal/phoneproxy"
+	"miya/internal/prefs"
+	"miya/internal/remote"
+	"miya/internal/svcproto"
+	"miya/internal/textutil"
+	"miya/internal/thumbnail"
+	"miya/internal/uiruntime"
+	"miya/internal/widgets"
 )
 
 // The phone shows one desktop's projects and conversations, sends messages
@@ -47,7 +55,7 @@ type App struct {
 	// a reopen sends first, so the Mac revokes them before the new open.
 	DesktopClosing               []string
 	WebPort                      string
-	WebRef                       appmodel.ThreadRef
+	WebRef                       model.ThreadRef
 	WebDetails                   bool
 	WebProject                   string
 	WebManual                    bool
@@ -70,9 +78,9 @@ type App struct {
 	pushOpen                     int
 	win                          *mygo.Window
 	DesktopAuthenticate          func(context.Context) error
-	Store                        appmodel.MobileSecretStore
+	Store                        phonecache.SecretStore
 	Desktops                     MobileDesktops
-	desktopSessions              map[string]appmodel.MobileDesktopSession
+	desktopSessions              map[string]phonecache.Session
 	DesktopWrites                desktopPersistence
 	desktopError                 string
 	DesktopNotice                string
@@ -93,7 +101,7 @@ type App struct {
 
 	Loaded             bool
 	Link, Host         string
-	State              appmodel.PhoneState
+	State              phoneapi.State
 	Memories           MobileMemory
 	Autos              mobileAutomations
 	Collaborations     widgets.CollaborationUI
@@ -142,10 +150,10 @@ type App struct {
 	PreviewRetries map[string]int
 	// commands are Claude Code\'s slash commands, by project; asked
 	// marks those requested on this connection.
-	Commands map[string][]appmodel.ComposerChoice
+	Commands map[string][]model.ComposerChoice
 	// msgCache keeps conversations\' messages by ServerID, most recent
 	// last in msgKeys, so reopening one sends only what changed.
-	MsgCache map[string][]appmodel.Message
+	MsgCache map[string][]model.Message
 	msgKeys  []string
 	// dataDir is the app\'s user data; cacheDir the current desktop\'s
 	// conversations on disk, and dirty what is yet to be written there.
@@ -232,7 +240,7 @@ func NewMobileApp() *App {
 		r.MessageID = req.MessageID
 		m.sendPhoneAction(r)
 	}
-	m.View.ReferenceThread = func(ref appmodel.ThreadRef) (appmodel.Thread, bool) {
+	m.View.ReferenceThread = func(ref model.ThreadRef) (model.Thread, bool) {
 		t, _, ok := m.referencedThread(ref)
 		return t, ok
 	}
@@ -244,7 +252,7 @@ func mobileMain() {
 	widgets.ConfigureInterfaceLanguage()
 	m := NewMobileApp()
 	m.Store = mygo.Secrets
-	m.PushDisabled = appmodel.LoadSetting("phone-notifications") == "off"
+	m.PushDisabled = prefs.Load("phone-notifications") == "off"
 	mygo.App.OnOpenURL(func(raw string) {
 		uiruntime.RunOnMain(func() {
 			if _, err := remote.ParseLink(raw); err == nil {
@@ -318,7 +326,7 @@ func (m *App) loadSaved() {
 	saved, migrated, desktopErr := ReadMobileDesktops(m.Store)
 	if migrated {
 		if item, ok := saved.find(saved.Active); ok {
-			appmodel.MigrateDesktopOptions(dataDir, item.Link)
+			phonecache.MigrateOptions(dataDir, item.Link)
 		}
 	}
 	uiruntime.RunOnMain(func() {
@@ -617,7 +625,7 @@ func (m *App) read(gen int, conn *remote.Conn) (greeted bool, err error) {
 				}
 			})
 		case "responded":
-			var result appmodel.PhoneApprovalReply
+			var result phoneapi.ApprovalReply
 			if json.Unmarshal(f.Data, &result) == nil {
 				message := f.Error
 				m.onMain(gen, func() { m.ApprovalAnswered(result.ID, message) })
@@ -631,14 +639,14 @@ func (m *App) read(gen int, conn *remote.Conn) (greeted bool, err error) {
 			message := f.Error
 			m.onMain(gen, func() { m.pushError = message; m.readPending = nil; m.markOpenRead() })
 		case "state":
-			var s appmodel.PhoneState
+			var s phoneapi.State
 			if json.Unmarshal(f.Data, &s) == nil {
 				m.onMain(gen, func() {
 					m.ApplyPhoneState(s)
 				})
 			}
 		case "thread":
-			var d appmodel.PhoneThreadDelta
+			var d phoneapi.ThreadDelta
 			if json.Unmarshal(f.Data, &d) == nil {
 				id := f.Thread
 				m.onMain(gen, func() {
@@ -672,14 +680,14 @@ func (m *App) read(gen int, conn *remote.Conn) (greeted bool, err error) {
 				}
 			}
 		case "commands":
-			var pc appmodel.PhoneCommands
+			var pc phoneapi.Commands
 			if json.Unmarshal(f.Data, &pc) == nil {
 				m.onMain(gen, func() {
 					if m.Commands == nil {
-						m.Commands = map[string][]appmodel.ComposerChoice{}
+						m.Commands = map[string][]model.ComposerChoice{}
 					}
 					if pc.Commands == nil {
-						pc.Commands = []appmodel.ComposerChoice{}
+						pc.Commands = []model.ComposerChoice{}
 					}
 					m.Commands[pc.Project] = pc.Commands
 				})
@@ -693,7 +701,7 @@ func (m *App) read(gen int, conn *remote.Conn) (greeted bool, err error) {
 
 // The desktop may renumber threads after a restart or while repairing an old
 // cache. Rebind the open page by durable identity before handling its deltas.
-func (m *App) ApplyPhoneState(s appmodel.PhoneState) {
+func (m *App) ApplyPhoneState(s phoneapi.State) {
 	m.CloseResolvedDesktopControl(s.Approvals)
 	if m.State.MemoryRevision != s.MemoryRevision {
 		m.Memories.List = manager.List{}
@@ -702,7 +710,7 @@ func (m *App) ApplyPhoneState(s appmodel.PhoneState) {
 	for _, old := range m.State.Approvals {
 		same := false
 		for _, next := range s.Approvals {
-			if appmodel.SameJSON(old.ID, next.ID) && appmodel.ApprovalFingerprint(old) == appmodel.ApprovalFingerprint(next) {
+			if phone.SameJSON(old.ID, next.ID) && phoneapi.ApprovalFingerprint(old) == phoneapi.ApprovalFingerprint(next) {
 				same = true
 				break
 			}
@@ -754,7 +762,7 @@ func (m *App) ApplyPhoneState(s appmodel.PhoneState) {
 	m.PersistState()
 }
 
-func (m *App) ReceiveThread(id int, d appmodel.PhoneThreadDelta) {
+func (m *App) ReceiveThread(id int, d phoneapi.ThreadDelta) {
 	if m.Open != id {
 		return
 	}
@@ -783,13 +791,13 @@ func (m *App) ReceiveThread(id int, d appmodel.PhoneThreadDelta) {
 	}
 }
 
-func (m *App) ShowThread(t appmodel.Thread) {
+func (m *App) ShowThread(t model.Thread) {
 	m.updateThreadView(t, true)
 }
 
-func (m *App) updateThreadView(t appmodel.Thread, messagesChanged bool) {
+func (m *App) updateThreadView(t model.Thread, messagesChanged bool) {
 	v := m.Viewer
-	v.SetThreads([]appmodel.Thread{t})
+	v.SetThreads([]model.Thread{t})
 	v.SetActive(t.ID)
 	if messagesChanged {
 		v.setRevision(v.Revision() + 1)
@@ -809,7 +817,7 @@ func (m *App) Subscribe(id int) {
 }
 
 // find looks a conversation up in the desktop's state.
-func (m *App) find(id int) (appmodel.Thread, appmodel.PhoneProject) {
+func (m *App) find(id int) (model.Thread, phoneapi.Project) {
 	for _, p := range m.State.Projects {
 		for _, t := range p.Threads {
 			if t.ID == id {
@@ -817,21 +825,21 @@ func (m *App) find(id int) (appmodel.Thread, appmodel.PhoneProject) {
 			}
 		}
 	}
-	return appmodel.Thread{}, appmodel.PhoneProject{}
+	return model.Thread{}, phoneapi.Project{}
 }
 
-func (m *App) project(path string) appmodel.PhoneProject {
+func (m *App) project(path string) phoneapi.Project {
 	for _, p := range m.State.Projects {
 		if p.Path == path {
 			return p
 		}
 	}
-	return appmodel.PhoneProject{Path: path, Name: filepath.Base(path)}
+	return phoneapi.Project{Path: path, Name: filepath.Base(path)}
 }
 
 // currentProject is the desktop's open project, where a new conversation
 // starts.
-func (m *App) currentProject() appmodel.PhoneProject {
+func (m *App) currentProject() phoneapi.Project {
 	for _, p := range m.State.Projects {
 		if p.Current {
 			return p
@@ -840,7 +848,7 @@ func (m *App) currentProject() appmodel.PhoneProject {
 	if len(m.State.Projects) > 0 {
 		return m.State.Projects[0]
 	}
-	return appmodel.PhoneProject{}
+	return phoneapi.Project{}
 }
 
 func (m *App) ApprovalsFor(serverID string) []codex.Approval {
@@ -862,12 +870,12 @@ func (m *App) resetComposer() {
 	m.Draft, m.SendErr, m.Sending = "", "", false
 }
 
-func (m *App) OpenThread(t appmodel.Thread) {
+func (m *App) OpenThread(t model.Thread) {
 	m.Collaborations.ClosePopovers()
 	m.DrawerSearch, m.DrawerQuery = false, ""
 	_, project := m.find(t.ID)
 	if t.ServerID != "" {
-		_, project, _ = m.referencedThread(appmodel.ThreadRef{Source: m.State.ReferenceSource, Backend: model.ThreadAgent(t), SessionID: t.ServerID})
+		_, project, _ = m.referencedThread(model.ThreadRef{Source: m.State.ReferenceSource, Backend: model.ThreadAgent(t), SessionID: t.ServerID})
 	}
 	if project.Path != "" {
 		m.Selected, m.ExpandedProject, m.projectsExpanded = project.Path, project.Path, true
@@ -966,7 +974,7 @@ func (m *App) sendDraft(steer bool) {
 		m.BeginNewSend(r.Text, paths)
 	}
 	go func() {
-		images, err := appmodel.ReadPhoneImages(paths)
+		images, err := phone.ReadImages(paths)
 		if err == nil {
 			r.Images = images
 			err = conn.Send(r)
@@ -1004,7 +1012,7 @@ func (m *App) Sent(id int, msg string) {
 	m.clearImages()
 	if m.Open == 0 && m.NewProject != "" && id != 0 {
 		m.Open, m.NewProject = id, ""
-		m.ShowThread(appmodel.Thread{ID: id, Agent: m.NewAgent, Loading: true})
+		m.ShowThread(model.Thread{ID: id, Agent: m.NewAgent, Loading: true})
 		m.Subscribe(id)
 	}
 	if id != 0 {
@@ -1287,7 +1295,7 @@ func (m *App) listView(c *ui.Context) {
 
 // selectedProject is where a new conversation starts: the chosen project,
 // else the desktop's open project.
-func (m *App) selectedProject() appmodel.PhoneProject {
+func (m *App) selectedProject() phoneapi.Project {
 	if m.Selected != "" {
 		for _, p := range m.State.Projects {
 			if p.Path == m.Selected {
@@ -1532,7 +1540,7 @@ func (m *App) ShowProject(path string) {
 }
 
 // threadStatus marks conversations waiting for approval, running, or unread.
-func (m *App) threadStatus(c *ui.Context, t appmodel.Thread) {
+func (m *App) threadStatus(c *ui.Context, t model.Thread) {
 	p := m.Pal
 	switch {
 	case len(m.ApprovalsFor(t.ServerID)) > 0:
@@ -1572,7 +1580,7 @@ func (m *App) threadView(c *ui.Context) {
 	ui.Row(c).FillWidth().MinHeight(64).Padding(0, 12).Gap(8).AlignItems(ui.Center).Children(func() {
 		m.navigationBack(c, "/thread")
 		ui.Column(c).Grow(1).MinWidth(0).AlignItems(ui.Center).Gap(2).Children(func() {
-			ui.Text(c, appmodel.NativeText(title)).FontSize(m.Font(16)).FontWeight(600).SingleLine().Ellipsis("…")
+			ui.Text(c, msgfmt.NativeText(title)).FontSize(m.Font(16)).FontWeight(600).SingleLine().Ellipsis("…")
 			sub := appmodel.AgentName(agent)
 			if proj.Name != "" {
 				sub += " · " + proj.Name
@@ -1601,7 +1609,7 @@ func (m *App) threadView(c *ui.Context) {
 	m.composer(c, agent, busy)
 }
 
-func (m *App) newConversationView(c *ui.Context, proj appmodel.PhoneProject) {
+func (m *App) newConversationView(c *ui.Context, proj phoneapi.Project) {
 	p := m.Pal
 	agent := m.composerAgent()
 	ui.Scroll(c.Key("draft-intro")).Grow(1).FillWidth().MinHeight(0).Children(func() {
@@ -1776,8 +1784,8 @@ func (m *App) composer(c *ui.Context, agent string, busy bool) {
 // addPhotos picks photos from the library with the system picker, which
 // needs no access to the whole library.
 func (m *App) addPhotos() {
-	if len(m.Images) >= appmodel.MaxPhoneImages {
-		m.SendErr = fmt.Sprintf(tr("Send up to %d images at a time"), appmodel.MaxPhoneImages)
+	if len(m.Images) >= phone.MaxImages {
+		m.SendErr = fmt.Sprintf(tr("Send up to %d images at a time"), phone.MaxImages)
 		return
 	}
 	win := m.win
@@ -1791,8 +1799,8 @@ func (m *App) addPhotos() {
 				m.SendErr = tr("Unable to open photos: ") + err.Error()
 			}
 			for _, p := range paths {
-				if len(m.Images) >= appmodel.MaxPhoneImages {
-					m.SendErr = fmt.Sprintf(tr("Send up to %d images at a time"), appmodel.MaxPhoneImages)
+				if len(m.Images) >= phone.MaxImages {
+					m.SendErr = fmt.Sprintf(tr("Send up to %d images at a time"), phone.MaxImages)
 					go os.Remove(p)
 					continue
 				}
@@ -1872,14 +1880,14 @@ func (m *App) requestCommands(project string) {
 	go conn.Send(remote.Request{Op: "commands", Project: project})
 }
 
-func (m *App) composerCommands(agent, project string) ([]appmodel.ComposerChoice, bool) {
+func (m *App) composerCommands(agent, project string) ([]model.ComposerChoice, bool) {
 	if agent == appmodel.AgentClaude {
 		cmds, known := m.Commands[project]
 		return cmds, known
 	}
-	goal := appmodel.ComposerCommands[0]
+	goal := composer.ComposerCommands[0]
 	goal.Detail = tr("Set a goal · /goal pause · /goal resume · /goal clear")
-	return []appmodel.ComposerChoice{goal}, true
+	return []model.ComposerChoice{goal}, true
 }
 
 // commandMenu lists commands while the draft is a slash and a command's beginning.
@@ -1894,7 +1902,7 @@ func (m *App) commandMenu(c *ui.Context, agent, project string) {
 		m.requestCommands(project)
 	}
 	cmds, known := m.composerCommands(agent, project)
-	var shown []appmodel.ComposerChoice
+	var shown []model.ComposerChoice
 	for _, cmd := range cmds {
 		if strings.Contains(strings.ToLower(cmd.Name), q) {
 			shown = append(shown, cmd)
@@ -1935,7 +1943,7 @@ func (m *App) commandMenu(c *ui.Context, agent, project string) {
 // phoneCachedThreads bounds how many conversations the phone keeps.
 const phoneCachedThreads = 30
 
-func (m *App) CachedMessages(serverID string) []appmodel.Message {
+func (m *App) CachedMessages(serverID string) []model.Message {
 	if serverID == "" {
 		return nil
 	}
@@ -1950,18 +1958,18 @@ func (m *App) CachedMessages(serverID string) []appmodel.Message {
 }
 
 // remember keeps a conversation's messages, dropping the oldest kept.
-func (m *App) Remember(serverID string, msgs []appmodel.Message) {
+func (m *App) Remember(serverID string, msgs []model.Message) {
 	m.keep(serverID, msgs)
 	m.persist(serverID, msgs)
 }
 
 // keep holds a conversation's messages in memory, dropping the oldest.
-func (m *App) keep(serverID string, msgs []appmodel.Message) {
+func (m *App) keep(serverID string, msgs []model.Message) {
 	if serverID == "" {
 		return
 	}
 	if m.MsgCache == nil {
-		m.MsgCache = map[string][]appmodel.Message{}
+		m.MsgCache = map[string][]model.Message{}
 	}
 	for i, k := range m.msgKeys {
 		if k == serverID {
@@ -1985,7 +1993,7 @@ func (m *App) SubscribeRequest(id int) remote.Request {
 		return r
 	}
 	for _, msg := range m.CachedMessages(r.ServerID) {
-		r.Have = append(r.Have, remote.Seen{ID: msg.ID, FP: appmodel.MessageFingerprint(msg)})
+		r.Have = append(r.Have, remote.Seen{ID: msg.ID, FP: svcproto.MessageFingerprint(msg)})
 	}
 	return r
 }
@@ -2000,11 +2008,11 @@ func (m *App) ThreadRequest(op string, id int) remote.Request {
 	// already reused its numeric ID for a different conversation.
 	if cur := m.Viewer.Current(); cur.ID == id && cur.ServerID != "" {
 		if cur.ServerID != t.ServerID || model.ThreadAgent(cur) != model.ThreadAgent(t) {
-			p = appmodel.PhoneProject{}
+			p = phoneapi.Project{}
 		}
 		t = cur
 	}
-	if _, project, ok := m.referencedThread(appmodel.ThreadRef{Source: m.State.ReferenceSource, Backend: model.ThreadAgent(t), SessionID: t.ServerID}); ok {
+	if _, project, ok := m.referencedThread(model.ThreadRef{Source: m.State.ReferenceSource, Backend: model.ThreadAgent(t), SessionID: t.ServerID}); ok {
 		p = project
 	}
 	r.ServerID, r.Agent, r.Project = t.ServerID, model.ThreadAgent(t), p.Path
@@ -2012,9 +2020,9 @@ func (m *App) ThreadRequest(op string, id int) remote.Request {
 }
 
 // applyThread merges a delta into what the phone holds of the conversation.
-func (m *App) ApplyThread(d appmodel.PhoneThreadDelta) {
+func (m *App) ApplyThread(d phoneapi.ThreadDelta) {
 	t := d.Thread
-	var base []appmodel.Message
+	var base []model.Message
 	if !d.Reset {
 		boundIdentity := false
 		if cur := m.Viewer.Current(); cur.ID == t.ID && (cur.ServerID == t.ServerID || cur.ServerID == "" && model.ThreadAgent(cur) == model.ThreadAgent(t)) {
@@ -2039,14 +2047,14 @@ func (m *App) ApplyThread(d appmodel.PhoneThreadDelta) {
 			return
 		}
 	}
-	known := make(map[int]appmodel.Message, len(base)+len(d.Changed))
+	known := make(map[int]model.Message, len(base)+len(d.Changed))
 	for _, x := range base {
 		known[x.ID] = x
 	}
 	for _, x := range d.Changed {
 		known[x.ID] = x
 	}
-	list := make([]appmodel.Message, 0, len(d.Order))
+	list := make([]model.Message, 0, len(d.Order))
 	for _, id := range d.Order {
 		if x, ok := known[id]; ok {
 			list = append(list, x)

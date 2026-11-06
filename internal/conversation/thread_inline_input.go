@@ -1,15 +1,17 @@
 package conversation
 
 import (
-	appmodel "miya/internal/appmodel"
-	model "miya/internal/model"
-	textutil "miya/internal/textutil"
-	widgets "miya/internal/widgets"
-	strings "strings"
-	utf8 "unicode/utf8"
+	"strings"
+	"unicode/utf8"
 
-	ui "github.com/egoist/mygo/ui"
-	richtext "github.com/egoist/mygo/ui/richtext"
+	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/richtext"
+
+	"miya/internal/appmodel"
+	"miya/internal/composer"
+	"miya/internal/model"
+	"miya/internal/textutil"
+	"miya/internal/widgets"
 )
 
 type ThreadMentionStyle struct {
@@ -25,7 +27,7 @@ func MentionStyle(c *ui.Context, size float32) ThreadMentionStyle {
 	return s
 }
 
-func (s ThreadMentionStyle) attachment(ref appmodel.ThreadRef, title string) *richtext.Attachment {
+func (s ThreadMentionStyle) attachment(ref model.ThreadRef, title string) *richtext.Attachment {
 	return s.tagAttachment(ref.URL(), title, "@ ")
 }
 
@@ -47,10 +49,10 @@ func (s ThreadMentionStyle) tagAttachment(uri, title, prefix string) *richtext.A
 	}
 }
 
-func InlineThreadText(raw string, _ bool, style ThreadMentionStyle, title func(appmodel.ThreadRef) string) richtext.Text {
+func InlineThreadText(raw string, _ bool, style ThreadMentionStyle, title func(model.ThreadRef) string) richtext.Text {
 	var runs []richtext.Run
 	end := 0
-	for _, m := range appmodel.ComposerMentions(raw) {
+	for _, m := range model.Mentions(raw) {
 		name := m.Part.TitleSnapshot
 		var attachment *richtext.Attachment
 		uri := ""
@@ -91,7 +93,7 @@ func InlineThreadRaw(text richtext.Text) string {
 				continue
 			}
 			if agent, ok := model.ParseAgentURL(a.URL); ok {
-				out.WriteString(appmodel.AgentReferenceText(agent, a.Name))
+				out.WriteString(composer.AgentReferenceText(agent, a.Name))
 				continue
 			}
 		}
@@ -119,11 +121,11 @@ func InlineThreadSpans(text richtext.Text, size float32) []ui.Span {
 // A document stores each reference as one editable object. The wire prompt
 // preserves the stable identity and title snapshot at its original position.
 type InlineThreadInput struct {
-	Commands      []appmodel.ComposerChoice
+	Commands      []model.ComposerChoice
 	Doc           *richtext.Document
 	Raw, Owner    string
 	Style         ThreadMentionStyle
-	Title         func(appmodel.ThreadRef) string
+	Title         func(model.ThreadRef) string
 	anchor, caret int
 	Moved         bool
 }
@@ -138,7 +140,7 @@ func (s *InlineThreadInput) SetRaw(raw string) {
 	} else {
 		// Keep completion in undo history and put the caret after its edit,
 		// rather than moving it past the rest of a mid-sentence prompt.
-		end := appmodel.ComposerEditEnd(s.Raw, raw)
+		end := composer.ComposerEditEnd(s.Raw, raw)
 		caret := 0
 		for _, run := range text.Runs(0, text.Len()) {
 			part := richtext.TextOf(richtext.Paragraph{Runs: []richtext.Run{run}})

@@ -1,15 +1,16 @@
 package mobile
 
 import (
-	appmodel "miya/internal/appmodel"
-	codex "miya/internal/codex"
-	uiruntime "miya/internal/uiruntime"
+	"miya/internal/appmodel"
+	"miya/internal/codex"
+	"miya/internal/model"
+	"miya/internal/uiruntime"
 )
 
 // mobileViewer holds only the selected snapshot. It never starts an agent.
 type mobileViewer struct {
-	threads      func() []appmodel.Thread
-	SetThreads   func([]appmodel.Thread)
+	threads      func() []model.Thread
+	SetThreads   func([]model.Thread)
 	Active       func() int
 	SetActive    func(int)
 	Revision     func() int
@@ -20,24 +21,24 @@ type mobileViewer struct {
 
 func newMobileViewer() *mobileViewer {
 	v := &mobileViewer{}
-	v.threads, v.SetThreads = uiruntime.CreateSignal([]appmodel.Thread{})
+	v.threads, v.SetThreads = uiruntime.CreateSignal([]model.Thread{})
 	v.Active, v.SetActive = uiruntime.CreateSignal(0)
 	v.Revision, v.setRevision = uiruntime.CreateSignal(0)
 	v.approvals, v.setApprovals = uiruntime.CreateSignal([]codex.Approval{})
 	return v
 }
 
-func (v *mobileViewer) Current() appmodel.Thread {
+func (v *mobileViewer) Current() model.Thread {
 	for _, t := range v.threads() {
 		if t.ID == v.Active() {
 			return t
 		}
 	}
-	return appmodel.Thread{}
+	return model.Thread{}
 }
 
-func (v *mobileViewer) selectThread(t appmodel.Thread) {
-	v.SetThreads([]appmodel.Thread{t})
+func (v *mobileViewer) selectThread(t model.Thread) {
+	v.SetThreads([]model.Thread{t})
 	v.SetActive(t.ID)
 }
 

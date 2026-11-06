@@ -1,15 +1,16 @@
 package controller
 
 import (
-	context "context"
-	json "encoding/json"
-	appmodel "miya/internal/appmodel"
-	codex "miya/internal/codex"
-	uiruntime "miya/internal/uiruntime"
-	time "time"
+	"context"
+	"encoding/json"
+	"time"
+
+	"miya/internal/account"
+	"miya/internal/codex"
+	"miya/internal/uiruntime"
 )
 
-func (c *Controller) setAccountReset(action appmodel.AccountResetAction) {
+func (c *Controller) setAccountReset(action account.ResetAction) {
 	c.AccountReset = action
 	uiruntime.Invalidate()
 }
@@ -24,12 +25,12 @@ func (c *Controller) AskAccountReset() {
 	}
 	action := c.AccountReset
 	if action.Attempt == nil || !action.Attempt.Submitted || !action.Attempt.Matches(c.AccountCache) {
-		attempt, err := appmodel.NewAccountResetAttempt(c.AccountCache)
+		attempt, err := account.NewResetAttempt(c.AccountCache)
 		if err != nil {
-			c.setAccountReset(appmodel.AccountResetAction{Notice: err.Error(), Failed: true})
+			c.setAccountReset(account.ResetAction{Notice: err.Error(), Failed: true})
 			return
 		}
-		action = appmodel.AccountResetAction{Attempt: attempt}
+		action = account.ResetAction{Attempt: attempt}
 	}
 	action.Confirming = true
 	c.setAccountReset(action)
@@ -73,17 +74,17 @@ func (c *Controller) ConfirmAccountReset() {
 	ctx, stop := context.WithTimeout(c.Ctx, 30*time.Second)
 	go func() {
 		defer stop()
-		result, err := appmodel.ExecuteAccountReset(ctx, client, attempt)
+		result, err := account.ExecuteReset(ctx, client, attempt)
 		c.Dispatch(func() {
 			if result.HaveDisplay && c.Client == client && !result.Display.Updated.Before(c.AccountCache.Updated) {
 				c.AccountCache = result.Display
 			}
 			attempt.Submitted = result.Submitted
-			finished := appmodel.AccountResetAction{Attempt: &attempt, Confirming: true}
+			finished := account.ResetAction{Attempt: &attempt, Confirming: true}
 			if err != nil {
 				finished.Notice, finished.Failed = err.Error(), true
 			} else {
-				finished = appmodel.AccountResetAction{Notice: appmodel.ResetOutcomeText(result.Outcome)}
+				finished = account.ResetAction{Notice: account.ResetOutcomeText(result.Outcome)}
 			}
 			if attempt.Account.Email != "" {
 				finished.Notice = attempt.Account.Email + ": " + finished.Notice

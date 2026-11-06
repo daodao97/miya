@@ -1,11 +1,11 @@
 package desktopui
 
 import (
-	appmodel "miya/internal/appmodel"
-	model "miya/internal/model"
+	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/ui"
 
-	mygo "github.com/egoist/mygo"
-	ui "github.com/egoist/mygo/ui"
+	"miya/internal/model"
+	"miya/internal/msgfmt"
 )
 
 // Message file links use the conversation's workspace, just as the agent does.
@@ -15,7 +15,7 @@ func (app *App) OpenMessageLink(link string) {
 		app.openCollaborationThread(link)
 		return
 	}
-	if rel, ok := appmodel.LocalFileLink(app.C.State().Cwd, link); ok {
+	if rel, ok := msgfmt.LocalFileLink(app.C.State().Cwd, link); ok {
 		p := app.Panel()
 		app.openSurface(p, SurfaceFiles)
 		app.openFile(p, rel)

@@ -1,15 +1,16 @@
 package mobile
 
 import (
-	context "context"
-	errors "errors"
-	appmodel "miya/internal/appmodel"
-	control "miya/internal/desktop/control"
-	widgets "miya/internal/widgets"
-	time "time"
+	"context"
+	"errors"
+	"time"
 
-	mygo "github.com/egoist/mygo"
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/ui"
+
+	"miya/internal/desktop/control"
+	"miya/internal/phonecache"
+	"miya/internal/widgets"
 )
 
 // Only the Keychain holds a saved password. The page retains flags and its
@@ -161,7 +162,7 @@ func desktopUnlockAuthenticationError(err error) error {
 // Called off the UI thread. Fresh device authentication gates every saved
 // password use and every opt-in save. Only a confirmed successful unlock is
 // saved. Cancellation never submits the password or creates a new saved item.
-func (m *App) DesktopPerformUnlock(ctx context.Context, client *control.Client, store appmodel.MobileSecretStore, key, password string, saved, remember bool) (result desktopUnlockResult) {
+func (m *App) DesktopPerformUnlock(ctx context.Context, client *control.Client, store phonecache.SecretStore, key, password string, saved, remember bool) (result desktopUnlockResult) {
 	defer func() { password = "" }()
 	if saved || remember {
 		if store == nil || key == "" {

@@ -1,17 +1,21 @@
 package controller
 
 import (
-	context "context"
-	fmt "fmt"
-	appmodel "miya/internal/appmodel"
-	codex "miya/internal/codex"
-	textutil "miya/internal/textutil"
-	filepath "path/filepath"
-	time "time"
+	"context"
+	"fmt"
+	"path/filepath"
+	"time"
+
+	"miya/internal/appmodel"
+	"miya/internal/codex"
+	"miya/internal/model"
+	"miya/internal/msgfmt"
+	"miya/internal/prefs"
+	"miya/internal/textutil"
 )
 
-func (c *Controller) CodexGoalCommand(req appmodel.SendRequest) (int, string) {
-	g, _, err := appmodel.ParseGoalCommand(req.Text)
+func (c *Controller) CodexGoalCommand(req model.SendRequest) (int, string) {
+	g, _, err := codex.ParseGoalCommand(req.Text)
 	if err != nil {
 		return 0, err.Error()
 	}
@@ -37,13 +41,13 @@ func (c *Controller) CodexGoalCommand(req appmodel.SendRequest) (int, string) {
 	}
 	if t.ID == 0 {
 		cwd := textutil.FirstNonEmpty(req.Project, c.Cwd)
-		t = appmodel.Thread{ID: c.NextID(), Agent: appmodel.AgentCodex, PermissionPolicy: policy,
-			Title: appmodel.ConversationTitle("", g.Objective, ""), Project: filepath.Base(cwd), Loaded: true, HistoryLoaded: true}
+		t = model.Thread{ID: c.NextID(), Agent: appmodel.AgentCodex, PermissionPolicy: policy,
+			Title: msgfmt.ConversationTitle("", g.Objective, ""), Project: filepath.Base(cwd), Loaded: true, HistoryLoaded: true}
 		c.AddThread(cwd, t)
 	}
 	client, id, cwd := c.Client, t.ID, c.ThreadWorkspace(t.ID)
 	cGoalRevision := t.GoalRevision
-	c.Update(id, func(t *appmodel.Thread) { t.TaskPending = true })
+	c.Update(id, func(t *model.Thread) { t.TaskPending = true })
 	go func() {
 		ctx, cancel := context.WithTimeout(c.parentContext(), 45*time.Second)
 		defer cancel()
@@ -51,7 +55,7 @@ func (c *Controller) CodexGoalCommand(req appmodel.SendRequest) (int, string) {
 		var err error
 		if serverID == "" || !t.Resumed {
 			method := "thread/start"
-			params := map[string]any{"cwd": cwd, "sandbox": appmodel.SandboxForPermissionPolicy(policy), "approvalPolicy": appmodel.ApprovalForPermissionPolicy(policy), "approvalsReviewer": appmodel.ReviewerForPermissionPolicy(policy)}
+			params := map[string]any{"cwd": cwd, "sandbox": prefs.SandboxForPolicy(policy), "approvalPolicy": prefs.ApprovalForPolicy(policy), "approvalsReviewer": prefs.ReviewerForPolicy(policy)}
 			if serverID != "" {
 				method, params["threadId"] = "thread/resume", serverID
 			}
@@ -66,7 +70,7 @@ func (c *Controller) CodexGoalCommand(req appmodel.SendRequest) (int, string) {
 					err = fmt.Errorf("Codex returned an empty conversation ID")
 				} else {
 					sid := serverID
-					c.Dispatch(func() { c.Update(id, func(t *appmodel.Thread) { t.ServerID, t.Resumed = sid, true }) })
+					c.Dispatch(func() { c.Update(id, func(t *model.Thread) { t.ServerID, t.Resumed = sid, true }) })
 				}
 			}
 		}
@@ -94,19 +98,19 @@ func (c *Controller) CodexGoalCommand(req appmodel.SendRequest) (int, string) {
 		}
 		c.Dispatch(func() {
 			if c.Client != client {
-				c.Update(id, func(t *appmodel.Thread) { t.TaskPending = false })
+				c.Update(id, func(t *model.Thread) { t.TaskPending = false })
 				c.ReturnDraft(id, req.Text, req.Attachments)
 				return
 			}
-			c.Update(id, func(t *appmodel.Thread) {
+			c.Update(id, func(t *model.Thread) {
 				t.TaskPending = false
 				if err != nil {
 					t.Status = "Goal operation failed: " + err.Error()
-					t.Messages = append(t.Messages, appmodel.Message{ID: c.NextID(), Role: "error", Content: t.Status})
+					t.Messages = append(t.Messages, model.Message{ID: c.NextID(), Role: "error", Content: t.Status})
 					return
 				}
 				if t.GoalRevision == cGoalRevision {
-					appmodel.ApplyCodexGoal(t, response.Goal)
+					model.ApplyCodexGoal(t, response.Goal)
 				}
 			})
 			if err != nil {
@@ -135,9 +139,9 @@ func (c *Controller) refreshCodexGoal(id int) {
 			if c.Client != client {
 				return
 			}
-			c.Update(id, func(current *appmodel.Thread) {
+			c.Update(id, func(current *model.Thread) {
 				if current.ServerID == t.ServerID && current.GoalRevision == t.GoalRevision {
-					appmodel.ApplyCodexGoal(current, response.Goal)
+					model.ApplyCodexGoal(current, response.Goal)
 				}
 			})
 		})

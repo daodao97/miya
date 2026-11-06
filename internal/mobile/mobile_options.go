@@ -1,26 +1,28 @@
 package mobile
 
 import (
-	json "encoding/json"
-	appmodel "miya/internal/appmodel"
-	model "miya/internal/model"
-	remote "miya/internal/remote"
-	textutil "miya/internal/textutil"
-	widgets "miya/internal/widgets"
-	os "os"
-	filepath "path/filepath"
-	strings "strings"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
 
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui"
+
+	"miya/internal/appmodel"
+	"miya/internal/model"
+	"miya/internal/phoneapi"
+	"miya/internal/remote"
+	"miya/internal/textutil"
+	"miya/internal/widgets"
 )
 
-func (m *App) agentOptions(agent string) appmodel.PhoneAgentOptions {
+func (m *App) agentOptions(agent string) phoneapi.AgentOptions {
 	for _, a := range m.State.Agents {
 		if a.Agent == agent {
 			return a
 		}
 	}
-	return appmodel.PhoneAgentOptions{Agent: agent, Current: remote.SendOptions{Model: m.State.Model, Effort: m.State.Effort, Policy: "on-request"}}
+	return phoneapi.AgentOptions{Agent: agent, Current: remote.SendOptions{Model: m.State.Model, Effort: m.State.Effort, Policy: "on-request"}}
 }
 
 func (m *App) SendOptions(agent string) remote.SendOptions {

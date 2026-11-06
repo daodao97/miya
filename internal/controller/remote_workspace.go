@@ -1,21 +1,25 @@
 package controller
 
 import (
-	context "context"
-	errors "errors"
-	io "io"
-	agentusage "miya/internal/agentusage"
-	appmodel "miya/internal/appmodel"
-	fsutil "miya/internal/fsutil"
-	thumbnail "miya/internal/thumbnail"
-	worktree "miya/internal/worktree"
-	os "os"
-	filepath "path/filepath"
-	strings "strings"
-	time "time"
+	"context"
+	"errors"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"miya/internal/agentusage"
+	"miya/internal/async"
+	"miya/internal/composer"
+	"miya/internal/fsutil"
+	"miya/internal/phone"
+	"miya/internal/svcproto"
+	"miya/internal/thumbnail"
+	"miya/internal/worktree"
 )
 
-func (c *Controller) PrepareHost(r appmodel.HostRequest) (appmodel.Deferred, error) {
+func (c *Controller) PrepareHost(r svcproto.HostRequest) (async.Reply, error) {
 	// Desktop clients have the same authority as a local window. Project
 	// operations still bind their root, so an old tab cannot silently follow
 	// a different client's selected project.
@@ -44,17 +48,17 @@ func (c *Controller) PrepareHost(r appmodel.HostRequest) (appmodel.Deferred, err
 			if err != nil {
 				return nil, err
 			}
-			out := []appmodel.HostEntry{}
+			out := []svcproto.HostEntry{}
 			for _, e := range entries {
 				if e.IsDir() {
-					out = append(out, appmodel.HostEntry{Name: e.Name(), Path: filepath.Join(root, e.Name()), Dir: true})
+					out = append(out, svcproto.HostEntry{Name: e.Name(), Path: filepath.Join(root, e.Name()), Dir: true})
 				}
 			}
 			return out, nil
 		case "upload":
-			return appmodel.SavePhoneImages(r.Images)
+			return phone.SaveImages(r.Images)
 		case "upload-files":
-			return appmodel.SaveDesktopUploads(r.Images)
+			return phone.SaveDesktopUploads(r.Images)
 		case "preview":
 			return thumbnail.File(r.Path)
 		case "usage":
@@ -70,32 +74,32 @@ func (c *Controller) PrepareHost(r appmodel.HostRequest) (appmodel.Deferred, err
 		}
 		switch r.Action {
 		case "index":
-			return appmodel.IndexProjectFiles(ctx, r.Project)
+			return composer.IndexProjectFiles(ctx, r.Project)
 		case "diff":
 			if r.Source < worktree.SourceUncommitted || r.Source > worktree.SourceBranch {
 				return nil, errors.New("Invalid diff source")
 			}
 			return worktree.CollectDiff(ctx, r.Project, r.Source)
 		case "sides":
-			if _, err := appmodel.HostProjectPath(r.Project, r.File.Path); err != nil {
+			if _, err := svcproto.HostProjectPath(r.Project, r.File.Path); err != nil {
 				return nil, err
 			}
 			old, new := worktree.FileSides(ctx, r.Project, r.Snapshot, r.File)
 			if len(old)+len(new) > 2*worktree.MaxEditableFile {
 				return nil, errors.New("Diff is too large")
 			}
-			return appmodel.HostSides{Old: old, New: new}, nil
+			return svcproto.HostSides{Old: old, New: new}, nil
 		}
-		path, err := appmodel.HostProjectPath(r.Project, r.Path)
+		path, err := svcproto.HostProjectPath(r.Project, r.Path)
 		if err != nil {
 			return nil, err
 		}
 		switch r.Action {
 		case "dir":
 			entries, err := worktree.ReadDirEntries(r.Project, r.Path)
-			out := make([]appmodel.HostEntry, 0, len(entries))
+			out := make([]svcproto.HostEntry, 0, len(entries))
 			for _, e := range entries {
-				out = append(out, appmodel.HostEntry{Name: e.Name, Path: e.Rel, Dir: e.Dir})
+				out = append(out, svcproto.HostEntry{Name: e.Name, Path: e.Rel, Dir: e.Dir})
 			}
 			return out, err
 		case "read":
@@ -115,7 +119,7 @@ func (c *Controller) PrepareHost(r appmodel.HostRequest) (appmodel.Deferred, err
 	}, nil
 }
 
-func (c *Controller) hostCall(r appmodel.HostRequest, out any) error {
+func (c *Controller) hostCall(r svcproto.HostRequest, out any) error {
 	if !c.RemoteHost() {
 		return errors.New("Server disconnected")
 	}
@@ -135,7 +139,7 @@ func (c *Controller) UploadRemoteAttachments(paths []string) ([]string, error) {
 		}
 		local, positions = append(local, path), append(positions, i)
 	}
-	images, err := appmodel.ReadDesktopUploads(local)
+	images, err := phone.ReadDesktopUploads(local)
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +147,7 @@ func (c *Controller) UploadRemoteAttachments(paths []string) ([]string, error) {
 		return result, nil
 	}
 	var uploaded []string
-	if err := c.hostCall(appmodel.HostRequest{Action: "upload-files", Images: images}, &uploaded); err != nil {
+	if err := c.hostCall(svcproto.HostRequest{Action: "upload-files", Images: images}, &uploaded); err != nil {
 		return nil, err
 	}
 	if len(uploaded) != len(positions) {

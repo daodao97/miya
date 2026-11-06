@@ -1,14 +1,14 @@
 package desktopui
 
 import (
-	bytes "bytes"
-	embed "embed"
-	image "image"
-	color "image/color"
-	png "image/png"
-	sync "sync"
+	"bytes"
+	"embed"
+	"image"
+	"image/color"
+	"image/png"
+	"sync"
 
-	vector "golang.org/x/image/vector"
+	"golang.org/x/image/vector"
 )
 
 //go:embed assets/tray/*.png

@@ -1,20 +1,22 @@
 package appmodel
 
 import (
-	model "miya/internal/model"
-	textutil "miya/internal/textutil"
-	filepath "path/filepath"
-	sort "sort"
-	strings "strings"
+	"path/filepath"
+	"sort"
+	"strings"
+
+	"miya/internal/model"
+	"miya/internal/phoneapi"
+	"miya/internal/textutil"
 )
 
 type ThreadReference struct {
-	Thread
+	model.Thread
 	ProjectName string
 }
 
 // Match every project's conversation metadata without loading its messages.
-func MatchingThreadRefs(projects []PhoneProject, self int, query string) []ThreadReference {
+func MatchingThreadRefs(projects []phoneapi.Project, self int, query string) []ThreadReference {
 	q := strings.ToLower(query)
 	seen := map[string]bool{}
 	var out []ThreadReference

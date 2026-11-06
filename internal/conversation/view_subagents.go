@@ -1,18 +1,20 @@
 package conversation
 
 import (
-	fmt "fmt"
-	appmodel "miya/internal/appmodel"
-	subagent "miya/internal/subagent"
-	textutil "miya/internal/textutil"
-	widgets "miya/internal/widgets"
+	"fmt"
 
-	ui "github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui"
+
+	"miya/internal/model"
+	"miya/internal/msgfmt"
+	"miya/internal/subagent"
+	"miya/internal/textutil"
+	"miya/internal/widgets"
 )
 
 // subAgentList shows the sub-agents an activity tracks, whichever agent's
 // adapter reported them: each one's state, name and latest step.
-func subAgentList(c *ui.Context, agents []appmodel.SubAgent) {
+func subAgentList(c *ui.Context, agents []model.SubAgent) {
 	ui.Column(c).FillWidth().MinWidth(0).Gap(8).Padding(12).Background(widgets.Subtle).Radius(8).Children(func() {
 		for i, a := range agents {
 			marker, color := subAgentMarker(a.Status)
@@ -26,7 +28,7 @@ func subAgentList(c *ui.Context, agents []appmodel.SubAgent) {
 					}
 				})
 				ui.Column(c).FillWidth().MinWidth(0).Gap(2).Children(func() {
-					ui.Text(c, appmodel.NativeText(textutil.FirstNonEmpty(a.Name, a.ID))).FontSize(12).TextColor(widgets.Ink).SingleLine().Ellipsis("…")
+					ui.Text(c, msgfmt.NativeText(textutil.FirstNonEmpty(a.Name, a.ID))).FontSize(12).TextColor(widgets.Ink).SingleLine().Ellipsis("…")
 					line := subagent.StatusLabel(a.Status)
 					if a.Steps > 0 {
 						line += fmt.Sprintf(tr(" · %d steps"), a.Steps)
@@ -34,7 +36,7 @@ func subAgentList(c *ui.Context, agents []appmodel.SubAgent) {
 					if a.Detail != "" {
 						line += " · " + a.Detail
 					}
-					ui.Text(c, appmodel.NativeText(line)).FontSize(12).TextColor(color).Selectable()
+					ui.Text(c, msgfmt.NativeText(line)).FontSize(12).TextColor(color).Selectable()
 				})
 			})
 		}

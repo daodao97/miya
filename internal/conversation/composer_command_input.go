@@ -1,13 +1,14 @@
 package conversation
 
 import (
-	textutil "miya/internal/textutil"
-	widgets "miya/internal/widgets"
-	strings "strings"
-	utf8 "unicode/utf8"
+	"strings"
+	"unicode/utf8"
 
-	ui "github.com/egoist/mygo/ui"
-	richtext "github.com/egoist/mygo/ui/richtext"
+	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/richtext"
+
+	"miya/internal/textutil"
+	"miya/internal/widgets"
 )
 
 const ComposerCommandTag = "composer-command"

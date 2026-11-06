@@ -1,7 +1,7 @@
 package appmodel
 
 import (
-	model "miya/internal/model"
+	"miya/internal/model"
 )
 
 const (

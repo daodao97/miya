@@ -1,13 +1,14 @@
 package controller
 
 import (
-	flag "flag"
-	fmt "fmt"
-	appdir "miya/internal/appdir"
-	appmodel "miya/internal/appmodel"
-	fsutil "miya/internal/fsutil"
-	os "os"
-	filepath "path/filepath"
+	"flag"
+	"fmt"
+	"os"
+	"path/filepath"
+
+	"miya/internal/appdir"
+	"miya/internal/fsutil"
+	"miya/internal/svcproto"
 )
 
 // -server remains the window-managed background process. -serve is a
@@ -63,14 +64,14 @@ func serveCommand(args []string) error {
 func ConnectionFile() string { return filepath.Join(appdir.Dir(), "connection.txt") }
 
 func requestServerRestart() error {
-	cl, err := appmodel.DialService(appmodel.ServiceSocket())
+	cl, err := svcproto.Dial(svcproto.Socket())
 	if err != nil {
 		return err
 	}
 	defer cl.Close()
 	// A no-reply request avoids mistaking a quick, idle shutdown for a
 	// failed RPC. The supervising service manager starts the replacement.
-	return cl.Send(appmodel.SvcRequest{Op: "quitWhenIdle"})
+	return cl.Send(svcproto.Request{Op: "quitWhenIdle"})
 }
 
 func SaveServerConnection(link string) error {

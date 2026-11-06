@@ -1,7 +1,7 @@
 package widgets
 
 import (
-	automation "miya/internal/automation"
+	"miya/internal/automation"
 )
 
 func LastAutomationRun(v automation.View) (automation.Run, bool) {
