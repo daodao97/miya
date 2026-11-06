@@ -63,19 +63,3 @@ func (c *chatController) rememberForkedReference(t Thread, project string) {
 		c.setStatus("Unable to save original conversation reference: " + err.Error())
 	}
 }
-
-func atomicWriteFile(path string, data []byte) error {
-	f, err := os.CreateTemp(filepath.Dir(path), ".references-")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(f.Name())
-	if _, err = f.Write(data); err != nil {
-		f.Close()
-		return err
-	}
-	if err = f.Close(); err != nil {
-		return err
-	}
-	return os.Rename(f.Name(), path)
-}

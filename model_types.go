@@ -596,3 +596,8 @@ var (
 var (
 	persistClaudeCommand = prefs.SaveClaudeCommand
 )
+
+// Moved to internal/fsutil.
+var (
+	atomicWriteFile = fsutil.AtomicWriteFile
+)
