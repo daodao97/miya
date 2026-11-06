@@ -459,3 +459,12 @@ var (
 	approvalFingerprint = phoneapi.ApprovalFingerprint
 	validateMobileForm  = phoneapi.ValidateMobileForm
 )
+
+// Moved to internal/msgfmt.
+var (
+	changedFiles  = msgfmt.ChangedFiles
+	lastReply     = msgfmt.LastReply
+	packetSection = msgfmt.PacketSection
+	threadRefTask = msgfmt.ThreadRefTask
+	threadRefs    = msgfmt.ThreadRefs
+)
