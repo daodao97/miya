@@ -12,14 +12,8 @@ import (
 // the background service, the service serves phones and this window shows
 // its status and forwards the actions.
 func (app *chatApp) phoneSettings(c *ui.Context) {
-	var st phoneStatus
-	var act func(string)
-	switch {
-	case desktopPhone != nil && !app.c.remoteHost():
-		st, act = desktopPhone.Status(), desktopPhone.Do
-	case app.c.remote != nil && app.c.mirror != nil:
-		st, act = app.c.mirror.phone, func(a string) { app.c.forward("phone", a) }
-	default:
+	st, act, ok := app.c.phoneControls()
+	if !ok {
 		return
 	}
 	ui.Column(c).FillWidth().Gap(16).Children(func() {

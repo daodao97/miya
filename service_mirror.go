@@ -342,3 +342,26 @@ func (c *chatController) remoteWorkspace(path string) error {
 	c.setDraft("")
 	return nil
 }
+
+// mirroredHistory reports whether this window has received conversation
+// id's messages from the service; a controller that is no mirror has them.
+func (c *chatController) mirroredHistory(id int) bool {
+	if c.mirror == nil {
+		return true
+	}
+	_, received := c.mirror.messages[id]
+	return received
+}
+
+// phoneControls are the phone connection the settings show and the action
+// that changes it: this Mac's bridge, or a remote server's through its
+// service. ok is false where neither applies.
+func (c *chatController) phoneControls() (st phoneStatus, act func(string), ok bool) {
+	switch {
+	case desktopPhone != nil && !c.remoteHost():
+		return desktopPhone.Status(), desktopPhone.Do, true
+	case c.remote != nil && c.mirror != nil:
+		return c.mirror.phone, func(a string) { c.forward("phone", a) }, true
+	}
+	return phoneStatus{}, nil, false
+}

@@ -143,10 +143,8 @@ func (app *chatApp) markDisplayedThreadRead() {
 	if list == nil || !list.AtEnd() {
 		return
 	}
-	if app.c.mirror != nil {
-		if _, received := app.c.mirror.messages[t.ID]; !received {
-			return
-		}
+	if !app.c.mirroredHistory(t.ID) {
+		return
 	}
 	app.c.readDesktopThread(t)
 }
@@ -160,10 +158,8 @@ func (app *chatApp) markRequestedThreadRead() {
 	if desktopUnreadKey(t) != read.Key || t.Busy || t.Loading || !t.HistoryLoaded {
 		return
 	}
-	if app.c.mirror != nil {
-		if _, received := app.c.mirror.messages[t.ID]; !received {
-			return
-		}
+	if !app.c.mirroredHistory(t.ID) {
+		return
 	}
 	app.desktopReadIntent = desktopRead{}
 	// A new turn may have completed while the chosen history was loading.
