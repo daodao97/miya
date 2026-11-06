@@ -1,4 +1,4 @@
-package main
+package model
 
 import (
 	"crypto/rand"
@@ -13,7 +13,7 @@ import (
 
 // loadReferenceSource persists a public data-instance ID, independent of pairing.
 // Link the complete temporary file so concurrent initializers cannot replace it.
-func loadReferenceSource(dir string) (string, error) {
+func LoadReferenceSource(dir string) (string, error) {
 	path := filepath.Join(dir, "reference-source")
 	read := func() (string, error) {
 		data, err := os.ReadFile(path)
@@ -55,8 +55,8 @@ func loadReferenceSource(dir string) (string, error) {
 	return read()
 }
 
-func referenceSourceForService() (string, string) {
-	id, err := loadReferenceSource(appdir.Dir())
+func ReferenceSourceForService() (string, string) {
+	id, err := LoadReferenceSource(appdir.Dir())
 	if err != nil {
 		return "", "Unable to initialize conversation reference source: " + err.Error()
 	}

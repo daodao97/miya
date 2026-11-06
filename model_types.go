@@ -585,3 +585,9 @@ var (
 	applyClaudeSchedules = claude.ApplySchedules
 	stopClaudeTasks      = claude.StopTasks
 )
+
+// Moved to internal/model.
+var (
+	loadReferenceSource       = model.LoadReferenceSource
+	referenceSourceForService = model.ReferenceSourceForService
+)
