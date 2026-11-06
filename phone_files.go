@@ -56,7 +56,7 @@ func (c *chatController) fileServer() http.Handler {
 			var out []fileProject
 			for _, p := range projects {
 				if p.Path != "" {
-					out = append(out, fileProject{projectFileID(p.Path), p.Name, p.Path})
+					out = append(out, fileProject{ID: projectFileID(p.Path), Name: p.Name, Path: p.Path})
 				}
 			}
 			reply <- out
