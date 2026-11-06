@@ -2,17 +2,14 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"mime"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"miya/internal/appdir"
 	"miya/internal/claude"
 	"miya/internal/codex"
 	dg "miya/internal/delegation"
@@ -20,42 +17,6 @@ import (
 	"miya/internal/textutil"
 )
 
-func claudeHistoryPath(id string) string {
-	if id == "" || filepath.Base(id) != id {
-		return ""
-	}
-	dir := appdir.File("quickgui-claude")
-	if dir == "" {
-		return ""
-	}
-	return filepath.Join(dir, id+".json")
-}
-func saveClaudeHistory(t Thread) {
-	p := claudeHistoryPath(t.ServerID)
-	if p == "" {
-		return
-	}
-	data, err := json.Marshal(t)
-	if err != nil {
-		return
-	}
-	if os.MkdirAll(filepath.Dir(p), 0700) != nil {
-		return
-	}
-	tmp, err := os.CreateTemp(filepath.Dir(p), ".history-*")
-	if err != nil {
-		return
-	}
-	name := tmp.Name()
-	defer os.Remove(name)
-	if _, err = tmp.Write(data); err != nil {
-		tmp.Close()
-		return
-	}
-	if tmp.Close() == nil {
-		_ = os.Rename(name, p)
-	}
-}
 func (c *chatController) loadClaudeHistory(t Thread) {
 	if t.HistoryLoaded || t.Loading {
 		return
@@ -104,25 +65,6 @@ func (c *chatController) loadClaudeHistory(t Thread) {
 	}()
 }
 
-func claudeInput(text string, paths []string) ([]map[string]any, error) {
-	blocks := []map[string]any{{"type": "text", "text": text}}
-	for _, p := range paths {
-		typ := mime.TypeByExtension(filepath.Ext(p))
-		if strings.HasPrefix(typ, "image/") {
-			data, err := os.ReadFile(p)
-			if err != nil {
-				return nil, err
-			}
-			if len(data) > 20*1024*1024 {
-				return nil, fmt.Errorf("Image is too large: %s", filepath.Base(p))
-			}
-			blocks = append(blocks, map[string]any{"type": "image", "source": map[string]any{"type": "base64", "media_type": typ, "data": base64.StdEncoding.EncodeToString(data)}})
-		} else {
-			blocks = append(blocks, map[string]any{"type": "text", "text": "Attached file: " + p})
-		}
-	}
-	return blocks, nil
-}
 func (c *chatController) sendClaude(req SendRequest) int {
 	text, paths, policy := req.Text, req.Attachments, req.Policy
 	t := c.threadWithID(req.ThreadID)
@@ -402,6 +344,7 @@ func (c *chatController) finishClaude(id int, cwd string, err error) {
 	}
 	c.setApprovals(pending)
 }
+
 func (c *chatController) handleClaude(id int, f claude.Frame) {
 	if f.ParentToolUseID == "" && (f.Type == "assistant" || f.Type == "stream_event" || f.Type == "control_request") {
 		c.managedClaudeStarted(id)
@@ -612,6 +555,7 @@ func (c *chatController) handleClaude(id int, f claude.Frame) {
 		c.managedClaudeResult(id, state, f.UUID)
 	}
 }
+
 func (c *chatController) respondClaude(a codex.Approval, result any) bool {
 	var id string
 	_ = json.Unmarshal(a.ID, &id)
@@ -654,51 +598,6 @@ func (c *chatController) respondClaude(a codex.Approval, result any) bool {
 	return true
 }
 
-// claudePermissionMode maps the app's permission choices to Claude Code's
-// modes, so one picker serves both agents.
-func claudePermissionMode(policy string) string {
-	switch normalizePermissionPolicy(policy) {
-	case "never":
-		return "bypassPermissions"
-	case "on-failure":
-		return "auto"
-	default:
-		return "manual"
-	}
-}
-
-// turnHasOutput reports whether the turn since the last prompt produced a
-// reply or a tool call.
-func turnHasOutput(messages []Message) bool {
-	for i := len(messages) - 1; i >= 0; i-- {
-		switch messages[i].Role {
-		case "user":
-			return false
-		case "assistant", "tool":
-			return true
-		}
-	}
-	return false
-}
-
-// claudeErrorMessage explains an empty result, which Claude Code reports as
-// a diagnostic such as "[ede_diagnostic] … stop_reason=null" when the
-// request got no answer, keeping its own words below.
-func claudeErrorMessage(message string, hadOutput, customCommand bool) string {
-	if hadOutput && !strings.Contains(message, "ede_diagnostic") {
-		return message
-	}
-	hint := "Claude Code returned no response. Check your connection and sign-in status, then try again."
-	if customCommand {
-		hint = "Claude Code returned no response. Check proxy or API settings in the custom launch command under Settings → General, or clear the command and try again."
-	}
-	return hint + "\n\nOriginal error: " + message
-}
-
-// claudeStallAfter is how long a run may send nothing before the app says
-// it is still waiting.
-const claudeStallAfter = 60 * time.Second
-
 // stalledHint tells that Claude Code has sent nothing for a while. A tool
 // that runs, or an approval the user has not answered, is not a stall.
 func stalledHint(t Thread, waitingForUser bool, now time.Time) string {
@@ -713,35 +612,4 @@ func stalledHint(t Thread, waitingForUser bool, now time.Time) string {
 		return ""
 	}
 	return fmt.Sprintf("No response for %s. Check your network or proxy, or stop and try again.", formatElapsed(quiet.Milliseconds()))
-}
-
-// claudeTextKey is the message a complete text block of a reply fills in.
-// Claude Code sends each block of a reply in its own assistant frame, where
-// it is at index 0, while streamed deltas carry the block's index in the
-// whole reply; so the block completes the streamed message of its text, and
-// an unstreamed block takes the first key no other text holds.
-func claudeTextKey(t *Thread, messageID string, index int, text string) string {
-	prefix := messageID + ":"
-	partial := ""
-	used := map[string]bool{}
-	for _, m := range t.Messages {
-		if m.Role != "assistant" || !strings.HasPrefix(m.ItemID, prefix) {
-			continue
-		}
-		if m.Content == text {
-			return m.ItemID
-		}
-		if partial == "" && m.Content != "" && strings.HasPrefix(text, m.Content) {
-			partial = m.ItemID
-		}
-		used[m.ItemID] = true
-	}
-	if partial != "" {
-		return partial
-	}
-	for k := index; ; k++ {
-		if key := fmt.Sprintf("%s:%d", messageID, k); !used[key] {
-			return key
-		}
-	}
 }

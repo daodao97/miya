@@ -50,25 +50,6 @@ func (claudeBackend) ModelChoices(c *chatController) []string {
 	return out
 }
 
-// claudeModelNames are the names of Claude's models and aliases.
-var claudeModelNames = map[string]string{
-	"claude-fable-5-1":  "Claude Fable 5.1",
-	"claude-opus-5-5":   "Claude Opus 5.5",
-	"claude-sonnet-5-5": "Claude Sonnet 5.5",
-	"claude-haiku-5-5":  "Claude Haiku 5.5",
-	"fable":             tr("Fable (latest)"),
-	"opus":              tr("Opus (latest)"),
-	"sonnet":            tr("Sonnet (latest)"),
-	"haiku":             tr("Haiku (latest)"),
-}
-
-func claudeModelName(v string) string {
-	if n, ok := claudeModelNames[v]; ok {
-		return n
-	}
-	return v
-}
-
 // ModelLabel names the default by the model Claude Code last reported.
 func (claudeBackend) ModelLabel(c *chatController, v string) string {
 	if v != "" {

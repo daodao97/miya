@@ -3,6 +3,7 @@ package main
 import (
 	"miya/internal/account"
 	"miya/internal/async"
+	"miya/internal/claude"
 	"miya/internal/claude/transcript"
 	"miya/internal/composer"
 	"miya/internal/mcpproto"
@@ -300,4 +301,20 @@ var (
 	reviewerForPermissionPolicy    = prefs.ReviewerForPolicy
 	sandboxForPermissionPolicy     = prefs.SandboxForPolicy
 	turnSandboxForPermissionPolicy = prefs.TurnSandboxForPolicy
+)
+
+// Moved to internal/claude.
+const (
+	claudeStallAfter = claude.StallAfter
+)
+
+var (
+	claudeErrorMessage   = claude.ErrorMessage
+	claudeHistoryPath    = claude.HistoryPath
+	claudeInput          = claude.Input
+	claudeModelName      = claude.ModelName
+	claudePermissionMode = claude.PermissionMode
+	claudeTextKey        = claude.TextKey
+	saveClaudeHistory    = claude.SaveHistory
+	turnHasOutput        = claude.TurnHasOutput
 )
