@@ -17,7 +17,7 @@
 - Agent：已迁移目录并建立公共 quota.Provider、quota.Service 与 account.Source。供应商配额和账号 RPC 位于各自 Agent 实现；重置卡模型共用 account.ResetCreditsSummary。相关 race 回归通过，等待最终全量审计。
 - 会话：已收拢到 chat；共享模型和展示不再导入 Agent 实现，原生投影移回对应 Agent。旧 Item 和未知缓存字段有往返兼容测试。全量 race：1255 项通过、26 项跳过；go vet 通过。仍需最终构建与全领域审计。
 - 后台服务：协议、客户端、镜像状态、远程工作区入口、进程启动与服务生命周期已归入 service；server 通过 Host 接入控制器，不依赖 UI 或原生 Agent。服务与重连相关 race 回归通过。
-- 项目：模型、文件/Git、索引、排序、登记和本机访问合同已归入 project；远程访问位于 service/client，原生项目发现回到 Agent；权限映射和 Claude 设置也已离开通用 prefs。相关 race 回归通过。
+- 项目：模型、文件/Git、索引、排序、登记和本机访问合同已归入 project；远程访问位于 service/client，原生项目发现和信任配置写入回到 Agent，列表登记/重命名/删除由 registry 处理；权限映射和 Claude 设置也已离开通用 prefs。相关 race 回归通过。
 - 运行环境：Web 发现与入口已归入 runtime/web，与已有进程/端点数据和 tracker 同域；运行环境相关 race 回归通过。等待全量验证和完成审计。
 
 ## 完整依赖图审计

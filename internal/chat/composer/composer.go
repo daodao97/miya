@@ -1,6 +1,6 @@
 // Package composer understands what is typed in a message composer: slash
-// commands, @ file and # agent references, the project file index behind them,
-// and the collaboration instructions agent tags add to native input.
+// commands, @ file and # agent references, completion choices over project
+// indexes, and the collaboration instructions agent tags add to native input.
 package composer
 
 import (

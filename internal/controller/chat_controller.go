@@ -247,23 +247,9 @@ func (c *Controller) SelectedPermissionPolicy() string {
 }
 
 func (c *Controller) rememberProject(path string) {
-	items := append([]projectmodel.Project(nil), c.Projects()...)
-	for _, p := range items {
-		if p.Path == path {
-			return
-		}
-	}
-	items = append([]projectmodel.Project{{Name: filepath.Base(path), Path: path}}, items...)
-	c.SetProjects(items)
-	if home, err := os.UserHomeDir(); err == nil {
-		configPath := filepath.Join(home, ".codex", "config.toml")
-		if data, err := os.ReadFile(configPath); err == nil {
-			escaped := strings.ReplaceAll(path, `"`, `\"`)
-			section := "\n[projects.\"" + escaped + "\"]\ntrust_level = \"trusted\"\n"
-			if !strings.Contains(string(data), "[projects.\""+escaped+"\"]") {
-				_ = os.WriteFile(configPath, append(data, []byte(section)...), 0600)
-			}
-		}
+	if items, added := projectregistry.Remember(c.Projects(), path); added {
+		c.SetProjects(items)
+		integrations.RememberProject(path)
 	}
 }
 
@@ -272,13 +258,8 @@ func (c *Controller) RenameProject(path, name string) {
 		c.forward("renameProject", svcproto.ProjectRequest{Path: path, Name: name})
 		return
 	}
-	items := append([]projectmodel.Project(nil), c.Projects()...)
-	for i := range items {
-		if items[i].Path == path {
-			items[i].Name = name
-			c.SetProjects(items)
-			return
-		}
+	if items, changed := projectregistry.Rename(c.Projects(), path, name); changed {
+		c.SetProjects(items)
 	}
 }
 
@@ -340,33 +321,11 @@ func (c *Controller) deleteCodexThread(t model.Thread) { c.codexAdapter().Delete
 
 func (c *Controller) removeProject(path string, deleteConfig bool) {
 	path, _ = filepath.Abs(path)
-	items := append([]projectmodel.Project(nil), c.Projects()...)
-	projects := items[:0]
-	for _, project := range items {
-		if project.Path != path {
-			projects = append(projects, project)
-		}
-	}
-	c.SetProjects(projects)
+	c.SetProjects(projectregistry.Remove(c.Projects(), path))
 	delete(c.ProjectCache, path)
 	threadlist.Persist(c.ProjectCache)
-	if !deleteConfig {
-		return
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return
-	}
-	configPath := filepath.Join(home, ".codex", "config.toml")
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		return
-	}
-	escaped := strings.ReplaceAll(path, `"`, `\"`)
-	block := "\n[projects.\"" + escaped + "\"]\ntrust_level = \"trusted\"\n"
-	updated := strings.Replace(string(data), block, "\n", 1)
-	if updated != string(data) {
-		_ = os.WriteFile(configPath, []byte(updated), 0600)
+	if deleteConfig {
+		integrations.ForgetProject(path)
 	}
 }
 
