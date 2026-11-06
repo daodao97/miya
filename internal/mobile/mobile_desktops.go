@@ -18,7 +18,6 @@ import (
 	"miya/internal/model"
 	phonecache "miya/internal/phone/cache"
 	phoneproto "miya/internal/phone/protocol"
-	phoneserver "miya/internal/phone/server"
 	"miya/internal/remote"
 	"miya/internal/uiruntime"
 	"miya/internal/workspaces"
@@ -282,7 +281,7 @@ func (m *App) saveDesktopSession() {
 	if thread.ServerID != "" && len(thread.Messages) > 0 {
 		m.Remember(thread.ServerID, thread.Messages)
 	}
-	m.desktopSessions[id] = phonecache.Session{Thread: phoneserver.ListThread(thread), Selected: m.Selected, Agent: m.NewAgent,
+	m.desktopSessions[id] = phonecache.Session{Thread: model.ListThread(thread), Selected: m.Selected, Agent: m.NewAgent,
 		Draft: m.Draft, Images: append([]string(nil), m.Images...), ExpandedProject: m.ExpandedProject,
 		ProjectsExpanded: m.projectsExpanded, ThreadListExpanded: m.ThreadListExpanded}
 	m.Images = nil

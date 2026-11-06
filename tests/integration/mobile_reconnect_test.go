@@ -80,7 +80,7 @@ func TestMobileRebindsOpenThreadAfterDesktopRestart(t *testing.T) {
 		Messages: []model.Message{{ID: 10, Role: "assistant", Content: "Cached reply"}}})
 	m.Draft, m.Images = "Unsent follow-up", []string{"photo.png"}
 	// The old number was reused for another conversation in this process.
-	s := phoneproto.State{Projects: []phoneproto.Project{{Path: "/a", Threads: []model.Thread{
+	s := phoneproto.State{Projects: []model.ProjectSnapshot{{Path: "/a", Threads: []model.Thread{
 		{ID: 1, ServerID: "different", Title: "Wrong conversation"},
 		{ID: 77, ServerID: "s1", Title: "Original"},
 	}}}}
@@ -111,7 +111,7 @@ func TestMobileReconnectKeepsIdentityBeforeListArrives(t *testing.T) {
 	m.Remember("s1", []model.Message{{ID: 10, Content: "Cached reply"}})
 	// A new/partial list may already associate the old number with another
 	// conversation. Subscription and send must still identify the open page.
-	m.State = phoneproto.State{Projects: []phoneproto.Project{{Path: "/wrong", Threads: []model.Thread{{ID: 1, ServerID: "wrong"}}}}}
+	m.State = phoneproto.State{Projects: []model.ProjectSnapshot{{Path: "/wrong", Threads: []model.Thread{{ID: 1, ServerID: "wrong"}}}}}
 	r := m.SubscribeRequest(1)
 	if r.ServerID != "s1" || r.Project != "" || len(r.Have) != 1 {
 		t.Fatalf("reconnect subscribed using the wrong cached number: %+v", r)
@@ -123,7 +123,7 @@ func TestMobileReconnectKeepsIdentityBeforeListArrives(t *testing.T) {
 			t.Fatalf("missing-thread frame erased the stable identity: %+v", cur)
 		}
 	}
-	m.ApplyPhoneState(phoneproto.State{Projects: []phoneproto.Project{{Path: "/a", Threads: []model.Thread{{ID: 8, ServerID: "s1"}}}}})
+	m.ApplyPhoneState(phoneproto.State{Projects: []model.ProjectSnapshot{{Path: "/a", Threads: []model.Thread{{ID: 8, ServerID: "s1"}}}}})
 	if m.Open != 8 || m.Viewer.Current().ServerID != "s1" {
 		t.Fatal("a later startup list did not repair the open page")
 	}

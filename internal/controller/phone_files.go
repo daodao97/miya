@@ -9,6 +9,7 @@ import (
 	"miya/internal/async"
 	"miya/internal/desktop/control"
 	"miya/internal/model"
+	phoneproto "miya/internal/phone/protocol"
 	phoneserver "miya/internal/phone/server"
 	"miya/internal/runtime/tracker"
 	"miya/internal/webservice"
@@ -31,7 +32,7 @@ func (c *Controller) FileServer() http.Handler {
 			var out []phoneserver.FileProject
 			for _, p := range projects {
 				if p.Path != "" {
-					out = append(out, phoneserver.FileProject{ID: phoneserver.ProjectFileID(p.Path), Name: p.Name, Path: p.Path})
+					out = append(out, phoneserver.FileProject{ID: phoneproto.ProjectFileID(p.Path), Name: p.Name, Path: p.Path})
 				}
 			}
 			reply <- out

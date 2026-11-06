@@ -22,7 +22,7 @@ func MobileEntry() {
 	m.Loaded, m.Link, m.Host = true, "miya://input-fixture", tr("Input test")
 	source := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	thread := model.Thread{ID: 1, ServerID: "input-fixture", Agent: agentmeta.Default().ID, Title: tr("Native input interaction test"), HistoryLoaded: true}
-	m.State = phoneproto.State{ReferenceSource: source, Projects: []phoneproto.Project{{Name: "Miya", Path: "/input-fixture", Current: true, Threads: []model.Thread{thread}}}}
+	m.State = phoneproto.State{ReferenceSource: source, Projects: []model.ProjectSnapshot{{Name: "Miya", Path: "/input-fixture", Current: true, Threads: []model.Thread{thread}}}}
 	m.Router().Transition = ui.TransitionNone
 	m.OpenThread(thread)
 	m.ShowThread(thread)

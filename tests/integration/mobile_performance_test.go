@@ -36,14 +36,14 @@ func TestMobileHistoryReloadReusesMarkdownViews(t *testing.T) {
 	for i := range messages {
 		messages[i].ID += 100
 	}
-	m.ReceiveThread(1, phoneproto.ThreadDelta{Thread: phoneserver.ListThread(desk), Reset: true,
+	m.ReceiveThread(1, phoneproto.ThreadDelta{Thread: model.ListThread(desk), Reset: true,
 		Order: []int{110, 111}, Changed: messages})
 	tt.Frame()
 	if len(documents) != 2 {
 		t.Fatalf("history reload rebuilt parsed Markdown: %d documents", len(documents))
 	}
 	// A genuinely new prompt still gets its own view and keeps the old ones.
-	m.ReceiveThread(1, phoneproto.ThreadDelta{Thread: phoneserver.ListThread(desk), Order: []int{110, 111, 112},
+	m.ReceiveThread(1, phoneproto.ThreadDelta{Thread: model.ListThread(desk), Order: []int{110, 111, 112},
 		Changed: []model.Message{{ID: 112, Role: "user", TurnID: "turn2", ItemID: "user2", Content: "Follow-up"}}})
 	tt.Frame()
 	if len(documents) != 3 || !tt.HasText("Follow-up") || !tt.HasText("Previous") {

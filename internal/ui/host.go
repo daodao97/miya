@@ -10,7 +10,6 @@ import (
 	"miya/internal/interaction"
 	"miya/internal/memory/manager"
 	"miya/internal/model"
-	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/runtime/tracker"
 	"miya/internal/svcproto"
 )
@@ -79,7 +78,7 @@ type Host interface {
 	TaskAction(threadID int, taskID string, action string) string
 	TaskWaitingApproval(t model.Thread) bool
 	ThreadRef(t model.Thread) model.ThreadRef
-	ThreadRefProjects() []phoneproto.Project
+	ThreadRefProjects() []model.ProjectSnapshot
 	ThreadWithID(id int) model.Thread
 	ThreadWorkspace(id int) string
 	WorkspaceFiles() appmodel.WorkspaceFiles

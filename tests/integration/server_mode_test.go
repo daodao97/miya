@@ -21,7 +21,6 @@ import (
 
 	"miya/internal/controller"
 	phoneproto "miya/internal/phone/protocol"
-	phoneserver "miya/internal/phone/server"
 	"miya/internal/remote"
 	"miya/internal/svcproto"
 	desktopui "miya/internal/ui"
@@ -372,7 +371,7 @@ func TestServerLinuxDeployment(t *testing.T) {
 	transport := &http.Transport{DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) { return cl.Wire().DialFiles(ctx) }}
 	defer transport.CloseIdleConnections()
 	client := &http.Client{Transport: transport, Timeout: 15 * time.Second}
-	response, err := client.Get("http://server/" + phoneserver.ProjectFileID(state.Cwd) + "/miya-linux-qa.txt")
+	response, err := client.Get("http://server/" + phoneproto.ProjectFileID(state.Cwd) + "/miya-linux-qa.txt")
 	if err != nil {
 		t.Fatal("Linux file stream", err)
 	}

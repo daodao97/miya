@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"miya/internal/mobile"
+	phoneproto "miya/internal/phone/protocol"
 	phoneproxy "miya/internal/phone/proxy"
 	phoneserver "miya/internal/phone/server"
 	"miya/internal/webservice"
@@ -43,7 +44,7 @@ func TestProjectWebServicesEndpointAndPhoneFetch(t *testing.T) {
 	if _, err := mobile.FetchPhoneWebServices(context.Background(), dial, t.TempDir()); err == nil {
 		t.Fatal("unshared project accepted")
 	}
-	if w := fileRequest(t, handler, "POST", "/"+phoneserver.ProjectFileID(root)+"/"+webservice.ProjectFile, nil); w.Code != 405 {
+	if w := fileRequest(t, handler, "POST", "/"+phoneproto.ProjectFileID(root)+"/"+webservice.ProjectFile, nil); w.Code != 405 {
 		t.Fatal("discovery accepted a write")
 	}
 	if calls != 1 {

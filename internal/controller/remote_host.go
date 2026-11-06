@@ -67,9 +67,9 @@ func (c *Controller) PhoneSnapshot() phoneproto.State {
 		if p.Path == c.Cwd {
 			threads = c.Threads()
 		}
-		pp := phoneproto.Project{Name: p.Name, Path: p.Path, Current: p.Path == c.Cwd, Threads: make([]model.Thread, 0, len(threads))}
+		pp := model.ProjectSnapshot{Name: p.Name, Path: p.Path, Current: p.Path == c.Cwd, Threads: make([]model.Thread, 0, len(threads))}
 		for _, t := range threads {
-			pp.Threads = append(pp.Threads, phoneserver.ListThread(t))
+			pp.Threads = append(pp.Threads, model.ListThread(t))
 		}
 		pp.Threads = msgfmt.DisplayedThreads(pp.Threads, true)
 		s.Projects = append(s.Projects, pp)
@@ -458,7 +458,7 @@ func readOnlyHistory(ctx context.Context, t phoneThread) ([]model.Message, strin
 	return messages, ""
 }
 
-// phoneHost is the desktop's bridge to phones, in internal/phoneserver.
+// phoneHost is the desktop's bridge to phones, in internal/phone/server.
 type phoneHost = phoneserver.Pairing
 
 var DesktopPhone *phoneHost

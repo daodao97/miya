@@ -14,7 +14,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	phoneserver "miya/internal/phone/server"
+	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/remote"
 )
 
@@ -45,7 +45,7 @@ func NewPhoneFileProxy(conn *remote.Conn, project string) (*PhoneFileProxy, erro
 }
 
 func (p *PhoneFileProxy) Start(project string, dial func(context.Context) (net.Conn, error)) error {
-	return p.StartProxy("/"+phoneserver.ProjectFileID(project), "", dial)
+	return p.StartProxy("/"+phoneproto.ProjectFileID(project), "", dial)
 }
 
 func (p *PhoneFileProxy) StartProxy(prefix, webOrigin string, dial func(context.Context) (net.Conn, error)) error {

@@ -133,7 +133,7 @@ func TestPhoneThreadDeltasKeepHistoryWhileResuming(t *testing.T) {
 				}
 				s = phoneserver.NewThreadSync(have)
 			}
-			loading := phoneserver.ListThread(desk)
+			loading := model.ListThread(desk)
 			loading.Loading, loading.Busy = true, true
 			for _, loaded := range []bool{false, true} {
 				loading.HistoryLoaded = loaded

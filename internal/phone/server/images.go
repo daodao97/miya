@@ -2,69 +2,27 @@ package server
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
-	"time"
 
+	phonetransfer "miya/internal/phone/transfer"
 	"miya/internal/remote"
-)
-
-// The same limits apply to binary uploads and legacy inline photos.
-const (
-	MaxImages     = remote.MaxImages
-	MaxImageBytes = remote.MaxImageBytes
-	MaxImageTotal = remote.MaxImageTotal
-	uploadsKept   = 7 * 24 * time.Hour
 )
 
 var imageExts = map[string]bool{".png": true, ".jpg": true, ".jpeg": true, ".gif": true, ".webp": true, ".heic": true, ".heif": true}
 
-func CheckImages(n, size, total int) error {
-	switch {
-	case n > MaxImages:
-		return fmt.Errorf("Send up to %d images at a time", MaxImages)
-	case size > MaxImageBytes:
-		return fmt.Errorf("Each image must be at most %d MB", MaxImageBytes>>20)
-	case total > MaxImageTotal:
-		return fmt.Errorf("Total image size must be at most %d MB", MaxImageTotal>>20)
-	}
-	return nil
-}
-
-// readPhoneImages reads the photos a phone attaches to a message.
-func ReadImages(paths []string) ([]remote.Image, error) {
-	if err := CheckImages(len(paths), 0, 0); err != nil {
-		return nil, err
-	}
-	var out []remote.Image
-	total := 0
-	for _, p := range paths {
-		data, err := os.ReadFile(p)
-		if err != nil {
-			return nil, errors.New("Unable to read image. Select it again.")
-		}
-		total += len(data)
-		if err := CheckImages(len(paths), len(data), total); err != nil {
-			return nil, err
-		}
-		out = append(out, remote.Image{Name: filepath.Base(p), Data: data})
-	}
-	return out, nil
-}
-
-// savePhoneImages keeps a phone's photos as files the agents can read, as
+// SaveImages keeps a phone's photos as files the agents can read, as
 // attachments chosen on the desktop are. HEIC becomes JPEG, which every
 // agent reads.
 func SaveImages(images []remote.Image) (paths []string, err error) {
 	if len(images) == 0 {
 		return nil, nil
 	}
-	if err := CheckImages(len(images), 0, 0); err != nil {
+	if err := phonetransfer.CheckImages(len(images), 0, 0); err != nil {
 		return nil, err
 	}
 	dir := filepath.Join(os.TempDir(), "miya-phone-uploads")
@@ -74,7 +32,7 @@ func SaveImages(images []remote.Image) (paths []string, err error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, errors.New("Unable to save image")
 	}
-	PruneOldUploads(dir)
+	phonetransfer.PruneOldUploads(dir)
 	defer func() {
 		if err != nil {
 			for _, p := range paths {
@@ -86,7 +44,7 @@ func SaveImages(images []remote.Image) (paths []string, err error) {
 	total := 0
 	for _, img := range images {
 		total += len(img.Data)
-		if err := CheckImages(len(images), len(img.Data), total); err != nil {
+		if err := phonetransfer.CheckImages(len(images), len(img.Data), total); err != nil {
 			return paths, err
 		}
 		ext := strings.ToLower(filepath.Ext(filepath.Base(img.Name)))
@@ -127,18 +85,4 @@ func SaveImages(images []remote.Image) (paths []string, err error) {
 		paths = append(paths, path)
 	}
 	return paths, nil
-}
-
-// pruneOldUploads removes photos sent long ago; the conversations keep
-// their own copies.
-func PruneOldUploads(dir string) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return
-	}
-	for _, e := range entries {
-		if info, err := e.Info(); err == nil && info.Mode().IsRegular() && time.Since(info.ModTime()) > uploadsKept {
-			os.Remove(filepath.Join(dir, e.Name()))
-		}
-	}
 }

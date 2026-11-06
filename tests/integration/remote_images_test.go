@@ -11,6 +11,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	phoneserver "miya/internal/phone/server"
+	phonetransfer "miya/internal/phone/transfer"
 	"miya/internal/remote"
 )
 
@@ -37,7 +38,7 @@ func TestSavePhoneImages(t *testing.T) {
 	if _, err := phoneserver.SaveImages([]remote.Image{{Name: "x.txt", Data: []byte("hello")}}); err == nil {
 		t.Error("text should be refused")
 	}
-	if _, err := phoneserver.SaveImages(make([]remote.Image, phoneserver.MaxImages+1)); err == nil {
+	if _, err := phoneserver.SaveImages(make([]remote.Image, phonetransfer.MaxImages+1)); err == nil {
 		t.Error("too many images should be refused")
 	}
 }

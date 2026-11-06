@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"miya/internal/model"
-	phoneserver "miya/internal/phone/server"
+	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/remote"
 )
 
@@ -77,7 +77,7 @@ func FetchPhoneFileReferences(ctx context.Context, dial func(context.Context) (n
 	transport := &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) { return dial(ctx) }}
 	defer transport.CloseIdleConnections()
 	client := &http.Client{Transport: transport, Timeout: 8 * time.Second}
-	req, err := http.NewRequestWithContext(ctx, "GET", "http://desktop/"+phoneserver.ProjectFileID(project)+"/.miya-references?q="+url.QueryEscape(query), nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", "http://desktop/"+phoneproto.ProjectFileID(project)+"/.miya-references?q="+url.QueryEscape(query), nil)
 	if err != nil {
 		return nil, err
 	}

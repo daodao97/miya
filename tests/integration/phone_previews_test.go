@@ -16,6 +16,7 @@ import (
 	"miya/internal/mobile"
 	"miya/internal/model"
 	phoneserver "miya/internal/phone/server"
+	phonetransfer "miya/internal/phone/transfer"
 	"miya/internal/remote"
 	"miya/internal/thumbnail"
 	"miya/internal/uiruntime"
@@ -28,7 +29,7 @@ func TestPhonePreviewSurvivesSendAndRelaunch(t *testing.T) {
 	if err := os.WriteFile(local, testPNG(t), 0600); err != nil {
 		t.Fatal(err)
 	}
-	upload, err := phoneserver.ReadImages([]string{local})
+	upload, err := phonetransfer.ReadImages([]string{local})
 	if err != nil {
 		t.Fatal(err)
 	}

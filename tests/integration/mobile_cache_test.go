@@ -20,7 +20,7 @@ func TestMobileDiskCacheSurvivesRelaunch(t *testing.T) {
 	m.DataDir = data
 	m.OpenDiskCache("miya://connect?a")
 	m.Host = "mac"
-	m.State = phoneproto.State{Projects: []phoneproto.Project{{Name: "Miya", Path: "/m", Current: true, Threads: []model.Thread{{ID: 3, Title: "cached", ServerID: "s3"}}}}}
+	m.State = phoneproto.State{Projects: []model.ProjectSnapshot{{Name: "Miya", Path: "/m", Current: true, Threads: []model.Thread{{ID: 3, Title: "cached", ServerID: "s3"}}}}}
 	m.State.Approvals = append(m.State.Approvals, m.State.Approvals...)
 	m.PersistState()
 	msgs := longThread(30).Messages

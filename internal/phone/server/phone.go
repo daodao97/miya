@@ -16,14 +16,6 @@ import (
 	"miya/internal/svcproto"
 )
 
-// listThread is a conversation as the list shows it: no messages, and never
-// the desktop's unsent draft.
-func ListThread(t model.Thread) model.Thread {
-	t.Messages = nil
-	t.Draft = ""
-	return t
-}
-
 func HasHistory(t model.Thread) bool { return len(t.Messages) > 0 || t.HistoryLoaded }
 
 func Dir() string {
@@ -61,8 +53,7 @@ func PersistEnabled(enabled bool) {
 	_ = os.WriteFile(path, data, 0600)
 }
 
-// sameJSON compares two JSON values regardless of their spacing.
-// phoneThreadSync is what one phone holds of the conversation it watches,
+// ThreadSync is what one phone holds of the conversation it watches,
 // as the service's windows have theirs (svcPeer.diff).
 type ThreadSync struct {
 	images map[string]bool
@@ -72,7 +63,7 @@ type ThreadSync struct {
 	fresh  bool
 }
 
-// newPhoneThreadSync starts from what the phone said it holds; without it
+// NewThreadSync starts from what the phone said it holds; without it
 // the first update replaces the phone's copy.
 func NewThreadSync(have []remote.Seen) *ThreadSync {
 	s := &ThreadSync{sent: map[int]uint64{}, fresh: len(have) == 0}
@@ -83,11 +74,10 @@ func NewThreadSync(have []remote.Seen) *ThreadSync {
 	return s
 }
 
-// update is the delta that brings the phone to t, and whether there is one;
-// it records the delta as sent.
 // HasImage reports whether the conversation last synced shows image src.
 func (s *ThreadSync) HasImage(src string) bool { return s.images[src] }
 
+// Update returns the delta that brings the phone to t and records it as sent.
 func (s *ThreadSync) Update(t model.Thread) (phoneproto.ThreadDelta, bool) {
 	msgs := t.Messages
 	t.Messages, t.Draft = nil, ""

@@ -2,8 +2,6 @@ package server
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -20,6 +18,7 @@ import (
 
 	"github.com/egoist/mygo/i18n"
 	"golang.org/x/text/language"
+
 	"miya/internal/composer"
 	"miya/internal/model"
 	"miya/internal/runtime/tracker"
@@ -276,9 +275,4 @@ func PlainFileExtension(ext string) bool {
 		return true
 	}
 	return false
-}
-
-func ProjectFileID(root string) string {
-	sum := sha256.Sum256([]byte(root))
-	return hex.EncodeToString(sum[:16])
 }

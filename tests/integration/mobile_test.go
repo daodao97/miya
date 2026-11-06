@@ -15,7 +15,7 @@ import (
 func testMobileApp() *mobile.App {
 	m := mobile.NewMobileApp()
 	m.Loaded, m.Link, m.Connected, m.Host = true, "miya://connect", true, "mac"
-	m.State = phoneproto.State{ReferenceSource: testReferenceSource, Projects: []phoneproto.Project{
+	m.State = phoneproto.State{ReferenceSource: testReferenceSource, Projects: []model.ProjectSnapshot{
 		{Name: "proj-a", Path: "/a", Current: true, Threads: []model.Thread{{ID: 1, Title: "thread-one", ServerID: "s1"}}},
 		{Name: "proj-b", Path: "/b", Threads: []model.Thread{{ID: 2, Title: "thread-two", ServerID: "s2"}}},
 	}}

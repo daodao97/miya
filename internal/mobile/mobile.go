@@ -29,7 +29,7 @@ import (
 	phonecache "miya/internal/phone/cache"
 	phoneproto "miya/internal/phone/protocol"
 	phoneproxy "miya/internal/phone/proxy"
-	phoneserver "miya/internal/phone/server"
+	phonetransfer "miya/internal/phone/transfer"
 	"miya/internal/prefs"
 	"miya/internal/remote"
 	"miya/internal/svcproto"
@@ -821,7 +821,7 @@ func (m *App) Subscribe(id int) {
 }
 
 // find looks a conversation up in the desktop's state.
-func (m *App) find(id int) (model.Thread, phoneproto.Project) {
+func (m *App) find(id int) (model.Thread, model.ProjectSnapshot) {
 	for _, p := range m.State.Projects {
 		for _, t := range p.Threads {
 			if t.ID == id {
@@ -829,21 +829,21 @@ func (m *App) find(id int) (model.Thread, phoneproto.Project) {
 			}
 		}
 	}
-	return model.Thread{}, phoneproto.Project{}
+	return model.Thread{}, model.ProjectSnapshot{}
 }
 
-func (m *App) project(path string) phoneproto.Project {
+func (m *App) project(path string) model.ProjectSnapshot {
 	for _, p := range m.State.Projects {
 		if p.Path == path {
 			return p
 		}
 	}
-	return phoneproto.Project{Path: path, Name: filepath.Base(path)}
+	return model.ProjectSnapshot{Path: path, Name: filepath.Base(path)}
 }
 
 // currentProject is the desktop's open project, where a new conversation
 // starts.
-func (m *App) currentProject() phoneproto.Project {
+func (m *App) currentProject() model.ProjectSnapshot {
 	for _, p := range m.State.Projects {
 		if p.Current {
 			return p
@@ -852,7 +852,7 @@ func (m *App) currentProject() phoneproto.Project {
 	if len(m.State.Projects) > 0 {
 		return m.State.Projects[0]
 	}
-	return phoneproto.Project{}
+	return model.ProjectSnapshot{}
 }
 
 func (m *App) ApprovalsFor(serverID string) []interaction.Request {
@@ -978,7 +978,7 @@ func (m *App) sendDraft(steer bool) {
 		m.BeginNewSend(r.Text, paths)
 	}
 	go func() {
-		images, err := phoneserver.ReadImages(paths)
+		images, err := phonetransfer.ReadImages(paths)
 		if err == nil {
 			r.Images = images
 			err = conn.Send(r)
@@ -1299,7 +1299,7 @@ func (m *App) listView(c *ui.Context) {
 
 // selectedProject is where a new conversation starts: the chosen project,
 // else the desktop's open project.
-func (m *App) selectedProject() phoneproto.Project {
+func (m *App) selectedProject() model.ProjectSnapshot {
 	if m.Selected != "" {
 		for _, p := range m.State.Projects {
 			if p.Path == m.Selected {
@@ -1613,7 +1613,7 @@ func (m *App) threadView(c *ui.Context) {
 	m.composer(c, agent, busy)
 }
 
-func (m *App) newConversationView(c *ui.Context, proj phoneproto.Project) {
+func (m *App) newConversationView(c *ui.Context, proj model.ProjectSnapshot) {
 	p := m.Pal
 	agent := m.composerAgent()
 	ui.Scroll(c.Key("draft-intro")).Grow(1).FillWidth().MinHeight(0).Children(func() {
@@ -1789,8 +1789,8 @@ func (m *App) composer(c *ui.Context, agent string, busy bool) {
 // addPhotos picks photos from the library with the system picker, which
 // needs no access to the whole library.
 func (m *App) addPhotos() {
-	if len(m.Images) >= phoneserver.MaxImages {
-		m.SendErr = fmt.Sprintf(tr("Send up to %d images at a time"), phoneserver.MaxImages)
+	if len(m.Images) >= phonetransfer.MaxImages {
+		m.SendErr = fmt.Sprintf(tr("Send up to %d images at a time"), phonetransfer.MaxImages)
 		return
 	}
 	win := m.win
@@ -1804,8 +1804,8 @@ func (m *App) addPhotos() {
 				m.SendErr = tr("Unable to open photos: ") + err.Error()
 			}
 			for _, p := range paths {
-				if len(m.Images) >= phoneserver.MaxImages {
-					m.SendErr = fmt.Sprintf(tr("Send up to %d images at a time"), phoneserver.MaxImages)
+				if len(m.Images) >= phonetransfer.MaxImages {
+					m.SendErr = fmt.Sprintf(tr("Send up to %d images at a time"), phonetransfer.MaxImages)
 					go os.Remove(p)
 					continue
 				}
@@ -2017,7 +2017,7 @@ func (m *App) ThreadRequest(op string, id int) remote.Request {
 	// already reused its numeric ID for a different conversation.
 	if cur := m.Viewer.Current(); cur.ID == id && cur.ServerID != "" {
 		if cur.ServerID != t.ServerID || model.ThreadAgent(cur) != model.ThreadAgent(t) {
-			p = phoneproto.Project{}
+			p = model.ProjectSnapshot{}
 		}
 		t = cur
 	}

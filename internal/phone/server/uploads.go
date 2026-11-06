@@ -9,12 +9,13 @@ import (
 	"strings"
 
 	"miya/internal/appdir"
+	phonetransfer "miya/internal/phone/transfer"
 	"miya/internal/remote"
 )
 
 func CheckDesktopUploads(count, size, total int) error {
-	if count > MaxImages || size > MaxImageBytes || total > MaxImageTotal {
-		return fmt.Errorf("Send up to %d attachments at a time, %d MB each, %d MB total", MaxImages, MaxImageBytes>>20, MaxImageTotal>>20)
+	if count > phonetransfer.MaxImages || size > phonetransfer.MaxImageBytes || total > phonetransfer.MaxImageTotal {
+		return fmt.Errorf("Send up to %d attachments at a time, %d MB each, %d MB total", phonetransfer.MaxImages, phonetransfer.MaxImageBytes>>20, phonetransfer.MaxImageTotal>>20)
 	}
 	return nil
 }
@@ -30,7 +31,7 @@ func ReadDesktopUploads(paths []string) ([]remote.Image, error) {
 		if err != nil {
 			return nil, err
 		}
-		data, err := io.ReadAll(io.LimitReader(f, MaxImageBytes+1))
+		data, err := io.ReadAll(io.LimitReader(f, phonetransfer.MaxImageBytes+1))
 		f.Close()
 		if err != nil {
 			return nil, err
@@ -52,7 +53,7 @@ func SaveDesktopUploads(files []remote.Image) (paths []string, err error) {
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return nil, err
 	}
-	PruneOldUploads(dir)
+	phonetransfer.PruneOldUploads(dir)
 	defer func() {
 		if err != nil {
 			for _, path := range paths {

@@ -9,7 +9,6 @@ import (
 
 	"miya/internal/appmodel"
 	"miya/internal/model"
-	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/remote"
 	"miya/internal/textutil"
 	"miya/internal/uiruntime"
@@ -131,9 +130,9 @@ func (m *App) openCollaborationThread(raw string) {
 
 // Resolve the complete backend identity across projects. Numeric sidebar IDs
 // may be reused after a reconnect and must not choose the destination.
-func (m *App) referencedThread(ref model.ThreadRef) (model.Thread, phoneproto.Project, bool) {
+func (m *App) referencedThread(ref model.ThreadRef) (model.Thread, model.ProjectSnapshot, bool) {
 	if !ref.Valid() || ref.Source != m.State.ReferenceSource {
-		return model.Thread{}, phoneproto.Project{}, false
+		return model.Thread{}, model.ProjectSnapshot{}, false
 	}
 	for _, project := range m.State.Projects {
 		for _, thread := range project.Threads {
@@ -142,5 +141,5 @@ func (m *App) referencedThread(ref model.ThreadRef) (model.Thread, phoneproto.Pr
 			}
 		}
 	}
-	return model.Thread{}, phoneproto.Project{}, false
+	return model.Thread{}, model.ProjectSnapshot{}, false
 }

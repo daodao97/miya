@@ -11,7 +11,6 @@ import (
 	"miya/internal/appmodel"
 	"miya/internal/controller"
 	"miya/internal/model"
-	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/svcproto"
 	desktopui "miya/internal/ui"
 )
@@ -43,7 +42,7 @@ func TestGlobalThreadChoicesIncludeAllProjectsAndMatches(t *testing.T) {
 	if got := app.ThreadChoices("已删除"); len(got) != 0 {
 		t.Fatalf("stale current-project cache searched: %+v", got)
 	}
-	if got := appmodel.MatchingThreadRefs([]phoneproto.Project{{Threads: []model.Thread{{ID: 7, ServerID: "session-7", Title: "API Review"}, {ID: 7, ServerID: "session-7", Title: "API Review"}, {ID: 0}}}}, 0, "api"); len(got) != 1 {
+	if got := appmodel.MatchingThreadRefs([]model.ProjectSnapshot{{Threads: []model.Thread{{ID: 7, ServerID: "session-7", Title: "API Review"}, {ID: 7, ServerID: "session-7", Title: "API Review"}, {ID: 0}}}}, 0, "api"); len(got) != 1 {
 		t.Fatalf("case-insensitive match or deduplication failed: %+v", got)
 	}
 }

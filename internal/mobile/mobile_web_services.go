@@ -15,7 +15,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"miya/internal/model"
-	phoneserver "miya/internal/phone/server"
+	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/remote"
 	rt "miya/internal/runtime"
 	"miya/internal/runtime/tracker"
@@ -120,7 +120,7 @@ func FetchPhoneWebServices(ctx context.Context, dial func(context.Context) (net.
 	transport := &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) { return dial(ctx) }}
 	defer transport.CloseIdleConnections()
 	client := &http.Client{Transport: transport, Timeout: 12 * time.Second}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://desktop/"+phoneserver.ProjectFileID(project)+"/"+webservice.ProjectFile, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://desktop/"+phoneproto.ProjectFileID(project)+"/"+webservice.ProjectFile, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -207,7 +207,7 @@ func FetchPhoneRuntime(ctx context.Context, dial func(context.Context) (net.Conn
 	transport := &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) { return dial(ctx) }}
 	defer transport.CloseIdleConnections()
 	client := &http.Client{Transport: transport, Timeout: 12 * time.Second}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://desktop/"+phoneserver.ProjectFileID(project)+"/.miya-runtime?ref="+url.QueryEscape(ref.URL()), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://desktop/"+phoneproto.ProjectFileID(project)+"/.miya-runtime?ref="+url.QueryEscape(ref.URL()), nil)
 	if err != nil {
 		return tracker.ConversationRuntime{}, err
 	}

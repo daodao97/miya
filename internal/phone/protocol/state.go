@@ -30,7 +30,7 @@ type State struct {
 	Automations      bool                       `json:"automations,omitempty"`
 	AutomationRun    bool                       `json:"automationRun,omitempty"`
 	AutomationCreate bool                       `json:"automationCreate,omitempty"`
-	Projects         []Project                  `json:"projects"`
+	Projects         []model.ProjectSnapshot    `json:"projects"`
 	Status           string                     `json:"status"`
 	Approvals        []interaction.Request      `json:"approvals"`
 	Agents           []AgentOptions             `json:"agents,omitempty"`
@@ -40,13 +40,6 @@ type State struct {
 	Agent  string `json:"agent"`
 	Model  string `json:"model"`
 	Effort string `json:"effort"`
-}
-
-type Project struct {
-	Name    string         `json:"name"`
-	Path    string         `json:"path"`
-	Current bool           `json:"current"`
-	Threads []model.Thread `json:"threads"`
 }
 
 // ThreadDelta brings the phone's copy of a conversation up to date:
