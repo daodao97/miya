@@ -12,14 +12,32 @@
 
 完成前检查全量 race 测试、静态检查及 macOS、iOS、Linux、Windows 构建。通用基础设施 `remote`、`fsutil`、`async` 等继续独立；订阅配额和消息 Token 用量分别建模；原生子任务和 Miya 委派调度分别建模。
 
-## 进度
+## 完成情况
 
-- Agent：已迁移目录并建立公共 quota.Provider、quota.Service 与 account.Source。供应商配额和账号 RPC 位于各自 Agent 实现；重置卡模型共用 account.ResetCreditsSummary。相关 race 回归通过，等待最终全量审计。
-- 会话：已收拢到 chat；共享模型和展示不再导入 Agent 实现，原生投影移回对应 Agent。旧 Item 和未知缓存字段有往返兼容测试。全量 race：1255 项通过、26 项跳过；go vet 通过。仍需最终构建与全领域审计。
-- 后台服务：协议、客户端、镜像状态、远程工作区入口、进程启动与服务生命周期已归入 service；server 通过 Host 接入控制器，不依赖 UI 或原生 Agent。服务与重连相关 race 回归通过。
-- 项目：模型、文件/Git、索引、排序、登记和本机访问合同已归入 project；远程访问位于 service/client，原生项目发现和信任配置写入回到 Agent，列表登记/重命名/删除由 registry 处理；权限映射和 Claude 设置也已离开通用 prefs。相关 race 回归通过。
-- 运行环境：Web 发现与入口已归入 runtime/web，与已有进程/端点数据和 tracker 同域；运行环境相关 race 回归通过。等待全量验证和完成审计。
+- Agent：account、quota、catalog 与 policy 归属明确；Provider、Service、Source 接口隔离供应商读取和 RPC，共用重置卡模型。
+- 会话：model、composer、history、presentation、text、usage、subagent、view 归入 chat；原生转换归回对应 Agent，保留旧缓存和协议字段。
+- 后台服务：protocol、client、server、process、workspaces 归入 service；Host 接入控制器，保留消息增量、重连及忙碌时延期升级。
+- 项目：model、files、git、registry、access 归入 project；本机和远程文件适配分开，供应商项目发现与信任配置写入归回 Agent。
+- 运行环境：Web 发现与入口归入 runtime/web，与进程、端点模型及 tracker 同域；传输与界面继续独立。
 
 ## 完整依赖图审计
 
 仅检查直接 import 不足以隔离界面：automation 的生成实现、manager 的具体记忆工作器和 phone 协议的 SDK 编码曾间接把原生 Agent 带回界面。现在分别通过 DraftGenerator、manager.Engine 与纯 legacy 编码合同切断，生成实现回到各 Agent，公共 CLI 配置独立于 SDK。go list 已核实 ui、mobile、chat/view 的完整依赖图没有 controller、agent/codex、agent/claude；测试同时扫描所有平台源文件的间接依赖以维持此边界。
+
+## 最终验收
+
+验收代码提交：`4970f8e`（本节随后仅补充文档）。
+
+| 检查 | 结果 |
+| --- | --- |
+| `go test -race -p 2 -json ./...` | 1259 项通过、26 项跳过；0 失败、0 竞态报告 |
+| `go vet -p 2 ./...` | 通过 |
+| macOS 原生构建 | arm64，启用 cgo；隔离产物整包验签通过 |
+| iOS 原生模拟器构建 | arm64，UIKit 主程序 MyGoApp，构建报告的元数据、架构、隐私与符号检查通过 |
+| iOS 模拟器资源封装 | 构建器允许未签名；本次隔离验证产物另作本地 ad-hoc 签名后整包验签通过，项目签名策略未改动 |
+| Linux / Windows | amd64 可执行文件构建通过，全仓测试交叉编译通过（未在目标系统执行测试） |
+| UI 依赖图 | `go list -deps` 核实桌面、手机、共享视图均不引入控制器、原生 Agent 或 integrations |
+| 包边界与旧目录 | 跨平台源文件的直接/间接依赖检查通过；旧根级业务目录已退出，无空壳转发包 |
+| 工作树 | 代码验收时干净；产物位于独立临时目录，未覆盖已安装应用 |
+
+关键回归涵盖账号切换、配额缺失与幂等重置、旧消息字段往返、UI 与引用、服务忙碌和重连、项目排序/登记/删除、文件与符号链接边界、Git 差异、进程与端点归属、运行访问令牌，以及自动化和记忆工作器注入。
