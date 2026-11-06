@@ -405,3 +405,15 @@ type (
 var (
 	projectFileID = phone.ProjectFileID
 )
+
+// Moved to internal/svcproto.
+type (
+	hostCommands = svcproto.HostCommands
+	hostEntry    = svcproto.HostEntry
+	hostRequest  = svcproto.HostRequest
+	hostSides    = svcproto.HostSides
+)
+
+var (
+	hostProjectPath = svcproto.HostProjectPath
+)

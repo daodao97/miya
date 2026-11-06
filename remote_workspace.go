@@ -18,25 +18,6 @@ import (
 	"miya/internal/worktree"
 )
 
-type hostRequest struct {
-	Action, Project, Path, Text string
-	Source                      worktree.DiffSource
-	Snapshot                    worktree.DiffSnapshot
-	File                        worktree.ChangedFile
-	Images                      []remote.Image
-	Reset                       *agentusage.ResetAttempt
-}
-
-type hostEntry struct {
-	Name, Path string
-	Dir        bool
-}
-type hostSides struct{ Old, New string }
-type hostCommands struct {
-	Choices []composerChoice
-	Known   bool
-}
-
 func (c *chatController) prepareHost(r hostRequest) (deferred, error) {
 	// Desktop clients have the same authority as a local window. Project
 	// operations still bind their root, so an old tab cannot silently follow
@@ -135,36 +116,6 @@ func (c *chatController) prepareHost(r hostRequest) (deferred, error) {
 		}
 		return nil, errors.New("Unknown server operation")
 	}, nil
-}
-
-func hostProjectPath(root, rel string) (string, error) {
-	if rel == "" {
-		return root, nil
-	}
-	if !filepath.IsLocal(rel) {
-		return "", errors.New("Invalid project path")
-	}
-	path := filepath.Join(root, rel)
-	resolved, err := filepath.EvalSymlinks(path)
-	if os.IsNotExist(err) {
-		var parent string
-		parent, err = filepath.EvalSymlinks(filepath.Dir(path))
-		if err == nil {
-			resolved = filepath.Join(parent, filepath.Base(path))
-		}
-	}
-	if err != nil {
-		return "", err
-	}
-	base, err := filepath.EvalSymlinks(root)
-	if err != nil {
-		return "", err
-	}
-	inside, err := filepath.Rel(base, resolved)
-	if err != nil || !filepath.IsLocal(inside) {
-		return "", errors.New("File is outside the project directory")
-	}
-	return path, nil
 }
 
 func (c *chatController) hostCall(r hostRequest, out any) error {
