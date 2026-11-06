@@ -175,7 +175,7 @@ func TestForkKeepsOriginalReferenceAndMetadataAcrossRestart(t *testing.T) {
 	if err != nil || got.ServerID != ref.SessionID || len(messages) != len(src.Messages) {
 		t.Fatalf("reference followed fork: %+v %v", got, err)
 	}
-	read, err := c.McpHandle("mcpRead", mcpproto.Request{Reference: ref.URL()})
+	read, err := c.MCP().Handle("mcpRead", mcpproto.Request{Reference: ref.URL()})
 	if err != nil || !strings.Contains(read.(mcpproto.ReadResult).Packet, "修复登录过期的问题") {
 		t.Fatalf("original session link unreadable after fork: %v %v", read, err)
 	}

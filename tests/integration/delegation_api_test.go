@@ -229,8 +229,8 @@ func TestCollaborationCorruptStoreDoesNotPanicStopOrLegacyTools(t *testing.T) {
 		c.Collaboration = controller.NewCollaboration(c, dir)
 		caller := c.ThreadWithID(callerID)
 		c.StopThread(callerID)
-		_, readErr = c.LegacyTaskRead(mcpproto.Request{TaskID: "task-unavailable"}, caller)
-		_, createErr = c.LegacyDelegate(mcpproto.Request{Arguments: json.RawMessage(`{"task":"test"}`)}, caller)
+		_, readErr = c.MCP().LegacyTaskRead(mcpproto.Request{TaskID: "task-unavailable"}, caller)
+		_, createErr = c.MCP().LegacyDelegate(mcpproto.Request{Arguments: json.RawMessage(`{"task":"test"}`)}, caller)
 		capability = c.CollaborationCapabilities()
 	})
 	if readErr == nil || createErr == nil || !strings.Contains(readErr.Error(), "STORAGE_UNAVAILABLE") || !strings.Contains(createErr.Error(), "STORAGE_UNAVAILABLE") || capability == nil || !capability.Stale {

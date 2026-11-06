@@ -320,7 +320,7 @@ func (s *Service) Handle(p *SvcPeer, req svcproto.Request) (any, error) {
 		if err := arg(&r); err != nil {
 			return nil, err
 		}
-		return c.McpHandle(req.Op, r)
+		return c.MCP().Handle(req.Op, r)
 	case "collaboration":
 		var r appmodel.CollaborationRequest
 		if err := arg(&r); err != nil {

@@ -41,7 +41,7 @@ func TestDesktopMCPWaitsForExplicitCompletion(t *testing.T) {
 	c := serverController(t.TempDir(), "")
 	caller := model.Thread{ID: 7, ServerID: "caller", Busy: true, Messages: []model.Message{{Kind: "mcpToolCall", Status: "inProgress", Item: &codex.Item{Server: "miya", Tool: "request_desktop_control"}}}}
 	c.SetThreads([]model.Thread{caller})
-	v, err := c.McpDesktopControl(mcpproto.Request{Tool: "request_desktop_control", Task: "在 Chrome 完成登录"})
+	v, err := c.MCP().DesktopControl(mcpproto.Request{Tool: "request_desktop_control", Task: "在 Chrome 完成登录"})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,4 +1,4 @@
-package controller
+package service
 
 import (
 	"errors"
@@ -12,8 +12,9 @@ import (
 	"miya/internal/textutil"
 )
 
-func (c *Controller) mcpAutomation(op string, r mcpproto.Request) (any, error) {
-	if c.Auto == nil {
+func (api *Service) automation(op string, r mcpproto.Request) (any, error) {
+	c := api.host
+	if c.Automations() == nil {
 		return nil, errors.New("Automations require the Miya background service")
 	}
 	var args mcpproto.AutomationArgs
@@ -22,9 +23,9 @@ func (c *Controller) mcpAutomation(op string, r mcpproto.Request) (any, error) {
 	}
 	switch op {
 	case "mcpAutomationList":
-		return c.Auto.ListText(), nil
+		return c.Automations().ListText(), nil
 	case "mcpAutomationCreate":
-		caller, ok := c.McpCaller(r.Tool)
+		caller, ok := api.Caller(r.Tool)
 		if !ok {
 			return nil, errors.New(mcpproto.CallerUnknown)
 		}
@@ -37,17 +38,17 @@ func (c *Controller) mcpAutomation(op string, r mcpproto.Request) (any, error) {
 			return nil, err
 		}
 		a.ID = ""
-		id, ch := c.AskUser(caller, "Create automation \""+a.Name+"\"", c.Auto.CardDetail(a, c.Auto.Now()))
+		id, ch := c.AskUser(caller, "Create automation \""+a.Name+"\"", c.Automations().CardDetail(a, c.Automations().Now()))
 		return async.Reply(func() (any, error) {
-			if !c.waitUser(id, ch) {
+			if !c.WaitUser(id, ch) {
 				return "The user did not confirm. No automation was created.", nil
 			}
-			v, err := c.onMain(func() (any, error) {
-				saved, err := c.Auto.Save(a)
+			v, err := c.OnMain(func() (any, error) {
+				saved, err := c.Automations().Save(a)
 				if err != nil {
 					return nil, err
 				}
-				return automation.ViewOf(saved, nil, false, c.Auto.Now()), nil
+				return automation.ViewOf(saved, nil, false, c.Automations().Now()), nil
 			})
 			if err != nil {
 				return nil, err
@@ -56,13 +57,14 @@ func (c *Controller) mcpAutomation(op string, r mcpproto.Request) (any, error) {
 			return fmt.Sprintf("Created automation %q (ID %s), %s. Next run: %s.", view.Name, view.ID, view.ScheduleText, automation.FormatTime(view.Next)), nil
 		}), nil
 	case "mcpAutomationUpdate":
-		return c.mcpUpdateAutomation(r, args)
+		return api.updateAutomation(r, args)
 	}
 	return nil, fmt.Errorf("unknown miya call %s", op)
 }
 
-func (c *Controller) mcpUpdateAutomation(r mcpproto.Request, args mcpproto.AutomationArgs) (any, error) {
-	s := c.Auto
+func (api *Service) updateAutomation(r mcpproto.Request, args mcpproto.AutomationArgs) (any, error) {
+	c := api.host
+	s := c.Automations()
 	i, ok := s.Store.Find(strings.TrimSpace(args.ID))
 	if !ok {
 		for j, a := range s.Store.Automations {
@@ -100,7 +102,7 @@ func (c *Controller) mcpUpdateAutomation(r mcpproto.Request, args mcpproto.Autom
 	if err := next.Normalize(); err != nil {
 		return nil, err
 	}
-	diff := c.Auto.Diff(old, next)
+	diff := c.Automations().Diff(old, next)
 	if diff == "" {
 		if next.Enabled == old.Enabled {
 			return "No changes to apply.", nil
@@ -114,41 +116,42 @@ func (c *Controller) mcpUpdateAutomation(r mcpproto.Request, args mcpproto.Autom
 		}
 		return "Paused \"" + old.Name + "\".", nil
 	}
-	caller, ok := c.McpCaller(r.Tool)
+	caller, ok := api.Caller(r.Tool)
 	if !ok {
 		return nil, errors.New(mcpproto.CallerUnknown)
 	}
 	id, ch := c.AskUser(caller, "Update automation \""+old.Name+"\"", diff)
 	return async.Reply(func() (any, error) {
-		if !c.waitUser(id, ch) {
+		if !c.WaitUser(id, ch) {
 			return "The user did not confirm. The automation was not changed.", nil
 		}
-		if _, err := c.onMain(func() (any, error) { return c.Auto.Save(next) }); err != nil {
+		if _, err := c.OnMain(func() (any, error) { return c.Automations().Save(next) }); err != nil {
 			return nil, err
 		}
 		return "Updated \"" + next.Name + "\", " + automation.DescribeCron(next.Schedule) + ".", nil
 	}), nil
 }
 
-func (c *Controller) mcpReportResult(r mcpproto.Request) (any, error) {
-	if c.Auto == nil {
+func (api *Service) reportResult(r mcpproto.Request) (any, error) {
+	c := api.host
+	if c.Automations() == nil {
 		return nil, errors.New("Automations require the Miya background service")
 	}
 	if r.Report == nil || strings.TrimSpace(r.Report.Summary) == "" {
 		return nil, errors.New("Summary is required")
 	}
-	caller, ok := c.McpCaller(r.Tool)
+	caller, ok := api.Caller(r.Tool)
 	if !ok {
 		return nil, errors.New(mcpproto.CallerUnknown)
 	}
-	for id, run := range c.Auto.Active {
+	for id, run := range c.Automations().Active {
 		if run.Thread != caller.ID {
 			continue
 		}
 		rep := r.Report.Cleaned()
 		rep.Auto = false
-		c.Auto.Store.UpdateLastRun(id, func(x *automation.Run) { x.Report = &rep })
-		c.Auto.Persist()
+		c.Automations().Store.UpdateLastRun(id, func(x *automation.Run) { x.Report = &rep })
+		c.Automations().Persist()
 		return "Run result recorded.", nil
 	}
 	return nil, errors.New("This conversation is not an active automation run. No report is needed.")

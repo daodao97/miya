@@ -6,8 +6,6 @@ import (
 	"strings"
 
 	mcpproto "miya/internal/mcp/protocol"
-
-	"miya/internal/memory/manager"
 )
 
 func init() {
@@ -33,7 +31,7 @@ func init() {
 }
 
 func memoryTool(s *Server, name string, raw json.RawMessage) (string, error) {
-	var args manager.Args
+	var args mcpproto.MemoryArgs
 	dec := json.NewDecoder(strings.NewReader(string(raw)))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&args); err != nil {

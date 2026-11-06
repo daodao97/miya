@@ -1,19 +1,21 @@
-package controller
+package service
 
 import (
 	"encoding/json"
 	"errors"
 	"strings"
 
-	codex "miya/internal/agent/codex/native"
+	"miya/internal/interaction"
+
 	"miya/internal/async"
 	"miya/internal/desktop"
 	"miya/internal/desktop/control"
 	mcpproto "miya/internal/mcp/protocol"
 )
 
-func (c *Controller) McpDesktopControl(r mcpproto.Request) (any, error) {
-	caller, ok := c.McpCaller(r.Tool)
+func (api *Service) DesktopControl(r mcpproto.Request) (any, error) {
+	c := api.host
+	caller, ok := api.Caller(r.Tool)
 	if !ok {
 		return nil, errors.New(mcpproto.CallerUnknown)
 	}
@@ -36,12 +38,12 @@ func (c *Controller) McpDesktopControl(r mcpproto.Request) (any, error) {
 		}
 	}
 	id, ch := c.AskUser(caller, "Action required in the authorization window", reason+"\nOn your phone, tap the window preview to enter a password or authorize access, then return to this card to confirm. You can also act directly on your Mac.")
-	list := append([]codex.Approval(nil), c.Approvals()...)
+	list := append([]interaction.Request(nil), c.Approvals()...)
 	list[len(list)-1].Method = "miya/desktopControl"
 	list[len(list)-1].Payload, _ = json.Marshal(hint)
 	c.SetApprovals(list)
 	return async.Reply(func() (any, error) {
-		if !c.waitUser(id, ch) {
+		if !c.WaitUser(id, ch) {
 			return "The user canceled takeover or the request timed out. Stop any steps that depend on it.", nil
 		}
 		return "The user confirmed that the manual action is complete. Check the target page again before continuing.", nil

@@ -1,4 +1,4 @@
-package controller
+package service
 
 import (
 	"encoding/json"
@@ -10,15 +10,16 @@ import (
 	"miya/internal/memory/manager"
 )
 
-func (c *Controller) McpMemory(r mcpproto.Request) (any, error) {
+func (api *Service) Memory(r mcpproto.Request) (any, error) {
+	c := api.host
 	if c.Memories().Store == nil {
 		return nil, errors.New("Memory requires the Miya background service")
 	}
-	caller, call, err := c.McpCallerWithArguments(r.Tool, r.Arguments)
+	caller, call, err := api.CallerWithArguments(r.Tool, r.Arguments)
 	if err != nil {
 		return nil, err
 	}
-	var a manager.Args
+	var a mcpproto.MemoryArgs
 	dec := json.NewDecoder(strings.NewReader(string(r.Arguments)))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&a); err != nil {
@@ -38,7 +39,7 @@ func (c *Controller) McpMemory(r mcpproto.Request) (any, error) {
 	}
 	var source memory.Source
 	if r.Tool == "remember" {
-		source, err = c.Memories().Source(caller, call, a)
+		source, err = c.Memories().Source(caller, call, manager.Evidence{SourceMessageID: a.SourceMessageID, Quote: a.Quote})
 		if err != nil {
 			return nil, err
 		}

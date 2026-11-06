@@ -349,11 +349,11 @@ func TestMCPRuntimeCannotBeRedirectedOrChooseLatestCaller(t *testing.T) {
 	c.Run = func(f func()) { f() }
 	c.Cwd = t.TempDir()
 	c.SetThreads([]model.Thread{{ID: 1, ServerID: "a", Messages: []model.Message{{Kind: "mcpToolCall", Status: "inProgress", Item: &codex.Item{Server: "miya", Tool: "runtime_info"}}}}, {ID: 2, ServerID: "b", Messages: []model.Message{{Kind: "mcpToolCall", Status: "inProgress", Item: &codex.Item{Server: "miya", Tool: "runtime_info"}}}}})
-	if _, err := c.McpRuntime(mcpproto.Request{Reference: testRef(appmodel.AgentCodex, "a").URL(), Thread: 1}); err == nil {
+	if _, err := c.MCP().Runtime(mcpproto.Request{Reference: testRef(appmodel.AgentCodex, "a").URL(), Thread: 1}); err == nil {
 		t.Fatal("ambiguous callers selected a thread")
 	}
 	c.SetThreads(c.Threads()[:1])
-	value, err := c.McpRuntime(mcpproto.Request{Reference: testRef(appmodel.AgentCodex, "b").URL(), Thread: 2})
+	value, err := c.MCP().Runtime(mcpproto.Request{Reference: testRef(appmodel.AgentCodex, "b").URL(), Thread: 2})
 	if err != nil {
 		t.Fatal(err)
 	}

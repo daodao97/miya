@@ -5,37 +5,17 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"miya/internal/memory"
-	"miya/internal/model"
 	"strings"
 	"time"
+
+	"miya/internal/memory"
+	"miya/internal/model"
 )
 
-type Args struct {
-	Query           string `json:"query,omitempty"`
-	ID              string `json:"id,omitempty"`
-	Version         uint64 `json:"version,omitempty"`
-	Scope           string `json:"scope,omitempty"`
-	Kind            string `json:"kind,omitempty"`
-	Content         string `json:"content,omitempty"`
-	TaskKey         string `json:"task_key,omitempty"`
-	ValidUntil      string `json:"valid_until,omitempty"`
-	SourceMessageID string `json:"source_message_id,omitempty"`
-	Quote           string `json:"quote,omitempty"`
-}
+// Evidence identifies the explicit user statement supporting a memory change.
+type Evidence struct{ SourceMessageID, Quote string }
 
-func Expiry(s string) (time.Time, error) {
-	if s == "" {
-		return time.Time{}, nil
-	}
-	t, err := time.Parse(time.RFC3339, s)
-	if err != nil {
-		return time.Time{}, errors.New("Expiration must use RFC3339, for example 2026-11-09T23:59:59+08:00")
-	}
-	return t, nil
-}
-
-func (mg *Manager) Source(t model.Thread, call model.Message, a Args) (memory.Source, error) {
+func (mg *Manager) Source(t model.Thread, call model.Message, a Evidence) (memory.Source, error) {
 	if !mg.Host.ThreadRef(t).Valid() {
 		return memory.Source{}, errors.New("Session identity is not ready. Try again shortly.")
 	}
@@ -110,4 +90,15 @@ func (mg *Manager) Source(t model.Thread, call model.Message, a Args) (memory.So
 		source.Locator = fmt.Sprintf("turn:%s;sent:%d;local-message:%d", m.TurnID, m.SentAtMs, m.ID)
 	}
 	return source, nil
+}
+
+func Expiry(s string) (time.Time, error) {
+	if s == "" {
+		return time.Time{}, nil
+	}
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return time.Time{}, errors.New("Expiration must use RFC3339, for example 2026-11-09T23:59:59+08:00")
+	}
+	return t, nil
 }

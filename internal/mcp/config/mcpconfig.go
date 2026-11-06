@@ -9,8 +9,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"miya/internal/agent/claude/native/transcript"
-	"miya/internal/model"
 	"miya/internal/svcproto"
 )
 
@@ -49,21 +47,6 @@ func CodexArgs(cwd string) []string {
 		"-c", "mcp_servers.miya.tool_timeout_sec=1500",
 	}
 }
-
-func IsMiyaToolCall(m model.Message, tool string) bool {
-	switch strings.ToLower(m.Kind) {
-	case "claudetool":
-		name, _ := transcript.ToolCall(m)
-		return name == "mcp__miya__"+tool
-	case "mcptoolcall":
-		return m.Item != nil && m.Item.Server == "miya" && m.Item.Tool == tool
-	}
-	return false
-}
-
-// maxDelegationDepth bounds how far conversations hand work on: one that
-// was handed work this many times over hands none further.
-const MaxDelegationDepth = 2
 
 func Command() (string, bool) {
 	if !Enabled {

@@ -3,7 +3,6 @@ package controller
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
@@ -11,58 +10,8 @@ import (
 	"miya/internal/async"
 	dg "miya/internal/delegation"
 	"miya/internal/delegation/coordinator"
-	mcpproto "miya/internal/mcp/protocol"
 	"miya/internal/model"
 )
-
-func (c *Controller) collaborationMCP(r mcpproto.Request) (any, error) {
-	if c.Collaboration == nil {
-		return nil, errors.New("Collaboration requires the Miya background service")
-	}
-	a, err := coordinator.Decode(r.Tool, r.Arguments)
-	if err != nil {
-		return nil, err
-	}
-	caller, _, err := c.McpCallerWithArguments(r.Tool, r.Arguments)
-	if err != nil {
-		return nil, err
-	}
-	from := c.ThreadRef(caller).URL()
-	s := c.Collaboration
-	if s.LoadError != nil {
-		return nil, fmt.Errorf("STORAGE_UNAVAILABLE: %w", s.LoadError)
-	}
-	if r.Tool == "list_agents" {
-		return c.agentList(), nil
-	}
-	if r.Tool == "start_task" || r.Tool == "send_thread" {
-		return c.startCollaboration(caller, r.Tool, a)
-	}
-
-	if r.Tool == "list_tasks" {
-		result, err := coordinator.List(s.Manager, from, a, false)
-		if values, ok := result.(map[string]any); ok {
-			s.WithHealth(values)
-		}
-		return result, err
-	}
-	if !s.Manager.CanAccess(from, a.TaskID) {
-		return nil, errors.New("ACCESS_DENIED: Task is not visible to this conversation")
-	}
-	switch r.Tool {
-	case "read_task", "wait_task":
-		task, err := s.Manager.Read(a.TaskID)
-		if err != nil {
-			return nil, err
-		}
-		result := c.Collaboration.TaskView(task, from)
-		s.WithHealth(result)
-		return result, nil
-	case "cancel_task", "watch_task", "unwatch_task", "resolve_task":
-		return c.Collaboration.Operation(from, r.Tool, a)
-	}
-	return nil, errors.New("Unknown collaboration operation")
-}
 
 func (c *Controller) startCollaboration(caller model.Thread, name string, a coordinator.Args) (any, error) {
 	s := c.Collaboration

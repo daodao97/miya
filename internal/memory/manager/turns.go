@@ -5,12 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"miya/internal/agent/claude/native"
-	"miya/internal/memory"
-	"miya/internal/model"
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	claude "miya/internal/agent/claude/native"
+	"miya/internal/memory"
+	"miya/internal/model"
 )
 
 type Turn struct {

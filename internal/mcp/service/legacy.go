@@ -1,10 +1,11 @@
-package controller
+package service
 
 import (
 	"encoding/json"
 	"errors"
 
-	claude "miya/internal/agent/claude/native"
+	"miya/internal/textutil"
+
 	"miya/internal/async"
 	"miya/internal/delegation/coordinator"
 	mcpproto "miya/internal/mcp/protocol"
@@ -13,8 +14,10 @@ import (
 
 // Older tools keep their default wait and context choices. Their result lookup
 // is still pinned to the accepted TaskID, never the target's latest turn.
-func (c *Controller) LegacyDelegate(r mcpproto.Request, caller model.Thread) (any, error) {
-	if c.Collaboration == nil || c.Collaboration.LoadError != nil || c.Collaboration.Manager == nil {
+
+func (api *Service) LegacyDelegate(r mcpproto.Request, caller model.Thread) (any, error) {
+	c := api.host
+	if c.Collaboration() == nil || c.Collaboration().LoadError != nil || c.Collaboration().Manager == nil {
 		return nil, errors.New("STORAGE_UNAVAILABLE: Collaboration storage is unavailable")
 	}
 	var raw struct {
@@ -26,15 +29,15 @@ func (c *Controller) LegacyDelegate(r mcpproto.Request, caller model.Thread) (an
 	if err := json.Unmarshal(r.Arguments, &raw); err != nil {
 		return nil, err
 	}
-	a := coordinator.Args{RequestID: claude.NewSessionID(), Agent: raw.Agent, Thread: raw.Thread, Task: raw.Task, Context: "caller_summary", Notify: "none"}
+	a := coordinator.Args{RequestID: textutil.NewID(), Agent: raw.Agent, Thread: raw.Thread, Task: raw.Task, Context: "caller_summary", Notify: "none"}
 	if raw.IncludeContext != nil && !*raw.IncludeContext {
 		a.Context = "none"
 	}
-	in, err := c.prepareDelegation(caller, a)
+	in, err := c.PrepareDelegation(caller, a)
 	if err != nil {
 		return nil, err
 	}
-	s := c.Collaboration
+	s := c.Collaboration()
 	return async.Reply(func() (any, error) {
 		return s.Call(func() (any, error) {
 			task, err := s.Create(in)
@@ -46,14 +49,15 @@ func (c *Controller) LegacyDelegate(r mcpproto.Request, caller model.Thread) (an
 	}), nil
 }
 
-func (c *Controller) LegacyTaskRead(r mcpproto.Request, caller model.Thread) (any, error) {
-	if c.Collaboration == nil {
+func (api *Service) LegacyTaskRead(r mcpproto.Request, caller model.Thread) (any, error) {
+	c := api.host
+	if c.Collaboration() == nil {
 		return nil, errors.New("EXECUTION_ASSOCIATION_LOST: Original task identity cannot be recovered")
 	}
-	if c.Collaboration.LoadError != nil || c.Collaboration.Manager == nil {
+	if c.Collaboration().LoadError != nil || c.Collaboration().Manager == nil {
 		return nil, errors.New("STORAGE_UNAVAILABLE: Original task storage is unavailable")
 	}
-	m := c.Collaboration.Manager
+	m := c.Collaboration().Manager
 	if _, err := m.Read(r.TaskID); err != nil {
 		return nil, errors.New("EXECUTION_ASSOCIATION_LOST: The original execution is unavailable; inspect the target manually")
 	}

@@ -75,7 +75,7 @@ func TestMCPCreateAutomationAsksFirst(t *testing.T) {
 	h.c.Run = func(f func()) { f() }
 	caller := automationCaller(h, "create_automation")
 	args := &mcpproto.AutomationArgs{Name: "每日分拣", Schedule: "0 9 * * 1-5", Instructions: "看 Issue", Check: "go test ./..."}
-	res, err := h.c.McpHandle("mcpAutomationCreate", mcpproto.Request{Tool: "create_automation", Auto: args})
+	res, err := h.c.MCP().Handle("mcpAutomationCreate", mcpproto.Request{Tool: "create_automation", Auto: args})
 	out := startDeferred(t, res, err)
 	card := miyaCard(t, h.c)
 	if card.ThreadID != caller.ServerID || widgets.RequestAgent(card) != "Miya" || !strings.Contains(card.Command, "Weekdays 9:00") || !strings.Contains(card.Command, "Check: go test ./...; up to 3 rounds") || !h.c.ThreadAwaitsUser(caller) {
@@ -96,7 +96,7 @@ func TestMCPCreateAutomationAsksFirst(t *testing.T) {
 		t.Fatalf("bad automation: %+v", a)
 	}
 
-	res, err = h.c.McpHandle("mcpAutomationCreate", mcpproto.Request{Tool: "create_automation", Auto: args})
+	res, err = h.c.MCP().Handle("mcpAutomationCreate", mcpproto.Request{Tool: "create_automation", Auto: args})
 	out = startDeferred(t, res, err)
 	card = miyaCard(t, h.c)
 	h.c.Respond(card, codex.ApprovalResult(card, false))
@@ -104,10 +104,10 @@ func TestMCPCreateAutomationAsksFirst(t *testing.T) {
 		t.Fatalf("declined card created one: %q", got)
 	}
 
-	if _, err := h.c.McpHandle("mcpAutomationCreate", mcpproto.Request{Tool: "create_automation", Auto: &mcpproto.AutomationArgs{Name: "x", Schedule: "每天", Instructions: "y"}}); err == nil || len(h.c.Approvals()) != 0 {
+	if _, err := h.c.MCP().Handle("mcpAutomationCreate", mcpproto.Request{Tool: "create_automation", Auto: &mcpproto.AutomationArgs{Name: "x", Schedule: "每天", Instructions: "y"}}); err == nil || len(h.c.Approvals()) != 0 {
 		t.Fatalf("bad schedule reached the user: %v", err)
 	}
-	if _, err := h.c.McpHandle("mcpAutomationCreate", mcpproto.Request{Tool: "update_automation", Auto: args}); err == nil || err.Error() != mcpproto.CallerUnknown {
+	if _, err := h.c.MCP().Handle("mcpAutomationCreate", mcpproto.Request{Tool: "update_automation", Auto: args}); err == nil || err.Error() != mcpproto.CallerUnknown {
 		t.Fatalf("unknown caller not reported: %v", err)
 	}
 }
@@ -117,12 +117,12 @@ func TestMCPUpdateAndListAutomations(t *testing.T) {
 	h.c.Run = func(f func()) { f() }
 	a := h.add(t, automation.Automation{Name: "每日分拣", Instructions: "看 Issue", Schedule: "0 9 * * 1-5"})
 	off := false
-	res, err := h.c.McpHandle("mcpAutomationUpdate", mcpproto.Request{Tool: "update_automation", Auto: &mcpproto.AutomationArgs{ID: a.ID, Enabled: &off}})
+	res, err := h.c.MCP().Handle("mcpAutomationUpdate", mcpproto.Request{Tool: "update_automation", Auto: &mcpproto.AutomationArgs{ID: a.ID, Enabled: &off}})
 	if err != nil || !strings.Contains(res.(string), "Paused") || h.s.Store.Automations[0].Enabled || len(h.c.Approvals()) != 0 {
 		t.Fatalf("pausing: %v %v", res, err)
 	}
 	automationCaller(h, "update_automation")
-	res, err = h.c.McpHandle("mcpAutomationUpdate", mcpproto.Request{Tool: "update_automation", Auto: &mcpproto.AutomationArgs{ID: "每日分拣", Schedule: "0 7 * * *"}})
+	res, err = h.c.MCP().Handle("mcpAutomationUpdate", mcpproto.Request{Tool: "update_automation", Auto: &mcpproto.AutomationArgs{ID: "每日分拣", Schedule: "0 7 * * *"}})
 	out := startDeferred(t, res, err)
 	card := miyaCard(t, h.c)
 	if !strings.Contains(card.Command, "Schedule: Weekdays 9:00 → Daily at 7:00") {
@@ -132,11 +132,11 @@ func TestMCPUpdateAndListAutomations(t *testing.T) {
 	if got := await(t, out); !strings.Contains(got, "Updated") || h.s.Store.Automations[0].Schedule != "0 7 * * *" {
 		t.Fatalf("not changed: %q %+v", got, h.s.Store.Automations[0])
 	}
-	list, err := h.c.McpHandle("mcpAutomationList", mcpproto.Request{Tool: "list_automations"})
+	list, err := h.c.MCP().Handle("mcpAutomationList", mcpproto.Request{Tool: "list_automations"})
 	if err != nil || !strings.Contains(list.(string), a.ID+"\"每日分拣\"") || !strings.Contains(list.(string), "Paused") {
 		t.Fatalf("bad list: %v %v", list, err)
 	}
-	if _, err := h.c.McpHandle("mcpAutomationUpdate", mcpproto.Request{Tool: "update_automation", Auto: &mcpproto.AutomationArgs{ID: "nope"}}); err == nil {
+	if _, err := h.c.MCP().Handle("mcpAutomationUpdate", mcpproto.Request{Tool: "update_automation", Auto: &mcpproto.AutomationArgs{ID: "nope"}}); err == nil {
 		t.Fatal("unknown automation changed")
 	}
 }
@@ -150,7 +150,7 @@ func TestMCPCreateAutomationFromBackgroundProject(t *testing.T) {
 	other := t.TempDir()
 	h.c.ProjectCache = map[string][]model.Thread{h.c.Cwd: h.c.Threads(), other: {{ID: 77, Agent: appmodel.AgentCodex, ServerID: "cx", Busy: true,
 		Messages: []model.Message{{ID: 78, Role: "tool", Kind: "mcpToolCall", Status: "inProgress", Item: &codex.Item{Server: "miya", Tool: "create_automation"}}}}}}
-	res, err := h.c.McpHandle("mcpAutomationCreate", mcpproto.Request{Workspace: "/", Tool: "create_automation", Auto: &mcpproto.AutomationArgs{Name: "上游对账", Schedule: "0 8 * * *", Instructions: "对账"}})
+	res, err := h.c.MCP().Handle("mcpAutomationCreate", mcpproto.Request{Workspace: "/", Tool: "create_automation", Auto: &mcpproto.AutomationArgs{Name: "上游对账", Schedule: "0 8 * * *", Instructions: "对账"}})
 	out := startDeferred(t, res, err)
 	card := miyaCard(t, h.c)
 	if card.ThreadID != "cx" {
@@ -163,7 +163,7 @@ func TestMCPCreateAutomationFromBackgroundProject(t *testing.T) {
 	if a := h.s.Store.Automations[0]; a.Project != other || a.Agent != appmodel.AgentCodex {
 		t.Fatalf("automation not in the caller's project: %+v", a)
 	}
-	list := h.c.McpThreads(mcpproto.Request{Tool: "create_automation"})
+	list := h.c.MCP().Threads(mcpproto.Request{Tool: "create_automation"})
 	for _, th := range list.Threads {
 		if th.ID == 77 {
 			t.Fatal("the caller listed itself")

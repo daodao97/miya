@@ -2,10 +2,11 @@ package manager
 
 import (
 	"fmt"
-	"miya/internal/memory"
-	"miya/internal/model"
 	"strings"
 	"unicode"
+
+	"miya/internal/memory"
+	"miya/internal/model"
 )
 
 // Memory preparation is called from backend workers, never the service's main

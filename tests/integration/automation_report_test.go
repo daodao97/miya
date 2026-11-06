@@ -31,7 +31,7 @@ func TestAutomationRunsReportAndCarryResults(t *testing.T) {
 	if err := json.Unmarshal([]byte(`{"summary":"上游多扣 3 笔\n细节","findings":["pomo 多扣 12.3 元"],"metrics":[{"name":"多扣占比","value":0.8,"unit":"%"}],"needs_user":true}`), &rep); err != nil {
 		t.Fatal(err)
 	}
-	res, err := h.c.McpHandle("mcpReportResult", mcpproto.Request{Tool: "report_result", Report: &rep})
+	res, err := h.c.MCP().Handle("mcpReportResult", mcpproto.Request{Tool: "report_result", Report: &rep})
 	if err != nil || !strings.Contains(res.(string), "recorded") {
 		t.Fatalf("report not kept: %v %v", res, err)
 	}
@@ -70,10 +70,10 @@ func TestReportResultOutsideAutomations(t *testing.T) {
 	h := newAutomationHarness(t)
 	h.c.Run = func(f func()) { f() }
 	automationCaller(h, "report_result")
-	if _, err := h.c.McpHandle("mcpReportResult", mcpproto.Request{Tool: "report_result", Report: &automation.Report{Summary: "x"}}); err == nil || !strings.Contains(err.Error(), "not an active automation") {
+	if _, err := h.c.MCP().Handle("mcpReportResult", mcpproto.Request{Tool: "report_result", Report: &automation.Report{Summary: "x"}}); err == nil || !strings.Contains(err.Error(), "not an active automation") {
 		t.Fatalf("report outside a run accepted: %v", err)
 	}
-	if _, err := h.c.McpHandle("mcpReportResult", mcpproto.Request{Tool: "report_result", Report: &automation.Report{}}); err == nil {
+	if _, err := h.c.MCP().Handle("mcpReportResult", mcpproto.Request{Tool: "report_result", Report: &automation.Report{}}); err == nil {
 		t.Fatal("empty summary accepted")
 	}
 	long := automation.Report{Summary: strings.Repeat("长", 3000), Findings: make([]string, 50)}
