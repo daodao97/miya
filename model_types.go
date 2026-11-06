@@ -591,3 +591,8 @@ var (
 	loadReferenceSource       = model.LoadReferenceSource
 	referenceSourceForService = model.ReferenceSourceForService
 )
+
+// Moved to internal/prefs.
+var (
+	persistClaudeCommand = prefs.SaveClaudeCommand
+)
