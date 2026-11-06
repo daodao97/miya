@@ -499,3 +499,8 @@ var (
 	applyCodexGoal   = model.ApplyCodexGoal
 	setThreadTask    = model.SetThreadTask
 )
+
+// Moved to internal/composer.
+var (
+	PartsText = composer.PartsText
+)
