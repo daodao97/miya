@@ -34,13 +34,13 @@ func projectFileID(root string) string {
 
 type fileProject struct{ ID, Name, Path string }
 type desktopFileServer struct {
-	projects    func(context.Context) ([]fileProject, error)
-	webServices func(context.Context, string) ([]webservice.Service, error)
-	runtime     func(context.Context, ThreadRef, string) (conversationRuntime, error)
+	Projects    func(context.Context) ([]fileProject, error)
+	WebServices func(context.Context, string) ([]webservice.Service, error)
+	Runtime     func(context.Context, ThreadRef, string) (conversationRuntime, error)
 }
 
 func (c *chatController) fileServer() http.Handler {
-	files := desktopFileServer{runtime: c.readRuntime, webServices: c.projectRuntimeServices, projects: func(ctx context.Context) ([]fileProject, error) {
+	files := desktopFileServer{Runtime: c.readRuntime, WebServices: c.projectRuntimeServices, Projects: func(ctx context.Context) ([]fileProject, error) {
 		reply := make(chan []fileProject, 1)
 		c.dispatch(func() {
 			projects := append([]Project(nil), c.projects()...)
@@ -118,7 +118,7 @@ func (s desktopFileServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), timeout)
 	defer cancel()
-	projects, err := s.projects(ctx)
+	projects, err := s.Projects(ctx)
 	if err != nil {
 		http.Error(w, "Desktop is not responding. Try again later.", 503)
 		return
@@ -135,7 +135,7 @@ func (s desktopFileServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if parts[1] == ".miya-runtime" {
-		if s.runtime == nil {
+		if s.Runtime == nil {
 			http.NotFound(w, r)
 			return
 		}
@@ -144,7 +144,7 @@ func (s desktopFileServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Invalid conversation identity", 400)
 			return
 		}
-		result, err := s.runtime(ctx, ref, project.Path)
+		result, err := s.Runtime(ctx, ref, project.Path)
 		if err != nil {
 			http.Error(w, err.Error(), 404)
 			return
@@ -156,7 +156,7 @@ func (s desktopFileServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if parts[1] == webservice.ProjectFile {
-		discover := s.webServices
+		discover := s.WebServices
 		if discover == nil {
 			discover = webservice.Discover
 		}

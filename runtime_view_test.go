@@ -87,14 +87,14 @@ func TestPhoneRuntimeEndpointValidatesStableReferenceAndNeverFallsBack(t *testin
 	ref := testRef(agentClaude, "claude-session")
 	sample := sampleConversationRuntime(ref)
 	calls := 0
-	handler.runtime = func(ctx context.Context, got ThreadRef, project string) (conversationRuntime, error) {
+	handler.Runtime = func(ctx context.Context, got ThreadRef, project string) (conversationRuntime, error) {
 		calls++
 		if got != ref || project != root {
 			return conversationRuntime{}, errors.New("unknown conversation")
 		}
 		return sample, nil
 	}
-	handler.webServices = func(context.Context, string) ([]webservice.Service, error) {
+	handler.WebServices = func(context.Context, string) ([]webservice.Service, error) {
 		t.Error("runtime fell back to directory candidates")
 		return nil, nil
 	}

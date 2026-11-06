@@ -20,7 +20,7 @@ func TestProjectWebServicesEndpointAndPhoneFetch(t *testing.T) {
 	root, fixture := fileServerFixture(t)
 	handler := fixture.(desktopFileServer)
 	calls := 0
-	handler.webServices = func(ctx context.Context, project string) ([]webservice.Service, error) {
+	handler.WebServices = func(ctx context.Context, project string) ([]webservice.Service, error) {
 		calls++
 		if project != root {
 			t.Fatalf("wrong project %q", project)

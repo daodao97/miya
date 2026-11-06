@@ -28,7 +28,7 @@ func fileServerFixture(t *testing.T) (string, http.Handler) {
 			t.Fatal(err)
 		}
 	}
-	handler := desktopFileServer{projects: func(context.Context) ([]fileProject, error) {
+	handler := desktopFileServer{Projects: func(context.Context) ([]fileProject, error) {
 		return []fileProject{{ID: projectFileID(root), Name: "Project <test>", Path: root}}, nil
 	}}
 	return root, handler
