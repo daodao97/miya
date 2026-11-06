@@ -9,6 +9,7 @@ import (
 	"miya/internal/codex"
 	"miya/internal/composer"
 	"miya/internal/delegation/coordinator"
+	"miya/internal/fsutil"
 	"miya/internal/mcpconfig"
 	"miya/internal/mcpproto"
 	"miya/internal/mcpserver"
@@ -503,4 +504,10 @@ var (
 // Moved to internal/composer.
 var (
 	PartsText = composer.PartsText
+)
+
+// Moved to internal/fsutil.
+var (
+	readGzipJSON  = fsutil.ReadGzipJSON
+	writeGzipJSON = fsutil.WriteGzipJSON
 )
