@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"math"
 	"runtime"
 	"strings"
 	"sync"
@@ -122,41 +121,6 @@ func (app *chatApp) refreshUsage() {
 			d.timer = time.AfterFunc(3*time.Minute, func() { mygo.RunOnMain(app.refreshUsage) })
 		})
 	}()
-}
-
-func selectedUsage(readings []agentusage.Reading, agent string) *agentusage.Reading {
-	for _, candidate := range []string{"codex", "claude"} {
-		if agent != "" && agent != candidate {
-			continue
-		}
-		for i := range readings {
-			r := &readings[i]
-			if r.Agent == candidate && r.Error == "" && len(r.Windows) > 0 {
-				return r
-			}
-		}
-	}
-	return nil
-}
-
-func usageAgentName(agent string) string {
-	if agent == "claude" {
-		return "Claude"
-	}
-	return "Codex"
-}
-
-func remainingUsage(used float64) int { return int(math.Round(100 - agentusage.Percent(used))) }
-
-func usageTrayTitle(r *agentusage.Reading) string {
-	if r == nil || len(r.Windows) == 0 {
-		return "—"
-	}
-	labels := make([]string, 0, 2)
-	for _, w := range r.Windows[:min(2, len(r.Windows))] {
-		labels = append(labels, fmt.Sprintf("%d%%", remainingUsage(w.Used)))
-	}
-	return strings.Join(labels, " · ")
 }
 
 func usageTrayTip(r *agentusage.Reading) string {

@@ -2,6 +2,7 @@ package main
 
 import (
 	"miya/internal/account"
+	"miya/internal/agentusage"
 	"miya/internal/async"
 	"miya/internal/automation"
 	"miya/internal/claude"
@@ -515,4 +516,12 @@ var (
 // Moved to internal/codex.
 var (
 	parseGoalCommand = codex.ParseGoalCommand
+)
+
+// Moved to internal/agentusage.
+var (
+	remainingUsage = agentusage.RemainingUsage
+	selectedUsage  = agentusage.SelectedUsage
+	usageAgentName = agentusage.AgentName
+	usageTrayTitle = agentusage.TrayTitle
 )
