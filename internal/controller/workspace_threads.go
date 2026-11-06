@@ -5,7 +5,6 @@ import (
 )
 
 // AllThreads returns conversations across projects, with the open project first.
-
 func (c *Controller) AllThreads() []model.Thread {
 	out := append([]model.Thread(nil), c.Threads()...)
 	for path, threads := range c.ProjectCache {
@@ -17,7 +16,6 @@ func (c *Controller) AllThreads() []model.Thread {
 }
 
 // projectThreads are the conversations of one project.
-
 func (c *Controller) projectThreads(project string) []model.Thread {
 	if project == "" || project == c.Cwd {
 		return c.Threads()

@@ -10,8 +10,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"miya/internal/interaction"
-	mcpconfig "miya/internal/mcp/config"
-	"miya/internal/phone"
+	mcpaccess "miya/internal/mcp/access"
 	"miya/internal/phoneapi"
 	"miya/internal/remote"
 	"miya/internal/textutil"
@@ -72,14 +71,14 @@ func (m *App) ApprovalAnswered(id json.RawMessage, message string) {
 	delete(m.FormErrors, key)
 	out := make([]interaction.Request, 0, len(m.State.Approvals))
 	for _, a := range m.State.Approvals {
-		if !phone.SameJSON(a.ID, id) {
+		if !textutil.SameJSON(a.ID, id) {
 			out = append(out, a)
 		}
 	}
 	m.State.Approvals = out
 	m.Viewer.setApprovals(out)
 	m.CloseResolvedDesktopControl(out)
-	if m.Router().Path() == "/approval" && phone.SameJSON(m.approvalID, id) {
+	if m.Router().Path() == "/approval" && textutil.SameJSON(m.approvalID, id) {
 		m.Router().Back()
 	}
 }
@@ -176,7 +175,7 @@ func (m *App) approvalPage(c *ui.Context) {
 	})
 	var approval *interaction.Request
 	for _, a := range m.State.Approvals {
-		if phone.SameJSON(a.ID, m.approvalID) {
+		if textutil.SameJSON(a.ID, m.approvalID) {
 			copy := a
 			approval = &copy
 			break
@@ -333,7 +332,7 @@ func (m *App) elicitationActions(c *ui.Context, a interaction.Request) {
 	fields := m.FieldsFor(a)
 	pending := m.ApprovalPending[id]
 	label := tr("Confirm")
-	if mcpconfig.RememberableMCPAccess(a) {
+	if mcpaccess.Rememberable(a) {
 		label = tr("Allow once")
 	}
 	ui.Row(c).FillWidth().Gap(10).Children(func() {
@@ -354,7 +353,7 @@ func (m *App) elicitationActions(c *ui.Context, a interaction.Request) {
 		}
 	})
 	ui.Row(c).FillWidth().Wrap().Gap(10).Children(func() {
-		if mcpconfig.RememberableMCPAccess(a) && m.ApprovalButton(c, "remember", tr("Always allow in this conversation"), false, pending).Clicked() {
+		if mcpaccess.Rememberable(a) && m.ApprovalButton(c, "remember", tr("Always allow in this conversation"), false, pending).Clicked() {
 			m.submitApproval(a, interaction.Response{Action: interaction.Allow}, true)
 		}
 		if m.ApprovalButton(c, "cancel", tr("Cancel request"), false, pending).Clicked() {

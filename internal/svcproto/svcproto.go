@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"miya/internal/account"
-	"miya/internal/agent/codex/native"
+	codex "miya/internal/agent/codex/native"
 	"miya/internal/appdir"
 	"miya/internal/model"
 )

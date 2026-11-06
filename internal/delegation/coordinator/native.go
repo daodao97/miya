@@ -4,7 +4,7 @@ import (
 	"errors"
 	"strings"
 
-	"miya/internal/agent/codex/native"
+	codex "miya/internal/agent/codex/native"
 	dg "miya/internal/delegation"
 	"miya/internal/model"
 	"miya/internal/msgfmt"

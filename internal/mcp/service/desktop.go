@@ -5,11 +5,10 @@ import (
 	"errors"
 	"strings"
 
-	"miya/internal/interaction"
-
 	"miya/internal/async"
 	"miya/internal/desktop"
 	"miya/internal/desktop/control"
+	"miya/internal/interaction"
 	mcpproto "miya/internal/mcp/protocol"
 )
 

@@ -52,3 +52,5 @@ flowchart TD
 - `go vet ./...` 通过；核心 Adapter、Host 与契约测试的 `gopls check` 无诊断。
 - macOS arm64、iOS arm64 模拟器构建通过；Linux amd64、Windows amd64 交叉编译通过。
 - 真实模型、真实远端、可选快照和设备测试仍按原有环境开关跳过。本轮未安装应用或切换生产后台。
+
+Agent 的 MCP 启动参数和访问确认依赖 `internal/mcp/config`、`internal/mcp/access`；协议与工具服务边界见 [MCP 范围与边界](mcp-boundaries.md)。

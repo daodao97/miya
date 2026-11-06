@@ -1,12 +1,13 @@
 package automation
 
 import (
-	"miya/internal/agent/claude/native"
-	"miya/internal/model"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	claude "miya/internal/agent/claude/native"
+	"miya/internal/model"
 )
 
 func TestAutomationDraftPromptAndAnswers(t *testing.T) {

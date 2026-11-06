@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"miya/internal/agent/claude/native"
+	claude "miya/internal/agent/claude/native"
 	"miya/internal/memory"
 	"miya/internal/textutil"
 )

@@ -6,7 +6,6 @@ package config
 import (
 	"encoding/json"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"miya/internal/svcproto"
@@ -58,18 +57,6 @@ func Command() (string, bool) {
 
 // miyaReadOnlyTools are the miya tools an agent may call without asking.
 var ReadOnlyTools = []string{"list_threads", "read_thread", "thread_status", "list_agents", "read_task", "wait_task", "list_tasks", "list_automations", "report_result", "search_memory", "runtime_info", "request_desktop_control"}
-
-// samePath reports whether two paths name one directory, through symlinks
-// such as macOS's /var to /private/var.
-func samePath(a, b string) bool {
-	resolve := func(p string) string {
-		if r, err := filepath.EvalSymlinks(p); err == nil {
-			return r
-		}
-		return filepath.Clean(p)
-	}
-	return resolve(a) == resolve(b)
-}
 
 // tomlString quotes s as a TOML basic string, whose escapes JSON's are.
 func TomlString(s string) string {

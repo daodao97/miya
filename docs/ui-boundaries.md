@@ -24,6 +24,8 @@ flowchart TD
 
 `internal/widgets` 保存通用控件、主题、图标和设备语言处理。`internal/uiruntime` 保存窗口调度、信号失效通知与退出清理，供窗口和后台使用。各领域的数据和算法直接引用现有领域包，原有根包的兼容别名已删除。
 
+MCP 协议和工具适配已统一到 `internal/mcp/`，Controller 通过 Host 接入，详见 [MCP 范围与边界](mcp-boundaries.md)。
+
 ## 验证
 
 原有跨模块测试集中到 `tests/integration`，测试数据仍在根目录 `testdata/`。测试主进程以仓库为工作目录；发现端口等辅助进程保留启动者指定的项目目录。

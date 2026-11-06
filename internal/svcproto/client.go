@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	mcpproto "miya/internal/mcp/protocol"
 	"miya/internal/remote"
 )
 
@@ -231,11 +232,12 @@ func (cl *Client) Call(op string, args, out any) error {
 // CallTimeout is how long a request may take: most answer at once,
 // a draft waits for an agent, and a confirmation card for the person.
 func CallTimeout(op string) time.Duration {
+	if mcpproto.WaitsForUser(op) {
+		return CardTimeout + time.Minute
+	}
 	switch op {
 	case "automationDraft":
 		return 3 * time.Minute
-	case "mcpDesktopControl", "mcpAutomationCreate", "mcpAutomationUpdate":
-		return CardTimeout + time.Minute
 	}
 	return 15 * time.Second
 }

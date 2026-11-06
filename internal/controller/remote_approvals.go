@@ -8,14 +8,14 @@ import (
 
 	codex "miya/internal/agent/codex/native"
 	"miya/internal/interaction"
-	"miya/internal/phone"
 	"miya/internal/phoneapi"
 	"miya/internal/remote"
+	"miya/internal/textutil"
 )
 
 func (c *Controller) PhoneApprovalResponse(r remote.Request) error {
 	for _, a := range c.Approvals() {
-		if !phone.SameJSON(a.ID, r.Approval) {
+		if !textutil.SameJSON(a.ID, r.Approval) {
 			continue
 		}
 		if r.ApprovalVersion != "" && r.ApprovalVersion != phoneapi.ApprovalFingerprint(a) {

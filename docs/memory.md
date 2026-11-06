@@ -32,7 +32,7 @@
 
 - [agent.go](../internal/controller/agent.go) 的 `submit` / `submitExpanded` 统一路由、排队和发送请求，两个后端通过 `agentBackend` 适配；`sendRequest` 已有 `Text` 与结构化 `Parts`。
 - [handoff.go](../internal/controller/handoff.go) 已能从规范化消息生成有界上下文；[会话引用设计](thread-references.md) 已定义来源、后端、会话身份和发送快照，`ThreadRef` 位于 [thread_reference.go](../internal/model/ref.go)。
-- [mcp_host.go](../internal/controller/mcp_host.go) 已能把 MCP 调用解析到发起会话及其项目（见「MCP 调用者身份」）。
+- [identity.go](../internal/mcp/service/identity.go) 已能把 MCP 调用解析到发起会话及其项目（见「MCP 调用者身份」）。
 - [internal/automation/draft.go](../internal/automation/draft.go) 已通过独立 Agent 调用获取结构化结果：Claude 使用 `--tools ""` 禁用工具；Codex 使用 `exec --sandbox read-only`，仍可执行命令和读取磁盘，不等于禁用工具。
 
 这些能力尚不构成记忆系统。我们还需要定义哪些信息可以保存、怎样纠正、什么时候注入，以及如何避免后台旧任务把删除的信息写回来。
@@ -217,7 +217,7 @@ Go 代码逐项检查：作用域是否允许、来源是否属于本轮、引�
 
 ### MCP 调用者身份是第一阶段的前置条件
 
-工具进程通过现有 MCP → 服务通道访问。服务不相信客户端声明的项目路径、用户身份或消息来源。当前机制（[mcp_host.go](../internal/controller/mcp_host.go) 的 `mcpCaller`）如下：
+工具进程通过现有 MCP → 服务通道访问。服务不相信客户端声明的项目路径、用户身份或消息来源。当前机制（[identity.go](../internal/mcp/service/identity.go) 的 `CallerWithArguments`）如下：
 
 - MCP 进程传来的工作区参数不受信任，因为 Codex 的一个 app-server 服务所有项目。
 - 服务在所有项目的会话中查找「状态为进行中、名称匹配」的 Miya 工具调用，取开始时间最晚的那一个作为调用者，再由该会话推出项目。
@@ -284,10 +284,10 @@ Go 代码逐项检查：作用域是否允许、来源是否属于本轮、引�
 | 位置 | 计划职责 | 阶段 |
 | --- | --- | --- |
 | `internal/memory/`（新增） | 数据类型、作用域存储、原子提交、版本合并、删除屏障、检索、派生索引接口 | 1a |
-| `memory_mcp.go`（新增） | 记忆工具、调用者作用域、服务操作和结果；服务端处理现位于 `internal/memory/manager` | 1a |
+| `internal/mcp/memory_tools.go`（新增） | 记忆工具、调用者作用域、服务操作和结果；MCP 服务适配位于 `internal/mcp/service/memory.go`，记忆业务由 `internal/memory/manager` 提供 | 1a |
 | `view_memory.go`（新增） | 记忆管理界面、可撤销提示、提升到项目文件 | 1a |
-| [mcp_host.go](../internal/controller/mcp_host.go) | 写工具的调用者消歧：参数比对、多候选时失败 | 1a |
-| [internal/mcp](../internal/mcp/mcpserver.go)、[service_server.go](../internal/controller/service_server.go) | 注册工具、串行提交，协调服务退出与恢复 | 1a |
+| [identity.go](../internal/mcp/service/identity.go) | 写工具的调用者消歧：参数比对、多候选时失败 | 1a |
+| [internal/mcp](../internal/mcp/server.go)、[service_server.go](../internal/controller/service_server.go) | 注册工具、串行提交，协调服务退出与恢复 | 1a |
 | `internal/memory/manager/input.go`（原 `memory_context.go`） | 从实际发送请求构造有界记忆块、按会话计算增量、记录注入快照 | 1b |
 | [agent.go](../internal/controller/agent.go)、[queue.go](../internal/controller/queue.go) | `sendRequest` 原文与上下文分离，普通发送、排队、引导、编辑重发的共同接入 | 1b |
 | [chat_controller.go](../internal/controller/chat_controller.go)、[agent_codex.go](../internal/controller/agent_codex.go)、[chat_claude.go](../internal/controller/chat_claude.go) | 组合实际后端输入；覆盖 Codex steer、Claude 保活发送和后台项目 | 1b |
@@ -302,7 +302,7 @@ Go 代码逐项检查：作用域是否允许、来源是否属于本轮、引�
 当前交付可独立使用的显式记忆，不启动自动注入、自动提炼或 embedding 调用。
 
 - `internal/memory/` 实现规范项目作用域、JSON 格式校验、单写者原子提交、版本竞争、遗忘屏障与中英文关键词查询。损坏、未知版本及作用域不匹配的文件保留原样并拒绝写入；未成功落盘的修改不进入查询结果。项目进展需要 `task_key`，默认有效期七天。
-- `memory_mcp.go` 注册 `search_memory`、`remember`、`forget_memory`。记忆的读取和写入均按真实工具消息参数确定唯一调用者，不能用客户端工作区或最新开始时间猜测。两个项目同时调用同名工具、两种后端原始事件保留参数和完全相同参数的歧义拒绝均有测试。保存时服务定位本轮用户消息中的原文摘录；仍无法从自然语言判断用户真实意图，因此保留可见提示和撤销入口。
+- `internal/mcp/memory_tools.go` 注册 `search_memory`、`remember`、`forget_memory`。记忆的读取和写入均按真实工具消息参数确定唯一调用者，不能用客户端工作区或最新开始时间猜测。两个项目同时调用同名工具、两种后端原始事件保留参数和完全相同参数的歧义拒绝均有测试。保存时服务定位本轮用户消息中的原文摘录；仍无法从自然语言判断用户真实意图，因此保留可见提示和撤销入口。
 - 桌面入口为 **Settings → 记忆**：项目/用户偏好列表、来源会话、时间、有效期、状态、编辑、忘记、项目偏好提升到用户级，以及项目事实提升到 `AGENTS.md` / `CLAUDE.md`。项目文件操作先预览最终文本，再由用户确认写入；文件或版本已变化时拒绝旧预览。用户级提升是两个独立作用域提交，部分成功会明确返回已创建的用户记忆 ID。
 - 记忆查询默认只包含当前项目；用户偏好需在项目设置显式启用。管理界面始终可用，停用项目记忆工具不会删除已有内容。此处记录的是 1a 交付状态，自动功能开关与会话禁用标记随后在 1b/2 接入。
 - 会话提示只保存 ID、版本和作用域，正文按需读取；更新/遗忘后通过修订通知使窗口和手机缓存失效。提示不额外持久化正文。原生后端重新加载历史时，运行期间插入的提示可能不再显示；已保存的条目与来源仍可在管理页查看和忘记。

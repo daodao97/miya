@@ -20,6 +20,7 @@ import (
 	"miya/internal/appmodel"
 	"miya/internal/automation"
 	"miya/internal/desktop/control"
+	"miya/internal/mcp/access"
 	mcpconfig "miya/internal/mcp/config"
 	"miya/internal/memory/manager"
 	"miya/internal/model"
@@ -61,7 +62,7 @@ type Controller struct {
 	DelegationParent      map[int]int
 	Collaboration         *collaborationState
 	CollaborationRemote   *model.CollaborationStatus
-	mcpSessionAccess      map[string]bool
+	mcpSessionAccess      access.Grants
 	fastMode              bool
 	Push                  *notification.Hub
 	ClaudeBinary          string

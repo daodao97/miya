@@ -9,7 +9,7 @@ import (
 	"miya/internal/svcproto"
 )
 
-// runMCP serves MCP on stdio for the workspace named after -mcp, reaching
+// Run serves MCP on stdio for the workspace named after -mcp, reaching
 // the background service that is already running; it never starts one.
 func Run() error {
 	workspace, _ := os.Getwd()

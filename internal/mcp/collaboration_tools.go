@@ -10,8 +10,12 @@ import (
 )
 
 func init() {
-	for _, t := range coordinator.Tools() {
-		Register(collaborationTool, true, mcpproto.Tool(t))
+	for _, command := range coordinator.Commands() {
+		annotations := map[string]any{"readOnlyHint": command.ReadOnly, "openWorldHint": false}
+		if !command.ReadOnly {
+			annotations["destructiveHint"] = true
+		}
+		Register(collaborationTool, true, mcpproto.Tool{Name: command.Name, Description: command.Description, InputSchema: command.Schema, Annotations: annotations})
 	}
 }
 

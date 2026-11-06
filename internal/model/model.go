@@ -3,7 +3,7 @@
 package model
 
 import (
-	"miya/internal/agent/codex/native"
+	codex "miya/internal/agent/codex/native"
 	"miya/internal/tokenusage"
 )
 

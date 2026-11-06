@@ -12,7 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"miya/internal/agent/claude/native"
+	claude "miya/internal/agent/claude/native"
 	"miya/internal/async"
 	dg "miya/internal/delegation"
 	"miya/internal/model"

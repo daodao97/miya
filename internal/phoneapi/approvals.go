@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"miya/internal/agent/codex/native"
+	codex "miya/internal/agent/codex/native"
 	"miya/internal/interaction"
 	"miya/internal/textutil"
 )

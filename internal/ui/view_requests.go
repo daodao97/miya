@@ -7,7 +7,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"miya/internal/interaction"
-	mcpconfig "miya/internal/mcp/config"
+	mcpaccess "miya/internal/mcp/access"
 	"miya/internal/msgfmt"
 	"miya/internal/textutil"
 	"miya/internal/widgets"
@@ -112,7 +112,7 @@ func (app *App) questionField(c *ui.Context, q interaction.Question, answers map
 
 func (app *App) elicitationView(c *ui.Context, a interaction.Request) {
 	id := string(a.ID)
-	rememberable := mcpconfig.RememberableMCPAccess(a)
+	rememberable := mcpaccess.Rememberable(a)
 	value, ok := app.forms[id]
 	if !ok {
 		value = "{}"

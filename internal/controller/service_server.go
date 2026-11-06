@@ -262,6 +262,13 @@ func (s *Service) Handle(p *SvcPeer, req svcproto.Request) (any, error) {
 		}
 		return json.Unmarshal(req.Args, v)
 	}
+	if mcpproto.IsOperation(req.Op) {
+		var request mcpproto.Request
+		if err := arg(&request); err != nil {
+			return nil, err
+		}
+		return c.MCP().Handle(req.Op, request)
+	}
 	var id int
 	var value string
 	switch req.Op {
@@ -315,12 +322,6 @@ func (s *Service) Handle(p *SvcPeer, req svcproto.Request) (any, error) {
 		_ = arg(&id)
 		p.Sub, p.sent, p.order = id, nil, nil
 		s.MarkDirty()
-	case "mcpDesktopControl", "mcpMemory", "mcpThreads", "mcpRead", "mcpStatus", "mcpDelegate", "mcpLegacyTask", "mcpCollaboration", "mcpAutomationList", "mcpAutomationCreate", "mcpAutomationUpdate", "mcpReportResult", "mcpRuntime":
-		var r mcpproto.Request
-		if err := arg(&r); err != nil {
-			return nil, err
-		}
-		return c.MCP().Handle(req.Op, r)
 	case "collaboration":
 		var r appmodel.CollaborationRequest
 		if err := arg(&r); err != nil {

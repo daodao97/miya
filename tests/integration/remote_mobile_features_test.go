@@ -16,9 +16,9 @@ import (
 	"miya/internal/appmodel"
 	"miya/internal/memory"
 	"miya/internal/model"
-	"miya/internal/phone"
 	"miya/internal/phoneapi"
 	"miya/internal/remote"
+	"miya/internal/textutil"
 	"miya/internal/thumbnail"
 )
 
@@ -124,7 +124,7 @@ func TestPhoneApprovalAcknowledgementReportsValidationFailure(t *testing.T) {
 					t.Fatal("missing validation error")
 				}
 				var reply phoneapi.ApprovalReply
-				if json.Unmarshal(f.Data, &reply) != nil || !phone.SameJSON(reply.ID, a.ID) {
+				if json.Unmarshal(f.Data, &reply) != nil || !textutil.SameJSON(reply.ID, a.ID) {
 					t.Fatal("ack identified the wrong request")
 				}
 				return

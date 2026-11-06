@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	mcpproto "miya/internal/mcp/protocol"
-
 	"miya/internal/model"
 )
 
@@ -16,7 +15,7 @@ var automationToolProps = map[string]any{
 	"instructions": map[string]any{"type": "string", "description": "First message each run sends to a coding agent: what to do, when it is done, and to reply that there is nothing to report when so"},
 	"check":        map[string]any{"type": "string", "description": "Optional shell command run in the project after each round; exit 0 passes, otherwise its output starts another round"},
 	"rounds":       map[string]any{"type": "integer", "minimum": 1, "maximum": 5, "description": "Most rounds when check fails (default 3; 1 without check)"},
-	"agent":        map[string]any{"type": "string", "enum": []string{model.AgentCodex, model.AgentClaude}, "description": "Agent that runs it (default: this conversation's)"},
+	"agent":        map[string]any{"type": "string", "enum": model.Backends, "description": "Agent that runs it (default: this conversation's)"},
 }
 
 func init() {

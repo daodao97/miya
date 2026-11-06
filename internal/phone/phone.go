@@ -62,14 +62,6 @@ func PersistEnabled(enabled bool) {
 }
 
 // sameJSON compares two JSON values regardless of their spacing.
-func SameJSON(a, b json.RawMessage) bool {
-	var x, y bytes.Buffer
-	if json.Compact(&x, a) != nil || json.Compact(&y, b) != nil {
-		return string(a) == string(b)
-	}
-	return x.String() == y.String()
-}
-
 // phoneThreadSync is what one phone holds of the conversation it watches,
 // as the service's windows have theirs (svcPeer.diff).
 type ThreadSync struct {

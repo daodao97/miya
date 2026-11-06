@@ -1,4 +1,4 @@
-package config
+package access
 
 import (
 	"crypto/sha256"
@@ -11,11 +11,11 @@ import (
 
 var ComputerUseAccessPrompt = regexp.MustCompile(`^Allow Computer Use to use "([^"\r\n]+)"\?$`)
 
-func AccessAccepted() map[string]any {
+func Accepted() map[string]any {
 	return map[string]any{"action": "accept", "content": map[string]any{}}
 }
 
-func SessionPermissionKey(a interaction.Request) string {
+func Key(a interaction.Request) string {
 	var schema any
 	_ = json.Unmarshal(a.RequestedSchema, &schema)
 	canonical, _ := json.Marshal(schema)
@@ -25,7 +25,7 @@ func SessionPermissionKey(a interaction.Request) string {
 
 // Only the known application-access prompt supports a session grant. General
 // MCP forms and browser authentication still require a separate response.
-func RememberableMCPAccess(a interaction.Request) bool {
+func Rememberable(a interaction.Request) bool {
 	if a.Method != "mcpServer/elicitation/request" || a.ServerName != "cua_repl" || a.ThreadID == "" || (a.Mode != "" && a.Mode != "form") || !ComputerUseAccessPrompt.MatchString(a.Message) {
 		return false
 	}

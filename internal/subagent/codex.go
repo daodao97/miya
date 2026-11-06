@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"miya/internal/agent/codex/native"
+	codex "miya/internal/agent/codex/native"
 	"miya/internal/model"
 	"miya/internal/textutil"
 )

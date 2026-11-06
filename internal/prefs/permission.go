@@ -1,7 +1,5 @@
 package prefs
 
-import ()
-
 // "on-failure" is retained as the stored ID for the existing Help me approve
 // preference; it must not be sent as the protocol's deprecated failure policy.
 func ApprovalForPolicy(policy string) string {

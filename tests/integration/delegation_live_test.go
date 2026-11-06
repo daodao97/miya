@@ -10,14 +10,13 @@ import (
 	"testing"
 	"time"
 
-	mcpserver "miya/internal/mcp"
-
 	claude "miya/internal/agent/claude/native"
 	"miya/internal/agent/claude/native/transcript"
 	codex "miya/internal/agent/codex/native"
 	"miya/internal/appmodel"
 	dg "miya/internal/delegation"
 	"miya/internal/delegation/coordinator"
+	mcpserver "miya/internal/mcp"
 	"miya/internal/model"
 	"miya/internal/svcproto"
 	"miya/internal/widgets"

@@ -714,7 +714,7 @@ func (m *App) ApplyPhoneState(s phoneapi.State) {
 	for _, old := range m.State.Approvals {
 		same := false
 		for _, next := range s.Approvals {
-			if phone.SameJSON(old.ID, next.ID) && phoneapi.ApprovalFingerprint(old) == phoneapi.ApprovalFingerprint(next) {
+			if textutil.SameJSON(old.ID, next.ID) && phoneapi.ApprovalFingerprint(old) == phoneapi.ApprovalFingerprint(next) {
 				same = true
 				break
 			}

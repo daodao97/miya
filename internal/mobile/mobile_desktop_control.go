@@ -12,7 +12,6 @@ import (
 	"miya/internal/desktop"
 	"miya/internal/desktop/control"
 	"miya/internal/interaction"
-	"miya/internal/phone"
 	"miya/internal/phoneapi"
 	"miya/internal/remote"
 	"miya/internal/textutil"
@@ -32,7 +31,7 @@ func (m *App) CloseResolvedDesktopControl(approvals []interaction.Request) {
 		return
 	}
 	for _, a := range approvals {
-		if phone.SameJSON(a.ID, ref.ID) && phoneapi.ApprovalFingerprint(a) == ref.Version {
+		if textutil.SameJSON(a.ID, ref.ID) && phoneapi.ApprovalFingerprint(a) == ref.Version {
 			return
 		}
 	}
@@ -237,7 +236,7 @@ func (m *App) ReceiveWindowPreview(conn *remote.Conn, p control.Preview, image u
 	}
 	current.Dialog = p.Dialog
 	for _, a := range m.State.Approvals {
-		if phone.SameJSON(a.ID, p.Approval) {
+		if textutil.SameJSON(a.ID, p.Approval) {
 			m.scheduleWindowPreview(a, current)
 			break
 		}
@@ -310,7 +309,7 @@ func (m *App) receiveWindowAction(conn *remote.Conn, reply control.Preview, mess
 	p.Message = message
 	if message == "" {
 		for _, a := range m.State.Approvals {
-			if phone.SameJSON(a.ID, reply.Approval) {
+			if textutil.SameJSON(a.ID, reply.Approval) {
 				m.requestWindowPreview(a)
 				break
 			}

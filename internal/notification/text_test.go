@@ -6,7 +6,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"miya/internal/agent/codex/native"
+	codex "miya/internal/agent/codex/native"
 	"miya/internal/model"
 )
 

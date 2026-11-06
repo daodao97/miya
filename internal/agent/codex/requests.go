@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 
 	codex "miya/internal/agent/codex/native"
-	mcpconfig "miya/internal/mcp/config"
+	mcpaccess "miya/internal/mcp/access"
 )
 
 func (b Adapter) HandleRequest(f codex.Frame) {
@@ -27,7 +27,7 @@ func (b Adapter) HandleRequest(f codex.Frame) {
 		if c.Snapshot().Client != nil && c.RememberedMCPAccess(a) {
 			client := c.Snapshot().Client
 			go func() {
-				if err := client.Reply(a.ID, mcpconfig.AccessAccepted()); err != nil {
+				if err := client.Reply(a.ID, mcpaccess.Accepted()); err != nil {
 					c.Dispatch(func() { c.SetStatus("Unable to respond to conversation approval: " + err.Error()) })
 				}
 			}()

@@ -52,7 +52,7 @@ var allTools = []mcpproto.Tool{
 		"Waits up to wait_seconds (default 300) for its reply, then returns its status; use thread_status to follow it later.",
 		InputSchema: map[string]any{"type": "object", "properties": map[string]any{
 			"task":            map[string]any{"type": "string", "description": "What to do, with everything the other agent needs"},
-			"agent":           map[string]any{"type": "string", "enum": []string{model.AgentCodex, model.AgentClaude}, "description": "Agent for a new conversation (default: this conversation's)"},
+			"agent":           map[string]any{"type": "string", "enum": model.Backends, "description": "Agent for a new conversation (default: this conversation's)"},
 			"thread_id":       map[string]any{"type": "string", "description": "Full miya:// session link of an existing conversation"},
 			"include_context": map[string]any{"type": "boolean", "description": "Attach this conversation's context (default true)"},
 			"wait_seconds":    map[string]any{"type": "integer", "minimum": 0, "maximum": 1200, "description": "Wait up to this long for the reply (default 300)"},

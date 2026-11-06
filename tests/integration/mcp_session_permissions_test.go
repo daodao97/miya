@@ -6,7 +6,7 @@ import (
 
 	codex "miya/internal/agent/codex/native"
 	"miya/internal/controller"
-	mcpconfig "miya/internal/mcp/config"
+	mcpaccess "miya/internal/mcp/access"
 )
 
 func appAccessRequest() codex.Approval {
@@ -77,7 +77,7 @@ func TestMCPSessionPermissionSchemaCanonicalization(t *testing.T) {
 	a := appAccessRequest()
 	b := a
 	b.RequestedSchema = json.RawMessage(`{ "properties": {}, "type": "object" }`)
-	if mcpconfig.SessionPermissionKey(a) != mcpconfig.SessionPermissionKey(b) {
+	if mcpaccess.Key(a) != mcpaccess.Key(b) {
 		t.Fatal("JSON formatting changed grant identity")
 	}
 }

@@ -16,21 +16,17 @@ import (
 	"miya/internal/textutil"
 )
 
-// Tool is a collaboration MCP tool as tools/list describes it.
-type Tool struct {
-	Name        string         `json:"name"`
-	Description string         `json:"description"`
-	InputSchema map[string]any `json:"inputSchema"`
-	Annotations map[string]any `json:"annotations,omitempty"`
+// Command describes the shared collaboration API used by UI and tool adapters.
+type Command struct {
+	Name, Description string
+	Schema            map[string]any
+	ReadOnly          bool
 }
 
-var tools []Tool
+var commands []Command
 
-// Tools are the collaboration MCP tools, in the order tools/list shows them.
-func Tools() []Tool { return tools }
-
-// IsTool reports whether name is a collaboration MCP tool.
-func IsTool(name string) bool { return toolNames[name] }
+func Commands() []Command        { return commands }
+func IsCommand(name string) bool { return commandNames[name] }
 
 type Args struct {
 	RequestID      string   `json:"request_id,omitempty"`
@@ -52,7 +48,7 @@ type Args struct {
 	State          dg.State `json:"state,omitempty"`
 }
 
-var toolNames = map[string]bool{"list_agents": true, "start_task": true, "read_task": true, "wait_task": true, "send_thread": true, "cancel_task": true, "resolve_task": true, "watch_task": true, "unwatch_task": true, "list_tasks": true}
+var commandNames = map[string]bool{"list_agents": true, "start_task": true, "read_task": true, "wait_task": true, "send_thread": true, "cancel_task": true, "resolve_task": true, "watch_task": true, "unwatch_task": true, "list_tasks": true}
 
 func init() {
 	str := func(description string) map[string]any {
@@ -113,18 +109,14 @@ func init() {
 			props["cursor"] = str("Opaque next_cursor from the previous page.")
 			props["state"] = map[string]any{"type": "string", "enum": []string{"queued", "starting", "running", "completed", "failed", "interrupted", "needsAttention"}}
 		}
-		annotations := map[string]any{"readOnlyHint": readonly, "openWorldHint": false}
-		if !readonly {
-			annotations["destructiveHint"] = true
-		}
-		tools = append(tools, Tool{Name: name, Description: description, InputSchema: map[string]any{"type": "object", "properties": props, "required": required, "additionalProperties": false}, Annotations: annotations})
+		commands = append(commands, Command{Name: name, Description: description, Schema: map[string]any{"type": "object", "properties": props, "required": required, "additionalProperties": false}, ReadOnly: readonly})
 	}
 }
 
-// Decode checks a collaboration tool's arguments against its schema.
+// Decode checks a collaboration command's arguments against its shared schema.
 func Decode(name string, raw json.RawMessage) (Args, error) {
 	var a Args
-	if !toolNames[name] {
+	if !commandNames[name] {
 		return a, errors.New("INVALID_ARGUMENT: Unknown collaboration operation")
 	}
 	if len(raw) == 0 || string(raw) == "null" {
@@ -139,17 +131,17 @@ func Decode(name string, raw json.RawMessage) (Args, error) {
 	if err := json.Unmarshal(raw, &object); err != nil || object == nil {
 		return a, errors.New("INVALID_ARGUMENT: Arguments must be an object")
 	}
-	for _, tool := range tools {
-		if tool.Name != name {
+	for _, command := range commands {
+		if command.Name != name {
 			continue
 		}
-		props := tool.InputSchema["properties"].(map[string]any)
+		props := command.Schema["properties"].(map[string]any)
 		for key := range object {
 			if _, ok := props[key]; !ok {
 				return a, fmt.Errorf("INVALID_ARGUMENT: Unsupported %s argument %s", name, key)
 			}
 		}
-		for _, key := range tool.InputSchema["required"].([]string) {
+		for _, key := range command.Schema["required"].([]string) {
 			v := object[key]
 			if len(v) == 0 || string(v) == "null" || string(v) == `""` {
 				return a, fmt.Errorf("INVALID_ARGUMENT: %s is required", key)

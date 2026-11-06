@@ -4,12 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 
-	"miya/internal/textutil"
-
 	"miya/internal/async"
 	"miya/internal/delegation/coordinator"
 	mcpproto "miya/internal/mcp/protocol"
 	"miya/internal/model"
+	"miya/internal/textutil"
 )
 
 // Older tools keep their default wait and context choices. Their result lookup
