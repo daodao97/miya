@@ -14,7 +14,7 @@ import (
 
 	"miya/internal/appmodel"
 	"miya/internal/automation"
-	"miya/internal/phoneapi"
+	phoneproto "miya/internal/phone/protocol"
 )
 
 func mobileAutomationFixture() automation.View {
@@ -45,12 +45,12 @@ func TestMobileAutomationCreateNavigationAndFeedback(t *testing.T) {
 	}
 	v := mobileAutomationFixture()
 	f.Pending, f.Op = "draft", "automation-draft"
-	raw, _ := json.Marshal(phoneapi.AutomationFormResult{RequestID: "stale", View: &v})
+	raw, _ := json.Marshal(phoneproto.AutomationFormResult{RequestID: "stale", View: &v})
 	m.ReceiveAutomationForm("automation-draft", raw, "")
 	if f.Draft != nil || f.Pending != "draft" {
 		t.Fatal("stale draft replaced the current request")
 	}
-	raw, _ = json.Marshal(phoneapi.AutomationFormResult{RequestID: "draft", View: &v})
+	raw, _ = json.Marshal(phoneproto.AutomationFormResult{RequestID: "draft", View: &v})
 	m.ReceiveAutomationForm("automation-draft", raw, "")
 	tt.Frame()
 	if f.Draft == nil || f.Pending != "" || !tt.HasText("Generated settings") || !tt.HasText("Create") {
@@ -65,7 +65,7 @@ func TestMobileAutomationCreateNavigationAndFeedback(t *testing.T) {
 		t.Fatal("interrupted creation lost its retry identity")
 	}
 	f.Pending = f.CreateKey
-	raw, _ = json.Marshal(phoneapi.AutomationFormResult{RequestID: f.Pending, View: &v})
+	raw, _ = json.Marshal(phoneproto.AutomationFormResult{RequestID: f.Pending, View: &v})
 	m.ReceiveAutomationForm("automation-create", raw, "")
 	tt.Frame()
 	if m.Router().Path() != "/automation" || m.Autos.Detail != v.ID || len(m.Autos.List) != 1 || f.CreateKey != "" || !tt.HasText(v.Name) {
@@ -271,12 +271,12 @@ func TestMobileAutomationRunFeedbackAndCompatibility(t *testing.T) {
 		t.Fatal("pending run feedback missing")
 	}
 	v.Running = true
-	data, _ := json.Marshal(phoneapi.AutomationRunResult{RequestID: "stale", List: []automation.View{v}})
+	data, _ := json.Marshal(phoneproto.AutomationRunResult{RequestID: "stale", List: []automation.View{v}})
 	m.ReceiveAutomationRun(data, "")
 	if m.Autos.RunRequest != "request" || m.Autos.List[0].Running {
 		t.Fatal("stale acknowledgement changed a pending request")
 	}
-	data, _ = json.Marshal(phoneapi.AutomationRunResult{RequestID: "request", List: []automation.View{v}})
+	data, _ = json.Marshal(phoneproto.AutomationRunResult{RequestID: "request", List: []automation.View{v}})
 	m.ReceiveAutomationRun(data, "")
 	tt.Frame()
 	if m.Autos.RunRequest != "" || !m.Autos.List[0].Running || !tt.HasText("Running") {
@@ -284,7 +284,7 @@ func TestMobileAutomationRunFeedbackAndCompatibility(t *testing.T) {
 	}
 	v.Running = false
 	m.Autos.RunRequest = "failed"
-	data, _ = json.Marshal(phoneapi.AutomationRunResult{RequestID: "failed", List: []automation.View{v}})
+	data, _ = json.Marshal(phoneproto.AutomationRunResult{RequestID: "failed", List: []automation.View{v}})
 	m.ReceiveAutomationRun(data, "Project directory does not exist")
 	tt.Frame()
 	if !tt.HasText("Project directory does not exist") || m.Autos.RunRequest != "" {

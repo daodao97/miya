@@ -8,7 +8,7 @@ import (
 
 	"miya/internal/fsutil"
 	"miya/internal/model"
-	"miya/internal/phonecache"
+	phonecache "miya/internal/phone/cache"
 	"miya/internal/remote"
 	"miya/internal/svcproto"
 	"miya/internal/uiruntime"

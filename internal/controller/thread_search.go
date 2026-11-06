@@ -3,16 +3,16 @@ package controller
 import (
 	"sort"
 
-	"miya/internal/phoneapi"
+	phoneproto "miya/internal/phone/protocol"
 )
 
-func (c *Controller) ThreadRefProjects() []phoneapi.Project {
+func (c *Controller) ThreadRefProjects() []phoneproto.Project {
 	names := map[string]string{}
 	for _, p := range c.Projects() {
 		names[p.Path] = p.Name
 	}
 	// The live list wins over the current project's possibly stale cache.
-	projects := []phoneapi.Project{{Path: c.Cwd, Name: names[c.Cwd], Threads: c.Threads()}}
+	projects := []phoneproto.Project{{Path: c.Cwd, Name: names[c.Cwd], Threads: c.Threads()}}
 	paths := make([]string, 0, len(c.ProjectCache))
 	for path := range c.ProjectCache {
 		if path != c.Cwd {
@@ -21,7 +21,7 @@ func (c *Controller) ThreadRefProjects() []phoneapi.Project {
 	}
 	sort.Strings(paths)
 	for _, path := range paths {
-		projects = append(projects, phoneapi.Project{Path: path, Name: names[path], Threads: c.ProjectCache[path]})
+		projects = append(projects, phoneproto.Project{Path: path, Name: names[path], Threads: c.ProjectCache[path]})
 	}
 	return projects
 }

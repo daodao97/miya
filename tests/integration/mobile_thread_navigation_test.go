@@ -11,7 +11,7 @@ import (
 	"miya/internal/appmodel"
 	dg "miya/internal/delegation"
 	"miya/internal/model"
-	"miya/internal/phoneapi"
+	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/widgets"
 )
 
@@ -66,7 +66,7 @@ func TestMobileTaskOpensTargetConversation(t *testing.T) {
 					t.Fatalf("wrong subscription: %+v", request)
 				}
 				target.Messages = []model.Message{{ID: 2, Role: "assistant", Content: "Target conversation history"}}
-				m.ReceiveThread(target.ID, phoneapi.ThreadDelta{Thread: target, Reset: true, Order: []int{2}, Changed: target.Messages})
+				m.ReceiveThread(target.ID, phoneproto.ThreadDelta{Thread: target, Reset: true, Order: []int{2}, Changed: target.Messages})
 				tt.Frame()
 				if !tt.HasText("Target conversation history") {
 					t.Fatal("target history did not become visible")

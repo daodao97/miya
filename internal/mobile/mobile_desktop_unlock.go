@@ -9,7 +9,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"miya/internal/desktop/control"
-	"miya/internal/phonecache"
+	phonecache "miya/internal/phone/cache"
 	"miya/internal/widgets"
 )
 

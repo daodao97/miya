@@ -10,8 +10,8 @@ import (
 
 	"miya/internal/mobile"
 	"miya/internal/model"
-	"miya/internal/phone"
-	"miya/internal/phoneapi"
+	phoneproto "miya/internal/phone/protocol"
+	phoneserver "miya/internal/phone/server"
 	"miya/internal/remote"
 	"miya/internal/svcproto"
 )
@@ -29,10 +29,10 @@ func longThread(n int) model.Thread {
 }
 
 // phoneOf applies deltas as the phone does, from what it holds.
-func phoneOf(t *testing.T, m *mobile.App, d phoneapi.ThreadDelta) []model.Message {
+func phoneOf(t *testing.T, m *mobile.App, d phoneproto.ThreadDelta) []model.Message {
 	t.Helper()
 	data, _ := json.Marshal(d)
-	var back phoneapi.ThreadDelta
+	var back phoneproto.ThreadDelta
 	if err := json.Unmarshal(data, &back); err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +56,7 @@ func sameMessages(a, b []model.Message) bool {
 func TestPhoneThreadDeltas(t *testing.T) {
 	desk := longThread(40)
 	m := mobile.NewMobileApp()
-	s := phone.NewThreadSync(nil)
+	s := phoneserver.NewThreadSync(nil)
 
 	d, ok := s.Update(desk)
 	if !ok || !d.Reset || len(d.Changed) != 40 {
@@ -87,7 +87,7 @@ func TestPhoneThreadDeltas(t *testing.T) {
 	for _, msg := range m.CachedMessages(desk.ServerID) {
 		req.Have = append(req.Have, remote.Seen{ID: msg.ID, FP: svcproto.MessageFingerprint(msg)})
 	}
-	s = phone.NewThreadSync(req.Have)
+	s = phoneserver.NewThreadSync(req.Have)
 	d, ok = s.Update(desk)
 	if !ok || d.Reset || len(d.Changed) != 0 {
 		t.Fatalf("a cached conversation should need no messages: reset %v, %d changed", d.Reset, len(d.Changed))
@@ -104,7 +104,7 @@ func TestPhoneThreadDeltas(t *testing.T) {
 	}
 	restarted.Messages[39].Content = desk.Messages[39].Content
 	restarted.Messages[40].Content = desk.Messages[40].Content
-	s = phone.NewThreadSync(req.Have)
+	s = phoneserver.NewThreadSync(req.Have)
 	d, _ = s.Update(restarted)
 	if len(d.Changed) != 41 {
 		t.Errorf("new IDs should resend everything: %d", len(d.Changed))
@@ -123,7 +123,7 @@ func TestPhoneThreadDeltasKeepHistoryWhileResuming(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			desk := longThread(4)
 			m := mobile.NewMobileApp()
-			s := phone.NewThreadSync(nil)
+			s := phoneserver.NewThreadSync(nil)
 			d, _ := s.Update(desk)
 			phoneOf(t, m, d)
 			if reconnect {
@@ -131,9 +131,9 @@ func TestPhoneThreadDeltasKeepHistoryWhileResuming(t *testing.T) {
 				for _, msg := range desk.Messages {
 					have = append(have, remote.Seen{ID: msg.ID, FP: svcproto.MessageFingerprint(msg)})
 				}
-				s = phone.NewThreadSync(have)
+				s = phoneserver.NewThreadSync(have)
 			}
-			loading := phone.ListThread(desk)
+			loading := phoneserver.ListThread(desk)
 			loading.Loading, loading.Busy = true, true
 			for _, loaded := range []bool{false, true} {
 				loading.HistoryLoaded = loaded
@@ -180,7 +180,7 @@ func TestPhoneTransferSize(t *testing.T) {
 	desk := longThread(300)
 	var before, after [][]byte
 	full := func() { b, _ := json.Marshal(desk); before = append(before, b) }
-	s := phone.NewThreadSync(nil)
+	s := phoneserver.NewThreadSync(nil)
 	delta := func() {
 		if d, ok := s.Update(desk); ok {
 			b, _ := json.Marshal(d)
@@ -201,7 +201,7 @@ func TestPhoneTransferSize(t *testing.T) {
 		have = append(have, remote.Seen{ID: m.ID, FP: svcproto.MessageFingerprint(m)})
 	}
 	full()
-	s = phone.NewThreadSync(have)
+	s = phoneserver.NewThreadSync(have)
 	delta()
 	sum := func(fs [][]byte) (n int) {
 		for _, f := range fs {

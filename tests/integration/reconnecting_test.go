@@ -15,8 +15,8 @@ import (
 	"miya/internal/controller"
 	"miya/internal/model"
 	"miya/internal/msgfmt"
-	"miya/internal/phone"
-	"miya/internal/phoneapi"
+	phoneproto "miya/internal/phone/protocol"
+	phoneserver "miya/internal/phone/server"
 )
 
 func TestReconnectStateReachesDesktopAndPhone(t *testing.T) {
@@ -33,13 +33,13 @@ func TestReconnectStateReachesDesktopAndPhone(t *testing.T) {
 				m := testMobileApp()
 				m.OpenThread(c.Current())
 				tt = ui.NewTester(m.ViewRoot, 390, 750)
-				s := phone.NewThreadSync(nil)
+				s := phoneserver.NewThreadSync(nil)
 				syncView = func() {
 					d, changed := s.Update(c.Current())
 					if changed {
 						// Exercise the actual wire format, including status-only deltas.
 						data, _ := json.Marshal(d)
-						var received phoneapi.ThreadDelta
+						var received phoneproto.ThreadDelta
 						if err := json.Unmarshal(data, &received); err != nil {
 							t.Fatal(err)
 						}

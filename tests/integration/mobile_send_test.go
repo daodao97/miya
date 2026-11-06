@@ -10,8 +10,8 @@ import (
 
 	"miya/internal/appmodel"
 	"miya/internal/model"
-	"miya/internal/phone"
-	"miya/internal/phoneapi"
+	phoneproto "miya/internal/phone/protocol"
+	phoneserver "miya/internal/phone/server"
 )
 
 func TestMobileNewSendStaysVisibleUntilHistoryArrives(t *testing.T) {
@@ -39,12 +39,12 @@ func TestMobileNewSendStaysVisibleUntilHistoryArrives(t *testing.T) {
 				if len(m.SubscribeRequest(3).Have) != 0 {
 					t.Fatal("the phone advertised an unconfirmed local message")
 				}
-				m.ReceiveThread(3, phoneapi.ThreadDelta{Thread: model.Thread{ID: 3, Agent: agent, Loading: true}, Reset: true})
+				m.ReceiveThread(3, phoneproto.ThreadDelta{Thread: model.Thread{ID: 3, Agent: agent, Loading: true}, Reset: true})
 				tt.Frame()
 				if !tt.HasText("请修复手机新建对话的空白问题") {
 					t.Fatal("a loading delta hid the local message")
 				}
-				m.ReceiveThread(3, phoneapi.ThreadDelta{Thread: model.Thread{ID: 3, ServerID: "created", Agent: agent, HistoryLoaded: true, Busy: true}, Reset: true,
+				m.ReceiveThread(3, phoneproto.ThreadDelta{Thread: model.Thread{ID: 3, ServerID: "created", Agent: agent, HistoryLoaded: true, Busy: true}, Reset: true,
 					Order: []int{10}, Changed: []model.Message{{ID: 10, Role: "user", Content: "请修复手机新建对话的空白问题"}}})
 				tt.Frame()
 				if m.NewSend != nil || !tt.HasText("请修复手机新建对话的空白问题") || tt.HasText("Syncing conversation…") {
@@ -70,7 +70,7 @@ func TestMobileNewSendKeepsMessageWhenServerIdentityArrives(t *testing.T) {
 	m.Sent(3, "")
 	// Codex publishes the local user message before thread/start returns
 	// its durable ID. The phone has already subscribed by the numeric ID.
-	sync := phone.NewThreadSync(nil)
+	sync := phoneserver.NewThreadSync(nil)
 	thread := model.Thread{ID: 3, Agent: appmodel.AgentCodex, HistoryLoaded: true, Busy: true,
 		Messages: []model.Message{{ID: 10, Role: "user", Content: "首条消息应一直可见", ItemID: "pending-user"}}}
 	delta, changed := sync.Update(thread)

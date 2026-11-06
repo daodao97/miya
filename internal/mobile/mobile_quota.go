@@ -7,7 +7,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"miya/internal/phoneapi"
+	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/widgets"
 )
 
@@ -21,7 +21,7 @@ func quotaResetLabel(unix int64) string {
 }
 
 func (m *App) drawerQuotas(c *ui.Context) {
-	var quotas []phoneapi.AgentQuota
+	var quotas []phoneproto.AgentQuota
 	for _, q := range m.State.Quotas {
 		if len(q.Windows) > 0 {
 			quotas = append(quotas, q)

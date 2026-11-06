@@ -15,7 +15,7 @@ import (
 	"miya/internal/async"
 	"miya/internal/controller"
 	"miya/internal/model"
-	"miya/internal/phoneapi"
+	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/remote"
 )
 
@@ -65,7 +65,7 @@ func serveTestPhone(t *testing.T, c *controller.Controller) (*testPhoneConnectio
 	return conn, ex
 }
 
-func (c *testPhoneConnection) nextThread(t *testing.T) phoneapi.ThreadDelta {
+func (c *testPhoneConnection) nextThread(t *testing.T) phoneproto.ThreadDelta {
 	t.Helper()
 	for {
 		select {
@@ -73,7 +73,7 @@ func (c *testPhoneConnection) nextThread(t *testing.T) phoneapi.ThreadDelta {
 			if f.Type != "thread" {
 				continue
 			}
-			var d phoneapi.ThreadDelta
+			var d phoneproto.ThreadDelta
 			if err := json.Unmarshal(f.Data, &d); err != nil {
 				t.Fatal(err)
 			}
@@ -83,7 +83,7 @@ func (c *testPhoneConnection) nextThread(t *testing.T) phoneapi.ThreadDelta {
 			return d
 		case <-c.ctx.Done():
 			t.Fatal("phone-serving loop did not return a thread")
-			return phoneapi.ThreadDelta{}
+			return phoneproto.ThreadDelta{}
 		}
 	}
 }

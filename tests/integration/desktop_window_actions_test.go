@@ -11,7 +11,7 @@ import (
 	"miya/internal/desktop"
 	"miya/internal/desktop/control"
 	"miya/internal/model"
-	"miya/internal/phoneapi"
+	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/remote"
 )
 
@@ -59,7 +59,7 @@ func TestDesktopAuthorizationRejectedPasswordKeepsTakeoverPending(t *testing.T) 
 	list := c.Approvals()
 	list[0].Method = "miya/desktopControl"
 	c.SetApprovals(list)
-	r := remote.Request{ServerID: "s", Approval: id, ApprovalVersion: phoneapi.ApprovalFingerprint(list[0]), WindowID: 81, WindowPID: 120}
+	r := remote.Request{ServerID: "s", Approval: id, ApprovalVersion: phoneproto.ApprovalFingerprint(list[0]), WindowID: 81, WindowPID: 120}
 	c.Desktop = &control.Server{Native: control.Native{Windows: func() ([]desktop.Window, error) { return []desktop.Window{{ID: 81, PID: 120}}, nil }}}
 	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
 	defer cancel()
@@ -83,13 +83,13 @@ func TestDesktopAuthorizationActionCompletesOnlyItsTakeover(t *testing.T) {
 	list[0].Method = "miya/desktopControl"
 	c.SetApprovals(list)
 	a := c.Approvals()[0]
-	r := remote.Request{ServerID: "s", Approval: id, ApprovalVersion: phoneapi.ApprovalFingerprint(a)}
+	r := remote.Request{ServerID: "s", Approval: id, ApprovalVersion: phoneproto.ApprovalFingerprint(a)}
 	r.ApprovalVersion = "stale"
 	c.CompleteDesktopAction(r, desktop.Action{Label: "允许访问"})
 	if len(c.Approvals()) != 1 {
 		t.Fatal("stale action completed request")
 	}
-	r.ApprovalVersion = phoneapi.ApprovalFingerprint(a)
+	r.ApprovalVersion = phoneproto.ApprovalFingerprint(a)
 	c.CompleteDesktopAction(r, desktop.Action{Label: "允许访问"})
 	select {
 	case ok := <-ch:
@@ -105,7 +105,7 @@ func TestDesktopAuthorizationActionCompletesOnlyItsTakeover(t *testing.T) {
 	a = codex.Approval{ID: json.RawMessage(`"question"`), ThreadID: "s", Method: "item/tool/requestUserInput"}
 	c.SetApprovals([]codex.Approval{a})
 	r.Approval = a.ID
-	r.ApprovalVersion = phoneapi.ApprovalFingerprint(a)
+	r.ApprovalVersion = phoneproto.ApprovalFingerprint(a)
 	c.CompleteDesktopAction(r, desktop.Action{Label: "允许访问"})
 	if len(c.Approvals()) != 1 {
 		t.Fatal("native action answered unrelated question")
@@ -129,7 +129,7 @@ func TestDesktopAuthorizationCompletionDoesNotDependOnButtonText(t *testing.T) {
 			list := c.Approvals()
 			list[0].Method = "miya/desktopControl"
 			c.SetApprovals(list)
-			r := remote.Request{ServerID: "s", Approval: id, ApprovalVersion: phoneapi.ApprovalFingerprint(list[0]), WindowID: 81, WindowPID: 120}
+			r := remote.Request{ServerID: "s", Approval: id, ApprovalVersion: phoneproto.ApprovalFingerprint(list[0]), WindowID: 81, WindowPID: 120}
 			reads := 0
 			c.Desktop = &control.Server{Native: control.Native{Windows: func() ([]desktop.Window, error) {
 				reads++
@@ -161,7 +161,7 @@ func TestDesktopAuthorizationTransitionKeepsTakeoverPending(t *testing.T) {
 	list := c.Approvals()
 	list[0].Method = "miya/desktopControl"
 	c.SetApprovals(list)
-	r := remote.Request{ServerID: "s", Approval: id, ApprovalVersion: phoneapi.ApprovalFingerprint(list[0]), WindowID: 81, WindowPID: 120}
+	r := remote.Request{ServerID: "s", Approval: id, ApprovalVersion: phoneproto.ApprovalFingerprint(list[0]), WindowID: 81, WindowPID: 120}
 	reads := 0
 	c.Desktop = &control.Server{Native: control.Native{Windows: func() ([]desktop.Window, error) {
 		reads++

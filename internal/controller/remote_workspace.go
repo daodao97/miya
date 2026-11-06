@@ -13,7 +13,7 @@ import (
 	"miya/internal/async"
 	"miya/internal/composer"
 	"miya/internal/fsutil"
-	"miya/internal/phone"
+	phoneserver "miya/internal/phone/server"
 	"miya/internal/svcproto"
 	"miya/internal/thumbnail"
 	"miya/internal/worktree"
@@ -56,9 +56,9 @@ func (c *Controller) PrepareHost(r svcproto.HostRequest) (async.Reply, error) {
 			}
 			return out, nil
 		case "upload":
-			return phone.SaveImages(r.Images)
+			return phoneserver.SaveImages(r.Images)
 		case "upload-files":
-			return phone.SaveDesktopUploads(r.Images)
+			return phoneserver.SaveDesktopUploads(r.Images)
 		case "preview":
 			return thumbnail.File(r.Path)
 		case "usage":
@@ -139,7 +139,7 @@ func (c *Controller) UploadRemoteAttachments(paths []string) ([]string, error) {
 		}
 		local, positions = append(local, path), append(positions, i)
 	}
-	images, err := phone.ReadDesktopUploads(local)
+	images, err := phoneserver.ReadDesktopUploads(local)
 	if err != nil {
 		return nil, err
 	}

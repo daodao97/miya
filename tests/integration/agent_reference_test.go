@@ -13,7 +13,7 @@ import (
 	"miya/internal/controller"
 	"miya/internal/conversation"
 	"miya/internal/model"
-	"miya/internal/phoneapi"
+	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/remote"
 	"miya/internal/svcproto"
 )
@@ -146,7 +146,7 @@ func TestMobileAgentSelectionUsesSameChipAndClipboardFormat(t *testing.T) {
 		t.Run(strconv.Itoa(width), func(t *testing.T) {
 			m := testMobileApp()
 			m.State.Collaboration = &model.CollaborationStatus{Version: 1}
-			m.State.Agents = []phoneapi.AgentOptions{{Agent: appmodel.AgentCodex}, {Agent: appmodel.AgentClaude}}
+			m.State.Agents = []phoneproto.AgentOptions{{Agent: appmodel.AgentCodex}, {Agent: appmodel.AgentClaude}}
 			m.StartConversation("/a", appmodel.AgentCodex)
 			m.Draft = "#claude"
 			tt := ui.NewTester(m.ViewRoot, width, 750)
@@ -228,7 +228,7 @@ func TestComposerAtMenuOffersAgentsForDelegation(t *testing.T) {
 func TestMobileAtMenuOffersDesktopAgents(t *testing.T) {
 	m := testMobileApp()
 	m.State.Collaboration = &model.CollaborationStatus{Version: 1}
-	m.State.Agents = []phoneapi.AgentOptions{{Agent: appmodel.AgentClaude}}
+	m.State.Agents = []phoneproto.AgentOptions{{Agent: appmodel.AgentClaude}}
 	m.StartConversation("/a", appmodel.AgentCodex)
 	m.Draft = "@"
 	tt := ui.NewTester(m.ViewRoot, 390, 750)

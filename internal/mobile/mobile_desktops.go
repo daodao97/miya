@@ -16,9 +16,9 @@ import (
 	"miya/internal/conversation"
 	"miya/internal/fsutil"
 	"miya/internal/model"
-	"miya/internal/phone"
-	"miya/internal/phoneapi"
-	"miya/internal/phonecache"
+	phonecache "miya/internal/phone/cache"
+	phoneproto "miya/internal/phone/protocol"
+	phoneserver "miya/internal/phone/server"
 	"miya/internal/remote"
 	"miya/internal/uiruntime"
 	"miya/internal/workspaces"
@@ -246,7 +246,7 @@ func (m *App) ResetDesktopState() {
 	m.WebDetails = false
 	m.ConversationMenu = false
 	m.Home()
-	m.State, m.Host, m.Selected = phoneapi.State{}, "", ""
+	m.State, m.Host, m.Selected = phoneproto.State{}, "", ""
 	m.Autos = mobileAutomations{}
 	m.Memories = MobileMemory{}
 	m.Options, m.optionsAgent, m.NewAgent = nil, "", ""
@@ -282,7 +282,7 @@ func (m *App) saveDesktopSession() {
 	if thread.ServerID != "" && len(thread.Messages) > 0 {
 		m.Remember(thread.ServerID, thread.Messages)
 	}
-	m.desktopSessions[id] = phonecache.Session{Thread: phone.ListThread(thread), Selected: m.Selected, Agent: m.NewAgent,
+	m.desktopSessions[id] = phonecache.Session{Thread: phoneserver.ListThread(thread), Selected: m.Selected, Agent: m.NewAgent,
 		Draft: m.Draft, Images: append([]string(nil), m.Images...), ExpandedProject: m.ExpandedProject,
 		ProjectsExpanded: m.projectsExpanded, ThreadListExpanded: m.ThreadListExpanded}
 	m.Images = nil

@@ -26,10 +26,10 @@ import (
 	"miya/internal/model"
 	"miya/internal/msgfmt"
 	"miya/internal/notification"
-	"miya/internal/phone"
-	"miya/internal/phoneapi"
-	"miya/internal/phonecache"
-	"miya/internal/phoneproxy"
+	phonecache "miya/internal/phone/cache"
+	phoneproto "miya/internal/phone/protocol"
+	phoneproxy "miya/internal/phone/proxy"
+	phoneserver "miya/internal/phone/server"
 	"miya/internal/prefs"
 	"miya/internal/remote"
 	"miya/internal/svcproto"
@@ -102,7 +102,7 @@ type App struct {
 
 	Loaded             bool
 	Link, Host         string
-	State              phoneapi.State
+	State              phoneproto.State
 	Memories           MobileMemory
 	Autos              mobileAutomations
 	Collaborations     widgets.CollaborationUI
@@ -626,7 +626,7 @@ func (m *App) read(gen int, conn *remote.Conn) (greeted bool, err error) {
 				}
 			})
 		case "responded":
-			var result phoneapi.ApprovalReply
+			var result phoneproto.ApprovalReply
 			if json.Unmarshal(f.Data, &result) == nil {
 				message := f.Error
 				m.onMain(gen, func() { m.ApprovalAnswered(result.ID, message) })
@@ -640,14 +640,14 @@ func (m *App) read(gen int, conn *remote.Conn) (greeted bool, err error) {
 			message := f.Error
 			m.onMain(gen, func() { m.pushError = message; m.readPending = nil; m.markOpenRead() })
 		case "state":
-			var s phoneapi.State
+			var s phoneproto.State
 			if json.Unmarshal(f.Data, &s) == nil {
 				m.onMain(gen, func() {
 					m.ApplyPhoneState(s)
 				})
 			}
 		case "thread":
-			var d phoneapi.ThreadDelta
+			var d phoneproto.ThreadDelta
 			if json.Unmarshal(f.Data, &d) == nil {
 				id := f.Thread
 				m.onMain(gen, func() {
@@ -681,7 +681,7 @@ func (m *App) read(gen int, conn *remote.Conn) (greeted bool, err error) {
 				}
 			}
 		case "commands":
-			var pc phoneapi.Commands
+			var pc phoneproto.Commands
 			if json.Unmarshal(f.Data, &pc) == nil {
 				m.onMain(gen, func() {
 					if m.Commands == nil {
@@ -705,7 +705,7 @@ func (m *App) read(gen int, conn *remote.Conn) (greeted bool, err error) {
 
 // The desktop may renumber threads after a restart or while repairing an old
 // cache. Rebind the open page by durable identity before handling its deltas.
-func (m *App) ApplyPhoneState(s phoneapi.State) {
+func (m *App) ApplyPhoneState(s phoneproto.State) {
 	m.CloseResolvedDesktopControl(s.Approvals)
 	if m.State.MemoryRevision != s.MemoryRevision {
 		m.Memories.List = manager.List{}
@@ -714,7 +714,7 @@ func (m *App) ApplyPhoneState(s phoneapi.State) {
 	for _, old := range m.State.Approvals {
 		same := false
 		for _, next := range s.Approvals {
-			if textutil.SameJSON(old.ID, next.ID) && phoneapi.ApprovalFingerprint(old) == phoneapi.ApprovalFingerprint(next) {
+			if textutil.SameJSON(old.ID, next.ID) && phoneproto.ApprovalFingerprint(old) == phoneproto.ApprovalFingerprint(next) {
 				same = true
 				break
 			}
@@ -766,7 +766,7 @@ func (m *App) ApplyPhoneState(s phoneapi.State) {
 	m.PersistState()
 }
 
-func (m *App) ReceiveThread(id int, d phoneapi.ThreadDelta) {
+func (m *App) ReceiveThread(id int, d phoneproto.ThreadDelta) {
 	if m.Open != id {
 		return
 	}
@@ -821,7 +821,7 @@ func (m *App) Subscribe(id int) {
 }
 
 // find looks a conversation up in the desktop's state.
-func (m *App) find(id int) (model.Thread, phoneapi.Project) {
+func (m *App) find(id int) (model.Thread, phoneproto.Project) {
 	for _, p := range m.State.Projects {
 		for _, t := range p.Threads {
 			if t.ID == id {
@@ -829,21 +829,21 @@ func (m *App) find(id int) (model.Thread, phoneapi.Project) {
 			}
 		}
 	}
-	return model.Thread{}, phoneapi.Project{}
+	return model.Thread{}, phoneproto.Project{}
 }
 
-func (m *App) project(path string) phoneapi.Project {
+func (m *App) project(path string) phoneproto.Project {
 	for _, p := range m.State.Projects {
 		if p.Path == path {
 			return p
 		}
 	}
-	return phoneapi.Project{Path: path, Name: filepath.Base(path)}
+	return phoneproto.Project{Path: path, Name: filepath.Base(path)}
 }
 
 // currentProject is the desktop's open project, where a new conversation
 // starts.
-func (m *App) currentProject() phoneapi.Project {
+func (m *App) currentProject() phoneproto.Project {
 	for _, p := range m.State.Projects {
 		if p.Current {
 			return p
@@ -852,7 +852,7 @@ func (m *App) currentProject() phoneapi.Project {
 	if len(m.State.Projects) > 0 {
 		return m.State.Projects[0]
 	}
-	return phoneapi.Project{}
+	return phoneproto.Project{}
 }
 
 func (m *App) ApprovalsFor(serverID string) []interaction.Request {
@@ -978,7 +978,7 @@ func (m *App) sendDraft(steer bool) {
 		m.BeginNewSend(r.Text, paths)
 	}
 	go func() {
-		images, err := phone.ReadImages(paths)
+		images, err := phoneserver.ReadImages(paths)
 		if err == nil {
 			r.Images = images
 			err = conn.Send(r)
@@ -1299,7 +1299,7 @@ func (m *App) listView(c *ui.Context) {
 
 // selectedProject is where a new conversation starts: the chosen project,
 // else the desktop's open project.
-func (m *App) selectedProject() phoneapi.Project {
+func (m *App) selectedProject() phoneproto.Project {
 	if m.Selected != "" {
 		for _, p := range m.State.Projects {
 			if p.Path == m.Selected {
@@ -1613,7 +1613,7 @@ func (m *App) threadView(c *ui.Context) {
 	m.composer(c, agent, busy)
 }
 
-func (m *App) newConversationView(c *ui.Context, proj phoneapi.Project) {
+func (m *App) newConversationView(c *ui.Context, proj phoneproto.Project) {
 	p := m.Pal
 	agent := m.composerAgent()
 	ui.Scroll(c.Key("draft-intro")).Grow(1).FillWidth().MinHeight(0).Children(func() {
@@ -1789,8 +1789,8 @@ func (m *App) composer(c *ui.Context, agent string, busy bool) {
 // addPhotos picks photos from the library with the system picker, which
 // needs no access to the whole library.
 func (m *App) addPhotos() {
-	if len(m.Images) >= phone.MaxImages {
-		m.SendErr = fmt.Sprintf(tr("Send up to %d images at a time"), phone.MaxImages)
+	if len(m.Images) >= phoneserver.MaxImages {
+		m.SendErr = fmt.Sprintf(tr("Send up to %d images at a time"), phoneserver.MaxImages)
 		return
 	}
 	win := m.win
@@ -1804,8 +1804,8 @@ func (m *App) addPhotos() {
 				m.SendErr = tr("Unable to open photos: ") + err.Error()
 			}
 			for _, p := range paths {
-				if len(m.Images) >= phone.MaxImages {
-					m.SendErr = fmt.Sprintf(tr("Send up to %d images at a time"), phone.MaxImages)
+				if len(m.Images) >= phoneserver.MaxImages {
+					m.SendErr = fmt.Sprintf(tr("Send up to %d images at a time"), phoneserver.MaxImages)
 					go os.Remove(p)
 					continue
 				}
@@ -2017,7 +2017,7 @@ func (m *App) ThreadRequest(op string, id int) remote.Request {
 	// already reused its numeric ID for a different conversation.
 	if cur := m.Viewer.Current(); cur.ID == id && cur.ServerID != "" {
 		if cur.ServerID != t.ServerID || model.ThreadAgent(cur) != model.ThreadAgent(t) {
-			p = phoneapi.Project{}
+			p = phoneproto.Project{}
 		}
 		t = cur
 	}
@@ -2029,7 +2029,7 @@ func (m *App) ThreadRequest(op string, id int) remote.Request {
 }
 
 // applyThread merges a delta into what the phone holds of the conversation.
-func (m *App) ApplyThread(d phoneapi.ThreadDelta) {
+func (m *App) ApplyThread(d phoneproto.ThreadDelta) {
 	t := d.Thread
 	var base []model.Message
 	if !d.Reset {

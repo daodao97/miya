@@ -16,7 +16,7 @@ import (
 	"miya/internal/mobile"
 	"miya/internal/model"
 	"miya/internal/msgfmt"
-	"miya/internal/phoneapi"
+	phoneproto "miya/internal/phone/protocol"
 	desktopui "miya/internal/ui"
 )
 
@@ -170,7 +170,7 @@ func TestMobileMemoryReadOnlyPageAndDesktopIsolation(t *testing.T) {
 	m.Memories = mobile.MobileMemory{Project: "/a", Scope: "project", RequestedAt: time.Now()}
 	at := time.Date(2026, 11, 2, 8, 0, 0, 0, time.UTC)
 	list := manager.List{Entries: []memory.Entry{{ID: "memory", Version: 1, Content: "本周暂缓手机协议升级", Kind: "fact", State: "active", ObservedAt: at}}}
-	data, _ := json.Marshal(phoneapi.MemoryResult{Project: "/a", Scope: "project", List: list})
+	data, _ := json.Marshal(phoneproto.MemoryResult{Project: "/a", Scope: "project", List: list})
 	m.ReceiveMemory(data, "")
 	tt := ui.NewTester(m.ViewRoot, 390, 844)
 	tt.Frame()
@@ -191,7 +191,7 @@ func TestMobileMemoryReadOnlyPageAndDesktopIsolation(t *testing.T) {
 	}
 	automationSnapshot(t, tt, "memory-mobile")
 	// A delayed response from another project must not populate this page.
-	other, _ := json.Marshal(phoneapi.MemoryResult{Project: "/b", Scope: "project", List: manager.List{}})
+	other, _ := json.Marshal(phoneproto.MemoryResult{Project: "/b", Scope: "project", List: manager.List{}})
 	m.ReceiveMemory(other, "")
 	if len(m.Memories.List.Entries) != 1 {
 		t.Fatal("foreign response changed active page")

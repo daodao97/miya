@@ -14,7 +14,7 @@ import (
 	"miya/internal/appmodel"
 	"miya/internal/controller"
 	"miya/internal/model"
-	"miya/internal/phone"
+	phoneserver "miya/internal/phone/server"
 )
 
 func TestGoalEventsAndClaudeSchedulesStayOnTheirThread(t *testing.T) {
@@ -39,7 +39,7 @@ func TestGoalEventsAndClaudeSchedulesStayOnTheirThread(t *testing.T) {
 		t.Fatal("turn completion lost waiting schedule")
 	}
 	// Thread tasks travel with metadata, even when no message changed.
-	sync := phone.NewThreadSync(nil)
+	sync := phoneserver.NewThreadSync(nil)
 	sync.Update(c.Threads()[1])
 	c.Update(2, func(t *model.Thread) { t.Tasks[0].Status = "completed" })
 	delta, changed := sync.Update(c.Threads()[1])

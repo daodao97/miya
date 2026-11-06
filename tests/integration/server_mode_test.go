@@ -20,8 +20,8 @@ import (
 	"time"
 
 	"miya/internal/controller"
-	"miya/internal/phone"
-	"miya/internal/phoneapi"
+	phoneproto "miya/internal/phone/protocol"
+	phoneserver "miya/internal/phone/server"
 	"miya/internal/remote"
 	"miya/internal/svcproto"
 	desktopui "miya/internal/ui"
@@ -300,7 +300,7 @@ func TestServerTailcatEndToEnd(t *testing.T) {
 	if err := phone.Receive(&frame); err != nil || frame.Type != "state" {
 		t.Fatal("phone state", frame.Type, err)
 	}
-	var phoneState phoneapi.State
+	var phoneState phoneproto.State
 	if err := json.Unmarshal(frame.Data, &phoneState); err != nil || len(phoneState.Projects) == 0 {
 		t.Fatal("phone projects", err)
 	}
@@ -372,7 +372,7 @@ func TestServerLinuxDeployment(t *testing.T) {
 	transport := &http.Transport{DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) { return cl.Wire().DialFiles(ctx) }}
 	defer transport.CloseIdleConnections()
 	client := &http.Client{Transport: transport, Timeout: 15 * time.Second}
-	response, err := client.Get("http://server/" + phone.ProjectFileID(state.Cwd) + "/miya-linux-qa.txt")
+	response, err := client.Get("http://server/" + phoneserver.ProjectFileID(state.Cwd) + "/miya-linux-qa.txt")
 	if err != nil {
 		t.Fatal("Linux file stream", err)
 	}

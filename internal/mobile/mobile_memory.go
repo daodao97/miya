@@ -8,7 +8,7 @@ import (
 
 	"miya/internal/memory/manager"
 	"miya/internal/model"
-	"miya/internal/phoneapi"
+	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/remote"
 	"miya/internal/widgets"
 )
@@ -43,7 +43,7 @@ func (m *App) loadPhoneMemory() {
 }
 
 func (m *App) ReceiveMemory(raw json.RawMessage, message string) {
-	var result phoneapi.MemoryResult
+	var result phoneproto.MemoryResult
 	if err := json.Unmarshal(raw, &result); err != nil {
 		m.Memories.loading = false
 		m.Memories.err = tr("Failed to load memory")

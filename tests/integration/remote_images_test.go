@@ -10,7 +10,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"miya/internal/phone"
+	phoneserver "miya/internal/phone/server"
 	"miya/internal/remote"
 )
 
@@ -25,7 +25,7 @@ func testPNG(t *testing.T) []byte {
 func TestSavePhoneImages(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	data := testPNG(t)
-	paths, err := phone.SaveImages([]remote.Image{{Name: "a.png", Data: data}, {Name: "noext", Data: data}})
+	paths, err := phoneserver.SaveImages([]remote.Image{{Name: "a.png", Data: data}, {Name: "noext", Data: data}})
 	if err != nil || len(paths) != 2 {
 		t.Fatalf("paths = %v, err = %v", paths, err)
 	}
@@ -34,10 +34,10 @@ func TestSavePhoneImages(t *testing.T) {
 			t.Errorf("%s: saved wrongly (%v)", p, err)
 		}
 	}
-	if _, err := phone.SaveImages([]remote.Image{{Name: "x.txt", Data: []byte("hello")}}); err == nil {
+	if _, err := phoneserver.SaveImages([]remote.Image{{Name: "x.txt", Data: []byte("hello")}}); err == nil {
 		t.Error("text should be refused")
 	}
-	if _, err := phone.SaveImages(make([]remote.Image, phone.MaxImages+1)); err == nil {
+	if _, err := phoneserver.SaveImages(make([]remote.Image, phoneserver.MaxImages+1)); err == nil {
 		t.Error("too many images should be refused")
 	}
 }

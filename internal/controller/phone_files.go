@@ -9,14 +9,14 @@ import (
 	"miya/internal/async"
 	"miya/internal/desktop/control"
 	"miya/internal/model"
-	"miya/internal/phone"
+	phoneserver "miya/internal/phone/server"
 	"miya/internal/runtime/tracker"
 	"miya/internal/webservice"
 )
 
 func (c *Controller) FileServer() http.Handler {
-	files := phone.DesktopFileServer{Runtime: c.ReadRuntime, WebServices: c.ProjectRuntimeServices, Projects: func(ctx context.Context) ([]phone.FileProject, error) {
-		reply := make(chan []phone.FileProject, 1)
+	files := phoneserver.DesktopFileServer{Runtime: c.ReadRuntime, WebServices: c.ProjectRuntimeServices, Projects: func(ctx context.Context) ([]phoneserver.FileProject, error) {
+		reply := make(chan []phoneserver.FileProject, 1)
 		c.Dispatch(func() {
 			projects := append([]model.Project(nil), c.Projects()...)
 			found := false
@@ -28,10 +28,10 @@ func (c *Controller) FileServer() http.Handler {
 			if !found && c.Cwd != "" && filepath.Dir(c.Cwd) != c.Cwd {
 				projects = append(projects, model.Project{Name: filepath.Base(c.Cwd), Path: c.Cwd})
 			}
-			var out []phone.FileProject
+			var out []phoneserver.FileProject
 			for _, p := range projects {
 				if p.Path != "" {
-					out = append(out, phone.FileProject{ID: phone.ProjectFileID(p.Path), Name: p.Name, Path: p.Path})
+					out = append(out, phoneserver.FileProject{ID: phoneserver.ProjectFileID(p.Path), Name: p.Name, Path: p.Path})
 				}
 			}
 			reply <- out

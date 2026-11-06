@@ -5,7 +5,7 @@ import (
 
 	"miya/internal/model"
 	"miya/internal/msgfmt"
-	"miya/internal/phoneapi"
+	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/textutil"
 	"miya/internal/widgets"
 )
@@ -57,7 +57,7 @@ func (m *App) StartConversation(project, agent string) {
 	}
 }
 
-func (m *App) drawerProject(c *ui.Context, project phoneapi.Project) {
+func (m *App) drawerProject(c *ui.Context, project phoneproto.Project) {
 	p := m.Pal
 	expanded := m.ExpandedProject == project.Path
 	ui.Column(c).FillWidth().Children(func() {

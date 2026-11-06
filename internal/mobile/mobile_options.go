@@ -10,19 +10,19 @@ import (
 
 	"miya/internal/appmodel"
 	"miya/internal/model"
-	"miya/internal/phoneapi"
+	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/remote"
 	"miya/internal/textutil"
 	"miya/internal/widgets"
 )
 
-func (m *App) agentOptions(agent string) phoneapi.AgentOptions {
+func (m *App) agentOptions(agent string) phoneproto.AgentOptions {
 	for _, a := range m.State.Agents {
 		if a.Agent == agent {
 			return a
 		}
 	}
-	return phoneapi.AgentOptions{Agent: agent, Current: remote.SendOptions{Model: m.State.Model, Effort: m.State.Effort, Policy: "on-request"}}
+	return phoneproto.AgentOptions{Agent: agent, Current: remote.SendOptions{Model: m.State.Model, Effort: m.State.Effort, Policy: "on-request"}}
 }
 
 func (m *App) SendOptions(agent string) remote.SendOptions {

@@ -6,7 +6,7 @@ import (
 
 	"github.com/egoist/mygo"
 
-	"miya/internal/phoneproxy"
+	phoneproxy "miya/internal/phone/proxy"
 )
 
 func (m *App) openProjectFiles(project string) {

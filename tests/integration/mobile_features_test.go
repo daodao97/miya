@@ -14,7 +14,7 @@ import (
 	"miya/internal/controller"
 	"miya/internal/model"
 	"miya/internal/msgfmt"
-	"miya/internal/phoneapi"
+	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/remote"
 	"miya/internal/widgets"
 )
@@ -24,7 +24,7 @@ func TestMobileModelSettingsRemainLocalAndKeepDraft(t *testing.T) {
 	m.StartConversation("/a", appmodel.AgentCodex)
 	m.DataDir = t.TempDir()
 	m.Draft = "未发送的内容"
-	m.State.Agents = []phoneapi.AgentOptions{{Agent: appmodel.AgentCodex, Current: remote.SendOptions{Model: "first", Effort: "low", Policy: "on-request"}, Models: []phoneapi.ModelOption{
+	m.State.Agents = []phoneproto.AgentOptions{{Agent: appmodel.AgentCodex, Current: remote.SendOptions{Model: "first", Effort: "low", Policy: "on-request"}, Models: []phoneproto.ModelOption{
 		{Value: "first", Label: "First", Efforts: []string{"low"}, DefaultEffort: "low"},
 		{Value: "second", Label: "Second", Efforts: []string{"medium", "high"}, DefaultEffort: "medium"},
 	}}}
@@ -117,12 +117,12 @@ func TestMobileQuestionPageAcceptsOptionsAndKeepsFailedAnswer(t *testing.T) {
 
 func TestMobileFormBuildsTypedValues(t *testing.T) {
 	a := codex.Approval{RequestedSchema: json.RawMessage(`{"type":"object","required":["name","count","enabled","mode"],"properties":{"name":{"type":"string"},"count":{"type":"integer"},"enabled":{"type":"boolean"},"mode":{"type":"string","enum":["a","b"]}}}`)}
-	values, err := phoneapi.ValidateMobileForm(a, map[string]string{"name": "hello", "count": "2", "enabled": "false", "mode": `"b"`})
+	values, err := phoneproto.ValidateMobileForm(a, map[string]string{"name": "hello", "count": "2", "enabled": "false", "mode": `"b"`})
 	if err != nil || values["count"] != float64(2) || values["enabled"] != false || values["mode"] != "b" {
 		t.Fatalf("wrong form types: %+v %v", values, err)
 	}
 	for _, fields := range []map[string]string{{"name": "hello"}, {"name": "hello", "count": "2.5", "enabled": "false", "mode": `"b"`}} {
-		if _, err := phoneapi.ValidateMobileForm(a, fields); err == nil {
+		if _, err := phoneproto.ValidateMobileForm(a, fields); err == nil {
 			t.Fatal("incomplete or invalid form was accepted")
 		}
 	}
@@ -157,13 +157,13 @@ func TestPhoneApprovalRejectsReusedRequestID(t *testing.T) {
 	next := old
 	next.Command = "different command"
 	c.SetApprovals([]codex.Approval{next})
-	if err := c.PhoneApprovalResponse(remote.Request{Approval: old.ID, ApprovalVersion: phoneapi.ApprovalFingerprint(old), Allow: true}); err == nil || len(c.Approvals()) != 1 {
+	if err := c.PhoneApprovalResponse(remote.Request{Approval: old.ID, ApprovalVersion: phoneproto.ApprovalFingerprint(old), Allow: true}); err == nil || len(c.Approvals()) != 1 {
 		t.Fatal("a reused request ID accepted an old approval")
 	}
 	m := testMobileApp()
 	m.State.Approvals = []codex.Approval{old}
 	m.FieldsFor(old)["secret"] = "unsent secret"
-	m.ApplyPhoneState(phoneapi.State{Approvals: []codex.Approval{next}})
+	m.ApplyPhoneState(phoneproto.State{Approvals: []codex.Approval{next}})
 	if len(m.FieldsFor(next)) != 0 {
 		t.Fatal("a new request inherited the previous request's private input")
 	}

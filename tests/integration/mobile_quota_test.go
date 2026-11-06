@@ -11,7 +11,7 @@ import (
 	"miya/internal/account"
 	"miya/internal/appmodel"
 	"miya/internal/controller"
-	"miya/internal/phoneapi"
+	phoneproto "miya/internal/phone/protocol"
 )
 
 func TestPhoneQuotasOnlyAccountUsage(t *testing.T) {
@@ -48,7 +48,7 @@ func TestPhoneQuotasOnlyAccountUsage(t *testing.T) {
 func TestMobileDrawerQuotaInspection(t *testing.T) {
 	m := testMobileApp()
 	m.State.Agent = appmodel.AgentClaude
-	m.State.Quotas = []phoneapi.AgentQuota{{Agent: appmodel.AgentCodex, Windows: []phoneapi.QuotaWindow{{Label: "Weekly: ", UsedPercent: 81}}}}
+	m.State.Quotas = []phoneproto.AgentQuota{{Agent: appmodel.AgentCodex, Windows: []phoneproto.QuotaWindow{{Label: "Weekly: ", UsedPercent: 81}}}}
 	tt := ui.NewTester(m.ViewRoot, 390, 844)
 	tt.Frame()
 	openMobileDrawer(t, tt)

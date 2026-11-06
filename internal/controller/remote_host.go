@@ -21,8 +21,8 @@ import (
 	"miya/internal/desktop"
 	"miya/internal/model"
 	"miya/internal/msgfmt"
-	"miya/internal/phone"
-	"miya/internal/phoneapi"
+	phoneproto "miya/internal/phone/protocol"
+	phoneserver "miya/internal/phone/server"
 	"miya/internal/remote"
 	"miya/internal/thumbnail"
 	"miya/internal/uiruntime"
@@ -37,8 +37,8 @@ const (
 	phonePingInterval = 15 * time.Second
 )
 
-func (c *Controller) PhoneSnapshot() phoneapi.State {
-	s := phoneapi.State{DesktopControl: desktop.Available(), ReferenceSource: c.ReferenceSource, MemoryRevision: c.MemoryRevision, Memory: c.Memories().Store != nil, Files: true, WebPorts: true, WebServices: true, Runtime: true, FileReferences: true, Automations: c.Auto != nil, Status: c.Status(), Approvals: c.Approvals(), Agents: c.phoneAgentOptions(), Quotas: c.PhoneQuotas()}
+func (c *Controller) PhoneSnapshot() phoneproto.State {
+	s := phoneproto.State{DesktopControl: desktop.Available(), ReferenceSource: c.ReferenceSource, MemoryRevision: c.MemoryRevision, Memory: c.Memories().Store != nil, Files: true, WebPorts: true, WebServices: true, Runtime: true, FileReferences: true, Automations: c.Auto != nil, Status: c.Status(), Approvals: c.Approvals(), Agents: c.phoneAgentOptions(), Quotas: c.PhoneQuotas()}
 	s.Collaboration = c.CollaborationCapabilities()
 	s.DesktopWindows = s.DesktopControl
 	s.AutomationRun = c.Auto != nil
@@ -67,9 +67,9 @@ func (c *Controller) PhoneSnapshot() phoneapi.State {
 		if p.Path == c.Cwd {
 			threads = c.Threads()
 		}
-		pp := phoneapi.Project{Name: p.Name, Path: p.Path, Current: p.Path == c.Cwd, Threads: make([]model.Thread, 0, len(threads))}
+		pp := phoneproto.Project{Name: p.Name, Path: p.Path, Current: p.Path == c.Cwd, Threads: make([]model.Thread, 0, len(threads))}
 		for _, t := range threads {
-			pp.Threads = append(pp.Threads, phone.ListThread(t))
+			pp.Threads = append(pp.Threads, phoneserver.ListThread(t))
 		}
 		pp.Threads = msgfmt.DisplayedThreads(pp.Threads, true)
 		s.Projects = append(s.Projects, pp)
@@ -143,7 +143,7 @@ func (c *Controller) SendPhonePreview(ctx context.Context, conn phoneConnection,
 		}
 		if target.Found {
 			messages := target.Thread.Messages
-			if !phone.HasHistory(target.Thread) {
+			if !phoneserver.HasHistory(target.Thread) {
 				messages, _ = readOnlyHistory(ctx, target)
 			}
 			for _, message := range messages {
@@ -292,7 +292,7 @@ func (c *Controller) ServePhoneConnection(ctx context.Context, conn phoneConnect
 	defer ticker.Stop()
 	ps := &phoneSession{c: c, ctx: ctx, send: send, collaborationJobs: collaborationJobs, drafts: drafts, previews: previews, lastRevision: -1}
 	type snapshot struct {
-		state    phoneapi.State
+		state    phoneproto.State
 		revision int
 		t        phoneThread
 		loading  bool
@@ -338,7 +338,7 @@ func (c *Controller) ServePhoneConnection(ctx context.Context, conn phoneConnect
 				if s.loading {
 					t.Loading, t.Status = true, "Loading conversation…"
 				}
-			case phone.HasHistory(t) || t.Loading:
+			case phoneserver.HasHistory(t) || t.Loading:
 				// The desktop's own copy is live; prefer it.
 			case ps.read != nil:
 				t.Messages, t.HistoryLoaded, t.Status = ps.read.Messages, true, ps.read.Status
@@ -351,7 +351,7 @@ func (c *Controller) ServePhoneConnection(ctx context.Context, conn phoneConnect
 				ps.lastRevision = -1
 			}
 			if ps.sync == nil {
-				ps.sync = phone.NewThreadSync(nil)
+				ps.sync = phoneserver.NewThreadSync(nil)
 			}
 			if d, changed := ps.sync.Update(t); changed {
 				if data, err := json.Marshal(d); err == nil {
@@ -385,7 +385,7 @@ func (c *Controller) ServePhoneConnection(ctx context.Context, conn phoneConnect
 			}
 			if k.Known {
 				ps.cmdWant = ""
-				data, _ := json.Marshal(phoneapi.Commands{Agent: ps.cmdAgent, Project: project, Commands: k.PhoneChoices})
+				data, _ := json.Marshal(phoneproto.Commands{Agent: ps.cmdAgent, Project: project, Commands: k.PhoneChoices})
 				if !send(remote.Frame{Type: "commands", Data: data}) {
 					return
 				}
@@ -458,23 +458,23 @@ func readOnlyHistory(ctx context.Context, t phoneThread) ([]model.Message, strin
 	return messages, ""
 }
 
-// phoneHost is the desktop's bridge to phones, in internal/phone.
-type phoneHost = phone.Pairing
+// phoneHost is the desktop's bridge to phones, in internal/phoneserver.
+type phoneHost = phoneserver.Pairing
 
 var DesktopPhone *phoneHost
 
 // newPhoneHost restores the bridge if the user left it on, so the phone's
 // saved link keeps working across desktop restarts.
 func NewPhoneHost(c *Controller) *phoneHost {
-	p := phone.NewPairing(phoneHostOf{c})
+	p := phoneserver.NewPairing(phoneHostOf{c})
 	uiruntime.OnCleanup(p.Close)
-	if phone.LoadEnabled() && !servingRemote {
+	if phoneserver.LoadEnabled() && !servingRemote {
 		p.Start()
 	}
 	return p
 }
 
-// phoneHostOf is a controller as the phone bridge's phone.Host.
+// phoneHostOf is a controller as the phone bridge's phoneserver.Host.
 type phoneHostOf struct{ c *Controller }
 
 func (h phoneHostOf) Serve(ctx context.Context, conn *remote.Conn) { h.c.ServePhone(ctx, conn) }

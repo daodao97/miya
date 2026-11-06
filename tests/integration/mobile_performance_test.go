@@ -9,8 +9,8 @@ import (
 
 	"miya/internal/mobile"
 	"miya/internal/model"
-	"miya/internal/phone"
-	"miya/internal/phoneapi"
+	phoneproto "miya/internal/phone/protocol"
+	phoneserver "miya/internal/phone/server"
 )
 
 func TestMobileHistoryReloadReusesMarkdownViews(t *testing.T) {
@@ -36,14 +36,14 @@ func TestMobileHistoryReloadReusesMarkdownViews(t *testing.T) {
 	for i := range messages {
 		messages[i].ID += 100
 	}
-	m.ReceiveThread(1, phoneapi.ThreadDelta{Thread: phone.ListThread(desk), Reset: true,
+	m.ReceiveThread(1, phoneproto.ThreadDelta{Thread: phoneserver.ListThread(desk), Reset: true,
 		Order: []int{110, 111}, Changed: messages})
 	tt.Frame()
 	if len(documents) != 2 {
 		t.Fatalf("history reload rebuilt parsed Markdown: %d documents", len(documents))
 	}
 	// A genuinely new prompt still gets its own view and keeps the old ones.
-	m.ReceiveThread(1, phoneapi.ThreadDelta{Thread: phone.ListThread(desk), Order: []int{110, 111, 112},
+	m.ReceiveThread(1, phoneproto.ThreadDelta{Thread: phoneserver.ListThread(desk), Order: []int{110, 111, 112},
 		Changed: []model.Message{{ID: 112, Role: "user", TurnID: "turn2", ItemID: "user2", Content: "Follow-up"}}})
 	tt.Frame()
 	if len(documents) != 3 || !tt.HasText("Follow-up") || !tt.HasText("Previous") {
@@ -55,7 +55,7 @@ func TestMobileMetadataUpdateReusesHistory(t *testing.T) {
 	m := mobile.NewMobileApp()
 	desk := longThread(1000)
 	m.Open = desk.ID
-	s := phone.NewThreadSync(nil)
+	s := phoneserver.NewThreadSync(nil)
 	d, _ := s.Update(desk)
 	m.ReceiveThread(desk.ID, d)
 	before := m.Viewer.Current()
@@ -100,7 +100,7 @@ func BenchmarkMobileThreadUpdate(b *testing.B) {
 			m := testMobileApp()
 			desk := longThread(1000)
 			m.OpenThread(desk)
-			s := phone.NewThreadSync(nil)
+			s := phoneserver.NewThreadSync(nil)
 			d, _ := s.Update(desk)
 			m.ReceiveThread(desk.ID, d)
 			m.View.Groups.Of(m.Viewer)

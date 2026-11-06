@@ -10,7 +10,7 @@ import (
 	claude "miya/internal/agent/claude/native"
 	"miya/internal/appmodel"
 	"miya/internal/model"
-	"miya/internal/phoneapi"
+	phoneproto "miya/internal/phone/protocol"
 )
 
 func TestMobileClaudeQuestionRoutesFromControllerToForm(t *testing.T) {
@@ -33,7 +33,7 @@ func TestMobileClaudeQuestionRoutesFromControllerToForm(t *testing.T) {
 				t.Fatal(err)
 			}
 			m := testMobileApp()
-			var state phoneapi.State
+			var state phoneproto.State
 			if err := json.Unmarshal(data, &state); err != nil {
 				t.Fatal(err)
 			}

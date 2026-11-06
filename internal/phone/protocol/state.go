@@ -1,7 +1,7 @@
-// Package phoneapi is the data the background service and the phone pass in
+// Package protocol is the data the background service and the phone pass in
 // the Data of remote frames and requests. Field names and JSON tags are the
 // wire format: changing them breaks phones and desktops of other versions.
-package phoneapi
+package protocol
 
 import (
 	"encoding/json"

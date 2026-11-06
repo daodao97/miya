@@ -22,7 +22,7 @@ import (
 	"miya/internal/memory/manager"
 	"miya/internal/model"
 	"miya/internal/notification"
-	"miya/internal/phone"
+	phoneserver "miya/internal/phone/server"
 	"miya/internal/prefs"
 	"miya/internal/remote"
 	"miya/internal/runtime/tracker"
@@ -705,7 +705,7 @@ func (c *Controller) SnapshotState() svcproto.State {
 		}
 		items := make([]model.Thread, len(cached))
 		for i, t := range cached {
-			t = phone.ListThread(t)
+			t = phoneserver.ListThread(t)
 			t.Queue = nil
 			items[i] = t
 		}

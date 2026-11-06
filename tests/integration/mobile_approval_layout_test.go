@@ -11,7 +11,7 @@ import (
 	codex "miya/internal/agent/codex/native"
 	"miya/internal/desktop"
 	"miya/internal/mobile"
-	"miya/internal/phoneapi"
+	phoneproto "miya/internal/phone/protocol"
 )
 
 func TestMobileToolPermissionKeepsActionsVisibleWithoutUnrelatedPreview(t *testing.T) {
@@ -24,7 +24,7 @@ func TestMobileToolPermissionKeepsActionsVisibleWithoutUnrelatedPreview(t *testi
 		m.ShowThread(th)
 		a := codex.Approval{ID: json.RawMessage(`"tool-consent"`), ThreadID: th.ServerID, Method: "mcpServer/elicitation/request", Mode: "form", Message: "Allow Computer Use to use Miya Window QA? " + strings.Repeat("这是一段需要滚动查看的工具权限说明。", 100), RequestedSchema: json.RawMessage(`{"type":"object","properties":{}}`)}
 		m.State.Approvals = []codex.Approval{a}
-		m.DesktopPreviews = map[string]*mobile.MobileWindowPreview{string(a.ID): {Version: phoneapi.ApprovalFingerprint(a), Dialog: desktop.Dialog{Title: "无关的 Apple 账户", Message: "Wi-Fi\n蓝牙\n网络\n侧栏内容"}}}
+		m.DesktopPreviews = map[string]*mobile.MobileWindowPreview{string(a.ID): {Version: phoneproto.ApprovalFingerprint(a), Dialog: desktop.Dialog{Title: "无关的 Apple 账户", Message: "Wi-Fi\n蓝牙\n网络\n侧栏内容"}}}
 		tt := ui.NewTester(m.ViewRoot, width, 700)
 		tt.SetDark(true)
 		tt.Frame()
@@ -157,7 +157,7 @@ func TestMobileAuthorizationOffersInputBeforeAllow(t *testing.T) {
 				m.OpenThread(thread)
 				m.ShowThread(thread)
 				a := codex.Approval{ID: json.RawMessage(`"input-first"`), ThreadID: thread.ServerID, Method: "miya/desktopControl"}
-				p := &mobile.MobileWindowPreview{Version: phoneapi.ApprovalFingerprint(a), Window: desktop.Window{ID: 21, PID: 80},
+				p := &mobile.MobileWindowPreview{Version: phoneproto.ApprovalFingerprint(a), Window: desktop.Window{ID: 21, PID: 80},
 					Dialog: desktop.Dialog{Title: "测试授权", Actions: []desktop.Action{
 						{ID: "allow", Default: true, Label: "允许访问", Enabled: false},
 						{ID: "deny", Cancel: true, Label: "不允许", Enabled: true},
@@ -221,7 +221,7 @@ func TestMobileAuthorizationLongCopyDoesNotBuryNativeButtons(t *testing.T) {
 		m.ShowThread(th)
 		a := codex.Approval{ID: json.RawMessage(`"auth"`), ThreadID: th.ServerID, Method: "miya/desktopControl"}
 		m.State.Approvals = []codex.Approval{a}
-		m.DesktopPreviews = map[string]*mobile.MobileWindowPreview{string(a.ID): {Version: phoneapi.ApprovalFingerprint(a), Image: img, Dialog: desktop.Dialog{Title: strings.Repeat("这是很长的授权窗口标题", 10), Message: strings.Repeat("权限的完整说明。\n", 40), Actions: []desktop.Action{{ID: "allow", Default: true, Label: "允许访问", Enabled: true}, {ID: "deny", Cancel: true, Label: "不允许", Enabled: true}}}}}
+		m.DesktopPreviews = map[string]*mobile.MobileWindowPreview{string(a.ID): {Version: phoneproto.ApprovalFingerprint(a), Image: img, Dialog: desktop.Dialog{Title: strings.Repeat("这是很长的授权窗口标题", 10), Message: strings.Repeat("权限的完整说明。\n", 40), Actions: []desktop.Action{{ID: "allow", Default: true, Label: "允许访问", Enabled: true}, {ID: "deny", Cancel: true, Label: "不允许", Enabled: true}}}}}
 		tt := ui.NewTester(m.ViewRoot, width, 750)
 		tt.SetDark(true)
 		tt.Frame()

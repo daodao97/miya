@@ -20,7 +20,7 @@ flowchart TD
 
 `internal/conversation.View` 负责消息分组、列表、Markdown、工具详情、图片、引用和富文本输入。它只要求读取当前会话、版本和审批以及重新选择会话的少量 `Host` 方法。重试、交接、用户消息编辑、记忆通知、附件粘贴和任务入口通过回调接入。桌面专属的侧栏、工作区、文件面板和设置不在共享视图中。
 
-`internal/mobile.App` 拥有独立的 `mobileViewer`，只保存桌面下发的会话快照，不构造桌面 App 或控制器。它通过手机协议执行动作，并与桌面复用共享渲染器。两端的文件和 Web 代理位于 `internal/phoneproxy`，不依赖任一界面包。
+`internal/mobile.App` 拥有独立的 `mobileViewer`，只保存桌面下发的会话快照，不构造桌面 App 或控制器。它通过手机协议执行动作，并与桌面复用共享渲染器。两端的文件和 Web 代理位于 `internal/phone/proxy`，不依赖任一界面包。
 
 `internal/widgets` 保存通用控件、主题、图标和设备语言处理。`internal/uiruntime` 保存窗口调度、信号失效通知与退出清理，供窗口和后台使用。各领域的数据和算法直接引用现有领域包，原有根包的兼容别名已删除。
 

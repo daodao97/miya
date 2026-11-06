@@ -14,8 +14,8 @@ import (
 	"miya/internal/interaction"
 	"miya/internal/model"
 	"miya/internal/msgfmt"
-	"miya/internal/phone"
-	"miya/internal/phoneapi"
+	phoneproto "miya/internal/phone/protocol"
+	phoneserver "miya/internal/phone/server"
 	"miya/internal/remote"
 	desktopui "miya/internal/ui"
 )
@@ -86,7 +86,7 @@ func TestAdaptersKeepWorkspaceStateSeparate(t *testing.T) {
 
 func TestMobileUsesThirdAgentDescriptorAndCommands(t *testing.T) {
 	m := testMobileApp()
-	m.State.Agents = []phoneapi.AgentOptions{{Agent: "third-party", Descriptor: agentmeta.Descriptor{ID: "third-party", Name: "External Agent"}, Commands: []model.ComposerChoice{{Name: "custom-build", Detail: "Build with external agent"}}}}
+	m.State.Agents = []phoneproto.AgentOptions{{Agent: "third-party", Descriptor: agentmeta.Descriptor{ID: "third-party", Name: "External Agent"}, Commands: []model.ComposerChoice{{Name: "custom-build", Detail: "Build with external agent"}}}}
 	m.NewAgent = "third-party"
 	m.Draft = "/custom"
 	tt := ui.NewTester(m.ViewRoot, 390, 750)
@@ -142,15 +142,15 @@ func TestApprovalWireCompatibilityAndFingerprint(t *testing.T) {
 	if _, ok := fields["kind"]; ok {
 		t.Fatal("legacy request gained a kind wire field")
 	}
-	original := phoneapi.ApprovalFingerprint(request)
+	original := phoneproto.ApprovalFingerprint(request)
 	request.Category = interaction.Questions
-	if original == phoneapi.ApprovalFingerprint(request) {
+	if original == phoneproto.ApprovalFingerprint(request) {
 		t.Fatal("changed interaction semantics retained a stale fingerprint")
 	}
 }
 
 func TestPresentationOnlyChangesReachPhone(t *testing.T) {
-	sync := phone.NewThreadSync(nil)
+	sync := phoneserver.NewThreadSync(nil)
 	thread := model.Thread{ID: 1, Messages: []model.Message{{ID: 1, Role: "tool", Content: "native state", Presentation: &model.MessagePresentation{Content: "first", Title: "External tool"}}}}
 	if delta, changed := sync.Update(thread); !changed || len(delta.Changed) != 1 {
 		t.Fatal("initial projection not sent")

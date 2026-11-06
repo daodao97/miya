@@ -12,8 +12,8 @@ import (
 	"miya/internal/controller"
 	"miya/internal/model"
 	"miya/internal/msgfmt"
-	"miya/internal/phone"
-	"miya/internal/phoneapi"
+	phoneproto "miya/internal/phone/protocol"
+	phoneserver "miya/internal/phone/server"
 )
 
 func TestCodexTurnOutputRate(t *testing.T) {
@@ -148,13 +148,13 @@ func TestWorkingOutputRateReachesDesktopAndPhone(t *testing.T) {
 			if surface == "phone" {
 				m := testMobileApp()
 				m.OpenThread(th)
-				s := phone.NewThreadSync(nil)
+				s := phoneserver.NewThreadSync(nil)
 				delta, _ := s.Update(th)
 				wire, err := json.Marshal(delta)
 				if err != nil {
 					t.Fatal(err)
 				}
-				var received phoneapi.ThreadDelta
+				var received phoneproto.ThreadDelta
 				if err := json.Unmarshal(wire, &received); err != nil {
 					t.Fatal(err)
 				}

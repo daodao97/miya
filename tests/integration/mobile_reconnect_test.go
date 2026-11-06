@@ -8,7 +8,7 @@ import (
 
 	"miya/internal/appmodel"
 	"miya/internal/model"
-	"miya/internal/phoneapi"
+	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/remote"
 )
 
@@ -56,7 +56,7 @@ func TestMobileSendKeepsMessagesDuringHistoryReload(t *testing.T) {
 		m.Sent(1, "")
 		// Older desktops can send an empty loading delta, even with the
 		// history-loaded flag left over from a previous read.
-		m.ReceiveThread(1, phoneapi.ThreadDelta{Thread: model.Thread{ID: 1, ServerID: "s1", Loading: true, HistoryLoaded: loaded}, Reset: true})
+		m.ReceiveThread(1, phoneproto.ThreadDelta{Thread: model.Thread{ID: 1, ServerID: "s1", Loading: true, HistoryLoaded: loaded}, Reset: true})
 		tt.Frame()
 		if !tt.HasText("Previous reply") || tt.HasText("Loading conversation…") {
 			t.Fatalf("sending hid the history (loaded %v): %q", loaded, tt.Texts())
@@ -64,7 +64,7 @@ func TestMobileSendKeepsMessagesDuringHistoryReload(t *testing.T) {
 		if got := m.CachedMessages("s1"); !sameMessages(got, messages) {
 			t.Fatal("loading erased the phone's message cache")
 		}
-		m.ReceiveThread(1, phoneapi.ThreadDelta{Thread: model.Thread{ID: 1, ServerID: "s1", HistoryLoaded: true},
+		m.ReceiveThread(1, phoneproto.ThreadDelta{Thread: model.Thread{ID: 1, ServerID: "s1", HistoryLoaded: true},
 			Order: []int{10, 11}, Changed: []model.Message{{ID: 11, Role: "user", Content: "Follow-up"}}})
 		tt.Frame()
 		if !tt.HasText("Previous reply") || !tt.HasText("Follow-up") {
@@ -80,7 +80,7 @@ func TestMobileRebindsOpenThreadAfterDesktopRestart(t *testing.T) {
 		Messages: []model.Message{{ID: 10, Role: "assistant", Content: "Cached reply"}}})
 	m.Draft, m.Images = "Unsent follow-up", []string{"photo.png"}
 	// The old number was reused for another conversation in this process.
-	s := phoneapi.State{Projects: []phoneapi.Project{{Path: "/a", Threads: []model.Thread{
+	s := phoneproto.State{Projects: []phoneproto.Project{{Path: "/a", Threads: []model.Thread{
 		{ID: 1, ServerID: "different", Title: "Wrong conversation"},
 		{ID: 77, ServerID: "s1", Title: "Original"},
 	}}}}
@@ -99,7 +99,7 @@ func TestMobileRebindsOpenThreadAfterDesktopRestart(t *testing.T) {
 		}
 	}
 	// A delayed frame for the old number must not replace the rebound page.
-	m.ReceiveThread(1, phoneapi.ThreadDelta{Thread: model.Thread{ID: 1, ServerID: "different"}, Reset: true})
+	m.ReceiveThread(1, phoneproto.ThreadDelta{Thread: model.Thread{ID: 1, ServerID: "different"}, Reset: true})
 	if cur := m.Viewer.Current(); cur.ServerID != "s1" || len(cur.Messages) != 1 {
 		t.Fatal("a stale frame replaced the open conversation")
 	}
@@ -111,19 +111,19 @@ func TestMobileReconnectKeepsIdentityBeforeListArrives(t *testing.T) {
 	m.Remember("s1", []model.Message{{ID: 10, Content: "Cached reply"}})
 	// A new/partial list may already associate the old number with another
 	// conversation. Subscription and send must still identify the open page.
-	m.State = phoneapi.State{Projects: []phoneapi.Project{{Path: "/wrong", Threads: []model.Thread{{ID: 1, ServerID: "wrong"}}}}}
+	m.State = phoneproto.State{Projects: []phoneproto.Project{{Path: "/wrong", Threads: []model.Thread{{ID: 1, ServerID: "wrong"}}}}}
 	r := m.SubscribeRequest(1)
 	if r.ServerID != "s1" || r.Project != "" || len(r.Have) != 1 {
 		t.Fatalf("reconnect subscribed using the wrong cached number: %+v", r)
 	}
 	// Both old and new desktops can temporarily report a missing thread.
 	for _, sid := range []string{"", "s1"} {
-		m.ReceiveThread(1, phoneapi.ThreadDelta{Thread: model.Thread{ID: 1, ServerID: sid, Status: "Conversation is no longer on the desktop"}, Reset: true})
+		m.ReceiveThread(1, phoneproto.ThreadDelta{Thread: model.Thread{ID: 1, ServerID: sid, Status: "Conversation is no longer on the desktop"}, Reset: true})
 		if cur := m.Viewer.Current(); cur.ServerID != "s1" {
 			t.Fatalf("missing-thread frame erased the stable identity: %+v", cur)
 		}
 	}
-	m.ApplyPhoneState(phoneapi.State{Projects: []phoneapi.Project{{Path: "/a", Threads: []model.Thread{{ID: 8, ServerID: "s1"}}}}})
+	m.ApplyPhoneState(phoneproto.State{Projects: []phoneproto.Project{{Path: "/a", Threads: []model.Thread{{ID: 8, ServerID: "s1"}}}}})
 	if m.Open != 8 || m.Viewer.Current().ServerID != "s1" {
 		t.Fatal("a later startup list did not repair the open page")
 	}
@@ -132,7 +132,7 @@ func TestMobileReconnectKeepsIdentityBeforeListArrives(t *testing.T) {
 func TestMobileRejectsReusedIDFromStaleDesktopFrame(t *testing.T) {
 	m := testMobileApp()
 	m.OpenThread(m.State.Projects[0].Threads[0])
-	m.ReceiveThread(1, phoneapi.ThreadDelta{Thread: model.Thread{ID: 1, ServerID: "other"}, Reset: true,
+	m.ReceiveThread(1, phoneproto.ThreadDelta{Thread: model.Thread{ID: 1, ServerID: "other"}, Reset: true,
 		Changed: []model.Message{{ID: 2, Content: "Wrong reply"}}, Order: []int{2}})
 	if m.Viewer.Current().ServerID != "s1" || len(m.Viewer.Current().Messages) != 0 {
 		t.Fatal("reused numeric ID exposed another conversation")

@@ -10,7 +10,7 @@ import (
 	"miya/internal/appmodel"
 	"miya/internal/automation"
 	"miya/internal/model"
-	"miya/internal/phoneapi"
+	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/remote"
 	"miya/internal/widgets"
 )
@@ -81,7 +81,7 @@ func (m *App) sendAutomationForm(op string) {
 
 func (m *App) ReceiveAutomationForm(op string, raw json.RawMessage, message string) {
 	f := &m.Autos.Form
-	var result phoneapi.AutomationFormResult
+	var result phoneproto.AutomationFormResult
 	if json.Unmarshal(raw, &result) != nil || result.RequestID == "" || result.RequestID != f.Pending || op != f.Op {
 		return
 	}

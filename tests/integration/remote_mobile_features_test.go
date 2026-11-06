@@ -16,7 +16,7 @@ import (
 	"miya/internal/appmodel"
 	"miya/internal/memory"
 	"miya/internal/model"
-	"miya/internal/phoneapi"
+	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/remote"
 	"miya/internal/textutil"
 	"miya/internal/thumbnail"
@@ -123,7 +123,7 @@ func TestPhoneApprovalAcknowledgementReportsValidationFailure(t *testing.T) {
 				if f.Error == "" {
 					t.Fatal("missing validation error")
 				}
-				var reply phoneapi.ApprovalReply
+				var reply phoneproto.ApprovalReply
 				if json.Unmarshal(f.Data, &reply) != nil || !textutil.SameJSON(reply.ID, a.ID) {
 					t.Fatal("ack identified the wrong request")
 				}
@@ -199,7 +199,7 @@ func TestPhoneMemoryIsExplicitReadOnlyAndAdvertised(t *testing.T) {
 			if f.Type != "memory" {
 				continue
 			}
-			var result phoneapi.MemoryResult
+			var result phoneproto.MemoryResult
 			if f.Error != "" || json.Unmarshal(f.Data, &result) != nil || len(result.List.Entries) != 1 || result.List.Entries[0].ID != e.ID {
 				t.Fatalf("memory response: %s %s", f.Error, f.Data)
 			}

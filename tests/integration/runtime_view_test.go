@@ -18,7 +18,7 @@ import (
 	mcpproto "miya/internal/mcp/protocol"
 	"miya/internal/mobile"
 	"miya/internal/model"
-	"miya/internal/phone"
+	phoneserver "miya/internal/phone/server"
 	rt "miya/internal/runtime"
 	"miya/internal/runtime/tracker"
 	desktopui "miya/internal/ui"
@@ -97,7 +97,7 @@ func TestDesktopRuntimeSurfaceUsesSameView(t *testing.T) {
 
 func TestPhoneRuntimeEndpointValidatesStableReferenceAndNeverFallsBack(t *testing.T) {
 	root, fixture := fileServerFixture(t)
-	handler := fixture.(phone.DesktopFileServer)
+	handler := fixture.(phoneserver.DesktopFileServer)
 	ref := testRef(appmodel.AgentClaude, "claude-session")
 	sample := sampleConversationRuntime(ref)
 	calls := 0

@@ -18,7 +18,7 @@ import (
 	mcpserver "miya/internal/mcp"
 	mcpproto "miya/internal/mcp/protocol"
 	"miya/internal/model"
-	"miya/internal/phoneapi"
+	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/remote"
 )
 
@@ -66,7 +66,7 @@ func TestDesktopMCPWaitsForExplicitCompletion(t *testing.T) {
 	default:
 	}
 	a := c.Approvals()[0]
-	if err := c.PhoneApprovalResponse(remote.Request{Approval: a.ID, ApprovalVersion: phoneapi.ApprovalFingerprint(a), Allow: true}); err != nil {
+	if err := c.PhoneApprovalResponse(remote.Request{Approval: a.ID, ApprovalVersion: phoneproto.ApprovalFingerprint(a), Allow: true}); err != nil {
 		t.Fatal(err)
 	}
 	select {
@@ -127,7 +127,7 @@ func TestDesktopPhoneOpenRequiresStableConversation(t *testing.T) {
 		t.Fatal("stale conversation accepted")
 	}
 	f := ask(remote.Request{Op: "desktop-open", Thread: 1, ServerID: "s1", RequestID: "open"})
-	var reply phoneapi.DesktopReply
+	var reply phoneproto.DesktopReply
 	if json.Unmarshal(f.Data, &reply) != nil || f.Error != "" || reply.RequestID != "open" || reply.Token == "" {
 		t.Fatal("no desktop lease", f.Error)
 	}

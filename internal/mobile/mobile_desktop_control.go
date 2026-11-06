@@ -12,7 +12,7 @@ import (
 	"miya/internal/desktop"
 	"miya/internal/desktop/control"
 	"miya/internal/interaction"
-	"miya/internal/phoneapi"
+	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/remote"
 	"miya/internal/textutil"
 	"miya/internal/uiruntime"
@@ -31,7 +31,7 @@ func (m *App) CloseResolvedDesktopControl(approvals []interaction.Request) {
 		return
 	}
 	for _, a := range approvals {
-		if textutil.SameJSON(a.ID, ref.ID) && phoneapi.ApprovalFingerprint(a) == ref.Version {
+		if textutil.SameJSON(a.ID, ref.ID) && phoneproto.ApprovalFingerprint(a) == ref.Version {
 			return
 		}
 	}
@@ -65,7 +65,7 @@ func (m *App) openDesktopWindow(approval *interaction.Request, window desktop.Wi
 	r.Op, r.RequestID, r.Have = "desktop-open", id, nil
 	if approval != nil {
 		r.WindowOnly, r.WindowID, r.WindowPID = true, window.ID, window.PID
-		r.Approval, r.ApprovalVersion = approval.ID, phoneapi.ApprovalFingerprint(*approval)
+		r.Approval, r.ApprovalVersion = approval.ID, phoneproto.ApprovalFingerprint(*approval)
 		m.DesktopApproval = MobileDesktopApproval{ID: approval.ID, Version: r.ApprovalVersion}
 	} else {
 		// The menu entry may choose any window or the full desktop.
@@ -100,7 +100,7 @@ func (m *App) openDesktopWindow(approval *interaction.Request, window desktop.Wi
 }
 
 func (m *App) receiveDesktopControl(conn *remote.Conn, data json.RawMessage, message string) {
-	var reply phoneapi.DesktopReply
+	var reply phoneproto.DesktopReply
 	if json.Unmarshal(data, &reply) != nil {
 		return
 	}
@@ -165,7 +165,7 @@ func (m *App) requestWindowPreview(a interaction.Request) {
 	}
 	id := string(a.ID)
 	old := m.DesktopPreviews[id]
-	if old != nil && old.Version == phoneapi.ApprovalFingerprint(a) && (old.Loading || old.ActionPending) {
+	if old != nil && old.Version == phoneproto.ApprovalFingerprint(a) && (old.Loading || old.ActionPending) {
 		return
 	}
 	if m.DesktopPreviews == nil {
@@ -175,7 +175,7 @@ func (m *App) requestWindowPreview(a interaction.Request) {
 	if _, err := rand.Read(raw[:]); err != nil {
 		return
 	}
-	p := &MobileWindowPreview{RequestID: hex.EncodeToString(raw[:]), Version: phoneapi.ApprovalFingerprint(a), Loading: true}
+	p := &MobileWindowPreview{RequestID: hex.EncodeToString(raw[:]), Version: phoneproto.ApprovalFingerprint(a), Loading: true}
 	if old != nil && old.Version == p.Version {
 		p.Image, p.Window, p.Dialog = old.Image, old.Window, old.Dialog
 		p.expanded = old.expanded
@@ -276,7 +276,7 @@ func (m *App) pressWindowAction(a interaction.Request, p *MobileWindowPreview, a
 	p.actionRequest = hex.EncodeToString(raw[:])
 	p.Message = ""
 	r := m.ThreadRequest("desktop-action", m.Open)
-	r.RequestID, r.Approval, r.ApprovalVersion = p.actionRequest, a.ID, phoneapi.ApprovalFingerprint(a)
+	r.RequestID, r.Approval, r.ApprovalVersion = p.actionRequest, a.ID, phoneproto.ApprovalFingerprint(a)
 	r.WindowID, r.WindowPID, r.DesktopAction = p.Window.ID, p.Window.PID, action.ID
 	conn, gen := m.Conn, m.Generation
 	go func() {
@@ -321,7 +321,7 @@ func (m *App) receiveWindowAction(conn *remote.Conn, reply control.Preview, mess
 func (m *App) desktopWindowPreview(c *ui.Context, a interaction.Request) {
 	id := string(a.ID)
 	p := m.DesktopPreviews[id]
-	if m.Connected && (p == nil || p.Version != phoneapi.ApprovalFingerprint(a)) {
+	if m.Connected && (p == nil || p.Version != phoneproto.ApprovalFingerprint(a)) {
 		m.requestWindowPreview(a)
 		p = m.DesktopPreviews[id]
 	}

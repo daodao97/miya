@@ -9,13 +9,13 @@ import (
 
 	"miya/internal/appmodel"
 	"miya/internal/async"
-	"miya/internal/phoneapi"
+	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/remote"
 )
 
 func collaborationPhoneFrame(requestID string, result any, err error) remote.Frame {
 	frame := remote.Frame{Type: "collaboration"}
-	frame.Data, _ = json.Marshal(phoneapi.CollaborationResult{RequestID: requestID, Result: result})
+	frame.Data, _ = json.Marshal(phoneproto.CollaborationResult{RequestID: requestID, Result: result})
 	if err != nil {
 		frame.Error = err.Error()
 	}

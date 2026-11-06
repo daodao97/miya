@@ -1,4 +1,4 @@
-package phonecache
+package cache
 
 import (
 	"os"

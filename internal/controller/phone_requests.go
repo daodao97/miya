@@ -19,8 +19,8 @@ import (
 	"miya/internal/memory/manager"
 	"miya/internal/model"
 	"miya/internal/notification"
-	"miya/internal/phone"
-	"miya/internal/phoneapi"
+	phoneproto "miya/internal/phone/protocol"
+	phoneserver "miya/internal/phone/server"
 	"miya/internal/remote"
 	"miya/internal/thumbnail"
 )
@@ -37,7 +37,7 @@ type phoneSession struct {
 	previews          chan previewRequest
 	deviceID          string
 	lastState         []byte
-	sync              *phone.ThreadSync
+	sync              *phoneserver.ThreadSync
 	sub               int
 	subscription      remote.Request
 	lastRevision      int
@@ -111,7 +111,7 @@ func (ps *phoneSession) onDesktopOpen(r remote.Request) bool {
 	if !ok {
 		return false
 	}
-	reply := phoneapi.DesktopReply{RequestID: r.RequestID}
+	reply := phoneproto.DesktopReply{RequestID: r.RequestID}
 	var err error
 	if !desktop.Available() {
 		err = fmt.Errorf("Remote desktop requires macOS 14 or later")
@@ -197,7 +197,7 @@ func (ps *phoneSession) onMemory(r remote.Request) bool {
 	if d, ok := result.(async.Reply); ok && err == nil {
 		result, err = d()
 	}
-	reply := phoneapi.MemoryResult{Revision: pending.revision, Project: r.Project, Scope: r.MemoryScope}
+	reply := phoneproto.MemoryResult{Revision: pending.revision, Project: r.Project, Scope: r.MemoryScope}
 	frame := remote.Frame{Type: "memory"}
 	if err != nil {
 		frame.Error = err.Error()
@@ -248,7 +248,7 @@ func (ps *phoneSession) onAutomationCreate(r remote.Request) bool {
 func (ps *phoneSession) onAutomationRun(r remote.Request) bool {
 	frame, ok := async.OnMain(ps.ctx, ps.c.Dispatch, func() remote.Frame {
 		_, err := ps.c.AutomationOp("automationRunNow", automation.Request{ID: r.AutomationID})
-		result := phoneapi.AutomationRunResult{RequestID: r.RequestID}
+		result := phoneproto.AutomationRunResult{RequestID: r.RequestID}
 		list, _ := ps.c.AutomationOp("automationList", automation.Request{})
 		result.List, _ = list.([]automation.View)
 		data, _ := json.Marshal(result)
@@ -355,7 +355,7 @@ func (ps *phoneSession) onSubscribe(r remote.Request) bool {
 	// while the desktop was still reconnecting.
 	ps.subscription = r
 	ps.sub, ps.lastRevision, ps.read, ps.fetched = r.Thread, -1, nil, false
-	ps.sync = phone.NewThreadSync(r.Have)
+	ps.sync = phoneserver.NewThreadSync(r.Have)
 	return true
 }
 
@@ -366,7 +366,7 @@ func (ps *phoneSession) onSend(r remote.Request) bool {
 			return false
 		}
 	} else {
-		paths, err := phone.SaveImages(r.Images)
+		paths, err := phoneserver.SaveImages(r.Images)
 		r.Images = nil
 		if err != nil {
 			if !ps.send(remote.Frame{Type: "sent", Error: err.Error()}) {
@@ -457,7 +457,7 @@ func (ps *phoneSession) onRespond(r remote.Request) bool {
 		}
 		return ""
 	})
-	data, _ := json.Marshal(phoneapi.ApprovalReply{ID: r.Approval})
+	data, _ := json.Marshal(phoneproto.ApprovalReply{ID: r.Approval})
 	if !ps.send(remote.Frame{Type: "responded", Data: data, Error: message}) {
 		return false
 	}

@@ -11,7 +11,7 @@ import (
 	"miya/internal/desktop"
 	"miya/internal/desktop/control"
 	"miya/internal/mobile"
-	"miya/internal/phoneapi"
+	phoneproto "miya/internal/phone/protocol"
 )
 
 func TestMobileWindowPreviewFailureKeepsLastFrameAndButtons(t *testing.T) {
@@ -22,7 +22,7 @@ func TestMobileWindowPreviewFailureKeepsLastFrameAndButtons(t *testing.T) {
 		t.Fatal(err)
 	}
 	a := codex.Approval{ID: json.RawMessage(`"preview"`), ThreadID: "s1", Method: "miya/desktopControl"}
-	p := &mobile.MobileWindowPreview{RequestID: "refresh", Version: phoneapi.ApprovalFingerprint(a), Loading: true, Image: img, ImageHash: sha256.Sum256(data), Window: desktop.Window{ID: 1, PID: 2}, Dialog: desktop.Dialog{Title: "授权", Actions: []desktop.Action{{ID: "allow", Label: "允许访问", Enabled: true}}}}
+	p := &mobile.MobileWindowPreview{RequestID: "refresh", Version: phoneproto.ApprovalFingerprint(a), Loading: true, Image: img, ImageHash: sha256.Sum256(data), Window: desktop.Window{ID: 1, PID: 2}, Dialog: desktop.Dialog{Title: "授权", Actions: []desktop.Action{{ID: "allow", Label: "允许访问", Enabled: true}}}}
 	m.DesktopPreviews = map[string]*mobile.MobileWindowPreview{string(a.ID): p}
 	m.State.Approvals = []codex.Approval{a}
 	m.ReceiveWindowPreview(nil, control.Preview{RequestID: "refresh", Approval: a.ID}, nil, "采集暂时不可用")

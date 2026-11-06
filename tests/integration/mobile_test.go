@@ -8,14 +8,14 @@ import (
 
 	"miya/internal/mobile"
 	"miya/internal/model"
-	"miya/internal/phoneapi"
+	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/widgets"
 )
 
 func testMobileApp() *mobile.App {
 	m := mobile.NewMobileApp()
 	m.Loaded, m.Link, m.Connected, m.Host = true, "miya://connect", true, "mac"
-	m.State = phoneapi.State{ReferenceSource: testReferenceSource, Projects: []phoneapi.Project{
+	m.State = phoneproto.State{ReferenceSource: testReferenceSource, Projects: []phoneproto.Project{
 		{Name: "proj-a", Path: "/a", Current: true, Threads: []model.Thread{{ID: 1, Title: "thread-one", ServerID: "s1"}}},
 		{Name: "proj-b", Path: "/b", Threads: []model.Thread{{ID: 2, Title: "thread-two", ServerID: "s2"}}},
 	}}

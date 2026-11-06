@@ -16,7 +16,7 @@ import (
 
 	"github.com/coder/websocket"
 
-	"miya/internal/phoneproxy"
+	phoneproxy "miya/internal/phone/proxy"
 	"miya/internal/webservice"
 )
 

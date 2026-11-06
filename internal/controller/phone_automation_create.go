@@ -9,12 +9,12 @@ import (
 
 	"miya/internal/async"
 	"miya/internal/automation"
-	"miya/internal/phoneapi"
+	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/remote"
 )
 
 func phoneAutomationFormFrame(r remote.Request, view *automation.View, err error) remote.Frame {
-	data, _ := json.Marshal(phoneapi.AutomationFormResult{RequestID: r.RequestID, View: view})
+	data, _ := json.Marshal(phoneproto.AutomationFormResult{RequestID: r.RequestID, View: view})
 	f := remote.Frame{Type: r.Op, Data: data}
 	if err != nil {
 		f.Error = err.Error()

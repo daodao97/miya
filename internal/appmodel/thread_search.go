@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"miya/internal/model"
-	"miya/internal/phoneapi"
+	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/textutil"
 )
 
@@ -16,7 +16,7 @@ type ThreadReference struct {
 }
 
 // Match every project's conversation metadata without loading its messages.
-func MatchingThreadRefs(projects []phoneapi.Project, self int, query string) []ThreadReference {
+func MatchingThreadRefs(projects []phoneproto.Project, self int, query string) []ThreadReference {
 	q := strings.ToLower(query)
 	seen := map[string]bool{}
 	var out []ThreadReference

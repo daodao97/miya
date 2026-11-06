@@ -19,8 +19,8 @@ import (
 	"miya/internal/appmodel"
 	"miya/internal/mobile"
 	"miya/internal/model"
-	"miya/internal/phoneapi"
-	"miya/internal/phonecache"
+	phonecache "miya/internal/phone/cache"
+	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/remote"
 	"miya/internal/workspaces"
 )
@@ -186,7 +186,7 @@ func TestMobileDesktopSwitchKeepsCachesAndOptionsSeparate(t *testing.T) {
 	m.Connect(a)
 	aID, oldGeneration := m.CurrentDesktopID(), m.Generation
 	m.Host = "Mac A"
-	m.State.Projects = []phoneapi.Project{{Path: "/a", Name: "A", Threads: []model.Thread{{ID: 7, ServerID: "shared", Title: "Only A"}}}}
+	m.State.Projects = []phoneproto.Project{{Path: "/a", Name: "A", Threads: []model.Thread{{ID: 7, ServerID: "shared", Title: "Only A"}}}}
 	m.Remember("shared", []model.Message{{ID: 1, Content: "Only A"}})
 	m.Options = map[string]remote.SendOptions{appmodel.AgentCodex: {Model: "model-a"}}
 	m.SaveOptions()
@@ -201,7 +201,7 @@ func TestMobileDesktopSwitchKeepsCachesAndOptionsSeparate(t *testing.T) {
 		t.Fatal("switching desktops leaked the previous desktop's state")
 	}
 	m.Host = "Mac B"
-	m.State.Projects = []phoneapi.Project{{Path: "/b", Name: "B", Threads: []model.Thread{{ID: 7, ServerID: "shared", Title: "Only B"}}}}
+	m.State.Projects = []phoneproto.Project{{Path: "/b", Name: "B", Threads: []model.Thread{{ID: 7, ServerID: "shared", Title: "Only B"}}}}
 	m.Remember("shared", []model.Message{{ID: 1, Content: "Only B"}})
 	m.Options = map[string]remote.SendOptions{appmodel.AgentCodex: {Model: "model-b"}}
 	m.SaveOptions()
@@ -229,7 +229,7 @@ func TestMobileDesktopRemovalOnlyRemovesSelectedPairing(t *testing.T) {
 	a, b, c := testDesktopLink(), testDesktopLink(), testDesktopLink()
 	for _, link := range []string{a, b, c} {
 		m.Connect(link)
-		m.State.Projects = []phoneapi.Project{{Name: "cached"}}
+		m.State.Projects = []phoneproto.Project{{Name: "cached"}}
 	}
 	aID, _ := workspaces.IDFromLink(a)
 	bID, _ := workspaces.IDFromLink(b)
@@ -297,7 +297,7 @@ func TestMobileDesktopSwitchPreservesDraftAndAttachments(t *testing.T) {
 	m := multiDesktopApp(t)
 	a, b := testDesktopLink(), testDesktopLink()
 	m.Connect(a)
-	m.State.Projects = []phoneapi.Project{{Path: "/a", Threads: []model.Thread{{ID: 1, ServerID: "a-thread", Title: "A"}}}}
+	m.State.Projects = []phoneproto.Project{{Path: "/a", Threads: []model.Thread{{ID: 1, ServerID: "a-thread", Title: "A"}}}}
 	m.OpenThread(m.State.Projects[0].Threads[0])
 	m.Draft = "A 的草稿"
 	photo := filepath.Join(t.TempDir(), "photo.png")
@@ -369,9 +369,9 @@ func TestMobileNotificationsSelectTheCorrectDesktop(t *testing.T) {
 	a, b := testDesktopLink(), testDesktopLink()
 	m.Connect(a)
 	aID := m.CurrentDesktopID()
-	m.State.Projects = []phoneapi.Project{{Path: "/a", Threads: []model.Thread{{ID: 7, ServerID: "only-a", Title: "A"}}}}
+	m.State.Projects = []phoneproto.Project{{Path: "/a", Threads: []model.Thread{{ID: 7, ServerID: "only-a", Title: "A"}}}}
 	m.Connect(b)
-	m.State.Projects = []phoneapi.Project{{Path: "/b", Threads: []model.Thread{{ID: 7, ServerID: "only-b", Title: "B"}}}}
+	m.State.Projects = []phoneproto.Project{{Path: "/b", Threads: []model.Thread{{ID: 7, ServerID: "only-b", Title: "B"}}}}
 	m.OpenNotification(map[string]string{"thread": "7", "serverId": "only-a", "project": "/a", "agent": appmodel.AgentCodex})
 	if m.CurrentDesktopID() != aID || m.Viewer.Current().ServerID != "only-a" {
 		t.Fatal("notification opened a same-numbered conversation on the wrong desktop")

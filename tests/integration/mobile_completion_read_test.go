@@ -5,7 +5,7 @@ import (
 
 	"miya/internal/appmodel"
 	"miya/internal/model"
-	"miya/internal/phone"
+	phoneserver "miya/internal/phone/server"
 )
 
 func TestMobileCompletionReadWaitsForLiveContents(t *testing.T) {
@@ -18,7 +18,7 @@ func TestMobileCompletionReadWaitsForLiveContents(t *testing.T) {
 	if _, _, ok := m.CompletionReadRequest(); ok {
 		t.Fatal("cached messages and sidebar metadata acknowledged unseen contents")
 	}
-	sync := phone.NewThreadSync(nil)
+	sync := phoneserver.NewThreadSync(nil)
 	delta, _ := sync.Update(thread)
 	m.ReceiveThread(thread.ID, delta)
 	r, read, ok := m.CompletionReadRequest()

@@ -1,7 +1,7 @@
-// Package phone is the background service's side of the phone connection
+// Package server is the background service's side of the phone connection
 // that needs no controller: where its state lives, whether pairing is on,
 // the message deltas it sends and the images a phone uploads.
-package phone
+package server
 
 import (
 	"bytes"
@@ -11,7 +11,7 @@ import (
 
 	"miya/internal/appdir"
 	"miya/internal/model"
-	"miya/internal/phoneapi"
+	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/remote"
 	"miya/internal/svcproto"
 )
@@ -88,17 +88,17 @@ func NewThreadSync(have []remote.Seen) *ThreadSync {
 // HasImage reports whether the conversation last synced shows image src.
 func (s *ThreadSync) HasImage(src string) bool { return s.images[src] }
 
-func (s *ThreadSync) Update(t model.Thread) (phoneapi.ThreadDelta, bool) {
+func (s *ThreadSync) Update(t model.Thread) (phoneproto.ThreadDelta, bool) {
 	msgs := t.Messages
 	t.Messages, t.Draft = nil, ""
 	meta, _ := json.Marshal(t)
-	d := phoneapi.ThreadDelta{Thread: t, Reset: s.fresh, Order: make([]int, len(msgs))}
+	d := phoneproto.ThreadDelta{Thread: t, Reset: s.fresh, Order: make([]int, len(msgs))}
 	if t.Loading && len(msgs) == 0 {
 		// Resuming for a send can temporarily expose only thread metadata.
 		// Keep the phone's history until the loaded messages replace it.
 		d.Order = append([]int{}, s.order...)
 		if !s.fresh && bytes.Equal(meta, s.meta) {
-			return phoneapi.ThreadDelta{}, false
+			return phoneproto.ThreadDelta{}, false
 		}
 		s.fresh, s.meta = false, meta
 		return d, true
@@ -121,7 +121,7 @@ func (s *ThreadSync) Update(t model.Thread) (phoneapi.ThreadDelta, bool) {
 		}
 	}
 	if same && len(d.Changed) == 0 && bytes.Equal(meta, s.meta) {
-		return phoneapi.ThreadDelta{}, false
+		return phoneproto.ThreadDelta{}, false
 	}
 	s.fresh, s.order, s.meta = false, d.Order, meta
 	return d, true

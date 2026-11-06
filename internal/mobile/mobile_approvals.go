@@ -11,7 +11,7 @@ import (
 
 	"miya/internal/interaction"
 	mcpaccess "miya/internal/mcp/access"
-	"miya/internal/phoneapi"
+	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/remote"
 	"miya/internal/textutil"
 	"miya/internal/widgets"
@@ -37,7 +37,7 @@ func (m *App) submitApproval(a interaction.Request, reply interaction.Response, 
 		m.FormErrors[id] = tr("Not connected to desktop")
 		return
 	}
-	raw, err := json.Marshal(phoneapi.LegacyResponse(a, reply))
+	raw, err := json.Marshal(phoneproto.LegacyResponse(a, reply))
 	if err != nil {
 		m.FormErrors[id] = err.Error()
 		return
@@ -48,7 +48,7 @@ func (m *App) submitApproval(a interaction.Request, reply interaction.Response, 
 	m.ApprovalPending[id] = true
 	delete(m.FormErrors, id)
 	conn, gen := m.Conn, m.Generation
-	r := remote.Request{Response: &reply, ApprovalVersion: phoneapi.ApprovalFingerprint(a), Op: "respond", Approval: a.ID, Result: raw, Allow: reply.Action == interaction.Allow, Remember: remember}
+	r := remote.Request{Response: &reply, ApprovalVersion: phoneproto.ApprovalFingerprint(a), Op: "respond", Approval: a.ID, Result: raw, Allow: reply.Action == interaction.Allow, Remember: remember}
 	go func() {
 		if err := conn.Send(r); err != nil {
 			m.onMain(gen, func() {
@@ -158,11 +158,11 @@ func inlineMCPConfirmation(a interaction.Request) bool {
 	if a.Kind() != interaction.Form || a.Mode != "" && a.Mode != "form" {
 		return false
 	}
-	var schema phoneapi.FormSchema
+	var schema phoneproto.FormSchema
 	if json.Unmarshal(a.RequestedSchema, &schema) != nil || schema.Type != "object" || len(schema.Properties) != 0 {
 		return false
 	}
-	_, err := phoneapi.ValidateMobileForm(a, nil)
+	_, err := phoneproto.ValidateMobileForm(a, nil)
 	return err == nil
 }
 
@@ -281,7 +281,7 @@ func (m *App) elicitationFields(c *ui.Context, a interaction.Request) {
 		ui.Text(c, tr("Complete the action in your browser, then return here to confirm.")).FontSize(m.Font(13)).TextColor(p.muted)
 		ui.Link(c, a.URL, a.URL).FontSize(m.Font(14))
 	} else {
-		var schema phoneapi.FormSchema
+		var schema phoneproto.FormSchema
 		_ = json.Unmarshal(a.RequestedSchema, &schema)
 		keys := make([]string, 0, len(schema.Properties))
 		for key := range schema.Properties {
@@ -339,7 +339,7 @@ func (m *App) elicitationActions(c *ui.Context, a interaction.Request) {
 		if m.ApprovalButton(c, "confirm", label, true, pending).Grow(1).Clicked() {
 			result := interaction.Response{Action: interaction.Allow}
 			if a.Mode != "url" {
-				content, err := phoneapi.ValidateMobileForm(a, fields)
+				content, err := phoneproto.ValidateMobileForm(a, fields)
 				if err != nil {
 					m.FormErrors[id] = err.Error()
 					return

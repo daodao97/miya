@@ -15,7 +15,7 @@ import (
 	"miya/internal/agent/claude/native/transcript"
 	"miya/internal/mobile"
 	"miya/internal/model"
-	"miya/internal/phone"
+	phoneserver "miya/internal/phone/server"
 	"miya/internal/remote"
 	"miya/internal/thumbnail"
 	"miya/internal/uiruntime"
@@ -28,11 +28,11 @@ func TestPhonePreviewSurvivesSendAndRelaunch(t *testing.T) {
 	if err := os.WriteFile(local, testPNG(t), 0600); err != nil {
 		t.Fatal(err)
 	}
-	upload, err := phone.ReadImages([]string{local})
+	upload, err := phoneserver.ReadImages([]string{local})
 	if err != nil {
 		t.Fatal(err)
 	}
-	paths, err := phone.SaveImages(upload)
+	paths, err := phoneserver.SaveImages(upload)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ func TestPhonePreviewSurvivesSendAndRelaunch(t *testing.T) {
 	th.HistoryLoaded = true
 	th.Messages = []model.Message{{ID: 10, Role: "user", Images: []string{source}, Content: "look"}}
 	m.OpenThread(th)
-	sync := phone.NewThreadSync(nil)
+	sync := phoneserver.NewThreadSync(nil)
 	delta, _ := sync.Update(th)
 	m.ReceiveThread(th.ID, delta)
 	m.Images, m.Sending = []string{local}, true
@@ -106,7 +106,7 @@ func TestPhonePreviewSurvivesSendAndRelaunch(t *testing.T) {
 func TestPhoneDeltaDetectsChangedImageSource(t *testing.T) {
 	th := longThread(1)
 	th.Messages[0].Images = []string{"file:///desktop/first.png"}
-	sync := phone.NewThreadSync(nil)
+	sync := phoneserver.NewThreadSync(nil)
 	sync.Update(th)
 	th.Messages[0].Images = []string{"file:///desktop/other.png"}
 	delta, changed := sync.Update(th)

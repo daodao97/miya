@@ -10,7 +10,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"miya/internal/fsutil"
-	"miya/internal/phone"
+	phoneserver "miya/internal/phone/server"
 	"miya/internal/remote"
 	"miya/internal/thumbnail"
 	"miya/internal/uiruntime"
@@ -52,7 +52,7 @@ func (m *App) RetryImage(source string, conn *remote.Conn) {
 	})
 }
 
-// messageImage never tries to open a desktop path on the phone. Resolve its
+// messageImage never tries to open a desktop path on the phoneserver. Resolve its
 // cached thumbnail off the UI thread, with bounded retries when a transfer
 // fails. Image sources in messages stay unchanged.
 func (m *App) MessageImage(source string) ui.ImageSource {
@@ -113,7 +113,7 @@ func StorePhonePreview(path string, data []byte) error {
 	widgets.ImageMu.Lock()
 	widgets.ImageCache[path] = img
 	widgets.ImageMu.Unlock()
-	phone.PruneOldUploads(filepath.Dir(path))
+	phoneserver.PruneOldUploads(filepath.Dir(path))
 	return nil
 }
 

@@ -1,6 +1,6 @@
-// Package phonecache keeps what the phone app saves between launches: the
+// Package cache keeps what the phone app saves between launches: the
 // state and conversations of each paired desktop, and the desktops themselves.
-package phonecache
+package cache
 
 import (
 	"os"
@@ -9,12 +9,12 @@ import (
 	"strings"
 	"time"
 
-	"miya/internal/phoneapi"
+	phoneproto "miya/internal/phone/protocol"
 )
 
 type SavedState struct {
-	Host  string         `json:"host"`
-	State phoneapi.State `json:"state"`
+	Host  string           `json:"host"`
+	State phoneproto.State `json:"state"`
 }
 
 // pruneCache keeps the keep most recently written conversations.

@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	"miya/internal/phone"
-	"miya/internal/phoneproxy"
+	phoneproxy "miya/internal/phone/proxy"
+	phoneserver "miya/internal/phone/server"
 )
 
 func fileServerFixture(t *testing.T) (string, http.Handler) {
@@ -31,8 +31,8 @@ func fileServerFixture(t *testing.T) (string, http.Handler) {
 			t.Fatal(err)
 		}
 	}
-	handler := phone.DesktopFileServer{Projects: func(context.Context) ([]phone.FileProject, error) {
-		return []phone.FileProject{{ID: phone.ProjectFileID(root), Name: "Project <test>", Path: root}}, nil
+	handler := phoneserver.DesktopFileServer{Projects: func(context.Context) ([]phoneserver.FileProject, error) {
+		return []phoneserver.FileProject{{ID: phoneserver.ProjectFileID(root), Name: "Project <test>", Path: root}}, nil
 	}}
 	return root, handler
 }
@@ -50,7 +50,7 @@ func fileRequest(t *testing.T, handler http.Handler, method, target string, head
 
 func TestDesktopFilesDirectoryLanguageFollowsClient(t *testing.T) {
 	root, handler := fileServerFixture(t)
-	base := "/" + phone.ProjectFileID(root) + "/"
+	base := "/" + phoneserver.ProjectFileID(root) + "/"
 	for _, tc := range []struct{ language, tag, download string }{{"zh-CN, en;q=0.8", "zh-Hans", "下载"}, {"en-GB", "en", "Download"}, {"fr", "en", "Download"}} {
 		response := fileRequest(t, handler, "GET", base, map[string]string{"Accept-Language": tc.language})
 		body := response.Body.String()
@@ -62,7 +62,7 @@ func TestDesktopFilesDirectoryLanguageFollowsClient(t *testing.T) {
 
 func TestDesktopFilesHTTPReadsAndDownloads(t *testing.T) {
 	root, handler := fileServerFixture(t)
-	base := "/" + phone.ProjectFileID(root) + "/"
+	base := "/" + phoneserver.ProjectFileID(root) + "/"
 	for _, tc := range []struct{ path, contentType, body string }{{"index.html", "text/html", "<h1>预览</h1>"}, {"assets/site.css", "text/css", "h1{color:red}"}, {"README.md", "text/plain", "# 项目"}, {url.PathEscape("空 格 #?.txt"), "text/plain", "special"}} {
 		w := fileRequest(t, handler, "GET", base+tc.path, nil)
 		if w.Code != 200 || !strings.HasPrefix(w.Header().Get("Content-Type"), tc.contentType) || !strings.Contains(w.Body.String(), tc.body) {
@@ -89,7 +89,7 @@ func TestDesktopFilesHTTPReadsAndDownloads(t *testing.T) {
 
 func TestDesktopFilesAreRootedAndReadOnly(t *testing.T) {
 	root, handler := fileServerFixture(t)
-	base := "/" + phone.ProjectFileID(root) + "/"
+	base := "/" + phoneserver.ProjectFileID(root) + "/"
 	outside := filepath.Join(t.TempDir(), "secret.txt")
 	os.WriteFile(outside, []byte("private"), 0600)
 	if err := os.Symlink(outside, filepath.Join(root, "escape")); err != nil {
@@ -131,7 +131,7 @@ func TestDesktopFilesRangesBeyondMessageLimit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	w := fileRequest(t, handler, "GET", "/"+phone.ProjectFileID(root)+"/large.bin", map[string]string{"Range": fmt.Sprintf("bytes=%d-%d", size-4, size-1)})
+	w := fileRequest(t, handler, "GET", "/"+phoneserver.ProjectFileID(root)+"/large.bin", map[string]string{"Range": fmt.Sprintf("bytes=%d-%d", size-4, size-1)})
 	if w.Code != 206 || w.Body.String() != "TAIL" || w.Header().Get("Content-Range") != fmt.Sprintf("bytes %d-%d/%d", size-4, size-1, size) {
 		t.Fatal("large file range streaming failed")
 	}

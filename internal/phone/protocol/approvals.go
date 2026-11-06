@@ -1,4 +1,4 @@
-package phoneapi
+package protocol
 
 import (
 	"crypto/sha256"

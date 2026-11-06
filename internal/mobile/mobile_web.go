@@ -7,7 +7,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"miya/internal/phoneproxy"
+	phoneproxy "miya/internal/phone/proxy"
 	"miya/internal/textutil"
 	"miya/internal/webservice"
 	"miya/internal/widgets"

@@ -12,7 +12,7 @@ import (
 	"miya/internal/controller"
 	dg "miya/internal/delegation"
 	"miya/internal/model"
-	"miya/internal/phoneapi"
+	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/remote"
 )
 
@@ -57,7 +57,7 @@ func TestCollaborationPhoneRequestsDoNotBlockStateStreaming(t *testing.T) {
 				t.Fatal("mutation ran before its durable worker was available")
 			}
 			if f.Type == "state" {
-				var state phoneapi.State
+				var state phoneproto.State
 				if json.Unmarshal(f.Data, &state) == nil && state.Status == "State stream remains responsive" {
 					if state.Collaboration == nil || state.Collaboration.Version != 1 {
 						t.Fatal("missing phone capability")
@@ -76,7 +76,7 @@ func TestCollaborationPhoneRequestsDoNotBlockStateStreaming(t *testing.T) {
 			if f.Type != "collaboration" {
 				continue
 			}
-			var response phoneapi.CollaborationResult
+			var response phoneproto.CollaborationResult
 			if json.Unmarshal(f.Data, &response) != nil || f.Error != "" || response.RequestID != "correlation" {
 				t.Fatalf("phone response: %+v", f)
 			}

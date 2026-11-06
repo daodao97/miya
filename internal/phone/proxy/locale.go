@@ -1,4 +1,4 @@
-package phoneproxy
+package proxy
 
 import (
 	"miya/locales"

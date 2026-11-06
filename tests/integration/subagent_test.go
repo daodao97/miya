@@ -13,8 +13,8 @@ import (
 	"miya/internal/controller"
 	"miya/internal/model"
 	"miya/internal/msgfmt"
-	"miya/internal/phone"
-	"miya/internal/phoneapi"
+	phoneproto "miya/internal/phone/protocol"
+	phoneserver "miya/internal/phone/server"
 	"miya/internal/subagent"
 	"miya/internal/uiruntime"
 )
@@ -203,7 +203,7 @@ func TestClaudeUnstreamedReplyBlocksKeepEach(t *testing.T) {
 func TestSubAgentProgressReachesPhone(t *testing.T) {
 	th := model.Thread{ID: 1, Agent: appmodel.AgentClaude, Messages: []model.Message{{ID: 1, Role: "tool", Kind: "claudeTool", Content: "Agent\n{}", Status: "inProgress",
 		Agents: []model.SubAgent{{ID: "a", Name: "Watch logs", Status: subagent.Running}}}}}
-	s := phone.NewThreadSync(nil)
+	s := phoneserver.NewThreadSync(nil)
 	if _, ok := s.Update(th); !ok {
 		t.Fatal("first update not sent")
 	}
@@ -221,7 +221,7 @@ func TestSubAgentProgressReachesPhone(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var got phoneapi.ThreadDelta
+	var got phoneproto.ThreadDelta
 	if err := json.Unmarshal(data, &got); err != nil {
 		t.Fatal(err)
 	}

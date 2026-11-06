@@ -9,7 +9,7 @@ import (
 	"miya/internal/async"
 	"miya/internal/desktop"
 	"miya/internal/desktop/control"
-	"miya/internal/phoneapi"
+	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/remote"
 	"miya/internal/textutil"
 )
@@ -141,7 +141,7 @@ func (c *Controller) PhoneDesktopApproval(r remote.Request) bool {
 		return false
 	}
 	for _, a := range c.Approvals() {
-		if a.ThreadID == r.ServerID && textutil.SameJSON(a.ID, r.Approval) && phoneapi.ApprovalFingerprint(a) == r.ApprovalVersion {
+		if a.ThreadID == r.ServerID && textutil.SameJSON(a.ID, r.Approval) && phoneproto.ApprovalFingerprint(a) == r.ApprovalVersion {
 			return true
 		}
 	}

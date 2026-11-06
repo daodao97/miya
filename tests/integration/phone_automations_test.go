@@ -11,7 +11,7 @@ import (
 	"miya/internal/appmodel"
 	"miya/internal/automation"
 	"miya/internal/model"
-	"miya/internal/phoneapi"
+	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/remote"
 )
 
@@ -49,7 +49,7 @@ func TestPhoneAutomationsReadListAndHistory(t *testing.T) {
 	}
 }
 
-func nextPhoneAutomationForm(t *testing.T, conn *testPhoneConnection, op string) (phoneapi.AutomationFormResult, remote.Frame) {
+func nextPhoneAutomationForm(t *testing.T, conn *testPhoneConnection, op string) (phoneproto.AutomationFormResult, remote.Frame) {
 	t.Helper()
 	for {
 		select {
@@ -57,14 +57,14 @@ func nextPhoneAutomationForm(t *testing.T, conn *testPhoneConnection, op string)
 			if f.Type != op {
 				continue
 			}
-			var result phoneapi.AutomationFormResult
+			var result phoneproto.AutomationFormResult
 			if err := json.Unmarshal(f.Data, &result); err != nil {
 				t.Fatal(err)
 			}
 			return result, f
 		case <-conn.ctx.Done():
 			t.Fatal("no automation form response")
-			return phoneapi.AutomationFormResult{}, remote.Frame{}
+			return phoneproto.AutomationFormResult{}, remote.Frame{}
 		}
 	}
 }
@@ -224,7 +224,7 @@ func TestPhoneAutomationRunStartsInItsProjectAndRejectsOverlap(t *testing.T) {
 				t.Fatal("no run acknowledgement")
 			}
 		}
-		var result phoneapi.AutomationRunResult
+		var result phoneproto.AutomationRunResult
 		if err := json.Unmarshal(f.Data, &result); err != nil || result.RequestID != request {
 			t.Fatalf("bad acknowledgement: %v %s", err, f.Data)
 		}
@@ -251,7 +251,7 @@ func TestPhoneAutomationRunUnavailable(t *testing.T) {
 		select {
 		case f := <-conn.frames:
 			if f.Type == "automation-run" {
-				var result phoneapi.AutomationRunResult
+				var result phoneproto.AutomationRunResult
 				if json.Unmarshal(f.Data, &result) != nil || result.RequestID != "unavailable" || f.Error == "" {
 					t.Fatalf("missing correlated failure: %+v", f)
 				}

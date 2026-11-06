@@ -13,7 +13,7 @@ import (
 	"miya/internal/automation"
 	"miya/internal/model"
 	"miya/internal/msgfmt"
-	"miya/internal/phoneapi"
+	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/remote"
 	"miya/internal/textutil"
 	"miya/internal/widgets"
@@ -61,7 +61,7 @@ func (m *App) runPhoneAutomation(id string) {
 }
 
 func (m *App) ReceiveAutomationRun(data json.RawMessage, message string) {
-	var result phoneapi.AutomationRunResult
+	var result phoneproto.AutomationRunResult
 	if json.Unmarshal(data, &result) != nil || result.RequestID == "" || result.RequestID != m.Autos.RunRequest {
 		return
 	}

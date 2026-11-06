@@ -10,7 +10,7 @@ import (
 	codex "miya/internal/agent/codex/native"
 	"miya/internal/desktop/control"
 	"miya/internal/mobile"
-	"miya/internal/phoneapi"
+	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/remote"
 )
 
@@ -26,12 +26,12 @@ func TestMobileDesktopReturnsOnlyWhenExactApprovalResolves(t *testing.T) {
 	m := testMobileApp()
 	a := codex.Approval{ID: json.RawMessage(`"authorization"`), ThreadID: "s1", Method: "miya/desktopControl", Reason: "Enter permission details"}
 	m.State.Approvals = []codex.Approval{a}
-	m.DesktopApproval = mobile.MobileDesktopApproval{ID: a.ID, Version: phoneapi.ApprovalFingerprint(a)}
+	m.DesktopApproval = mobile.MobileDesktopApproval{ID: a.ID, Version: phoneproto.ApprovalFingerprint(a)}
 	closed := 0
 	openTestDesktopPage(m, &closed)
 	m.DesktopRequest = "opening"
 	// Wrong passwords and intermediate native buttons keep this request pending.
-	m.ApplyPhoneState(phoneapi.State{Approvals: []codex.Approval{a}})
+	m.ApplyPhoneState(phoneproto.State{Approvals: []codex.Approval{a}})
 	if closed != 0 || m.DesktopPage == nil || m.DesktopRequest == "" {
 		t.Fatal("pending authorization closed its input page")
 	}
@@ -43,11 +43,11 @@ func TestMobileDesktopReturnsOnlyWhenExactApprovalResolves(t *testing.T) {
 	if closed != 0 || m.DesktopPage == nil {
 		t.Fatal("a rejected submission closed the input page")
 	}
-	m.ApplyPhoneState(phoneapi.State{Approvals: []codex.Approval{}})
+	m.ApplyPhoneState(phoneproto.State{Approvals: []codex.Approval{}})
 	if closed != 1 || m.DesktopPage != nil || len(m.DesktopApproval.ID) != 0 || m.DesktopRequest != "" {
 		t.Fatal("resolved authorization did not dismiss its control page")
 	}
-	m.ApplyPhoneState(phoneapi.State{})
+	m.ApplyPhoneState(phoneproto.State{})
 	if closed != 1 {
 		t.Fatal("control page dismissed more than once")
 	}
@@ -56,7 +56,7 @@ func TestMobileDesktopReturnsOnlyWhenExactApprovalResolves(t *testing.T) {
 func TestMobileDesktopReusedApprovalIDClosesStalePage(t *testing.T) {
 	m := testMobileApp()
 	a := codex.Approval{ID: json.RawMessage(`"authorization"`), ThreadID: "s1", Method: "miya/desktopControl", Reason: "old window"}
-	m.DesktopApproval = mobile.MobileDesktopApproval{ID: a.ID, Version: phoneapi.ApprovalFingerprint(a)}
+	m.DesktopApproval = mobile.MobileDesktopApproval{ID: a.ID, Version: phoneproto.ApprovalFingerprint(a)}
 	closed := 0
 	openTestDesktopPage(m, &closed)
 	a.Reason = "different window"
@@ -72,7 +72,7 @@ func TestMobileOtherBrowserRemainsOpenWhenApprovalResolves(t *testing.T) {
 	m.FilesCancel = func() { closed = true }
 	pages := 0
 	openTestDesktopPage(m, &pages)
-	m.ApplyPhoneState(phoneapi.State{})
+	m.ApplyPhoneState(phoneproto.State{})
 	if closed || pages != 0 || m.DesktopPage == nil {
 		t.Fatal("approval state dismissed an unrelated file browser or full desktop page")
 	}

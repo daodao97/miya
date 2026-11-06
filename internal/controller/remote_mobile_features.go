@@ -11,20 +11,20 @@ import (
 	"miya/internal/agentmeta"
 	"miya/internal/appmodel"
 	"miya/internal/model"
-	"miya/internal/phoneapi"
+	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/remote"
 )
 
-func (c *Controller) phoneAgentOptions() []phoneapi.AgentOptions {
-	var out []phoneapi.AgentOptions
+func (c *Controller) phoneAgentOptions() []phoneproto.AgentOptions {
+	var out []phoneproto.AgentOptions
 	for _, b := range c.Adapters() {
-		a := phoneapi.AgentOptions{Agent: b.ID(), Current: remote.SendOptions{Model: b.Model(), Effort: b.Effort(), Policy: c.SelectedPermissionPolicy()}}
+		a := phoneproto.AgentOptions{Agent: b.ID(), Current: remote.SendOptions{Model: b.Model(), Effort: b.Effort(), Policy: c.SelectedPermissionPolicy()}}
 		a.Descriptor = agentmeta.For(b.ID())
 		if !a.Descriptor.NativeCommands {
 			a.Commands = b.Commands(c.Cwd, false).PhoneChoices
 		}
 		for _, option := range b.ModelOptions() {
-			a.Models = append(a.Models, phoneapi.ModelOption{Value: option.Value, Label: option.Label, Efforts: option.Efforts, DefaultEffort: option.DefaultEffort})
+			a.Models = append(a.Models, phoneproto.ModelOption{Value: option.Value, Label: option.Label, Efforts: option.Efforts, DefaultEffort: option.DefaultEffort})
 		}
 		out = append(out, a)
 	}
@@ -46,7 +46,7 @@ func (c *Controller) PhoneSendRequest(r remote.Request, paths []string, agent st
 		if a.Agent != agent {
 			continue
 		}
-		var model *phoneapi.ModelOption
+		var model *phoneproto.ModelOption
 		for i := range a.Models {
 			if a.Models[i].Value == r.Options.Model {
 				model = &a.Models[i]
@@ -92,7 +92,7 @@ func (c *Controller) PhoneQueueAction(r remote.Request) error {
 	return nil
 }
 
-func (c *Controller) PhoneQuotas() []phoneapi.AgentQuota {
+func (c *Controller) PhoneQuotas() []phoneproto.AgentQuota {
 	q := c.QuotaLimits.RateLimits
 	if v, ok := c.QuotaLimits.ByID[appmodel.CodexAccountLimitID]; ok {
 		q = &v
@@ -116,12 +116,12 @@ func (c *Controller) PhoneQuotas() []phoneapi.AgentQuota {
 			windows = append(windows, w)
 		}
 	}
-	quota := phoneapi.AgentQuota{Agent: appmodel.AgentCodex}
+	quota := phoneproto.AgentQuota{Agent: appmodel.AgentCodex}
 	for i, w := range windows {
 		if math.IsNaN(w.UsedPercent) || math.IsInf(w.UsedPercent, 0) {
 			continue
 		}
-		v := phoneapi.QuotaWindow{Label: strings.TrimSuffix(account.QuotaLabel(w, i), tr("Quota")), UsedPercent: math.Max(0, math.Min(100, w.UsedPercent))}
+		v := phoneproto.QuotaWindow{Label: strings.TrimSuffix(account.QuotaLabel(w, i), tr("Quota")), UsedPercent: math.Max(0, math.Min(100, w.UsedPercent))}
 		if w.ResetsAt != nil && *w.ResetsAt > 0 {
 			v.ResetsAt = *w.ResetsAt
 		}
@@ -130,5 +130,5 @@ func (c *Controller) PhoneQuotas() []phoneapi.AgentQuota {
 	if len(quota.Windows) == 0 {
 		return nil
 	}
-	return []phoneapi.AgentQuota{quota}
+	return []phoneproto.AgentQuota{quota}
 }
