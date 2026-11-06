@@ -417,3 +417,9 @@ type (
 var (
 	hostProjectPath = svcproto.HostProjectPath
 )
+
+// Moved to internal/phone.
+var (
+	readDesktopUploads = phone.ReadDesktopUploads
+	saveDesktopUploads = phone.SaveDesktopUploads
+)

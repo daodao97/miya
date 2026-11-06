@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -11,9 +10,7 @@ import (
 	"time"
 
 	"miya/internal/agentusage"
-	"miya/internal/appdir"
 	"miya/internal/fsutil"
-	"miya/internal/remote"
 	"miya/internal/thumbnail"
 	"miya/internal/worktree"
 )
@@ -156,79 +153,4 @@ func (c *chatController) uploadRemoteAttachments(paths []string) ([]string, erro
 		result[pos] = uploaded[i]
 	}
 	return result, nil
-}
-
-func checkDesktopUploads(count, size, total int) error {
-	if count > maxPhoneImages || size > maxPhoneImageBytes || total > maxPhoneImageTotal {
-		return fmt.Errorf("Send up to %d attachments at a time, %d MB each, %d MB total", maxPhoneImages, maxPhoneImageBytes>>20, maxPhoneImageTotal>>20)
-	}
-	return nil
-}
-
-func readDesktopUploads(paths []string) ([]remote.Image, error) {
-	if err := checkDesktopUploads(len(paths), 0, 0); err != nil {
-		return nil, err
-	}
-	var out []remote.Image
-	total := 0
-	for _, path := range paths {
-		f, err := os.Open(path)
-		if err != nil {
-			return nil, err
-		}
-		data, err := io.ReadAll(io.LimitReader(f, maxPhoneImageBytes+1))
-		f.Close()
-		if err != nil {
-			return nil, err
-		}
-		total += len(data)
-		if err := checkDesktopUploads(len(paths), len(data), total); err != nil {
-			return nil, err
-		}
-		out = append(out, remote.Image{Name: filepath.Base(path), Data: data})
-	}
-	return out, nil
-}
-
-func saveDesktopUploads(files []remote.Image) (paths []string, err error) {
-	if err := checkDesktopUploads(len(files), 0, 0); err != nil {
-		return nil, err
-	}
-	dir := filepath.Join(appdir.Dir(), "uploads")
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		return nil, err
-	}
-	pruneOldUploads(dir)
-	defer func() {
-		if err != nil {
-			for _, path := range paths {
-				os.Remove(path)
-			}
-			paths = nil
-		}
-	}()
-	total := 0
-	for _, file := range files {
-		total += len(file.Data)
-		if err := checkDesktopUploads(len(files), len(file.Data), total); err != nil {
-			return paths, err
-		}
-		name := filepath.Base(file.Name)
-		if strings.ContainsAny(name, "\\\x00") || name == "." || name == ".." {
-			return paths, errors.New("Invalid attachment name")
-		}
-		f, err := os.CreateTemp(dir, "desktop-*-"+name)
-		if err != nil {
-			return paths, err
-		}
-		paths = append(paths, f.Name())
-		_, err = f.Write(file.Data)
-		if closeErr := f.Close(); err == nil {
-			err = closeErr
-		}
-		if err != nil {
-			return paths, err
-		}
-	}
-	return paths, nil
 }
