@@ -1,7 +1,7 @@
 package appmodel
 
 import (
-	account "miya/internal/account"
+	account "miya/internal/agent/account"
 )
 
 // Prefer a five-day bucket when supplied; otherwise show the short window first.

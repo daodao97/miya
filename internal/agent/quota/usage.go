@@ -1,6 +1,6 @@
 // Package agentusage reads the current local CLI account's subscription usage.
 // It starts no conversations and keeps neither credentials nor usage on disk.
-package agentusage
+package quota
 
 import (
 	"context"

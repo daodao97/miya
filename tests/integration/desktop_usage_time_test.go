@@ -7,7 +7,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"miya/internal/agentusage"
+	agentusage "miya/internal/agent/quota"
 	desktopui "miya/internal/ui"
 	"miya/internal/widgets"
 )

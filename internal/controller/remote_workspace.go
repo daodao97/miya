@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"miya/internal/agentusage"
+	agentusage "miya/internal/agent/quota"
 	"miya/internal/async"
 	"miya/internal/composer"
 	"miya/internal/fsutil"

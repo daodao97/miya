@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
+	agentmeta "miya/internal/agent/catalog"
 	codex "miya/internal/agent/codex/native"
-	"miya/internal/agentmeta"
 	"miya/internal/composer"
 	dg "miya/internal/delegation"
 	"miya/internal/model"

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"miya/internal/account"
+	"miya/internal/agent/account"
 )
 
 func TestAccountQuotaResponse(t *testing.T) {

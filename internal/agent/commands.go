@@ -3,7 +3,7 @@ package agent
 import (
 	"strings"
 
-	"miya/internal/agentmeta"
+	agentmeta "miya/internal/agent/catalog"
 	"miya/internal/composer"
 	"miya/internal/model"
 )

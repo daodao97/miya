@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
+	agentmeta "miya/internal/agent/catalog"
 	claude "miya/internal/agent/claude/native"
 	"miya/internal/agent/claude/native/transcript"
-	"miya/internal/agentmeta"
 	"miya/internal/composer"
 	dg "miya/internal/delegation"
 	mcpconfig "miya/internal/mcp/config"

@@ -1,11 +1,11 @@
-package agentusage
+package quota
 
 import (
 	"fmt"
 	"math"
 	"strings"
 
-	"miya/internal/agentmeta"
+	agentmeta "miya/internal/agent/catalog"
 )
 
 func RemainingUsage(used float64) int { return int(math.Round(100 - Percent(used))) }

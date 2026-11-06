@@ -3,7 +3,7 @@ package appmodel
 import (
 	"context"
 
-	"miya/internal/account"
+	"miya/internal/agent/account"
 	"miya/internal/interaction"
 	"miya/internal/model"
 	"miya/internal/svcproto"

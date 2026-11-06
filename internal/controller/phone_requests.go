@@ -9,7 +9,7 @@ import (
 
 	"github.com/egoist/mygo/push/apns"
 
-	"miya/internal/agentmeta"
+	agentmeta "miya/internal/agent/catalog"
 	"miya/internal/appdir"
 	"miya/internal/appmodel"
 	"miya/internal/async"

@@ -9,7 +9,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"miya/internal/agentusage"
+	agentusage "miya/internal/agent/quota"
 	"miya/internal/svcproto"
 	"miya/internal/widgets"
 )

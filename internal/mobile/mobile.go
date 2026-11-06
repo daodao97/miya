@@ -17,7 +17,7 @@ import (
 	"github.com/egoist/mygo/ui/markdown"
 
 	"miya/internal/agent"
-	"miya/internal/agentmeta"
+	agentmeta "miya/internal/agent/catalog"
 	"miya/internal/appmodel"
 	"miya/internal/conversation"
 	"miya/internal/desktop/control"

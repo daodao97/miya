@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"miya/internal/agentusage"
+	agentusage "miya/internal/agent/quota"
 	"miya/internal/model"
 	"miya/internal/remote"
 	"miya/internal/worktree"

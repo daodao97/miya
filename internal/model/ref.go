@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"miya/internal/agentmeta"
+	agentmeta "miya/internal/agent/catalog"
 )
 
 // Stable IDs are retained in saved references and older wire formats.

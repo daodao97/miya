@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"miya/internal/account"
+	"miya/internal/agent/account"
 	"miya/internal/appmodel"
 	desktopui "miya/internal/ui"
 	"miya/internal/widgets"

@@ -7,8 +7,8 @@ import (
 	"slices"
 	"strings"
 
-	"miya/internal/account"
-	"miya/internal/agentmeta"
+	"miya/internal/agent/account"
+	agentmeta "miya/internal/agent/catalog"
 	"miya/internal/appmodel"
 	"miya/internal/model"
 	phoneproto "miya/internal/phone/protocol"

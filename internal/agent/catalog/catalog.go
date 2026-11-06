@@ -1,6 +1,6 @@
 // Package agentmeta contains the built-in agent manifest shared by adapters,
 // conversation references and clients. It performs no discovery or native I/O.
-package agentmeta
+package catalog
 
 import (
 	_ "embed"

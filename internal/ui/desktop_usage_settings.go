@@ -3,8 +3,8 @@ package desktopui
 import (
 	"github.com/egoist/mygo/ui"
 
-	"miya/internal/agentmeta"
-	"miya/internal/agentusage"
+	agentmeta "miya/internal/agent/catalog"
+	agentusage "miya/internal/agent/quota"
 	"miya/internal/prefs"
 	"miya/internal/widgets"
 )

@@ -3,7 +3,7 @@
 package agent
 
 import (
-	"miya/internal/agentmeta"
+	agentmeta "miya/internal/agent/catalog"
 	"miya/internal/interaction"
 	"miya/internal/model"
 	"miya/internal/runtime/tracker"

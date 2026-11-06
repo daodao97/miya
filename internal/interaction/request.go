@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	"miya/internal/agentmeta"
+	agentmeta "miya/internal/agent/catalog"
 )
 
 type Request struct {

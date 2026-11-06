@@ -9,8 +9,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"miya/internal/account"
 	"miya/internal/agent"
+	"miya/internal/agent/account"
 	"miya/internal/textutil"
 	"miya/internal/tokenusage"
 	"miya/internal/widgets"

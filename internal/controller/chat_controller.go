@@ -13,7 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"miya/internal/account"
+	"miya/internal/agent/account"
 	claude "miya/internal/agent/claude/native"
 	codex "miya/internal/agent/codex/native"
 	"miya/internal/appdir"

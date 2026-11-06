@@ -11,8 +11,8 @@ import (
 
 	"github.com/egoist/mygo"
 
-	"miya/internal/agentmeta"
-	"miya/internal/agentusage"
+	agentmeta "miya/internal/agent/catalog"
+	agentusage "miya/internal/agent/quota"
 	"miya/internal/prefs"
 	"miya/internal/svcproto"
 	"miya/internal/uiruntime"

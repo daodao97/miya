@@ -1,7 +1,7 @@
 package mobile
 
 import (
-	"miya/internal/agentmeta"
+	agentmeta "miya/internal/agent/catalog"
 	"miya/internal/model"
 )
 

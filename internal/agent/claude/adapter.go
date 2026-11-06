@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"miya/internal/agent"
+	agentmeta "miya/internal/agent/catalog"
 	claude "miya/internal/agent/claude/native"
 	"miya/internal/agent/claude/native/transcript"
-	"miya/internal/agentmeta"
 	"miya/internal/interaction"
 	"miya/internal/model"
 	"miya/internal/msgfmt"

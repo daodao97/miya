@@ -6,7 +6,7 @@ package protocol
 import (
 	"encoding/json"
 
-	"miya/internal/agentmeta"
+	agentmeta "miya/internal/agent/catalog"
 	"miya/internal/automation"
 	"miya/internal/interaction"
 	"miya/internal/memory/manager"

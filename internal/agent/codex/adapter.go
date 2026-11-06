@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"miya/internal/agent"
+	agentmeta "miya/internal/agent/catalog"
 	codex "miya/internal/agent/codex/native"
-	"miya/internal/agentmeta"
 	"miya/internal/composer"
 	"miya/internal/interaction"
 	"miya/internal/model"

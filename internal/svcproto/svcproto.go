@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"miya/internal/account"
+	"miya/internal/agent/account"
 	codex "miya/internal/agent/codex/native"
 	"miya/internal/appdir"
 	"miya/internal/model"

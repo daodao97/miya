@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"miya/internal/agentmeta"
+	agentmeta "miya/internal/agent/catalog"
 	"miya/internal/model"
 	"miya/internal/msgfmt"
 )
