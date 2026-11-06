@@ -69,7 +69,7 @@ func (c *chatController) prepareHost(r hostRequest) (deferred, error) {
 			out := []hostEntry{}
 			for _, e := range entries {
 				if e.IsDir() {
-					out = append(out, hostEntry{e.Name(), filepath.Join(root, e.Name()), true})
+					out = append(out, hostEntry{Name: e.Name(), Path: filepath.Join(root, e.Name()), Dir: true})
 				}
 			}
 			return out, nil
@@ -106,7 +106,7 @@ func (c *chatController) prepareHost(r hostRequest) (deferred, error) {
 			if len(old)+len(new) > 2*worktree.MaxEditableFile {
 				return nil, errors.New("Diff is too large")
 			}
-			return hostSides{old, new}, nil
+			return hostSides{Old: old, New: new}, nil
 		}
 		path, err := hostProjectPath(r.Project, r.Path)
 		if err != nil {
@@ -117,7 +117,7 @@ func (c *chatController) prepareHost(r hostRequest) (deferred, error) {
 			entries, err := worktree.ReadDirEntries(r.Project, r.Path)
 			out := make([]hostEntry, 0, len(entries))
 			for _, e := range entries {
-				out = append(out, hostEntry{e.Name, e.Rel, e.Dir})
+				out = append(out, hostEntry{Name: e.Name, Path: e.Rel, Dir: e.Dir})
 			}
 			return out, err
 		case "read":
