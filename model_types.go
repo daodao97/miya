@@ -15,6 +15,7 @@ import (
 	"miya/internal/phone"
 	"miya/internal/phoneapi"
 	"miya/internal/prefs"
+	"miya/internal/runtime/tracker"
 	"miya/internal/svcproto"
 	"miya/internal/threadlist"
 )
@@ -377,4 +378,20 @@ var (
 	threadListCachePath  = threadlist.CachePath
 	threadMetaOf         = threadlist.MetaOf
 	writeThreadListCache = threadlist.Write
+)
+
+// Moved to internal/runtime/tracker.
+type (
+	conversationRuntime = tracker.ConversationRuntime
+	runtimeManager      = tracker.Manager
+	runtimeRequest      = tracker.Request
+	runtimeSnapshot     = tracker.TaskSnapshot
+	runtimeSource       = tracker.SnapshotSource
+)
+
+var (
+	newRuntimeManager    = tracker.NewManager
+	remoteRuntimeRequest = tracker.RemoteRuntimeRequest
+	runtimeKey           = tracker.KeyOf
+	runtimeResult        = tracker.Result
 )

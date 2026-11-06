@@ -5,10 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"miya/internal/async"
-	"miya/internal/remote"
 	rt "miya/internal/runtime"
 	"miya/internal/textutil"
-	"miya/internal/webservice"
 	"time"
 )
 
@@ -47,6 +45,7 @@ func (codexBackend) Runtime(c *chatController, t Thread) runtimeSource {
 		return out, nil
 	}}
 }
+
 func (claudeBackend) Runtime(c *chatController, t Thread) runtimeSource {
 	client := c.claudeRuns[t.ID]
 	caps := rt.Capabilities{Tasks: true, Snapshot: true, SessionRoot: true, RequiresHost: true}
@@ -76,6 +75,7 @@ func (claudeBackend) Runtime(c *chatController, t Thread) runtimeSource {
 		return out, nil
 	}}
 }
+
 func (c *chatController) noteRuntime(t Thread) {
 	if t.ServerID == "" || c.remote != nil || c.closed {
 		return
@@ -112,33 +112,6 @@ func (c *chatController) prepareRuntime(ref ThreadRef, project string) (deferred
 		return runtimeResult(manager, key, view), nil
 	}, nil
 }
-func runtimeResult(manager *runtimeManager, key rt.SessionKey, view rt.View) conversationRuntime {
-	result := conversationRuntime{View: view, Services: []webservice.Service{}}
-	for _, e := range view.Endpoints {
-		if e.Protocol != "http" {
-			continue
-		}
-		name := "Web services"
-		for _, p := range view.Processes {
-			if p.Identity == e.Process {
-				name = p.Name
-				break
-			}
-		}
-		result.Services = append(result.Services, webservice.Service{Port: e.Port, Host: e.Host, Process: name, RuntimeToken: manager.Token(key, e), Owner: &ThreadRef{Source: key.Source, Backend: key.Backend, SessionID: key.SessionID}})
-	}
-	return result
-}
-
-// Deadline-free call sites use the same stable request identity as the phone.
-func remoteRuntimeRequest(ref ThreadRef, project string) remote.Request {
-	return remote.Request{ServerID: ref.SessionID, Agent: ref.Backend, Project: project}
-}
-
-type conversationRuntime struct {
-	View     rt.View              `json:"view"`
-	Services []webservice.Service `json:"services"`
-}
 
 func (c *chatController) readRuntime(ctx context.Context, ref ThreadRef, project string) (conversationRuntime, error) {
 	cl, ok := async.OnMain(ctx, c.dispatch, func() *serviceClient { return c.remote })
@@ -169,9 +142,4 @@ func (c *chatController) readRuntime(ctx context.Context, ref ThreadRef, project
 		return value, nil
 	}
 	return conversationRuntime{}, fmt.Errorf("Invalid runtime data")
-}
-
-type runtimeRequest struct {
-	Ref     ThreadRef
-	Project string
 }
