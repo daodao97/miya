@@ -3,28 +3,11 @@ package main
 import (
 	"os"
 	"path/filepath"
-	"sort"
-	"strings"
 	"sync"
 	"time"
 
 	"miya/internal/remote"
 )
-
-// The phone keeps what it last saw of each desktop on disk, so it shows
-// the conversations at once after a relaunch and asks the desktop only for
-// what changed. Each desktop has a directory of its own, named by its link.
-const (
-	phoneDiskThreads = 50
-	cacheFlushDelay  = 800 * time.Millisecond
-	stateKey         = "\x00state"
-	stateFile        = "state.json.gz"
-)
-
-type phoneSavedState struct {
-	Host  string     `json:"host"`
-	State phoneState `json:"state"`
-}
 
 type mobileCacheWork struct {
 	mu      sync.Mutex
@@ -135,34 +118,6 @@ func (m *mobileApp) flushCache(wait bool) {
 			defer m.cacheWork.pending.Done()
 			write()
 		}()
-	}
-}
-
-// pruneCache keeps the keep most recently written conversations.
-func pruneCache(dir string, keep int) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return
-	}
-	type file struct {
-		name string
-		at   time.Time
-	}
-	var files []file
-	for _, e := range entries {
-		if e.Name() == stateFile || !strings.HasSuffix(e.Name(), ".json.gz") {
-			continue
-		}
-		if info, err := e.Info(); err == nil {
-			files = append(files, file{e.Name(), info.ModTime()})
-		}
-	}
-	if len(files) <= keep {
-		return
-	}
-	sort.Slice(files, func(i, j int) bool { return files[i].at.Before(files[j].at) })
-	for _, f := range files[:len(files)-keep] {
-		os.Remove(filepath.Join(dir, f.name))
 	}
 }
 

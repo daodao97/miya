@@ -18,6 +18,7 @@ import (
 	"miya/internal/msgfmt"
 	"miya/internal/phone"
 	"miya/internal/phoneapi"
+	"miya/internal/phonecache"
 	"miya/internal/prefs"
 	"miya/internal/runtime/tracker"
 	"miya/internal/svcproto"
@@ -536,4 +537,20 @@ var (
 	mcpAccessAccepted       = mcpconfig.AccessAccepted
 	mcpSessionPermissionKey = mcpconfig.SessionPermissionKey
 	rememberableMCPAccess   = mcpconfig.RememberableMCPAccess
+)
+
+// Moved to internal/phonecache.
+type (
+	phoneSavedState = phonecache.SavedState
+)
+
+const (
+	cacheFlushDelay  = phonecache.CacheFlushDelay
+	phoneDiskThreads = phonecache.PhoneDiskThreads
+	stateFile        = phonecache.StateFile
+	stateKey         = phonecache.StateKey
+)
+
+var (
+	pruneCache = phonecache.Prune
 )
