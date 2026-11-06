@@ -325,13 +325,6 @@ func (c *chatController) selectedPermissionPolicy() string {
 	return normalizePermissionPolicy(c.permissionPolicy())
 }
 
-func sandboxForPermissionPolicy(policy string) string {
-	if policy == "never" {
-		return "danger-full-access"
-	}
-	return "workspace-write"
-}
-
 func loadProjects(current string) []Project {
 	seen := map[string]bool{}
 	projects := []Project{}
@@ -1521,29 +1514,6 @@ func (c *chatController) interrupt(t Thread) {
 			c.dispatch(func() { c.update(t.ID, func(t *Thread) { t.Status = "Stop failed: " + err.Error() }) })
 		}
 	}()
-}
-
-// "on-failure" is retained as the stored ID for the existing Help me approve
-// preference; it must not be sent as the protocol's deprecated failure policy.
-func approvalForPermissionPolicy(policy string) string {
-	if normalizePermissionPolicy(policy) == "never" {
-		return "never"
-	}
-	return "on-request"
-}
-
-func reviewerForPermissionPolicy(policy string) string {
-	if policy == "on-failure" {
-		return "auto_review"
-	}
-	return "user"
-}
-
-func turnSandboxForPermissionPolicy(policy string) map[string]any {
-	if policy == "never" {
-		return map[string]any{"type": "dangerFullAccess"}
-	}
-	return map[string]any{"type": "workspaceWrite", "networkAccess": false}
 }
 
 func (c *chatController) permissionForThread(t Thread) string {

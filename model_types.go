@@ -293,3 +293,11 @@ var (
 	persistSetting             = prefs.Save
 	restoreProjectOrder        = prefs.RestoreProjectOrder
 )
+
+// Moved to internal/prefs.
+var (
+	approvalForPermissionPolicy    = prefs.ApprovalForPolicy
+	reviewerForPermissionPolicy    = prefs.ReviewerForPolicy
+	sandboxForPermissionPolicy     = prefs.SandboxForPolicy
+	turnSandboxForPermissionPolicy = prefs.TurnSandboxForPolicy
+)
