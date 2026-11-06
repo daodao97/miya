@@ -345,3 +345,17 @@ var (
 	launchdTarget         = automation.LaunchdTarget
 	removeAutomationAgent = automation.RemoveLaunchAgent
 )
+
+// Moved to internal/account.
+type (
+	accountCaller = account.Caller
+)
+
+var (
+	executeAccountReset    = account.ExecuteReset
+	newAccountResetAttempt = account.NewResetAttempt
+	quotaLabel             = account.QuotaLabel
+	readAccountDisplay     = account.ReadDisplay
+	resetExpiryText        = account.ResetExpiryText
+	resetOutcomeText       = account.ResetOutcomeText
+)
