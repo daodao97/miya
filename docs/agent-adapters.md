@@ -54,3 +54,5 @@ flowchart TD
 - 真实模型、真实远端、可选快照和设备测试仍按原有环境开关跳过。本轮未安装应用或切换生产后台。
 
 Agent 的 MCP 启动参数和访问确认依赖 `internal/mcp/config`、`internal/mcp/access`；协议与工具服务边界见 [MCP 范围与边界](mcp-boundaries.md)。
+
+账号模型、订阅配额与能力目录分别位于 `agent/account`、`agent/quota`、`agent/catalog`。配额通过 Provider 合同接入，具体读取器在各 Agent 的 quota 子包；入口 integrations 负责组合，界面通过 Environment 注入服务。自动化的结构化生成同样通过 DraftGenerator 接入，原生命令与输出解析留在各 Agent 的 generation 子包。记忆管理器依赖工作器接口，旧审批回复由 interaction/legacy 编码，避免通过功能模型把 SDK 间接带入界面。

@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	codex "miya/internal/agent/codex/native"
 	"miya/internal/interaction"
+	"miya/internal/interaction/legacy"
 	"miya/internal/textutil"
 )
 
@@ -50,5 +50,5 @@ func ValidateMobileForm(a interaction.Request, fields map[string]string) (map[st
 // LegacyResponse is the transport bridge for background services that predate
 // normalized interaction responses. Presentation code never builds wire objects.
 func LegacyResponse(a interaction.Request, reply interaction.Response) any {
-	return codex.EncodeResponse(a, reply)
+	return legacy.EncodeResponse(a, reply)
 }

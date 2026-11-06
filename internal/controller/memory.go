@@ -2,6 +2,7 @@ package controller
 
 import (
 	claude "miya/internal/agent/claude/native"
+	"miya/internal/agent/integrations"
 	"miya/internal/chat/model"
 	"miya/internal/memory"
 	"miya/internal/memory/extractor"
@@ -63,3 +64,5 @@ func (c *Controller) memoryChanged() {
 		c.SetRevision(c.Revision() + 1)
 	}
 }
+
+func (h memoryHost) ExtractorAvailable(id string) bool { return integrations.BinaryAvailable(id) }

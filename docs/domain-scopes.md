@@ -19,3 +19,7 @@
 - 后台服务：协议、客户端、镜像状态、远程工作区入口、进程启动与服务生命周期已归入 service；server 通过 Host 接入控制器，不依赖 UI 或原生 Agent。服务与重连相关 race 回归通过。
 - 项目：模型、文件/Git、索引、排序、登记和本机访问合同已归入 project；远程访问位于 service/client，原生项目发现回到 Agent；权限映射和 Claude 设置也已离开通用 prefs。相关 race 回归通过。
 - 运行环境：Web 发现与入口已归入 runtime/web，与已有进程/端点数据和 tracker 同域；运行环境相关 race 回归通过。等待全量验证和完成审计。
+
+## 完整依赖图审计
+
+仅检查直接 import 不足以隔离界面：automation 的生成实现、manager 的具体记忆工作器和 phone 协议的 SDK 编码曾间接把原生 Agent 带回界面。现在分别通过 DraftGenerator、manager.Engine 与纯 legacy 编码合同切断，生成实现回到各 Agent，公共 CLI 配置独立于 SDK。go list 已核实 ui、mobile、chat/view 的完整依赖图没有 controller、agent/codex、agent/claude；测试同时扫描所有平台源文件的间接依赖以维持此边界。

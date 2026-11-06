@@ -9,9 +9,9 @@ import (
 	"time"
 	"unicode/utf8"
 
-	claude "miya/internal/agent/claude/native"
 	"miya/internal/chat/model"
 	"miya/internal/memory"
+	"miya/internal/textutil"
 )
 
 type Turn struct {
@@ -44,7 +44,7 @@ func (mg *Manager) BeginTurn(t model.Thread, req model.SendRequest, firstMessage
 	if req.Steer {
 		return mg.Turns[t.ID].LocalID
 	}
-	turn := Turn{claude.NewSessionID(), firstMessage}
+	turn := Turn{textutil.NewID(), firstMessage}
 	mg.Turns[t.ID] = turn
 	return turn.LocalID
 }

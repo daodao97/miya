@@ -1,6 +1,7 @@
 package automation
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +10,22 @@ import (
 	claude "miya/internal/agent/claude/native"
 	"miya/internal/chat/model"
 )
+
+func TestDraftForUsesInjectedGenerator(t *testing.T) {
+	project := t.TempDir()
+	called := false
+	generate := func(ctx context.Context, dir, prompt, schema string) ([]byte, error) {
+		called = true
+		if ctx.Err() != nil || dir != project || !strings.Contains(prompt, "run the checks every morning") || !strings.Contains(schema, `"time_missing"`) {
+			t.Fatalf("generator lost the request contract: %q %q %q", dir, prompt, schema)
+		}
+		return []byte(`{"name":"Run checks","schedule":"0 9 * * *","check":"go test ./...","rounds":3,"instructions":"Run the checks","time_missing":false}`), nil
+	}
+	draft, err := DraftFor(context.Background(), generate, project, "run the checks every morning", atLocal("2026-11-01 10:00"))
+	if err != nil || !called || draft.Name != "Run checks" || draft.Rounds != 3 || draft.TimeMissing {
+		t.Fatalf("generator result changed: %+v %v", draft, err)
+	}
+}
 
 func TestAutomationDraftPromptAndAnswers(t *testing.T) {
 	dir := t.TempDir()

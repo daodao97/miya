@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	codex "miya/internal/agent/codex/native"
 	"miya/internal/async"
 	"miya/internal/chat/model"
 	"miya/internal/memory"
@@ -144,8 +143,8 @@ func (mg *Manager) Op(op string, r Request) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		_, codexErr := codex.Binary()
-		extractors := []ExtractorOption{{Agent: model.AgentCodex, Available: codexErr == nil}, {Agent: model.AgentClaude, Available: claudeAvailable}}
+		codexAvailable := mg.Host.ExtractorAvailable(model.AgentCodex)
+		extractors := []ExtractorOption{{Agent: model.AgentCodex, Available: codexAvailable}, {Agent: model.AgentClaude, Available: claudeAvailable}}
 		available := func(agent string) bool {
 			for _, option := range extractors {
 				if option.Agent == agent {

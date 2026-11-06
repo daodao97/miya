@@ -1,20 +1,14 @@
 package automation
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
-	claude "miya/internal/agent/claude/native"
-	codex "miya/internal/agent/codex/native"
-	"miya/internal/chat/model"
 	"miya/internal/textutil"
 )
 
@@ -76,17 +70,11 @@ func projectTopFiles(dir string) string {
 
 // DraftFor asks agent to turn request into settings. It runs
 // programs and waits for them: call it off the main thread.
-func DraftFor(ctx context.Context, cfg claude.CLI, agent, project, request string, now time.Time) (Draft, error) {
+func DraftFor(ctx context.Context, generate DraftGenerator, project, request string, now time.Time) (Draft, error) {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 	prompt := automationDraftPrompt(request, project, now)
-	var raw []byte
-	var err error
-	if agent == model.AgentClaude {
-		raw, err = draftWithClaude(ctx, cfg, project, prompt)
-	} else {
-		raw, err = draftWithCodex(ctx, project, prompt)
-	}
+	raw, err := generate(ctx, project, prompt, automationDraftSchema)
 	if err != nil {
 		return Draft{}, err
 	}
@@ -95,51 +83,6 @@ func DraftFor(ctx context.Context, cfg claude.CLI, agent, project, request strin
 		return Draft{}, fmt.Errorf("The agent returned an unexpected format: %v", err)
 	}
 	return d, nil
-}
-
-func draftWithClaude(ctx context.Context, cfg claude.CLI, project, prompt string) ([]byte, error) {
-	bin := cfg.Binary
-	if bin == "" {
-		var err error
-		if bin, err = claude.Binary(); err != nil {
-			return nil, err
-		}
-	}
-	args := append(append([]string(nil), cfg.Args...), "-p", prompt, "--json-schema", automationDraftSchema, "--output-format", "json", "--tools", "")
-	cmd := exec.CommandContext(ctx, bin, args...)
-	cmd.Dir = project
-	cmd.Env = append(os.Environ(), cfg.Env...)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	out, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("Claude Code could not draft the automation: %v %s", err, textutil.ClipRunes(strings.TrimSpace(stderr.String()), 300))
-	}
-	return claude.StructuredOutput(out, "draft the automation")
-}
-
-func draftWithCodex(ctx context.Context, project, prompt string) ([]byte, error) {
-	bin, err := codex.Binary()
-	if err != nil {
-		return nil, err
-	}
-	dir, err := os.MkdirTemp("", "miya-draft-")
-	if err != nil {
-		return nil, err
-	}
-	defer os.RemoveAll(dir)
-	schema, last := filepath.Join(dir, "schema.json"), filepath.Join(dir, "last.json")
-	if err := os.WriteFile(schema, []byte(automationDraftSchema), 0o600); err != nil {
-		return nil, err
-	}
-	cmd := exec.CommandContext(ctx, bin, "exec", "--skip-git-repo-check", "--ephemeral", "--sandbox", "read-only", "--output-schema", schema, "-o", last, prompt)
-	cmd.Dir = project
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("Codex could not draft the automation: %v %s", err, textutil.ClipRunes(textutil.LastLine(stderr.String()), 300))
-	}
-	return os.ReadFile(last)
 }
 
 // FromDraft checks what the agent made and fills the rest.
@@ -177,3 +120,6 @@ func stripProjectCd(check, project string) string {
 	}
 	return check
 }
+
+// DraftGenerator returns structured output without executing the drafted automation.
+type DraftGenerator func(context.Context, string, string, string) ([]byte, error)

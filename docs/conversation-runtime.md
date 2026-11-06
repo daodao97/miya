@@ -12,7 +12,7 @@ Status: Implemented（通用运行态、Codex/Claude 适配及两端视图已实
 
 ## Background / 背景与动机
 
-改造前，[internal/webservice/discovery.go](../internal/webservice/discovery.go) 通过监听进程的工作目录判断项目归属，再用 HTTP HEAD 探测端口。这能找到项目中的网站，却回答不了「它由哪个对话启动、当前是否仍由那个 Agent 持有」。
+改造前，[internal/runtime/web/discovery.go](../internal/runtime/web/discovery.go) 通过监听进程的工作目录判断项目归属，再用 HTTP HEAD 探测端口。这能找到项目中的网站，却回答不了「它由哪个对话启动、当前是否仍由那个 Agent 持有」。
 
 例如同一项目的对话 A 启动 `npm run dev`，对话 B 启动 API。两者工作目录相同。当前实现会在两个对话里显示同一组端口；进程切换到其他目录后又可能被漏掉。这是归属依据不足，继续增加目录规则解决不了。
 

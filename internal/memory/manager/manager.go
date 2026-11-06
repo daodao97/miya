@@ -5,9 +5,9 @@
 package manager
 
 import (
+	"miya/internal/agent/cli"
 	"miya/internal/chat/model"
 	"miya/internal/memory"
-	"miya/internal/memory/extractor"
 )
 
 // Host is what the manager needs from the controller that owns the
@@ -26,6 +26,7 @@ type Host interface {
 	Projects() (cwd string, paths []string)
 	// ClaudeBinary is the Claude Code executable, "" when none is found.
 	ClaudeBinary() string
+	ExtractorAvailable(string) bool
 	// Changed tells windows the memory library changed.
 	Changed()
 }
@@ -34,8 +35,16 @@ type Host interface {
 type Manager struct {
 	Store   *memory.Store // non-nil only in the background service
 	Calls   int           // executor-owned; pending IO prevents idle service exit
-	Engine  *extractor.Engine
+	Engine  Engine
 	Turns   map[int]Turn
 	results map[string]bool
 	Host    Host
+}
+
+type Engine interface {
+	Wakeup()
+	Configure(cli.Config)
+	Pause()
+	Stop()
+	Busy() bool
 }

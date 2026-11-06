@@ -5,15 +5,13 @@ import (
 	"errors"
 	"fmt"
 
+	"miya/internal/agent/cli"
 	"miya/internal/textutil"
 )
 
 // CLI is how this Miya runs Claude Code: one-off calls such as drafting an
 // automation or extracting memories reuse it.
-type CLI struct {
-	Binary    string
-	Args, Env []string
-}
+type CLI = cli.Config
 
 // StructuredOutput is the answer of a Claude Code --json-schema run. task
 // says what the run was for, as its error reports: "draft the automation".
