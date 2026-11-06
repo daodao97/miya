@@ -1,7 +1,5 @@
 package model
 
-import ()
-
 // Resumed and writer ownership are valid only for the current app-server.
 // Claude's Resumed instead describes its persisted CLI session.
 func ResetCodexSession(t *Thread) {

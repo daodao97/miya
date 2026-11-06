@@ -37,7 +37,7 @@ var miyaTrayIcon = sync.OnceValue(func() []byte {
 })
 
 func UsageTrayIconFor(agent string) []byte {
-	if agent == "codex" || agent == "claude" {
+	if supportedUsageAgent(agent) {
 		if data, err := usageTrayAssets.ReadFile("assets/tray/" + agent + ".png"); err == nil {
 			return data
 		}

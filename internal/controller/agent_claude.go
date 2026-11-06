@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"miya/internal/agentmeta"
+
 	"miya/internal/agent"
 
 	"miya/internal/appmodel"
@@ -24,13 +26,8 @@ func (b claudeBackend) ID() string { return appmodel.AgentClaude }
 
 func (b claudeBackend) Name() string { return model.AgentName(model.AgentClaude) }
 
-func (b claudeBackend) Icon() agent.Icon {
-	return agent.Icon{SVG: "claude-code", Color: "#c46b4d"}
-}
-
-func (b claudeBackend) Caps() agent.Capabilities {
-	return agent.Capabilities{Models: true, Effort: true, StallHint: true}
-}
+func (b claudeBackend) Icon() agentmeta.Icon         { return agentmeta.For(b.ID()).Icon }
+func (b claudeBackend) Caps() agentmeta.Capabilities { return agentmeta.For(b.ID()).Capabilities }
 
 func (b claudeBackend) Discover() { c := b.C; c.loadClaudeSessions() }
 

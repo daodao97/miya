@@ -15,9 +15,6 @@ func (c *Controller) AgentSettings() []agent.Setting {
 	}
 	return out
 }
-func (c *Controller) KnownClaudeCommands(cwd string) []model.ComposerChoice {
-	return c.ClaudeCmdCache[cwd].Choice
-}
 func (c *Controller) SavedReferenceTitle(ref model.ThreadRef) (string, bool) {
 	if ref.Source != c.ReferenceSource {
 		return "", false

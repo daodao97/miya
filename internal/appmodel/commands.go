@@ -1,14 +1,12 @@
 package appmodel
 
 import (
-	"strings"
+	"miya/internal/agent"
+	"miya/internal/agentmeta"
 )
 
-var AppUICommands = map[string]bool{"new": true, "model": true, "permissions": true, "mention": true, "diff": true, "status": true}
+var AppUICommands = agent.HostCommands
 
-// claudeTakesCommand reports whether a slash command, without its slash,
-// goes to Claude Code as a message.
-func ClaudeTakesCommand(agent, command string) bool {
-	name, _, _ := strings.Cut(strings.TrimSpace(command), " ")
-	return agent == AgentClaude && !AppUICommands[name]
+func ClaudeTakesCommand(id, command string) bool {
+	return (agent.CommandCatalog{Native: agentmeta.For(id).NativeCommands}).TakesCommand(command)
 }

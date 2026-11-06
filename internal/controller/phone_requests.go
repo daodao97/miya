@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"miya/internal/agentmeta"
+
 	"github.com/egoist/mygo/push/apns"
 
 	"miya/internal/appdir"
@@ -44,6 +46,7 @@ type phoneSession struct {
 	fetched           bool
 	pending           *PhoneSendReq
 	cmdWant           string
+	cmdAgent          string
 }
 
 type previewRequest struct {
@@ -465,5 +468,9 @@ func (ps *phoneSession) onRespond(r remote.Request) bool {
 // onCommands answers a phone's "commands" request; false ends the connection.
 func (ps *phoneSession) onCommands(r remote.Request) bool {
 	ps.cmdWant = r.Project
+	ps.cmdAgent = r.Agent
+	if ps.cmdAgent == "" {
+		ps.cmdAgent = agentmeta.LegacyCommandAgent()
+	}
 	return true
 }

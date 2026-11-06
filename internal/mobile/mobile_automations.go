@@ -479,7 +479,7 @@ func (m *App) AutomationRunThread(v automation.View, r automation.Run) (model.Th
 			continue
 		}
 		for _, t := range p.Threads {
-			if model.ThreadAgent(t) != textutil.FirstNonEmpty(v.Agent, appmodel.AgentCodex) {
+			if model.ThreadAgent(t) != textutil.FirstNonEmpty(v.Agent, m.defaultAgent()) {
 				continue
 			}
 			if r.ServerID != "" && t.ServerID == r.ServerID || r.ServerID == "" && r.Thread != 0 && t.ID == r.Thread {

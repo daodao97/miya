@@ -6,6 +6,8 @@ package phoneapi
 import (
 	"encoding/json"
 
+	"miya/internal/agentmeta"
+
 	"miya/internal/automation"
 	"miya/internal/codex"
 	"miya/internal/memory/manager"
@@ -83,9 +85,11 @@ type ModelOption struct {
 }
 
 type AgentOptions struct {
-	Agent   string             `json:"agent"`
-	Current remote.SendOptions `json:"current"`
-	Models  []ModelOption      `json:"models"`
+	Commands   []model.ComposerChoice `json:"commands,omitempty"`
+	Descriptor agentmeta.Descriptor   `json:"descriptor,omitempty"`
+	Agent      string                 `json:"agent"`
+	Current    remote.SendOptions     `json:"current"`
+	Models     []ModelOption          `json:"models"`
 }
 
 // Only subscription usage is shared, never account identity or credentials.
@@ -128,8 +132,9 @@ type CollaborationResult struct {
 	Result    any    `json:"result,omitempty"`
 }
 
-// Commands is a project's Claude Code commands, for the phone.
+// Commands is a project and agent's command catalog. Untagged messages are from legacy servers.
 type Commands struct {
+	Agent    string                 `json:"agent,omitempty"`
 	Project  string                 `json:"project"`
 	Commands []model.ComposerChoice `json:"commands"`
 }

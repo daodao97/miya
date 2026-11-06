@@ -7,7 +7,6 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"miya/internal/appmodel"
 	"miya/internal/phoneapi"
 	"miya/internal/widgets"
 )
@@ -35,10 +34,7 @@ func (m *App) drawerQuotas(c *ui.Context) {
 	p := m.Pal
 	ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
 		for _, q := range quotas {
-			name := "Codex"
-			if q.Agent == appmodel.AgentClaude {
-				name = "Claude"
-			}
+			name := m.agentDescriptor(q.Agent).Name
 			cc := c.Key(q.Agent)
 			button := m.phoneButton(cc).MinHeight(44).Padding(0).Gap(5).Radius(12).Label(name + tr(" quota"))
 			button.Children(func() {

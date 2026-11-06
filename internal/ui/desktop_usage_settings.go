@@ -3,8 +3,9 @@ package desktopui
 import (
 	"github.com/egoist/mygo/ui"
 
+	"miya/internal/agentmeta"
+
 	"miya/internal/agentusage"
-	"miya/internal/appmodel"
 	"miya/internal/prefs"
 	"miya/internal/widgets"
 )
@@ -38,13 +39,17 @@ func (app *App) usageSettings(c *ui.Context) {
 			},
 			func() {
 				widgets.SettingRow(c, tr("Account to show"), "", func() {
-					agents, index := []string{"", "codex", "claude"}, 0
+					agents, index := append([]string{""}, usageAgents()...), 0
+					labels := []string{tr("Automatic")}
+					for _, id := range agents[1:] {
+						labels = append(labels, agentusage.AgentName(id))
+					}
 					for i, agent := range agents {
 						if d.Prefs.Agent == agent {
 							index = i
 						}
 					}
-					if ui.Segmented(c, &index, tr("Automatic"), "Codex", "Claude").Label(tr("Tray account")).Changed() {
+					if ui.Segmented(c, &index, labels...).Label(tr("Tray account")).Changed() {
 						d.Prefs.Agent = agents[index]
 						prefs.Save("usageTrayAgent", d.Prefs.Agent)
 						app.syncUsageTray()
@@ -72,21 +77,17 @@ func (app *App) usageSettings(c *ui.Context) {
 		ui.Column(c).FillWidth().Gap(8).Children(func() {
 			ui.Text(c, tr("Account")).FontSize(12).FontWeight(600).TextColor(widgets.Muted).PaddingX(4)
 			ui.Column(c).FillWidth().Gap(12).Children(func() {
-				for _, agent := range []string{"codex", "claude"} {
+				for _, agent := range usageAgents() {
 					r := d.reading(agent)
 					widgets.SettingsCard(c.Key(agent)).Gap(14).Children(func() {
 						ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
-							name := appmodel.AgentCodex
-							if agent == "claude" {
-								name = appmodel.AgentClaude
-							}
-							widgets.AgentIcon(c, name, 18)
+							widgets.AgentIcon(c, agentmeta.UsageFor(agent).ID, 18)
 							ui.Text(c, agentusage.AgentName(agent)).Grow(1).FontSize(14).FontWeight(600)
 							if r.Plan != "" {
 								badge(c, r.Plan)
 							}
 						})
-						if agent == "codex" && d.ResetOpen {
+						if agentmeta.UsageFor(agent).UsageReset && d.ResetOpen {
 							app.usageResetConfirmation(c, r)
 							return
 						}
@@ -96,7 +97,7 @@ func (app *App) usageSettings(c *ui.Context) {
 						for _, w := range r.Windows {
 							usagePanelWindow(c, w, palette)
 						}
-						if agent == "codex" {
+						if agentmeta.UsageFor(agent).UsageReset {
 							app.usageResetSection(c, r, false)
 						}
 						ui.Text(c, UsagePanelStatus(r, d.Busy, c.Now())).FontSize(11).TextColor(widgets.Muted)

@@ -16,9 +16,10 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/markdown"
 
+	"miya/internal/agent"
+	"miya/internal/agentmeta"
 	"miya/internal/appmodel"
 	"miya/internal/codex"
-	"miya/internal/composer"
 	"miya/internal/conversation"
 	"miya/internal/desktop/control"
 	"miya/internal/memory/manager"
@@ -689,7 +690,10 @@ func (m *App) read(gen int, conn *remote.Conn) (greeted bool, err error) {
 					if pc.Commands == nil {
 						pc.Commands = []model.ComposerChoice{}
 					}
-					m.Commands[pc.Project] = pc.Commands
+					if pc.Agent == "" {
+						pc.Agent = agentmeta.LegacyCommandAgent()
+					}
+					m.Commands[agent.CommandKey(pc.Agent, pc.Project)] = pc.Commands
 				})
 			}
 		case "sent":
@@ -1572,7 +1576,7 @@ func (m *App) threadView(c *ui.Context) {
 		title, agent, busy, proj = tr("New conversation"), m.NewAgent, false, m.project(m.NewProject)
 	}
 	if agent == "" {
-		agent = appmodel.AgentCodex
+		agent = m.defaultAgent()
 	}
 	if title == "" {
 		title = tr("Conversations")
@@ -1633,8 +1637,9 @@ func (m *App) newConversationView(c *ui.Context, proj phoneapi.Project) {
 				}
 			})
 			ui.Row(c).FillWidth().Wrap().Justify(ui.Center).Gap(8).Children(func() {
-				for _, a := range []string{appmodel.AgentCodex, appmodel.AgentClaude} {
-					if m.pill(c, "agent:"+a, appmodel.AgentName(a), agent == a).Clicked() {
+				for _, descriptor := range m.agentDescriptors() {
+					a := descriptor.ID
+					if m.pill(c, "agent:"+a, descriptor.Name, agent == a).Clicked() {
 						m.NewAgent = a
 					}
 				}
@@ -1650,7 +1655,7 @@ func (m *App) composerAgent() string {
 	if m.State.Agent != "" {
 		return m.State.Agent
 	}
-	return appmodel.AgentCodex
+	return m.defaultAgent()
 }
 
 // composer is the floating message box: the agent, the text, the model's
@@ -1868,26 +1873,30 @@ func (m *App) ComposerProject() string {
 
 // requestCommands asks the desktop for a project's Claude Code commands,
 // once per connection.
-func (m *App) requestCommands(project string) {
+func (m *App) requestCommands(id, project string) {
 	conn := m.Conn
-	if project == "" || conn == nil || m.Asked[project] {
+	key := agent.CommandKey(id, project)
+	if project == "" || conn == nil || m.Asked[key] {
 		return
 	}
 	if m.Asked == nil {
 		m.Asked = map[string]bool{}
 	}
-	m.Asked[project] = true
-	go conn.Send(remote.Request{Op: "commands", Project: project})
+	m.Asked[key] = true
+	go conn.Send(remote.Request{Op: "commands", Agent: id, Project: project})
 }
 
-func (m *App) composerCommands(agent, project string) ([]model.ComposerChoice, bool) {
-	if agent == appmodel.AgentClaude {
-		cmds, known := m.Commands[project]
-		return cmds, known
+func (m *App) composerCommands(id, project string) ([]model.ComposerChoice, bool) {
+	if m.agentDescriptor(id).NativeCommands {
+		return m.commandChoices(id, project)
 	}
-	goal := composer.ComposerCommands[0]
-	goal.Detail = tr("Set a goal · /goal pause · /goal resume · /goal clear")
-	return []model.ComposerChoice{goal}, true
+	for _, option := range m.State.Agents {
+		if option.Agent == id && option.Commands != nil {
+			return option.Commands, true
+		}
+	}
+	fallback := agent.DefaultCommands(id)
+	return fallback.PhoneChoices, fallback.Known
 }
 
 // commandMenu lists commands while the draft is a slash and a command's beginning.
@@ -1898,8 +1907,8 @@ func (m *App) commandMenu(c *ui.Context, agent, project string) {
 	}
 	p := m.Pal
 	q := strings.ToLower(d[1:])
-	if agent == appmodel.AgentClaude {
-		m.requestCommands(project)
+	if m.agentDescriptor(agent).NativeCommands {
+		m.requestCommands(agent, project)
 	}
 	cmds, known := m.composerCommands(agent, project)
 	var shown []model.ComposerChoice
@@ -1913,7 +1922,7 @@ func (m *App) commandMenu(c *ui.Context, agent, project string) {
 		case !known:
 			ui.Row(c).Gap(8).Padding(10).AlignItems(ui.Center).Children(func() {
 				ui.Spinner(c).FontSize(m.Font(12))
-				ui.Text(c, tr("Loading Claude Code commands…")).FontSize(m.Font(13)).TextColor(p.muted)
+				ui.Text(c, tr("Loading commands…")).FontSize(m.Font(13)).TextColor(p.muted)
 			})
 		case len(shown) == 0:
 			ui.Text(c, tr("No matching commands")).FontSize(m.Font(13)).TextColor(p.muted).Padding(10)

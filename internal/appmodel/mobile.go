@@ -4,12 +4,7 @@ import (
 	model "miya/internal/model"
 )
 
-func AgentName(agent string) string {
-	if agent == AgentClaude {
-		return "Claude Code"
-	}
-	return "Codex"
-}
+func AgentName(id string) string { return model.AgentName(id) }
 
 func SameMessageOrder(messages []model.Message, order []int) bool {
 	if len(messages) != len(order) {

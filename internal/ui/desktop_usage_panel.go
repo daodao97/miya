@@ -6,6 +6,8 @@ import (
 	"runtime"
 	"time"
 
+	"miya/internal/agentmeta"
+
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
@@ -26,7 +28,7 @@ func (d *DesktopUsage) reading(agent string) agentusage.Reading {
 }
 
 func (d *DesktopUsage) Height() int {
-	if d.PanelAgent == "codex" && d.ResetOpen {
+	if agentmeta.UsageFor(d.PanelAgent).UsageReset && d.ResetOpen {
 		return 304
 	}
 	r := d.reading(d.PanelAgent)
@@ -43,7 +45,7 @@ func (d *DesktopUsage) Height() int {
 			height += 22
 		}
 	}
-	if d.PanelAgent == "codex" && (r.Resets != nil || d.resetMessage != "") {
+	if agentmeta.UsageFor(d.PanelAgent).UsageReset && (r.Resets != nil || d.resetMessage != "") {
 		height += 96
 	}
 	return min(480, height)
@@ -70,7 +72,7 @@ func (app *App) toggleUsagePanel() {
 			d.PanelAgent = r.Agent
 		}
 		if d.PanelAgent == "" {
-			d.PanelAgent = "codex"
+			d.PanelAgent = agentmeta.Usage()[0].UsageID
 		}
 	}
 	d.panelHeight = d.Height()
@@ -139,7 +141,7 @@ func (app *App) UsagePanelView(c *ui.Context) {
 		return
 	}
 	if d.PanelAgent == "" {
-		d.PanelAgent = "codex"
+		d.PanelAgent = agentmeta.Usage()[0].UsageID
 	}
 	t, p := app.usageTheme(c)
 	c.SetTheme(t)
@@ -154,11 +156,13 @@ func (app *App) UsagePanelView(c *ui.Context) {
 	}
 	box.Children(func() {
 		ui.Row(c).FillWidth().Height(UsagePanelHeader).Padding(10, 12).Gap(6).AlignItems(ui.Center).Children(func() {
-			agents, selected := []string{"codex", "claude"}, 0
-			if d.PanelAgent == "claude" {
-				selected = 1
+			agents, selected := usageAgents(), 0
+			for i, id := range agents {
+				if id == d.PanelAgent {
+					selected = i
+				}
 			}
-			tabs := ui.TabsBase(c, &selected, 2)
+			tabs := ui.TabsBase(c, &selected, len(agents))
 			tabs.List.Gap(4).Children(func() {
 				for i, agent := range agents {
 					tab := tabs.Tab(i).Height(30).Padding(0, 10).Gap(6).Radius(6).AlignItems(ui.Center).Label(tr("View ") + agentusage.AgentName(agent) + tr(" usage"))
@@ -170,11 +174,7 @@ func (app *App) UsagePanelView(c *ui.Context) {
 						tab.Background(t.Surface)
 					}
 					tab.Children(func() {
-						glyph := "brand-openai"
-						if agent == "claude" {
-							glyph = "claude-code"
-						}
-						widgets.Icon(c, glyph, 14, color)
+						widgets.AgentIcon(c, agentmeta.UsageFor(agent).ID, 14)
 						ui.Text(c, agentusage.AgentName(agent)).FontSize(12).FontWeight(500).TextColor(color)
 					})
 				}
@@ -190,7 +190,7 @@ func (app *App) UsagePanelView(c *ui.Context) {
 		})
 		r := d.reading(d.PanelAgent)
 		ui.Scroll(c.Key("usage-"+d.PanelAgent)).FillWidth().Grow(1).MinHeight(0).Padding(12, 18, 20, 18).Gap(22).Children(func() {
-			if d.PanelAgent == "codex" && d.ResetOpen {
+			if agentmeta.UsageFor(d.PanelAgent).UsageReset && d.ResetOpen {
 				app.usageResetConfirmation(c, r)
 				return
 			}
@@ -200,7 +200,7 @@ func (app *App) UsagePanelView(c *ui.Context) {
 			for _, w := range r.Windows {
 				usagePanelWindow(c, w, p)
 			}
-			if d.PanelAgent == "codex" {
+			if agentmeta.UsageFor(d.PanelAgent).UsageReset {
 				app.usageResetSection(c, r, true)
 			}
 		})

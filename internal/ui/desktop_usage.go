@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"miya/internal/agentmeta"
+
 	"github.com/egoist/mygo"
 
 	"miya/internal/agentusage"
@@ -24,7 +26,7 @@ type UsagePreferences struct {
 
 func LoadUsagePreferences() UsagePreferences {
 	p := UsagePreferences{Hidden: prefs.Load("usageTray") == "off", AgentIcon: prefs.Load("usageTrayIcon") == "agent", Agent: prefs.Load("usageTrayAgent")}
-	if p.Agent != "codex" && p.Agent != "claude" {
+	if !supportedUsageAgent(p.Agent) {
 		p.Agent = ""
 	}
 	return p
@@ -102,14 +104,18 @@ func (app *App) refreshUsage() {
 	}
 	go func() {
 		defer cancel()
-		readings := make([]agentusage.Reading, 2)
+		providers := agentmeta.Usage()
+		readings := make([]agentusage.Reading, len(providers))
 		if cl != nil {
 			if err := cl.Call("host", svcproto.HostRequest{Action: "usage"}, &readings); err != nil {
-				readings = []agentusage.Reading{{Agent: "codex", Error: err.Error()}, {Agent: "claude", Error: err.Error()}}
+				for i, p := range providers {
+					readings[i] = agentusage.Reading{Agent: p.UsageID, Error: err.Error()}
+				}
 			}
 		} else {
 			var wg sync.WaitGroup
-			for i, agent := range []string{"codex", "claude"} {
+			for i, provider := range providers {
+				agent := provider.UsageID
 				wg.Go(func() { readings[i] = agentusage.Read(ctx, agent) })
 			}
 			wg.Wait()
@@ -170,7 +176,7 @@ func (app *App) syncUsageTray() {
 			agent = r.Agent
 		}
 		if agent == "" {
-			agent = "codex"
+			agent = agentmeta.Usage()[0].UsageID
 		}
 	}
 	tip, title := usageTrayTip(r), agentusage.TrayTitle(r)
@@ -237,4 +243,20 @@ func (app *App) usageTrayMenu() *mygo.Menu {
 		mygo.Separator(),
 		{Label: tr("Quit Miya"), Click: func(*mygo.MenuItem, *mygo.Window) { mygo.App.Quit() }},
 	})
+}
+
+func usageAgents() []string {
+	var out []string
+	for _, d := range agentmeta.Usage() {
+		out = append(out, d.UsageID)
+	}
+	return out
+}
+func supportedUsageAgent(id string) bool {
+	for _, candidate := range usageAgents() {
+		if candidate == id {
+			return true
+		}
+	}
+	return false
 }

@@ -3,19 +3,11 @@
 package agent
 
 import (
+	"miya/internal/agentmeta"
 	"miya/internal/codex"
 	"miya/internal/model"
 	"miya/internal/runtime/tracker"
 )
-
-type Capabilities struct {
-	Models, Effort, Quota, ThreadCommands, StallHint bool
-}
-
-type Icon struct {
-	SVG, Color string
-	PNG        []byte
-}
 
 type Setting struct {
 	ID, Title, Help, Placeholder string
@@ -28,7 +20,8 @@ type Setting struct {
 // state remain behind this interface.
 type Controls interface {
 	Name() string
-	Caps() Capabilities
+	Commands(project string, load bool) CommandCatalog
+	Caps() agentmeta.Capabilities
 	Problem() (string, bool)
 	Reconnect()
 	ModelChoices() []string
@@ -45,7 +38,7 @@ type Controls interface {
 type Adapter interface {
 	Controls
 	ID() string
-	Icon() Icon
+	Icon() agentmeta.Icon
 	Runtime(model.Thread) tracker.SnapshotSource
 	Discover()
 	Ready() bool
@@ -58,6 +51,7 @@ type Adapter interface {
 	Owns(codex.Approval) bool
 	Respond(codex.Approval, any)
 	Settings() []Setting
+	ModelOptions() []ModelOption
 	CanRewind(model.Thread, model.Message) bool
 	Rewind(model.Thread, model.Message, string)
 	Steer(model.Thread, model.SendRequest) bool

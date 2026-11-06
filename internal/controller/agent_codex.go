@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"miya/internal/agentmeta"
+
 	"miya/internal/agent"
 
 	"miya/internal/appmodel"
@@ -49,13 +51,8 @@ func (b CodexBackend) ID() string { return appmodel.AgentCodex }
 
 func (b CodexBackend) Name() string { return model.AgentName(model.AgentCodex) }
 
-func (b CodexBackend) Icon() agent.Icon {
-	return agent.Icon{PNG: appmodel.CodexAgentPNG}
-}
-
-func (b CodexBackend) Caps() agent.Capabilities {
-	return agent.Capabilities{Models: true, Effort: true, Quota: true, ThreadCommands: true}
-}
+func (b CodexBackend) Icon() agentmeta.Icon         { return agentmeta.For(b.ID()).Icon }
+func (b CodexBackend) Caps() agentmeta.Capabilities { return agentmeta.For(b.ID()).Capabilities }
 
 // Discover connects, which lists the workspace's threads once connected.
 func (b CodexBackend) Discover() { c := b.C; c.Connect() }

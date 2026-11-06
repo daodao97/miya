@@ -259,7 +259,7 @@ func (app *App) SendDraft(steer bool) {
 	c := app.C
 	// In a Claude Code conversation, the commands Miya does not run itself
 	// (skills, custom commands, /compact…) go to Claude Code as messages.
-	if command, ok := composer.SlashCommand(c.State().Draft()); ok && !appmodel.ClaudeTakesCommand(c.CurrentAgent(), command) {
+	if command, ok := composer.SlashCommand(c.State().Draft()); ok && !c.CurrentAgentControls().Commands(c.State().Cwd, false).TakesCommand(command) {
 		app.Notice = ""
 		clear := func() { c.RememberDraft(""); app.menu = "" }
 		if _, goal, _ := codex.ParseGoalCommand("/" + command); goal {

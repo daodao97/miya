@@ -4,39 +4,20 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+
+	"miya/internal/agentmeta"
 )
 
-// Agent backend IDs. main lists an adapter for each in agentBackends;
-// TestModelBackendsMatchAgentBackends keeps the two lists equal.
+// Stable IDs are retained in saved references and older wire formats.
 const (
-	AgentCodex  = "codex"
-	AgentClaude = "claude-code"
+	AgentCodex  = agentmeta.Codex
+	AgentClaude = agentmeta.Claude
 )
 
-// Backends are the agent backend IDs, in agentBackends' order.
-var Backends = []string{AgentCodex, AgentClaude}
+var Backends = agentmeta.IDs()
 
-// agentNames are the backends' display names.
-var agentNames = map[string]string{AgentCodex: "Codex", AgentClaude: "Claude Code"}
-
-// AgentName is a backend's display name. An unknown ID gets the first
-// backend's, as main's backendFor falls back to it.
-func AgentName(id string) string {
-	if n, ok := agentNames[id]; ok {
-		return n
-	}
-	return agentNames[Backends[0]]
-}
-
-// RegisteredBackend reports whether id names an agent backend.
-func RegisteredBackend(id string) bool {
-	for _, b := range Backends {
-		if b == id {
-			return true
-		}
-	}
-	return false
-}
+func AgentName(id string) string       { return agentmeta.For(id).Name }
+func RegisteredBackend(id string) bool { _, ok := agentmeta.Lookup(id); return ok }
 
 // SourceIDPattern matches the ID of a Miya installation in a thread URL.
 var SourceIDPattern = regexp.MustCompile(`^[0-9a-f]{32}$`)
@@ -72,19 +53,7 @@ type MessagePart struct {
 
 // NormalizeAgentID maps an agent name a user or agent wrote to its backend
 // ID, or "" when it names no backend.
-func NormalizeAgentID(id string) string {
-	normalized := strings.ToLower(strings.TrimSpace(id))
-	if RegisteredBackend(normalized) {
-		return normalized
-	}
-	switch normalized {
-	case AgentCodex:
-		return AgentCodex
-	case AgentClaude, "claude", "claude code":
-		return AgentClaude
-	}
-	return ""
-}
+func NormalizeAgentID(id string) string { return agentmeta.Normalize(id) }
 
 // ThreadAgent is a conversation's agent; conversations from before agents
 // were recorded are Codex's.

@@ -12,6 +12,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"miya/internal/agent"
+
 	"miya/internal/appmodel"
 	"miya/internal/async"
 	"miya/internal/claude"
@@ -378,17 +380,13 @@ func (c *Controller) ServePhoneConnection(ctx context.Context, conn phoneConnect
 		}
 		if ps.cmdWant != "" {
 			project := ps.cmdWant
-			type known struct {
-				list []model.ComposerChoice
-				ok   bool
-			}
-			k, ok := async.OnMain(ctx, c.Dispatch, func() known { l, ok := c.ClaudeCommandsFor(project); return known{l, ok} })
+			k, ok := async.OnMain(ctx, c.Dispatch, func() agent.CommandCatalog { return c.BackendFor(ps.cmdAgent).Commands(project, true) })
 			if !ok {
 				return
 			}
-			if k.ok {
+			if k.Known {
 				ps.cmdWant = ""
-				data, _ := json.Marshal(phoneapi.Commands{Project: project, Commands: k.list})
+				data, _ := json.Marshal(phoneapi.Commands{Agent: ps.cmdAgent, Project: project, Commands: k.PhoneChoices})
 				if !send(remote.Frame{Type: "commands", Data: data}) {
 					return
 				}

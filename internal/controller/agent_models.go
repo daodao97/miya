@@ -3,6 +3,8 @@ package controller
 import (
 	"slices"
 
+	"miya/internal/agent"
+
 	"miya/internal/appmodel"
 	"miya/internal/claude"
 	"miya/internal/codex"
@@ -130,4 +132,45 @@ func (c *Controller) AgentSpeedBadge(agent string) string {
 		return "2x"
 	}
 	return ""
+}
+
+func (b CodexBackend) ModelOptions() []agent.ModelOption {
+	c := b.C
+	choices := []string{}
+	if c.Models != nil {
+		choices = b.ModelChoices()
+	} else if b.Model() != "" {
+		choices = append(choices, b.Model())
+	}
+	if !slices.Contains(choices, "") {
+		choices = append([]string{""}, choices...)
+	}
+	var out []agent.ModelOption
+	for _, value := range choices {
+		option := agent.ModelOption{Value: value, Label: b.ModelLabel(value)}
+		if c.Models != nil {
+			for _, m := range c.Models() {
+				if m.Model == value || value == "" && m.IsDefault {
+					option.DefaultEffort = m.DefaultReasoningEffort
+					for _, e := range m.SupportedReasoningEfforts {
+						option.Efforts = append(option.Efforts, e.ReasoningEffort)
+					}
+					break
+				}
+			}
+		}
+		if len(option.Efforts) == 0 && value == b.Model() && b.Effort() != "" {
+			option.Efforts = []string{b.Effort()}
+			option.DefaultEffort = b.Effort()
+		}
+		out = append(out, option)
+	}
+	return out
+}
+func (b claudeBackend) ModelOptions() []agent.ModelOption {
+	var out []agent.ModelOption
+	for _, value := range b.ModelChoices() {
+		out = append(out, agent.ModelOption{Value: value, Label: b.ModelLabel(value), Efforts: append([]string(nil), b.EffortChoices()...)})
+	}
+	return out
 }

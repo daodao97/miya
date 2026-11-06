@@ -7,6 +7,8 @@ import (
 	"slices"
 	"strings"
 
+	"miya/internal/agentmeta"
+
 	"miya/internal/account"
 	"miya/internal/appmodel"
 	"miya/internal/model"
@@ -18,37 +20,10 @@ func (c *Controller) phoneAgentOptions() []phoneapi.AgentOptions {
 	var out []phoneapi.AgentOptions
 	for _, b := range c.Adapters() {
 		a := phoneapi.AgentOptions{Agent: b.ID(), Current: remote.SendOptions{Model: b.Model(), Effort: b.Effort(), Policy: c.SelectedPermissionPolicy()}}
-		var choices []string
-		if b.ID() == appmodel.AgentCodex && c.Models == nil {
-			if a.Current.Model != "" {
-				choices = []string{a.Current.Model}
-			}
-		} else {
-			choices = b.ModelChoices()
-		}
-		if !slices.Contains(choices, "") {
-			choices = append([]string{""}, choices...)
-		}
-		for _, value := range choices {
-			m := phoneapi.ModelOption{Value: value, Label: b.ModelLabel(value)}
-			if b.ID() == appmodel.AgentClaude {
-				m.Efforts = b.EffortChoices()
-			} else if c.Models != nil {
-				for _, model := range c.Models() {
-					if model.Model == value || value == "" && model.IsDefault {
-						m.DefaultEffort = model.DefaultReasoningEffort
-						for _, e := range model.SupportedReasoningEfforts {
-							m.Efforts = append(m.Efforts, e.ReasoningEffort)
-						}
-						break
-					}
-				}
-			}
-			if len(m.Efforts) == 0 && value == a.Current.Model && a.Current.Effort != "" {
-				m.Efforts = []string{a.Current.Effort}
-				m.DefaultEffort = a.Current.Effort
-			}
-			a.Models = append(a.Models, m)
+		a.Descriptor = agentmeta.For(b.ID())
+		a.Commands = b.Commands(c.Cwd, false).PhoneChoices
+		for _, option := range b.ModelOptions() {
+			a.Models = append(a.Models, phoneapi.ModelOption{Value: option.Value, Label: option.Label, Efforts: option.Efforts, DefaultEffort: option.DefaultEffort})
 		}
 		out = append(out, a)
 	}
@@ -59,7 +34,7 @@ func (c *Controller) PhoneSendRequest(r remote.Request, paths []string, agent st
 	if agent == "" {
 		agent = appmodel.AgentCodex
 	}
-	if agent != appmodel.AgentCodex && agent != appmodel.AgentClaude {
+	if !model.RegisteredBackend(agent) {
 		return model.SendRequest{}, errors.New("Unsupported agent")
 	}
 	req := model.SendRequest{Agent: agent, Text: r.Text, Attachments: paths, Steer: r.Steer}

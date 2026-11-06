@@ -34,7 +34,6 @@ type Host interface {
 	CanRewind(t model.Thread, m model.Message) bool
 	CancelAccountReset()
 	ChangeWorkspace(path string) error
-	ClaudeCommandsFor(cwd string) ([]model.ComposerChoice, bool)
 	CollaborationCapabilities() *model.CollaborationStatus
 	CollaborationUserOp(r appmodel.CollaborationRequest) (any, error)
 	ConfigureMirror(remote bool, reconnect func() (*svcproto.Client, svcproto.State, error))
@@ -49,7 +48,6 @@ type Host interface {
 	DesktopThreadUnread(t model.Thread) bool
 	Dispatch(f func())
 	EnsurePhoneHost()
-	KnownClaudeCommands(cwd string) []model.ComposerChoice
 	Memories() *manager.Manager
 	MirroredHistory(id int) bool
 	NewThread()

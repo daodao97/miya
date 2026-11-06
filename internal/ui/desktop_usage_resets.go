@@ -189,7 +189,7 @@ func (a *App) consumeUsageReset() {
 				}
 				found := false
 				for i := range d.Readings {
-					if d.Readings[i].Agent == "codex" {
+					if d.Readings[i].Agent == result.Reading.Agent {
 						d.Readings[i], found = result.Reading, true
 					}
 				}
