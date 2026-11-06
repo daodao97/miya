@@ -18,7 +18,7 @@ import (
 	phoneproto "miya/internal/phone/protocol"
 	phoneproxy "miya/internal/phone/proxy"
 	phoneserver "miya/internal/phone/server"
-	"miya/internal/webservice"
+	webservice "miya/internal/runtime/web"
 )
 
 func TestProjectWebServicesEndpointAndPhoneFetch(t *testing.T) {

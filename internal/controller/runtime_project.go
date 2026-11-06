@@ -9,7 +9,7 @@ import (
 	"miya/internal/async"
 	rt "miya/internal/runtime"
 	"miya/internal/runtime/tracker"
-	"miya/internal/webservice"
+	webservice "miya/internal/runtime/web"
 )
 
 // Project overview aggregates proven session resources first. Directory-based

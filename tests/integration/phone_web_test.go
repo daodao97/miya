@@ -17,7 +17,7 @@ import (
 	"github.com/coder/websocket"
 
 	phoneproxy "miya/internal/phone/proxy"
-	"miya/internal/webservice"
+	webservice "miya/internal/runtime/web"
 )
 
 func webProxyFixture(t *testing.T, handler http.Handler) (*phoneproxy.PhoneFileProxy, *http.Client, string) {

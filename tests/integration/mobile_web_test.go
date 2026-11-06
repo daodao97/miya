@@ -8,7 +8,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"miya/internal/webservice"
+	webservice "miya/internal/runtime/web"
 )
 
 func TestMobileWebServiceNavigation(t *testing.T) {

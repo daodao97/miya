@@ -24,12 +24,12 @@ import (
 	projectfiles "miya/internal/project/files"
 	projectgit "miya/internal/project/git"
 	"miya/internal/remote"
+	webservice "miya/internal/runtime/web"
 	svcclient "miya/internal/service/client"
 	svcproto "miya/internal/service/protocol"
 	serviceserver "miya/internal/service/server"
 	"miya/internal/service/workspaces"
 	desktopui "miya/internal/ui"
-	"miya/internal/webservice"
 )
 
 func TestServerPersistentIdleAndTerminalRestart(t *testing.T) {

@@ -19,8 +19,8 @@ import (
 	"miya/internal/remote"
 	rt "miya/internal/runtime"
 	"miya/internal/runtime/tracker"
+	webservice "miya/internal/runtime/web"
 	"miya/internal/textutil"
-	"miya/internal/webservice"
 	"miya/internal/widgets"
 )
 

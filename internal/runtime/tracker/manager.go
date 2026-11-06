@@ -22,7 +22,7 @@ import (
 	"miya/internal/chat/model"
 	"miya/internal/remote"
 	rt "miya/internal/runtime"
-	"miya/internal/webservice"
+	webservice "miya/internal/runtime/web"
 )
 
 type ConversationRuntime struct {

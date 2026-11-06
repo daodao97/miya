@@ -7,7 +7,7 @@ import (
 	"strconv"
 
 	"miya/internal/remote"
-	"miya/internal/webservice"
+	webservice "miya/internal/runtime/web"
 )
 
 func NewPhoneWebProxy(conn *remote.Conn, port int, host string, tokens ...string) (*PhoneFileProxy, error) {

@@ -8,8 +8,8 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	phoneproxy "miya/internal/phone/proxy"
+	webservice "miya/internal/runtime/web"
 	"miya/internal/textutil"
-	"miya/internal/webservice"
 	"miya/internal/widgets"
 )
 

@@ -23,7 +23,7 @@ import (
 	"miya/internal/chat/model"
 	projectfiles "miya/internal/project/files"
 	"miya/internal/runtime/tracker"
-	"miya/internal/webservice"
+	webservice "miya/internal/runtime/web"
 	"miya/locales"
 )
 

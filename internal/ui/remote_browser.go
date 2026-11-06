@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	phoneproxy "miya/internal/phone/proxy"
+	webservice "miya/internal/runtime/web"
 	svcproto "miya/internal/service/protocol"
-	"miya/internal/webservice"
 )
 
 // Only localhost URLs change meaning when the workspace is remote. Public

@@ -1,11 +1,10 @@
 // Package webservice finds the web servers a project runs on this desktop
 // and proxies them to a paired phone through the private file tunnel.
-package webservice
+package web
 
 import (
 	"context"
 	"fmt"
-	rt "miya/internal/runtime"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -13,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	rt "miya/internal/runtime"
 )
 
 const Prefix = "/.miya-web/"

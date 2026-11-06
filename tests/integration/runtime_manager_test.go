@@ -26,7 +26,7 @@ import (
 	mcpproto "miya/internal/mcp/protocol"
 	rt "miya/internal/runtime"
 	"miya/internal/runtime/tracker"
-	"miya/internal/webservice"
+	webservice "miya/internal/runtime/web"
 )
 
 func TestCodexRuntimeRecoversTaggedServicesWithoutNativeTerminals(t *testing.T) {

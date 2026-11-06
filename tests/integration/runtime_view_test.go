@@ -21,8 +21,8 @@ import (
 	phoneserver "miya/internal/phone/server"
 	rt "miya/internal/runtime"
 	"miya/internal/runtime/tracker"
+	webservice "miya/internal/runtime/web"
 	desktopui "miya/internal/ui"
-	"miya/internal/webservice"
 	"miya/internal/widgets"
 )
 

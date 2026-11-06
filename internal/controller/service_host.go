@@ -18,10 +18,10 @@ import (
 	"miya/internal/memory/manager"
 	"miya/internal/notification"
 	"miya/internal/runtime/tracker"
+	webservice "miya/internal/runtime/web"
 	svcproto "miya/internal/service/protocol"
 	serviceserver "miya/internal/service/server"
 	"miya/internal/uiruntime"
-	"miya/internal/webservice"
 )
 
 func NewService(c *Controller, ex *async.Executor) *serviceserver.Service {

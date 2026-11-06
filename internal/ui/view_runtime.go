@@ -10,9 +10,9 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"miya/internal/chat/model"
+	webservice "miya/internal/runtime/web"
 	"miya/internal/textutil"
 	"miya/internal/uiruntime"
-	"miya/internal/webservice"
 	"miya/internal/widgets"
 )
 

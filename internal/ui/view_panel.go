@@ -23,9 +23,9 @@ import (
 	projectfiles "miya/internal/project/files"
 	projectgit "miya/internal/project/git"
 	"miya/internal/runtime/tracker"
+	webservice "miya/internal/runtime/web"
 	svcproto "miya/internal/service/protocol"
 	"miya/internal/uiruntime"
-	"miya/internal/webservice"
 	"miya/internal/widgets"
 )
 
