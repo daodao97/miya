@@ -468,3 +468,8 @@ var (
 	threadRefTask = msgfmt.ThreadRefTask
 	threadRefs    = msgfmt.ThreadRefs
 )
+
+// Moved to internal/composer.
+var (
+	insertThreadReference = composer.InsertThreadReference
+)

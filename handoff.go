@@ -384,13 +384,6 @@ func (app *chatApp) threadChoices(query string) []composerChoice {
 	return out
 }
 
-func insertThreadReference(value string, token composerToken, ref ThreadRef, title string) string {
-	if token.Kind != '@' || token.Start < 0 || token.End < token.Start || token.End > len(value) || !ref.Valid() {
-		return value
-	}
-	return value[:token.Start] + model.ReferenceText(ref, title) + " " + value[token.End:]
-}
-
 func (app *chatApp) handoffToNewThread() {
 	if app.onHandoff != nil {
 		app.onHandoff()
