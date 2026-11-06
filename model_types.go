@@ -453,3 +453,9 @@ var (
 	isMiyaApproval = codex.IsMiyaApproval
 	validateForm   = codex.ValidateForm
 )
+
+// Moved to internal/phoneapi.
+var (
+	approvalFingerprint = phoneapi.ApprovalFingerprint
+	validateMobileForm  = phoneapi.ValidateMobileForm
+)
