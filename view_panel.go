@@ -171,6 +171,14 @@ func (app *chatApp) panel() *panelState {
 	}
 	if p.cwd != app.c.cwd {
 		p.resetWorkspace(app.c.cwd)
+		// Open files and review views follow the new workspace; otherwise
+		// they stay empty until reopened.
+		if p.find(surfaceFiles) != nil {
+			app.loadDir(p, "")
+		}
+		if p.find(surfaceDiff) != nil {
+			app.refreshDiff(p)
+		}
 	}
 	return p
 }
