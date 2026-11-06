@@ -253,15 +253,6 @@ func usagePanelWindow(c *ui.Context, w agentusage.Window, p desktopPalette) {
 	})
 }
 
-func usageTimeProgress(w agentusage.Window, now time.Time) (float64, bool) {
-	if w.DurationMins <= 0 || w.ResetsAt <= 0 {
-		return 0, false
-	}
-	remainingSeconds := float64(w.ResetsAt) - float64(now.Unix())
-	elapsed := 100 * (1 - remainingSeconds/(float64(w.DurationMins)*60))
-	return math.Max(0, math.Min(100, elapsed)), true
-}
-
 func usagePaceText(used, elapsed float64) string {
 	pace := int(math.Round(elapsed))
 	delta := int(math.Round(elapsed - used))

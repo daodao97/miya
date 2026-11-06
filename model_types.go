@@ -606,3 +606,8 @@ var (
 var (
 	isMissingCodexThread = codex.IsMissingThread
 )
+
+// Moved to internal/agentusage.
+var (
+	usageTimeProgress = agentusage.TimeProgress
+)
