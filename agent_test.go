@@ -1,21 +1,22 @@
 package main
 
 import (
-	"encoding/json"
-	"os"
-	"path/filepath"
-	"strings"
-	"testing"
-
-	"miya/internal/codex"
-	"miya/internal/model"
+	json "encoding/json"
+	appmodel "miya/internal/appmodel"
+	codex "miya/internal/codex"
+	controller "miya/internal/controller"
+	model "miya/internal/model"
+	os "os"
+	filepath "path/filepath"
+	strings "strings"
+	testing "testing"
 )
 
 // The interface is shared by every agent: views reach agents only through
 // agentBackend, never by an agent's ID or its adapter's state.
 func TestViewsDoNotKnowAgents(t *testing.T) {
-	files, _ := filepath.Glob("view_*.go")
-	files = append(files, "app.go")
+	files, _ := filepath.Glob("internal/ui/view_*.go")
+	files = append(files, "internal/ui/app.go")
 	forbidden := []string{`"claude-code"`, `"codex"`, "agentCodex", "agentClaude", "currentAgent() ==", "currentAgent() !=",
 		".claudeError", ".claudeBinary", ".claudeCommand", ".claudeRuns", "sendClaude", "sendCodex"}
 	for _, f := range files {
@@ -38,7 +39,7 @@ func TestViewsDoNotKnowAgents(t *testing.T) {
 
 func TestAgentRegistry(t *testing.T) {
 	seen := map[string]bool{}
-	for _, b := range agentBackends {
+	for _, b := range controller.AgentBackends {
 		if b.ID() == "" || seen[b.ID()] || b.Name() == "" {
 			t.Fatalf("bad agent %q %q", b.ID(), b.Name())
 		}
@@ -52,11 +53,11 @@ func TestAgentRegistry(t *testing.T) {
 			}
 		}
 	}
-	if model.ThreadAgent(Thread{}) != agentCodex || backendFor("unknown").ID() != agentBackends[0].ID() {
+	if model.ThreadAgent(appmodel.Thread{}) != appmodel.AgentCodex || controller.BackendFor("unknown").ID() != controller.AgentBackends[0].ID() {
 		t.Fatal("defaults")
 	}
 	claudeID, _ := json.Marshal("claude:3:r1")
-	if approvalOwner(codex.Approval{ID: claudeID}).ID() != agentClaude || approvalOwner(codex.Approval{ID: json.RawMessage("7")}).ID() != agentCodex {
+	if controller.ApprovalOwner(codex.Approval{ID: claudeID}).ID() != appmodel.AgentClaude || controller.ApprovalOwner(codex.Approval{ID: json.RawMessage("7")}).ID() != appmodel.AgentCodex {
 		t.Fatal("approval routing")
 	}
 }
@@ -65,13 +66,13 @@ func TestAgentRegistry(t *testing.T) {
 // agentBackends. Adding an adapter must add its ID there too.
 func TestModelBackendsMatchAgentBackends(t *testing.T) {
 	var ids []string
-	for _, b := range agentBackends {
+	for _, b := range controller.AgentBackends {
 		ids = append(ids, b.ID())
 	}
 	if strings.Join(ids, ",") != strings.Join(model.Backends, ",") {
 		t.Fatalf("model.Backends = %v, agentBackends = %v", model.Backends, ids)
 	}
-	if got, want := model.AgentName("unknown"), backendFor("unknown").Name(); got != want {
+	if got, want := model.AgentName("unknown"), controller.BackendFor("unknown").Name(); got != want {
 		t.Fatalf("model.AgentName falls back to %q, backendFor to %q", got, want)
 	}
 }

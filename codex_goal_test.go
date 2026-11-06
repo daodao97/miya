@@ -3,30 +3,31 @@
 package main
 
 import (
-	"encoding/json"
-	"os"
-	"strings"
-	"testing"
+	json "encoding/json"
+	appmodel "miya/internal/appmodel"
+	os "os"
+	strings "strings"
+	testing "testing"
 )
 
 func TestCodexGoalCommandsUseNativeRPC(t *testing.T) {
 	c, d, log := codexResumeFixture(t)
-	c.update(1, func(t *Thread) { t.Resumed = false })
-	id, msg := c.codexGoalCommand(SendRequest{ThreadID: 1, Text: "/goal --budget 50000 fix CI"})
+	c.Update(1, func(t *appmodel.Thread) { t.Resumed = false })
+	id, msg := c.CodexGoalCommand(appmodel.SendRequest{ThreadID: 1, Text: "/goal --budget 50000 fix CI"})
 	if id != 1 || msg != "" {
 		t.Fatalf("%d %s", id, msg)
 	}
-	waitCodexResume(t, c, d, func() bool { return !c.threadWithID(1).TaskPending })
-	if tasks := c.threadWithID(1).Tasks; len(tasks) != 1 || tasks[0].Title != "fix CI" || *tasks[0].TokenBudget != 50000 {
+	waitCodexResume(t, c, d, func() bool { return !c.ThreadWithID(1).TaskPending })
+	if tasks := c.ThreadWithID(1).Tasks; len(tasks) != 1 || tasks[0].Title != "fix CI" || *tasks[0].TokenBudget != 50000 {
 		t.Fatalf("%+v", tasks)
 	}
 	for _, action := range []string{"pause", "resume", "clear"} {
-		if msg := c.taskAction(1, "goal", action); msg != "" {
+		if msg := c.TaskAction(1, "goal", action); msg != "" {
 			t.Fatal(msg)
 		}
-		waitCodexResume(t, c, d, func() bool { return !c.threadWithID(1).TaskPending })
+		waitCodexResume(t, c, d, func() bool { return !c.ThreadWithID(1).TaskPending })
 	}
-	if len(c.threadWithID(1).Tasks) != 0 {
+	if len(c.ThreadWithID(1).Tasks) != 0 {
 		t.Fatal("clear retained goal")
 	}
 	sets, turns := 0, 0

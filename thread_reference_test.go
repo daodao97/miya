@@ -1,31 +1,36 @@
 package main
 
 import (
-	"encoding/json"
-	"miya/internal/model"
-	"os"
-	"path/filepath"
-	"strings"
-	"sync"
-	"testing"
+	json "encoding/json"
+	appmodel "miya/internal/appmodel"
+	controller "miya/internal/controller"
+	model "miya/internal/model"
+	os "os"
+	filepath "path/filepath"
+	strings "strings"
+	sync "sync"
+	testing "testing"
 )
 
 const testReferenceSource = "0123456789abcdef0123456789abcdef"
 
-func testRef(backend, sid string) ThreadRef {
-	return ThreadRef{Source: testReferenceSource, Backend: backend, SessionID: sid}
+func testRef(backend, sid string) appmodel.ThreadRef {
+	return appmodel.ThreadRef{Source: testReferenceSource, Backend: backend, SessionID: sid}
 }
-func testReference(t Thread) ThreadRef { return testRef(model.ThreadAgent(t), t.ServerID) }
+
+func testReference(t appmodel.Thread) appmodel.ThreadRef {
+	return testRef(model.ThreadAgent(t), t.ServerID)
+}
 
 func TestThreadReferenceURLIsExactAndLossless(t *testing.T) {
 	for _, sid := range []string{"019a-uuid", "CaseSensitive", "中文 空格", "a/b?#%()"} {
-		ref := testRef(agentCodex, sid)
+		ref := testRef(appmodel.AgentCodex, sid)
 		got, ok := model.ParseThreadURL(ref.URL())
 		if !ok || got != ref {
 			t.Fatalf("URL round trip: %q %+v", ref.URL(), got)
 		}
 	}
-	ref := testRef(agentCodex, "id")
+	ref := testRef(appmodel.AgentCodex, "id")
 	for _, raw := range []string{ref.URL() + "?secret=x", ref.URL() + "#fragment", ref.URL() + "/more", "miya://user@" + testReferenceSource + "/thread/codex/id", "miya://" + testReferenceSource + "/thread/unknown/id", "miya://desktop/thread/codex/id", "miya://" + testReferenceSource + "/thread/codex/"} {
 		if _, ok := model.ParseThreadURL(raw); ok {
 			t.Errorf("accepted %q", raw)
@@ -34,31 +39,31 @@ func TestThreadReferenceURLIsExactAndLossless(t *testing.T) {
 }
 
 func TestThreadReferencesRequireExplicitObjectsOutsideCode(t *testing.T) {
-	ref := testRef(agentCodex, "id")
+	ref := testRef(appmodel.AgentCodex, "id")
 	mention := model.ReferenceText(ref, `同名 [标题] \ " 👋`)
 	for _, raw := range []string{"@#2", ref.URL(), "`" + mention + "`", "``" + mention + "``", "\\" + mention, "```go\n" + mention + "\n```", "~~~\n" + mention + "\n~~~", "    " + mention, "\t" + mention, "> ~~~\n> " + mention + "\n> ~~~", "- ~~~\n  " + mention + "\n  ~~~"} {
-		if got := threadRefs(raw); len(got) != 0 {
+		if got := appmodel.ThreadRefs(raw); len(got) != 0 {
 			t.Errorf("literal became reference: %q %v", raw, got)
 		}
 	}
-	withBacktick := model.ReferenceText(ref, "title with `backtick") + model.ReferenceText(testRef(agentCodex, "next"), "next")
-	if got := threadRefs(withBacktick); len(got) != 2 {
+	withBacktick := model.ReferenceText(ref, "title with `backtick") + model.ReferenceText(testRef(appmodel.AgentCodex, "next"), "next")
+	if got := appmodel.ThreadRefs(withBacktick); len(got) != 2 {
 		t.Fatalf("title changed Markdown state: %v", got)
 	}
 	raw := "中文" + mention + mention + "。"
-	if got := threadRefs(raw); len(got) != 1 || got[0] != ref {
+	if got := appmodel.ThreadRefs(raw); len(got) != 1 || got[0] != ref {
 		t.Fatal(got)
 	}
-	parts := MessageParts(raw)
-	if got, err := PartsText(parts); err != nil || got != raw {
+	parts := appmodel.MessageParts(raw)
+	if got, err := appmodel.PartsText(parts); err != nil || got != raw {
 		t.Fatalf("parts round trip: %q %v", got, err)
 	}
 	data, _ := json.Marshal(parts)
-	var restored []MessagePart
+	var restored []appmodel.MessagePart
 	if err := json.Unmarshal(data, &restored); err != nil {
 		t.Fatal(err)
 	}
-	if got, _ := PartsText(restored); got != raw {
+	if got, _ := appmodel.PartsText(restored); got != raw {
 		t.Fatal(got)
 	}
 }
@@ -69,7 +74,7 @@ func TestReferenceSourceConcurrentInitialization(t *testing.T) {
 	ids := make(chan string, 8)
 	for i := 0; i < 8; i++ {
 		wg.Go(func() {
-			id, err := loadReferenceSource(dir)
+			id, err := appmodel.LoadReferenceSource(dir)
 			if err != nil {
 				t.Error(err)
 			}
@@ -91,18 +96,18 @@ func TestReferenceSourceConcurrentInitialization(t *testing.T) {
 
 func TestReferenceSourcePersistsIndependentlyOfPairing(t *testing.T) {
 	dir := t.TempDir()
-	id, err := loadReferenceSource(dir)
+	id, err := appmodel.LoadReferenceSource(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	again, err := loadReferenceSource(dir)
-	if err != nil || id != again || !SourceIDPattern.MatchString(id) {
+	again, err := appmodel.LoadReferenceSource(dir)
+	if err != nil || id != again || !appmodel.SourceIDPattern.MatchString(id) {
 		t.Fatalf("source changed: %s %s %v", id, again, err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "reference-source"), []byte("corrupt"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := loadReferenceSource(dir); err == nil {
+	if _, err := appmodel.LoadReferenceSource(dir); err == nil {
 		t.Fatal("silently replaced an invalid source identity")
 	}
 }
@@ -113,18 +118,18 @@ func TestReferenceIdentitySurvivesRenumberingAndRejectsOtherSources(t *testing.T
 	ref := testReference(src)
 	src.ID = 999
 	src.Title = "已改名"
-	c.setThreads([]Thread{{ID: 2, ServerID: "wrong-session", HistoryLoaded: true}, src})
-	if got, _, err := c.resolveReference(ref); err != nil || got.ServerID != src.ServerID {
+	c.SetThreads([]appmodel.Thread{{ID: 2, ServerID: "wrong-session", HistoryLoaded: true}, src})
+	if got, _, err := c.ResolveReference(ref); err != nil || got.ServerID != src.ServerID {
 		t.Fatalf("identity resolved by row number: %+v %v", got, err)
 	}
 	other := ref
 	other.Source = "ffffffffffffffffffffffffffffffff"
-	if _, _, err := c.resolveReference(other); err == nil {
+	if _, _, err := c.ResolveReference(other); err == nil {
 		t.Fatal("cross-source reference resolved locally")
 	}
 	other = ref
-	other.Backend = agentCodex
-	if _, _, err := c.resolveReference(other); err == nil {
+	other.Backend = appmodel.AgentCodex
+	if _, _, err := c.ResolveReference(other); err == nil {
 		t.Fatal("cross-backend reference resolved")
 	}
 }
@@ -136,58 +141,58 @@ func TestSameTitleReferencesKeepTheirIdentitiesWhenEdited(t *testing.T) {
 	b := a
 	b.ID = 3
 	b.ServerID = "another-session"
-	app.c.setThreads([]Thread{a, b})
+	app.C.(*controller.Controller).SetThreads([]appmodel.Thread{a, b})
 	raw := model.ReferenceText(testReference(a), a.Title) + " 对比 " + model.ReferenceText(testReference(b), b.Title)
-	out, _, err := expandThreadRefs(raw, ThreadRef{}, app.c.resolveReference)
+	out, _, err := controller.ExpandThreadRefs(raw, appmodel.ThreadRef{}, app.C.(*controller.Controller).ResolveReference)
 	if err != nil {
 		t.Fatal(err)
 	}
-	body, tags := app.threadReferenceContent(out)
+	body, tags := app.ThreadReferenceContent(out)
 	if body != raw || len(tags) != 2 || tags[0].Ref == tags[1].Ref {
 		t.Fatalf("title merged identities: %s %+v", body, tags)
 	}
-	app.startEdit(Message{ID: 42, Content: out})
-	if app.editText != raw {
-		t.Fatal(app.editText)
+	app.StartEdit(appmodel.Message{ID: 42, Content: out})
+	if app.EditText != raw {
+		t.Fatal(app.EditText)
 	}
 }
 
 func TestForkKeepsOriginalReferenceAndMetadataAcrossRestart(t *testing.T) {
 	c := testController()
-	c.referenceDir = t.TempDir()
+	c.ReferenceDir = t.TempDir()
 	src := handoffSource()
 	ref := testReference(src)
-	c.setThreads([]Thread{src})
-	c.update(src.ID, func(t *Thread) {
+	c.SetThreads([]appmodel.Thread{src})
+	c.Update(src.ID, func(t *appmodel.Thread) {
 		t.ServerID = "forked-session"
-		t.Messages = []Message{{Role: "user", Content: "new branch"}}
+		t.Messages = []appmodel.Message{{Role: "user", Content: "new branch"}}
 	})
-	got, messages, err := c.resolveReference(ref)
+	got, messages, err := c.ResolveReference(ref)
 	if err != nil || got.ServerID != ref.SessionID || len(messages) != len(src.Messages) {
 		t.Fatalf("reference followed fork: %+v %v", got, err)
 	}
-	read, err := c.mcpHandle("mcpRead", mcpRequest{Reference: ref.URL()})
-	if err != nil || !strings.Contains(read.(mcpReadResult).Packet, "修复登录过期的问题") {
+	read, err := c.McpHandle("mcpRead", appmodel.McpRequest{Reference: ref.URL()})
+	if err != nil || !strings.Contains(read.(appmodel.McpReadResult).Packet, "修复登录过期的问题") {
 		t.Fatalf("original session link unreadable after fork: %v %v", read, err)
 	}
 	restarted := testController()
-	restarted.referenceDir = c.referenceDir
-	restarted.loadForkedReferences()
-	if saved, ok := restarted.forkedReferences[ref]; !ok || saved.Ref.SessionID != src.ServerID {
-		t.Fatalf("original metadata lost: %+v", restarted.forkedReferences)
+	restarted.ReferenceDir = c.ReferenceDir
+	restarted.LoadForkedReferences()
+	if saved, ok := restarted.ForkedReferences[ref]; !ok || saved.Ref.SessionID != src.ServerID {
+		t.Fatalf("original metadata lost: %+v", restarted.ForkedReferences)
 	}
 }
 
 func TestInvalidReferencePreventsQueueAndPreservesDraft(t *testing.T) {
 	app, _ := testApp(t)
-	c := app.c
-	c.setThreads([]Thread{{ID: 1, ServerID: "target", Busy: true, HistoryLoaded: true}})
-	c.setActive(1)
-	raw := model.ReferenceText(testRef(agentCodex, "missing"), "不存在")
-	c.rememberDraft(raw)
-	c.send()
-	if len(c.current().Queue) != 0 || c.draft() != raw || !strings.Contains(c.lastSubmitError, "不存在") {
-		t.Fatalf("invalid reference sent: %+v %q %s", c.current().Queue, c.draft(), c.lastSubmitError)
+	c := app.C.(*controller.Controller)
+	c.SetThreads([]appmodel.Thread{{ID: 1, ServerID: "target", Busy: true, HistoryLoaded: true}})
+	c.SetActive(1)
+	raw := model.ReferenceText(testRef(appmodel.AgentCodex, "missing"), "不存在")
+	c.RememberDraft(raw)
+	c.Send()
+	if len(c.Current().Queue) != 0 || c.Draft() != raw || !strings.Contains(c.LastSubmitError, "不存在") {
+		t.Fatalf("invalid reference sent: %+v %q %s", c.Current().Queue, c.Draft(), c.LastSubmitError)
 	}
 }
 
@@ -199,14 +204,14 @@ func TestReferenceSnapshotDoesNotCutLiteralContextTags(t *testing.T) {
 	src := handoffSource()
 	ref := testReference(src)
 	raw += " " + model.ReferenceText(ref, src.Title)
-	out, _, err := expandThreadRefs(raw, ThreadRef{}, func(ThreadRef) (Thread, []Message, error) { return src, src.Messages, nil })
+	out, _, err := controller.ExpandThreadRefs(raw, appmodel.ThreadRef{}, func(appmodel.ThreadRef) (appmodel.Thread, []appmodel.Message, error) { return src, src.Messages, nil })
 	if err != nil {
 		t.Fatal(err)
 	}
 	if own, snapshots := model.SplitReferenceContext(out); own != raw || len(snapshots) != 1 {
 		t.Fatal(own)
 	}
-	withAttachment, _ := attachmentDisplay(out, []string{"notes.txt"})
+	withAttachment, _ := appmodel.AttachmentDisplay(out, []string{"notes.txt"})
 	if own, snapshots := model.SplitReferenceContext(withAttachment); own != raw+"\n📎 notes.txt" || len(snapshots) != 1 {
 		t.Fatalf("attachment exposed or truncated context: %q", own)
 	}

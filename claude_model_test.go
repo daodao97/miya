@@ -3,14 +3,16 @@
 package main
 
 import (
-	"context"
-	"os"
-	"path/filepath"
-	"strings"
-	"testing"
-	"time"
-
-	"miya/internal/codex"
+	context "context"
+	appmodel "miya/internal/appmodel"
+	codex "miya/internal/codex"
+	controller "miya/internal/controller"
+	uiruntime "miya/internal/uiruntime"
+	os "os"
+	filepath "path/filepath"
+	strings "strings"
+	testing "testing"
+	time "time"
 )
 
 func TestClaudeRunUsesTheChosenModelAndEffort(t *testing.T) {
@@ -24,16 +26,16 @@ func TestClaudeRunUsesTheChosenModelAndEffort(t *testing.T) {
 	if err := os.WriteFile(bin, []byte("#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$MIYA_OUT.tmp\"\nmv \"$MIYA_OUT.tmp\" \"$MIYA_OUT\"\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	c := &chatController{cwd: dir, ctx: context.Background(), claudeBinary: bin, claudeEnv: []string{"MIYA_OUT=" + out}, run: d.push}
-	c.threads, c.setThreads = createSignal([]Thread{})
-	c.approvals, c.setApprovals = createSignal([]codex.Approval{})
-	b := backendFor(agentClaude)
+	c := &controller.Controller{WindowState: appmodel.WindowState{Cwd: dir, Ctx: context.Background()}, ClaudeBinary: bin, ClaudeEnv: []string{"MIYA_OUT=" + out}, Run: d.push}
+	c.Threads, c.SetThreads = uiruntime.CreateSignal([]appmodel.Thread{})
+	c.Approvals, c.SetApprovals = uiruntime.CreateSignal([]codex.Approval{})
+	b := controller.BackendFor(appmodel.AgentClaude)
 	b.SetModel(c, "opus")
 	b.SetEffort(c, "high")
-	if loadSetting("claudeModel") != "opus" || loadSetting("claudeEffort") != "high" {
+	if appmodel.LoadSetting("claudeModel") != "opus" || appmodel.LoadSetting("claudeEffort") != "high" {
 		t.Fatal("choices not saved")
 	}
-	if c.submit(SendRequest{Agent: agentClaude, Text: "hi"}) == 0 {
+	if c.Submit(appmodel.SendRequest{Agent: appmodel.AgentClaude, Text: "hi"}) == 0 {
 		t.Fatal("not sent")
 	}
 	var args string
@@ -54,9 +56,9 @@ func TestClaudeRunUsesTheChosenModelAndEffort(t *testing.T) {
 
 func TestComposerPicksClaudeModel(t *testing.T) {
 	app, tt := testApp(t)
-	c := app.c
-	c.claudeBinary = "/bin/true"
-	c.setAgent(agentClaude)
+	c := app.C.(*controller.Controller)
+	c.ClaudeBinary = "/bin/true"
+	c.SetAgent(appmodel.AgentClaude)
 	tt.Frame()
 	if err := tt.Click("Default model"); err != nil {
 		t.Fatalf("no model picker for Claude Code in %q: %v", tt.Texts(), err)
@@ -64,8 +66,8 @@ func TestComposerPicksClaudeModel(t *testing.T) {
 	if err := tt.Click("Claude Sonnet 5.5"); err != nil {
 		t.Fatal(err)
 	}
-	if c.claudeModel != "claude-sonnet-5-5" || !tt.HasText("Claude Sonnet 5.5") {
-		t.Fatalf("model %q", c.claudeModel)
+	if c.ClaudeModel != "claude-sonnet-5-5" || !tt.HasText("Claude Sonnet 5.5") {
+		t.Fatalf("model %q", c.ClaudeModel)
 	}
 	if err := tt.Click("Default effort"); err != nil {
 		t.Fatal(err)
@@ -73,20 +75,20 @@ func TestComposerPicksClaudeModel(t *testing.T) {
 	if err := tt.Click("xhigh"); err != nil {
 		t.Fatal(err)
 	}
-	if c.claudeEffort != "xhigh" {
-		t.Fatalf("effort %q", c.claudeEffort)
+	if c.ClaudeEffort != "xhigh" {
+		t.Fatalf("effort %q", c.ClaudeEffort)
 	}
 }
 
 func TestClaudeDefaultModelFromInit(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	c := testController()
-	b := backendFor(agentClaude)
+	b := controller.BackendFor(appmodel.AgentClaude)
 	if b.ModelLabel(c, "") != "Default model" {
 		t.Fatal("label before any run")
 	}
-	c.noteClaudeModel("claude-opus-5-5")
-	if got := b.ModelLabel(c, ""); got != "Default · Claude Opus 5.5" || loadSetting("claudeDefaultModel") != "claude-opus-5-5" {
+	c.NoteClaudeModel("claude-opus-5-5")
+	if got := b.ModelLabel(c, ""); got != "Default · Claude Opus 5.5" || appmodel.LoadSetting("claudeDefaultModel") != "claude-opus-5-5" {
 		t.Fatalf("label %q", got)
 	}
 	if b.ModelLabel(c, "opus") != "Opus (latest)" || b.ModelLabel(c, "my-model") != "my-model" {

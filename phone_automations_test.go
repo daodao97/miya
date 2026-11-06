@@ -3,22 +3,22 @@
 package main
 
 import (
-	"encoding/json"
-	"os"
-	"path/filepath"
-	"testing"
-
-	"miya/internal/automation"
-	"miya/internal/remote"
+	json "encoding/json"
+	appmodel "miya/internal/appmodel"
+	automation "miya/internal/automation"
+	remote "miya/internal/remote"
+	os "os"
+	filepath "path/filepath"
+	testing "testing"
 )
 
 func TestPhoneAutomationsReadListAndHistory(t *testing.T) {
 	c := serverController(t.TempDir(), "")
-	c.startAutomations(filepath.Join(t.TempDir(), "automations.json"), false)
+	c.StartAutomations(filepath.Join(t.TempDir(), "automations.json"), false)
 	v := mobileAutomationFixture()
-	c.auto.Store.Automations = []automation.Automation{v.Automation}
-	c.auto.Store.Runs[v.ID] = v.Runs
-	if !c.phoneSnapshot().Automations {
+	c.Auto.Store.Automations = []automation.Automation{v.Automation}
+	c.Auto.Store.Runs[v.ID] = v.Runs
+	if !c.PhoneSnapshot().Automations {
 		t.Fatal("automation capability not advertised")
 	}
 	conn, _ := serveTestPhone(t, c)
@@ -36,7 +36,7 @@ func TestPhoneAutomationsReadListAndHistory(t *testing.T) {
 			if list[0].ID != v.ID || list[0].ScheduleText == "" || len(list[0].Runs) != 1 || list[0].Runs[0].Report.Summary != v.Runs[0].Report.Summary {
 				t.Fatal("schedule or structured run report lost in transport")
 			}
-			if len(c.auto.Active) != 0 || len(c.threads()) != 0 {
+			if len(c.Auto.Active) != 0 || len(c.Threads()) != 0 {
 				t.Fatal("viewing automations started a run")
 			}
 			return
@@ -46,7 +46,7 @@ func TestPhoneAutomationsReadListAndHistory(t *testing.T) {
 	}
 }
 
-func nextPhoneAutomationForm(t *testing.T, conn *testPhoneConnection, op string) (phoneAutomationFormResult, remote.Frame) {
+func nextPhoneAutomationForm(t *testing.T, conn *testPhoneConnection, op string) (appmodel.PhoneAutomationFormResult, remote.Frame) {
 	t.Helper()
 	for {
 		select {
@@ -54,14 +54,14 @@ func nextPhoneAutomationForm(t *testing.T, conn *testPhoneConnection, op string)
 			if f.Type != op {
 				continue
 			}
-			var result phoneAutomationFormResult
+			var result appmodel.PhoneAutomationFormResult
 			if err := json.Unmarshal(f.Data, &result); err != nil {
 				t.Fatal(err)
 			}
 			return result, f
 		case <-conn.ctx.Done():
 			t.Fatal("no automation form response")
-			return phoneAutomationFormResult{}, remote.Frame{}
+			return appmodel.PhoneAutomationFormResult{}, remote.Frame{}
 		}
 	}
 }
@@ -78,14 +78,14 @@ printf '%s\n' '{"structured_output":{"name":"每日检查","schedule":"0 9 * * 1
 		t.Fatal(err)
 	}
 	c := serverController(dir, bin)
-	c.claudeEnv = []string{"MIYA_DRAFT_GATE=" + gate}
+	c.ClaudeEnv = []string{"MIYA_DRAFT_GATE=" + gate}
 	path := filepath.Join(dir, "automations.json")
-	c.startAutomations(path, false)
-	if !c.phoneSnapshot().AutomationCreate {
+	c.StartAutomations(path, false)
+	if !c.PhoneSnapshot().AutomationCreate {
 		t.Fatal("creation capability not advertised")
 	}
 	conn, _ := serveTestPhone(t, c)
-	conn.requests <- remote.Request{Op: "automation-draft", RequestID: "draft", Text: "每个工作日 9 点检查 Issue", Project: dir, Agent: agentClaude}
+	conn.requests <- remote.Request{Op: "automation-draft", RequestID: "draft", Text: "每个工作日 9 点检查 Issue", Project: dir, Agent: appmodel.AgentClaude}
 	conn.requests <- remote.Request{Op: "automations"}
 	// A slow agent must not block list refreshes or the rest of the phone.
 	listReceived := false
@@ -104,7 +104,7 @@ printf '%s\n' '{"structured_output":{"name":"每日检查","schedule":"0 9 * * 1
 		t.Fatal(err)
 	}
 	result, frame := nextPhoneAutomationForm(t, conn, "automation-draft")
-	if frame.Error != "" || result.RequestID != "draft" || result.View == nil || result.View.Project != dir || result.View.Agent != agentClaude || result.View.Rounds != 3 {
+	if frame.Error != "" || result.RequestID != "draft" || result.View == nil || result.View.Project != dir || result.View.Agent != appmodel.AgentClaude || result.View.Rounds != 3 {
 		t.Fatalf("bad draft response: %+v %s", result, frame.Error)
 	}
 	if len(automation.Load(path).Automations) != 0 {
@@ -134,9 +134,9 @@ printf '%s\n' '{"structured_output":{"name":"每日检查","schedule":"0 9 * * 1
 	}
 	// Persistence also carries the retry identity across a service restart.
 	restarted := serverController(dir, "")
-	restarted.startAutomations(path, false)
-	frame = restarted.phoneAutomationCreate(r)
-	if frame.Error != "" || len(restarted.auto.Store.Automations) != 1 || restarted.auto.Store.Automations[0].Created != saved.Created {
+	restarted.StartAutomations(path, false)
+	frame = restarted.PhoneAutomationCreate(r)
+	if frame.Error != "" || len(restarted.Auto.Store.Automations) != 1 || restarted.Auto.Store.Automations[0].Created != saved.Created {
 		t.Fatal("retry after service restart duplicated the automation")
 	}
 	a.Schedule = "invalid"
@@ -151,7 +151,7 @@ printf '%s\n' '{"structured_output":{"name":"每日检查","schedule":"0 9 * * 1
 
 func TestPhoneAutomationCreateUnavailable(t *testing.T) {
 	c := serverController(t.TempDir(), "")
-	if c.phoneSnapshot().AutomationCreate {
+	if c.PhoneSnapshot().AutomationCreate {
 		t.Fatal("unavailable creation capability advertised")
 	}
 	conn, _ := serveTestPhone(t, c)
@@ -169,7 +169,7 @@ func TestPhoneAutomationCreateUnavailable(t *testing.T) {
 
 func TestPhoneAutomationsUnavailableReplies(t *testing.T) {
 	c := serverController(t.TempDir(), "")
-	if c.phoneSnapshot().Automations {
+	if c.PhoneSnapshot().Automations {
 		t.Fatal("unsupported automation capability advertised")
 	}
 	conn, _ := serveTestPhone(t, c)
@@ -191,19 +191,19 @@ func TestPhoneAutomationsUnavailableReplies(t *testing.T) {
 
 func TestPhoneAutomationRunStartsInItsProjectAndRejectsOverlap(t *testing.T) {
 	c := serverController(t.TempDir(), "")
-	c.startAutomations(filepath.Join(t.TempDir(), "automations.json"), false)
+	c.StartAutomations(filepath.Join(t.TempDir(), "automations.json"), false)
 	v := mobileAutomationFixture()
 	v.Project, v.Enabled = t.TempDir(), false
-	c.auto.Store.Automations = []automation.Automation{v.Automation}
-	c.auto.Submit = func(r SendRequest) int {
+	c.Auto.Store.Automations = []automation.Automation{v.Automation}
+	c.Auto.Submit = func(r appmodel.SendRequest) int {
 		if r.Project != v.Project || r.Agent != v.Agent || !r.MemoryControl {
 			t.Errorf("wrong automation submission: %+v", r)
 		}
-		id := c.nextID()
-		c.projectCache[r.Project] = []Thread{{ID: id, ServerID: "phone-run", Agent: r.Agent, Busy: true}}
+		id := c.NextID()
+		c.ProjectCache[r.Project] = []appmodel.Thread{{ID: id, ServerID: "phone-run", Agent: r.Agent, Busy: true}}
 		return id
 	}
-	if !c.phoneSnapshot().AutomationRun {
+	if !c.PhoneSnapshot().AutomationRun {
 		t.Fatal("run capability not advertised")
 	}
 	conn, _ := serveTestPhone(t, c)
@@ -221,7 +221,7 @@ func TestPhoneAutomationRunStartsInItsProjectAndRejectsOverlap(t *testing.T) {
 				t.Fatal("no run acknowledgement")
 			}
 		}
-		var result phoneAutomationRunResult
+		var result appmodel.PhoneAutomationRunResult
 		if err := json.Unmarshal(f.Data, &result); err != nil || result.RequestID != request {
 			t.Fatalf("bad acknowledgement: %v %s", err, f.Data)
 		}
@@ -231,7 +231,7 @@ func TestPhoneAutomationRunStartsInItsProjectAndRejectsOverlap(t *testing.T) {
 		if len(result.List) != 1 || !result.List[0].Running || len(result.List[0].Runs) != 1 || result.List[0].Enabled {
 			t.Fatalf("run not returned or schedule changed: %+v", result.List)
 		}
-		if result.List[0].Runs[0].Result != automation.Running || result.List[0].Runs[0].Thread == 0 || c.cwd == v.Project {
+		if result.List[0].Runs[0].Result != automation.Running || result.List[0].Runs[0].Thread == 0 || c.Cwd == v.Project {
 			t.Fatal("manual run did not start a background conversation")
 		}
 	}
@@ -239,7 +239,7 @@ func TestPhoneAutomationRunStartsInItsProjectAndRejectsOverlap(t *testing.T) {
 
 func TestPhoneAutomationRunUnavailable(t *testing.T) {
 	c := serverController(t.TempDir(), "")
-	if c.phoneSnapshot().AutomationRun {
+	if c.PhoneSnapshot().AutomationRun {
 		t.Fatal("unavailable run capability advertised")
 	}
 	conn, _ := serveTestPhone(t, c)
@@ -248,7 +248,7 @@ func TestPhoneAutomationRunUnavailable(t *testing.T) {
 		select {
 		case f := <-conn.frames:
 			if f.Type == "automation-run" {
-				var result phoneAutomationRunResult
+				var result appmodel.PhoneAutomationRunResult
 				if json.Unmarshal(f.Data, &result) != nil || result.RequestID != "unavailable" || f.Error == "" {
 					t.Fatalf("missing correlated failure: %+v", f)
 				}

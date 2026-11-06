@@ -3,40 +3,43 @@
 package main
 
 import (
-	"strings"
-	"sync"
-	"testing"
-	"time"
+	appmodel "miya/internal/appmodel"
+	controller "miya/internal/controller"
+	desktopui "miya/internal/ui"
+	strings "strings"
+	sync "sync"
+	testing "testing"
+	time "time"
 )
 
 func TestCollaborationWorkspaceSwitchKeepsPendingRequestAtOriginalService(t *testing.T) {
 	first := newServiceFixture(t)
-	caller := collaborationCaller(t, first, agentClaude, "first-source")
+	caller := collaborationCaller(t, first, appmodel.AgentClaude, "first-source")
 	var from, source string
 	first.serv.Do(func() {
-		c := first.srv.c
-		from, source = c.threadRef(c.threadWithID(caller)).URL(), c.referenceSource
+		c := first.srv.C
+		from, source = c.ThreadRef(c.ThreadWithID(caller)).URL(), c.ReferenceSource
 	})
 	second := newServiceFixture(t)
 	secondSource := "fedcba9876543210fedcba9876543210"
-	second.serv.Do(func() { second.srv.c.referenceSource = secondSource })
-	clientA, err := dialService(first.sock)
+	second.serv.Do(func() { second.srv.C.ReferenceSource = secondSource })
+	clientA, err := appmodel.DialService(first.sock)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer clientA.Close()
-	clientB, err := dialService(second.sock)
+	clientB, err := appmodel.DialService(second.sock)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer clientB.Close()
-	var app *chatApp
+	var app *desktopui.App
 	first.win.Do(func() {
-		c := newMirrorController()
-		c.run, c.remote, c.referenceSource = first.win.Push, clientA, source
-		app = &chatApp{c: c}
+		c := controller.NewMirrorController()
+		c.Run, c.Remote, c.ReferenceSource = first.win.Push, clientA, source
+		app = &desktopui.App{C: c}
 	})
-	s := first.srv.c.collaboration
+	s := first.srv.C.Collaboration
 	gate, entered := make(chan struct{}), make(chan struct{})
 	var once sync.Once
 	release := func() { once.Do(func() { close(gate) }) }
@@ -44,8 +47,8 @@ func TestCollaborationWorkspaceSwitchKeepsPendingRequestAtOriginalService(t *tes
 	s.Post(func() { close(entered); <-gate })
 	<-entered
 	first.win.Do(func() {
-		p := app.collaborations.pane(from)
-		p.submit("start_task", map[string]any{"agent": agentClaude, "task": "original service only", "context": "none", "notify": "none"}, app.collaborationCall)
+		p := app.Collaborations.Pane(from)
+		p.Submit("start_task", map[string]any{"agent": appmodel.AgentClaude, "task": "original service only", "context": "none", "notify": "none"}, app.CollaborationCall)
 	})
 	deadline := time.Now().Add(5 * time.Second)
 	for s.Pending() < 2 && time.Now().Before(deadline) {
@@ -54,28 +57,30 @@ func TestCollaborationWorkspaceSwitchKeepsPendingRequestAtOriginalService(t *tes
 	if s.Pending() < 2 {
 		t.Fatal("original service did not receive the pending request")
 	}
-	first.win.Do(func() { app.c.remote, app.c.referenceSource = clientB, secondSource })
+	first.win.Do(func() {
+		app.C.(*controller.Controller).Remote, app.C.(*controller.Controller).ReferenceSource = clientB, secondSource
+	})
 	release()
 	first.waitWindow("late response from the original service", func() bool {
-		p := app.collaborations.pane(from)
-		return !p.busy && p.pending != nil && strings.Contains(p.err, "workspace changed")
+		p := app.Collaborations.Pane(from)
+		return !p.Busy && p.Pending != nil && strings.Contains(p.Err, "workspace changed")
 	})
-	if len(second.srv.c.collaboration.Manager.View().Tasks) != 0 {
+	if len(second.srv.C.Collaboration.Manager.View().Tasks) != 0 {
 		t.Fatal("switching services moved the accepted task to another service")
 	}
 	first.win.Do(func() {
-		app.c.remote, app.c.referenceSource = clientA, source
-		app.collaborations.pane(from).retry(app.collaborationCall)
+		app.C.(*controller.Controller).Remote, app.C.(*controller.Controller).ReferenceSource = clientA, source
+		app.Collaborations.Pane(from).Retry(app.CollaborationCall)
 	})
 	first.waitWindow("retry against original service", func() bool {
-		p := app.collaborations.pane(from)
-		return !p.busy && p.pending == nil && p.err == ""
+		p := app.Collaborations.Pane(from)
+		return !p.Busy && p.Pending == nil && p.Err == ""
 	})
-	tasks := first.srv.c.collaboration.Manager.View().Tasks
+	tasks := first.srv.C.Collaboration.Manager.View().Tasks
 	if len(tasks) != 1 {
 		t.Fatalf("same request retry created %d tasks at the original service", len(tasks))
 	}
-	if len(second.srv.c.collaboration.Manager.View().Tasks) != 0 {
+	if len(second.srv.C.Collaboration.Manager.View().Tasks) != 0 {
 		t.Fatal("retry crossed the source boundary")
 	}
 	// Both fixtures share process environment. Finish native history writes
@@ -85,8 +90,8 @@ func TestCollaborationWorkspaceSwitchKeepsPendingRequestAtOriginalService(t *tes
 		for deadline := time.Now().Add(5 * time.Second); ; {
 			idle := false
 			first.serv.Do(func() {
-				thread, found := first.srv.c.threadByReference(task.Target)
-				idle = found && !thread.Busy && first.srv.c.collaboration.Reservations[thread.ID] == ""
+				thread, found := first.srv.C.ThreadByReference(task.Target)
+				idle = found && !thread.Busy && first.srv.C.Collaboration.Reservations[thread.ID] == ""
 			})
 			if idle {
 				break

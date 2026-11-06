@@ -1,36 +1,39 @@
 package main
 
 import (
-	"encoding/json"
-	"miya/internal/codex"
-	"testing"
+	json "encoding/json"
+	appmodel "miya/internal/appmodel"
+	codex "miya/internal/codex"
+	controller "miya/internal/controller"
+	testing "testing"
 )
 
 func appAccessRequest() codex.Approval {
 	return codex.Approval{ID: json.RawMessage(`1`), Method: "mcpServer/elicitation/request", ThreadID: "thread-a", TurnID: "turn-1", ServerName: "cua_repl", Mode: "form", Message: `Allow Computer Use to use "Xcode"?`, RequestedSchema: json.RawMessage(`{"type":"object","properties":{}}`)}
 }
+
 func TestMCPSessionGrantRequiresExplicitLiveResponse(t *testing.T) {
 	c := testController()
 	a := appAccessRequest()
-	if c.rememberedMCPAccess(a) {
+	if c.RememberedMCPAccess(a) {
 		t.Fatal("permission granted before user response")
 	}
-	if c.respondMCPAlways(a) == nil {
+	if c.RespondMCPAlways(a) == nil {
 		t.Fatal("stale request created grant")
 	}
-	c.setApprovals([]codex.Approval{a})
-	if err := c.respondMCPAlways(a); err != nil {
+	c.SetApprovals([]codex.Approval{a})
+	if err := c.RespondMCPAlways(a); err != nil {
 		t.Fatal(err)
 	}
-	if len(c.approvals()) != 0 {
+	if len(c.Approvals()) != 0 {
 		t.Fatal("accepted request remained pending")
 	}
 	a.ID = json.RawMessage(`2`)
 	a.TurnID = "turn-2"
-	if !c.rememberedMCPAccess(a) {
+	if !c.RememberedMCPAccess(a) {
 		t.Fatal("grant did not survive the next turn")
 	}
-	if testController().rememberedMCPAccess(a) {
+	if testController().RememberedMCPAccess(a) {
 		t.Fatal("grant persisted beyond backend lifetime")
 	}
 	for _, change := range []func(*codex.Approval){
@@ -48,30 +51,32 @@ func TestMCPSessionGrantRequiresExplicitLiveResponse(t *testing.T) {
 	} {
 		different := a
 		change(&different)
-		if c.rememberedMCPAccess(different) {
+		if c.RememberedMCPAccess(different) {
 			t.Fatalf("grant exceeded scope: %+v", different)
 		}
 	}
 }
+
 func TestMCPSessionGrantUsesTrustedQueuedRequest(t *testing.T) {
 	c := testController()
 	a := appAccessRequest()
-	c.setApprovals([]codex.Approval{a})
+	c.SetApprovals([]codex.Approval{a})
 	submitted := a
 	submitted.ThreadID = "forged-thread"
 	submitted.Message = `Allow Computer Use to use "Terminal"?`
-	if err := c.respondMCPAlways(submitted); err != nil {
+	if err := c.RespondMCPAlways(submitted); err != nil {
 		t.Fatal(err)
 	}
-	if c.rememberedMCPAccess(submitted) || !c.rememberedMCPAccess(a) {
+	if c.RememberedMCPAccess(submitted) || !c.RememberedMCPAccess(a) {
 		t.Fatal("grant used UI-supplied scope instead of live request")
 	}
 }
+
 func TestMCPSessionPermissionSchemaCanonicalization(t *testing.T) {
 	a := appAccessRequest()
 	b := a
 	b.RequestedSchema = json.RawMessage(`{ "properties": {}, "type": "object" }`)
-	if mcpSessionPermissionKey(a) != mcpSessionPermissionKey(b) {
+	if appmodel.McpSessionPermissionKey(a) != appmodel.McpSessionPermissionKey(b) {
 		t.Fatal("JSON formatting changed grant identity")
 	}
 }
@@ -79,7 +84,7 @@ func TestMCPSessionPermissionSchemaCanonicalization(t *testing.T) {
 func TestMCPApplicationAccessCardAllowsForSession(t *testing.T) {
 	app, tt := testApp(t)
 	a := appAccessRequest()
-	app.c.setApprovals([]codex.Approval{a})
+	app.C.(*controller.Controller).SetApprovals([]codex.Approval{a})
 	tt.Frame()
 	if !tt.HasText("Always allow in this conversation") || !tt.HasText("Allow once") {
 		t.Fatalf("missing choices: %q", tt.Texts())
@@ -90,19 +95,20 @@ func TestMCPApplicationAccessCardAllowsForSession(t *testing.T) {
 	if err := tt.Click("Always allow in this conversation"); err != nil {
 		t.Fatal(err)
 	}
-	if !app.c.rememberedMCPAccess(a) || len(app.c.approvals()) != 0 {
+	if !app.C.(*controller.Controller).RememberedMCPAccess(a) || len(app.C.(*controller.Controller).Approvals()) != 0 {
 		t.Fatal("explicit click did not grant session access")
 	}
 }
+
 func TestMCPAllowOnceDoesNotCreateSessionGrant(t *testing.T) {
 	app, tt := testApp(t)
 	a := appAccessRequest()
-	app.c.setApprovals([]codex.Approval{a})
+	app.C.(*controller.Controller).SetApprovals([]codex.Approval{a})
 	tt.Frame()
 	if err := tt.Click("Allow once"); err != nil {
 		t.Fatal(err)
 	}
-	if app.c.rememberedMCPAccess(a) || len(app.c.approvals()) != 0 {
+	if app.C.(*controller.Controller).RememberedMCPAccess(a) || len(app.C.(*controller.Controller).Approvals()) != 0 {
 		t.Fatal("allow once did not remain a one-time response")
 	}
 }

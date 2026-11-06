@@ -1,51 +1,53 @@
 package main
 
 import (
-	"fmt"
-	"testing"
+	fmt "fmt"
+	appmodel "miya/internal/appmodel"
+	controller "miya/internal/controller"
+	testing "testing"
 
-	"github.com/egoist/mygo/ui"
+	ui "github.com/egoist/mygo/ui"
 )
 
 func TestDesktopCommandPaletteCommandsAndSidebar(t *testing.T) {
 	app, tt := testApp(t)
-	app.appearance = "light"
+	app.Appearance = "light"
 	if tt.HasText("Search conversations") || tt.HasText("Skills") {
 		t.Fatal("removed sidebar entries are still visible")
 	}
-	app.c.rememberDraft("Keep my draft")
+	app.C.(*controller.Controller).RememberDraft("Keep my draft")
 	tt.Frame()
 	tt.Key(ui.Cmd|ui.Shift, ui.KeyP)
-	if !app.commandPalette.open || !tt.Focused("Search commands") {
+	if !app.CommandPalette.Open || !tt.Focused("Search commands") {
 		t.Fatal("command palette did not open with its search focused")
 	}
 	saveReconnectSnapshot(t, tt, "command-palette-light")
-	app.appearance = "dark"
+	app.Appearance = "dark"
 	tt.Frame()
 	saveReconnectSnapshot(t, tt, "command-palette-dark")
 	tt.Type("skills")
 	if err := tt.Click("Open skills"); err != nil {
 		t.Fatal(err)
 	}
-	if app.commandPalette.open || app.section != "Skills" || app.c.draft() != "Keep my draft" {
+	if app.CommandPalette.Open || app.Section != "Skills" || app.C.(*controller.Controller).Draft() != "Keep my draft" {
 		t.Fatal("command did not run or changed the draft")
 	}
 	tt.Key(ui.Cmd|ui.Shift, ui.KeyP)
 	tt.Type("stng")
 	tt.Key(0, ui.KeyEnter)
-	if app.commandPalette.open || app.section != "Settings" {
+	if app.CommandPalette.Open || app.Section != "Settings" {
 		t.Fatal("fuzzy command search did not open settings")
 	}
 }
 
 func TestDesktopCommandPaletteConversationNavigation(t *testing.T) {
 	app, tt := testApp(t)
-	var threads []Thread
+	var threads []appmodel.Thread
 	for i := 1; i <= 12; i++ {
-		threads = append(threads, Thread{ID: i, Title: fmt.Sprintf("Review %02d", i), Draft: fmt.Sprintf("Draft %d", i), HistoryLoaded: true, LastActivityAt: int64(20 - i)})
+		threads = append(threads, appmodel.Thread{ID: i, Title: fmt.Sprintf("Review %02d", i), Draft: fmt.Sprintf("Draft %d", i), HistoryLoaded: true, LastActivityAt: int64(20 - i)})
 	}
-	app.c.setThreads(threads)
-	app.c.selectThread(threads[0])
+	app.C.(*controller.Controller).SetThreads(threads)
+	app.C.(*controller.Controller).SelectThread(threads[0])
 	tt.Frame()
 	tt.Key(ui.Cmd|ui.Shift, ui.KeyP)
 	tt.Type("Review conversation")
@@ -57,10 +59,10 @@ func TestDesktopCommandPaletteConversationNavigation(t *testing.T) {
 	}
 	tt.Key(0, ui.KeyUp)
 	tt.Key(0, ui.KeyEnter)
-	if app.commandPalette.open || app.c.active() != 9 || app.c.draft() != "Draft 9" || !tt.Focused("Message Codex") {
-		t.Fatalf("incorrect conversation selection: active=%d draft=%q", app.c.active(), app.c.draft())
+	if app.CommandPalette.Open || app.C.(*controller.Controller).Active() != 9 || app.C.(*controller.Controller).Draft() != "Draft 9" || !tt.Focused("Message Codex") {
+		t.Fatalf("incorrect conversation selection: active=%d draft=%q", app.C.(*controller.Controller).Active(), app.C.(*controller.Controller).Draft())
 	}
-	if app.c.threadWithID(1).Draft != "Draft 1" || len(app.c.current().Queue) != 0 {
+	if app.C.(*controller.Controller).ThreadWithID(1).Draft != "Draft 1" || len(app.C.(*controller.Controller).Current().Queue) != 0 {
 		t.Fatal("palette changed or submitted a draft")
 	}
 }
@@ -74,7 +76,7 @@ func TestDesktopCommandPaletteDismissalAndModalSafety(t *testing.T) {
 			tt.Key(ui.Cmd|ui.Shift, ui.KeyP)
 			tt.Key(ui.Cmd, ui.KeyN)
 			tt.Key(ui.Cmd, ui.KeyB)
-			if app.c.draft() != "Keep this draft" || !app.sidebar {
+			if app.C.(*controller.Controller).Draft() != "Keep this draft" || !app.Sidebar {
 				t.Fatal("a shortcut ran behind the palette")
 			}
 			switch dismiss {
@@ -87,22 +89,22 @@ func TestDesktopCommandPaletteDismissalAndModalSafety(t *testing.T) {
 			case "empty":
 				tt.Type("no-match-9382")
 				tt.Key(0, ui.KeyEnter)
-				if !app.commandPalette.open || !tt.HasText("No matching commands or conversations") {
+				if !app.CommandPalette.Open || !tt.HasText("No matching commands or conversations") {
 					t.Fatal("empty results executed a stale selection")
 				}
 				tt.Key(0, ui.KeyEscape)
 			}
 			tt.Frame()
-			if app.commandPalette.open || !tt.Focused("Message Codex") || app.c.draft() != "Keep this draft" {
+			if app.CommandPalette.Open || !tt.Focused("Message Codex") || app.C.(*controller.Controller).Draft() != "Keep this draft" {
 				t.Fatal("dismissal lost composer focus or changed the draft")
 			}
 		})
 	}
 	app, tt := testApp(t)
-	app.openProjectDialog()
+	app.OpenProjectDialog()
 	tt.Frame()
 	tt.Key(ui.Cmd|ui.Shift, ui.KeyP)
-	if app.commandPalette.open || !app.projectDialog {
+	if app.CommandPalette.Open || !app.ProjectDialog {
 		t.Fatal("palette opened behind another dialog")
 	}
 }
@@ -113,12 +115,12 @@ func TestDesktopCommandPaletteOpensAnotherDialog(t *testing.T) {
 	tt.Type("add remote workspace")
 	tt.Key(0, ui.KeyEnter)
 	tt.Frame()
-	if app.commandPalette.open || !app.workspaceHub.open || !tt.Focused("Workspace name") {
+	if app.CommandPalette.Open || !app.WorkspaceHub.Open || !tt.Focused("Workspace name") {
 		t.Fatal("palette did not hand focus to the workspace dialog")
 	}
 	tt.Key(0, ui.KeyEscape)
 	tt.Key(ui.Cmd|ui.Shift, ui.KeyP)
-	if app.commandPalette.query != "" {
+	if app.CommandPalette.Query != "" {
 		t.Fatal("reopening retained the previous filter")
 	}
 }

@@ -1,19 +1,23 @@
 package main
 
 import (
-	"os"
-	"os/exec"
-	"path/filepath"
-	"testing"
+	appmodel "miya/internal/appmodel"
+	controller "miya/internal/controller"
+	desktopui "miya/internal/ui"
+	uiruntime "miya/internal/uiruntime"
+	os "os"
+	exec "os/exec"
+	filepath "path/filepath"
+	testing "testing"
 )
 
 // syncPanel runs the panel's disk and git work in place, so a frame after a
 // click shows its result.
 func syncPanel(t *testing.T) {
 	t.Helper()
-	old := goAsync
-	goAsync = func(f func()) { f() }
-	t.Cleanup(func() { goAsync = old })
+	old := uiruntime.GoAsync
+	uiruntime.GoAsync = func(f func()) { f() }
+	t.Cleanup(func() { uiruntime.GoAsync = old })
 }
 
 func writeFile(t *testing.T, path, text string) {
@@ -63,7 +67,7 @@ func TestBrowserURL(t *testing.T) {
 		"about:blank":          "about:blank",
 		"":                     "",
 	} {
-		if got := browserURL(in); got != want {
+		if got := desktopui.BrowserURL(in); got != want {
 			t.Errorf("browserURL(%q) = %q, want %q", in, got, want)
 		}
 	}
@@ -72,7 +76,7 @@ func TestBrowserURL(t *testing.T) {
 func TestPanelOpensFilesEditsAndSaves(t *testing.T) {
 	syncPanel(t)
 	app, tt := testApp(t)
-	cwd := app.c.cwd
+	cwd := app.C.(*controller.Controller).Cwd
 	writeFile(t, filepath.Join(cwd, "README.md"), "# Demo\n")
 	writeFile(t, filepath.Join(cwd, "src", "main.go"), "package main\n")
 	if err := tt.Click("Show right panel"); err != nil {
@@ -93,33 +97,33 @@ func TestPanelOpensFilesEditsAndSaves(t *testing.T) {
 	if err := tt.Click("main.go"); err != nil {
 		t.Fatalf("expanded folder has no main.go in %q: %v", tt.Texts(), err)
 	}
-	p := app.panel()
-	ed := p.editors["src/main.go"]
-	if p.selected != "src/main.go" || ed == nil || ed.state == nil {
-		t.Fatalf("file not opened: %q %+v", p.selected, ed)
+	p := app.Panel()
+	ed := p.Editors["src/main.go"]
+	if p.Selected != "src/main.go" || ed == nil || ed.State == nil {
+		t.Fatalf("file not opened: %q %+v", p.Selected, ed)
 	}
-	ed.state.Buffer.Set("package main\n\n// edited\n")
+	ed.State.Buffer.Set("package main\n\n// edited\n")
 	tt.Frame()
-	if !p.dirty(p.surfaces[p.active]) {
+	if !p.Dirty(p.Surfaces[p.Active]) {
 		t.Fatal("edited file not marked unsaved")
 	}
 	if err := tt.Click("Save (⌘S)"); err != nil {
 		t.Fatal(err)
 	}
 	data, _ := os.ReadFile(filepath.Join(cwd, "src", "main.go"))
-	if string(data) != "package main\n\n// edited\n" || ed.state.Buffer.Modified() {
+	if string(data) != "package main\n\n// edited\n" || ed.State.Buffer.Modified() {
 		t.Fatalf("save wrote %q", data)
 	}
 	if err := tt.Click("Back to file list"); err != nil {
 		t.Fatal(err)
 	}
-	if p.selected != "" || !tt.HasText("README.md") {
+	if p.Selected != "" || !tt.HasText("README.md") {
 		t.Fatal("did not return to the tree")
 	}
 	if err := tt.Click("Hide right panel"); err != nil {
 		t.Fatal(err)
 	}
-	if p.visible || tt.HasText("README.md") {
+	if p.Visible || tt.HasText("README.md") {
 		t.Fatal("panel still shown")
 	}
 }
@@ -127,27 +131,27 @@ func TestPanelOpensFilesEditsAndSaves(t *testing.T) {
 func TestPanelReviewsChanges(t *testing.T) {
 	syncPanel(t)
 	app, tt := testApp(t)
-	testRepo(t, app.c.cwd)
+	testRepo(t, app.C.(*controller.Controller).Cwd)
 	if err := tt.Click("Show right panel"); err != nil {
 		t.Fatal(err)
 	}
 	if err := tt.Click("Review"); err != nil {
 		t.Fatal(err)
 	}
-	p := app.panel()
-	if p.diff == nil || len(p.diff.Files) != 2 {
-		t.Fatalf("review not read: %+v %s", p.diff, p.diffErr)
+	p := app.Panel()
+	if p.Diff == nil || len(p.Diff.Files) != 2 {
+		t.Fatalf("review not read: %+v %s", p.Diff, p.DiffErr)
 	}
 	if !tt.HasText("a.txt") || !tt.HasText("c.txt") || !tt.HasText("New file") || !tt.HasText("2 files") {
 		t.Fatalf("changed files missing: %q", tt.Texts())
 	}
-	if p.diffView == nil || p.diffViewPath != "a.txt" || p.diffView.New.String() != "one\ntwo\nthree\n" {
-		t.Fatalf("first file's diff not shown: %q", p.diffViewPath)
+	if p.DiffView == nil || p.DiffViewPath != "a.txt" || p.DiffView.New.String() != "one\ntwo\nthree\n" {
+		t.Fatalf("first file's diff not shown: %q", p.DiffViewPath)
 	}
 	if err := tt.Click("c.txt"); err != nil {
 		t.Fatal(err)
 	}
-	if p.diffViewPath != "c.txt" || p.diffView.Old.String() != "" {
+	if p.DiffViewPath != "c.txt" || p.DiffView.Old.String() != "" {
 		t.Fatal("untracked file's diff not shown")
 	}
 }
@@ -155,9 +159,9 @@ func TestPanelReviewsChanges(t *testing.T) {
 func TestPanelBelongsToItsConversation(t *testing.T) {
 	syncPanel(t)
 	app, tt := testApp(t)
-	c := app.c
-	c.setThreads([]Thread{{ID: 1, Title: "First thread", HistoryLoaded: true, Agent: "claude-code"}, {ID: 2, Title: "Second thread", HistoryLoaded: true, Agent: "claude-code"}})
-	c.setActive(1)
+	c := app.C.(*controller.Controller)
+	c.SetThreads([]appmodel.Thread{{ID: 1, Title: "First thread", HistoryLoaded: true, Agent: "claude-code"}, {ID: 2, Title: "Second thread", HistoryLoaded: true, Agent: "claude-code"}})
+	c.SetActive(1)
 	tt.Frame()
 	if err := tt.Click("Show right panel"); err != nil {
 		t.Fatal(err)
@@ -168,13 +172,13 @@ func TestPanelBelongsToItsConversation(t *testing.T) {
 	if err := tt.Click("Second thread"); err != nil {
 		t.Fatal(err)
 	}
-	if p := app.panel(); len(p.surfaces) != 0 || !p.visible || !tt.HasText("Open a panel") {
-		t.Fatalf("second conversation shares the first's tabs: %+v", p.surfaces)
+	if p := app.Panel(); len(p.Surfaces) != 0 || !p.Visible || !tt.HasText("Open a panel") {
+		t.Fatalf("second conversation shares the first's tabs: %+v", p.Surfaces)
 	}
 	if err := tt.Click("First thread"); err != nil {
 		t.Fatal(err)
 	}
-	if p := app.panel(); len(p.surfaces) != 1 || p.surfaces[0].kind != surfaceFiles {
+	if p := app.Panel(); len(p.Surfaces) != 1 || p.Surfaces[0].Kind != desktopui.SurfaceFiles {
 		t.Fatal("first conversation lost its tab")
 	}
 	// Closing the last tab shows the chooser again.

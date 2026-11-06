@@ -1,11 +1,11 @@
 package main
 
 import (
-	"fmt"
-	"testing"
-	"time"
+	fmt "fmt"
+	testing "testing"
+	time "time"
 
-	"github.com/egoist/mygo/ui"
+	ui "github.com/egoist/mygo/ui"
 )
 
 func TestMobileConversationActionsSheet(t *testing.T) {
@@ -13,9 +13,9 @@ func TestMobileConversationActionsSheet(t *testing.T) {
 		for _, dark := range []bool{false, true} {
 			t.Run(fmt.Sprintf("width=%d/dark=%v", width, dark), func(t *testing.T) {
 				m := testMobileApp()
-				m.openThread(m.state.Projects[0].Threads[0])
-				m.draft = "保留草稿"
-				tt := ui.NewTester(m.viewRoot, width, 844)
+				m.OpenThread(m.State.Projects[0].Threads[0])
+				m.Draft = "保留草稿"
+				tt := ui.NewTester(m.ViewRoot, width, 844)
 				tt.SetDark(dark)
 				tt.SetSafeArea(ui.SafeArea{Top: 59, Bottom: 34})
 				tt.SetPreferences(ui.Preferences{TextScale: 1.8})
@@ -45,13 +45,13 @@ func TestMobileConversationActionsSheet(t *testing.T) {
 					t.Fatal(err)
 				}
 				tt.Advance(time.Second)
-				if tt.HasText("Project files") || m.draft != "保留草稿" || m.open != 1 {
+				if tt.HasText("Project files") || m.Draft != "保留草稿" || m.Open != 1 {
 					t.Fatal("cancel should dismiss the sheet and preserve the current conversation and draft")
 				}
 				open()
 				tt.ClickAt(10, 120)
 				tt.Advance(time.Second)
-				if tt.HasText("Project files") || m.draft != "保留草稿" {
+				if tt.HasText("Project files") || m.Draft != "保留草稿" {
 					t.Fatal("backdrop should dismiss without changing the draft")
 				}
 				open()
@@ -59,7 +59,7 @@ func TestMobileConversationActionsSheet(t *testing.T) {
 					t.Fatal(err)
 				}
 				tt.Advance(time.Second)
-				if m.router().Path() != "/" || m.open != 0 || m.composerProject() != "/a" || m.draft != "" || tt.HasText("Project files") {
+				if m.Router().Path() != "/" || m.Open != 0 || m.ComposerProject() != "/a" || m.Draft != "" || tt.HasText("Project files") {
 					t.Fatal("new conversation should dismiss the sheet and compose in the same project")
 				}
 			})

@@ -3,26 +3,26 @@
 package main
 
 import (
-	"bufio"
-	"context"
-	"encoding/json"
-	"errors"
-	"net"
-	"net/http"
-	"net/http/httptest"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"strconv"
-	"strings"
-	"sync"
-	"testing"
-	"time"
-
-	"miya/internal/claude"
-	"miya/internal/codex"
+	bufio "bufio"
+	context "context"
+	json "encoding/json"
+	errors "errors"
+	appmodel "miya/internal/appmodel"
+	claude "miya/internal/claude"
+	codex "miya/internal/codex"
 	rt "miya/internal/runtime"
-	"miya/internal/webservice"
+	webservice "miya/internal/webservice"
+	net "net"
+	http "net/http"
+	httptest "net/http/httptest"
+	os "os"
+	exec "os/exec"
+	filepath "path/filepath"
+	strconv "strconv"
+	strings "strings"
+	sync "sync"
+	testing "testing"
+	time "time"
 )
 
 func TestCodexRuntimeRecoversTaggedServicesWithoutNativeTerminals(t *testing.T) {
@@ -36,17 +36,17 @@ func TestCodexRuntimeRecoversTaggedServicesWithoutNativeTerminals(t *testing.T) 
 	if got := rt.CodexProcessSession(pidA); got != "detached-a" {
 		t.Fatalf("process marker = %q", got)
 	}
-	m := newRuntimeManager(nil, "")
+	m := appmodel.NewRuntimeManager(nil, "")
 	defer m.Close()
 	for _, tc := range []struct {
 		session string
 		port    int
 	}{{"detached-a", portA}, {"detached-b", portB}} {
-		key := runtimeKey(testRef(agentCodex, tc.session))
-		m.Register(key, runtimeSource{Epoch: "e", Caps: rt.Capabilities{SessionTag: true}, Snapshot: func(context.Context) (runtimeSnapshot, error) {
-			return runtimeSnapshot{Known: true, Tasks: []rt.Task{}}, nil
+		key := appmodel.RuntimeKey(testRef(appmodel.AgentCodex, tc.session))
+		m.Register(key, appmodel.RuntimeSource{Epoch: "e", Caps: rt.Capabilities{SessionTag: true}, Snapshot: func(context.Context) (appmodel.RuntimeSnapshot, error) {
+			return appmodel.RuntimeSnapshot{Known: true, Tasks: []rt.Task{}}, nil
 		}})
-		result := runtimeResult(m, key, m.Refresh(context.Background(), key))
+		result := appmodel.RuntimeResult(m, key, m.Refresh(context.Background(), key))
 		if len(result.Services) != 1 || result.Services[0].Port != tc.port || !result.View.TasksKnown || len(result.View.Tasks) != 0 {
 			t.Fatalf("tagged recovery failed (unowned port %d): %+v", unowned, result)
 		}
@@ -75,11 +75,13 @@ func TestRuntimeOwnedServiceOnDesktopLANInterface(t *testing.T) {
 	t.Setenv("MIYA_WEB_DISCOVERY_HOST", host)
 	t.Setenv("CODEX_THREAD_ID", "lan-session")
 	_, port, _ := startRuntimeHTTP(t, t.TempDir())
-	m := newRuntimeManager(nil, "")
+	m := appmodel.NewRuntimeManager(nil, "")
 	defer m.Close()
-	key := runtimeKey(testRef(agentCodex, "lan-session"))
-	m.Register(key, runtimeSource{Epoch: "e", Caps: rt.Capabilities{SessionTag: true}, Snapshot: func(context.Context) (runtimeSnapshot, error) { return runtimeSnapshot{Known: true}, nil }})
-	result := runtimeResult(m, key, m.Refresh(context.Background(), key))
+	key := appmodel.RuntimeKey(testRef(appmodel.AgentCodex, "lan-session"))
+	m.Register(key, appmodel.RuntimeSource{Epoch: "e", Caps: rt.Capabilities{SessionTag: true}, Snapshot: func(context.Context) (appmodel.RuntimeSnapshot, error) {
+		return appmodel.RuntimeSnapshot{Known: true}, nil
+	}})
+	result := appmodel.RuntimeResult(m, key, m.Refresh(context.Background(), key))
 	if len(result.Services) != 1 || result.Services[0].Host != host || result.Services[0].Port != port {
 		t.Fatalf("LAN listener missing: %+v", result)
 	}
@@ -134,6 +136,7 @@ func startRuntimeHTTP(t *testing.T, dir string) (pid, port int, stop func()) {
 	}
 	return cmd.Process.Pid, port, stop
 }
+
 func TestCodexRuntimeUsesNativeSessionPIDsOnSharedProject(t *testing.T) {
 	dir := t.TempDir()
 	pidA, portA, _ := startRuntimeHTTP(t, dir)
@@ -142,12 +145,12 @@ func TestCodexRuntimeUsesNativeSessionPIDsOnSharedProject(t *testing.T) {
 	data, _ := json.Marshal(metadata)
 	t.Setenv("QUICKGUI_FIXTURE_BACKGROUND", string(data))
 	c, _, _ := codexResumeFixture(t)
-	c.setThreads([]Thread{{ID: 1, ServerID: "resume-thread"}, {ID: 2, ServerID: "session-b"}})
+	c.SetThreads([]appmodel.Thread{{ID: 1, ServerID: "resume-thread"}, {ID: 2, ServerID: "session-b"}})
 	for _, tc := range []struct {
 		id          int
 		port, other int
 	}{{1, portA, portB}, {2, portB, portA}} {
-		work, err := c.prepareRuntime(c.threadRef(c.threadWithID(tc.id)), c.cwd)
+		work, err := c.PrepareRuntime(c.ThreadRef(c.ThreadWithID(tc.id)), c.Cwd)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -155,7 +158,7 @@ func TestCodexRuntimeUsesNativeSessionPIDsOnSharedProject(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		result := raw.(conversationRuntime)
+		result := raw.(appmodel.ConversationRuntime)
 		if !result.View.TasksKnown || len(result.Services) != 1 || result.Services[0].Port != tc.port {
 			t.Fatalf("wrong Codex session resources: %+v", result)
 		}
@@ -165,12 +168,12 @@ func TestCodexRuntimeUsesNativeSessionPIDsOnSharedProject(t *testing.T) {
 			}
 		}
 	}
-	if _, err := c.prepareRuntime(testRef(agentCodex, "resume-thread"), "/other-project"); err == nil {
+	if _, err := c.PrepareRuntime(testRef(appmodel.AgentCodex, "resume-thread"), "/other-project"); err == nil {
 		t.Fatal("runtime accepted a mismatched project")
 	}
-	foreign := c.threadRef(c.threadWithID(1))
+	foreign := c.ThreadRef(c.ThreadWithID(1))
 	foreign.Source = "ffffffffffffffffffffffffffffffff"
-	if _, err := c.prepareRuntime(foreign, c.cwd); err == nil {
+	if _, err := c.PrepareRuntime(foreign, c.Cwd); err == nil {
 		t.Fatal("runtime accepted another desktop")
 	}
 }
@@ -222,6 +225,7 @@ func startRuntimeClaude(t *testing.T, ctx context.Context, dir string) (*claude.
 	t.Fatal("fake Claude's HTTP child did not start")
 	return nil, 0
 }
+
 func TestClaudeRuntimeUsesDedicatedSessionProcessTrees(t *testing.T) {
 	if _, err := exec.LookPath("sh"); err != nil {
 		t.Skip(err)
@@ -232,12 +236,12 @@ func TestClaudeRuntimeUsesDedicatedSessionProcessTrees(t *testing.T) {
 	a, portA := startRuntimeClaude(t, ctx, dir)
 	b, portB := startRuntimeClaude(t, ctx, dir)
 	c := serverController(dir, "")
-	c.ctx, c.cancel = context.WithCancel(ctx)
-	t.Cleanup(func() { c.cancel() })
-	c.claudeRuns = map[int]*claude.Client{1: a, 2: b}
-	c.setThreads([]Thread{{ID: 1, Agent: agentClaude, ServerID: "claude-a"}, {ID: 2, Agent: agentClaude, ServerID: "claude-b"}})
+	c.Ctx, c.Cancel = context.WithCancel(ctx)
+	t.Cleanup(func() { c.Cancel() })
+	c.ClaudeRuns = map[int]*claude.Client{1: a, 2: b}
+	c.SetThreads([]appmodel.Thread{{ID: 1, Agent: appmodel.AgentClaude, ServerID: "claude-a"}, {ID: 2, Agent: appmodel.AgentClaude, ServerID: "claude-b"}})
 	for _, tc := range []struct{ id, port, other int }{{1, portA, portB}, {2, portB, portA}} {
-		work, err := c.prepareRuntime(c.threadRef(c.threadWithID(tc.id)), dir)
+		work, err := c.PrepareRuntime(c.ThreadRef(c.ThreadWithID(tc.id)), dir)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -245,7 +249,7 @@ func TestClaudeRuntimeUsesDedicatedSessionProcessTrees(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		result := raw.(conversationRuntime)
+		result := raw.(appmodel.ConversationRuntime)
 		if !result.View.TasksKnown || len(result.View.Tasks) != 1 || result.View.Tasks[0].Kind != "local_bash" || len(result.Services) != 1 || result.Services[0].Port != tc.port {
 			t.Fatalf("wrong Claude session resources: %+v", result)
 		}
@@ -258,21 +262,22 @@ func TestClaudeRuntimeUsesDedicatedSessionProcessTrees(t *testing.T) {
 			}
 		}
 	}
-	if !c.runtimes().Busy() {
+	if !c.Runtimes().Busy() {
 		t.Fatal("managed background resource did not delay upgrade")
 	}
 }
+
 func TestRuntimeEndpointTokensRejectReusedPortsAndTampering(t *testing.T) {
 	dir := t.TempDir()
 	pid, port, stop := startRuntimeHTTP(t, dir)
-	manager := newRuntimeManager(nil, filepath.Join(t.TempDir(), "runtime.json"))
+	manager := appmodel.NewRuntimeManager(nil, filepath.Join(t.TempDir(), "runtime.json"))
 	defer manager.Close()
-	key := runtimeKey(testRef(agentCodex, "a"))
-	manager.Register(key, runtimeSource{Epoch: "e1", Caps: rt.Capabilities{RequiresHost: true}, Snapshot: func(context.Context) (runtimeSnapshot, error) {
-		return runtimeSnapshot{Known: true, Tasks: []rt.Task{{ID: "opaque", Status: "running"}}, Roots: []rt.Root{{PID: pid, TaskID: "opaque"}}}, nil
+	key := appmodel.RuntimeKey(testRef(appmodel.AgentCodex, "a"))
+	manager.Register(key, appmodel.RuntimeSource{Epoch: "e1", Caps: rt.Capabilities{RequiresHost: true}, Snapshot: func(context.Context) (appmodel.RuntimeSnapshot, error) {
+		return appmodel.RuntimeSnapshot{Known: true, Tasks: []rt.Task{{ID: "opaque", Status: "running"}}, Roots: []rt.Root{{PID: pid, TaskID: "opaque"}}}, nil
 	}})
 	view := manager.Refresh(context.Background(), key)
-	result := runtimeResult(manager, key, view)
+	result := appmodel.RuntimeResult(manager, key, view)
 	if len(result.Services) != 1 || result.Services[0].Port != port {
 		t.Fatalf("missing owned service: %+v", result)
 	}
@@ -296,27 +301,29 @@ func TestRuntimeEndpointTokensRejectReusedPortsAndTampering(t *testing.T) {
 		t.Fatal("another process inherited a reused endpoint")
 	}
 }
+
 func TestRuntimeUnavailableNativeDataNeverGuessesByDirectory(t *testing.T) {
 	_, _, _ = startRuntimeHTTP(t, t.TempDir())
-	manager := newRuntimeManager(nil, "")
+	manager := appmodel.NewRuntimeManager(nil, "")
 	defer manager.Close()
-	key := runtimeKey(testRef(agentCodex, "unknown"))
-	manager.Register(key, runtimeSource{Epoch: "e", Snapshot: func(context.Context) (runtimeSnapshot, error) {
-		return runtimeSnapshot{}, errors.New("unsupported native method")
+	key := appmodel.RuntimeKey(testRef(appmodel.AgentCodex, "unknown"))
+	manager.Register(key, appmodel.RuntimeSource{Epoch: "e", Snapshot: func(context.Context) (appmodel.RuntimeSnapshot, error) {
+		return appmodel.RuntimeSnapshot{}, errors.New("unsupported native method")
 	}})
 	view := manager.Refresh(context.Background(), key)
 	if view.TasksKnown || len(view.Endpoints) != 0 || len(view.Processes) != 0 || view.Notice == "" {
 		t.Fatalf("missing evidence became guessed ownership: %+v", view)
 	}
 }
+
 func TestRuntimeManagerCloseWaitsForOutstandingObservation(t *testing.T) {
-	manager := newRuntimeManager(nil, "")
-	key := runtimeKey(testRef(agentCodex, "close"))
+	manager := appmodel.NewRuntimeManager(nil, "")
+	key := appmodel.RuntimeKey(testRef(appmodel.AgentCodex, "close"))
 	started := make(chan struct{})
-	manager.Register(key, runtimeSource{Epoch: "e", Snapshot: func(ctx context.Context) (runtimeSnapshot, error) {
+	manager.Register(key, appmodel.RuntimeSource{Epoch: "e", Snapshot: func(ctx context.Context) (appmodel.RuntimeSnapshot, error) {
 		close(started)
 		<-ctx.Done()
-		return runtimeSnapshot{}, ctx.Err()
+		return appmodel.RuntimeSnapshot{}, ctx.Err()
 	}})
 	manager.Kick(key)
 	<-started
@@ -331,20 +338,21 @@ func TestRuntimeManagerCloseWaitsForOutstandingObservation(t *testing.T) {
 		t.Fatal("closed runtime retained in-flight observer")
 	}
 }
+
 func TestMCPRuntimeCannotBeRedirectedOrChooseLatestCaller(t *testing.T) {
 	c := testController()
-	c.run = func(f func()) { f() }
-	c.cwd = t.TempDir()
-	c.setThreads([]Thread{{ID: 1, ServerID: "a", Messages: []Message{{Kind: "mcpToolCall", Status: "inProgress", Item: &codex.Item{Server: "miya", Tool: "runtime_info"}}}}, {ID: 2, ServerID: "b", Messages: []Message{{Kind: "mcpToolCall", Status: "inProgress", Item: &codex.Item{Server: "miya", Tool: "runtime_info"}}}}})
-	if _, err := c.mcpRuntime(mcpRequest{Reference: testRef(agentCodex, "a").URL(), Thread: 1}); err == nil {
+	c.Run = func(f func()) { f() }
+	c.Cwd = t.TempDir()
+	c.SetThreads([]appmodel.Thread{{ID: 1, ServerID: "a", Messages: []appmodel.Message{{Kind: "mcpToolCall", Status: "inProgress", Item: &codex.Item{Server: "miya", Tool: "runtime_info"}}}}, {ID: 2, ServerID: "b", Messages: []appmodel.Message{{Kind: "mcpToolCall", Status: "inProgress", Item: &codex.Item{Server: "miya", Tool: "runtime_info"}}}}})
+	if _, err := c.McpRuntime(appmodel.McpRequest{Reference: testRef(appmodel.AgentCodex, "a").URL(), Thread: 1}); err == nil {
 		t.Fatal("ambiguous callers selected a thread")
 	}
-	c.setThreads(c.threads()[:1])
-	value, err := c.mcpRuntime(mcpRequest{Reference: testRef(agentCodex, "b").URL(), Thread: 2})
+	c.SetThreads(c.Threads()[:1])
+	value, err := c.McpRuntime(appmodel.McpRequest{Reference: testRef(appmodel.AgentCodex, "b").URL(), Thread: 2})
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := value.(deferred)()
+	result, err := value.(appmodel.Deferred)()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -359,16 +367,16 @@ func TestProjectOverviewCombinesOwnedServicesAndUnownedCandidates(t *testing.T) 
 	metadata, _ := json.Marshal(map[string]any{"resume-thread": []map[string]any{{"processId": "native", "itemId": "start", "osPid": pid, "command": "server"}}})
 	t.Setenv("QUICKGUI_FIXTURE_BACKGROUND", string(metadata))
 	c, _, _ := codexResumeFixture(t)
-	c.run = func(f func()) { f() }
-	work, err := c.prepareRuntime(c.threadRef(c.threadWithID(1)), c.cwd)
+	c.Run = func(f func()) { f() }
+	work, err := c.PrepareRuntime(c.ThreadRef(c.ThreadWithID(1)), c.Cwd)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := work(); err != nil {
 		t.Fatal(err)
 	}
-	_, candidatePort, _ := startRuntimeHTTP(t, c.cwd)
-	services, err := c.projectRuntimeServices(context.Background(), c.cwd)
+	_, candidatePort, _ := startRuntimeHTTP(t, c.Cwd)
+	services, err := c.ProjectRuntimeServices(context.Background(), c.Cwd)
 	if err != nil {
 		t.Fatal(err)
 	}

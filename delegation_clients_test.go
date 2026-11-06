@@ -3,25 +3,26 @@
 package main
 
 import (
-	"context"
-	"encoding/json"
-	"fmt"
-	"reflect"
-	"testing"
-	"time"
-
+	context "context"
+	json "encoding/json"
+	fmt "fmt"
+	appmodel "miya/internal/appmodel"
 	dg "miya/internal/delegation"
-	"miya/internal/remote"
+	remote "miya/internal/remote"
+	widgets "miya/internal/widgets"
+	reflect "reflect"
+	testing "testing"
+	time "time"
 
-	"github.com/egoist/mygo/ui"
+	ui "github.com/egoist/mygo/ui"
 )
 
 func collaborationPhoneCall(t *testing.T, f *serviceFixture, operation, from string, args map[string]any) (map[string]any, error) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	raw := collaborationArgsJSON(collaborationRequest{Operation: operation, From: from, Arguments: collaborationArgsJSON(args)})
-	frame := f.srv.c.phoneCollaboration(ctx, remote.Request{Op: "collaboration", RequestID: "phone-correlation", Collaboration: raw})
+	raw := widgets.CollaborationArgsJSON(appmodel.CollaborationRequest{Operation: operation, From: from, Arguments: widgets.CollaborationArgsJSON(args)})
+	frame := f.srv.C.PhoneCollaboration(ctx, remote.Request{Op: "collaboration", RequestID: "phone-correlation", Collaboration: raw})
 	var response struct {
 		RequestID string         `json:"request_id"`
 		Result    map[string]any `json:"result"`
@@ -40,10 +41,12 @@ func collaborationPhoneCall(t *testing.T, f *serviceFixture, operation, from str
 
 func TestCollaborationPhoneDispatchAndDesktopCardsShareFixedTaskData(t *testing.T) {
 	f := newServiceFixture(t)
-	caller := collaborationCaller(t, f, agentClaude, "source")
+	caller := collaborationCaller(t, f, appmodel.AgentClaude, "source")
 	var from string
-	f.serv.Do(func() { from = f.srv.c.threadRef(f.srv.c.threadWithID(caller)).URL() })
-	created, err := collaborationPhoneCall(t, f, "start_task", from, map[string]any{"request_id": "phone-dispatch", "agent": agentClaude, "task": "Review compatibility", "title": "Compatibility review", "notify": "none"})
+	f.serv.Do(func() {
+		from = f.srv.C.ThreadRef(f.srv.C.ThreadWithID(caller)).URL()
+	})
+	created, err := collaborationPhoneCall(t, f, "start_task", from, map[string]any{"request_id": "phone-dispatch", "agent": appmodel.AgentClaude, "task": "Review compatibility", "title": "Compatibility review", "notify": "none"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,26 +56,26 @@ func TestCollaborationPhoneDispatchAndDesktopCardsShareFixedTaskData(t *testing.
 		t.Fatal(err)
 	}
 	phone, err := collaborationPhoneCall(t, f, "read_task", from, map[string]any{"task_id": task.ID})
-	if err != nil || !reflect.DeepEqual(desktop, phone) || desktop["agent"] != agentClaude {
+	if err != nil || !reflect.DeepEqual(desktop, phone) || desktop["agent"] != appmodel.AgentClaude {
 		t.Fatal("desktop and phone disagree about the same execution", desktop, phone, err)
 	}
-	call := func(r collaborationRequest, done func(json.RawMessage, error)) {
+	call := func(r appmodel.CollaborationRequest, done func(json.RawMessage, error)) {
 		var args map[string]any
 		if err := json.Unmarshal(r.Arguments, &args); err != nil {
 			done(nil, err)
 			return
 		}
 		result, err := collaborationUserCall(t, f, r.Operation, r.From, args)
-		done(collaborationArgsJSON(result), err)
+		done(widgets.CollaborationArgsJSON(result), err)
 	}
 	for _, width := range []int{1120, 320, 390} {
 		t.Run(fmt.Sprint(width), func(t *testing.T) {
-			p := (&collaborationUI{}).pane(from)
-			p.open = true
-			var capability *collaborationStatus
-			f.serv.Do(func() { capability = f.srv.c.collaborationCapabilities() })
-			view := collaborationPanelView{palette: taskPalette{panel, line, ink, muted}, capability: capability, connected: true, call: call, openThread: func(string) {}}
-			tt := ui.NewTester(func(c *ui.Context) { ui.Column(c).FillWidth().Padding(12).Children(func() { p.draw(c, view) }) }, width, 750)
+			p := (&widgets.CollaborationUI{}).Pane(from)
+			p.Open = true
+			var capability *appmodel.CollaborationStatus
+			f.serv.Do(func() { capability = f.srv.C.CollaborationCapabilities() })
+			view := widgets.CollaborationPanelView{Palette: widgets.TaskPalette{widgets.Panel, widgets.Line, widgets.Ink, widgets.Muted}, Capability: capability, Connected: true, Call: call, OpenThread: func(string) {}}
+			tt := ui.NewTester(func(c *ui.Context) { ui.Column(c).FillWidth().Padding(12).Children(func() { p.Draw(c, view) }) }, width, 750)
 			tt.Frame()
 			if !tt.HasText(task.Title) || !tt.HasText("Claude Code · Completed") || !tt.HasText(task.Result.Text) {
 				t.Fatal("service task data did not reach task cards", tt.Texts())
@@ -81,7 +84,7 @@ func TestCollaborationPhoneDispatchAndDesktopCardsShareFixedTaskData(t *testing.
 				t.Fatal(err)
 			}
 			tt.Frame()
-			if !tt.HasText(task.Result.Text) || p.details[task.ID].Thread != task.Target {
+			if !tt.HasText(task.Result.Text) || p.Details[task.ID].Thread != task.Target {
 				t.Fatal("task detail lost the fixed result/target", tt.Texts())
 			}
 			saveCommandSnapshot(t, tt, fmt.Sprintf("service-task-result-%d.png", width))
@@ -93,10 +96,10 @@ func TestCollaborationPhoneAndDesktopCanResolveUnknownNotification(t *testing.T)
 	for _, width := range []int{320, 390, 1120} {
 		t.Run(fmt.Sprint(width), func(t *testing.T) {
 			f := newServiceFixture(t)
-			caller := collaborationCaller(t, f, agentClaude, "source")
-			f.serv.Do(func() { f.srv.c.update(caller, func(th *Thread) { th.Busy = true }) })
+			caller := collaborationCaller(t, f, appmodel.AgentClaude, "source")
+			f.serv.Do(func() { f.srv.C.Update(caller, func(th *appmodel.Thread) { th.Busy = true }) })
 			q := collaborationStoredFixtureTask(t, f, caller)
-			s := f.srv.c.collaboration
+			s := f.srv.C.Collaboration
 			value, err := s.Call(func() (any, error) {
 				if _, err := s.Manager.Watch(q.From, q.ID); err != nil {
 					return nil, err
@@ -121,19 +124,19 @@ func TestCollaborationPhoneAndDesktopCanResolveUnknownNotification(t *testing.T)
 			if err != nil || result["notification"] != "needsAttention" || result["delivery_id"] != d.ID {
 				t.Fatal(result, err)
 			}
-			p := (&collaborationUI{}).pane(q.From)
-			p.open = true
-			call := func(r collaborationRequest, done func(json.RawMessage, error)) {
+			p := (&widgets.CollaborationUI{}).Pane(q.From)
+			p.Open = true
+			call := func(r appmodel.CollaborationRequest, done func(json.RawMessage, error)) {
 				var args map[string]any
 				_ = json.Unmarshal(r.Arguments, &args)
 				res, err := collaborationPhoneCall(t, f, r.Operation, r.From, args)
-				done(collaborationArgsJSON(res), err)
+				done(widgets.CollaborationArgsJSON(res), err)
 			}
-			p.read(q.ID, call)
-			var cap *collaborationStatus
-			f.serv.Do(func() { cap = f.srv.c.collaborationCapabilities() })
-			v := collaborationPanelView{palette: taskPalette{panel, line, ink, muted}, capability: cap, connected: true, call: call}
-			tt := ui.NewTester(func(c *ui.Context) { ui.Column(c).Fill().Padding(12).Justify(ui.End).Children(func() { p.draw(c, v) }) }, width, 750)
+			p.Read(q.ID, call)
+			var cap *appmodel.CollaborationStatus
+			f.serv.Do(func() { cap = f.srv.C.CollaborationCapabilities() })
+			v := widgets.CollaborationPanelView{Palette: widgets.TaskPalette{widgets.Panel, widgets.Line, widgets.Ink, widgets.Muted}, Capability: cap, Connected: true, Call: call}
+			tt := ui.NewTester(func(c *ui.Context) { ui.Column(c).Fill().Padding(12).Justify(ui.End).Children(func() { p.Draw(c, v) }) }, width, 750)
 			tt.Frame()
 			if err := tt.Click("Stop tracking this notification"); err != nil {
 				t.Fatal(err)
@@ -144,14 +147,14 @@ func TestCollaborationPhoneAndDesktopCanResolveUnknownNotification(t *testing.T)
 				t.Fatal(err)
 			}
 			tt.Frame()
-			if p.pending != nil || p.err != "" || !tt.HasText("Notification tracking stopped") {
-				t.Fatal("resolution failed", p.err, tt.Texts())
+			if p.Pending != nil || p.Err != "" || !tt.HasText("Notification tracking stopped") {
+				t.Fatal("resolution failed", p.Err, tt.Texts())
 			}
 			old, _ := s.Manager.Delivery(d.ID)
 			if old.State != "needsAttention" || old.Resolution != "abandoned" {
 				t.Fatal("native outcome fabricated", old)
 			}
-			f.serv.Do(func() { f.srv.c.update(caller, func(th *Thread) { th.Busy = false }) })
+			f.serv.Do(func() { f.srv.C.Update(caller, func(th *appmodel.Thread) { th.Busy = false }) })
 		})
 	}
 }

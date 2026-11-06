@@ -1,33 +1,33 @@
 package main
 
 import (
-	"bufio"
-	"context"
-	"fmt"
-	"io"
-	"net"
-	"net/http"
-	"net/http/cookiejar"
-	"net/http/httptest"
-	"net/url"
-	"strings"
-	"testing"
-	"time"
+	bufio "bufio"
+	context "context"
+	fmt "fmt"
+	io "io"
+	phoneproxy "miya/internal/phoneproxy"
+	webservice "miya/internal/webservice"
+	net "net"
+	http "net/http"
+	cookiejar "net/http/cookiejar"
+	httptest "net/http/httptest"
+	url "net/url"
+	strings "strings"
+	testing "testing"
+	time "time"
 
-	"miya/internal/webservice"
-
-	"github.com/coder/websocket"
+	websocket "github.com/coder/websocket"
 )
 
-func webProxyFixture(t *testing.T, handler http.Handler) (*phoneFileProxy, *http.Client, string) {
+func webProxyFixture(t *testing.T, handler http.Handler) (*phoneproxy.PhoneFileProxy, *http.Client, string) {
 	t.Helper()
 	app := httptest.NewServer(handler)
 	t.Cleanup(app.Close)
 	u, _ := url.Parse(app.URL)
 	bridge := httptest.NewServer(webservice.Server())
 	t.Cleanup(bridge.Close)
-	p := new(phoneFileProxy)
-	if err := p.startProxy(webservice.Prefix+u.Port(), "http://localhost:"+u.Port(), func(ctx context.Context) (net.Conn, error) {
+	p := new(phoneproxy.PhoneFileProxy)
+	if err := p.StartProxy(webservice.Prefix+u.Port(), "http://localhost:"+u.Port(), func(ctx context.Context) (net.Conn, error) {
 		return (&net.Dialer{}).DialContext(ctx, "tcp", bridge.Listener.Addr().String())
 	}); err != nil {
 		t.Fatal(err)

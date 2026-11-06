@@ -1,8 +1,9 @@
 package main
 
 import (
-	"errors"
-	"testing"
+	errors "errors"
+	appmodel "miya/internal/appmodel"
+	testing "testing"
 )
 
 func TestWriterConflictMessages(t *testing.T) {
@@ -10,12 +11,12 @@ func TestWriterConflictMessages(t *testing.T) {
 		"thread abc already has an active writer",
 		"Thread abc already has a live local writer",
 	} {
-		if !isWriterConflict(errors.New(message)) {
+		if !appmodel.IsWriterConflict(errors.New(message)) {
 			t.Fatalf("missed conflict: %s", message)
 		}
 	}
 	for _, err := range []error{nil, errors.New("connection closed"), errors.New("thread not found")} {
-		if isWriterConflict(err) {
+		if appmodel.IsWriterConflict(err) {
 			t.Fatalf("misclassified error: %v", err)
 		}
 	}
@@ -23,8 +24,8 @@ func TestWriterConflictMessages(t *testing.T) {
 
 func TestTurnStartedDoesNotInferExternalOwnership(t *testing.T) {
 	c := testController()
-	c.handle(event("turn/started", `{"threadId":"t2","turn":{"id":"turn2"}}`))
-	if c.threads()[1].ReadOnly {
+	c.Handle(event("turn/started", `{"threadId":"t2","turn":{"id":"turn2"}}`))
+	if c.Threads()[1].ReadOnly {
 		t.Fatal("turn notification is not a writer conflict")
 	}
 }

@@ -1,19 +1,22 @@
 package main
 
 import (
-	"context"
-	"encoding/json"
-	"errors"
-	"os"
-	"strings"
-	"testing"
-	"time"
-
-	"miya/internal/codex"
+	context "context"
+	json "encoding/json"
+	errors "errors"
+	appmodel "miya/internal/appmodel"
+	codex "miya/internal/codex"
+	controller "miya/internal/controller"
+	os "os"
+	strings "strings"
+	testing "testing"
+	time "time"
 )
 
 const resetTestAccount = `{"account":{"type":"chatgpt","email":"test@example.com","planType":"plus"}}`
+
 const resetTestLimits = `{"accountId":"account-1","rateLimits":{"primary":{"usedPercent":25,"windowDurationMins":300}},"rateLimitResetCredits":{"availableCount":4,"credits":[{"id":"later","resetType":"codexRateLimits","status":"available","grantedAt":1800000000,"expiresAt":1800100000},{"id":"soon","resetType":"codexRateLimits","status":"available","grantedAt":1800000000,"expiresAt":1800010000,"title":"Codex reset","description":"Reset your usage windows"}]}}`
+
 const resetTestAfter = `{"accountId":"account-1","rateLimits":{"primary":{"usedPercent":0,"windowDurationMins":300}},"rateLimitResetCredits":{"availableCount":3,"credits":[{"id":"later","resetType":"codexRateLimits","status":"available","grantedAt":1800000000,"expiresAt":1800100000}]}}`
 
 type accountCallStep struct {
@@ -47,13 +50,13 @@ func (s *scriptedAccountCaller) Call(_ context.Context, method string, params an
 	return json.Unmarshal([]byte(step.response), out)
 }
 
-func resetTestDisplay(t *testing.T) accountDisplay {
+func resetTestDisplay(t *testing.T) appmodel.AccountDisplay {
 	t.Helper()
-	var data accountLimits
+	var data appmodel.AccountLimits
 	if err := json.Unmarshal([]byte(resetTestLimits), &data); err != nil {
 		t.Fatal(err)
 	}
-	return accountDisplay{Identity: &accountIdentity{Type: "chatgpt", Email: "test@example.com"}, Limits: data, Updated: time.Now()}
+	return appmodel.AccountDisplay{Identity: &appmodel.AccountIdentity{Type: "chatgpt", Email: "test@example.com"}, Limits: data, Updated: time.Now()}
 }
 
 func TestAccountReadUsesRealResetDetailsWithoutRedeeming(t *testing.T) {
@@ -65,13 +68,13 @@ func TestAccountReadUsesRealResetDetailsWithoutRedeeming(t *testing.T) {
 			}
 		}},
 	}}
-	data, ok := readAccountDisplay(context.Background(), rpc, accountDisplay{})
+	data, ok := appmodel.ReadAccountDisplay(context.Background(), rpc, appmodel.AccountDisplay{})
 	if !ok || data.Limits.ResetCredits.AvailableCount != 4 || data.Limits.ResetCredits.Next().ID != "soon" || len(rpc.steps) != 0 {
 		t.Fatalf("reset-credit response was not mapped: %+v", data)
 	}
 	// The available count can exceed the capped detail list, and null details
 	// must remain unknown rather than invented cards or a zero count.
-	var countOnly accountLimits
+	var countOnly appmodel.AccountLimits
 	if err := json.Unmarshal([]byte(`{"rateLimitResetCredits":{"availableCount":2,"credits":null}}`), &countOnly); err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +90,7 @@ func TestAccountRefreshFailureKeepsPreviousDisplay(t *testing.T) {
 		{{method: "account/read", response: resetTestAccount}, {method: "account/rateLimits/read", err: errors.New("offline")}},
 	} {
 		rpc := &scriptedAccountCaller{t: t, steps: steps}
-		result, _ := readAccountDisplay(context.Background(), rpc, cached)
+		result, _ := appmodel.ReadAccountDisplay(context.Background(), rpc, cached)
 		if result.Loading || result.Refreshing || result.Identity == nil || result.Limits.ResetCredits != cached.Limits.ResetCredits || result.Limits.RateLimits != cached.Limits.RateLimits || !result.Updated.Equal(cached.Updated) {
 			t.Fatal("background refresh removed the previous account or usage")
 		}
@@ -96,49 +99,49 @@ func TestAccountRefreshFailureKeepsPreviousDisplay(t *testing.T) {
 
 func TestNextResetCreditIgnoresUnavailableAndUsesEarliestExpiry(t *testing.T) {
 	soon, later := int64(1800010000), int64(1800100000)
-	credits := []resetCredit{
+	credits := []appmodel.ResetCredit{
 		{ID: "used", Status: "redeemed", ResetType: "codexRateLimits", ExpiresAt: &soon},
 		{ID: "forever", Status: "available", ResetType: "codexRateLimits"},
 		{ID: "later", Status: "available", ResetType: "codexRateLimits", ExpiresAt: &later},
 		{ID: "soon", Status: "available", ResetType: "codexRateLimits", ExpiresAt: &soon},
 		{ID: "unknown", Status: "available", ResetType: "unknown", ExpiresAt: &soon},
 	}
-	if i := nextResetCredit(credits); i != 3 {
+	if i := appmodel.NextResetCredit(credits); i != 3 {
 		t.Fatalf("selected %d, want earliest available Codex credit", i)
 	}
-	if i := nextResetCredit(credits[:2]); i != 1 {
+	if i := appmodel.NextResetCredit(credits[:2]); i != 1 {
 		t.Fatalf("selected %d, want non-expiring available credit", i)
 	}
-	if i := nextResetCredit(credits[:1]); i != -1 || nextResetCredit(nil) != -1 {
+	if i := appmodel.NextResetCredit(credits[:1]); i != -1 || appmodel.NextResetCredit(nil) != -1 {
 		t.Fatal("an unavailable credit was selected")
 	}
 }
 
 func TestResetRequiresConfirmationAndKeepsRetryIdentity(t *testing.T) {
-	c := &chatController{accountCache: resetTestDisplay(t), ready: func() bool { return true }, client: &codex.Client{}}
-	c.confirmAccountReset() // No user confirmation: no request can be sent.
-	c.askAccountReset()     // Opening the confirmation also sends no request.
-	if !c.accountReset.Confirming || c.accountReset.Attempt == nil || c.accountReset.Attempt.Credit.ID != "soon" || len(c.accountReset.Attempt.IdempotencyKey) != 36 {
+	c := &controller.Controller{WindowState: appmodel.WindowState{Ready: func() bool { return true }}, AccountCache: resetTestDisplay(t), Client: &codex.Client{}}
+	c.ConfirmAccountReset() // No user confirmation: no request can be sent.
+	c.AskAccountReset()     // Opening the confirmation also sends no request.
+	if !c.AccountReset.Confirming || c.AccountReset.Attempt == nil || c.AccountReset.Attempt.Credit.ID != "soon" || len(c.AccountReset.Attempt.IdempotencyKey) != 36 {
 		t.Fatal("confirmation did not bind the chosen credit")
 	}
-	c.cancelAccountReset()
-	if c.accountReset.Attempt != nil {
+	c.CancelAccountReset()
+	if c.AccountReset.Attempt != nil {
 		t.Fatal("cancel before submission kept an unused attempt")
 	}
-	c.askAccountReset()
-	attempt := c.accountReset.Attempt
+	c.AskAccountReset()
+	attempt := c.AccountReset.Attempt
 	attempt.Submitted = true
-	c.cancelAccountReset()
-	c.askAccountReset()
-	if c.accountReset.Attempt.IdempotencyKey != attempt.IdempotencyKey || !c.accountReset.Confirming {
+	c.CancelAccountReset()
+	c.AskAccountReset()
+	if c.AccountReset.Attempt.IdempotencyKey != attempt.IdempotencyKey || !c.AccountReset.Confirming {
 		t.Fatal("an uncertain request was replaced with a new attempt")
 	}
-	c.accountReset.Busy = true
-	c.confirmAccountReset() // Busy guard must block duplicate submission.
+	c.AccountReset.Busy = true
+	c.ConfirmAccountReset() // Busy guard must block duplicate submission.
 }
 
 func TestResetRedeemsSelectedCreditAndReloadsServerData(t *testing.T) {
-	attempt, err := newAccountResetAttempt(resetTestDisplay(t))
+	attempt, err := appmodel.NewAccountResetAttempt(resetTestDisplay(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,14 +157,14 @@ func TestResetRedeemsSelectedCreditAndReloadsServerData(t *testing.T) {
 		{method: "account/read", response: resetTestAccount},
 		{method: "account/rateLimits/read", response: resetTestAfter},
 	}}
-	result, err := executeAccountReset(context.Background(), rpc, *attempt)
+	result, err := appmodel.ExecuteAccountReset(context.Background(), rpc, *attempt)
 	if err != nil || result.Outcome != "reset" || !result.Submitted || result.Display.Limits.ResetCredits.AvailableCount != 3 || result.Display.Limits.RateLimits.Primary.UsedPercent != 0 || len(rpc.steps) != 0 {
 		t.Fatalf("redemption did not use the refreshed server result: %+v %v", result, err)
 	}
 }
 
 func TestResetBlocksChangedAccountOrSelectedCredit(t *testing.T) {
-	attempt, err := newAccountResetAttempt(resetTestDisplay(t))
+	attempt, err := appmodel.NewAccountResetAttempt(resetTestDisplay(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -173,7 +176,7 @@ func TestResetBlocksChangedAccountOrSelectedCredit(t *testing.T) {
 			{method: "account/read", response: resetTestAccount},
 			{method: "account/rateLimits/read", response: limits},
 		}}
-		result, err := executeAccountReset(context.Background(), rpc, *attempt)
+		result, err := appmodel.ExecuteAccountReset(context.Background(), rpc, *attempt)
 		if err == nil || result.Submitted {
 			t.Fatal("redemption was allowed after the account or card changed")
 		}
@@ -181,7 +184,7 @@ func TestResetBlocksChangedAccountOrSelectedCredit(t *testing.T) {
 }
 
 func TestResetRetryReusesKeyAfterLostResponse(t *testing.T) {
-	attempt, err := newAccountResetAttempt(resetTestDisplay(t))
+	attempt, err := appmodel.NewAccountResetAttempt(resetTestDisplay(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -196,7 +199,7 @@ func TestResetRetryReusesKeyAfterLostResponse(t *testing.T) {
 		{method: "account/rateLimits/read", response: resetTestLimits},
 		{method: "account/rateLimitResetCredit/consume", err: context.DeadlineExceeded, check: check},
 	}}
-	result, err := executeAccountReset(context.Background(), first, *attempt)
+	result, err := appmodel.ExecuteAccountReset(context.Background(), first, *attempt)
 	if err == nil || !result.Submitted {
 		t.Fatal("lost response was not retained as an uncertain submission")
 	}
@@ -208,7 +211,7 @@ func TestResetRetryReusesKeyAfterLostResponse(t *testing.T) {
 		{method: "account/read", response: resetTestAccount},
 		{method: "account/rateLimits/read", response: resetTestAfter},
 	}}
-	result, err = executeAccountReset(context.Background(), retry, *attempt)
+	result, err = appmodel.ExecuteAccountReset(context.Background(), retry, *attempt)
 	if err != nil || result.Outcome != "alreadyRedeemed" {
 		t.Fatalf("idempotent retry failed: %+v %v", result, err)
 	}
@@ -233,7 +236,7 @@ func TestReadRealAccountResetCredits(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer client.Close()
-	data, ok := readAccountDisplay(ctx, client, accountDisplay{})
+	data, ok := appmodel.ReadAccountDisplay(ctx, client, appmodel.AccountDisplay{})
 	if !ok || data.Error != "" || data.UsageError != "" {
 		t.Fatalf("read-only account check failed: %s %s", data.Error, data.UsageError)
 	}

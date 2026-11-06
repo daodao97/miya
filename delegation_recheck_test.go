@@ -3,31 +3,32 @@
 package main
 
 import (
-	"os"
-	"path/filepath"
-	"strings"
-	"testing"
-
-	"miya/internal/appdir"
-	"miya/internal/claude"
+	appdir "miya/internal/appdir"
+	appmodel "miya/internal/appmodel"
+	claude "miya/internal/claude"
+	controller "miya/internal/controller"
 	dg "miya/internal/delegation"
+	os "os"
+	filepath "path/filepath"
+	strings "strings"
+	testing "testing"
 )
 
 func TestCollaborationClaudeRootResultCanBeRecheckedAfterRestart(t *testing.T) {
 	f := newServiceFixture(t)
-	caller := collaborationCaller(t, f, agentClaude, "source")
+	caller := collaborationCaller(t, f, appmodel.AgentClaude, "source")
 	task := collaborationStoredFixtureTask(t, f, caller)
 	var targetID int
-	target := ThreadRef{Source: testReferenceSource, Backend: agentClaude, SessionID: "target"}.URL()
+	target := appmodel.ThreadRef{Source: testReferenceSource, Backend: appmodel.AgentClaude, SessionID: "target"}.URL()
 	f.serv.Do(func() {
-		c := f.srv.c
-		targetID = c.nextID()
-		c.addThread(c.cwd, Thread{ID: targetID, Agent: agentClaude, ServerID: "target", HistoryLoaded: true, Busy: true, ExecutionID: task.ID,
-			Messages: []Message{{Role: "user", Content: task.Prompt}, {Role: "assistant", Content: "fixed result", ExecutionID: task.ID}}})
-		c.collaboration.Executions = map[string]*managedExecution{task.ID: {Thread: targetID, Epoch: "claude:original"}}
-		c.collaboration.Reservations = map[int]string{targetID: task.ID}
+		c := f.srv.C
+		targetID = c.NextID()
+		c.AddThread(c.Cwd, appmodel.Thread{ID: targetID, Agent: appmodel.AgentClaude, ServerID: "target", HistoryLoaded: true, Busy: true, ExecutionID: task.ID,
+			Messages: []appmodel.Message{{Role: "user", Content: task.Prompt}, {Role: "assistant", Content: "fixed result", ExecutionID: task.ID}}})
+		c.Collaboration.Executions = map[string]*controller.ManagedExecution{task.ID: {Thread: targetID, Epoch: "claude:original"}}
+		c.Collaboration.Reservations = map[int]string{targetID: task.ID}
 	})
-	s := f.srv.c.collaboration
+	s := f.srv.C.Collaboration
 	if _, err := s.Call(func() (any, error) {
 		return nil, s.Manager.Observe(dg.Event{TaskID: task.ID, Target: target, SessionEpoch: "claude:original", State: dg.Running})
 	}); err != nil {
@@ -41,9 +42,9 @@ func TestCollaborationClaudeRootResultCanBeRecheckedAfterRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.serv.Do(func() {
-		c := f.srv.c
+		c := f.srv.C
 		// A child's result must never create parent completion evidence.
-		c.handleClaude(targetID, claude.Frame{Type: "result", UUID: "child-result", ParentToolUseID: "child-call", Result: "wrong result"})
+		c.HandleClaude(targetID, claude.Frame{Type: "result", UUID: "child-result", ParentToolUseID: "child-call", Result: "wrong result"})
 	})
 	if _, err := s.Call(func() (any, error) { return nil, nil }); err != nil {
 		t.Fatal(err)
@@ -52,9 +53,9 @@ func TestCollaborationClaudeRootResultCanBeRecheckedAfterRestart(t *testing.T) {
 		t.Fatal("child result created parent terminal evidence")
 	}
 	f.serv.Do(func() {
-		c := f.srv.c
-		c.handleClaude(targetID, claude.Frame{Type: "result", UUID: "root-result", Result: "fixed result"})
-		c.update(targetID, func(t *Thread) { t.Busy = false })
+		c := f.srv.C
+		c.HandleClaude(targetID, claude.Frame{Type: "result", UUID: "root-result", Result: "fixed result"})
+		c.Update(targetID, func(t *appmodel.Thread) { t.Busy = false })
 	})
 	if _, err := s.Call(func() (any, error) { return nil, nil }); err != nil {
 		t.Fatal(err)
@@ -76,24 +77,24 @@ func TestCollaborationClaudeRootResultCanBeRecheckedAfterRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.serv.Do(func() {
-		c := f.srv.c
-		c.collaboration = newCollaboration(c, filepath.Dir(index))
-		c.collaboration.Executions, c.collaboration.Reservations = nil, nil
-		c.update(targetID, func(t *Thread) {
+		c := f.srv.C
+		c.Collaboration = controller.NewCollaboration(c, filepath.Dir(index))
+		c.Collaboration.Executions, c.Collaboration.Reservations = nil, nil
+		c.Update(targetID, func(t *appmodel.Thread) {
 			t.ExecutionID = ""
-			t.Messages = append(t.Messages, Message{Role: "assistant", Content: "later unrelated result"})
+			t.Messages = append(t.Messages, appmodel.Message{Role: "assistant", Content: "later unrelated result"})
 		})
 	})
-	current, _ := f.srv.c.collaboration.Manager.Read(task.ID)
+	current, _ := f.srv.C.Collaboration.Manager.Read(task.ID)
 	if current.State != dg.NeedsAttention {
 		t.Fatal("restart guessed an uncommitted outcome", current)
 	}
 	var work any
-	f.serv.Do(func() { work, err = f.srv.c.prepareTaskRecheck(task.From, task.ID) })
+	f.serv.Do(func() { work, err = f.srv.C.PrepareTaskRecheck(task.From, task.ID) })
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := work.(deferred)(); err != nil {
+	if _, err := work.(appmodel.Deferred)(); err != nil {
 		t.Fatal(err)
 	}
 	result, err := collaborationUserCall(t, f, "read_task", task.From, map[string]any{"task_id": task.ID})
@@ -106,18 +107,18 @@ func TestCollaborationClaudeLiveBindingIsSavedBeforeInput(t *testing.T) {
 	f := newServiceFixture(t)
 	// Exercise the actual stream adapter with a native root-result UUID.
 	var binary string
-	f.serv.Do(func() { binary = f.srv.c.claudeBinary })
+	f.serv.Do(func() { binary = f.srv.C.ClaudeBinary })
 	protocol := strings.Replace(fakeClaude, `"type":"result",`, `"type":"result","uuid":"root-result",`, 1)
 	if err := os.WriteFile(binary, []byte(protocol), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	caller := collaborationCaller(t, f, agentClaude, "source")
-	result, err := collaborationMCPCall(t, f, caller, "start_task", map[string]any{"request_id": "bound", "agent": agentClaude, "task": "review"})
+	caller := collaborationCaller(t, f, appmodel.AgentClaude, "source")
+	result, err := collaborationMCPCall(t, f, caller, "start_task", map[string]any{"request_id": "bound", "agent": appmodel.AgentClaude, "task": "review"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	task := waitCollaborationTask(t, f, result["task_id"].(string))
-	proof, err := f.srv.c.collaboration.Manager.NativeOutcome(task.ID)
+	proof, err := f.srv.C.Collaboration.Manager.NativeOutcome(task.ID)
 	if err != nil || task.State != dg.Completed || proof.Target != task.Target || proof.SessionEpoch != task.SessionEpoch || proof.NativeResultID != "root-result" {
 		t.Fatal("native result was not bound to its persisted process/session", task, proof, err)
 	}

@@ -3,20 +3,22 @@
 package main
 
 import (
-	"errors"
-	"io"
-	"net"
-	"os"
-	"path/filepath"
-	"strings"
-	"sync/atomic"
-	"testing"
-	"time"
-
-	"miya/internal/async"
-	"miya/internal/codex"
-	"miya/internal/model"
-	"miya/internal/notification"
+	errors "errors"
+	io "io"
+	appmodel "miya/internal/appmodel"
+	async "miya/internal/async"
+	codex "miya/internal/codex"
+	controller "miya/internal/controller"
+	model "miya/internal/model"
+	notification "miya/internal/notification"
+	uiruntime "miya/internal/uiruntime"
+	net "net"
+	os "os"
+	filepath "path/filepath"
+	strings "strings"
+	atomic "sync/atomic"
+	testing "testing"
+	time "time"
 )
 
 // fakeClaude speaks enough stream-json for one turn: a first delta, a
@@ -36,33 +38,33 @@ func TestServiceRestartWhenIdleChecksAllWork(t *testing.T) {
 	for _, work := range []string{"idle", "current-project", "background-project", "memory"} {
 		t.Run(work, func(t *testing.T) {
 			c := serverController(t.TempDir(), "")
-			s := &service{c: c, quit: make(chan struct{})}
+			s := &controller.Service{C: c, Quit: make(chan struct{})}
 			switch work {
 			case "current-project":
-				c.setThreads([]Thread{{ID: 1, Busy: true}})
+				c.SetThreads([]appmodel.Thread{{ID: 1, Busy: true}})
 			case "background-project":
-				c.projectCache["/other"] = []Thread{{ID: 2, Busy: true}}
+				c.ProjectCache["/other"] = []appmodel.Thread{{ID: 2, Busy: true}}
 			case "memory":
-				c.memories().Calls = 1
+				c.Memories().Calls = 1
 			}
-			if _, err := s.handle(nil, svcRequest{Op: "quitWhenIdle"}); err != nil {
+			if _, err := s.Handle(nil, appmodel.SvcRequest{Op: "quitWhenIdle"}); err != nil {
 				t.Fatal(err)
 			}
 			stopped := func() bool {
 				select {
-				case <-s.quit:
+				case <-s.Quit:
 					return true
 				default:
 					return false
 				}
 			}
-			if !s.quitWhenIdle || stopped() != (work == "idle") {
+			if !s.QuitWhenIdle || stopped() != (work == "idle") {
 				t.Fatal("safe restart did not check all running work before stopping")
 			}
-			c.setThreads(nil)
-			c.projectCache = nil
-			c.memories().Calls = 0
-			if _, err := s.handle(nil, svcRequest{Op: "quitWhenIdle"}); err != nil || !stopped() {
+			c.SetThreads(nil)
+			c.ProjectCache = nil
+			c.Memories().Calls = 0
+			if _, err := s.Handle(nil, appmodel.SvcRequest{Op: "quitWhenIdle"}); err != nil || !stopped() {
 				t.Fatal("idle service did not stop promptly")
 			}
 		})
@@ -77,45 +79,45 @@ func TestServiceDeleteSelectedConversationUpdatesWindow(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			f := newServiceFixture(t)
-			target := Thread{ID: 1, ServerID: "delete-this", Title: "Delete", HistoryLoaded: true}
-			keep := Thread{ID: 2, ServerID: "keep-this", Title: "Keep", HistoryLoaded: true, Draft: "keep draft"}
+			target := appmodel.Thread{ID: 1, ServerID: "delete-this", Title: "Delete", HistoryLoaded: true}
+			keep := appmodel.Thread{ID: 2, ServerID: "keep-this", Title: "Keep", HistoryLoaded: true, Draft: "keep draft"}
 			f.serv.Do(func() {
-				items := []Thread{target}
+				items := []appmodel.Thread{target}
 				if !last {
 					items = append(items, keep)
 				}
-				f.srv.c.setThreads(items)
-				f.srv.c.projectCache[f.srv.c.cwd] = items
+				f.srv.C.SetThreads(items)
+				f.srv.C.ProjectCache[f.srv.C.Cwd] = items
 			})
 			window := f.window()
-			t.Cleanup(func() { window.cancel(); window.remote.Close() })
+			t.Cleanup(func() { window.Cancel(); window.Remote.Close() })
 			f.win.Do(func() {
-				window.setActive(target.ID)
-				window.rememberDraft("old draft")
-				window.setAttachments([]string{"old-attachment.txt"})
-				window.mirror.messages[target.ID] = []Message{{Role: "assistant", Content: "old response"}}
-				window.deleteThread(target)
+				window.SetActive(target.ID)
+				window.RememberDraft("old draft")
+				window.SetAttachments([]string{"old-attachment.txt"})
+				window.Mirror.Messages[target.ID] = []appmodel.Message{{Role: "assistant", Content: "old response"}}
+				window.DeleteThread(target)
 			})
-			f.waitWindow("deleted conversation to disappear", func() bool { return window.threadWithID(target.ID).ID == 0 })
+			f.waitWindow("deleted conversation to disappear", func() bool { return window.ThreadWithID(target.ID).ID == 0 })
 			f.win.Do(func() {
 				want := keep.ID
 				if last {
 					want = 0
 				}
-				if window.active() != want {
-					t.Errorf("selected conversation = %d, want %d", window.active(), want)
+				if window.Active() != want {
+					t.Errorf("selected conversation = %d, want %d", window.Active(), want)
 				}
 				draft := keep.Draft
 				if last {
 					draft = ""
 				}
-				if window.draft() != draft || len(window.attachments()) != 0 {
+				if window.Draft() != draft || len(window.Attachments()) != 0 {
 					t.Error("deleted conversation left its composer contents in the new selection")
 				}
-				if _, ok := window.mirror.drafts[target.ID]; ok {
+				if _, ok := window.Mirror.Drafts[target.ID]; ok {
 					t.Error("deleted conversation retained its draft")
 				}
-				if _, ok := window.mirror.messages[target.ID]; ok {
+				if _, ok := window.Mirror.Messages[target.ID]; ok {
 					t.Error("deleted conversation retained its messages")
 				}
 			})
@@ -127,30 +129,30 @@ func TestCompletionNoticeSurvivesServiceSnapshots(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	c := serverController(t.TempDir(), "")
 	h := notification.NewQueueHub(t.TempDir(), notification.Registration{ID: strings.Repeat("a", 32), Token: strings.Repeat("b", 64), Updated: time.Now()})
-	c.push = h
-	c.installNotifications()
-	c.setThreads([]Thread{{ID: 1, ServerID: "thread", Busy: true, TurnID: "turn", Messages: []Message{
+	c.Push = h
+	c.InstallNotifications()
+	c.SetThreads([]appmodel.Thread{{ID: 1, ServerID: "thread", Busy: true, TurnID: "turn", Messages: []appmodel.Message{
 		{Role: "user", Content: "修复按钮"},
 		{Role: "assistant", TurnID: "turn", Content: "按钮已修复。测试通过。", Item: &codex.Item{Phase: "final_answer"}},
 	}}})
-	c.update(1, func(t *Thread) {
+	c.Update(1, func(t *appmodel.Thread) {
 		t.Busy, t.CompletedAtMs, t.TurnID = false, 10, ""
 	})
 	push, ok := h.NextDelivery()
 	if !ok || push.Payload.Body != "按钮已修复。" {
 		t.Fatal("phone did not receive the result excerpt", push)
 	}
-	state := c.snapshotState()
+	state := c.SnapshotState()
 	if len(state.Threads[0].Messages) != 0 {
 		t.Fatal("snapshot included transcript")
 	}
 	// A desktop that never subscribed to this thread sees metadata only.
-	n, ok := notification.Completion(Thread{Busy: true}, state.Threads[0])
+	n, ok := notification.Completion(appmodel.Thread{Busy: true}, state.Threads[0])
 	if !ok || n.Body != push.Payload.Body {
 		t.Fatal("desktop and phone notification bodies differ", n)
 	}
-	c.projectCache["/background"] = c.threads()
-	state = c.snapshotState()
+	c.ProjectCache["/background"] = c.Threads()
+	state = c.SnapshotState()
 	if state.ProjectThreads["/background"][0].CompletionNoticeBody != n.Body {
 		t.Fatal("background project's snapshot lost the result")
 	}
@@ -159,7 +161,7 @@ func TestCompletionNoticeSurvivesServiceSnapshots(t *testing.T) {
 type serviceFixture struct {
 	t    *testing.T
 	sock string
-	srv  *service
+	srv  *controller.Service
 	serv *async.Executor // the service's main thread
 	win  *async.Executor // the windows' main thread
 }
@@ -181,24 +183,24 @@ func newServiceFixture(t *testing.T) *serviceFixture {
 	stop := make(chan struct{})
 	go f.serv.Loop(stop)
 	go f.win.Loop(stop)
-	oldHook := currentInvalidateHook()
+	oldHook := uiruntime.CurrentInvalidateHook()
 	f.serv.Do(func() {
-		f.srv = newService(serverController(dir, bin), f.serv)
+		f.srv = controller.NewService(serverController(dir, bin), f.serv)
 	})
-	setInvalidateHook(f.srv.markDirty)
+	uiruntime.SetInvalidateHook(f.srv.MarkDirty)
 	ln, err := net.Listen("unix", f.sock)
 	if err != nil {
 		t.Fatal(err)
 	}
-	go f.srv.serve(ln)
-	go f.srv.publishLoop()
+	go f.srv.Serve(ln)
+	go f.srv.PublishLoop()
 	t.Cleanup(func() {
-		f.srv.stop()
+		f.srv.Stop()
 		ln.Close()
 		// Let the Claude run report its end before the state goes away.
 		for deadline := time.Now().Add(30 * time.Second); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
 			busy := true
-			f.serv.Do(func() { busy = f.srv.busy() })
+			f.serv.Do(func() { busy = f.srv.Busy() })
 			if !busy {
 				break
 			}
@@ -207,31 +209,31 @@ func newServiceFixture(t *testing.T) *serviceFixture {
 		// be finishing a native outcome/index operation. Wait before TempDir
 		// cleanup removes the isolated service data and before its executor
 		// disappears; busy() intentionally ignores a cancelled worker.
-		if collaboration := f.srv.c.collaboration; collaboration != nil {
+		if collaboration := f.srv.C.Collaboration; collaboration != nil {
 			<-collaboration.Done()
 		}
 		close(stop)
-		setInvalidateHook(oldHook)
+		uiruntime.SetInvalidateHook(oldHook)
 	})
 	return f
 }
 
 // window connects a window's controller, as newWindowController does.
-func (f *serviceFixture) window() *chatController {
+func (f *serviceFixture) window() *controller.Controller {
 	f.t.Helper()
-	cl, err := dialService(f.sock)
+	cl, err := appmodel.DialService(f.sock)
 	if err != nil {
 		f.t.Fatal(err)
 	}
-	var st svcState
+	var st appmodel.SvcState
 	if err := cl.Call("state", nil, &st); err != nil {
 		f.t.Fatal(err)
 	}
-	var c *chatController
+	var c *controller.Controller
 	f.win.Do(func() {
-		c = newMirrorController()
-		c.run = f.win.Push
-		c.attachService(cl, st)
+		c = controller.NewMirrorController()
+		c.Run = f.win.Push
+		c.AttachService(cl, st)
 	})
 	return c
 }
@@ -240,21 +242,21 @@ func TestServiceWindowWaitsInsteadOfStartingLocalAgents(t *testing.T) {
 	var attempts atomic.Int32
 	retrying, allow := make(chan struct{}), make(chan struct{})
 	conn, peer := net.Pipe()
-	cl := newServiceClient(conn)
+	cl := appmodel.NewServiceClient(conn)
 	go io.Copy(io.Discard, peer)
-	c := newServiceWindow("/workspace", func() (*serviceClient, svcState, error) {
+	c := controller.NewServiceWindow("/workspace", func() (*appmodel.ServiceClient, appmodel.SvcState, error) {
 		if attempts.Add(1) == 1 {
-			return nil, svcState{}, errors.New("Incompatible background service version; conversations are running")
+			return nil, appmodel.SvcState{}, errors.New("Incompatible background service version; conversations are running")
 		}
 		close(retrying)
 		<-allow
-		return cl, svcState{Cwd: "/workspace", Ready: true, ProjectThreads: map[string][]Thread{}}, nil
+		return cl, appmodel.SvcState{Cwd: "/workspace", Ready: true, ProjectThreads: map[string][]appmodel.Thread{}}, nil
 	})
-	t.Cleanup(func() { c.cancel(); cl.Close(); peer.Close() })
-	if c.remote == nil || c.client != nil || len(c.claudeRuns) != 0 || c.ready() {
+	t.Cleanup(func() { c.Cancel(); cl.Close(); peer.Close() })
+	if c.Remote == nil || c.Client != nil || len(c.ClaudeRuns) != 0 || c.Ready() {
 		t.Fatal("disconnected window started local agents")
 	}
-	if got := c.submit(SendRequest{Text: "不要启动本地会话"}); got != 0 || len(c.threads()) != 0 || c.lastSubmitError == "" {
+	if got := c.Submit(appmodel.SendRequest{Text: "不要启动本地会话"}); got != 0 || len(c.Threads()) != 0 || c.LastSubmitError == "" {
 		t.Fatal("offline window accepted a local send")
 	}
 	select {
@@ -263,12 +265,12 @@ func TestServiceWindowWaitsInsteadOfStartingLocalAgents(t *testing.T) {
 		t.Fatal("window did not retry connection")
 	}
 	d := &testDispatch{}
-	c.run = d.push
+	c.Run = d.push
 	close(allow)
 	for deadline := time.Now().Add(2 * time.Second); time.Now().Before(deadline); time.Sleep(5 * time.Millisecond) {
 		d.drain()
-		if c.ready() {
-			if c.remote != cl || c.client != nil || attempts.Load() != 2 {
+		if c.Ready() {
+			if c.Remote != cl || c.Client != nil || attempts.Load() != 2 {
 				t.Fatal("window did not attach to the shared service")
 			}
 			return
@@ -290,7 +292,7 @@ func (f *serviceFixture) waitWindow(what string, ok func() bool) {
 	f.t.Fatalf("timed out waiting for %s", what)
 }
 
-func assistantText(t Thread) string {
+func assistantText(t appmodel.Thread) string {
 	for _, m := range t.Messages {
 		if m.Role == "assistant" {
 			return m.Content
@@ -302,29 +304,29 @@ func assistantText(t Thread) string {
 func TestServiceKeepsTurnsRunningAfterTheWindowQuits(t *testing.T) {
 	f := newServiceFixture(t)
 	a := f.window()
-	f.waitWindow("Claude to be ready in the window", func() bool { return a.backendReady() || a.claudeBinary != "" })
+	f.waitWindow("Claude to be ready in the window", func() bool { return a.BackendReady() || a.ClaudeBinary != "" })
 	f.win.Do(func() {
-		a.setAgent(agentClaude)
-		a.rememberDraft("hello")
-		a.send()
+		a.SetAgent(appmodel.AgentClaude)
+		a.RememberDraft("hello")
+		a.Send()
 	})
 	var id int
 	f.waitWindow("the reply to start streaming", func() bool {
-		id = a.active()
-		cur := a.current()
+		id = a.Active()
+		cur := a.Current()
 		return id != 0 && cur.Busy && strings.HasPrefix(assistantText(cur), "partial")
 	})
 	f.win.Do(func() {
-		if a.draft() != "" || a.current().Messages[0].Content != "hello" {
-			t.Errorf("window after send: draft %q messages %+v", a.draft(), a.current().Messages)
+		if a.Draft() != "" || a.Current().Messages[0].Content != "hello" {
+			t.Errorf("window after send: draft %q messages %+v", a.Draft(), a.Current().Messages)
 		}
 	})
 
 	// The window quits while the reply streams.
-	a.remote.Close()
+	a.Remote.Close()
 	for deadline := time.Now().Add(30 * time.Second); ; time.Sleep(20 * time.Millisecond) {
-		var th Thread
-		f.serv.Do(func() { th = f.srv.c.threadWithID(id) })
+		var th appmodel.Thread
+		f.serv.Do(func() { th = f.srv.C.ThreadWithID(id) })
 		if !th.Busy && assistantText(th) == "partial done" {
 			break
 		}
@@ -335,10 +337,10 @@ func TestServiceKeepsTurnsRunningAfterTheWindowQuits(t *testing.T) {
 
 	// A new window finds the finished reply.
 	b := f.window()
-	f.waitWindow("the conversation in the new window", func() bool { return b.threadWithID(id).ID != 0 })
-	f.win.Do(func() { b.selectThread(b.threadWithID(id)) })
+	f.waitWindow("the conversation in the new window", func() bool { return b.ThreadWithID(id).ID != 0 })
+	f.win.Do(func() { b.SelectThread(b.ThreadWithID(id)) })
 	f.waitWindow("the whole reply in the new window", func() bool {
-		cur := b.current()
+		cur := b.Current()
 		return !cur.Busy && assistantText(cur) == "partial done" && len(cur.Messages) == 2
 	})
 }
@@ -346,37 +348,37 @@ func TestServiceKeepsTurnsRunningAfterTheWindowQuits(t *testing.T) {
 func TestServiceRetryContinuesFailedResponseAfterOutput(t *testing.T) {
 	f := newServiceFixture(t)
 	// This headless fixture has no native event loop for notification APIs.
-	persistSetting("notifications-completion", "off")
+	appmodel.PersistSetting("notifications-completion", "off")
 	a := f.window()
-	f.waitWindow("Claude to be ready", func() bool { return a.claudeBinary != "" })
+	f.waitWindow("Claude to be ready", func() bool { return a.ClaudeBinary != "" })
 	f.serv.Do(func() {
 		th := failedResponse()
-		th.Agent = agentClaude
-		f.srv.c.setThreads([]Thread{th})
+		th.Agent = appmodel.AgentClaude
+		f.srv.C.SetThreads([]appmodel.Thread{th})
 	})
-	f.waitWindow("the failed conversation", func() bool { return a.threadWithID(1).ID == 1 })
-	f.win.Do(func() { a.selectThread(a.threadWithID(1)) })
-	f.waitWindow("the failed response", func() bool { return len(a.threadWithID(1).Messages) == 3 })
+	f.waitWindow("the failed conversation", func() bool { return a.ThreadWithID(1).ID == 1 })
+	f.win.Do(func() { a.SelectThread(a.ThreadWithID(1)) })
+	f.waitWindow("the failed response", func() bool { return len(a.ThreadWithID(1).Messages) == 3 })
 	f.win.Do(func() {
-		a.setDraft("keep this draft")
-		if err := a.retryResponse(retryRequest{ThreadID: 1, MessageID: 12}); err != nil {
+		a.SetDraft("keep this draft")
+		if err := a.RetryResponse(appmodel.RetryRequest{ThreadID: 1, MessageID: 12}); err != nil {
 			t.Error(err)
 		}
 	})
 	f.waitWindow("the retried response", func() bool {
-		th := a.threadWithID(1)
+		th := a.ThreadWithID(1)
 		return !th.Busy && assistantText(th) == "partial done"
 	})
 	f.win.Do(func() {
-		th := a.threadWithID(1)
-		if th.ServerID != "s1" || len(th.Messages) != 5 || th.Messages[0].ID != 10 || th.Messages[1].ID != 11 || th.Messages[2].ID != 12 || th.Messages[3].Role != "user" || !strings.Contains(th.Messages[3].Content, retryContinuePrompt) || a.draft() != "keep this draft" {
+		th := a.ThreadWithID(1)
+		if th.ServerID != "s1" || len(th.Messages) != 5 || th.Messages[0].ID != 10 || th.Messages[1].ID != 11 || th.Messages[2].ID != 12 || th.Messages[3].Role != "user" || !strings.Contains(th.Messages[3].Content, appmodel.RetryContinuePrompt) || a.Draft() != "keep this draft" {
 			t.Errorf("retry did not continue the failed turn or preserve its output and draft: %+v", th)
 		}
 		count := len(th.Messages)
-		if err := a.retryResponse(retryRequest{ThreadID: 1, MessageID: 12}); err == nil {
+		if err := a.RetryResponse(appmodel.RetryRequest{ThreadID: 1, MessageID: 12}); err == nil {
 			t.Error("a stale retry from another window was accepted")
 		}
-		if len(a.threadWithID(1).Messages) != count {
+		if len(a.ThreadWithID(1).Messages) != count {
 			t.Error("a stale retry submitted another message")
 		}
 	})
@@ -385,9 +387,9 @@ func TestServiceRetryContinuesFailedResponseAfterOutput(t *testing.T) {
 func TestServiceRetryRewindsOnlyTheLastUserMessage(t *testing.T) {
 	f := newServiceFixture(t)
 	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
-	persistSetting("notifications-completion", "off")
+	appmodel.PersistSetting("notifications-completion", "off")
 	source := handoffSource()
-	prompt, _, err := expandThreadRefs(model.ReferenceText(testReference(source), source.Title)+" 再审核一下", ThreadRef{}, func(ThreadRef) (Thread, []Message, error) {
+	prompt, _, err := controller.ExpandThreadRefs(model.ReferenceText(testReference(source), source.Title)+" 再审核一下", appmodel.ThreadRef{}, func(appmodel.ThreadRef) (appmodel.Thread, []appmodel.Message, error) {
 		return source, source.Messages, nil
 	})
 	if err != nil {
@@ -398,12 +400,12 @@ func TestServiceRetryRewindsOnlyTheLastUserMessage(t *testing.T) {
 		t.Fatal(err)
 	}
 	paths := []string{image, filepath.Join(t.TempDir(), "notes.txt")}
-	shown, images := attachmentDisplay(prompt, paths)
+	shown, images := appmodel.AttachmentDisplay(prompt, paths)
 	f.serv.Do(func() {
-		c := f.srv.c
-		writeClaudeSession(t, c.cwd, "s1", sessionLines(c.cwd)...)
-		c.serial = 100
-		c.setThreads([]Thread{{ID: 1, Agent: agentClaude, ServerID: "s1", Resumed: true, Loaded: true, HistoryLoaded: true, Messages: []Message{
+		c := f.srv.C
+		writeClaudeSession(t, c.Cwd, "s1", sessionLines(c.Cwd)...)
+		c.Serial = 100
+		c.SetThreads([]appmodel.Thread{{ID: 1, Agent: appmodel.AgentClaude, ServerID: "s1", Resumed: true, Loaded: true, HistoryLoaded: true, Messages: []appmodel.Message{
 			{ID: 10, Role: "user", Content: "first"},
 			{ID: 11, Role: "assistant", Content: "reply one"},
 			{ID: 12, Role: "user", Content: shown, Images: images, Attachments: paths},
@@ -412,22 +414,22 @@ func TestServiceRetryRewindsOnlyTheLastUserMessage(t *testing.T) {
 		}}})
 	})
 	a := f.window()
-	f.waitWindow("the failed conversation", func() bool { return a.threadWithID(1).ID == 1 })
-	f.win.Do(func() { a.selectThread(a.threadWithID(1)) })
-	f.waitWindow("the failed turn", func() bool { return len(a.threadWithID(1).Messages) == 4 })
+	f.waitWindow("the failed conversation", func() bool { return a.ThreadWithID(1).ID == 1 })
+	f.win.Do(func() { a.SelectThread(a.ThreadWithID(1)) })
+	f.waitWindow("the failed turn", func() bool { return len(a.ThreadWithID(1).Messages) == 4 })
 	f.win.Do(func() {
-		a.rememberDraft("keep my draft")
-		a.setAttachments([]string{"/tmp/unsent.txt"})
-		if err := a.retryResponse(retryRequest{ThreadID: 1, MessageID: 14}); err != nil {
+		a.RememberDraft("keep my draft")
+		a.SetAttachments([]string{"/tmp/unsent.txt"})
+		if err := a.RetryResponse(appmodel.RetryRequest{ThreadID: 1, MessageID: 14}); err != nil {
 			t.Error(err)
 		}
 	})
 	f.waitWindow("the replacement response", func() bool {
-		th := a.threadWithID(1)
+		th := a.ThreadWithID(1)
 		return !th.Busy && len(th.Messages) == 4 && th.Messages[3].Content == "partial done"
 	})
 	f.win.Do(func() {
-		th := a.threadWithID(1)
+		th := a.ThreadWithID(1)
 		if th.ServerID == "s1" || th.Messages[0].Content != "first" || th.Messages[1].Content != "reply one" || th.Messages[2].Content != shown {
 			t.Fatal("retry did not preserve earlier turns and replay the last original request")
 		}
@@ -435,7 +437,7 @@ func TestServiceRetryRewindsOnlyTheLastUserMessage(t *testing.T) {
 		if len(m.Images) != 1 || len(m.Attachments) != 2 || m.Attachments[0] != paths[0] || m.Attachments[1] != paths[1] {
 			t.Fatal("retry lost the original attachments")
 		}
-		if a.draft() != "keep my draft" || len(a.attachments()) != 1 || a.attachments()[0] != "/tmp/unsent.txt" {
+		if a.Draft() != "keep my draft" || len(a.Attachments()) != 1 || a.Attachments()[0] != "/tmp/unsent.txt" {
 			t.Fatal("retry changed the unsent draft or attachments")
 		}
 	})
@@ -443,53 +445,53 @@ func TestServiceRetryRewindsOnlyTheLastUserMessage(t *testing.T) {
 
 func TestServiceDraftSurvivesStaleSnapshotsAndQuickSwitches(t *testing.T) {
 	f := newServiceFixture(t)
-	persistSetting("notifications-completion", "off")
+	appmodel.PersistSetting("notifications-completion", "off")
 	f.serv.Do(func() {
-		f.srv.c.setThreads([]Thread{
-			{ID: 1, ServerID: "s1", Agent: agentClaude, Busy: true, HistoryLoaded: true},
-			{ID: 2, ServerID: "s2", Agent: agentClaude, HistoryLoaded: true},
+		f.srv.C.SetThreads([]appmodel.Thread{
+			{ID: 1, ServerID: "s1", Agent: appmodel.AgentClaude, Busy: true, HistoryLoaded: true},
+			{ID: 2, ServerID: "s2", Agent: appmodel.AgentClaude, HistoryLoaded: true},
 		})
 	})
 	t.Cleanup(func() {
 		f.serv.Do(func() {
-			f.srv.c.update(1, func(th *Thread) { th.Busy, th.Queue = false, nil })
+			f.srv.C.Update(1, func(th *appmodel.Thread) { th.Busy, th.Queue = false, nil })
 		})
 	})
 	a := f.window()
-	var stale svcState
-	f.serv.Do(func() { stale = f.srv.c.snapshotState() })
+	var stale appmodel.SvcState
+	f.serv.Do(func() { stale = f.srv.C.SnapshotState() })
 	stale.Threads[0].Draft = "已经发送的消息"
 	f.win.Do(func() {
-		a.selectThread(a.threadWithID(1))
-		a.rememberDraft("已经发送的消息")
-		a.send()
-		var confirmed svcState
-		if err := a.remote.Call("state", nil, &confirmed); err != nil {
+		a.SelectThread(a.ThreadWithID(1))
+		a.RememberDraft("已经发送的消息")
+		a.Send()
+		var confirmed appmodel.SvcState
+		if err := a.Remote.Call("state", nil, &confirmed); err != nil {
 			t.Error(err)
 		} else if confirmed.Threads[0].Draft != "" {
 			t.Errorf("the service kept a sent draft: %q", confirmed.Threads[0].Draft)
 		}
-		a.applyState(stale)
-		a.selectThread(a.threadWithID(2))
-		a.selectThread(a.threadWithID(1))
-		if a.draft() != "" {
-			t.Errorf("a stale snapshot resurrected a sent draft: %q", a.draft())
+		a.ApplyState(stale)
+		a.SelectThread(a.ThreadWithID(2))
+		a.SelectThread(a.ThreadWithID(1))
+		if a.Draft() != "" {
+			t.Errorf("a stale snapshot resurrected a sent draft: %q", a.Draft())
 		}
-		a.rememberDraft("对话一尚未发送")
-		a.selectThread(a.threadWithID(2))
-		a.rememberDraft("对话二尚未发送")
-		a.applyState(stale)
-		a.selectThread(a.threadWithID(1))
-		if a.draft() != "对话一尚未发送" {
-			t.Errorf("lost the latest draft of conversation one: %q", a.draft())
+		a.RememberDraft("对话一尚未发送")
+		a.SelectThread(a.ThreadWithID(2))
+		a.RememberDraft("对话二尚未发送")
+		a.ApplyState(stale)
+		a.SelectThread(a.ThreadWithID(1))
+		if a.Draft() != "对话一尚未发送" {
+			t.Errorf("lost the latest draft of conversation one: %q", a.Draft())
 		}
-		a.selectThread(a.threadWithID(2))
-		if a.draft() != "对话二尚未发送" {
-			t.Errorf("lost the latest draft of conversation two: %q", a.draft())
+		a.SelectThread(a.ThreadWithID(2))
+		if a.Draft() != "对话二尚未发送" {
+			t.Errorf("lost the latest draft of conversation two: %q", a.Draft())
 		}
 	})
-	var confirmed svcState
-	if err := a.remote.Call("state", nil, &confirmed); err != nil {
+	var confirmed appmodel.SvcState
+	if err := a.Remote.Call("state", nil, &confirmed); err != nil {
 		t.Fatal(err)
 	}
 	if confirmed.Threads[0].Draft != "对话一尚未发送" || confirmed.Threads[1].Draft != "对话二尚未发送" {
@@ -498,13 +500,13 @@ func TestServiceDraftSurvivesStaleSnapshotsAndQuickSwitches(t *testing.T) {
 }
 
 func TestServicePublishesOnlyChangedMessages(t *testing.T) {
-	p := &svcPeer{sub: 7}
-	th := Thread{ID: 7, Messages: []Message{{ID: 1, Role: "user", Content: "hi"}, {ID: 2, Role: "assistant", Content: "a"}}}
+	p := &controller.SvcPeer{Sub: 7}
+	th := appmodel.Thread{ID: 7, Messages: []appmodel.Message{{ID: 1, Role: "user", Content: "hi"}, {ID: 2, Role: "assistant", Content: "a"}}}
 	first, ok := p.Diff(th)
 	if !ok || !first.Reset || len(first.Changed) != 2 {
 		t.Fatalf("first update %+v", first)
 	}
-	th.Messages = append([]Message(nil), th.Messages...)
+	th.Messages = append([]appmodel.Message(nil), th.Messages...)
 	th.Messages[1].Content = "ab"
 	second, ok := p.Diff(th)
 	if !ok || second.Reset || len(second.Changed) != 1 || second.Changed[0].Content != "ab" || len(second.Order) != 2 {
@@ -525,12 +527,12 @@ func TestServiceReturnsUnsentDraftsToTheWindow(t *testing.T) {
 	w := f.window()
 	var id int
 	f.serv.Do(func() {
-		c := f.srv.c
-		id = c.nextID()
-		c.setThreads([]Thread{{ID: id, Title: "Lost", Agent: agentClaude, ServerID: "s1", HistoryLoaded: true}})
+		c := f.srv.C
+		id = c.NextID()
+		c.SetThreads([]appmodel.Thread{{ID: id, Title: "Lost", Agent: appmodel.AgentClaude, ServerID: "s1", HistoryLoaded: true}})
 	})
-	f.waitWindow("the conversation", func() bool { return w.threadWithID(id).ID != 0 })
-	f.win.Do(func() { w.selectThread(w.threadWithID(id)) })
-	f.serv.Do(func() { f.srv.c.returnDraft(id, "try again", []string{"/tmp/a.png"}) })
-	f.waitWindow("the returned draft", func() bool { return w.draft() == "try again" && len(w.attachments()) == 1 })
+	f.waitWindow("the conversation", func() bool { return w.ThreadWithID(id).ID != 0 })
+	f.win.Do(func() { w.SelectThread(w.ThreadWithID(id)) })
+	f.serv.Do(func() { f.srv.C.ReturnDraft(id, "try again", []string{"/tmp/a.png"}) })
+	f.waitWindow("the returned draft", func() bool { return w.Draft() == "try again" && len(w.Attachments()) == 1 })
 }

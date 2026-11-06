@@ -1,11 +1,15 @@
 package main
 
-import "testing"
+import (
+	appmodel "miya/internal/appmodel"
+	widgets "miya/internal/widgets"
+	testing "testing"
+)
 
 func TestDesktopDarkMode(t *testing.T) {
 	app, tt := testApp(t)
-	t.Cleanup(func() { applyDesktopPalette(false) })
-	if app.dark || canvas != desktopLight.canvas {
+	t.Cleanup(func() { widgets.ApplyDesktopPalette(false) })
+	if app.Dark || widgets.Canvas != widgets.DesktopLight.Canvas {
 		t.Fatal("not light by default")
 	}
 	if err := tt.Click("Settings"); err != nil {
@@ -15,21 +19,21 @@ func TestDesktopDarkMode(t *testing.T) {
 		t.Fatalf("no appearance setting in %q: %v", tt.Texts(), err)
 	}
 	tt.Frame()
-	if !app.dark || !app.theme.Dark || canvas != desktopDark.canvas || ink != desktopDark.ink || loadSetting("appearance") != "dark" {
-		t.Fatalf("dark not applied: dark %v setting %q", app.dark, loadSetting("appearance"))
+	if !app.Dark || !app.Theme.Dark || widgets.Canvas != widgets.DesktopDark.Canvas || widgets.Ink != widgets.DesktopDark.Ink || appmodel.LoadSetting("appearance") != "dark" {
+		t.Fatalf("dark not applied: dark %v setting %q", app.Dark, appmodel.LoadSetting("appearance"))
 	}
-	systemDark.Store(false)
+	widgets.SystemDark.Store(false)
 	if err := tt.Click("System"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if app.dark || canvas != desktopLight.canvas || loadSetting("appearance") != "" {
+	if app.Dark || widgets.Canvas != widgets.DesktopLight.Canvas || appmodel.LoadSetting("appearance") != "" {
 		t.Fatal("system appearance not followed")
 	}
-	systemDark.Store(true)
-	t.Cleanup(func() { systemDark.Store(false) })
+	widgets.SystemDark.Store(true)
+	t.Cleanup(func() { widgets.SystemDark.Store(false) })
 	tt.Frame()
-	if !app.dark {
+	if !app.Dark {
 		t.Fatal("a dark system did not switch the palette")
 	}
 }

@@ -1,17 +1,19 @@
 package main
 
 import (
-	"os"
-	"testing"
+	appmodel "miya/internal/appmodel"
+	conversation "miya/internal/conversation"
+	os "os"
+	testing "testing"
 )
 
 func TestClaudeToolTitles(t *testing.T) {
 	home, _ := os.UserHomeDir()
-	tool := func(content, status string) Message {
-		return Message{Role: "tool", Kind: "claudeTool", Content: content, Status: status}
+	tool := func(content, status string) appmodel.Message {
+		return appmodel.Message{Role: "tool", Kind: "claudeTool", Content: content, Status: status}
 	}
 	for _, tc := range []struct {
-		m          Message
+		m          appmodel.Message
 		title, ico string
 	}{
 		{tool("Bash\n{\"command\":\"rtk ls -la\\necho hi\",\"description\":\"List\"}\nout", "completed"), "Ran rtk ls -la", "terminal-2"},
@@ -22,11 +24,11 @@ func TestClaudeToolTitles(t *testing.T) {
 		{tool("mcp__x__lookup\n{\"query\":\"weather\"}", "completed"), "mcp__x__lookup · weather", ""},
 		{tool("Read", "completed"), "Read", "file-text"},
 	} {
-		if got := activityTitle(tc.m); got != tc.title {
+		if got := conversation.ActivityTitle(tc.m); got != tc.title {
 			t.Errorf("title %q, want %q", got, tc.title)
 		}
-		if tc.ico != "" && activityIcon(tc.m) != tc.ico {
-			t.Errorf("%q icon %q, want %q", tc.title, activityIcon(tc.m), tc.ico)
+		if tc.ico != "" && appmodel.ActivityIcon(tc.m) != tc.ico {
+			t.Errorf("%q icon %q, want %q", tc.title, appmodel.ActivityIcon(tc.m), tc.ico)
 		}
 	}
 }

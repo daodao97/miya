@@ -1,24 +1,26 @@
 package main
 
 import (
-	"fmt"
-	"image"
-	"image/png"
-	"os"
-	"path/filepath"
-	"strings"
-	"testing"
-	"time"
+	fmt "fmt"
+	image "image"
+	png "image/png"
+	appmodel "miya/internal/appmodel"
+	controller "miya/internal/controller"
+	os "os"
+	filepath "path/filepath"
+	strings "strings"
+	testing "testing"
+	time "time"
 )
 
 // The working label is still: an animated one kept the whole window
 // building frames while a conversation ran. Its elapsed time still counts.
 func TestWorkingLabelCounts(t *testing.T) {
 	app, tt := testApp(t)
-	c := app.c
-	c.setThreads([]Thread{{ID: 1, Agent: agentClaude, ServerID: "s1", Title: "Run", Busy: true, HistoryLoaded: true,
+	c := app.C.(*controller.Controller)
+	c.SetThreads([]appmodel.Thread{{ID: 1, Agent: appmodel.AgentClaude, ServerID: "s1", Title: "Run", Busy: true, HistoryLoaded: true,
 		StartedAtMs: time.Now().Add(-3 * time.Second).UnixMilli(), LastOutputAtMs: time.Now().UnixMilli()}})
-	c.setActive(1)
+	c.SetActive(1)
 	label := func() string {
 		for _, s := range tt.Texts() {
 			if strings.Contains(s, "Working for ") {
@@ -49,10 +51,10 @@ func TestWorkingLabelSnapshot(t *testing.T) {
 	}
 	app, tt := testApp(t)
 	tt.SetScale(2)
-	c := app.c
-	c.setThreads([]Thread{{ID: 1, Agent: agentClaude, ServerID: "s1", Title: "Run", Busy: true, HistoryLoaded: true,
+	c := app.C.(*controller.Controller)
+	c.SetThreads([]appmodel.Thread{{ID: 1, Agent: appmodel.AgentClaude, ServerID: "s1", Title: "Run", Busy: true, HistoryLoaded: true,
 		StartedAtMs: time.Now().Add(-35 * time.Second).UnixMilli(), LastOutputAtMs: time.Now().UnixMilli()}})
-	c.setActive(1)
+	c.SetActive(1)
 	for i := 0; i < 3; i++ {
 		tt.Advance(500 * time.Millisecond)
 		tt.Frame()

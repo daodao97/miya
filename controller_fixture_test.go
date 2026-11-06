@@ -4,6 +4,9 @@ package main
 
 import (
 	"context"
+	"miya/internal/appmodel"
+	"miya/internal/controller"
+	"miya/internal/uiruntime"
 	"sync"
 	"testing"
 	"time"
@@ -38,29 +41,29 @@ func (d *testDispatch) drain() {
 }
 
 // serverController is a controller with every signal the service reads.
-func serverController(dir, claudeBin string) *chatController {
-	c := &chatController{referenceSource: testReferenceSource, cwd: dir, ctx: context.Background(), claudeBinary: claudeBin, projectCache: map[string][]Thread{}}
-	c.agent, c.setAgent = createSignal(agentCodex)
-	c.draftPermission, c.setDraftPermission = createSignal("")
-	c.projects, c.setProjects = createSignal([]Project{{Name: "demo", Path: dir}})
-	c.threads, c.setThreads = createSignal([]Thread{})
-	c.active, c.setActive = createSignal(0)
-	c.draft, c.setDraft = createSignal("")
-	c.model, c.setModel = createSignal("")
-	c.effort, c.setEffort = createSignal("")
-	c.permissionPolicy, c.setPermissionPolicy = createSignal("on-request")
-	c.locale, c.setLocale = createSignal("en")
-	c.models, c.setModels = createSignal([]codex.Model{})
-	c.attachments, c.setAttachments = createSignal([]string{})
-	c.status, c.setStatus = createSignal("")
-	c.ready, c.setReady = createSignal(false)
-	c.approvals, c.setApprovals = createSignal([]codex.Approval{})
-	c.historyStatus, c.setHistoryStatus = createSignal("")
-	c.revision, c.setRevision = createSignal(0)
+func serverController(dir, claudeBin string) *controller.Controller {
+	c := &controller.Controller{WindowState: appmodel.WindowState{ReferenceSource: testReferenceSource, Cwd: dir, Ctx: context.Background(), ProjectCache: map[string][]appmodel.Thread{}}, ClaudeBinary: claudeBin}
+	c.Agent, c.SetAgent = uiruntime.CreateSignal(appmodel.AgentCodex)
+	c.DraftPermission, c.SetDraftPermission = uiruntime.CreateSignal("")
+	c.Projects, c.SetProjects = uiruntime.CreateSignal([]appmodel.Project{{Name: "demo", Path: dir}})
+	c.Threads, c.SetThreads = uiruntime.CreateSignal([]appmodel.Thread{})
+	c.Active, c.SetActive = uiruntime.CreateSignal(0)
+	c.Draft, c.SetDraft = uiruntime.CreateSignal("")
+	c.Model, c.SetModel = uiruntime.CreateSignal("")
+	c.Effort, c.SetEffort = uiruntime.CreateSignal("")
+	c.PermissionPolicy, c.SetPermissionPolicy = uiruntime.CreateSignal("on-request")
+	c.Locale, c.SetLocale = uiruntime.CreateSignal("en")
+	c.Models, c.SetModels = uiruntime.CreateSignal([]codex.Model{})
+	c.Attachments, c.SetAttachments = uiruntime.CreateSignal([]string{})
+	c.Status, c.SetStatus = uiruntime.CreateSignal("")
+	c.Ready, c.SetReady = uiruntime.CreateSignal(false)
+	c.Approvals, c.SetApprovals = uiruntime.CreateSignal([]codex.Approval{})
+	c.HistoryStatus, c.SetHistoryStatus = uiruntime.CreateSignal("")
+	c.Revision, c.SetRevision = uiruntime.CreateSignal(0)
 	return c
 }
 
-func waitCodexResume(t *testing.T, c *chatController, d *testDispatch, done func() bool) {
+func waitCodexResume(t *testing.T, c *controller.Controller, d *testDispatch, done func() bool) {
 	t.Helper()
 	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(5 * time.Millisecond) {
 		d.drain()
@@ -68,5 +71,5 @@ func waitCodexResume(t *testing.T, c *chatController, d *testDispatch, done func
 			return
 		}
 	}
-	t.Fatalf("Codex fixture timed out: status %q, threads %+v", c.status(), c.threads())
+	t.Fatalf("Codex fixture timed out: status %q, threads %+v", c.Status(), c.Threads())
 }

@@ -1,14 +1,13 @@
 package main
 
 import (
-	"context"
-	"fmt"
-	"testing"
+	context "context"
+	fmt "fmt"
+	control "miya/internal/desktop/control"
+	controltest "miya/internal/desktop/control/controltest"
+	testing "testing"
 
-	"miya/internal/desktop/control"
-	"miya/internal/desktop/control/controltest"
-
-	"github.com/egoist/mygo/ui"
+	ui "github.com/egoist/mygo/ui"
 )
 
 func TestDesktopPrivacyPageToggleAndServerState(t *testing.T) {
@@ -17,23 +16,23 @@ func TestDesktopPrivacyPageToggleAndServerState(t *testing.T) {
 	controltest.ReadyPrivacy(t, d, token)
 	m := testMobileApp()
 	p := liveTestDesktopPage(t, m)
-	p.client, p.pickable, p.phase = controltest.Client(t, d, token), true, "live"
-	m.desktopInitPrivacy(p, control.Session{Pick: true, Privacy: true})
-	wait(func() bool { return p.privacy.known })
-	if p.privacy.enabled {
+	p.Client, p.Pickable, p.Phase = controltest.Client(t, d, token), true, "live"
+	m.DesktopInitPrivacy(p, control.Session{Pick: true, Privacy: true})
+	wait(func() bool { return p.Privacy.Known })
+	if p.Privacy.Enabled {
 		t.Fatal("privacy must start off")
 	}
-	m.desktopSetPrivacy(p)
-	wait(func() bool { return !p.privacy.busy })
-	if !p.privacy.enabled || !p.privacy.known || *current == nil {
+	m.DesktopSetPrivacy(p)
+	wait(func() bool { return !p.Privacy.Busy })
+	if !p.Privacy.Enabled || !p.Privacy.Known || *current == nil {
 		t.Fatal("did not enable")
 	}
-	m.desktopSetPrivacy(p)
-	wait(func() bool { return !p.privacy.busy })
-	if p.privacy.enabled || !p.privacy.known {
+	m.DesktopSetPrivacy(p)
+	wait(func() bool { return !p.Privacy.Busy })
+	if p.Privacy.Enabled || !p.Privacy.Known {
 		t.Fatal("did not restore")
 	}
-	p.cancel()
+	p.Cancel()
 }
 
 func TestDesktopPrivacyPanelLayoutAndCapability(t *testing.T) {
@@ -41,9 +40,9 @@ func TestDesktopPrivacyPanelLayoutAndCapability(t *testing.T) {
 		t.Run(fmt.Sprint(width), func(t *testing.T) {
 			m := testMobileApp()
 			p := liveTestDesktopPage(t, m)
-			p.phase, p.pickable, p.privacy.available, p.privacy.known, p.more = "live", true, true, true, true
-			m.router().Push("/desktop")
-			tt := ui.NewTester(m.viewRoot, width, 750)
+			p.Phase, p.Pickable, p.Privacy.Available, p.Privacy.Known, p.More = "live", true, true, true, true
+			m.Router().Push("/desktop")
+			tt := ui.NewTester(m.ViewRoot, width, 750)
 			tt.Frame()
 			tt.Frame()
 			for _, text := range []string{"Privacy mode", "Enable privacy mode", "Control–Option–Command–P"} {
@@ -58,7 +57,7 @@ func TestDesktopPrivacyPanelLayoutAndCapability(t *testing.T) {
 			saveMobileNativeSnapshot(t, tt, fmt.Sprintf("desktop-privacy-%d", width))
 			// The sheet remains reachable when the software keyboard leaves a
 			// short viewport and the person uses larger text.
-			short := ui.NewTester(m.viewRoot, width, 440)
+			short := ui.NewTester(m.ViewRoot, width, 440)
 			short.SetPreferences(ui.Preferences{TextScale: 1.6})
 			short.Frame()
 			short.Frame()
@@ -67,17 +66,17 @@ func TestDesktopPrivacyPanelLayoutAndCapability(t *testing.T) {
 				t.Fatal("privacy panel leaves short viewport", panel)
 			}
 			saveMobileNativeSnapshot(t, short, fmt.Sprintf("desktop-privacy-short-%d", width))
-			p.privacy.enabled = true
+			p.Privacy.Enabled = true
 			tt.Frame()
 			if !tt.HasText("Restore Mac displays") {
 				t.Fatal("missing restore")
 			}
-			p.pickable = false
+			p.Pickable = false
 			tt.Frame()
 			if tt.HasText("Privacy mode") {
 				t.Fatal("approval view offered privacy")
 			}
-			p.pickable, p.privacy.available = true, false
+			p.Pickable, p.Privacy.Available = true, false
 			tt.Frame()
 			if tt.HasText("Privacy mode") {
 				t.Fatal("old host offered privacy")
@@ -91,18 +90,18 @@ func TestDesktopPrivacyUncertainStateCanStillRestore(t *testing.T) {
 	d, token, _, _ := controltest.Privacy(t)
 	m := testMobileApp()
 	p := liveTestDesktopPage(t, m)
-	p.client, p.pickable, p.privacy.available, p.privacy.known = controltest.Client(t, d, token), true, true, false
-	m.desktopSetPrivacy(p)
-	wait(func() bool { return !p.privacy.busy })
-	if !p.privacy.known || p.privacy.enabled {
+	p.Client, p.Pickable, p.Privacy.Available, p.Privacy.Known = controltest.Client(t, d, token), true, true, false
+	m.DesktopSetPrivacy(p)
+	wait(func() bool { return !p.Privacy.Busy })
+	if !p.Privacy.Known || p.Privacy.Enabled {
 		t.Fatal("uncertain status could not restore")
 	}
 	// A missing image must never allow the display to be blanked.
-	p.image = nil
-	m.desktopSetPrivacy(p)
-	if p.privacy.busy {
+	p.Image = nil
+	m.DesktopSetPrivacy(p)
+	if p.Privacy.Busy {
 		t.Fatal("enabled before a frame")
 	}
-	p.cancel()
-	_, _ = p.client.Privacy(context.Background(), nil)
+	p.Cancel()
+	_, _ = p.Client.Privacy(context.Background(), nil)
 }

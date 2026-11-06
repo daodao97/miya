@@ -1,14 +1,15 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
-	"io"
-	"strings"
-	"sync"
-	"sync/atomic"
-	"testing"
-	"time"
+	json "encoding/json"
+	fmt "fmt"
+	io "io"
+	appmodel "miya/internal/appmodel"
+	strings "strings"
+	sync "sync"
+	atomic "sync/atomic"
+	testing "testing"
+	time "time"
 )
 
 type mcpFrameWriter chan []byte
@@ -29,7 +30,7 @@ func TestMCPWaitCancellationAndEOFReleaseObserverWithoutCancellingTask(t *testin
 			var once sync.Once
 			var reads, cancels atomic.Int32
 			call := func(op string, args, out any) error {
-				r := args.(mcpRequest)
+				r := args.(appmodel.McpRequest)
 				if r.Tool == "cancel_task" {
 					cancels.Add(1)
 				}
@@ -42,7 +43,7 @@ func TestMCPWaitCancellationAndEOFReleaseObserverWithoutCancellingTask(t *testin
 				return nil
 			}
 			done := make(chan error, 1)
-			go func() { done <- serveMCP(reader, frames, "/workspace", call, time.Sleep) }()
+			go func() { done <- appmodel.ServeMCP(reader, frames, "/workspace", call, time.Sleep) }()
 			if _, err := io.WriteString(writer, "{\"jsonrpc\":\"2.0\",\"id\":17,\"method\":\"tools/call\",\"params\":{\"name\":\"wait_task\",\"arguments\":{\"task_id\":\"task-live\",\"wait_seconds\":120}}}\n"); err != nil {
 				t.Fatal(err)
 			}

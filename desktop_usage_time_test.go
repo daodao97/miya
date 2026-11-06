@@ -1,13 +1,15 @@
 package main
 
 import (
-	"math"
-	"testing"
-	"time"
+	math "math"
+	agentusage "miya/internal/agentusage"
+	appmodel "miya/internal/appmodel"
+	desktopui "miya/internal/ui"
+	widgets "miya/internal/widgets"
+	testing "testing"
+	time "time"
 
-	"miya/internal/agentusage"
-
-	"github.com/egoist/mygo/ui"
+	ui "github.com/egoist/mygo/ui"
 )
 
 func TestUsageTimeProgress(t *testing.T) {
@@ -33,13 +35,13 @@ func TestUsageTimeProgress(t *testing.T) {
 			if !tc.reset.IsZero() {
 				reset = tc.reset.Unix()
 			}
-			got, valid := usageTimeProgress(agentusage.Window{DurationMins: tc.mins, ResetsAt: reset}, now)
+			got, valid := appmodel.UsageTimeProgress(agentusage.Window{DurationMins: tc.mins, ResetsAt: reset}, now)
 			if valid != tc.valid || math.Abs(got-tc.want) > 0.001 {
 				t.Fatalf("got %v, %v; want %v, %v", got, valid, tc.want, tc.valid)
 			}
 		})
 	}
-	if usagePaceText(2, 31) != "Steady pace 31% · 29 points under" || usagePaceText(60, 40) != "Steady pace 40% · 20 points over" || usagePaceText(31, 31) != "Steady pace 31% · On pace" {
+	if desktopui.UsagePaceText(2, 31) != "Steady pace 31% · 29 points under" || desktopui.UsagePaceText(60, 40) != "Steady pace 40% · 20 points over" || desktopui.UsagePaceText(31, 31) != "Steady pace 31% · On pace" {
 		t.Fatal("pacing comparison has the wrong direction")
 	}
 }
@@ -47,11 +49,11 @@ func TestUsageTimeProgress(t *testing.T) {
 func TestUsagePanelTimeMarkerAndRefresh(t *testing.T) {
 	app := usageFixture()
 	now := time.Now()
-	app.usage.readings[0].Windows = []agentusage.Window{
+	app.Usage.Readings[0].Windows = []agentusage.Window{
 		{Name: "5 hours", Used: 2, DurationMins: 300, ResetsAt: now.Add(207 * time.Minute).Unix(), Reset: now.Add(207 * time.Minute).Format("01-02 15:04")},
 		{Name: "7 days", Used: 60, DurationMins: 10080, ResetsAt: now.Add(100 * time.Hour).Unix(), Reset: now.Add(100 * time.Hour).Format("01-02 15:04")},
 	}
-	tt := ui.NewTester(app.usagePanelView, usagePanelWidth, app.usage.height())
+	tt := ui.NewTester(app.UsagePanelView, desktopui.UsagePanelWidth, app.Usage.Height())
 	if !tt.HasText("2% used") || !tt.HasText("Steady pace 31% · 29 points under") {
 		t.Fatalf("missing pacing: %q", tt.Texts())
 	}
@@ -61,10 +63,10 @@ func TestUsagePanelTimeMarkerAndRefresh(t *testing.T) {
 		t.Fatalf("time marker is misplaced: track=%v marker=%v", track, marker)
 	}
 	pixel := tt.Image().RGBAAt(int(marker.X+marker.W/2), int(marker.Y+marker.H/2))
-	if pixel.R != desktopLight.ink.R || pixel.G != desktopLight.ink.G || pixel.B != desktopLight.ink.B {
+	if pixel.R != widgets.DesktopLight.Ink.R || pixel.G != widgets.DesktopLight.Ink.G || pixel.B != widgets.DesktopLight.Ink.B {
 		t.Fatalf("time marker did not paint over the track: marker=%v pixel=%v", marker, pixel)
 	}
-	assertUsageControls(t, tt, app.usage.height())
+	assertUsageControls(t, tt, app.Usage.Height())
 	saveUsageImage(t, tt, "usage-time-light")
 	tt.SetDark(true)
 	saveUsageImage(t, tt, "usage-time-dark")
@@ -73,13 +75,13 @@ func TestUsagePanelTimeMarkerAndRefresh(t *testing.T) {
 	if after.X <= marker.X+20 || !tt.HasText("Steady pace 41% · 39 points under") {
 		t.Fatal("time progress did not advance while the panel stayed open")
 	}
-	app.usage.readings[0].Windows[0].ResetsAt = 0
+	app.Usage.Readings[0].Windows[0].ResetsAt = 0
 	tt.Frame()
 	if _, ok := tt.Find("Time progress 5 hours"); ok {
 		t.Fatal("a display-only reset string produced a fictitious time marker")
 	}
 	for _, reset := range []time.Time{now.Add(7 * time.Hour), now.Add(-time.Hour)} {
-		app.usage.readings[0].Windows[0].ResetsAt = reset.Unix()
+		app.Usage.Readings[0].Windows[0].ResetsAt = reset.Unix()
 		tt.Frame()
 		marker, ok := tt.Find("Time progress 5 hours")
 		if !ok || marker.X < track.X || marker.X+marker.W > track.X+track.W {

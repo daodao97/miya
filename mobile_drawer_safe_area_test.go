@@ -1,12 +1,12 @@
 package main
 
 import (
-	"fmt"
-	"image/color"
-	"testing"
-	"time"
+	fmt "fmt"
+	color "image/color"
+	testing "testing"
+	time "time"
 
-	"github.com/egoist/mygo/ui"
+	ui "github.com/egoist/mygo/ui"
 )
 
 func TestMobileDrawerBackgroundCoversSafeArea(t *testing.T) {
@@ -20,11 +20,11 @@ func TestMobileDrawerBackgroundCoversSafeArea(t *testing.T) {
 					safe = ui.SafeArea{Left: 59, Right: 59, Bottom: 21}
 				}
 				m := mobileHomeFixture()
-				tt := ui.NewTester(m.viewRoot, width, height)
+				tt := ui.NewTester(m.ViewRoot, width, height)
 				tt.SetDark(dark)
 				tt.SetSafeArea(safe)
 				tt.Frame()
-				home := m.homeBackground()
+				home := m.HomeBackground()
 				wantHome := color.RGBA{R: home.R, G: home.G, B: home.B, A: 255}
 				checkClosed := func() {
 					t.Helper()
@@ -38,14 +38,14 @@ func TestMobileDrawerBackgroundCoversSafeArea(t *testing.T) {
 				if header, ok := tt.Find("Desktop connections"); !ok || header.Y < safe.Top || header.X < safe.Left {
 					t.Fatalf("home controls entered unsafe area: %v", header)
 				}
-				m.menu = true
+				m.Menu = true
 				tt.Frame()
 				tt.Advance(100 * time.Millisecond)
 				for _, phase := range []string{"opening", "open"} {
 					if phase == "open" {
 						tt.Advance(time.Second)
 					}
-					drawer := m.pal.drawer
+					drawer := m.Pal.Drawer
 					wantDrawer := color.RGBA{R: drawer.R, G: drawer.G, B: drawer.B, A: 255}
 					// While sliding, navigation rows can pass through the
 					// left edge; check that edge's middle once settled.
@@ -71,7 +71,7 @@ func TestMobileDrawerBackgroundCoversSafeArea(t *testing.T) {
 				if button, ok := tt.Find("Settings"); !ok || button.Y < safe.Top || button.Y+button.H > float32(height)-safe.Bottom || button.X < safe.Left {
 					t.Fatalf("drawer controls entered unsafe area: %v", button)
 				}
-				m.menu = false
+				m.Menu = false
 				tt.Frame()
 				tt.Advance(time.Second)
 				checkClosed()
@@ -87,10 +87,10 @@ func TestMobileDrawerClosingFramesMatchRestingPage(t *testing.T) {
 				t.Run(fmt.Sprintf("dark=%v/conversation=%v/%s", dark, conversation, closeWith), func(t *testing.T) {
 					m := testMobileApp()
 					if conversation {
-						m.openThread(m.state.Projects[0].Threads[0])
+						m.OpenThread(m.State.Projects[0].Threads[0])
 					}
-					m.draft = "保留草稿"
-					tt := ui.NewTester(m.viewRoot, 390, 844)
+					m.Draft = "保留草稿"
+					tt := ui.NewTester(m.ViewRoot, 390, 844)
 					tt.SetDark(dark)
 					tt.SetSafeArea(ui.SafeArea{Top: 59, Bottom: 34})
 					tt.Frame()
@@ -99,8 +99,8 @@ func TestMobileDrawerClosingFramesMatchRestingPage(t *testing.T) {
 					for i, point := range points {
 						want[i] = tt.Image().RGBAAt(point[0], point[1])
 					}
-					path := m.router().Path()
-					m.menu = true
+					path := m.Router().Path()
+					m.Menu = true
 					tt.Frame()
 					tt.Advance(time.Second)
 					if closeWith == "tap" {
@@ -136,7 +136,7 @@ func TestMobileDrawerClosingFramesMatchRestingPage(t *testing.T) {
 							break
 						}
 					}
-					if !nearClosed || m.menu || m.drawerVisible || m.router().Path() != path || m.draft != "保留草稿" {
+					if !nearClosed || m.Menu || m.DrawerVisible || m.Router().Path() != path || m.Draft != "保留草稿" {
 						t.Fatal("closing the drawer skipped its settling frames or changed the page/draft")
 					}
 				})

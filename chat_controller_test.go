@@ -1,79 +1,90 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
-	"miya/internal/codex"
-	"miya/internal/subagent"
-	"strings"
-	"testing"
+	json "encoding/json"
+	fmt "fmt"
+	appmodel "miya/internal/appmodel"
+	codex "miya/internal/codex"
+	controller "miya/internal/controller"
+	subagent "miya/internal/subagent"
+	uiruntime "miya/internal/uiruntime"
+	strings "strings"
+	testing "testing"
 )
 
-func testController() *chatController {
-	c := &chatController{referenceSource: testReferenceSource}
-	c.projects, c.setProjects = createSignal([]Project{})
-	c.status, c.setStatus = createSignal("")
-	c.threads, c.setThreads = createSignal([]Thread{{ID: 1, ServerID: "t1", Busy: true}, {ID: 2, ServerID: "t2"}})
-	c.approvals, c.setApprovals = createSignal([]codex.Approval{})
+func testController() *controller.Controller {
+	c := &controller.Controller{WindowState: appmodel.WindowState{ReferenceSource: testReferenceSource}}
+	c.Projects, c.SetProjects = uiruntime.CreateSignal([]appmodel.Project{})
+	c.Status, c.SetStatus = uiruntime.CreateSignal("")
+	c.Threads, c.SetThreads = uiruntime.CreateSignal([]appmodel.Thread{{ID: 1, ServerID: "t1", Busy: true}, {ID: 2, ServerID: "t2"}})
+	c.Approvals, c.SetApprovals = uiruntime.CreateSignal([]codex.Approval{})
 	return c
 }
+
 func event(method, params string) codex.Frame {
 	return codex.Frame{Method: method, Params: json.RawMessage(params)}
 }
+
 func TestStreamReconciliationAndRouting(t *testing.T) {
 	c := testController()
-	c.handle(event("turn/started", `{"threadId":"t1","turn":{"id":"turn1"}}`))
-	c.handle(event("item/agentMessage/delta", `{"threadId":"t1","turnId":"turn1","itemId":"a","delta":"Hello "}`))
-	c.handle(event("item/agentMessage/delta", `{"threadId":"t1","turnId":"turn1","itemId":"a","delta":"世界"}`))
-	c.handle(event("item/completed", `{"threadId":"t1","turnId":"turn1","item":{"id":"a","type":"agentMessage","text":"Hello 世界!"}}`))
-	first := c.threads()[0]
+	c.Handle(event("turn/started", `{"threadId":"t1","turn":{"id":"turn1"}}`))
+	c.Handle(event("item/agentMessage/delta", `{"threadId":"t1","turnId":"turn1","itemId":"a","delta":"Hello "}`))
+	c.Handle(event("item/agentMessage/delta", `{"threadId":"t1","turnId":"turn1","itemId":"a","delta":"世界"}`))
+	c.Handle(event("item/completed", `{"threadId":"t1","turnId":"turn1","item":{"id":"a","type":"agentMessage","text":"Hello 世界!"}}`))
+	first := c.Threads()[0]
 	if len(first.Messages) != 1 || first.Messages[0].Content != "Hello 世界!" {
 		t.Fatalf("bad final reconciliation: %+v", first.Messages)
 	}
-	if len(c.threads()[1].Messages) != 0 {
+	if len(c.Threads()[1].Messages) != 0 {
 		t.Fatal("event leaked to other thread")
 	}
-	c.handle(event("turn/completed", `{"threadId":"t1","turn":{"id":"old","status":"completed"}}`))
-	if !c.threads()[0].Busy {
+	c.Handle(event("turn/completed", `{"threadId":"t1","turn":{"id":"old","status":"completed"}}`))
+	if !c.Threads()[0].Busy {
 		t.Fatal("stale completion stopped active turn")
 	}
-	c.handle(event("turn/completed", `{"threadId":"t1","turn":{"id":"turn1","status":"interrupted"}}`))
-	if c.threads()[0].Busy || c.threads()[0].Status != "Stopped" {
+	c.Handle(event("turn/completed", `{"threadId":"t1","turn":{"id":"turn1","status":"interrupted"}}`))
+	if c.Threads()[0].Busy || c.Threads()[0].Status != "Stopped" {
 		t.Fatal("interrupt not reflected")
 	}
 }
 
 func TestThreadTitleUsesServerName(t *testing.T) {
 	c := testController()
-	c.handle(event("thread/name/updated", `{"threadId":"t1","name":"按 service 分组统计"}`))
-	if got := c.threads()[0].Title; got != "按 service 分组统计" {
+	c.Handle(event("thread/name/updated", `{"threadId":"t1","name":"按 service 分组统计"}`))
+	if got := c.Threads()[0].Title; got != "按 service 分组统计" {
 		t.Fatalf("server title not applied: %q", got)
 	}
 }
+
 func TestOptimisticUserIsNotDuplicated(t *testing.T) {
 	c := testController()
-	c.update(1, func(t *Thread) { t.Messages = []Message{{ID: 9, Role: "user", Content: "Hi", ItemID: "pending-user"}} })
+	c.Update(1, func(t *appmodel.Thread) {
+		t.Messages = []appmodel.Message{{ID: 9, Role: "user", Content: "Hi", ItemID: "pending-user"}}
+	})
 	e := event("item/started", `{"threadId":"t1","turnId":"turn1","item":{"id":"u","type":"userMessage","content":[{"type":"text","text":"Hi"}]}}`)
-	c.handle(e)
+	c.Handle(e)
 	e.Method = "item/completed"
-	c.handle(e)
-	if len(c.threads()[0].Messages) != 1 {
+	c.Handle(e)
+	if len(c.Threads()[0].Messages) != 1 {
 		t.Fatal("duplicate user message")
 	}
 }
 
 func TestOptimisticUserIsNotDuplicatedAcrossStartedAndCompleted(t *testing.T) {
 	c := testController()
-	c.update(1, func(t *Thread) { t.Messages = []Message{{ID: 9, Role: "user", Content: "Hi", ItemID: "pending-user"}} })
+	c.Update(1, func(t *appmodel.Thread) {
+		t.Messages = []appmodel.Message{{ID: 9, Role: "user", Content: "Hi", ItemID: "pending-user"}}
+	})
 	params := `{"threadId":"t1","turnId":"turn1","item":{"id":"u","type":"userMessage","content":[{"type":"text","text":"Hi"}]}}`
-	c.handle(event("item/started", params))
-	c.handle(event("item/completed", params))
-	if len(c.threads()[0].Messages) != 1 || c.threads()[0].Messages[0].ItemID != "u" {
-		t.Fatalf("started/completed duplicated optimistic user: %+v", c.threads()[0].Messages)
+	c.Handle(event("item/started", params))
+	c.Handle(event("item/completed", params))
+	if len(c.Threads()[0].Messages) != 1 || c.Threads()[0].Messages[0].ItemID != "u" {
+		t.Fatalf("started/completed duplicated optimistic user: %+v", c.Threads()[0].Messages)
 	}
 }
+
 func TestToolOutputBounded(t *testing.T) {
-	m, ok := itemMessage(codex.Item{Type: "commandExecution", Command: "test", AggregatedOutput: strings.Repeat("a", 10000)})
+	m, ok := appmodel.ItemMessage(codex.Item{Type: "commandExecution", Command: "test", AggregatedOutput: strings.Repeat("a", 10000)})
 	if !ok || len(m.Content) > 8100 || !strings.Contains(m.Content, "omitted") {
 		t.Fatal("unbounded tool output")
 	}
@@ -82,7 +93,7 @@ func TestToolOutputBounded(t *testing.T) {
 
 func TestAttachmentInputs(t *testing.T) {
 	c := testController()
-	inputs := c.attachmentInputs([]string{"/tmp/photo.png", "/tmp/notes.md"})
+	inputs := c.AttachmentInputs([]string{"/tmp/photo.png", "/tmp/notes.md"})
 	if len(inputs) != 2 || inputs[0]["type"] != "localImage" || inputs[1]["type"] != "text" {
 		t.Fatalf("unexpected attachment inputs: %#v", inputs)
 	}
@@ -96,12 +107,12 @@ func TestPermissionPolicySandboxMapping(t *testing.T) {
 		{"on-failure", "workspace-write"},
 		{"never", "danger-full-access"},
 	} {
-		if got := sandboxForPermissionPolicy(tc.policy); got != tc.sandbox {
+		if got := appmodel.SandboxForPermissionPolicy(tc.policy); got != tc.sandbox {
 			t.Fatalf("%s sandbox = %s, want %s", tc.policy, got, tc.sandbox)
 		}
 	}
 	c := testController()
-	if got := c.selectedPermissionPolicy(); got != "on-request" {
+	if got := c.SelectedPermissionPolicy(); got != "on-request" {
 		t.Fatalf("default policy = %s", got)
 	}
 }
@@ -112,7 +123,7 @@ func TestNormalizeLocale(t *testing.T) {
 		"en": "en", "en-US": "en", "English": "en", "": "en", "fr": "en",
 	}
 	for input, want := range tests {
-		if got := normalizeLocale(input); got != want {
+		if got := appmodel.NormalizeLocale(input); got != want {
 			t.Fatalf("normalizeLocale(%q) = %q, want %q", input, got, want)
 		}
 	}
@@ -151,7 +162,7 @@ func TestAllProtocolItemTypes(t *testing.T) {
 			if err := json.Unmarshal([]byte(raw), &item); err != nil {
 				t.Fatal(err)
 			}
-			m, ok := itemMessage(item)
+			m, ok := appmodel.ItemMessage(item)
 			if !ok || m.Role != f.role || !strings.Contains(m.Content, f.contains) {
 				t.Fatalf("bad mapping: %+v", m)
 			}
@@ -165,43 +176,45 @@ func TestAllProtocolItemTypes(t *testing.T) {
 		})
 	}
 }
+
 func TestProgressErrorsAndRequestResolution(t *testing.T) {
 	c := testController()
 	for _, method := range []string{"item/plan/delta", "item/reasoning/summaryTextDelta", "item/commandExecution/outputDelta", "item/fileChange/outputDelta"} {
-		c.handle(event(method, `{"threadId":"t1","turnId":"turn1","itemId":"`+method+`","delta":"progress"}`))
+		c.Handle(event(method, `{"threadId":"t1","turnId":"turn1","itemId":"`+method+`","delta":"progress"}`))
 	}
-	if len(c.threads()[0].Messages) != 4 {
+	if len(c.Threads()[0].Messages) != 4 {
 		t.Fatal("progress notifications dropped")
 	}
-	c.handle(event("turn/plan/updated", `{"threadId":"t1","turnId":"turn1","plan":[{"step":"verify","status":"in_progress"}]}`))
-	c.handle(event("turn/plan/updated", `{"threadId":"t1","turnId":"turn1","plan":[{"step":"verify","status":"completed"}]}`))
-	if len(c.threads()[0].Messages) != 5 || !strings.Contains(c.threads()[0].Messages[4].Content, "completed") {
+	c.Handle(event("turn/plan/updated", `{"threadId":"t1","turnId":"turn1","plan":[{"step":"verify","status":"in_progress"}]}`))
+	c.Handle(event("turn/plan/updated", `{"threadId":"t1","turnId":"turn1","plan":[{"step":"verify","status":"completed"}]}`))
+	if len(c.Threads()[0].Messages) != 5 || !strings.Contains(c.Threads()[0].Messages[4].Content, "completed") {
 		t.Fatal("plan not updated in place")
 	}
-	c.handle(event("turn/diff/updated", `{"threadId":"t1","turnId":"turn1","diff":"+line"}`))
-	c.handle(event("thread/tokenUsage/updated", `{"threadId":"t1","tokenUsage":{"last":{"totalTokens":123}}}`))
-	if c.threads()[0].Tokens != 123 {
+	c.Handle(event("turn/diff/updated", `{"threadId":"t1","turnId":"turn1","diff":"+line"}`))
+	c.Handle(event("thread/tokenUsage/updated", `{"threadId":"t1","tokenUsage":{"last":{"totalTokens":123}}}`))
+	if c.Threads()[0].Tokens != 123 {
 		t.Fatal("usage missing")
 	}
-	c.handle(event("error", `{"threadId":"t1","willRetry":true,"error":{"message":"temporary"}}`))
-	if c.threads()[0].Status != "Retrying: temporary" || !c.threads()[0].Busy {
+	c.Handle(event("error", `{"threadId":"t1","willRetry":true,"error":{"message":"temporary"}}`))
+	if c.Threads()[0].Status != "Retrying: temporary" || !c.Threads()[0].Busy {
 		t.Fatal("retry state wrong")
 	}
-	c.setApprovals([]codex.Approval{{ID: json.RawMessage(`7`), ThreadID: "t1", TurnID: "turn1"}, {ID: json.RawMessage(`"other"`), ThreadID: "t2", TurnID: "turn2"}})
-	c.handle(event("serverRequest/resolved", `{"threadId":"t1","requestId":7}`))
-	if len(c.approvals()) != 1 || c.approvals()[0].ThreadID != "t2" {
+	c.SetApprovals([]codex.Approval{{ID: json.RawMessage(`7`), ThreadID: "t1", TurnID: "turn1"}, {ID: json.RawMessage(`"other"`), ThreadID: "t2", TurnID: "turn2"}})
+	c.Handle(event("serverRequest/resolved", `{"threadId":"t1","requestId":7}`))
+	if len(c.Approvals()) != 1 || c.Approvals()[0].ThreadID != "t2" {
 		t.Fatal("resolved request cleanup wrong")
 	}
-	c.handle(event("turn/completed", `{"threadId":"t1","turn":{"id":"turn1","status":"failed","error":{"message":"failure"}}}`))
-	if c.threads()[0].Busy || c.threads()[0].Status != "failure" {
+	c.Handle(event("turn/completed", `{"threadId":"t1","turn":{"id":"turn1","status":"failed","error":{"message":"failure"}}}`))
+	if c.Threads()[0].Busy || c.Threads()[0].Status != "failure" {
 		t.Fatal("failed turn state wrong")
 	}
 }
+
 func TestApprovalDecisionsAndForms(t *testing.T) {
 	for _, method := range []string{"item/commandExecution/requestApproval", "item/fileChange/requestApproval", "item/permissions/requestApproval"} {
 		for _, allow := range []bool{false, true} {
 			a := codex.Approval{Method: method, Permissions: json.RawMessage(`{"network":{"enabled":true}}`)}
-			b, _ := json.Marshal(approvalResult(a, allow))
+			b, _ := json.Marshal(appmodel.ApprovalResult(a, allow))
 			if method == "item/permissions/requestApproval" {
 				if allow && !strings.Contains(string(b), `"enabled":true`) {
 					t.Fatal(string(b))
@@ -222,11 +235,11 @@ func TestApprovalDecisionsAndForms(t *testing.T) {
 	}
 	schema := json.RawMessage(`{"type":"object","required":["name"],"properties":{"name":{"type":"string","enum":["yes","no"]},"count":{"type":"integer"}}}`)
 	for _, content := range []map[string]any{{}, {"name": true}, {"name": "invalid"}, {"name": "yes", "count": 1.5}, {"name": "yes", "extra": "oops"}} {
-		if validateForm(schema, content) == nil {
+		if appmodel.ValidateForm(schema, content) == nil {
 			t.Fatalf("invalid form accepted: %v", content)
 		}
 	}
-	if err := validateForm(schema, map[string]any{"name": "yes", "count": float64(2)}); err != nil {
+	if err := appmodel.ValidateForm(schema, map[string]any{"name": "yes", "count": float64(2)}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -236,21 +249,21 @@ func TestServerRequestQueueAndInterruptedCleanup(t *testing.T) {
 	for i, method := range []string{"item/commandExecution/requestApproval", "item/fileChange/requestApproval", "item/permissions/requestApproval", "item/tool/requestUserInput", "mcpServer/elicitation/request"} {
 		f := event(method, `{"threadId":"t1","turnId":"turn1","itemId":"item"}`)
 		f.ID = json.RawMessage(fmt.Sprintf("%d", i))
-		c.serverRequest(f)
-		c.serverRequest(f)
+		c.ServerRequest(f)
+		c.ServerRequest(f)
 	}
-	if len(c.approvals()) != 5 {
-		t.Fatalf("requests missing or duplicated: %d", len(c.approvals()))
+	if len(c.Approvals()) != 5 {
+		t.Fatalf("requests missing or duplicated: %d", len(c.Approvals()))
 	}
-	c.handle(event("turn/completed", `{"threadId":"t1","turn":{"id":"turn1","status":"interrupted"}}`))
-	if len(c.approvals()) != 0 {
+	c.Handle(event("turn/completed", `{"threadId":"t1","turn":{"id":"turn1","status":"interrupted"}}`))
+	if len(c.Approvals()) != 0 {
 		t.Fatal("interrupted turn kept stale requests")
 	}
 }
 
 func TestUnsupportedMCPConstraintsCannotBeSilentlyAccepted(t *testing.T) {
 	raw := json.RawMessage(`{"type":"object","properties":{"label":{"type":"string","minLength":5}}}`)
-	if err := validateForm(raw, map[string]any{"label": "x"}); err == nil {
+	if err := appmodel.ValidateForm(raw, map[string]any{"label": "x"}); err == nil {
 		t.Fatal("unsupported constraint was silently ignored")
 	}
 }
@@ -261,30 +274,30 @@ func TestPermissionModes(t *testing.T) {
 		{"on-failure", "on-request", "auto_review", "workspaceWrite"},
 		{"never", "never", "user", "dangerFullAccess"},
 	} {
-		if approvalForPermissionPolicy(tc.mode) != tc.approval || reviewerForPermissionPolicy(tc.mode) != tc.reviewer || turnSandboxForPermissionPolicy(tc.mode)["type"] != tc.sandbox {
+		if appmodel.ApprovalForPermissionPolicy(tc.mode) != tc.approval || appmodel.ReviewerForPermissionPolicy(tc.mode) != tc.reviewer || appmodel.TurnSandboxForPermissionPolicy(tc.mode)["type"] != tc.sandbox {
 			t.Fatalf("incorrect permission routing for %s", tc.mode)
 		}
 	}
-	if turnSandboxForPermissionPolicy("on-failure")["networkAccess"] != false {
+	if appmodel.TurnSandboxForPermissionPolicy("on-failure")["networkAccess"] != false {
 		t.Fatal("auto review must retain the network sandbox")
 	}
 }
 
 func TestProjectOrderUsesLatestConversation(t *testing.T) {
 	c := testController()
-	c.cwd = "/workspace/current"
-	c.projects, c.setProjects = createSignal([]Project{
+	c.Cwd = "/workspace/current"
+	c.Projects, c.SetProjects = uiruntime.CreateSignal([]appmodel.Project{
 		{Name: "old", Path: "/workspace/old"},
-		{Name: "current", Path: c.cwd},
+		{Name: "current", Path: c.Cwd},
 		{Name: "new", Path: "/workspace/new"},
 	})
-	c.projectCache = map[string][]Thread{
+	c.ProjectCache = map[string][]appmodel.Thread{
 		"/workspace/old":     {{LastActivityAt: 100}},
 		"/workspace/current": {{LastActivityAt: 200}},
 		"/workspace/new":     {{LastActivityAt: 300}},
 	}
-	c.refreshProjectOrder()
-	got := c.projects()
+	c.RefreshProjectOrder()
+	got := c.Projects()
 	if got[0].Name != "new" || got[1].Name != "current" || got[2].Name != "old" {
 		t.Fatalf("project order = %#v", got)
 	}
@@ -292,57 +305,57 @@ func TestProjectOrderUsesLatestConversation(t *testing.T) {
 
 func TestResumeWithoutClientDoesNotPanic(t *testing.T) {
 	c := testController()
-	c.resume(Thread{ID: 1, ServerID: "thread-1"}, nil)
-	if c.threads()[0].Status != "Codex is reconnecting…" {
-		t.Fatalf("status = %q", c.threads()[0].Status)
+	c.Resume(appmodel.Thread{ID: 1, ServerID: "thread-1"}, nil)
+	if c.Threads()[0].Status != "Codex is reconnecting…" {
+		t.Fatalf("status = %q", c.Threads()[0].Status)
 	}
 }
 
 func TestConversationPermissionOverride(t *testing.T) {
 	c := testController()
-	c.active, c.setActive = createSignal(1)
-	c.permissionPolicy, c.setPermissionPolicy = createSignal("on-request")
-	c.draftPermission, c.setDraftPermission = createSignal("")
-	c.setCurrentPermissionPolicy("on-failure")
-	if c.currentPermissionPolicy() != "on-failure" || c.selectedPermissionPolicy() != "on-request" {
+	c.Active, c.SetActive = uiruntime.CreateSignal(1)
+	c.PermissionPolicy, c.SetPermissionPolicy = uiruntime.CreateSignal("on-request")
+	c.DraftPermission, c.SetDraftPermission = uiruntime.CreateSignal("")
+	c.SetCurrentPermissionPolicy("on-failure")
+	if c.CurrentPermissionPolicy() != "on-failure" || c.SelectedPermissionPolicy() != "on-request" {
 		t.Fatal("conversation override changed the default")
 	}
-	c.setActive(2)
-	if c.currentPermissionPolicy() != "on-request" {
+	c.SetActive(2)
+	if c.CurrentPermissionPolicy() != "on-request" {
 		t.Fatal("permission leaked to another thread")
 	}
-	c.setActive(1)
-	if c.currentPermissionPolicy() != "on-failure" {
+	c.SetActive(1)
+	if c.CurrentPermissionPolicy() != "on-failure" {
 		t.Fatal("override lost on thread switch")
 	}
-	c.setActive(0)
-	c.setCurrentPermissionPolicy("never")
-	if c.currentPermissionPolicy() != "never" || c.threads()[0].PermissionPolicy != "on-failure" {
+	c.SetActive(0)
+	c.SetCurrentPermissionPolicy("never")
+	if c.CurrentPermissionPolicy() != "never" || c.Threads()[0].PermissionPolicy != "on-failure" {
 		t.Fatal("new conversation permission changed an existing thread")
 	}
 }
 
 func TestBackgroundThreadsContinueAfterSelection(t *testing.T) {
 	c := testController()
-	c.active, c.setActive = createSignal(1)
-	c.draft, c.setDraft = createSignal("")
-	c.attachments, c.setAttachments = createSignal([]string{})
-	c.handle(event("turn/started", `{"threadId":"t1","turn":{"id":"a"}}`))
-	c.selectThread(c.threads()[1])
-	c.handle(event("turn/started", `{"threadId":"t2","turn":{"id":"b"}}`))
-	if !c.threads()[0].Busy || !c.threads()[1].Busy {
+	c.Active, c.SetActive = uiruntime.CreateSignal(1)
+	c.Draft, c.SetDraft = uiruntime.CreateSignal("")
+	c.Attachments, c.SetAttachments = uiruntime.CreateSignal([]string{})
+	c.Handle(event("turn/started", `{"threadId":"t1","turn":{"id":"a"}}`))
+	c.SelectThread(c.Threads()[1])
+	c.Handle(event("turn/started", `{"threadId":"t2","turn":{"id":"b"}}`))
+	if !c.Threads()[0].Busy || !c.Threads()[1].Busy {
 		t.Fatal("switching stopped a running thread")
 	}
-	c.handle(event("item/agentMessage/delta", `{"threadId":"t1","turnId":"a","itemId":"answer","delta":"background reply"}`))
-	if c.active() != 2 || c.threads()[0].Messages[0].Content != "background reply" {
+	c.Handle(event("item/agentMessage/delta", `{"threadId":"t1","turnId":"a","itemId":"answer","delta":"background reply"}`))
+	if c.Active() != 2 || c.Threads()[0].Messages[0].Content != "background reply" {
 		t.Fatal("background stream changed selection or lost output")
 	}
-	c.handle(event("turn/completed", `{"threadId":"t1","turn":{"id":"a","status":"completed"}}`))
-	if c.threads()[0].Busy || !c.threads()[1].Busy {
+	c.Handle(event("turn/completed", `{"threadId":"t1","turn":{"id":"a","status":"completed"}}`))
+	if c.Threads()[0].Busy || !c.Threads()[1].Busy {
 		t.Fatal("completion affected another thread")
 	}
-	c.selectThread(c.threads()[0])
-	if !c.threads()[1].Busy {
+	c.SelectThread(c.Threads()[0])
+	if !c.Threads()[1].Busy {
 		t.Fatal("switching back stopped the second thread")
 	}
 }

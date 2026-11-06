@@ -1,28 +1,30 @@
 package main
 
 import (
-	"encoding/json"
-	"testing"
+	json "encoding/json"
+	appmodel "miya/internal/appmodel"
+	controller "miya/internal/controller"
+	testing "testing"
 
-	"github.com/egoist/mygo/ui"
+	ui "github.com/egoist/mygo/ui"
 )
 
 func TestCollapsedProjectShowsRunningConversation(t *testing.T) {
 	app, _ := testApp(t)
-	app.expandedProject = ""
-	app.c.setThreads([]Thread{{ID: 1, Busy: true}})
-	tt := ui.NewTester(app.sidebarView, 260, 750)
+	app.ExpandedProject = ""
+	app.C.(*controller.Controller).SetThreads([]appmodel.Thread{{ID: 1, Busy: true}})
+	tt := ui.NewTester(app.SidebarView, 260, 750)
 	tt.Frame()
 	if _, ok := tt.Find("Project activity: demo"); !ok {
 		t.Fatal("a collapsed project with a running conversation should show its spinner")
 	}
-	app.expandedProject = app.workspace
+	app.ExpandedProject = app.Workspace
 	tt.Frame()
 	if _, ok := tt.Find("Project activity: demo"); ok {
 		t.Fatal("expanded projects show status on the individual conversation")
 	}
-	app.expandedProject = ""
-	app.c.setThreads([]Thread{{ID: 1}})
+	app.ExpandedProject = ""
+	app.C.(*controller.Controller).SetThreads([]appmodel.Thread{{ID: 1}})
 	tt.Frame()
 	if _, ok := tt.Find("Project activity: demo"); ok {
 		t.Fatal("a finished conversation should restore the collapse arrow")
@@ -31,31 +33,31 @@ func TestCollapsedProjectShowsRunningConversation(t *testing.T) {
 
 func TestProjectRunningStateReachesServiceWindow(t *testing.T) {
 	app, _ := testApp(t)
-	c := app.c
-	c.setProjects([]Project{{Name: "demo", Path: c.cwd}, {Name: "background", Path: "/background"}})
-	c.projectCache = map[string][]Thread{"/background": {{ID: 2, Agent: agentClaude, Busy: true}}}
-	c.setThreads([]Thread{{ID: 1, Busy: true, Loading: true}})
-	mirror := newMirrorController()
-	t.Cleanup(mirror.cancel)
+	c := app.C.(*controller.Controller)
+	c.SetProjects([]appmodel.Project{{Name: "demo", Path: c.Cwd}, {Name: "background", Path: "/background"}})
+	c.ProjectCache = map[string][]appmodel.Thread{"/background": {{ID: 2, Agent: appmodel.AgentClaude, Busy: true}}}
+	c.SetThreads([]appmodel.Thread{{ID: 1, Busy: true, Loading: true}})
+	mirror := controller.NewMirrorController()
+	t.Cleanup(mirror.Cancel)
 	apply := func() {
 		t.Helper()
-		data, err := json.Marshal(c.snapshotState())
+		data, err := json.Marshal(c.SnapshotState())
 		if err != nil {
 			t.Fatal(err)
 		}
-		var state svcState
+		var state appmodel.SvcState
 		if err := json.Unmarshal(data, &state); err != nil {
 			t.Fatal(err)
 		}
-		mirror.applyState(state)
+		mirror.ApplyState(state)
 	}
 	apply()
-	if !mirror.projectBusy("/background") || mirror.projectBusy(c.cwd) {
+	if !mirror.ProjectBusy("/background") || mirror.ProjectBusy(c.Cwd) {
 		t.Fatal("background runs should reach the window; loading history should not count as running")
 	}
-	c.projectCache["/background"][0].Busy = false
+	c.ProjectCache["/background"][0].Busy = false
 	apply()
-	if mirror.projectBusy("/background") {
+	if mirror.ProjectBusy("/background") {
 		t.Fatal("the window should clear status after the background run finishes")
 	}
 }

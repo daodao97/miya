@@ -1,35 +1,39 @@
 package main
 
 import (
-	"reflect"
-	"testing"
+	appmodel "miya/internal/appmodel"
+	controller "miya/internal/controller"
+	uiruntime "miya/internal/uiruntime"
+	reflect "reflect"
+	testing "testing"
 )
 
 func TestProjectOrderRestoresSavedOrder(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
-	saved := []Project{{Name: "b", Path: "/b"}, {Name: "a", Path: "/a"}}
-	persistProjectOrder(saved)
-	discovered := []Project{saved[1], {Name: "new", Path: "/new"}, saved[0]}
-	want := append(append([]Project(nil), saved...), discovered[1])
-	if got := restoreProjectOrder(discovered); !reflect.DeepEqual(got, want) {
+	saved := []appmodel.Project{{Name: "b", Path: "/b"}, {Name: "a", Path: "/a"}}
+	appmodel.PersistProjectOrder(saved)
+	discovered := []appmodel.Project{saved[1], {Name: "new", Path: "/new"}, saved[0]}
+	want := append(append([]appmodel.Project(nil), saved...), discovered[1])
+	if got := appmodel.RestoreProjectOrder(discovered); !reflect.DeepEqual(got, want) {
 		t.Fatalf("restored=%v want=%v", got, want)
 	}
 	// Removed projects must not reappear from the order file.
-	if got := restoreProjectOrder([]Project{saved[1]}); !reflect.DeepEqual(got, []Project{saved[1]}) {
+	if got := appmodel.RestoreProjectOrder([]appmodel.Project{saved[1]}); !reflect.DeepEqual(got, []appmodel.Project{saved[1]}) {
 		t.Fatal(got)
 	}
 }
+
 func TestProjectOrderTiesKeepSavedOrder(t *testing.T) {
-	c := &chatController{cwd: "/a", projectCache: map[string][]Thread{}}
-	want := []Project{{Path: "/b"}, {Path: "/a"}}
-	c.projects, c.setProjects = createSignal(want)
-	c.refreshProjectOrder()
-	if !reflect.DeepEqual(c.projects(), want) {
+	c := &controller.Controller{WindowState: appmodel.WindowState{Cwd: "/a", ProjectCache: map[string][]appmodel.Thread{}}}
+	want := []appmodel.Project{{Path: "/b"}, {Path: "/a"}}
+	c.Projects, c.SetProjects = uiruntime.CreateSignal(want)
+	c.RefreshProjectOrder()
+	if !reflect.DeepEqual(c.Projects(), want) {
 		t.Fatal("startup workspace changed saved order")
 	}
-	c.projectCache["/a"] = []Thread{{LastActivityAt: 42}}
-	c.refreshProjectOrder()
-	if c.projects()[0].Path != "/a" {
+	c.ProjectCache["/a"] = []appmodel.Thread{{LastActivityAt: 42}}
+	c.RefreshProjectOrder()
+	if c.Projects()[0].Path != "/a" {
 		t.Fatal("new activity did not update order")
 	}
 }

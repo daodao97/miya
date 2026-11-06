@@ -1,18 +1,19 @@
 package main
 
 import (
-	"go/ast"
-	"go/parser"
-	"go/token"
-	"os"
-	"path/filepath"
-	"strconv"
-	"strings"
-	"testing"
-	"unicode"
-
-	"miya/internal/notification"
-	"miya/locales"
+	ast "go/ast"
+	parser "go/parser"
+	token "go/token"
+	appmodel "miya/internal/appmodel"
+	controller "miya/internal/controller"
+	notification "miya/internal/notification"
+	locales "miya/locales"
+	os "os"
+	filepath "path/filepath"
+	strconv "strconv"
+	strings "strings"
+	testing "testing"
+	unicode "unicode"
 )
 
 // Chinese input and old conversation titles still need to be recognized.
@@ -88,25 +89,25 @@ func TestProductSourceCopyUsesEnglishCatalog(t *testing.T) {
 
 func TestLegacyServicePreferenceDoesNotChooseDeviceLanguage(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
-	path := permissionPolicyPath()
+	path := appmodel.PermissionPolicyPath()
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(path, []byte(`{"locale":"zh","permissionPolicy":"never"}`), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if loadLocale() != "en" || loadPermissionPolicy() != "never" {
+	if appmodel.LoadLocale() != "en" || appmodel.LoadPermissionPolicy() != "never" {
 		t.Fatal("legacy language preference affected English UI or permissions")
 	}
 	app, tt := testApp(t)
-	app.c.setLocale("zh") // A legacy service or preference cannot change the copy.
-	app.section = "Settings"
+	app.C.(*controller.Controller).SetLocale("zh") // A legacy service or preference cannot change the copy.
+	app.Section = "Settings"
 	tt.Frame()
 	if !tt.HasText("General") || !tt.HasText("Appearance") || !tt.HasText("Interface language") || !tt.HasText("Follow system") {
 		t.Fatalf("settings language: %q", tt.Texts())
 	}
 	userText := "帮我检查中文文件"
-	if got := notification.Task(Thread{Messages: []Message{{Role: "user", Content: userText}}}); got != "Task: "+userText {
+	if got := notification.Task(appmodel.Thread{Messages: []appmodel.Message{{Role: "user", Content: userText}}}); got != "Task: "+userText {
 		t.Fatalf("user text was changed: %q", got)
 	}
 }

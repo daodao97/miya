@@ -1,19 +1,21 @@
 package main
 
 import (
-	"context"
-	"fmt"
-	"io"
-	"net"
-	"net/http"
-	"net/http/cookiejar"
-	"net/http/httptest"
-	"net/url"
-	"os"
-	"path/filepath"
-	"strings"
-	"testing"
-	"time"
+	context "context"
+	fmt "fmt"
+	io "io"
+	appmodel "miya/internal/appmodel"
+	phoneproxy "miya/internal/phoneproxy"
+	net "net"
+	http "net/http"
+	cookiejar "net/http/cookiejar"
+	httptest "net/http/httptest"
+	url "net/url"
+	os "os"
+	filepath "path/filepath"
+	strings "strings"
+	testing "testing"
+	time "time"
 )
 
 func fileServerFixture(t *testing.T) (string, http.Handler) {
@@ -28,11 +30,12 @@ func fileServerFixture(t *testing.T) (string, http.Handler) {
 			t.Fatal(err)
 		}
 	}
-	handler := desktopFileServer{Projects: func(context.Context) ([]fileProject, error) {
-		return []fileProject{{ID: projectFileID(root), Name: "Project <test>", Path: root}}, nil
+	handler := appmodel.DesktopFileServer{Projects: func(context.Context) ([]appmodel.FileProject, error) {
+		return []appmodel.FileProject{{ID: appmodel.ProjectFileID(root), Name: "Project <test>", Path: root}}, nil
 	}}
 	return root, handler
 }
+
 func fileRequest(t *testing.T, handler http.Handler, method, target string, headers map[string]string) *httptest.ResponseRecorder {
 	t.Helper()
 	r := httptest.NewRequest(method, target, nil)
@@ -46,7 +49,7 @@ func fileRequest(t *testing.T, handler http.Handler, method, target string, head
 
 func TestDesktopFilesDirectoryLanguageFollowsClient(t *testing.T) {
 	root, handler := fileServerFixture(t)
-	base := "/" + projectFileID(root) + "/"
+	base := "/" + appmodel.ProjectFileID(root) + "/"
 	for _, tc := range []struct{ language, tag, download string }{{"zh-CN, en;q=0.8", "zh-Hans", "下载"}, {"en-GB", "en", "Download"}, {"fr", "en", "Download"}} {
 		response := fileRequest(t, handler, "GET", base, map[string]string{"Accept-Language": tc.language})
 		body := response.Body.String()
@@ -55,9 +58,10 @@ func TestDesktopFilesDirectoryLanguageFollowsClient(t *testing.T) {
 		}
 	}
 }
+
 func TestDesktopFilesHTTPReadsAndDownloads(t *testing.T) {
 	root, handler := fileServerFixture(t)
-	base := "/" + projectFileID(root) + "/"
+	base := "/" + appmodel.ProjectFileID(root) + "/"
 	for _, tc := range []struct{ path, contentType, body string }{{"index.html", "text/html", "<h1>预览</h1>"}, {"assets/site.css", "text/css", "h1{color:red}"}, {"README.md", "text/plain", "# 项目"}, {url.PathEscape("空 格 #?.txt"), "text/plain", "special"}} {
 		w := fileRequest(t, handler, "GET", base+tc.path, nil)
 		if w.Code != 200 || !strings.HasPrefix(w.Header().Get("Content-Type"), tc.contentType) || !strings.Contains(w.Body.String(), tc.body) {
@@ -81,9 +85,10 @@ func TestDesktopFilesHTTPReadsAndDownloads(t *testing.T) {
 		t.Fatal("directory redirect incorrect")
 	}
 }
+
 func TestDesktopFilesAreRootedAndReadOnly(t *testing.T) {
 	root, handler := fileServerFixture(t)
-	base := "/" + projectFileID(root) + "/"
+	base := "/" + appmodel.ProjectFileID(root) + "/"
 	outside := filepath.Join(t.TempDir(), "secret.txt")
 	os.WriteFile(outside, []byte("private"), 0600)
 	if err := os.Symlink(outside, filepath.Join(root, "escape")); err != nil {
@@ -109,6 +114,7 @@ func TestDesktopFilesAreRootedAndReadOnly(t *testing.T) {
 		t.Fatal("escaping symlink shown in directory")
 	}
 }
+
 func TestDesktopFilesRangesBeyondMessageLimit(t *testing.T) {
 	root, handler := fileServerFixture(t)
 	full := filepath.Join(root, "large.bin")
@@ -124,17 +130,18 @@ func TestDesktopFilesRangesBeyondMessageLimit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	w := fileRequest(t, handler, "GET", "/"+projectFileID(root)+"/large.bin", map[string]string{"Range": fmt.Sprintf("bytes=%d-%d", size-4, size-1)})
+	w := fileRequest(t, handler, "GET", "/"+appmodel.ProjectFileID(root)+"/large.bin", map[string]string{"Range": fmt.Sprintf("bytes=%d-%d", size-4, size-1)})
 	if w.Code != 206 || w.Body.String() != "TAIL" || w.Header().Get("Content-Range") != fmt.Sprintf("bytes %d-%d/%d", size-4, size-1, size) {
 		t.Fatal("large file range streaming failed")
 	}
 }
+
 func TestPhoneFileProxyPreservesBrowserPathsAndSession(t *testing.T) {
 	root, handler := fileServerFixture(t)
 	upstream := httptest.NewServer(handler)
 	defer upstream.Close()
-	proxy := new(phoneFileProxy)
-	if err := proxy.start(root, func(ctx context.Context) (net.Conn, error) {
+	proxy := new(phoneproxy.PhoneFileProxy)
+	if err := proxy.Start(root, func(ctx context.Context) (net.Conn, error) {
 		return (&net.Dialer{}).DialContext(ctx, "tcp", upstream.Listener.Addr().String())
 	}); err != nil {
 		t.Fatal(err)

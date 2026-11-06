@@ -3,50 +3,52 @@
 package main
 
 import (
-	"bytes"
-	"context"
-	"encoding/json"
-	"image"
-	"image/png"
-	"io"
-	"net"
-	"net/http"
-	"net/url"
-	"os"
-	"path/filepath"
-	"strings"
-	"syscall"
-	"testing"
-	"time"
-
-	"miya/internal/remote"
-	"miya/internal/webservice"
-	"miya/internal/worktree"
+	bytes "bytes"
+	context "context"
+	json "encoding/json"
+	image "image"
+	png "image/png"
+	io "io"
+	appmodel "miya/internal/appmodel"
+	controller "miya/internal/controller"
+	remote "miya/internal/remote"
+	desktopui "miya/internal/ui"
+	webservice "miya/internal/webservice"
+	worktree "miya/internal/worktree"
+	net "net"
+	http "net/http"
+	url "net/url"
+	os "os"
+	filepath "path/filepath"
+	strings "strings"
+	syscall "syscall"
+	testing "testing"
+	time "time"
 )
 
 func TestServerPersistentIdleAndTerminalRestart(t *testing.T) {
 	c := serverController(t.TempDir(), "")
-	s := &service{c: c, persistent: true, quit: make(chan struct{}), idleSince: time.Now().Add(-time.Hour), idleTimeout: time.Nanosecond}
-	s.checkIdle()
+	s := &controller.Service{C: c, Persistent: true, Quit: make(chan struct{}), IdleSince: time.Now().Add(-time.Hour), IdleTimeout: time.Nanosecond}
+	s.CheckIdle()
 	select {
-	case <-s.quit:
+	case <-s.Quit:
 		t.Fatal("permanent server exited without a client")
 	default:
 	}
-	c.remoteTerminals.Store(1)
-	if _, err := s.handle(nil, svcRequest{Op: "quitWhenIdle"}); err != nil {
+	c.RemoteTerminals.Store(1)
+	if _, err := s.Handle(nil, appmodel.SvcRequest{Op: "quitWhenIdle"}); err != nil {
 		t.Fatal(err)
 	}
-	s.checkIdle()
+	s.CheckIdle()
 	select {
-	case <-s.quit:
+	case <-s.Quit:
 		t.Fatal("safe restart ended an interactive terminal")
 	default:
 	}
-	c.remoteTerminals.Store(0)
-	s.checkIdle()
+	c.RemoteTerminals.Store(0)
+	s.CheckIdle()
 	select {
-	case <-s.quit:
+	case <-s.Quit:
 	default:
 		t.Fatal("idle server did not honor scheduled restart")
 	}
@@ -54,26 +56,26 @@ func TestServerPersistentIdleAndTerminalRestart(t *testing.T) {
 
 func TestServerPrivateConnectionFiles(t *testing.T) {
 	t.Setenv("MIYA_DIR", t.TempDir())
-	if err := os.WriteFile(connectionFile(), []byte("old"), 0644); err != nil {
+	if err := os.WriteFile(controller.ConnectionFile(), []byte("old"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := saveServerConnection("test-capability"); err != nil {
+	if err := controller.SaveServerConnection("test-capability"); err != nil {
 		t.Fatal(err)
 	}
-	info, err := os.Stat(connectionFile())
+	info, err := os.Stat(controller.ConnectionFile())
 	if err != nil || info.Mode().Perm() != 0600 {
 		t.Fatal("pairing capability permissions", info, err)
 	}
-	if err := saveRemoteServer("bad-code"); err == nil {
+	if err := appmodel.SaveRemoteServer("bad-code"); err == nil {
 		t.Fatal("invalid connection accepted")
 	}
-	if err := saveRemoteServer(""); err != nil {
+	if err := appmodel.SaveRemoteServer(""); err != nil {
 		t.Fatal(err)
 	}
-	if remoteServerLink() != "" {
+	if appmodel.RemoteServerLink() != "" {
 		t.Fatal("local mode did not clear remote target")
 	}
-	info, err = os.Stat(remoteServerPath())
+	info, err = os.Stat(appmodel.RemoteServerPath())
 	if err != nil || info.Mode().Perm() != 0600 {
 		t.Fatal("client capability permissions", info, err)
 	}
@@ -81,25 +83,25 @@ func TestServerPrivateConnectionFiles(t *testing.T) {
 
 func TestRemoteHostWorkspaceRPC(t *testing.T) {
 	f := newServiceFixture(t)
-	cl, err := dialService(f.sock)
+	cl, err := appmodel.DialService(f.sock)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer cl.Close()
-	root := f.srv.c.cwd
+	root := f.srv.C.Cwd
 	file := filepath.Join(root, "hello.txt")
 	if err := os.WriteFile(file, []byte("server text"), 0640); err != nil {
 		t.Fatal(err)
 	}
-	var entries []hostEntry
-	if err := cl.Call("host", hostRequest{Action: "dir", Project: root}, &entries); err != nil || len(entries) < 1 {
+	var entries []appmodel.HostEntry
+	if err := cl.Call("host", appmodel.HostRequest{Action: "dir", Project: root}, &entries); err != nil || len(entries) < 1 {
 		t.Fatal(entries, err)
 	}
 	var text string
-	if err := cl.Call("host", hostRequest{Action: "read", Project: root, Path: "hello.txt"}, &text); err != nil || text != "server text" {
+	if err := cl.Call("host", appmodel.HostRequest{Action: "read", Project: root, Path: "hello.txt"}, &text); err != nil || text != "server text" {
 		t.Fatal(text, err)
 	}
-	if err := cl.Call("host", hostRequest{Action: "write", Project: root, Path: "hello.txt", Text: "saved remotely"}, nil); err != nil {
+	if err := cl.Call("host", appmodel.HostRequest{Action: "write", Project: root, Path: "hello.txt", Text: "saved remotely"}, nil); err != nil {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(file)
@@ -111,10 +113,10 @@ func TestRemoteHostWorkspaceRPC(t *testing.T) {
 		t.Fatal("remote save lost permissions")
 	}
 	var files []string
-	if err := cl.Call("host", hostRequest{Action: "index", Project: root}, &files); err != nil || !strings.Contains(strings.Join(files, "\n"), "hello.txt") {
+	if err := cl.Call("host", appmodel.HostRequest{Action: "index", Project: root}, &files); err != nil || !strings.Contains(strings.Join(files, "\n"), "hello.txt") {
 		t.Fatal(files, err)
 	}
-	for _, r := range []hostRequest{
+	for _, r := range []appmodel.HostRequest{
 		{Action: "read", Project: root, Path: "../secret"},
 		{Action: "read", Project: "/unregistered", Path: "hello.txt"},
 		{Action: "write", Project: root, Path: "hello.txt", Text: strings.Repeat("x", worktree.MaxEditableFile+1)},
@@ -130,14 +132,14 @@ func TestRemoteHostWorkspaceRPC(t *testing.T) {
 	if err := os.Symlink(outside, filepath.Join(root, "escape")); err != nil {
 		t.Fatal(err)
 	}
-	if err := cl.Call("host", hostRequest{Action: "read", Project: root, Path: "escape"}, nil); err == nil {
+	if err := cl.Call("host", appmodel.HostRequest{Action: "read", Project: root, Path: "escape"}, nil); err == nil {
 		t.Fatal("project traversal through symlink accepted")
 	}
 }
 
 func TestRemoteHostAttachmentsAndPreview(t *testing.T) {
 	f := newServiceFixture(t)
-	cl, err := dialService(f.sock)
+	cl, err := appmodel.DialService(f.sock)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,23 +149,23 @@ func TestRemoteHostAttachmentsAndPreview(t *testing.T) {
 		t.Fatal(err)
 	}
 	var paths []string
-	if err := cl.Call("host", hostRequest{Action: "upload", Images: []remote.Image{{Name: "photo.png", Data: buf.Bytes()}}}, &paths); err != nil || len(paths) != 1 {
+	if err := cl.Call("host", appmodel.HostRequest{Action: "upload", Images: []remote.Image{{Name: "photo.png", Data: buf.Bytes()}}}, &paths); err != nil || len(paths) != 1 {
 		t.Fatal(paths, err)
 	}
 	var preview []byte
 	source := (&url.URL{Scheme: "file", Path: paths[0]}).String()
-	if err := cl.Call("host", hostRequest{Action: "preview", Path: source}, &preview); err != nil || len(preview) == 0 {
+	if err := cl.Call("host", appmodel.HostRequest{Action: "preview", Path: source}, &preview); err != nil || len(preview) == 0 {
 		t.Fatal("preview unavailable", err)
 	}
-	c := newMirrorController()
-	c.cwd, c.remote, c.mirror.remoteHost = f.srv.c.cwd, cl, true
-	c.setActive(7)
-	c.restoreDraft(7, "retry", paths)
-	got := c.attachments()
+	c := controller.NewMirrorController()
+	c.Cwd, c.Remote, c.Mirror.RemoteHost = f.srv.C.Cwd, cl, true
+	c.SetActive(7)
+	c.RestoreDraft(7, "retry", paths)
+	got := c.Attachments()
 	if len(got) != 1 || got[0] != "miya-server:"+paths[0] {
 		t.Fatal("returned attachment lost server identity", got)
 	}
-	resolved, err := c.uploadRemoteAttachments(got)
+	resolved, err := c.UploadRemoteAttachments(got)
 	if err != nil || len(resolved) != 1 || resolved[0] != paths[0] {
 		t.Fatal("server attachment re-uploaded", resolved, err)
 	}
@@ -171,7 +173,7 @@ func TestRemoteHostAttachmentsAndPreview(t *testing.T) {
 	if err := os.WriteFile(document, []byte("attached document"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	uploaded, err := c.uploadRemoteAttachments([]string{document})
+	uploaded, err := c.UploadRemoteAttachments([]string{document})
 	if err != nil || len(uploaded) != 1 || uploaded[0] == document {
 		t.Fatal("ordinary document did not cross host boundary", uploaded, err)
 	}
@@ -183,7 +185,7 @@ func TestRemoteHostAttachmentsAndPreview(t *testing.T) {
 	if info.Mode().Perm() != 0600 {
 		t.Fatal("document upload permissions")
 	}
-	c.cancel()
+	c.Cancel()
 }
 
 func TestRemoteHostDeletedGitFile(t *testing.T) {
@@ -200,27 +202,27 @@ func TestRemoteHostDeletedGitFile(t *testing.T) {
 	if err != nil || len(snap.Files) != 1 {
 		t.Fatal(snap, err)
 	}
-	work, err := c.prepareHost(hostRequest{Action: "sides", Project: root, Snapshot: snap, File: snap.Files[0]})
+	work, err := c.PrepareHost(appmodel.HostRequest{Action: "sides", Project: root, Snapshot: snap, File: snap.Files[0]})
 	if err != nil {
 		t.Fatal(err)
 	}
 	result, err := work()
-	if err != nil || result.(hostSides).Old != "old\n" || result.(hostSides).New != "" {
+	if err != nil || result.(appmodel.HostSides).Old != "old\n" || result.(appmodel.HostSides).New != "" {
 		t.Fatal(result, err)
 	}
 }
 
 func TestRemoteBrowserServerTargets(t *testing.T) {
 	for _, raw := range []string{"http://localhost:3000/docs?q=yes", "http://127.0.0.1:5173/", "http://[::1]:8080/"} {
-		s, u, proxy, err := remoteBrowserService(raw, webservice.Service{})
+		s, u, proxy, err := desktopui.RemoteBrowserService(raw, webservice.Service{})
 		if err != nil || !proxy || s.Port == 0 || u == nil {
 			t.Fatal(raw, s, err)
 		}
 	}
-	if _, _, proxy, err := remoteBrowserService("https://example.com/", webservice.Service{}); proxy || err != nil {
+	if _, _, proxy, err := desktopui.RemoteBrowserService("https://example.com/", webservice.Service{}); proxy || err != nil {
 		t.Fatal("public website was redirected to server", err)
 	}
-	if _, _, _, err := remoteBrowserService("https://localhost:3000/", webservice.Service{}); err == nil {
+	if _, _, _, err := desktopui.RemoteBrowserService("https://localhost:3000/", webservice.Service{}); err == nil {
 		t.Fatal("unsupported localhost TLS silently used client network")
 	}
 }
@@ -233,20 +235,20 @@ func TestServerTailcatEndToEnd(t *testing.T) {
 	f := newServiceFixture(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
-	root := f.srv.c.cwd
+	root := f.srv.C.Cwd
 	if err := os.WriteFile(filepath.Join(root, "remote.txt"), []byte("tailcat server file"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	bridge, err := remote.Start(ctx, remote.Options{
-		StateDir: t.TempDir(), Files: f.srv.c.fileServer(), Serve: f.srv.c.servePhone,
-		Service:  func(ctx context.Context, wire *remote.Conn) { f.srv.handleConn(&svcPeer{wire: wire}) },
-		Terminal: f.srv.c.serveRemoteTerminal,
+		StateDir: t.TempDir(), Files: f.srv.C.FileServer(), Serve: f.srv.C.ServePhone,
+		Service:  func(ctx context.Context, wire *remote.Conn) { f.srv.HandleConn(&controller.SvcPeer{Wire: wire}) },
+		Terminal: f.srv.C.ServeRemoteTerminal,
 	})
 	if err != nil {
 		t.Fatal("start Tailcat", err)
 	}
 	defer bridge.Close()
-	cl, state, err := connectRemoteService(bridge.Link())
+	cl, state, err := appmodel.ConnectRemoteService(bridge.Link())
 	if err != nil {
 		t.Fatal("desktop connect", err)
 	}
@@ -255,7 +257,7 @@ func TestServerTailcatEndToEnd(t *testing.T) {
 		t.Fatal("desktop received another workspace")
 	}
 	var text string
-	if err := cl.Call("host", hostRequest{Action: "read", Project: root, Path: "remote.txt"}, &text); err != nil || text != "tailcat server file" {
+	if err := cl.Call("host", appmodel.HostRequest{Action: "read", Project: root, Path: "remote.txt"}, &text); err != nil || text != "tailcat server file" {
 		t.Fatal("desktop remote read", text, err)
 	}
 	// A deferred disk read must not prevent heartbeats/stop/approvals on
@@ -265,8 +267,8 @@ func TestServerTailcatEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { go func() { _ = os.WriteFile(pipe, []byte("released"), 0600) }() }()
-	args, _ := json.Marshal(hostRequest{Action: "read", Project: root, Path: "slow-read"})
-	if err := cl.Wire().Send(svcRequest{ID: 1000000, Op: "host", Args: args}); err != nil {
+	args, _ := json.Marshal(appmodel.HostRequest{Action: "read", Project: root, Path: "slow-read"})
+	if err := cl.Wire().Send(appmodel.SvcRequest{ID: 1000000, Op: "host", Args: args}); err != nil {
 		t.Fatal(err)
 	}
 	heartbeat := make(chan error, 1)
@@ -294,11 +296,11 @@ func TestServerTailcatEndToEnd(t *testing.T) {
 	if err := phone.Receive(&frame); err != nil || frame.Type != "state" {
 		t.Fatal("phone state", frame.Type, err)
 	}
-	var phoneState phoneState
+	var phoneState appmodel.PhoneState
 	if err := json.Unmarshal(frame.Data, &phoneState); err != nil || len(phoneState.Projects) == 0 {
 		t.Fatal("phone projects", err)
 	}
-	term, err := openRemoteTerminal(cl, root)
+	term, err := appmodel.OpenRemoteTerminal(cl, root)
 	if err != nil {
 		t.Fatal("terminal open", err)
 	}
@@ -345,16 +347,16 @@ func TestServerLinuxDeployment(t *testing.T) {
 		t.Fatal("read QA link", err)
 	}
 	t.Setenv("MIYA_DIR", t.TempDir())
-	cl, state, err := connectRemoteService(strings.TrimSpace(string(data)))
+	cl, state, err := appmodel.ConnectRemoteService(strings.TrimSpace(string(data)))
 	if err != nil {
 		t.Fatal("Linux desktop connect", err)
 	}
 	defer cl.Close()
-	var hello svcHello
+	var hello appmodel.SvcHello
 	if err := cl.Call("hello", nil, &hello); err != nil || !hello.Remote {
 		t.Fatal("not a permanent Linux server", err)
 	}
-	request := hostRequest{Action: "write", Project: state.Cwd, Path: "miya-linux-qa.txt", Text: "linux server round trip"}
+	request := appmodel.HostRequest{Action: "write", Project: state.Cwd, Path: "miya-linux-qa.txt", Text: "linux server round trip"}
 	if err := cl.Call("host", request, nil); err != nil {
 		t.Fatal("Linux remote save", err)
 	}
@@ -366,7 +368,7 @@ func TestServerLinuxDeployment(t *testing.T) {
 	transport := &http.Transport{DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) { return cl.Wire().DialFiles(ctx) }}
 	defer transport.CloseIdleConnections()
 	client := &http.Client{Transport: transport, Timeout: 15 * time.Second}
-	response, err := client.Get("http://server/" + projectFileID(state.Cwd) + "/miya-linux-qa.txt")
+	response, err := client.Get("http://server/" + appmodel.ProjectFileID(state.Cwd) + "/miya-linux-qa.txt")
 	if err != nil {
 		t.Fatal("Linux file stream", err)
 	}
@@ -375,7 +377,7 @@ func TestServerLinuxDeployment(t *testing.T) {
 	if err != nil || response.StatusCode != 200 || string(body) != request.Text {
 		t.Fatal("Linux file download", response.StatusCode, err)
 	}
-	term, err := openRemoteTerminal(cl, state.Cwd)
+	term, err := appmodel.OpenRemoteTerminal(cl, state.Cwd)
 	if err != nil {
 		t.Fatal("Linux shell", err)
 	}

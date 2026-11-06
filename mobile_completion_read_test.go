@@ -1,36 +1,39 @@
 package main
 
-import "testing"
+import (
+	appmodel "miya/internal/appmodel"
+	testing "testing"
+)
 
 func TestMobileCompletionReadWaitsForLiveContents(t *testing.T) {
 	m := testMobileApp()
-	m.pushDisabled = true
-	thread := Thread{ID: 1, ServerID: "s1", CompletedAtMs: 100, HistoryLoaded: true,
-		Messages: []Message{{ID: 10, Role: "assistant", Content: "完成结果"}}}
-	m.open = thread.ID
-	m.showThread(thread)
-	if _, _, ok := m.completionReadRequest(); ok {
+	m.PushDisabled = true
+	thread := appmodel.Thread{ID: 1, ServerID: "s1", CompletedAtMs: 100, HistoryLoaded: true,
+		Messages: []appmodel.Message{{ID: 10, Role: "assistant", Content: "完成结果"}}}
+	m.Open = thread.ID
+	m.ShowThread(thread)
+	if _, _, ok := m.CompletionReadRequest(); ok {
 		t.Fatal("cached messages and sidebar metadata acknowledged unseen contents")
 	}
-	sync := newPhoneThreadSync(nil)
+	sync := appmodel.NewPhoneThreadSync(nil)
 	delta, _ := sync.Update(thread)
-	m.receiveThread(thread.ID, delta)
-	r, read, ok := m.completionReadRequest()
+	m.ReceiveThread(thread.ID, delta)
+	r, read, ok := m.CompletionReadRequest()
 	if !ok || r.Op != "read" || r.ServerID != thread.ServerID || r.Project != "/a" || r.ReadCompletedAtMs != 100 || r.ReadVersion != 0 {
 		t.Fatalf("completed contents need a read independent of push registration: %+v, %v", r, ok)
 	}
-	m.completionRead = read
-	if _, _, ok := m.completionReadRequest(); ok {
+	m.CompletionRead = read
+	if _, _, ok := m.CompletionReadRequest(); ok {
 		t.Fatal("the same completed result was acknowledged twice")
 	}
 	thread.CompletedAtMs = 200
 	delta, _ = sync.Update(thread)
-	m.receiveThread(thread.ID, delta)
-	if r, _, ok := m.completionReadRequest(); !ok || r.ReadCompletedAtMs != 200 {
+	m.ReceiveThread(thread.ID, delta)
+	if r, _, ok := m.CompletionReadRequest(); !ok || r.ReadCompletedAtMs != 200 {
 		t.Fatal("a metadata-only completion delta with unchanged messages was not acknowledged")
 	}
-	m.subscribe(0)
-	if _, _, ok := m.completionReadRequest(); ok {
+	m.Subscribe(0)
+	if _, _, ok := m.CompletionReadRequest(); ok {
 		t.Fatal("reconnecting or changing subscriptions reused an earlier received result")
 	}
 }
@@ -39,8 +42,8 @@ func TestMobileCompletionReadRejectsIncompleteResults(t *testing.T) {
 	for _, state := range []string{"running", "loading", "history-missing", "messages-missing", "not-completed", "other-thread"} {
 		t.Run(state, func(t *testing.T) {
 			m := testMobileApp()
-			thread := Thread{ID: 1, ServerID: "s1", CompletedAtMs: 100, HistoryLoaded: true,
-				Messages: []Message{{ID: 10, Content: "result"}}}
+			thread := appmodel.Thread{ID: 1, ServerID: "s1", CompletedAtMs: 100, HistoryLoaded: true,
+				Messages: []appmodel.Message{{ID: 10, Content: "result"}}}
 			switch state {
 			case "running":
 				thread.Busy = true
@@ -55,10 +58,10 @@ func TestMobileCompletionReadRejectsIncompleteResults(t *testing.T) {
 			case "other-thread":
 				thread.ID = 2
 			}
-			m.open = 1
-			m.showThread(thread)
-			m.completionReceived = desktopRead{Key: desktopUnreadKey(thread), Version: thread.CompletedAtMs}
-			if _, _, ok := m.completionReadRequest(); ok {
+			m.Open = 1
+			m.ShowThread(thread)
+			m.CompletionReceived = appmodel.DesktopRead{Key: appmodel.DesktopUnreadKey(thread), Version: thread.CompletedAtMs}
+			if _, _, ok := m.CompletionReadRequest(); ok {
 				t.Fatal("acknowledged an unavailable completed result")
 			}
 		})

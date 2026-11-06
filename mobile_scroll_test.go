@@ -1,29 +1,30 @@
 package main
 
 import (
-	"fmt"
-	"testing"
-	"time"
+	fmt "fmt"
+	appmodel "miya/internal/appmodel"
+	testing "testing"
+	time "time"
 
-	"github.com/egoist/mygo/ui"
+	ui "github.com/egoist/mygo/ui"
 )
 
 func TestMobileUserMessageBlankSpaceKeepsVerticalScroll(t *testing.T) {
 	for _, width := range []int{320, 390} {
 		t.Run(fmt.Sprint(width), func(t *testing.T) {
 			m := testMobileApp()
-			th := m.state.Projects[0].Threads[0]
+			th := m.State.Projects[0].Threads[0]
 			th.HistoryLoaded = true
 			for i := 0; i < 40; i++ {
-				th.Messages = append(th.Messages, Message{ID: i + 1, Role: "user", Content: fmt.Sprintf("消息 %02d", i)})
+				th.Messages = append(th.Messages, appmodel.Message{ID: i + 1, Role: "user", Content: fmt.Sprintf("消息 %02d", i)})
 			}
-			m.openThread(th)
-			m.showThread(th)
-			m.draft = "保留草稿"
-			tt := ui.NewTester(m.viewRoot, width, 750)
+			m.OpenThread(th)
+			m.ShowThread(th)
+			m.Draft = "保留草稿"
+			tt := ui.NewTester(m.ViewRoot, width, 750)
 			tt.SetSafeArea(ui.SafeArea{Top: 59, Bottom: 34})
 			tt.Frame()
-			list := m.view.listFor(th.ID)
+			list := m.View.ListFor(th.ID)
 			list.ScrollTo(20, ui.Center)
 			tt.Frame()
 			bubble, ok := tt.Find("消息 20")
@@ -34,7 +35,7 @@ func TestMobileUserMessageBlankSpaceKeepsVerticalScroll(t *testing.T) {
 			tt.Press(x, y)
 			tt.Move(x, y-40)
 			tt.Frame()
-			if m.drawerDragging || m.drawerOffset.X != 0 || m.menu {
+			if m.DrawerDragging || m.DrawerOffset.X != 0 || m.Menu {
 				t.Fatal("vertical movement in message whitespace was captured by the drawer")
 			}
 			// Native touch scrolling delivers precise scroll events after
@@ -51,11 +52,11 @@ func TestMobileUserMessageBlankSpaceKeepsVerticalScroll(t *testing.T) {
 			}
 			tt.Release(x, y-40)
 			tt.Advance(time.Second)
-			if m.router().Path() != "/thread" || m.open != th.ID || m.menu || m.draft != "保留草稿" {
+			if m.Router().Path() != "/thread" || m.Open != th.ID || m.Menu || m.Draft != "保留草稿" {
 				t.Fatal("scrolling changed the conversation, drawer or draft")
 			}
 			drag(tt, 8, float32(width)-40, y)
-			if !m.menu {
+			if !m.Menu {
 				t.Fatal("message scrolling disabled the drawer edge gesture")
 			}
 		})

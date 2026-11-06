@@ -1,15 +1,16 @@
 package main
 
 import (
-	"fmt"
-	"strings"
-	"testing"
-	"time"
-
+	fmt "fmt"
+	appmodel "miya/internal/appmodel"
 	dg "miya/internal/delegation"
-	"miya/internal/model"
+	model "miya/internal/model"
+	widgets "miya/internal/widgets"
+	strings "strings"
+	testing "testing"
+	time "time"
 
-	"github.com/egoist/mygo/ui"
+	ui "github.com/egoist/mygo/ui"
 )
 
 func TestMobileTaskOpensTargetConversation(t *testing.T) {
@@ -17,32 +18,32 @@ func TestMobileTaskOpensTargetConversation(t *testing.T) {
 		for _, reusedID := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%d/reused-ID-%v", width, reusedID), func(t *testing.T) {
 				m := testMobileApp()
-				m.state.Collaboration = &collaborationStatus{Version: 1}
-				source := m.state.Projects[0].Threads[0]
-				source.Messages = []Message{{ID: 1, Role: "assistant", Content: "Review done", StartedAtMs: 1000, CompletedAtMs: 4000}}
+				m.State.Collaboration = &appmodel.CollaborationStatus{Version: 1}
+				source := m.State.Projects[0].Threads[0]
+				source.Messages = []appmodel.Message{{ID: 1, Role: "assistant", Content: "Review done", StartedAtMs: 1000, CompletedAtMs: 4000}}
 				source.HistoryLoaded = true
-				target := m.state.Projects[1].Threads[0]
-				target.Agent = agentClaude
+				target := m.State.Projects[1].Threads[0]
+				target.Agent = appmodel.AgentClaude
 				if reusedID {
 					target.ID = source.ID
 				}
-				m.state.Projects[1].Threads[0] = target
-				targetRef := ThreadRef{Source: m.state.ReferenceSource, Backend: model.ThreadAgent(target), SessionID: target.ServerID}.URL()
-				m.openThread(source)
-				m.showThread(source)
-				pane, _, _ := m.collaborationPane()
-				pane.loaded, pane.loadedAt = true, time.Now()
-				pane.rows = []collaborationTaskView{{ID: "review", Title: "Review", State: dg.Completed}}
-				pane.selected = "review"
-				pane.details["review"] = collaborationTaskView{ID: "review", Title: "Review", State: dg.Completed, Thread: targetRef}
+				m.State.Projects[1].Threads[0] = target
+				targetRef := appmodel.ThreadRef{Source: m.State.ReferenceSource, Backend: model.ThreadAgent(target), SessionID: target.ServerID}.URL()
+				m.OpenThread(source)
+				m.ShowThread(source)
+				pane, _, _ := m.CollaborationPane()
+				pane.Loaded, pane.LoadedAt = true, time.Now()
+				pane.Rows = []widgets.CollaborationTaskView{{ID: "review", Title: "Review", State: dg.Completed}}
+				pane.Selected = "review"
+				pane.Details["review"] = widgets.CollaborationTaskView{ID: "review", Title: "Review", State: dg.Completed, Thread: targetRef}
 				// The destination's previously opened task popover must not reappear
 				// over its history when navigating from another conversation.
-				destination := m.collaborations.pane(targetRef)
-				destination.loaded, destination.loadedAt, destination.open = true, time.Now(), true
-				destination.rows = pane.rows
-				destination.selected = "review"
-				destination.details["review"] = pane.details["review"]
-				tt := ui.NewTester(m.viewRoot, width, 750)
+				destination := m.Collaborations.Pane(targetRef)
+				destination.Loaded, destination.LoadedAt, destination.Open = true, time.Now(), true
+				destination.Rows = pane.Rows
+				destination.Selected = "review"
+				destination.Details["review"] = pane.Details["review"]
+				tt := ui.NewTester(m.ViewRoot, width, 750)
 				tt.Frame()
 				if err := tt.Click("Agent tasks (1)"); err != nil {
 					t.Fatal(err)
@@ -52,24 +53,24 @@ func TestMobileTaskOpensTargetConversation(t *testing.T) {
 					t.Fatal(err)
 				}
 				tt.Frame()
-				if m.open != target.ID || m.viewer.current().ServerID != target.ServerID || m.selected != "/b" || m.viewer.current().Agent != agentClaude {
-					t.Fatalf("did not navigate to exact target: open=%d current=%+v err=%q", m.open, m.viewer.current(), m.sendErr)
+				if m.Open != target.ID || m.Viewer.Current().ServerID != target.ServerID || m.Selected != "/b" || m.Viewer.Current().Agent != appmodel.AgentClaude {
+					t.Fatalf("did not navigate to exact target: open=%d current=%+v err=%q", m.Open, m.Viewer.Current(), m.SendErr)
 				}
-				if pane.open || destination.open || tt.HasText("Back to tasks") {
+				if pane.Open || destination.Open || tt.HasText("Back to tasks") {
 					t.Fatal("cached task popover covered destination")
 				}
-				request := m.subscribeRequest(m.open)
-				if request.ServerID != target.ServerID || request.Agent != agentClaude || request.Project != "/b" {
+				request := m.SubscribeRequest(m.Open)
+				if request.ServerID != target.ServerID || request.Agent != appmodel.AgentClaude || request.Project != "/b" {
 					t.Fatalf("wrong subscription: %+v", request)
 				}
-				target.Messages = []Message{{ID: 2, Role: "assistant", Content: "Target conversation history"}}
-				m.receiveThread(target.ID, phoneThreadDelta{Thread: target, Reset: true, Order: []int{2}, Changed: target.Messages})
+				target.Messages = []appmodel.Message{{ID: 2, Role: "assistant", Content: "Target conversation history"}}
+				m.ReceiveThread(target.ID, appmodel.PhoneThreadDelta{Thread: target, Reset: true, Order: []int{2}, Changed: target.Messages})
 				tt.Frame()
 				if !tt.HasText("Target conversation history") {
 					t.Fatal("target history did not become visible")
 				}
 				// Already inside the destination: only the source navigation belongs here.
-				destination.details["review"] = collaborationTaskView{ID: "review", Title: "Review", State: dg.Completed, Thread: targetRef, From: pane.from}
+				destination.Details["review"] = widgets.CollaborationTaskView{ID: "review", Title: "Review", State: dg.Completed, Thread: targetRef, From: pane.From}
 				if err := tt.Click("Agent tasks (1)"); err != nil {
 					t.Fatal(err)
 				}
@@ -81,7 +82,7 @@ func TestMobileTaskOpensTargetConversation(t *testing.T) {
 					t.Fatal(err)
 				}
 				tt.Frame()
-				if m.viewer.current().ServerID != source.ServerID || m.selected != "/a" || pane.open || destination.open {
+				if m.Viewer.Current().ServerID != source.ServerID || m.Selected != "/a" || pane.Open || destination.Open {
 					t.Fatal("source navigation failed or left a popover open")
 				}
 			})
@@ -94,9 +95,9 @@ func TestMobileMessageLinksOpenConversation(t *testing.T) {
 		for _, kind := range []string{"markdown", "assistant-mention", "user-mention", "mixed-user-links"} {
 			t.Run(fmt.Sprintf("%d/%s", width, kind), func(t *testing.T) {
 				m := testMobileApp()
-				source := m.state.Projects[0].Threads[0]
-				target := m.state.Projects[1].Threads[0]
-				ref := ThreadRef{Source: m.state.ReferenceSource, Backend: model.ThreadAgent(target), SessionID: target.ServerID}
+				source := m.State.Projects[0].Threads[0]
+				target := m.State.Projects[1].Threads[0]
+				ref := appmodel.ThreadRef{Source: m.State.ReferenceSource, Backend: model.ThreadAgent(target), SessionID: target.ServerID}
 				body := "[Target conversation](" + ref.URL() + ")"
 				role := "assistant"
 				if strings.Contains(kind, "mention") {
@@ -109,11 +110,11 @@ func TestMobileMessageLinksOpenConversation(t *testing.T) {
 					role = "user"
 					body = model.ReferenceText(ref, "Reference tag") + " and " + body
 				}
-				source.Messages = []Message{{ID: 1, Role: role, Content: body}}
+				source.Messages = []appmodel.Message{{ID: 1, Role: role, Content: body}}
 				source.HistoryLoaded = true
-				m.openThread(source)
-				m.showThread(source)
-				tt := ui.NewTester(m.viewRoot, width, 750)
+				m.OpenThread(source)
+				m.ShowThread(source)
+				tt := ui.NewTester(m.ViewRoot, width, 750)
 				tt.Frame()
 				r, ok := tt.Find("Target conversation")
 				if !ok {
@@ -122,8 +123,8 @@ func TestMobileMessageLinksOpenConversation(t *testing.T) {
 				// Markdown exposes its containing paragraph to Find. Tap its words.
 				tt.ClickAt(r.X+12, r.Y+r.H/2)
 				tt.Frame()
-				if m.open != target.ID || m.selected != "/b" {
-					t.Fatalf("link did not navigate: open=%d err=%q", m.open, m.sendErr)
+				if m.Open != target.ID || m.Selected != "/b" {
+					t.Fatalf("link did not navigate: open=%d err=%q", m.Open, m.SendErr)
 				}
 			})
 		}
@@ -131,16 +132,16 @@ func TestMobileMessageLinksOpenConversation(t *testing.T) {
 }
 
 func TestMobileThreadLinksRejectOtherSourcesAndMissingTargets(t *testing.T) {
-	for _, ref := range []ThreadRef{
-		{Source: strings.Repeat("b", 32), Backend: agentCodex, SessionID: "s2"},
-		{Source: testReferenceSource, Backend: agentClaude, SessionID: "s2"},
-		{Source: testReferenceSource, Backend: agentCodex, SessionID: "deleted"},
+	for _, ref := range []appmodel.ThreadRef{
+		{Source: strings.Repeat("b", 32), Backend: appmodel.AgentCodex, SessionID: "s2"},
+		{Source: testReferenceSource, Backend: appmodel.AgentClaude, SessionID: "s2"},
+		{Source: testReferenceSource, Backend: appmodel.AgentCodex, SessionID: "deleted"},
 	} {
 		m := testMobileApp()
-		m.openThread(m.state.Projects[0].Threads[0])
-		m.draft = "Keep my draft"
-		m.view.md.OnLink(ref.URL())
-		if m.open != 1 || m.draft != "Keep my draft" || m.sendErr != "Conversation unavailable" {
+		m.OpenThread(m.State.Projects[0].Threads[0])
+		m.Draft = "Keep my draft"
+		m.View.Md.OnLink(ref.URL())
+		if m.Open != 1 || m.Draft != "Keep my draft" || m.SendErr != "Conversation unavailable" {
 			t.Fatal("unavailable link changed conversation or lacked feedback")
 		}
 	}

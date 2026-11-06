@@ -3,19 +3,21 @@
 package main
 
 import (
-	"context"
-	"encoding/json"
-	"errors"
-	"os"
-	"path/filepath"
-	"strings"
-	"testing"
-	"time"
+	context "context"
+	json "encoding/json"
+	errors "errors"
+	appdir "miya/internal/appdir"
+	appmodel "miya/internal/appmodel"
+	controller "miya/internal/controller"
+	remote "miya/internal/remote"
+	desktopui "miya/internal/ui"
+	os "os"
+	filepath "path/filepath"
+	strings "strings"
+	testing "testing"
+	time "time"
 
-	"miya/internal/appdir"
-	"miya/internal/remote"
-
-	"github.com/egoist/mygo/ui"
+	ui "github.com/egoist/mygo/ui"
 )
 
 func TestDesktopWorkspacesMigrateAndKeepLocalSelection(t *testing.T) {
@@ -25,7 +27,7 @@ func TestDesktopWorkspacesMigrateAndKeepLocalSelection(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(appdir.Dir(), "remote-client.json"), legacy, 0600); err != nil {
 		t.Fatal(err)
 	}
-	store, err := loadDesktopWorkspaces()
+	store, err := appmodel.LoadDesktopWorkspaces()
 	if err != nil || len(store.Items) != 2 || store.Current().Link != link {
 		t.Fatal("legacy workspace did not migrate", err)
 	}
@@ -34,18 +36,18 @@ func TestDesktopWorkspacesMigrateAndKeepLocalSelection(t *testing.T) {
 	if err != nil || len(store.Items) != 2 || item.Name != "prod-us" {
 		t.Fatal("same pairing created multiple workspaces", err)
 	}
-	store.Active = localDesktopWorkspace
+	store.Active = appmodel.LocalDesktopWorkspace
 	if err := store.Save(); err != nil {
 		t.Fatal(err)
 	}
-	loaded, err := loadDesktopWorkspaces()
-	if err != nil || loaded.Active != localDesktopWorkspace || len(loaded.Items) != 2 || loaded.Items[1].Name != "prod-us" {
+	loaded, err := appmodel.LoadDesktopWorkspaces()
+	if err != nil || loaded.Active != appmodel.LocalDesktopWorkspace || len(loaded.Items) != 2 || loaded.Items[1].Name != "prod-us" {
 		t.Fatal("local selection or saved name lost", err)
 	}
-	if remoteServerLink() != "" {
+	if appmodel.RemoteServerLink() != "" {
 		t.Fatal("legacy target resurrected after selecting local")
 	}
-	info, err := os.Stat(remoteServerPath())
+	info, err := os.Stat(appmodel.RemoteServerPath())
 	if err != nil || info.Mode().Perm() != 0600 {
 		t.Fatal("workspace capabilities are not private", err)
 	}
@@ -54,125 +56,125 @@ func TestDesktopWorkspacesMigrateAndKeepLocalSelection(t *testing.T) {
 func TestDesktopWorkspacesRejectCorruptRegistry(t *testing.T) {
 	t.Setenv("MIYA_DIR", t.TempDir())
 	data := []byte(`{"version":99,"items":[]}`)
-	if err := os.WriteFile(remoteServerPath(), data, 0600); err != nil {
+	if err := os.WriteFile(appmodel.RemoteServerPath(), data, 0600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := loadDesktopWorkspaces(); err == nil {
+	if _, err := appmodel.LoadDesktopWorkspaces(); err == nil {
 		t.Fatal("unknown registry version silently accepted")
 	}
-	if err := saveRemoteServer(testDesktopLink()); err == nil {
+	if err := appmodel.SaveRemoteServer(testDesktopLink()); err == nil {
 		t.Fatal("corrupt registry overwritten by adding a workspace")
 	}
-	after, _ := os.ReadFile(remoteServerPath())
+	after, _ := os.ReadFile(appmodel.RemoteServerPath())
 	if string(after) != string(data) {
 		t.Fatal("failed migration changed saved capabilities")
 	}
 }
 
-func desktopWorkspaceFixture(t *testing.T) (*chatApp, *desktopWorkspaces, *testDispatch) {
+func desktopWorkspaceFixture(t *testing.T) (*desktopui.App, *desktopui.DesktopWorkspaces, *testDispatch) {
 	t.Helper()
 	t.Setenv("MIYA_DIR", t.TempDir())
 	app, _ := testApp(t)
 	dispatch := &testDispatch{}
-	app.c.run = dispatch.push
-	hub := app.ensureDesktopWorkspaces()
-	t.Cleanup(hub.close)
+	app.C.(*controller.Controller).Run = dispatch.push
+	hub := app.EnsureDesktopWorkspaces()
+	t.Cleanup(hub.Close)
 	return app, hub, dispatch
 }
 
-func waitDesktopWorkspace(t *testing.T, hub *desktopWorkspaces, dispatch *testDispatch) {
+func waitDesktopWorkspace(t *testing.T, hub *desktopui.DesktopWorkspaces, dispatch *testDispatch) {
 	t.Helper()
 	for until := time.Now().Add(3 * time.Second); time.Now().Before(until); time.Sleep(5 * time.Millisecond) {
 		dispatch.drain()
-		if !hub.busy {
+		if !hub.Busy {
 			return
 		}
 	}
 	t.Fatal("workspace connection did not finish")
 }
 
-func workspaceState(name string) svcState {
-	return svcState{ReferenceSource: "host-" + name, Cwd: "/same/project", Projects: []Project{{Name: name, Path: "/same/project"}}, Threads: []Thread{{ID: 7, ServerID: "thread-" + name, Title: name, Loaded: true, HistoryLoaded: true}}, Locale: "en", Ready: true, ProjectThreads: map[string][]Thread{}}
+func workspaceState(name string) appmodel.SvcState {
+	return appmodel.SvcState{ReferenceSource: "host-" + name, Cwd: "/same/project", Projects: []appmodel.Project{{Name: name, Path: "/same/project"}}, Threads: []appmodel.Thread{{ID: 7, ServerID: "thread-" + name, Title: name, Loaded: true, HistoryLoaded: true}}, Locale: "en", Ready: true, ProjectThreads: map[string][]appmodel.Thread{}}
 }
 
 func TestDesktopWorkspaceSwitchPreservesDraftsAndPanels(t *testing.T) {
 	local, hub, dispatch := desktopWorkspaceFixture(t)
-	local.c.setThreads([]Thread{{ID: 7, ServerID: "local-thread", Title: "local", Loaded: true}})
-	local.c.setActive(7)
-	local.c.rememberDraft("local draft")
-	local.c.setAttachments([]string{"/local/photo.png"})
-	localPanel := local.panel()
-	localPanel.selected = "unsaved-local.txt"
+	local.C.(*controller.Controller).SetThreads([]appmodel.Thread{{ID: 7, ServerID: "local-thread", Title: "local", Loaded: true}})
+	local.C.(*controller.Controller).SetActive(7)
+	local.C.(*controller.Controller).RememberDraft("local draft")
+	local.C.(*controller.Controller).SetAttachments([]string{"/local/photo.png"})
+	localPanel := local.Panel()
+	localPanel.Selected = "unsaved-local.txt"
 	link := testDesktopLink()
-	next := hub.store.Clone()
+	next := hub.Store.Clone()
 	item, err := next.Remember(link, "prod-us")
 	if err != nil {
 		t.Fatal(err)
 	}
 	calls := 0
-	hub.connect = func(ctx context.Context, p desktopWorkspace) (*serviceClient, svcState, error) {
+	hub.Connect = func(ctx context.Context, p appmodel.DesktopWorkspace) (*appmodel.ServiceClient, appmodel.SvcState, error) {
 		calls++
-		cl, _ := restartTestClient(t, svcHello{Version: serviceVersion}, "")
+		cl, _ := restartTestClient(t, appmodel.SvcHello{Version: appmodel.ServiceVersion}, "")
 		return cl, workspaceState("remote"), nil
 	}
-	hub.connectWorkspace(item)
+	hub.ConnectWorkspace(item)
 	waitDesktopWorkspace(t, hub, dispatch)
-	remoteApp := hub.active
-	if remoteApp == local || hub.store.Active != item.ID || !remoteApp.c.remoteHost() || calls != 1 {
-		t.Fatal("workspace did not switch in place", hub.err)
+	remoteApp := hub.Active
+	if remoteApp == local || hub.Store.Active != item.ID || !remoteApp.C.(*controller.Controller).RemoteHost() || calls != 1 {
+		t.Fatal("workspace did not switch in place", hub.Err)
 	}
-	if remoteApp.c.draft() != "" || len(remoteApp.c.attachments()) != 0 || remoteApp.panel() == localPanel {
+	if remoteApp.C.(*controller.Controller).Draft() != "" || len(remoteApp.C.(*controller.Controller).Attachments()) != 0 || remoteApp.Panel() == localPanel {
 		t.Fatal("local state crossed into server workspace")
 	}
-	remoteApp.c.setActive(7)
-	remoteApp.c.rememberDraft("remote draft")
-	remoteApp.c.setAttachments([]string{"miya-server:/remote/photo.png"})
-	remotePanel := remoteApp.panel()
-	remotePanel.selected = "remote-edit.txt"
-	hub.selectWorkspace(localDesktopWorkspace)
-	if hub.active != local || local.c.active() != 7 || local.c.draft() != "local draft" || local.panel() != localPanel || len(local.c.attachments()) != 1 {
+	remoteApp.C.(*controller.Controller).SetActive(7)
+	remoteApp.C.(*controller.Controller).RememberDraft("remote draft")
+	remoteApp.C.(*controller.Controller).SetAttachments([]string{"miya-server:/remote/photo.png"})
+	remotePanel := remoteApp.Panel()
+	remotePanel.Selected = "remote-edit.txt"
+	hub.SelectWorkspace(appmodel.LocalDesktopWorkspace)
+	if hub.Active != local || local.C.(*controller.Controller).Active() != 7 || local.C.(*controller.Controller).Draft() != "local draft" || local.Panel() != localPanel || len(local.C.(*controller.Controller).Attachments()) != 1 {
 		t.Fatal("returning to local lost draft, attachments or panel")
 	}
-	if !local.c.workspaceVisible() || remoteApp.c.workspaceVisible() {
+	if !local.C.(*controller.Controller).WorkspaceVisible() || remoteApp.C.(*controller.Controller).WorkspaceVisible() {
 		t.Fatal("inactive workspace incorrectly reports foreground presence")
 	}
-	remoteApp.c.mirror.setLocale("zh")
-	if tr("Projects") != "Projects" {
+	remoteApp.C.(*controller.Controller).Mirror.SetLocale("zh")
+	if appmodel.Tr("Projects") != "Projects" {
 		t.Fatal("inactive server changed active workspace language")
 	}
-	hub.selectWorkspace(item.ID)
-	if hub.active != remoteApp || remoteApp.c.active() != 7 || remoteApp.c.draft() != "remote draft" || remoteApp.panel() != remotePanel || remotePanel.selected != "remote-edit.txt" || calls != 1 {
+	hub.SelectWorkspace(item.ID)
+	if hub.Active != remoteApp || remoteApp.C.(*controller.Controller).Active() != 7 || remoteApp.C.(*controller.Controller).Draft() != "remote draft" || remoteApp.Panel() != remotePanel || remotePanel.Selected != "remote-edit.txt" || calls != 1 {
 		t.Fatal("server state was rebuilt instead of retained")
 	}
-	local.section = "Settings"
-	local.c.revealWorkspace()
-	if hub.active != local || local.section != "" {
+	local.Section = "Settings"
+	local.C.(*controller.Controller).RevealWorkspace()
+	if hub.Active != local || local.Section != "" {
 		t.Fatal("notification did not reveal its own workspace")
 	}
 }
 
 func TestDesktopWorkspaceFailureKeepsCurrentContext(t *testing.T) {
 	local, hub, dispatch := desktopWorkspaceFixture(t)
-	local.c.rememberDraft("do not lose")
-	next := hub.store.Clone()
+	local.C.(*controller.Controller).RememberDraft("do not lose")
+	next := hub.Store.Clone()
 	item, _ := next.Remember(testDesktopLink(), "offline")
-	hub.connect = func(context.Context, desktopWorkspace) (*serviceClient, svcState, error) {
-		return nil, svcState{}, errors.New("offline")
+	hub.Connect = func(context.Context, appmodel.DesktopWorkspace) (*appmodel.ServiceClient, appmodel.SvcState, error) {
+		return nil, appmodel.SvcState{}, errors.New("offline")
 	}
-	hub.connectWorkspace(item)
+	hub.ConnectWorkspace(item)
 	waitDesktopWorkspace(t, hub, dispatch)
-	if hub.active != local || hub.store.Active != localDesktopWorkspace || local.c.draft() != "do not lose" || hub.err != "offline" || len(hub.store.Items) != 1 {
+	if hub.Active != local || hub.Store.Active != appmodel.LocalDesktopWorkspace || local.C.(*controller.Controller).Draft() != "do not lose" || hub.Err != "offline" || len(hub.Store.Items) != 1 {
 		t.Fatal("failed connection replaced or persisted the active workspace")
 	}
 }
 
 func TestDesktopWorkspaceCancelDiscardsLateConnection(t *testing.T) {
 	local, hub, dispatch := desktopWorkspaceFixture(t)
-	next := hub.store.Clone()
+	next := hub.Store.Clone()
 	item, _ := next.Remember(testDesktopLink(), "slow")
-	cl, _ := restartTestClient(t, svcHello{Version: serviceVersion}, "")
+	cl, _ := restartTestClient(t, appmodel.SvcHello{Version: appmodel.ServiceVersion}, "")
 	started, release, dispatched := make(chan struct{}), make(chan struct{}), make(chan struct{})
-	local.c.run = func(f func()) {
+	local.C.(*controller.Controller).Run = func(f func()) {
 		dispatch.push(f)
 		select {
 		case <-dispatched:
@@ -180,14 +182,14 @@ func TestDesktopWorkspaceCancelDiscardsLateConnection(t *testing.T) {
 			close(dispatched)
 		}
 	}
-	hub.connect = func(context.Context, desktopWorkspace) (*serviceClient, svcState, error) {
+	hub.Connect = func(context.Context, appmodel.DesktopWorkspace) (*appmodel.ServiceClient, appmodel.SvcState, error) {
 		close(started)
 		<-release
 		return cl, workspaceState("late"), nil
 	}
-	hub.connectWorkspace(item)
+	hub.ConnectWorkspace(item)
 	<-started
-	hub.cancelConnection()
+	hub.CancelConnection()
 	close(release)
 	select {
 	case <-dispatched:
@@ -195,7 +197,7 @@ func TestDesktopWorkspaceCancelDiscardsLateConnection(t *testing.T) {
 		t.Fatal("late connection did not return")
 	}
 	dispatch.drain()
-	if hub.active != local || len(hub.sessions) != 1 || hub.store.Active != localDesktopWorkspace {
+	if hub.Active != local || len(hub.Sessions) != 1 || hub.Store.Active != appmodel.LocalDesktopWorkspace {
 		t.Fatal("canceled result changed workspace")
 	}
 	select {
@@ -207,7 +209,7 @@ func TestDesktopWorkspaceCancelDiscardsLateConnection(t *testing.T) {
 
 func TestDesktopWorkspaceSidebarFlow(t *testing.T) {
 	app, hub, _ := desktopWorkspaceFixture(t)
-	tt := ui.NewTester(app.view, 1180, 820)
+	tt := ui.NewTester(app.Render, 1180, 820)
 	switcher, ok := tt.Find("Switch workspace")
 	if !ok {
 		t.Fatal("workspace switcher missing from primary navigation")
@@ -225,17 +227,17 @@ func TestDesktopWorkspaceSidebarFlow(t *testing.T) {
 	if err := tt.Click("Add remote workspace…"); err != nil {
 		t.Fatal(err)
 	}
-	if !hub.open || !tt.HasText("Add remote workspace") || !tt.HasText("Workspace name") || !tt.HasText("Connection code") {
+	if !hub.Open || !tt.HasText("Add remote workspace") || !tt.HasText("Workspace name") || !tt.HasText("Connection code") {
 		t.Fatal("adding a workspace still requires settings")
 	}
 	saveUsageImage(t, tt, "desktop-workspace-add")
 	if err := tt.Click("Cancel"); err != nil {
 		t.Fatal(err)
 	}
-	if hub.open {
+	if hub.Open {
 		t.Fatal("workspace dialog did not close")
 	}
-	app.section = "Settings"
+	app.Section = "Settings"
 	tt.Frame()
 	if tt.HasText("运行位置") || tt.HasText("切回本机") {
 		t.Fatal("old settings-based connection flow remains")
@@ -244,15 +246,15 @@ func TestDesktopWorkspaceSidebarFlow(t *testing.T) {
 
 func TestDesktopWorkspaceSidebarRemoteSnapshot(t *testing.T) {
 	app, hub, _ := desktopWorkspaceFixture(t)
-	item, err := hub.store.Remember(testDesktopLink(), "prod-us")
+	item, err := hub.Store.Remember(testDesktopLink(), "prod-us")
 	if err != nil {
 		t.Fatal(err)
 	}
-	hub.store.Active = item.ID
-	app.c.setProjects([]Project{{Name: "miya-server", Path: "/srv/miya"}})
-	app.c.cwd = "/srv/miya"
-	app.workspace, app.projectName, app.expandedProject = app.c.cwd, "miya-server", app.c.cwd
-	tt := ui.NewTester(app.view, 1180, 820)
+	hub.Store.Active = item.ID
+	app.C.(*controller.Controller).SetProjects([]appmodel.Project{{Name: "miya-server", Path: "/srv/miya"}})
+	app.C.(*controller.Controller).Cwd = "/srv/miya"
+	app.Workspace, app.ProjectName, app.ExpandedProject = app.C.(*controller.Controller).Cwd, "miya-server", app.C.(*controller.Controller).Cwd
+	tt := ui.NewTester(app.Render, 1180, 820)
 	if !tt.HasText("prod-us") || !tt.HasText("miya-server") {
 		t.Fatal("workspace and its project hierarchy missing", strings.Join(tt.Texts(), ","))
 	}

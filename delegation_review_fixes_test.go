@@ -3,13 +3,15 @@
 package main
 
 import (
-	"encoding/json"
-	"strings"
-	"testing"
-	"time"
-
+	json "encoding/json"
+	appmodel "miya/internal/appmodel"
+	controller "miya/internal/controller"
 	dg "miya/internal/delegation"
-	"miya/internal/delegation/coordinator"
+	coordinator "miya/internal/delegation/coordinator"
+	widgets "miya/internal/widgets"
+	strings "strings"
+	testing "testing"
+	time "time"
 )
 
 func TestManagedCodexResumeFailuresNeverReturnSystemInputAsDraft(t *testing.T) {
@@ -27,16 +29,16 @@ func TestManagedCodexResumeFailuresNeverReturnSystemInputAsDraft(t *testing.T) {
 					t.Setenv("QUICKGUI_FIXTURE_RESUME_ERROR", `{"code":-32000,"message":"resume rejected"}`)
 				}
 				c, dispatch, logPath := codexResumeFixture(t)
-				oldClient := c.client
+				oldClient := c.Client
 				t.Cleanup(func() { oldClient.Close() })
-				c.collaboration = newCollaboration(c, t.TempDir())
-				s := c.collaboration
+				c.Collaboration = controller.NewCollaboration(c, t.TempDir())
+				s := c.Collaboration
 				t.Cleanup(func() { s.Stop(); <-s.Done() })
-				c.update(1, func(th *Thread) { th.Resumed = false; th.HistoryLoaded = true; th.Draft = "user draft" })
-				c.addThread(c.cwd, Thread{ID: c.nextID(), Agent: agentCodex, ServerID: "source", HistoryLoaded: true})
-				from := ThreadRef{Source: c.referenceSource, Backend: agentCodex, SessionID: "source"}.URL()
-				target := c.threadRef(c.threadWithID(1)).URL()
-				in := dg.StartInput{From: from, RequestID: "resume", Target: target, Agent: agentCodex, Workspace: c.cwd, Prompt: "system input"}
+				c.Update(1, func(th *appmodel.Thread) { th.Resumed = false; th.HistoryLoaded = true; th.Draft = "user draft" })
+				c.AddThread(c.Cwd, appmodel.Thread{ID: c.NextID(), Agent: appmodel.AgentCodex, ServerID: "source", HistoryLoaded: true})
+				from := appmodel.ThreadRef{Source: c.ReferenceSource, Backend: appmodel.AgentCodex, SessionID: "source"}.URL()
+				target := c.ThreadRef(c.ThreadWithID(1)).URL()
+				in := dg.StartInput{From: from, RequestID: "resume", Target: target, Agent: appmodel.AgentCodex, Workspace: c.Cwd, Prompt: "system input"}
 				if delivery {
 					in.From = target
 					in.Target = ""
@@ -57,13 +59,13 @@ func TestManagedCodexResumeFailuresNeverReturnSystemInputAsDraft(t *testing.T) {
 					}
 					id = d.ID
 				}
-				c.collaboration.Executions = map[string]*managedExecution{id: {Thread: 1}}
-				c.collaboration.Reservations = map[int]string{1: id}
+				c.Collaboration.Executions = map[string]*controller.ManagedExecution{id: {Thread: 1}}
+				c.Collaboration.Reservations = map[int]string{1: id}
 				if failure == "unavailable" {
-					c.client = nil
+					c.Client = nil
 				}
-				req := SendRequest{ThreadID: 1, ExecutionID: id, Text: "system input"}
-				c.resume(c.threadWithID(1), &req)
+				req := appmodel.SendRequest{ThreadID: 1, ExecutionID: id, Text: "system input"}
+				c.Resume(c.ThreadWithID(1), &req)
 				if failure == "changed" {
 					for deadline := time.Now().Add(5 * time.Second); ; {
 						requests := codexTurnRequests(t, logPath)
@@ -75,10 +77,10 @@ func TestManagedCodexResumeFailuresNeverReturnSystemInputAsDraft(t *testing.T) {
 						}
 						time.Sleep(time.Millisecond)
 					}
-					c.client = nil
+					c.Client = nil
 				}
 				waitCodexResume(t, c, dispatch, func() bool {
-					if c.collaboration.Reservations[1] != "" {
+					if c.Collaboration.Reservations[1] != "" {
 						return false
 					}
 					if delivery {
@@ -88,15 +90,15 @@ func TestManagedCodexResumeFailuresNeverReturnSystemInputAsDraft(t *testing.T) {
 					q, _ := s.Manager.Read(id)
 					return q.State == dg.Failed
 				})
-				if c.threadWithID(1).Draft != "user draft" {
+				if c.ThreadWithID(1).Draft != "user draft" {
 					t.Fatal("system input leaked into user draft")
 				}
-				if len(c.threadWithID(1).Queue) != 0 {
+				if len(c.ThreadWithID(1).Queue) != 0 {
 					t.Fatal("managed input entered ordinary queue")
 				}
 				if failure == "history-busy" {
-					c.submitExpanded(SendRequest{ThreadID: 1, Text: "ordinary user follow-up"})
-					q := c.threadWithID(1).Queue
+					c.SubmitExpanded(appmodel.SendRequest{ThreadID: 1, Text: "ordinary user follow-up"})
+					q := c.ThreadWithID(1).Queue
 					if len(q) != 1 || q[0].ExecutionID != "" {
 						t.Fatal("ordinary user queue changed")
 					}
@@ -112,22 +114,22 @@ func TestManagedCodexResumeFailuresNeverReturnSystemInputAsDraft(t *testing.T) {
 }
 
 func TestCollaborationInvalidArgumentsReleasePendingRequest(t *testing.T) {
-	p := (&collaborationUI{}).pane("source")
-	p.submit("send_thread", map[string]any{"thread": "wrong field", "task": "follow up"}, func(r collaborationRequest, done func(json.RawMessage, error)) {
+	p := (&widgets.CollaborationUI{}).Pane("source")
+	p.Submit("send_thread", map[string]any{"thread": "wrong field", "task": "follow up"}, func(r appmodel.CollaborationRequest, done func(json.RawMessage, error)) {
 		_, err := coordinator.Decode(r.Operation, r.Arguments)
 		done(nil, err)
 	})
-	if p.pending != nil || p.busy || !strings.Contains(p.err, "INVALID_ARGUMENT:") {
-		t.Fatal("invalid request left the panel locked", p.err)
+	if p.Pending != nil || p.Busy || !strings.Contains(p.Err, "INVALID_ARGUMENT:") {
+		t.Fatal("invalid request left the panel locked", p.Err)
 	}
 }
 
 func TestCollaborationDefaultContinuationAndExplicitRecordOnly(t *testing.T) {
 	f := newServiceFixture(t)
-	caller := collaborationCaller(t, f, agentClaude, "notify-source")
-	f.serv.Do(func() { f.srv.c.update(caller, func(th *Thread) { th.Busy = true }) })
+	caller := collaborationCaller(t, f, appmodel.AgentClaude, "notify-source")
+	f.serv.Do(func() { f.srv.C.Update(caller, func(th *appmodel.Thread) { th.Busy = true }) })
 	for _, notify := range []string{"", "none"} {
-		args := map[string]any{"request_id": "default-" + notify, "agent": agentClaude, "task": "review"}
+		args := map[string]any{"request_id": "default-" + notify, "agent": appmodel.AgentClaude, "task": "review"}
 		if notify != "" {
 			args["notify"] = notify
 		}
@@ -144,21 +146,21 @@ func TestCollaborationDefaultContinuationAndExplicitRecordOnly(t *testing.T) {
 			t.Fatal("retry changed notification semantics", retry, err)
 		}
 	}
-	f.serv.Do(func() { f.srv.c.stopThread(caller) })
-	paused, err := collaborationMCPCall(t, f, caller, "start_task", map[string]any{"request_id": "paused-default", "agent": agentClaude, "task": "review paused"})
+	f.serv.Do(func() { f.srv.C.StopThread(caller) })
+	paused, err := collaborationMCPCall(t, f, caller, "start_task", map[string]any{"request_id": "paused-default", "agent": appmodel.AgentClaude, "task": "review paused"})
 	if err != nil || paused["receiving_paused"] != true || paused["notification"] != "watching" {
 		t.Fatal("implicit unpause or missing pause status", paused, err)
 	}
 	waitCollaborationTask(t, f, paused["task_id"].(string))
-	f.serv.Do(func() { f.srv.c.update(caller, func(th *Thread) { th.Busy = false }) })
+	f.serv.Do(func() { f.srv.C.Update(caller, func(th *appmodel.Thread) { th.Busy = false }) })
 }
 
 func TestClaudeFailedRootReplyStillConfirmsNotificationAcceptedInput(t *testing.T) {
 	f := newServiceFixture(t)
-	caller := collaborationCaller(t, f, agentClaude, "source")
-	f.serv.Do(func() { f.srv.c.update(caller, func(th *Thread) { th.Busy = true }) })
+	caller := collaborationCaller(t, f, appmodel.AgentClaude, "source")
+	f.serv.Do(func() { f.srv.C.Update(caller, func(th *appmodel.Thread) { th.Busy = true }) })
 	q := collaborationStoredFixtureTask(t, f, caller)
-	s := f.srv.c.collaboration
+	s := f.srv.C.Collaboration
 	value, err := s.Call(func() (any, error) {
 		if _, err := s.Manager.Watch(q.From, q.ID); err != nil {
 			return nil, err
@@ -177,7 +179,7 @@ func TestClaudeFailedRootReplyStillConfirmsNotificationAcceptedInput(t *testing.
 	}
 	d := value.(dg.Delivery)
 	f.serv.Do(func() {
-		f.srv.c.managedEvent(d.ID, dg.Event{State: dg.Failed, NativeResultID: "bound-root-result", Result: dg.Result{Error: "model reply failed"}})
+		f.srv.C.ManagedEvent(d.ID, dg.Event{State: dg.Failed, NativeResultID: "bound-root-result", Result: dg.Result{Error: "model reply failed"}})
 	})
 	if _, err := s.Call(func() (any, error) { return nil, nil }); err != nil {
 		t.Fatal(err)
@@ -186,14 +188,14 @@ func TestClaudeFailedRootReplyStillConfirmsNotificationAcceptedInput(t *testing.
 	if got.State != "delivered" {
 		t.Fatal("accepted input was confused with successful reply", got)
 	}
-	f.serv.Do(func() { f.srv.c.update(caller, func(th *Thread) { th.Busy = false }) })
+	f.serv.Do(func() { f.srv.C.Update(caller, func(th *appmodel.Thread) { th.Busy = false }) })
 }
 
 func TestCollaborationDefaultChangePreservesLegacyOmittedNotifyRetry(t *testing.T) {
 	f := newServiceFixture(t)
-	caller := collaborationCaller(t, f, agentClaude, "legacy-source")
+	caller := collaborationCaller(t, f, appmodel.AgentClaude, "legacy-source")
 	q := collaborationStoredFixtureTask(t, f, caller)
-	result, err := collaborationMCPCall(t, f, caller, "start_task", map[string]any{"request_id": "fixture", "agent": agentClaude, "task": "fixture task"})
+	result, err := collaborationMCPCall(t, f, caller, "start_task", map[string]any{"request_id": "fixture", "agent": appmodel.AgentClaude, "task": "fixture task"})
 	if err != nil || result["task_id"] != q.ID || result["notification"] != "" {
 		t.Fatal("upgrade changed already accepted request", result, err)
 	}

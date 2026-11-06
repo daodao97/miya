@@ -1,11 +1,11 @@
 package main
 
 import (
-	"fmt"
-	"testing"
-	"time"
+	fmt "fmt"
+	testing "testing"
+	time "time"
 
-	"github.com/egoist/mygo/ui"
+	ui "github.com/egoist/mygo/ui"
 )
 
 func TestMobileActionsKeepCancelVisibleAndScroll(t *testing.T) {
@@ -19,9 +19,9 @@ func TestMobileActionsKeepCancelVisibleAndScroll(t *testing.T) {
 		for _, scale := range []float32{1, 3} {
 			t.Run(fmt.Sprintf("%dx%d/%v", size.width, size.height, scale), func(t *testing.T) {
 				m := testMobileApp()
-				m.openThread(m.state.Projects[0].Threads[0])
-				m.draft = "keep draft"
-				tt := ui.NewTester(m.viewRoot, size.width, size.height)
+				m.OpenThread(m.State.Projects[0].Threads[0])
+				m.Draft = "keep draft"
+				tt := ui.NewTester(m.ViewRoot, size.width, size.height)
 				tt.SetSafeArea(size.safe)
 				tt.SetPreferences(ui.Preferences{TextScale: scale})
 				if err := tt.Click("More"); err != nil {
@@ -50,7 +50,7 @@ func TestMobileActionsKeepCancelVisibleAndScroll(t *testing.T) {
 					t.Fatal(err)
 				}
 				tt.Advance(time.Second)
-				if m.conversationMenu || m.open != 1 || m.draft != "keep draft" {
+				if m.ConversationMenu || m.Open != 1 || m.Draft != "keep draft" {
 					t.Fatal("Cancel changed the conversation or draft")
 				}
 			})
@@ -61,8 +61,8 @@ func TestMobileActionsKeepCancelVisibleAndScroll(t *testing.T) {
 func TestMobileLanguageChoicesFitLargeText(t *testing.T) {
 	for _, width := range []int{320, 393} {
 		m := testMobileApp()
-		m.openDrawerPage("/settings")
-		tt := ui.NewTester(m.viewRoot, width, 852)
+		m.OpenDrawerPage("/settings")
+		tt := ui.NewTester(m.ViewRoot, width, 852)
 		tt.SetSafeArea(ui.SafeArea{Top: 59, Bottom: 34})
 		tt.SetPreferences(ui.Preferences{TextScale: 3})
 		tt.Frame()
@@ -83,7 +83,7 @@ func TestMobileSwitchHasFullHeightTouchTarget(t *testing.T) {
 	on := false
 	tt := ui.NewTester(func(c *ui.Context) {
 		ui.Column(c).Fill().Children(func() {
-			_ = m.phoneSwitch(c, &on, "Notifications").Changed()
+			_ = m.PhoneSwitch(c, &on, "Notifications").Changed()
 		})
 	}, 200, 100)
 	tt.Frame()
@@ -100,7 +100,7 @@ func TestMobileSwitchHasFullHeightTouchTarget(t *testing.T) {
 
 func TestMobileDrawerSearchReturnKeepsResultsAndDismissesInput(t *testing.T) {
 	m := testMobileApp()
-	tt := ui.NewTester(m.viewRoot, 393, 852)
+	tt := ui.NewTester(m.ViewRoot, 393, 852)
 	tt.Frame()
 	openMobileDrawer(t, tt)
 	if err := tt.Click("Search conversations"); err != nil {
@@ -108,16 +108,16 @@ func TestMobileDrawerSearchReturnKeepsResultsAndDismissesInput(t *testing.T) {
 	}
 	tt.Type("thread")
 	tt.Key(0, ui.KeyEnter)
-	if m.drawerQuery != "thread" || tt.Focused("Search conversations") || !m.menu || m.open != 0 || !tt.HasText("thread-one") {
+	if m.DrawerQuery != "thread" || tt.Focused("Search conversations") || !m.Menu || m.Open != 0 || !tt.HasText("thread-one") {
 		t.Fatal("search return changed the query, selected a conversation or retained input focus")
 	}
 }
 
 func TestMobileMemoryScopeShowsSelection(t *testing.T) {
 	m := testMobileApp()
-	m.state.Memory = true
-	m.openDrawerPage("/memory")
-	tt := ui.NewTester(m.viewRoot, 393, 852)
+	m.State.Memory = true
+	m.OpenDrawerPage("/memory")
+	tt := ui.NewTester(m.ViewRoot, 393, 852)
 	tt.Frame()
 	project, _ := tt.Find("Current project")
 	user, _ := tt.Find("User preferences")
@@ -132,7 +132,7 @@ func TestMobileMemoryScopeShowsSelection(t *testing.T) {
 	if err := tt.Click("User preferences"); err != nil {
 		t.Fatal(err)
 	}
-	if m.memories.scope != "user" || pixel(project) != unselected || pixel(user) != selected {
+	if m.Memories.Scope != "user" || pixel(project) != unselected || pixel(user) != selected {
 		t.Fatal("switching scope did not update the selection indicator")
 	}
 }
@@ -140,14 +140,14 @@ func TestMobileMemoryScopeShowsSelection(t *testing.T) {
 func TestMobileDrawerLargeTextWrapsConversationTitles(t *testing.T) {
 	m := testMobileApp()
 	title := "A conversation title that stays distinguishable when accessibility text is enlarged"
-	m.state.Projects[0].Threads[0].Title = title
-	tt := ui.NewTester(m.viewRoot, 393, 852)
+	m.State.Projects[0].Threads[0].Title = title
+	tt := ui.NewTester(m.ViewRoot, 393, 852)
 	tt.SetSafeArea(ui.SafeArea{Top: 59, Bottom: 34})
 	tt.SetPreferences(ui.Preferences{TextScale: 2})
 	tt.Frame()
 	openMobileDrawer(t, tt)
 	r, ok := tt.Find(title)
-	if !ok || r.H < m.font(16)*2 {
+	if !ok || r.H < m.Font(16)*2 {
 		t.Fatalf("large conversation title is still restricted to one line: %v", r)
 	}
 	saveMobileNativeSnapshot(t, tt, "native-drawer-title-large")

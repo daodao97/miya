@@ -3,11 +3,13 @@
 package main
 
 import (
-	"os"
-	"path/filepath"
-	"reflect"
-	"strings"
-	"testing"
+	appmodel "miya/internal/appmodel"
+	widgets "miya/internal/widgets"
+	os "os"
+	filepath "path/filepath"
+	reflect "reflect"
+	strings "strings"
+	testing "testing"
 )
 
 func TestCodexSentImagesStayPreviews(t *testing.T) {
@@ -24,37 +26,37 @@ func TestCodexSentImagesStayPreviews(t *testing.T) {
 			}
 			t.Run(name, func(t *testing.T) {
 				c, d, _ := codexResumeFixture(t)
-				c.resume(c.threadWithID(1), nil)
-				waitCodexResume(t, c, d, func() bool { return c.threadWithID(1).Resumed })
+				c.Resume(c.ThreadWithID(1), nil)
+				waitCodexResume(t, c, d, func() bool { return c.ThreadWithID(1).Resumed })
 				if steer {
-					c.submit(SendRequest{ThreadID: 1, Text: "long"})
-					waitCodexResume(t, c, d, func() bool { return c.threadWithID(1).TurnID != "" })
+					c.Submit(appmodel.SendRequest{ThreadID: 1, Text: "long"})
+					waitCodexResume(t, c, d, func() bool { return c.ThreadWithID(1).TurnID != "" })
 				}
 				path := filepath.Join(t.TempDir(), "photo with spaces.png")
 				if err := os.WriteFile(path, testPNG(t), 0600); err != nil {
 					t.Fatal(err)
 				}
-				req := SendRequest{ThreadID: 1, Steer: steer, Attachments: []string{path}}
+				req := appmodel.SendRequest{ThreadID: 1, Steer: steer, Attachments: []string{path}}
 				wantText := "Please inspect the attached file(s)."
 				if !imageOnly {
 					req.Text = "look at this"
 					req.Attachments = append(req.Attachments, filepath.Join(t.TempDir(), "notes.txt"))
 					wantText = "look at this\n📎 notes.txt"
 				}
-				if id := c.submit(req); id != 1 {
+				if id := c.Submit(req); id != 1 {
 					t.Fatalf("send returned %d", id)
 				}
-				messages := c.threadWithID(1).Messages
+				messages := c.ThreadWithID(1).Messages
 				sent := messages[len(messages)-1]
-				wantImages := []string{localImageDataURI(path)}
+				wantImages := []string{appmodel.LocalImageDataURI(path)}
 				if sent.Content != wantText || !reflect.DeepEqual(sent.Images, wantImages) {
 					t.Fatalf("sent message must immediately show previews: %+v", sent)
 				}
-				if _, err := loadImage(sent.Images[0]); err != nil {
+				if _, err := widgets.LoadImage(sent.Images[0]); err != nil {
 					t.Fatalf("preview unreadable: %v", err)
 				}
 				waitCodexResume(t, c, d, func() bool {
-					for _, m := range c.threadWithID(1).Messages {
+					for _, m := range c.ThreadWithID(1).Messages {
 						if m.ID == sent.ID {
 							return m.ItemID != "pending-user"
 						}
@@ -62,12 +64,12 @@ func TestCodexSentImagesStayPreviews(t *testing.T) {
 					return false
 				})
 				if !steer {
-					waitCodexResume(t, c, d, func() bool { return !c.threadWithID(1).Busy })
+					waitCodexResume(t, c, d, func() bool { return !c.ThreadWithID(1).Busy })
 				}
 				check := func(stage string) {
 					t.Helper()
-					var users []Message
-					for _, m := range c.threadWithID(1).Messages {
+					var users []appmodel.Message
+					for _, m := range c.ThreadWithID(1).Messages {
 						if m.Role == "user" {
 							users = append(users, m)
 						}
@@ -85,8 +87,8 @@ func TestCodexSentImagesStayPreviews(t *testing.T) {
 					}
 				}
 				check("after server events")
-				c.resume(c.threadWithID(1), nil)
-				waitCodexResume(t, c, d, func() bool { return !c.threadWithID(1).Loading })
+				c.Resume(c.ThreadWithID(1), nil)
+				waitCodexResume(t, c, d, func() bool { return !c.ThreadWithID(1).Loading })
 				check("after history reload")
 			})
 		}

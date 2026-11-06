@@ -1,17 +1,19 @@
 package main
 
 import (
-	"strings"
-	"testing"
+	appmodel "miya/internal/appmodel"
+	mobile "miya/internal/mobile"
+	strings "strings"
+	testing "testing"
 
-	"github.com/egoist/mygo/ui"
+	ui "github.com/egoist/mygo/ui"
 )
 
 func TestMobileMessagePasteReplacesSelectionAndKeepsCaret(t *testing.T) {
 	m := testMobileApp()
-	m.startConversation("/a", agentCodex)
-	m.draft = "你好👋尾"
-	tt := ui.NewTester(m.viewRoot, 390, 750)
+	m.StartConversation("/a", appmodel.AgentCodex)
+	m.Draft = "你好👋尾"
+	tt := ui.NewTester(m.ViewRoot, 390, 750)
 	tt.Frame()
 	if err := tt.Click("Message"); err != nil {
 		t.Fatal(err)
@@ -21,42 +23,42 @@ func TestMobileMessagePasteReplacesSelectionAndKeepsCaret(t *testing.T) {
 	tt.SetClipboard("世界🌍\n下一行")
 	tt.Key(ui.Cmd, ui.KeyV)
 	tt.Frame()
-	if m.draft != "你好👋世界🌍\n下一行" {
-		t.Fatalf("pasted draft = %q", m.draft)
+	if m.Draft != "你好👋世界🌍\n下一行" {
+		t.Fatalf("pasted draft = %q", m.Draft)
 	}
 	tt.Type("!")
 	tt.Frame()
-	if m.draft != "你好👋世界🌍\n下一行!" {
-		t.Fatalf("typing after paste = %q", m.draft)
+	if m.Draft != "你好👋世界🌍\n下一行!" {
+		t.Fatalf("typing after paste = %q", m.Draft)
 	}
 	tt.SetClipboard("")
 	tt.Key(ui.Cmd, ui.KeyV)
 	tt.Frame()
-	if m.draft != "你好👋世界🌍\n下一行!" {
+	if m.Draft != "你好👋世界🌍\n下一行!" {
 		t.Fatal("an empty clipboard should leave the draft alone")
 	}
 }
 
 func TestMobilePairCodePaste(t *testing.T) {
-	m := newMobileApp()
-	m.loaded = true
-	tt := ui.NewTester(m.viewRoot, 390, 750)
+	m := mobile.NewMobileApp()
+	m.Loaded = true
+	tt := ui.NewTester(m.ViewRoot, 390, 750)
 	tt.Frame()
 	tt.SetClipboard("miya://connect/code")
 	if err := tt.Click("Paste"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if m.paste != "miya://connect/code" || m.link != "" {
-		t.Fatalf("paste should fill the code without connecting: paste=%q link=%q", m.paste, m.link)
+	if m.Paste != "miya://connect/code" || m.Link != "" {
+		t.Fatalf("paste should fill the code without connecting: paste=%q link=%q", m.Paste, m.Link)
 	}
 }
 
 func TestMobileComposerExpandsWithoutLosingFocus(t *testing.T) {
 	m := testMobileApp()
-	m.startConversation("/a", agentCodex)
-	m.state.Model, m.state.Effort = "gpt-6.1-sol", "high"
-	tt := ui.NewTester(m.viewRoot, 390, 750)
+	m.StartConversation("/a", appmodel.AgentCodex)
+	m.State.Model, m.State.Effort = "gpt-6.1-sol", "high"
+	tt := ui.NewTester(m.ViewRoot, 390, 750)
 	tt.Frame()
 	compact, ok := tt.Find("Message")
 	if !ok {
@@ -77,14 +79,14 @@ func TestMobileComposerExpandsWithoutLosingFocus(t *testing.T) {
 	}
 	tt.Type("\n第二行")
 	tt.Frame()
-	if !strings.HasSuffix(m.draft, "\n第二行") {
-		t.Fatalf("typing after expansion lost the caret: %q", m.draft)
+	if !strings.HasSuffix(m.Draft, "\n第二行") {
+		t.Fatalf("typing after expansion lost the caret: %q", m.Draft)
 	}
 	tt.Key(ui.Cmd, ui.KeyA)
 	tt.Type("短消息")
 	tt.Frame()
 	shrunk, _ := tt.Find("Message")
-	if m.draft != "短消息" || shrunk.W != compact.W || !tt.Focused("Message") {
-		t.Fatalf("short input should return to the capsule without losing focus: draft=%q bounds=%v", m.draft, shrunk)
+	if m.Draft != "短消息" || shrunk.W != compact.W || !tt.Focused("Message") {
+		t.Fatalf("short input should return to the capsule without losing focus: draft=%q bounds=%v", m.Draft, shrunk)
 	}
 }

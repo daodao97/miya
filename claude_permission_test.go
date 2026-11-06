@@ -3,16 +3,19 @@
 package main
 
 import (
-	"os"
-	"path/filepath"
-	"strings"
-	"testing"
-	"time"
+	appmodel "miya/internal/appmodel"
+	controller "miya/internal/controller"
+	uiruntime "miya/internal/uiruntime"
+	os "os"
+	filepath "path/filepath"
+	strings "strings"
+	testing "testing"
+	time "time"
 )
 
 func TestClaudePermissionModes(t *testing.T) {
 	for policy, want := range map[string]string{"on-request": "manual", "on-failure": "auto", "never": "bypassPermissions", "": "manual"} {
-		if got := claudePermissionMode(policy); got != want {
+		if got := appmodel.ClaudePermissionMode(policy); got != want {
 			t.Errorf("%q → %q, want %q", policy, got, want)
 		}
 	}
@@ -21,15 +24,15 @@ func TestClaudePermissionModes(t *testing.T) {
 // The picker shows for Claude Code, and its choice reaches the CLI.
 func TestClaudeRunUsesThePermissionPicker(t *testing.T) {
 	app, tt := testApp(t)
-	c := app.c
+	c := app.C.(*controller.Controller)
 	dir := t.TempDir()
 	out := filepath.Join(dir, "argv")
 	bin := filepath.Join(dir, "claude")
 	if err := os.WriteFile(bin, []byte("#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$MIYA_OUT\"\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	c.claudeBinary, c.claudeEnv = bin, []string{"MIYA_OUT=" + out}
-	c.setAgent("claude-code")
+	c.ClaudeBinary, c.ClaudeEnv = bin, []string{"MIYA_OUT=" + out}
+	c.SetAgent("claude-code")
 	tt.Frame()
 	if err := tt.Click("Ask when needed"); err != nil {
 		t.Fatalf("no permission picker for Claude Code in %q: %v", tt.Texts(), err)
@@ -42,11 +45,11 @@ func TestClaudeRunUsesThePermissionPicker(t *testing.T) {
 	}
 	// Keep the run's later updates queued: this test reads only what
 	// sendClaude does on its own goroutine and what the CLI received.
-	inlineDispatch.Store(false)
-	t.Cleanup(func() { windowMu.Lock(); pending = nil; windowMu.Unlock() })
-	c.rememberDraft("hello")
-	c.send()
-	if cur := c.current(); cur.Agent != "claude-code" || cur.PermissionPolicy != "never" {
+	uiruntime.InlineDispatch.Store(false)
+	t.Cleanup(func() { uiruntime.WindowMu.Lock(); uiruntime.Pending = nil; uiruntime.WindowMu.Unlock() })
+	c.RememberDraft("hello")
+	c.Send()
+	if cur := c.Current(); cur.Agent != "claude-code" || cur.PermissionPolicy != "never" {
 		t.Fatalf("conversation %+v", cur)
 	}
 	var args []string

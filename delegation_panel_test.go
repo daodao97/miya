@@ -1,70 +1,72 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
-	"errors"
-	"fmt"
-	"strings"
-	"testing"
-	"time"
-
+	bytes "bytes"
+	json "encoding/json"
+	errors "errors"
+	fmt "fmt"
+	appmodel "miya/internal/appmodel"
 	dg "miya/internal/delegation"
+	mobile "miya/internal/mobile"
+	widgets "miya/internal/widgets"
+	strings "strings"
+	testing "testing"
+	time "time"
 
-	"github.com/egoist/mygo/ui"
+	ui "github.com/egoist/mygo/ui"
 )
 
 func TestCollaborationPanelRetriesExactRequestAfterAmbiguousResponse(t *testing.T) {
-	p := (&collaborationUI{}).pane("source")
-	var requests []collaborationRequest
+	p := (&widgets.CollaborationUI{}).Pane("source")
+	var requests []appmodel.CollaborationRequest
 	var complete func(json.RawMessage, error)
-	call := func(r collaborationRequest, done func(json.RawMessage, error)) {
+	call := func(r appmodel.CollaborationRequest, done func(json.RawMessage, error)) {
 		if r.Operation == "read_task" {
-			done(collaborationArgsJSON(collaborationTaskView{ID: "accepted", State: dg.Running}), nil)
+			done(widgets.CollaborationArgsJSON(widgets.CollaborationTaskView{ID: "accepted", State: dg.Running}), nil)
 			return
 		}
 		requests = append(requests, r)
 		complete = done
 	}
-	p.submit("cancel_task", map[string]any{"task_id": "accepted"}, call)
-	original := append([]byte(nil), p.pending.Arguments...)
+	p.Submit("cancel_task", map[string]any{"task_id": "accepted"}, call)
+	original := append([]byte(nil), p.Pending.Arguments...)
 	complete(nil, errors.New("connection closed before acknowledgement"))
-	if p.pending == nil || p.busy {
+	if p.Pending == nil || p.Busy {
 		t.Fatal("ambiguous request discarded")
 	}
-	p.retry(call)
+	p.Retry(call)
 	if len(requests) != 2 || !bytes.Equal(requests[1].Arguments, original) {
 		t.Fatal("retry created another request ID")
 	}
 	complete(json.RawMessage(`{}`), nil)
-	if p.pending == nil || !strings.Contains(p.err, "incomplete") {
+	if p.Pending == nil || !strings.Contains(p.Err, "incomplete") {
 		t.Fatal("malformed response acknowledged work")
 	}
-	p.retry(call)
+	p.Retry(call)
 	complete(json.RawMessage(`{"accepted":true}`), nil)
-	if p.pending != nil || p.err != "" {
+	if p.Pending != nil || p.Err != "" {
 		t.Fatal("accepted request stayed pending")
 	}
 }
 
 func TestCollaborationPanelLateResponsesCannotReplaceAnotherTaskOrSource(t *testing.T) {
-	var cache collaborationUI
-	a, b := cache.pane("source-a"), cache.pane("source-b")
+	var cache widgets.CollaborationUI
+	a, b := cache.Pane("source-a"), cache.Pane("source-b")
 	callbacks := map[string]func(json.RawMessage, error){}
-	call := func(r collaborationRequest, done func(json.RawMessage, error)) {
+	call := func(r appmodel.CollaborationRequest, done func(json.RawMessage, error)) {
 		var args struct {
 			ID string `json:"task_id"`
 		}
 		_ = json.Unmarshal(r.Arguments, &args)
 		callbacks[r.From+args.ID] = done
 	}
-	a.read("old", call)
-	a.read("new", call)
-	b.read("other", call)
-	callbacks["source-anew"](collaborationArgsJSON(collaborationTaskView{ID: "new", Result: dg.Result{Text: "new fixed result"}}), nil)
-	callbacks["source-aold"](collaborationArgsJSON(collaborationTaskView{ID: "old", Result: dg.Result{Text: "late old result"}}), nil)
-	callbacks["source-bother"](collaborationArgsJSON(collaborationTaskView{ID: "other", Result: dg.Result{Text: "other source"}}), nil)
-	if a.selected != "new" || a.details["new"].Result.Text != "new fixed result" || b.details["other"].Result.Text != "other source" {
+	a.Read("old", call)
+	a.Read("new", call)
+	b.Read("other", call)
+	callbacks["source-anew"](widgets.CollaborationArgsJSON(widgets.CollaborationTaskView{ID: "new", Result: dg.Result{Text: "new fixed result"}}), nil)
+	callbacks["source-aold"](widgets.CollaborationArgsJSON(widgets.CollaborationTaskView{ID: "old", Result: dg.Result{Text: "late old result"}}), nil)
+	callbacks["source-bother"](widgets.CollaborationArgsJSON(widgets.CollaborationTaskView{ID: "other", Result: dg.Result{Text: "other source"}}), nil)
+	if a.Selected != "new" || a.Details["new"].Result.Text != "new fixed result" || b.Details["other"].Result.Text != "other source" {
 		t.Fatal("late response crossed task/source identity")
 	}
 }
@@ -72,40 +74,40 @@ func TestCollaborationPanelLateResponsesCannotReplaceAnotherTaskOrSource(t *test
 func TestCollaborationPanelRefreshesSelectedNotificationWithoutTaskRevisionChange(t *testing.T) {
 	for _, offPage := range []bool{false, true} {
 		t.Run(fmt.Sprint(offPage), func(t *testing.T) {
-			p := (&collaborationUI{}).pane("source")
-			p.selected, p.revision = "task-selected", 7
-			p.details[p.selected] = collaborationTaskView{ID: p.selected, Revision: 3, Notification: "pending"}
+			p := (&widgets.CollaborationUI{}).Pane("source")
+			p.Selected, p.Revision = "task-selected", 7
+			p.Details[p.Selected] = widgets.CollaborationTaskView{ID: p.Selected, Revision: 3, Notification: "pending"}
 			reads := 0
-			call := func(r collaborationRequest, done func(json.RawMessage, error)) {
+			call := func(r appmodel.CollaborationRequest, done func(json.RawMessage, error)) {
 				switch r.Operation {
 				case "list_tasks":
-					row := p.details[p.selected]
+					row := p.Details[p.Selected]
 					row.Notification = "delivered"
 					if offPage {
 						row.ID = "newer-task"
 					}
-					done(collaborationArgsJSON(collaborationListView{Tasks: []collaborationTaskView{row}, Revision: 8}), nil)
+					done(widgets.CollaborationArgsJSON(widgets.CollaborationListView{Tasks: []widgets.CollaborationTaskView{row}, Revision: 8}), nil)
 				case "read_task":
 					reads++
-					task := p.details[p.selected]
+					task := p.Details[p.Selected]
 					task.Notification = "delivered"
-					done(collaborationArgsJSON(task), nil)
+					done(widgets.CollaborationArgsJSON(task), nil)
 				}
 			}
-			p.refresh(&collaborationStatus{Version: 1, Revision: 8}, call, false)
-			if reads != 1 || p.details[p.selected].Notification != "delivered" {
-				t.Fatal("selected delivery state stayed stale", p.details[p.selected])
+			p.Refresh(&appmodel.CollaborationStatus{Version: 1, Revision: 8}, call, false)
+			if reads != 1 || p.Details[p.Selected].Notification != "delivered" {
+				t.Fatal("selected delivery state stayed stale", p.Details[p.Selected])
 			}
 		})
 	}
 }
 
 func TestCollaborationRefreshDoesNotOpenPopover(t *testing.T) {
-	pane := (&collaborationUI{}).pane("source")
-	pane.refresh(&collaborationStatus{Version: 1}, func(_ collaborationRequest, done func(json.RawMessage, error)) {
-		done(collaborationArgsJSON(collaborationListView{Tasks: []collaborationTaskView{{ID: "review", Title: "Review", State: dg.Completed}}}), nil)
+	pane := (&widgets.CollaborationUI{}).Pane("source")
+	pane.Refresh(&appmodel.CollaborationStatus{Version: 1}, func(_ appmodel.CollaborationRequest, done func(json.RawMessage, error)) {
+		done(widgets.CollaborationArgsJSON(widgets.CollaborationListView{Tasks: []widgets.CollaborationTaskView{{ID: "review", Title: "Review", State: dg.Completed}}}), nil)
 	}, false)
-	if pane.hidden() || pane.open {
+	if pane.Hidden() || pane.Open {
 		t.Fatal("refresh should reveal the task entry without opening its popover")
 	}
 }
@@ -113,14 +115,14 @@ func TestCollaborationRefreshDoesNotOpenPopover(t *testing.T) {
 func TestCollaborationTaskCardsUseSameLayoutOnBothClients(t *testing.T) {
 	for _, width := range []int{1120, 320, 390} {
 		t.Run(fmt.Sprint(width), func(t *testing.T) {
-			old := collaborationTaskView{ID: "task-old", From: "source", Thread: "target", Title: "Review compatibility", Agent: agentClaude, Workspace: "/workspace/project", State: dg.Completed, Revision: 7, ResultSummary: "Two compatibility issues", Result: dg.Result{Availability: "available", Text: "Fixed review result: two compatibility issues."}, Notification: "delivered"}
-			pane := (&collaborationUI{}).pane("source")
-			pane.open = true
-			pane.loaded = true
-			pane.revision = 7
-			pane.loadedAt = time.Now()
-			pane.rows = []collaborationTaskView{old}
-			call := func(r collaborationRequest, done func(json.RawMessage, error)) {
+			old := widgets.CollaborationTaskView{ID: "task-old", From: "source", Thread: "target", Title: "Review compatibility", Agent: appmodel.AgentClaude, Workspace: "/workspace/project", State: dg.Completed, Revision: 7, ResultSummary: "Two compatibility issues", Result: dg.Result{Availability: "available", Text: "Fixed review result: two compatibility issues."}, Notification: "delivered"}
+			pane := (&widgets.CollaborationUI{}).Pane("source")
+			pane.Open = true
+			pane.Loaded = true
+			pane.Revision = 7
+			pane.LoadedAt = time.Now()
+			pane.Rows = []widgets.CollaborationTaskView{old}
+			call := func(r appmodel.CollaborationRequest, done func(json.RawMessage, error)) {
 				switch r.Operation {
 				case "read_task":
 					var args struct {
@@ -128,19 +130,19 @@ func TestCollaborationTaskCardsUseSameLayoutOnBothClients(t *testing.T) {
 					}
 					_ = json.Unmarshal(r.Arguments, &args)
 					if args.ID == old.ID {
-						done(collaborationArgsJSON(old), nil)
+						done(widgets.CollaborationArgsJSON(old), nil)
 					} else {
-						done(collaborationArgsJSON(collaborationTaskView{ID: args.ID, State: dg.Running}), nil)
+						done(widgets.CollaborationArgsJSON(widgets.CollaborationTaskView{ID: args.ID, State: dg.Running}), nil)
 					}
 				case "list_tasks":
-					done(collaborationArgsJSON(collaborationListView{Tasks: []collaborationTaskView{old}, Revision: 7}), nil)
+					done(widgets.CollaborationArgsJSON(widgets.CollaborationListView{Tasks: []widgets.CollaborationTaskView{old}, Revision: 7}), nil)
 				default:
 					t.Errorf("unexpected action %s", r.Operation)
 				}
 			}
-			view := collaborationPanelView{palette: taskPalette{panel, line, ink, muted}, capability: &collaborationStatus{Version: 1, Revision: 7}, connected: true, call: call, openThread: func(string) {}}
+			view := widgets.CollaborationPanelView{Palette: widgets.TaskPalette{widgets.Panel, widgets.Line, widgets.Ink, widgets.Muted}, Capability: &appmodel.CollaborationStatus{Version: 1, Revision: 7}, Connected: true, Call: call, OpenThread: func(string) {}}
 			tt := ui.NewTester(func(c *ui.Context) {
-				ui.Column(c).Fill().Padding(12).Justify(ui.End).Children(func() { pane.draw(c, view) })
+				ui.Column(c).Fill().Padding(12).Justify(ui.End).Children(func() { pane.Draw(c, view) })
 			}, width, 750)
 			tt.Frame()
 			if !tt.HasText("Two compatibility issues") || !tt.HasText("Results returned") {
@@ -163,16 +165,16 @@ func TestMobileCollaborationResponsesAreCorrelatedAndCancelledOnDisconnect(t *te
 	var first, second int
 	timerA := time.AfterFunc(time.Hour, func() {})
 	timerB := time.AfterFunc(time.Hour, func() {})
-	m.collaborationCalls = map[string]*mobileCollaborationCall{
-		"first":  {timer: timerA, done: func(json.RawMessage, error) { first++ }},
-		"second": {timer: timerB, done: func(json.RawMessage, error) { second++ }},
+	m.CollaborationCalls = map[string]*mobile.MobileCollaborationCall{
+		"first":  {Timer: timerA, Done: func(json.RawMessage, error) { first++ }},
+		"second": {Timer: timerB, Done: func(json.RawMessage, error) { second++ }},
 	}
-	m.receiveCollaboration(json.RawMessage(`{"request_id":"second","result":{"accepted":true}}`), "")
+	m.ReceiveCollaboration(json.RawMessage(`{"request_id":"second","result":{"accepted":true}}`), "")
 	if first != 0 || second != 1 || timerB.Stop() {
 		t.Fatal("response matched wrong request or retained timeout")
 	}
-	m.interruptCollaborationRequests()
-	if first != 1 || second != 1 || len(m.collaborationCalls) != 0 || timerA.Stop() {
+	m.InterruptCollaborationRequests()
+	if first != 1 || second != 1 || len(m.CollaborationCalls) != 0 || timerA.Stop() {
 		t.Fatal("disconnect retained pending callback/timeout")
 	}
 }

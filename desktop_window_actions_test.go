@@ -1,16 +1,16 @@
 package main
 
 import (
-	"context"
-	"encoding/json"
-	"errors"
-	"testing"
-	"time"
-
-	"miya/internal/codex"
-	"miya/internal/desktop"
-	"miya/internal/desktop/control"
-	"miya/internal/remote"
+	context "context"
+	json "encoding/json"
+	errors "errors"
+	appmodel "miya/internal/appmodel"
+	codex "miya/internal/codex"
+	desktop "miya/internal/desktop"
+	control "miya/internal/desktop/control"
+	remote "miya/internal/remote"
+	testing "testing"
+	time "time"
 )
 
 func TestDesktopAuthorizationButtonsUseCurrentNativeState(t *testing.T) {
@@ -51,44 +51,44 @@ func TestDesktopAuthorizationButtonsUseCurrentNativeState(t *testing.T) {
 
 func TestDesktopAuthorizationRejectedPasswordKeepsTakeoverPending(t *testing.T) {
 	c := serverController(t.TempDir(), "")
-	c.run = func(f func()) { f() }
-	c.setThreads([]Thread{{ID: 1, ServerID: "s"}})
-	id, ch := c.askUser(Thread{ID: 1, ServerID: "s"}, "授权", "填写密码")
-	list := c.approvals()
+	c.Run = func(f func()) { f() }
+	c.SetThreads([]appmodel.Thread{{ID: 1, ServerID: "s"}})
+	id, ch := c.AskUser(appmodel.Thread{ID: 1, ServerID: "s"}, "授权", "填写密码")
+	list := c.Approvals()
 	list[0].Method = "miya/desktopControl"
-	c.setApprovals(list)
-	r := remote.Request{ServerID: "s", Approval: id, ApprovalVersion: approvalFingerprint(list[0]), WindowID: 81, WindowPID: 120}
-	c.desktop = &control.Server{Windows: func() ([]desktop.Window, error) { return []desktop.Window{{ID: 81, PID: 120}}, nil }}
+	c.SetApprovals(list)
+	r := remote.Request{ServerID: "s", Approval: id, ApprovalVersion: appmodel.ApprovalFingerprint(list[0]), WindowID: 81, WindowPID: 120}
+	c.Desktop = &control.Server{Windows: func() ([]desktop.Window, error) { return []desktop.Window{{ID: 81, PID: 120}}, nil }}
 	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
 	defer cancel()
-	c.confirmDesktopAction(ctx, r, desktop.Action{Label: "任意文字"}, []desktop.Window{{ID: 81, PID: 120}})
+	c.ConfirmDesktopAction(ctx, r, desktop.Action{Label: "任意文字"}, []desktop.Window{{ID: 81, PID: 120}})
 	select {
 	case <-ch:
 		t.Fatal("visible password window was considered completed")
 	default:
 	}
-	if len(c.approvals()) != 1 {
+	if len(c.Approvals()) != 1 {
 		t.Fatal("password rejection removed takeover")
 	}
 }
 
 func TestDesktopAuthorizationActionCompletesOnlyItsTakeover(t *testing.T) {
 	c := serverController(t.TempDir(), "")
-	c.run = func(f func()) { f() }
-	c.setThreads([]Thread{{ID: 1, ServerID: "s"}})
-	id, ch := c.askUser(Thread{ID: 1, ServerID: "s"}, "授权", "填写密码")
-	list := c.approvals()
+	c.Run = func(f func()) { f() }
+	c.SetThreads([]appmodel.Thread{{ID: 1, ServerID: "s"}})
+	id, ch := c.AskUser(appmodel.Thread{ID: 1, ServerID: "s"}, "授权", "填写密码")
+	list := c.Approvals()
 	list[0].Method = "miya/desktopControl"
-	c.setApprovals(list)
-	a := c.approvals()[0]
-	r := remote.Request{ServerID: "s", Approval: id, ApprovalVersion: approvalFingerprint(a)}
+	c.SetApprovals(list)
+	a := c.Approvals()[0]
+	r := remote.Request{ServerID: "s", Approval: id, ApprovalVersion: appmodel.ApprovalFingerprint(a)}
 	r.ApprovalVersion = "stale"
-	c.completeDesktopAction(r, desktop.Action{Label: "允许访问"})
-	if len(c.approvals()) != 1 {
+	c.CompleteDesktopAction(r, desktop.Action{Label: "允许访问"})
+	if len(c.Approvals()) != 1 {
 		t.Fatal("stale action completed request")
 	}
-	r.ApprovalVersion = approvalFingerprint(a)
-	c.completeDesktopAction(r, desktop.Action{Label: "允许访问"})
+	r.ApprovalVersion = appmodel.ApprovalFingerprint(a)
+	c.CompleteDesktopAction(r, desktop.Action{Label: "允许访问"})
 	select {
 	case ok := <-ch:
 		if !ok {
@@ -97,15 +97,15 @@ func TestDesktopAuthorizationActionCompletesOnlyItsTakeover(t *testing.T) {
 	default:
 		t.Fatal("native allow did not resolve takeover")
 	}
-	if len(c.approvals()) != 0 {
+	if len(c.Approvals()) != 0 {
 		t.Fatal("completed card retained")
 	}
 	a = codex.Approval{ID: json.RawMessage(`"question"`), ThreadID: "s", Method: "item/tool/requestUserInput"}
-	c.setApprovals([]codex.Approval{a})
+	c.SetApprovals([]codex.Approval{a})
 	r.Approval = a.ID
-	r.ApprovalVersion = approvalFingerprint(a)
-	c.completeDesktopAction(r, desktop.Action{Label: "允许访问"})
-	if len(c.approvals()) != 1 {
+	r.ApprovalVersion = appmodel.ApprovalFingerprint(a)
+	c.CompleteDesktopAction(r, desktop.Action{Label: "允许访问"})
+	if len(c.Approvals()) != 1 {
 		t.Fatal("native action answered unrelated question")
 	}
 }
@@ -121,15 +121,15 @@ func TestDesktopAuthorizationCompletionDoesNotDependOnButtonText(t *testing.T) {
 	} {
 		t.Run(tc.label, func(t *testing.T) {
 			c := serverController(t.TempDir(), "")
-			c.run = func(f func()) { f() }
-			c.setThreads([]Thread{{ID: 1, ServerID: "s"}})
-			id, ch := c.askUser(Thread{ID: 1, ServerID: "s"}, "接管", "")
-			list := c.approvals()
+			c.Run = func(f func()) { f() }
+			c.SetThreads([]appmodel.Thread{{ID: 1, ServerID: "s"}})
+			id, ch := c.AskUser(appmodel.Thread{ID: 1, ServerID: "s"}, "接管", "")
+			list := c.Approvals()
 			list[0].Method = "miya/desktopControl"
-			c.setApprovals(list)
-			r := remote.Request{ServerID: "s", Approval: id, ApprovalVersion: approvalFingerprint(list[0]), WindowID: 81, WindowPID: 120}
+			c.SetApprovals(list)
+			r := remote.Request{ServerID: "s", Approval: id, ApprovalVersion: appmodel.ApprovalFingerprint(list[0]), WindowID: 81, WindowPID: 120}
 			reads := 0
-			c.desktop = &control.Server{Windows: func() ([]desktop.Window, error) {
+			c.Desktop = &control.Server{Windows: func() ([]desktop.Window, error) {
 				reads++
 				if reads == 1 {
 					return nil, errors.New("temporary window read failure")
@@ -138,7 +138,7 @@ func TestDesktopAuthorizationCompletionDoesNotDependOnButtonText(t *testing.T) {
 			}}
 			ctx, stop := context.WithTimeout(context.Background(), time.Second)
 			defer stop()
-			c.confirmDesktopAction(ctx, r, desktop.Action{ID: "button", Label: tc.label, Cancel: tc.cancel}, []desktop.Window{{ID: 81, PID: 120}})
+			c.ConfirmDesktopAction(ctx, r, desktop.Action{ID: "button", Label: tc.label, Cancel: tc.cancel}, []desktop.Window{{ID: 81, PID: 120}})
 			select {
 			case allow := <-ch:
 				if allow == tc.cancel {
@@ -153,28 +153,28 @@ func TestDesktopAuthorizationCompletionDoesNotDependOnButtonText(t *testing.T) {
 
 func TestDesktopAuthorizationTransitionKeepsTakeoverPending(t *testing.T) {
 	c := serverController(t.TempDir(), "")
-	c.run = func(f func()) { f() }
-	c.setThreads([]Thread{{ID: 1, ServerID: "s"}})
-	id, ch := c.askUser(Thread{ID: 1, ServerID: "s"}, "接管", "")
-	list := c.approvals()
+	c.Run = func(f func()) { f() }
+	c.SetThreads([]appmodel.Thread{{ID: 1, ServerID: "s"}})
+	id, ch := c.AskUser(appmodel.Thread{ID: 1, ServerID: "s"}, "接管", "")
+	list := c.Approvals()
 	list[0].Method = "miya/desktopControl"
-	c.setApprovals(list)
-	r := remote.Request{ServerID: "s", Approval: id, ApprovalVersion: approvalFingerprint(list[0]), WindowID: 81, WindowPID: 120}
+	c.SetApprovals(list)
+	r := remote.Request{ServerID: "s", Approval: id, ApprovalVersion: appmodel.ApprovalFingerprint(list[0]), WindowID: 81, WindowPID: 120}
 	reads := 0
-	c.desktop = &control.Server{Windows: func() ([]desktop.Window, error) {
+	c.Desktop = &control.Server{Windows: func() ([]desktop.Window, error) {
 		reads++
 		if reads == 1 {
 			return nil, nil
 		} // Brief gap between authorization steps.
 		return []desktop.Window{{ID: 82, PID: 120}}, nil
 	}}
-	c.confirmDesktopAction(context.Background(), r, desktop.Action{Label: "允许访问", Default: true}, []desktop.Window{{ID: 81, PID: 120}})
+	c.ConfirmDesktopAction(context.Background(), r, desktop.Action{Label: "允许访问", Default: true}, []desktop.Window{{ID: 81, PID: 120}})
 	select {
 	case <-ch:
 		t.Fatal("next authorization step was completed prematurely")
 	default:
 	}
-	if len(c.approvals()) != 1 {
+	if len(c.Approvals()) != 1 {
 		t.Fatal("transition removed approval")
 	}
 }

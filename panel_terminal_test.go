@@ -1,10 +1,11 @@
 package main
 
 import (
-	"net"
-	"testing"
+	desktopui "miya/internal/ui"
+	net "net"
+	testing "testing"
 
-	"github.com/egoist/mygo/plugins/terminal"
+	terminal "github.com/egoist/mygo/plugins/terminal"
 )
 
 func TestPanelTerminalFocusAfterStartup(t *testing.T) {
@@ -16,14 +17,14 @@ func TestPanelTerminalFocusAfterStartup(t *testing.T) {
 	}
 	t.Cleanup(func() { term.Close() })
 	app, tt := testApp(t)
-	p := app.panel()
-	s := &panelSurface{id: 1, kind: surfaceTerminal, starting: true}
-	p.visible, p.active, p.surfaces = true, 0, []*panelSurface{s}
+	p := app.Panel()
+	s := &desktopui.PanelSurface{Id: 1, Kind: desktopui.SurfaceTerminal, Starting: true}
+	p.Visible, p.Active, p.Surfaces = true, 0, []*desktopui.PanelSurface{s}
 	tt.Frame()
 	if !tt.HasText("Starting terminal…") {
 		t.Fatal("terminal must first show its loading state")
 	}
-	s.starting, s.term = false, term
+	s.Starting, s.Term = false, term
 	tt.Frame()
 	if !tt.Focused("Terminal") {
 		t.Fatal("terminal did not take focus after startup")

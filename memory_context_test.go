@@ -3,33 +3,33 @@
 package main
 
 import (
-	"encoding/json"
-	"os"
-	"strings"
-	"testing"
-	"time"
-
-	"miya/internal/codex"
-	"miya/internal/memory"
+	json "encoding/json"
+	appmodel "miya/internal/appmodel"
+	codex "miya/internal/codex"
+	memory "miya/internal/memory"
+	os "os"
+	strings "strings"
+	testing "testing"
+	time "time"
 )
 
 func TestMemoryInjectedIntoCodexWithoutChangingUserTextOrHistory(t *testing.T) {
 	c, d, log := codexResumeFixture(t)
 	attachMemory(t, c)
-	scope, _ := memory.ProjectScope(c.cwd)
-	if err := c.memories().Store.Configure(scope, memory.Settings{AutoInject: true}); err != nil {
+	scope, _ := memory.ProjectScope(c.Cwd)
+	if err := c.Memories().Store.Configure(scope, memory.Settings{AutoInject: true}); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Now()
-	saved, err := c.memories().Store.Save(scope, memory.Mutation{Kind: "fact", Content: "手机构建必须使用 scripts/build-ios.sh", ObservedAt: now, Sources: []memory.Source{{EvidenceKind: "manual", ObservedAt: now}}})
+	saved, err := c.Memories().Store.Save(scope, memory.Mutation{Kind: "fact", Content: "手机构建必须使用 scripts/build-ios.sh", ObservedAt: now, Sources: []memory.Source{{EvidenceKind: "manual", ObservedAt: now}}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	query := "手机构建入口是什么"
-	if c.submit(SendRequest{ThreadID: 1, Text: query}) != 1 {
-		t.Fatal(c.lastSubmitError)
+	if c.Submit(appmodel.SendRequest{ThreadID: 1, Text: query}) != 1 {
+		t.Fatal(c.LastSubmitError)
 	}
-	waitCodexResume(t, c, d, func() bool { return !c.threadWithID(1).Busy && len(c.threadWithID(1).Messages) > 2 })
+	waitCodexResume(t, c, d, func() bool { return !c.ThreadWithID(1).Busy && len(c.ThreadWithID(1).Messages) > 2 })
 	b, err := os.ReadFile(log)
 	if err != nil {
 		t.Fatal(err)
@@ -48,19 +48,19 @@ func TestMemoryInjectedIntoCodexWithoutChangingUserTextOrHistory(t *testing.T) {
 	if !strings.HasPrefix(augmented, query) || !strings.Contains(augmented, saved.Content) {
 		t.Fatalf("backend input omitted recall: %q", augmented)
 	}
-	if texts := userTexts(c.threadWithID(1)); len(texts) == 0 || texts[len(texts)-1] != query || strings.Contains(strings.Join(texts, "\n"), "miya-memory") {
+	if texts := userTexts(c.ThreadWithID(1)); len(texts) == 0 || texts[len(texts)-1] != query || strings.Contains(strings.Join(texts, "\n"), "miya-memory") {
 		t.Fatalf("user bubble changed: %q", texts)
 	}
 	content, _ := json.Marshal([]map[string]any{{"type": "text", "text": augmented}})
-	m, ok := itemMessage(codex.Item{Type: "userMessage", Content: content})
+	m, ok := appmodel.ItemMessage(codex.Item{Type: "userMessage", Content: content})
 	if !ok || m.Content != query {
 		t.Fatalf("history leaked injected content: %q", m.Content)
 	}
-	if got := claudeVisibleText([]claudeBlock{{Type: "text", Text: augmented}}); got != query {
+	if got := appmodel.ClaudeVisibleText([]appmodel.ClaudeBlock{{Type: "text", Text: augmented}}); got != query {
 		t.Fatalf("Claude history leaked: %q", got)
 	}
-	req := SendRequest{ThreadID: 1, Text: query, KeepSessionSettings: true}
-	if c.memories().PrepareInput(c.threadWithID(1), req, c.cwd, c.threadRef(c.threadWithID(1)).URL()).Text(query) != query {
+	req := appmodel.SendRequest{ThreadID: 1, Text: query, KeepSessionSettings: true}
+	if c.Memories().PrepareInput(c.ThreadWithID(1), req, c.Cwd, c.ThreadRef(c.ThreadWithID(1)).URL()).Text(query) != query {
 		t.Fatal("native task control injected memory")
 	}
 }
@@ -68,35 +68,35 @@ func TestMemoryInjectedIntoCodexWithoutChangingUserTextOrHistory(t *testing.T) {
 func TestMemoryQueueRecallsAtExecutionAndFailuresDoNotBlockSend(t *testing.T) {
 	c, d := queueController(t)
 	attachMemory(t, c)
-	scope, _ := memory.ProjectScope(c.cwd)
-	_ = c.memories().Store.Configure(scope, memory.Settings{AutoInject: true})
+	scope, _ := memory.ProjectScope(c.Cwd)
+	_ = c.Memories().Store.Configure(scope, memory.Settings{AutoInject: true})
 	now := time.Now()
-	old, err := c.memories().Store.Save(scope, memory.Mutation{Kind: "fact", Content: "手机构建旧约定", ObservedAt: now, Sources: []memory.Source{{EvidenceKind: "manual", ObservedAt: now}}})
+	old, err := c.Memories().Store.Save(scope, memory.Mutation{Kind: "fact", Content: "手机构建旧约定", ObservedAt: now, Sources: []memory.Source{{EvidenceKind: "manual", ObservedAt: now}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.submit(SendRequest{ThreadID: 1, Text: "手机构建"}) != 1 {
+	if c.Submit(appmodel.SendRequest{ThreadID: 1, Text: "手机构建"}) != 1 {
 		t.Fatal("queue rejected")
 	}
-	if len(c.threadWithID(1).Queue) != 1 {
+	if len(c.ThreadWithID(1).Queue) != 1 {
 		t.Fatal("missing queue")
 	}
-	_, err = c.memories().Store.Save(scope, memory.Mutation{ID: old.ID, Version: old.Version, Kind: "fact", Content: "手机构建新约定", ObservedAt: now, Sources: []memory.Source{{EvidenceKind: "manual", ObservedAt: now}}})
+	_, err = c.Memories().Store.Save(scope, memory.Mutation{ID: old.ID, Version: old.Version, Kind: "fact", Content: "手机构建新约定", ObservedAt: now, Sources: []memory.Source{{EvidenceKind: "manual", ObservedAt: now}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	req := c.threadWithID(1).Queue[0].SendRequest
-	input := c.memories().PrepareInput(c.threadWithID(1), req, c.cwd, "session")
+	req := c.ThreadWithID(1).Queue[0].SendRequest
+	input := c.Memories().PrepareInput(c.ThreadWithID(1), req, c.Cwd, "session")
 	if text := input.Text(req.Text); !strings.Contains(text, "手机构建新约定") || strings.Contains(text, "手机构建旧约定") {
 		t.Fatalf("queued recall frozen too early: %q", text)
 	}
-	_ = c.memories().Store.Configure(scope, memory.Settings{Disabled: true})
+	_ = c.Memories().Store.Configure(scope, memory.Settings{Disabled: true})
 	if got := input.Text(req.Text); got != req.Text {
 		t.Fatal("disabled retry retained memory")
 	}
-	c.update(1, func(t *Thread) { t.Busy = false })
+	c.Update(1, func(t *appmodel.Thread) { t.Busy = false })
 	d.drain()
-	if got := userTexts(c.threadWithID(1)); len(got) != 1 || got[0] != "手机构建" {
+	if got := userTexts(c.ThreadWithID(1)); len(got) != 1 || got[0] != "手机构建" {
 		t.Fatal("memory failure blocked normal send")
 	}
 }
@@ -104,26 +104,26 @@ func TestMemoryQueueRecallsAtExecutionAndFailuresDoNotBlockSend(t *testing.T) {
 func TestMemoryAbsolutePathMessagesAreNotSlashCommands(t *testing.T) {
 	c, _ := queueController(t)
 	attachMemory(t, c)
-	scope, _ := memory.ProjectScope(c.cwd)
-	if err := c.memories().Store.Configure(scope, memory.Settings{AutoInject: true}); err != nil {
+	scope, _ := memory.ProjectScope(c.Cwd)
+	if err := c.Memories().Store.Configure(scope, memory.Settings{AutoInject: true}); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Now()
-	_, err := c.memories().Store.Save(scope, memory.Mutation{Kind: "fact", Content: "项目构建使用 build-ios.sh", ObservedAt: now, Sources: []memory.Source{{EvidenceKind: "manual", ObservedAt: now}}})
+	_, err := c.Memories().Store.Save(scope, memory.Mutation{Kind: "fact", Content: "项目构建使用 build-ios.sh", ObservedAt: now, Sources: []memory.Source{{EvidenceKind: "manual", ObservedAt: now}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	th := c.threadWithID(1)
+	th := c.ThreadWithID(1)
 	text := "/Users/daodao/project 项目构建入口是什么"
-	if c.memories().BeginTurn(th, SendRequest{Text: text}, 10) == "" {
+	if c.Memories().BeginTurn(th, appmodel.SendRequest{Text: text}, 10) == "" {
 		t.Fatal("absolute path incorrectly disabled extraction")
 	}
-	input := c.memories().PrepareInput(th, SendRequest{Text: text}, c.cwd, c.threadRef(th).URL())
+	input := c.Memories().PrepareInput(th, appmodel.SendRequest{Text: text}, c.Cwd, c.ThreadRef(th).URL())
 	if !strings.Contains(input.Text(text), "build-ios.sh") {
 		t.Fatal("absolute path incorrectly disabled recall")
 	}
 	for _, command := range []string{"/compact", "/review changes", "/goal run", "/loop 5m check", "/custom-skill"} {
-		if c.memories().BeginTurn(th, SendRequest{Text: command}, 20) != "" {
+		if c.Memories().BeginTurn(th, appmodel.SendRequest{Text: command}, 20) != "" {
 			t.Fatalf("command unexpectedly enabled extraction: %s", command)
 		}
 	}

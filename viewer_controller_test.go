@@ -1,35 +1,38 @@
 package main
 
 import (
-	"context"
-	"miya/internal/codex"
+	context "context"
+	appmodel "miya/internal/appmodel"
+	codex "miya/internal/codex"
+	controller "miya/internal/controller"
+	uiruntime "miya/internal/uiruntime"
 )
 
 // newViewerController holds a conversation for the message views without
 // starting Codex or Claude Code.
-func newViewerController() *chatController {
-	c := &chatController{projectCache: map[string][]Thread{}}
-	c.threads, c.setThreads = createSignal([]Thread{})
+func newViewerController() *controller.Controller {
+	c := &controller.Controller{WindowState: appmodel.WindowState{ProjectCache: map[string][]appmodel.Thread{}}}
+	c.Threads, c.SetThreads = uiruntime.CreateSignal([]appmodel.Thread{})
 
-	c.active, c.setActive = createSignal(0)
-	c.revision, c.setRevision = createSignal(0)
-	c.draft, c.setDraft = createSignal("")
-	c.attachments, c.setAttachments = createSignal([]string{})
-	c.approvals, c.setApprovals = createSignal([]codex.Approval{})
+	c.Active, c.SetActive = uiruntime.CreateSignal(0)
+	c.Revision, c.SetRevision = uiruntime.CreateSignal(0)
+	c.Draft, c.SetDraft = uiruntime.CreateSignal("")
+	c.Attachments, c.SetAttachments = uiruntime.CreateSignal([]string{})
+	c.Approvals, c.SetApprovals = uiruntime.CreateSignal([]codex.Approval{})
 
-	c.status, c.setStatus = createSignal("")
-	c.agent, c.setAgent = createSignal(agentCodex)
+	c.Status, c.SetStatus = uiruntime.CreateSignal("")
+	c.Agent, c.SetAgent = uiruntime.CreateSignal(appmodel.AgentCodex)
 	// The shared views call these; left nil they would panic, as a Codex
 	// message's rewind check once did with ready.
-	c.ready, c.setReady = createSignal(false)
-	c.projects, c.setProjects = createSignal([]Project{})
-	c.model, c.setModel = createSignal("")
-	c.effort, c.setEffort = createSignal("")
-	c.models, c.setModels = createSignal([]codex.Model{})
-	c.permissionPolicy, c.setPermissionPolicy = createSignal("")
-	c.draftPermission, c.setDraftPermission = createSignal("")
-	c.locale, c.setLocale = createSignal("en")
-	c.historyStatus, c.setHistoryStatus = createSignal("")
-	c.ctx, c.cancel = context.WithCancel(context.Background())
+	c.Ready, c.SetReady = uiruntime.CreateSignal(false)
+	c.Projects, c.SetProjects = uiruntime.CreateSignal([]appmodel.Project{})
+	c.Model, c.SetModel = uiruntime.CreateSignal("")
+	c.Effort, c.SetEffort = uiruntime.CreateSignal("")
+	c.Models, c.SetModels = uiruntime.CreateSignal([]codex.Model{})
+	c.PermissionPolicy, c.SetPermissionPolicy = uiruntime.CreateSignal("")
+	c.DraftPermission, c.SetDraftPermission = uiruntime.CreateSignal("")
+	c.Locale, c.SetLocale = uiruntime.CreateSignal("en")
+	c.HistoryStatus, c.SetHistoryStatus = uiruntime.CreateSignal("")
+	c.Ctx, c.Cancel = context.WithCancel(context.Background())
 	return c
 }

@@ -3,17 +3,19 @@
 package main
 
 import (
-	"context"
-	"encoding/json"
-	"os"
-	"strings"
-	"testing"
-	"time"
-
-	"miya/internal/claude"
-	"miya/internal/codex"
+	context "context"
+	json "encoding/json"
+	appmodel "miya/internal/appmodel"
+	claude "miya/internal/claude"
+	codex "miya/internal/codex"
+	controller "miya/internal/controller"
 	dg "miya/internal/delegation"
-	"miya/internal/delegation/coordinator"
+	coordinator "miya/internal/delegation/coordinator"
+	widgets "miya/internal/widgets"
+	os "os"
+	strings "strings"
+	testing "testing"
+	time "time"
 )
 
 // Opt-in real CLI verification. Only marker prompts in empty temporary
@@ -26,7 +28,7 @@ func TestInstalledAgentsCollaboration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	claudeConfig := claudeConfigDir()
+	claudeConfig := appmodel.ClaudeConfigDir()
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 	// Start before the fixture isolates Miya's HOME so the native app-server
@@ -38,17 +40,17 @@ func TestInstalledAgentsCollaboration(t *testing.T) {
 	defer client.Close()
 	f := newServiceFixture(t)
 	var cwd string
-	f.serv.Do(func() { cwd = f.srv.c.cwd })
+	f.serv.Do(func() { cwd = f.srv.C.Cwd })
 	var parent codex.ThreadResponse
 	if err := client.Call(ctx, "thread/start", map[string]any{"cwd": cwd, "sandbox": "workspace-write", "approvalPolicy": "on-request", "developerInstructions": "Transport verification in an empty workspace. Do not use tools or read files. When sent a collaboration notification, reply only MIYA_NOTICE_OK."}, &parent); err != nil {
 		t.Fatal(err)
 	}
 	f.serv.Do(func() {
-		c := f.srv.c
-		c.client = client
-		c.setReady(true)
-		c.claudeBinary, c.claudeArgs = command.Path, append(command.Args, "--tools", "")
-		c.claudeEnv = append(command.Env, "CLAUDE_CONFIG_DIR="+claudeConfig)
+		c := f.srv.C
+		c.Client = client
+		c.SetReady(true)
+		c.ClaudeBinary, c.ClaudeArgs = command.Path, append(command.Args, "--tools", "")
+		c.ClaudeEnv = append(command.Env, "CLAUDE_CONFIG_DIR="+claudeConfig)
 	})
 	streamDone := make(chan struct{})
 	go func() {
@@ -58,16 +60,16 @@ func TestInstalledAgentsCollaboration(t *testing.T) {
 				_ = client.Reject(frame.ID, "Marker verification does not permit tool requests")
 				continue
 			}
-			f.srv.c.dispatch(func() { f.srv.c.handle(frame) })
+			f.srv.C.Dispatch(func() { f.srv.C.Handle(frame) })
 		}
 	}()
 	t.Cleanup(func() { client.Close(); <-streamDone })
-	caller := collaborationCaller(t, f, agentCodex, parent.Thread.ID)
+	caller := collaborationCaller(t, f, appmodel.AgentCodex, parent.Thread.ID)
 	var from string
 	f.serv.Do(func() {
-		c := f.srv.c
-		c.update(caller, func(t *Thread) { t.Busy = true; t.LaunchModel = parent.Model })
-		from = c.threadRef(c.threadWithID(caller)).URL()
+		c := f.srv.C
+		c.Update(caller, func(t *appmodel.Thread) { t.Busy = true; t.LaunchModel = parent.Model })
+		from = c.ThreadRef(c.ThreadWithID(caller)).URL()
 	})
 	wait := func(condition func() bool, description string) {
 		t.Helper()
@@ -80,7 +82,7 @@ func TestInstalledAgentsCollaboration(t *testing.T) {
 		}
 	}
 	var ids []string
-	for _, agent := range []string{agentCodex, agentClaude} {
+	for _, agent := range []string{appmodel.AgentCodex, appmodel.AgentClaude} {
 		result, err := collaborationPhoneCall(t, f, "start_task", from, map[string]any{"request_id": "live-" + agent, "agent": agent, "task": "Reply only MIYA_TASK_OK. Do not use tools or read files.", "notify": "on_finish"})
 		if err != nil {
 			t.Fatal(err)
@@ -90,7 +92,7 @@ func TestInstalledAgentsCollaboration(t *testing.T) {
 	var bothBusy bool
 	f.serv.Do(func() {
 		busy := 0
-		for _, thread := range f.srv.c.allThreads() {
+		for _, thread := range f.srv.C.AllThreads() {
 			if thread.ExecutionID == ids[0] || thread.ExecutionID == ids[1] {
 				if thread.Busy {
 					busy++
@@ -103,13 +105,16 @@ func TestInstalledAgentsCollaboration(t *testing.T) {
 		t.Fatal("two independent native task sessions did not overlap")
 	}
 	for _, id := range ids {
-		wait(func() bool { task, _ := f.srv.c.collaboration.Manager.Read(id); return dg.Terminal(task.State) }, "native task "+id)
-		task, _ := f.srv.c.collaboration.Manager.Read(id)
+		wait(func() bool {
+			task, _ := f.srv.C.Collaboration.Manager.Read(id)
+			return dg.Terminal(task.State)
+		}, "native task "+id)
+		task, _ := f.srv.C.Collaboration.Manager.Read(id)
 		if task.State != dg.Completed || !strings.Contains(task.Result.Text, "MIYA_TASK_OK") || task.SessionEpoch == "" {
 			t.Fatalf("live %s result: %+v", task.Agent, task)
 		}
-		if task.Agent == agentClaude {
-			if proof, err := f.srv.c.collaboration.Manager.NativeOutcome(id); err != nil || proof.NativeResultID == "" {
+		if task.Agent == appmodel.AgentClaude {
+			if proof, err := f.srv.C.Collaboration.Manager.NativeOutcome(id); err != nil || proof.NativeResultID == "" {
 				t.Fatal("live Claude root result did not yield recheck evidence", proof, err)
 			}
 		}
@@ -117,9 +122,9 @@ func TestInstalledAgentsCollaboration(t *testing.T) {
 	}
 	// Both results must coalesce while the parent is busy. Releasing that
 	// barrier should submit exactly one real native notification turn.
-	f.serv.Do(func() { f.srv.c.update(caller, func(t *Thread) { t.Busy = false }) })
+	f.serv.Do(func() { f.srv.C.Update(caller, func(t *appmodel.Thread) { t.Busy = false }) })
 	wait(func() bool {
-		deliveries := f.srv.c.collaboration.Manager.View().Deliveries
+		deliveries := f.srv.C.Collaboration.Manager.View().Deliveries
 		if len(deliveries) != 1 {
 			return false
 		}
@@ -130,13 +135,13 @@ func TestInstalledAgentsCollaboration(t *testing.T) {
 	}, "merged native completion notification")
 	wait(func() bool {
 		ready := false
-		f.serv.Do(func() { ready = !f.srv.c.threadWithID(caller).Busy })
+		f.serv.Do(func() { ready = !f.srv.C.ThreadWithID(caller).Busy })
 		return ready
 	}, "parent notification reply")
 	f.serv.Do(func() {
 		notices := 0
 		replied := false
-		for _, message := range f.srv.c.threadWithID(caller).Messages {
+		for _, message := range f.srv.C.ThreadWithID(caller).Messages {
 			if message.Role == "user" && strings.HasPrefix(message.Content, "[Miya collaboration]") {
 				notices++
 			}
@@ -165,7 +170,7 @@ func TestCollaborationMCPBridgeProcess(t *testing.T) {
 	for i, arg := range args {
 		if arg == "--" && i+2 < len(args) {
 			os.Args = []string{args[0], "-mcp", args[i+1], args[i+2]}
-			if err := runMCP(); err != nil {
+			if err := controller.RunMCP(); err != nil {
 				os.Exit(1)
 			}
 			os.Exit(0)
@@ -182,7 +187,7 @@ func TestInstalledAgentCollaborationMCP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	config := claudeConfigDir()
+	config := appmodel.ClaudeConfigDir()
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 	client, err := codex.Start(ctx, "", t.TempDir())
@@ -196,19 +201,19 @@ func TestInstalledAgentCollaborationMCP(t *testing.T) {
 		t.Fatal(err)
 	}
 	var cwd string
-	f.serv.Do(func() { cwd = f.srv.c.cwd })
-	mcp := collaborationArgsJSON(map[string]any{"mcpServers": map[string]any{"miya": map[string]any{
+	f.serv.Do(func() { cwd = f.srv.C.Cwd })
+	mcp := widgets.CollaborationArgsJSON(map[string]any{"mcpServers": map[string]any{"miya": map[string]any{
 		"type": "stdio", "command": exe,
 		"args": []string{"-test.run=^TestCollaborationMCPBridgeProcess$", "--", cwd, f.sock},
 		"env":  map[string]string{"MIYA_COLLABORATION_MCP_HELPER": "1"},
 	}}})
 	f.serv.Do(func() {
-		c := f.srv.c
-		c.client = client
-		c.setReady(true)
-		c.claudeBinary = command.Path
-		c.claudeArgs = append(command.Args, "--tools", "", "--strict-mcp-config", "--mcp-config", string(mcp), "--allowedTools", "mcp__miya__read_task,mcp__miya__wait_task", "--disable-slash-commands", "--settings", `{"disableAllHooks":true}`, "--no-chrome")
-		c.claudeEnv = append(command.Env, "CLAUDE_CONFIG_DIR="+config)
+		c := f.srv.C
+		c.Client = client
+		c.SetReady(true)
+		c.ClaudeBinary = command.Path
+		c.ClaudeArgs = append(command.Args, "--tools", "", "--strict-mcp-config", "--mcp-config", string(mcp), "--allowedTools", "mcp__miya__read_task,mcp__miya__wait_task", "--disable-slash-commands", "--settings", `{"disableAllHooks":true}`, "--no-chrome")
+		c.ClaudeEnv = append(command.Env, "CLAUDE_CONFIG_DIR="+config)
 	})
 	streamDone := make(chan struct{})
 	go func() {
@@ -218,28 +223,31 @@ func TestInstalledAgentCollaborationMCP(t *testing.T) {
 				_ = client.Reject(frame.ID, "Marker verification does not permit native tool requests")
 				continue
 			}
-			f.srv.c.dispatch(func() { f.srv.c.handle(frame) })
+			f.srv.C.Dispatch(func() { f.srv.C.Handle(frame) })
 		}
 	}()
 	t.Cleanup(func() { client.Close(); <-streamDone })
 	var parentID int
 	prompt := "Miya MCP continuation verification in an empty temporary workspace. Use start_task with request_id miya-live-mcp-1, agent codex, task exactly 'Reply only MIYA_MCP_TASK_OK. Do not use tools or read files.', context none. Omit the notify argument to use automatic continuation. After start_task immediately end your first reply with MIYA_WAITING; do not wait or read the task in this first turn. When Miya later sends its completion notification, use read_task to verify the fixed result and then reply only MIYA_MCP_PARENT_OK. Use only start_task and read_task; do not access files, use built-in tools, or create any other tasks."
 	f.serv.Do(func() {
-		parentID = f.srv.c.submit(SendRequest{Agent: agentClaude, Project: cwd, Text: prompt, MemoryControl: true})
+		parentID = f.srv.C.Submit(appmodel.SendRequest{Agent: appmodel.AgentClaude, Project: cwd, Text: prompt, MemoryControl: true})
 	})
 	if parentID == 0 {
 		t.Fatal("native parent did not start")
 	}
-	observer, err := dialService(f.sock)
+	observer, err := appmodel.DialService(f.sock)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer observer.Close()
 	approved := false
-	var parent Thread
+	var parent appmodel.Thread
 	for {
 		var approvals []codex.Approval
-		f.serv.Do(func() { parent = f.srv.c.threadWithID(parentID); approvals = append(approvals, f.srv.c.approvals()...) })
+		f.serv.Do(func() {
+			parent = f.srv.C.ThreadWithID(parentID)
+			approvals = append(approvals, f.srv.C.Approvals()...)
+		})
 		for _, approval := range approvals {
 			if approval.ThreadID != parent.ServerID {
 				t.Fatal("approval routed to another native session")
@@ -247,7 +255,7 @@ func TestInstalledAgentCollaborationMCP(t *testing.T) {
 			switch approval.Command {
 			case "mcp__miya__start_task":
 				var args coordinator.Args
-				if json.Unmarshal(approval.Payload, &args) != nil || args.Agent != agentCodex || args.RequestID != "miya-live-mcp-1" || args.Task != "Reply only MIYA_MCP_TASK_OK. Do not use tools or read files." || args.Notify == "none" {
+				if json.Unmarshal(approval.Payload, &args) != nil || args.Agent != appmodel.AgentCodex || args.RequestID != "miya-live-mcp-1" || args.Task != "Reply only MIYA_MCP_TASK_OK. Do not use tools or read files." || args.Notify == "none" {
 					t.Fatal("refusing unexpected live task parameters", string(approval.Payload))
 				}
 			case "mcp__miya__wait_task", "mcp__miya__read_task":
@@ -259,7 +267,7 @@ func TestInstalledAgentCollaborationMCP(t *testing.T) {
 			}
 			approved = true
 		}
-		if !parent.Busy && strings.Contains(managedResult(parent.Messages, false).Text, "MIYA_MCP_PARENT_OK") {
+		if !parent.Busy && strings.Contains(appmodel.ManagedResult(parent.Messages, false).Text, "MIYA_MCP_PARENT_OK") {
 			break
 		}
 		select {
@@ -268,15 +276,15 @@ func TestInstalledAgentCollaborationMCP(t *testing.T) {
 		case <-time.After(20 * time.Millisecond):
 		}
 	}
-	if !strings.Contains(managedResult(parent.Messages, false).Text, "MIYA_MCP_PARENT_OK") {
-		t.Fatal("native parent did not verify its MCP task result", parent.Status, managedResult(parent.Messages, false))
+	if !strings.Contains(appmodel.ManagedResult(parent.Messages, false).Text, "MIYA_MCP_PARENT_OK") {
+		t.Fatal("native parent did not verify its MCP task result", parent.Status, appmodel.ManagedResult(parent.Messages, false))
 	}
-	tasks := f.srv.c.collaboration.Manager.View().Tasks
+	tasks := f.srv.C.Collaboration.Manager.View().Tasks
 	if len(tasks) != 1 {
 		t.Fatalf("native MCP workflow created %d tasks", len(tasks))
 	}
 	for _, task := range tasks {
-		if task.State != dg.Completed || task.Agent != agentCodex || task.From != (ThreadRef{Source: testReferenceSource, Backend: agentClaude, SessionID: parent.ServerID}).URL() || task.NativeTurnID == "" || !strings.Contains(task.Result.Text, "MIYA_MCP_TASK_OK") {
+		if task.State != dg.Completed || task.Agent != appmodel.AgentCodex || task.From != (appmodel.ThreadRef{Source: testReferenceSource, Backend: appmodel.AgentClaude, SessionID: parent.ServerID}).URL() || task.NativeTurnID == "" || !strings.Contains(task.Result.Text, "MIYA_MCP_TASK_OK") {
 			t.Fatal("native tool caller or fixed result was not verified", task)
 		}
 	}

@@ -1,25 +1,26 @@
 package main
 
 import (
-	"context"
-	"encoding/json"
-	"errors"
-	"fmt"
-	"net"
-	"net/http"
-	"net/http/httptest"
-	"os"
-	"slices"
-	"strings"
-	"sync/atomic"
-	"testing"
-	"time"
+	context "context"
+	json "encoding/json"
+	errors "errors"
+	fmt "fmt"
+	desktop "miya/internal/desktop"
+	control "miya/internal/desktop/control"
+	mobile "miya/internal/mobile"
+	uiruntime "miya/internal/uiruntime"
+	net "net"
+	http "net/http"
+	httptest "net/http/httptest"
+	os "os"
+	slices "slices"
+	strings "strings"
+	atomic "sync/atomic"
+	testing "testing"
+	time "time"
 
-	"miya/internal/desktop"
-	"miya/internal/desktop/control"
-
-	"github.com/egoist/mygo"
-	"github.com/egoist/mygo/ui"
+	mygo "github.com/egoist/mygo"
+	ui "github.com/egoist/mygo/ui"
 )
 
 func unlockClient(t *testing.T, status int, receive func(string)) *control.Client {
@@ -54,33 +55,33 @@ func unlockClient(t *testing.T, status int, receive func(string)) *control.Clien
 func TestDesktopUnlockSavedPasswordAndHostIsolation(t *testing.T) {
 	m := testMobileApp()
 	store := newDesktopTestStore()
-	key, other := desktopUnlockKey("mac-a"), desktopUnlockKey("mac-b")
+	key, other := mobile.DesktopUnlockKey("mac-a"), mobile.DesktopUnlockKey("mac-b")
 	_ = store.Set(other, []byte("other-password"))
 	var authenticated atomic.Bool
-	m.desktopAuthenticate = func(context.Context) error { authenticated.Store(true); return nil }
+	m.DesktopAuthenticate = func(context.Context) error { authenticated.Store(true); return nil }
 	client := unlockClient(t, 204, func(password string) {
 		if !authenticated.Load() || password != "test-password" {
 			t.Error("unlock not authenticated or wrong password")
 		}
 	})
-	result := m.desktopPerformUnlock(context.Background(), client, store, key, "test-password", false, true)
-	if result.err != nil || !result.saved || !result.savedChanged {
-		t.Fatal("password not saved after success", result.err)
+	result := m.DesktopPerformUnlock(context.Background(), client, store, key, "test-password", false, true)
+	if result.Err != nil || !result.Saved || !result.SavedChanged {
+		t.Fatal("password not saved after success", result.Err)
 	}
 	data, err := store.Get(key)
 	if err != nil || string(data) != "test-password" {
 		t.Fatal("missing saved password")
 	}
 	authenticated.Store(false)
-	result = m.desktopPerformUnlock(context.Background(), client, store, key, "", true, false)
-	if result.err != nil || !authenticated.Load() {
-		t.Fatal("saved unlock failed", result.err)
+	result = m.DesktopPerformUnlock(context.Background(), client, store, key, "", true, false)
+	if result.Err != nil || !authenticated.Load() {
+		t.Fatal("saved unlock failed", result.Err)
 	}
 	data, err = store.Get(other)
 	if err != nil || string(data) != "other-password" {
 		t.Fatal("another Mac password changed")
 	}
-	if desktopUnlockKey("") != "" {
+	if mobile.DesktopUnlockKey("") != "" {
 		t.Fatal("empty host must not get a shared key")
 	}
 }
@@ -89,15 +90,15 @@ func TestDesktopUnlockCanceledAuthenticationSendsNothing(t *testing.T) {
 	for _, saved := range []bool{false, true} {
 		m := testMobileApp()
 		store := newDesktopTestStore()
-		key := desktopUnlockKey("mac")
+		key := mobile.DesktopUnlockKey("mac")
 		if saved {
 			_ = store.Set(key, []byte("existing"))
 		}
-		m.desktopAuthenticate = func(context.Context) error { return errors.New("canceled") }
+		m.DesktopAuthenticate = func(context.Context) error { return errors.New("canceled") }
 		var calls atomic.Int32
 		client := unlockClient(t, 204, func(string) { calls.Add(1) })
-		result := m.desktopPerformUnlock(context.Background(), client, store, key, "new", saved, true)
-		if result.err == nil || calls.Load() != 0 {
+		result := m.DesktopPerformUnlock(context.Background(), client, store, key, "new", saved, true)
+		if result.Err == nil || calls.Load() != 0 {
 			t.Fatal("canceled authentication sent a password")
 		}
 		data, err := store.Get(key)
@@ -111,12 +112,12 @@ func TestDesktopUnlockCancellationAfterAuthentication(t *testing.T) {
 	m := testMobileApp()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	m.desktopAuthenticate = func(context.Context) error { cancel(); return nil }
+	m.DesktopAuthenticate = func(context.Context) error { cancel(); return nil }
 	var calls atomic.Int32
 	client := unlockClient(t, 204, func(string) { calls.Add(1) })
 	store := newDesktopTestStore()
-	result := m.desktopPerformUnlock(ctx, client, store, "key", "secret", false, true)
-	if !errors.Is(result.err, context.Canceled) || calls.Load() != 0 {
+	result := m.DesktopPerformUnlock(ctx, client, store, "key", "secret", false, true)
+	if !errors.Is(result.Err, context.Canceled) || calls.Load() != 0 {
 		t.Fatal("closed page sent password")
 	}
 	if _, err := store.Get("key"); !errors.Is(err, mygo.ErrSecretNotFound) {
@@ -128,11 +129,11 @@ func TestDesktopUnlockOnlySuccessfulPasswordSaved(t *testing.T) {
 	for _, status := range []int{401, 403, 409, 410, 503} {
 		t.Run(fmt.Sprint(status), func(t *testing.T) {
 			m := testMobileApp()
-			m.desktopAuthenticate = func(context.Context) error { return nil }
+			m.DesktopAuthenticate = func(context.Context) error { return nil }
 			store := newDesktopTestStore()
-			result := m.desktopPerformUnlock(context.Background(), unlockClient(t, status, nil), store, "key", "test", false, true)
-			if control.Status(result.err) != status {
-				t.Fatal(result.err)
+			result := m.DesktopPerformUnlock(context.Background(), unlockClient(t, status, nil), store, "key", "test", false, true)
+			if control.Status(result.Err) != status {
+				t.Fatal(result.Err)
 			}
 			if _, err := store.Get("key"); !errors.Is(err, mygo.ErrSecretNotFound) {
 				t.Fatal("unverified password saved")
@@ -143,11 +144,11 @@ func TestDesktopUnlockOnlySuccessfulPasswordSaved(t *testing.T) {
 
 func TestDesktopUnlockIncorrectSavedPasswordForgotten(t *testing.T) {
 	m := testMobileApp()
-	m.desktopAuthenticate = func(context.Context) error { return nil }
+	m.DesktopAuthenticate = func(context.Context) error { return nil }
 	store := newDesktopTestStore()
 	_ = store.Set("key", []byte("incorrect"))
-	result := m.desktopPerformUnlock(context.Background(), unlockClient(t, 401, nil), store, "key", "", true, false)
-	if control.Status(result.err) != 401 || !result.savedChanged || result.saved {
+	result := m.DesktopPerformUnlock(context.Background(), unlockClient(t, 401, nil), store, "key", "", true, false)
+	if control.Status(result.Err) != 401 || !result.SavedChanged || result.Saved {
 		t.Fatal("incorrect password retained")
 	}
 	if _, err := store.Get("key"); !errors.Is(err, mygo.ErrSecretNotFound) {
@@ -157,16 +158,16 @@ func TestDesktopUnlockIncorrectSavedPasswordForgotten(t *testing.T) {
 
 func TestDesktopUnlockStorageFailureAndManualFallback(t *testing.T) {
 	m := testMobileApp()
-	m.desktopAuthenticate = func(context.Context) error { t.Error("manual unlock asked for authentication"); return nil }
+	m.DesktopAuthenticate = func(context.Context) error { t.Error("manual unlock asked for authentication"); return nil }
 	client := unlockClient(t, 204, nil)
-	if result := m.desktopPerformUnlock(context.Background(), client, nil, "", "manual", false, false); result.err != nil {
-		t.Fatal("manual unlock needs storage", result.err)
+	if result := m.DesktopPerformUnlock(context.Background(), client, nil, "", "manual", false, false); result.Err != nil {
+		t.Fatal("manual unlock needs storage", result.Err)
 	}
-	m.desktopAuthenticate = func(context.Context) error { return nil }
+	m.DesktopAuthenticate = func(context.Context) error { return nil }
 	store := newDesktopTestStore()
 	store.fail = true
-	result := m.desktopPerformUnlock(context.Background(), client, store, "key", "test", false, true)
-	if result.err != nil || !result.storageError || result.saved {
+	result := m.DesktopPerformUnlock(context.Background(), client, store, "key", "test", false, true)
+	if result.Err != nil || !result.StorageError || result.Saved {
 		t.Fatal("save failure misreported")
 	}
 }
@@ -175,9 +176,9 @@ func TestDesktopUnlockStorageFailureAndManualFallback(t *testing.T) {
 func unlockUI(t *testing.T) (chan func(), func(func() bool)) {
 	t.Helper()
 	callbacks := make(chan func(), 64)
-	old := runOnMain
-	runOnMain = func(f func()) { callbacks <- f }
-	t.Cleanup(func() { runOnMain = old })
+	old := uiruntime.RunOnMain
+	uiruntime.RunOnMain = func(f func()) { callbacks <- f }
+	t.Cleanup(func() { uiruntime.RunOnMain = old })
 	return callbacks, func(done func() bool) {
 		deadline := time.After(3 * time.Second)
 		for !done() {
@@ -195,28 +196,28 @@ func TestDesktopUnlockAutoOnceAndForgetUI(t *testing.T) {
 	_, wait := unlockUI(t)
 	m := testMobileApp()
 	p := liveTestDesktopPage(t, m)
-	p.phase = "live"
-	p.unlock.key = desktopUnlockKey("mac")
+	p.Phase = "live"
+	p.Unlock.Key = mobile.DesktopUnlockKey("mac")
 	store := newDesktopTestStore()
-	m.store = store
-	_ = store.Set(p.unlock.key, []byte("saved"))
+	m.Store = store
+	_ = store.Set(p.Unlock.Key, []byte("saved"))
 	var auth atomic.Int32
-	m.desktopAuthenticate = func(context.Context) error { auth.Add(1); return errors.New("canceled") }
-	m.desktopCheckSavedUnlock(p)
-	m.desktopLockChanged(p, true)
-	wait(func() bool { return p.unlock.saved && !p.unlock.busy && auth.Load() == 1 })
+	m.DesktopAuthenticate = func(context.Context) error { auth.Add(1); return errors.New("canceled") }
+	m.DesktopCheckSavedUnlock(p)
+	m.DesktopLockChanged(p, true)
+	wait(func() bool { return p.Unlock.Saved && !p.Unlock.Busy && auth.Load() == 1 })
 	for range 5 {
-		m.desktopLockChanged(p, true)
+		m.DesktopLockChanged(p, true)
 	}
-	if auth.Load() != 1 || p.unlock.busy {
+	if auth.Load() != 1 || p.Unlock.Busy {
 		t.Fatal("automatic unlock repeated after cancel")
 	}
-	m.desktopLockChanged(p, false)
-	m.desktopLockChanged(p, true)
-	wait(func() bool { return !p.unlock.busy && auth.Load() == 2 })
-	m.desktopForgetUnlock(p)
-	wait(func() bool { return !p.unlock.busy && !p.unlock.saved })
-	if _, err := store.Get(p.unlock.key); !errors.Is(err, mygo.ErrSecretNotFound) {
+	m.DesktopLockChanged(p, false)
+	m.DesktopLockChanged(p, true)
+	wait(func() bool { return !p.Unlock.Busy && auth.Load() == 2 })
+	m.DesktopForgetUnlock(p)
+	wait(func() bool { return !p.Unlock.Busy && !p.Unlock.Saved })
+	if _, err := store.Get(p.Unlock.Key); !errors.Is(err, mygo.ErrSecretNotFound) {
 		t.Fatal("forget did not delete key")
 	}
 }
@@ -224,18 +225,18 @@ func TestDesktopUnlockAutoOnceAndForgetUI(t *testing.T) {
 func TestDesktopUnlockAuthorizationPageAndOrdinaryInput(t *testing.T) {
 	m := testMobileApp()
 	p := liveTestDesktopPage(t, m)
-	p.windowOnly, p.unlock.saved, p.unlock.key = true, true, "key"
-	m.desktopAuthenticate = func(context.Context) error { t.Error("authorization page used saved password"); return nil }
-	m.desktopLockChanged(p, true)
-	if p.unlock.locked || p.unlock.busy {
+	p.WindowOnly, p.Unlock.Saved, p.Unlock.Key = true, true, "key"
+	m.DesktopAuthenticate = func(context.Context) error { t.Error("authorization page used saved password"); return nil }
+	m.DesktopLockChanged(p, true)
+	if p.Unlock.Locked || p.Unlock.Busy {
 		t.Fatal("authorization lease offered unlock")
 	}
-	p.pickable = true
-	p.unlock.saved = false
-	p.queue = []desktop.Input{{Kind: "text", Text: "pending"}}
-	m.desktopLockChanged(p, true)
-	m.desktopSend(p, desktop.Input{Kind: "text", Text: "ordinary"})
-	if len(p.queue) != 0 {
+	p.Pickable = true
+	p.Unlock.Saved = false
+	p.Queue = []desktop.Input{{Kind: "text", Text: "pending"}}
+	m.DesktopLockChanged(p, true)
+	m.DesktopSend(p, desktop.Input{Kind: "text", Text: "ordinary"})
+	if len(p.Queue) != 0 {
 		t.Fatal("ordinary input mixed with unlock")
 	}
 }
@@ -245,12 +246,12 @@ func TestDesktopUnlockLayout(t *testing.T) {
 		for _, saved := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%d-saved-%v", width, saved), func(t *testing.T) {
 				m := testMobileApp()
-				m.store = newDesktopTestStore()
+				m.Store = newDesktopTestStore()
 				p := liveTestDesktopPage(t, m)
-				p.phase, p.status, p.image = "live", "Mac is locked", nil
-				p.unlock = desktopUnlockState{locked: true, key: "mac", saved: saved, status: "Identity verification incomplete. Unlock manually or retry the saved password."}
-				m.router().Push("/desktop")
-				tt := ui.NewTester(m.viewRoot, width, 700)
+				p.Phase, p.Status, p.Image = "live", "Mac is locked", nil
+				p.Unlock = mobile.DesktopUnlockState{Locked: true, Key: "mac", Saved: saved, Status: "Identity verification incomplete. Unlock manually or retry the saved password."}
+				m.Router().Push("/desktop")
+				tt := ui.NewTester(m.ViewRoot, width, 700)
 				tt.Frame()
 				tt.Frame()
 				for _, text := range []string{"Mac is locked", "Unlock", "Save password for automatic unlock after identity verification"} {
@@ -291,22 +292,22 @@ func TestDesktopUnlockManualSaveUIAndClose(t *testing.T) {
 	_, wait := unlockUI(t)
 	m := testMobileApp()
 	p := liveTestDesktopPage(t, m)
-	p.phase = "live"
-	m.store = newDesktopTestStore()
-	m.desktopAuthenticate = func(context.Context) error { return nil }
-	p.client = unlockClient(t, 204, nil)
-	p.unlock = desktopUnlockState{key: "mac", locked: true, text: "synthetic-password", remember: true}
-	m.desktopUnlock(p)
-	if p.unlock.text != "" || !p.unlock.busy {
+	p.Phase = "live"
+	m.Store = newDesktopTestStore()
+	m.DesktopAuthenticate = func(context.Context) error { return nil }
+	p.Client = unlockClient(t, 204, nil)
+	p.Unlock = mobile.DesktopUnlockState{Key: "mac", Locked: true, Text: "synthetic-password", Remember: true}
+	m.DesktopUnlock(p)
+	if p.Unlock.Text != "" || !p.Unlock.Busy {
 		t.Fatal("submitted password stayed in the UI")
 	}
-	wait(func() bool { return !p.unlock.busy })
-	if p.unlock.locked || !p.unlock.saved {
+	wait(func() bool { return !p.Unlock.Busy })
+	if p.Unlock.Locked || !p.Unlock.Saved {
 		t.Fatal("successful unlock did not update saved state")
 	}
-	p.unlock.text = "unsubmitted"
-	m.closeDesktopPage(false)
-	if p.unlock.text != "" || p.ctx.Err() == nil {
+	p.Unlock.Text = "unsubmitted"
+	m.CloseDesktopPage(false)
+	if p.Unlock.Text != "" || p.Ctx.Err() == nil {
 		t.Fatal("closed page retained typed credentials")
 	}
 }
@@ -314,23 +315,23 @@ func TestDesktopUnlockManualSaveUIAndClose(t *testing.T) {
 func TestDesktopUnlockClosedPageCancelsAuthentication(t *testing.T) {
 	m := testMobileApp()
 	p := liveTestDesktopPage(t, m)
-	p.phase = "live"
-	m.store = newDesktopTestStore()
+	p.Phase = "live"
+	m.Store = newDesktopTestStore()
 	entered, done := make(chan struct{}), make(chan struct{})
-	m.desktopAuthenticate = func(ctx context.Context) error {
+	m.DesktopAuthenticate = func(ctx context.Context) error {
 		close(entered)
 		<-ctx.Done()
 		close(done)
 		return ctx.Err()
 	}
-	p.unlock = desktopUnlockState{key: "mac", locked: true, text: "synthetic-password", remember: true}
-	m.desktopUnlock(p)
+	p.Unlock = mobile.DesktopUnlockState{Key: "mac", Locked: true, Text: "synthetic-password", Remember: true}
+	m.DesktopUnlock(p)
 	select {
 	case <-entered:
 	case <-time.After(time.Second):
 		t.Fatal("authentication did not start")
 	}
-	m.closeDesktopPage(false)
+	m.CloseDesktopPage(false)
 	select {
 	case <-done:
 	case <-time.After(time.Second):
@@ -341,15 +342,15 @@ func TestDesktopUnlockClosedPageCancelsAuthentication(t *testing.T) {
 func TestDesktopUnlockRemovePairingClearsOnlyItsPassword(t *testing.T) {
 	m := testMobileApp()
 	store := newDesktopTestStore()
-	m.store = store
-	item, err := m.desktops.remember(testDesktopLink(), "removed")
+	m.Store = store
+	item, err := m.Desktops.Remember(testDesktopLink(), "removed")
 	if err != nil {
 		t.Fatal(err)
 	}
-	key := desktopUnlockKey(item.ID)
+	key := mobile.DesktopUnlockKey(item.ID)
 	_ = store.Set(key, []byte("removed"))
-	_ = store.Set(desktopUnlockKey("other"), []byte("retained"))
-	m.removeDesktop(item.ID)
+	_ = store.Set(mobile.DesktopUnlockKey("other"), []byte("retained"))
+	m.RemoveDesktop(item.ID)
 	deadline := time.Now().Add(time.Second)
 	for {
 		if _, err := store.Get(key); errors.Is(err, mygo.ErrSecretNotFound) {
@@ -360,7 +361,7 @@ func TestDesktopUnlockRemovePairingClearsOnlyItsPassword(t *testing.T) {
 		}
 		time.Sleep(time.Millisecond)
 	}
-	if data, err := store.Get(desktopUnlockKey("other")); err != nil || string(data) != "retained" {
+	if data, err := store.Get(mobile.DesktopUnlockKey("other")); err != nil || string(data) != "retained" {
 		t.Fatal("removed another desktop password")
 	}
 	// Drain the normal registry writer before this test returns.
@@ -411,13 +412,13 @@ func TestDesktopUnlockAuthenticationFailureIsActionable(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			m := testMobileApp()
-			m.desktopAuthenticate = func(context.Context) error { return tc.err }
+			m.DesktopAuthenticate = func(context.Context) error { return tc.err }
 			var calls atomic.Int32
 			client := unlockClient(t, 204, func(string) { calls.Add(1) })
 			store := newDesktopTestStore()
-			result := m.desktopPerformUnlock(context.Background(), client, store, "key", "synthetic", false, true)
-			if result.err == nil || !strings.Contains(result.err.Error(), tc.want) || calls.Load() != 0 {
-				t.Fatalf("authentication result = %v; requests = %d", result.err, calls.Load())
+			result := m.DesktopPerformUnlock(context.Background(), client, store, "key", "synthetic", false, true)
+			if result.Err == nil || !strings.Contains(result.Err.Error(), tc.want) || calls.Load() != 0 {
+				t.Fatalf("authentication result = %v; requests = %d", result.Err, calls.Load())
 			}
 			if _, err := store.Get("key"); !errors.Is(err, mygo.ErrSecretNotFound) {
 				t.Fatal("failed authentication saved password")

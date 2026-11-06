@@ -1,30 +1,32 @@
 package main
 
 import (
-	"encoding/json"
-	"os"
-	"strings"
-	"testing"
-
-	"miya/internal/claude"
-	"miya/internal/codex"
-	"miya/internal/subagent"
+	json "encoding/json"
+	appmodel "miya/internal/appmodel"
+	claude "miya/internal/claude"
+	codex "miya/internal/codex"
+	controller "miya/internal/controller"
+	subagent "miya/internal/subagent"
+	uiruntime "miya/internal/uiruntime"
+	os "os"
+	strings "strings"
+	testing "testing"
 )
 
 // claudeTestThread is a controller with one Claude conversation, and a
 // function that streams a frame to it.
-func claudeTestThread(t *testing.T) (*chatController, func(string)) {
+func claudeTestThread(t *testing.T) (*controller.Controller, func(string)) {
 	c := testController()
-	c.active, c.setActive = createSignal(1)
-	c.agent, c.setAgent = createSignal("claude-code")
-	c.setThreads([]Thread{{ID: 1, Agent: "claude-code", ServerID: "s1"}})
+	c.Active, c.SetActive = uiruntime.CreateSignal(1)
+	c.Agent, c.SetAgent = uiruntime.CreateSignal("claude-code")
+	c.SetThreads([]appmodel.Thread{{ID: 1, Agent: "claude-code", ServerID: "s1"}})
 	return c, func(s string) {
 		t.Helper()
 		var f claude.Frame
 		if err := json.Unmarshal([]byte(s), &f); err != nil {
 			t.Fatalf("frame does not decode: %v\n%s", err, s)
 		}
-		c.handleClaude(1, f)
+		c.HandleClaude(1, f)
 	}
 }
 
@@ -35,7 +37,7 @@ func TestClaudeSubAgentFramesStayOnTheirTask(t *testing.T) {
 	emit(`{"type":"stream_event","parent_tool_use_id":"task1","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Looking"}}}`)
 	emit(`{"type":"assistant","parent_tool_use_id":"task1","message":{"id":"sub1","content":[{"type":"text","text":"Looking"},{"type":"tool_use","id":"read1","name":"Read","input":{"file_path":"/src/a.go"}}]}}`)
 	emit(`{"type":"user","parent_tool_use_id":"task1","message":{"content":[{"type":"tool_result","tool_use_id":"read1","content":"code"}]}}`)
-	messages := c.current().Messages
+	messages := c.Current().Messages
 	if len(messages) != 1 {
 		t.Fatalf("sub-agent frames leaked into the conversation: %+v", messages)
 	}
@@ -47,7 +49,7 @@ func TestClaudeSubAgentFramesStayOnTheirTask(t *testing.T) {
 		t.Fatalf("summary lost progress: %q", got)
 	}
 	emit(`{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"task1","content":[{"type":"text","text":"Found 2 bugs\nDetails"}]}]}}`)
-	a = c.current().Messages[0].Agents
+	a = c.Current().Messages[0].Agents
 	if a[0].Status != subagent.Completed || a[0].Detail != "Found 2 bugs" || subagent.AnyActive(a) {
 		t.Fatalf("bad finished sub-agent: %+v", a)
 	}
@@ -64,8 +66,8 @@ func TestClaudeSubAgentRecordedStream(t *testing.T) {
 	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
 		emit(line)
 	}
-	var tools []Message
-	for _, m := range c.current().Messages {
+	var tools []appmodel.Message
+	for _, m := range c.Current().Messages {
 		if m.Role == "tool" {
 			tools = append(tools, m)
 		}
@@ -77,7 +79,7 @@ func TestClaudeSubAgentRecordedStream(t *testing.T) {
 		t.Fatalf("sub-agent tool calls leaked: %+v", tools)
 	}
 	replies := 0
-	for _, m := range c.current().Messages {
+	for _, m := range c.Current().Messages {
 		if m.Role == "assistant" {
 			replies++
 		}
@@ -99,24 +101,24 @@ func TestClaudeBackgroundSubAgentFollowsItsTask(t *testing.T) {
 	emit(`{"type":"assistant","message":{"id":"m1","content":[{"type":"tool_use","id":"bg1","name":"Agent","input":{"description":"Watch logs","prompt":"p","run_in_background":true}}]}}`)
 	emit(`{"type":"system","subtype":"task_started","task_id":"t9","tool_use_id":"bg1","description":"Watch logs"}`)
 	emit(`{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"bg1","content":"Async agent launched"}]}}`)
-	a := c.current().Messages[0].Agents
+	a := c.Current().Messages[0].Agents
 	if a[0].Status != subagent.Running || a[0].ID != "t9" {
 		t.Fatalf("background sub-agent ended with its call: %+v", a)
 	}
 	emit(`{"type":"system","subtype":"task_progress","task_id":"t9","tool_use_id":"bg1","description":"Reading logs","usage":{"tool_uses":2}}`)
-	a = c.current().Messages[0].Agents
+	a = c.Current().Messages[0].Agents
 	if a[0].Detail != "Reading logs" || a[0].Steps != 2 {
 		t.Fatalf("progress lost: %+v", a)
 	}
 	emit(`{"type":"system","subtype":"task_updated","task_id":"t9","patch":{"status":"killed"}}`)
-	a = c.current().Messages[0].Agents
+	a = c.Current().Messages[0].Agents
 	if a[0].Status != subagent.Interrupted || subagent.AnyActive(a) {
 		t.Fatalf("stop lost: %+v", a)
 	}
 }
 
 func TestCodexCollabAgentStatesNormalize(t *testing.T) {
-	m, ok := itemMessage(codex.Item{Type: "collabAgentToolCall", Status: "inProgress", Tool: "wait", AgentsStates: json.RawMessage(`{"thread-b":{"status":"running","message":null},"thread-a":{"status":"errored","message":"boom"},"thread-c":{"status":"pendingInit"},"thread-d":{"status":"interrupted"}}`)})
+	m, ok := appmodel.ItemMessage(codex.Item{Type: "collabAgentToolCall", Status: "inProgress", Tool: "wait", AgentsStates: json.RawMessage(`{"thread-b":{"status":"running","message":null},"thread-a":{"status":"errored","message":"boom"},"thread-c":{"status":"pendingInit"},"thread-d":{"status":"interrupted"}}`)})
 	if !ok || len(m.Agents) != 4 {
 		t.Fatalf("collab agents not normalized: %+v", m.Agents)
 	}
@@ -134,11 +136,11 @@ func TestCodexCollabAgentStatesNormalize(t *testing.T) {
 }
 
 func TestCodexSpawnedAgentWithoutState(t *testing.T) {
-	m, _ := itemMessage(codex.Item{Type: "collabAgentToolCall", Status: "inProgress", Tool: "spawnAgent", ReceiverThreadIDs: []string{"019a7f3c-new"}, Prompt: "Review the parser\nin detail", AgentsStates: json.RawMessage(`{}`)})
+	m, _ := appmodel.ItemMessage(codex.Item{Type: "collabAgentToolCall", Status: "inProgress", Tool: "spawnAgent", ReceiverThreadIDs: []string{"019a7f3c-new"}, Prompt: "Review the parser\nin detail", AgentsStates: json.RawMessage(`{}`)})
 	if len(m.Agents) != 1 || m.Agents[0].Name != "Review the parser" || m.Agents[0].Status != subagent.Running {
 		t.Fatalf("spawned agent not shown: %+v", m.Agents)
 	}
-	m, _ = itemMessage(codex.Item{Type: "subAgentActivity", Kind: "started", AgentPath: "reviewer"})
+	m, _ = appmodel.ItemMessage(codex.Item{Type: "subAgentActivity", Kind: "started", AgentPath: "reviewer"})
 	if m.Content != "Subagent started · reviewer" || len(m.Agents) != 0 {
 		t.Fatalf("bad activity: %+v", m)
 	}
@@ -146,17 +148,17 @@ func TestCodexSpawnedAgentWithoutState(t *testing.T) {
 
 func TestClaudeTaskReportUnwrapsHandBack(t *testing.T) {
 	out := "  <tools-used-before-summary>Bash, Read</tools-used-before-summary>\n  \n[Subagent hand-back] Notes. The report follows:\n  Found 2 bugs\n  details\nagentId: a1 (use SendMessage)\n<usage>subagent_tokens: 10\ntool_uses: 3\nduration_ms: 5</usage>"
-	if report, steps := claudeTaskReport(out); report != "Found 2 bugs" || steps != 3 {
+	if report, steps := appmodel.ClaudeTaskReport(out); report != "Found 2 bugs" || steps != 3 {
 		t.Fatalf("bad report: %q, %d", report, steps)
 	}
-	if report, steps := claudeTaskReport("plain answer\nmore"); report != "plain answer" || steps != 0 {
+	if report, steps := appmodel.ClaudeTaskReport("plain answer\nmore"); report != "plain answer" || steps != 0 {
 		t.Fatalf("bad plain report: %q, %d", report, steps)
 	}
 }
 
-func claudeReplies(c *chatController) string {
+func claudeReplies(c *controller.Controller) string {
 	var texts []string
-	for _, m := range c.current().Messages {
+	for _, m := range c.Current().Messages {
 		if m.Role == "assistant" {
 			texts = append(texts, m.Content)
 		}
@@ -193,18 +195,18 @@ func TestClaudeUnstreamedReplyBlocksKeepEach(t *testing.T) {
 // A sub-agent's progress changes only its message's Agents; the phone and
 // the other windows must still get it.
 func TestSubAgentProgressReachesPhone(t *testing.T) {
-	th := Thread{ID: 1, Agent: agentClaude, Messages: []Message{{ID: 1, Role: "tool", Kind: "claudeTool", Content: "Agent\n{}", Status: "inProgress",
-		Agents: []SubAgent{{ID: "a", Name: "Watch logs", Status: subagent.Running}}}}}
-	s := newPhoneThreadSync(nil)
+	th := appmodel.Thread{ID: 1, Agent: appmodel.AgentClaude, Messages: []appmodel.Message{{ID: 1, Role: "tool", Kind: "claudeTool", Content: "Agent\n{}", Status: "inProgress",
+		Agents: []appmodel.SubAgent{{ID: "a", Name: "Watch logs", Status: subagent.Running}}}}}
+	s := appmodel.NewPhoneThreadSync(nil)
 	if _, ok := s.Update(th); !ok {
 		t.Fatal("first update not sent")
 	}
-	th.Messages[0].Agents = []SubAgent{{ID: "a", Name: "Watch logs", Status: subagent.Running, Steps: 2, Detail: "Reading logs"}}
+	th.Messages[0].Agents = []appmodel.SubAgent{{ID: "a", Name: "Watch logs", Status: subagent.Running, Steps: 2, Detail: "Reading logs"}}
 	d, ok := s.Update(th)
 	if !ok || len(d.Changed) != 1 {
 		t.Fatalf("progress not sent: %+v", d)
 	}
-	th.Messages[0].Agents = []SubAgent{{ID: "a", Name: "Watch logs", Status: subagent.Completed, Steps: 2, Detail: "Reading logs"}}
+	th.Messages[0].Agents = []appmodel.SubAgent{{ID: "a", Name: "Watch logs", Status: subagent.Completed, Steps: 2, Detail: "Reading logs"}}
 	d, ok = s.Update(th)
 	if !ok || len(d.Changed) != 1 {
 		t.Fatalf("background end not sent: %+v", d)
@@ -213,7 +215,7 @@ func TestSubAgentProgressReachesPhone(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var got phoneThreadDelta
+	var got appmodel.PhoneThreadDelta
 	if err := json.Unmarshal(data, &got); err != nil {
 		t.Fatal(err)
 	}
@@ -226,25 +228,25 @@ func TestSubAgentProgressReachesPhone(t *testing.T) {
 }
 
 func TestCodexCollabContentLeavesStatesToTheList(t *testing.T) {
-	m, _ := itemMessage(codex.Item{Type: "collabAgentToolCall", Status: "inProgress", Tool: "wait", AgentsStates: json.RawMessage(`{"thread-a":{"status":"errored","message":"boom"}}`)})
+	m, _ := appmodel.ItemMessage(codex.Item{Type: "collabAgentToolCall", Status: "inProgress", Tool: "wait", AgentsStates: json.RawMessage(`{"thread-a":{"status":"errored","message":"boom"}}`)})
 	if m.Content != "" || len(m.Agents) != 1 {
 		t.Fatalf("states shown twice: %q", m.Content)
 	}
-	m, _ = itemMessage(codex.Item{Type: "collabAgentToolCall", Status: "completed", Tool: "sendInput", ReceiverThreadIDs: []string{"thread-a"}, Prompt: " Also check the docs "})
+	m, _ = appmodel.ItemMessage(codex.Item{Type: "collabAgentToolCall", Status: "completed", Tool: "sendInput", ReceiverThreadIDs: []string{"thread-a"}, Prompt: " Also check the docs "})
 	if m.Content != "Also check the docs" {
 		t.Fatalf("prompt lost: %q", m.Content)
 	}
-	m, _ = itemMessage(codex.Item{Type: "collabAgentToolCall", Status: "completed", Tool: "listAgents"})
+	m, _ = appmodel.ItemMessage(codex.Item{Type: "collabAgentToolCall", Status: "completed", Tool: "listAgents"})
 	if len(m.Agents) != 0 || !strings.Contains(m.Content, "listAgents") {
 		t.Fatalf("call without agents lost its summary: %+v", m)
 	}
 }
 
 func TestCollapsedRunSummarizesLatestSubAgents(t *testing.T) {
-	msgs := []Message{
-		{ID: 1, Role: "tool", Agents: []SubAgent{{ID: "r", Status: subagent.Running}}},
+	msgs := []appmodel.Message{
+		{ID: 1, Role: "tool", Agents: []appmodel.SubAgent{{ID: "r", Status: subagent.Running}}},
 		{ID: 2, Role: "tool", Kind: "commandExecution"},
-		{ID: 3, Role: "tool", Agents: []SubAgent{{ID: "r", Status: subagent.Completed}, {ID: "d", Status: subagent.Failed}}},
+		{ID: 3, Role: "tool", Agents: []appmodel.SubAgent{{ID: "r", Status: subagent.Completed}, {ID: "d", Status: subagent.Failed}}},
 	}
 	agents := subagent.Latest(msgs)
 	if len(agents) != 2 || agents[0].Status != subagent.Completed || subagent.AnyActive(agents) {
@@ -256,11 +258,11 @@ func TestCollapsedRunSummarizesLatestSubAgents(t *testing.T) {
 }
 
 func TestCodexSpawnPromptShownOnce(t *testing.T) {
-	m, _ := itemMessage(codex.Item{Type: "collabAgentToolCall", Status: "completed", Tool: "spawnAgent", ReceiverThreadIDs: []string{"a"}, Prompt: "Review the parser"})
+	m, _ := appmodel.ItemMessage(codex.Item{Type: "collabAgentToolCall", Status: "completed", Tool: "spawnAgent", ReceiverThreadIDs: []string{"a"}, Prompt: "Review the parser"})
 	if m.Agents[0].Name != "Review the parser" || m.Content != "" {
 		t.Fatalf("prompt shown twice: %+v", m)
 	}
-	m, _ = itemMessage(codex.Item{Type: "collabAgentToolCall", Status: "completed", Tool: "spawnAgent", ReceiverThreadIDs: []string{"a"}, Prompt: "Review the parser\nFocus on edge cases"})
+	m, _ = appmodel.ItemMessage(codex.Item{Type: "collabAgentToolCall", Status: "completed", Tool: "spawnAgent", ReceiverThreadIDs: []string{"a"}, Prompt: "Review the parser\nFocus on edge cases"})
 	if m.Agents[0].Name != "Review the parser" || !strings.Contains(m.Content, "Focus on edge cases") {
 		t.Fatalf("long prompt lost: %+v", m)
 	}

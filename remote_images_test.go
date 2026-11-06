@@ -1,16 +1,16 @@
 package main
 
 import (
-	"bytes"
-	"image"
-	"image/png"
-	"os"
-	"path/filepath"
-	"testing"
+	bytes "bytes"
+	image "image"
+	png "image/png"
+	appmodel "miya/internal/appmodel"
+	remote "miya/internal/remote"
+	os "os"
+	filepath "path/filepath"
+	testing "testing"
 
-	"miya/internal/remote"
-
-	"github.com/egoist/mygo/ui"
+	ui "github.com/egoist/mygo/ui"
 )
 
 func testPNG(t *testing.T) []byte {
@@ -24,7 +24,7 @@ func testPNG(t *testing.T) []byte {
 func TestSavePhoneImages(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	data := testPNG(t)
-	paths, err := savePhoneImages([]remote.Image{{Name: "a.png", Data: data}, {Name: "noext", Data: data}})
+	paths, err := appmodel.SavePhoneImages([]remote.Image{{Name: "a.png", Data: data}, {Name: "noext", Data: data}})
 	if err != nil || len(paths) != 2 {
 		t.Fatalf("paths = %v, err = %v", paths, err)
 	}
@@ -33,10 +33,10 @@ func TestSavePhoneImages(t *testing.T) {
 			t.Errorf("%s: saved wrongly (%v)", p, err)
 		}
 	}
-	if _, err := savePhoneImages([]remote.Image{{Name: "x.txt", Data: []byte("hello")}}); err == nil {
+	if _, err := appmodel.SavePhoneImages([]remote.Image{{Name: "x.txt", Data: []byte("hello")}}); err == nil {
 		t.Error("text should be refused")
 	}
-	if _, err := savePhoneImages(make([]remote.Image, maxPhoneImages+1)); err == nil {
+	if _, err := appmodel.SavePhoneImages(make([]remote.Image, appmodel.MaxPhoneImages+1)); err == nil {
 		t.Error("too many images should be refused")
 	}
 }
@@ -46,7 +46,7 @@ func TestMobileComposerAttachments(t *testing.T) {
 	path := filepath.Join(dir, "a.png")
 	os.WriteFile(path, testPNG(t), 0o600)
 	m := testMobileApp()
-	tt := ui.NewTester(m.viewRoot, 390, 750)
+	tt := ui.NewTester(m.ViewRoot, 390, 750)
 	tt.Frame()
 	openMobileDrawer(t, tt)
 	if err := tt.Click("thread-one"); err != nil {
@@ -56,13 +56,13 @@ func TestMobileComposerAttachments(t *testing.T) {
 	if _, ok := tt.Find("Add image"); !ok {
 		t.Fatal("the composer should offer to add photos")
 	}
-	m.images = []string{path}
+	m.Images = []string{path}
 	tt.Frame()
 	if err := tt.Click("Remove image"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if len(m.images) != 0 {
-		t.Fatalf("removing should drop the photo: %v", m.images)
+	if len(m.Images) != 0 {
+		t.Fatalf("removing should drop the photo: %v", m.Images)
 	}
 }

@@ -1,33 +1,34 @@
 package main
 
 import (
-	"encoding/json"
-	"errors"
-	"strings"
-	"testing"
-	"time"
-
-	"miya/internal/claude"
-	"miya/internal/notification"
+	json "encoding/json"
+	errors "errors"
+	appmodel "miya/internal/appmodel"
+	claude "miya/internal/claude"
+	controller "miya/internal/controller"
+	notification "miya/internal/notification"
+	strings "strings"
+	testing "testing"
+	time "time"
 )
 
 func TestClaudeEmptyResultExplained(t *testing.T) {
 	c := testController()
-	c.claudeCommand = "claude --settings ~/proxy.json"
-	c.setThreads([]Thread{{ID: 1, Agent: "claude-code", ServerID: "s1", Messages: []Message{{ID: 1, Role: "user", Content: "继续"}}}})
+	c.ClaudeCommand = "claude --settings ~/proxy.json"
+	c.SetThreads([]appmodel.Thread{{ID: 1, Agent: "claude-code", ServerID: "s1", Messages: []appmodel.Message{{ID: 1, Role: "user", Content: "继续"}}}})
 	var f claude.Frame
 	_ = json.Unmarshal([]byte(`{"type":"result","is_error":true,"errors":["[ede_diagnostic] result_type=user last_content_type=n/a stop_reason=null"]}`), &f)
-	c.handleClaude(1, f)
-	msgs := c.threads()[0].Messages
+	c.HandleClaude(1, f)
+	msgs := c.Threads()[0].Messages
 	last := msgs[len(msgs)-1].Content
 	if !strings.Contains(last, "returned no response") || !strings.Contains(last, "proxy") || !strings.Contains(last, "stop_reason=null") {
 		t.Fatalf("message %q", last)
 	}
 	// A real error after a reply keeps Claude Code's own words.
-	if got := claudeErrorMessage("rate limited", true, true); got != "rate limited" {
+	if got := appmodel.ClaudeErrorMessage("rate limited", true, true); got != "rate limited" {
 		t.Fatalf("rewrote %q", got)
 	}
-	if got := claudeErrorMessage("x", false, false); strings.Contains(got, "custom launch command") {
+	if got := appmodel.ClaudeErrorMessage("x", false, false); strings.Contains(got, "custom launch command") {
 		t.Fatalf("custom hint without a custom command: %q", got)
 	}
 }
@@ -46,29 +47,29 @@ func TestClaudeStoppedResultDoesNotReportFailure(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Setenv("HOME", t.TempDir())
 			c := testController()
-			c.cwd = t.TempDir()
-			c.claudeCommand = "claude --settings ~/proxy.json"
-			messages := []Message{{Role: "user", Content: "继续"}}
+			c.Cwd = t.TempDir()
+			c.ClaudeCommand = "claude --settings ~/proxy.json"
+			messages := []appmodel.Message{{Role: "user", Content: "继续"}}
 			if tc.tool {
-				messages = append(messages, Message{Role: "tool", Kind: "claudeTool", Content: "Bash", Status: "inProgress"})
+				messages = append(messages, appmodel.Message{Role: "tool", Kind: "claudeTool", Content: "Bash", Status: "inProgress"})
 			}
-			c.setThreads([]Thread{{ID: 1, Agent: agentClaude, Busy: true, Messages: messages}})
-			old := c.threadWithID(1)
-			c.stopThread(1)
+			c.SetThreads([]appmodel.Thread{{ID: 1, Agent: appmodel.AgentClaude, Busy: true, Messages: messages}})
+			old := c.ThreadWithID(1)
+			c.StopThread(1)
 			var f claude.Frame
 			if err := json.Unmarshal([]byte(tc.frame), &f); err != nil {
 				t.Fatal(err)
 			}
-			c.handleClaude(1, f)
-			got := c.threadWithID(1)
+			c.HandleClaude(1, f)
+			got := c.ThreadWithID(1)
 			if got.Status != "Stopping…" || len(got.Messages) != len(messages) {
 				t.Fatalf("stop result reported as output or failure: %+v", got)
 			}
 			if tc.tool && got.Messages[1].Status != "inProgress" {
 				t.Fatalf("stop result changed tool to %q", got.Messages[1].Status)
 			}
-			c.finishClaude(1, c.cwd, errors.New("signal: killed"))
-			got = c.threadWithID(1)
+			c.FinishClaude(1, c.Cwd, errors.New("signal: killed"))
+			got = c.ThreadWithID(1)
 			if got.Busy || got.Status != "Stopped" || got.CompletedAtMs == 0 || len(got.Messages) != len(messages) {
 				t.Fatalf("stop did not finish cleanly: %+v", got)
 			}
@@ -85,35 +86,35 @@ func TestClaudeStoppedResultDoesNotReportFailure(t *testing.T) {
 func TestClaudeResultSurvivesProcessExit(t *testing.T) {
 	for _, tc := range []struct {
 		name, frame, wantRole, wantText string
-		messages                        []Message
+		messages                        []appmodel.Message
 		stopped                         bool
 	}{
 		{name: "API failure", frame: `{"type":"result","is_error":true,"errors":["upstream unavailable"]}`, wantRole: "error", wantText: "upstream unavailable"},
 		{name: "empty success", frame: `{"type":"result","subtype":"success","is_error":false,"result":""}`, wantRole: "error", wantText: "returned no response"},
 		{name: "final text only", frame: `{"type":"result","result":"Hello"}`, wantRole: "assistant", wantText: "Hello"},
-		{name: "streamed text", frame: `{"type":"result","result":"Hello"}`, messages: []Message{{Role: "assistant", Content: "Hello"}}, wantRole: "assistant", wantText: "Hello"},
-		{name: "tool output", frame: `{"type":"result"}`, messages: []Message{{Role: "tool", Content: "done"}}, wantRole: "tool", wantText: "done"},
+		{name: "streamed text", frame: `{"type":"result","result":"Hello"}`, messages: []appmodel.Message{{Role: "assistant", Content: "Hello"}}, wantRole: "assistant", wantText: "Hello"},
+		{name: "tool output", frame: `{"type":"result"}`, messages: []appmodel.Message{{Role: "tool", Content: "done"}}, wantRole: "tool", wantText: "done"},
 		{name: "scheduled idle", frame: `{"type":"result"}`, wantRole: "user", wantText: "继续"},
 		{name: "stopped", frame: `{"type":"result"}`, stopped: true, wantRole: "user", wantText: "继续"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Setenv("HOME", t.TempDir())
 			c := testController()
-			c.cwd = t.TempDir()
-			c.claudeCommand = "claude --settings ~/proxy.json"
-			messages := []Message{{Role: "error", Content: "old failure"}, {Role: "user", Content: "继续"}}
+			c.Cwd = t.TempDir()
+			c.ClaudeCommand = "claude --settings ~/proxy.json"
+			messages := []appmodel.Message{{Role: "error", Content: "old failure"}, {Role: "user", Content: "继续"}}
 			messages = append(messages, tc.messages...)
-			c.setThreads([]Thread{{ID: 1, Agent: agentClaude, Busy: true, StopRequested: tc.stopped, Messages: messages}})
+			c.SetThreads([]appmodel.Thread{{ID: 1, Agent: appmodel.AgentClaude, Busy: true, StopRequested: tc.stopped, Messages: messages}})
 			var f claude.Frame
 			if err := json.Unmarshal([]byte(tc.frame), &f); err != nil {
 				t.Fatal(err)
 			}
 			f.KeepingAlive = tc.name == "scheduled idle"
-			c.handleClaude(1, f)
+			c.HandleClaude(1, f)
 			if !f.KeepingAlive {
-				c.finishClaude(1, c.cwd, nil)
+				c.FinishClaude(1, c.Cwd, nil)
 			}
-			got := c.threads()[0]
+			got := c.Threads()[0]
 			last := got.Messages[len(got.Messages)-1]
 			if last.Role != tc.wantRole || !strings.Contains(last.Content, tc.wantText) {
 				t.Fatalf("last message = %+v", last)
@@ -138,13 +139,13 @@ func TestClaudeResultSurvivesProcessExit(t *testing.T) {
 
 func TestClaudeErrorVisibleAfterProcessExit(t *testing.T) {
 	app, tt := testApp(t)
-	c := app.c
-	c.setThreads([]Thread{{ID: 1, Agent: agentClaude, Busy: true, HistoryLoaded: true,
-		Messages: []Message{{ID: c.nextID(), Role: "user", Content: "继续"}}}})
-	c.setActive(1)
-	old := c.current()
-	c.handleClaude(1, claude.Frame{Type: "result", IsError: true, Errors: []string{"upstream unavailable"}})
-	c.finishClaude(1, c.cwd, nil)
+	c := app.C.(*controller.Controller)
+	c.SetThreads([]appmodel.Thread{{ID: 1, Agent: appmodel.AgentClaude, Busy: true, HistoryLoaded: true,
+		Messages: []appmodel.Message{{ID: c.NextID(), Role: "user", Content: "继续"}}}})
+	c.SetActive(1)
+	old := c.Current()
+	c.HandleClaude(1, claude.Frame{Type: "result", IsError: true, Errors: []string{"upstream unavailable"}})
+	c.FinishClaude(1, c.Cwd, nil)
 	tt.Frame()
 	texts := strings.Join(tt.Texts(), "\n")
 	if !strings.Contains(texts, "upstream unavailable") {
@@ -153,42 +154,42 @@ func TestClaudeErrorVisibleAfterProcessExit(t *testing.T) {
 	if _, ok := tt.Find("Retry response"); !ok {
 		t.Fatalf("error has no retry action: %q", texts)
 	}
-	if notice, ok := notification.Completion(old, c.current()); !ok || notice.Title != "Miya · Failed" {
+	if notice, ok := notification.Completion(old, c.Current()); !ok || notice.Title != "Miya · Failed" {
 		t.Fatalf("error reported as success: %+v, %v", notice, ok)
 	}
 }
 
 func TestStalledHint(t *testing.T) {
 	now := time.Now()
-	base := Thread{Agent: "claude-code", Busy: true, LastOutputAtMs: now.Add(-90 * time.Second).UnixMilli()}
-	if h := stalledHint(base, false, now); !strings.Contains(h, "1m 30s") {
+	base := appmodel.Thread{Agent: "claude-code", Busy: true, LastOutputAtMs: now.Add(-90 * time.Second).UnixMilli()}
+	if h := appmodel.StalledHint(base, false, now); !strings.Contains(h, "1m 30s") {
 		t.Fatalf("hint %q", h)
 	}
 	fresh := base
 	fresh.LastOutputAtMs = now.Add(-10 * time.Second).UnixMilli()
 	tool := base
-	tool.Messages = []Message{{Role: "tool", Status: "inProgress"}}
+	tool.Messages = []appmodel.Message{{Role: "tool", Status: "inProgress"}}
 	idle := base
 	idle.Busy = false
 	codex := base
 	codex.Agent = ""
-	for name, th := range map[string]Thread{"recent output": fresh, "tool running": tool, "not busy": idle, "codex": codex} {
-		if h := stalledHint(th, false, now); h != "" {
+	for name, th := range map[string]appmodel.Thread{"recent output": fresh, "tool running": tool, "not busy": idle, "codex": codex} {
+		if h := appmodel.StalledHint(th, false, now); h != "" {
 			t.Errorf("%s: %q", name, h)
 		}
 	}
-	if stalledHint(base, true, now) != "" {
+	if appmodel.StalledHint(base, true, now) != "" {
 		t.Error("hint while an approval waits")
 	}
 }
 
 func TestStalledHintShowsInConversation(t *testing.T) {
 	app, tt := testApp(t)
-	c := app.c
-	c.setThreads([]Thread{{ID: 1, Agent: "claude-code", ServerID: "s1", Title: "Slow", Busy: true, HistoryLoaded: true,
+	c := app.C.(*controller.Controller)
+	c.SetThreads([]appmodel.Thread{{ID: 1, Agent: "claude-code", ServerID: "s1", Title: "Slow", Busy: true, HistoryLoaded: true,
 		StartedAtMs: time.Now().Add(-2 * time.Minute).UnixMilli(), LastOutputAtMs: time.Now().Add(-2 * time.Minute).UnixMilli(),
-		Messages: []Message{{ID: 1, Role: "user", Content: "继续"}}}})
-	c.setActive(1)
+		Messages: []appmodel.Message{{ID: 1, Role: "user", Content: "继续"}}}})
+	c.SetActive(1)
 	tt.Frame()
 	for _, s := range tt.Texts() {
 		if strings.Contains(s, "No response for") {

@@ -1,54 +1,56 @@
 package main
 
 import (
-	"context"
-	"encoding/json"
-	"os"
-	"strings"
-	"testing"
-	"time"
+	context "context"
+	json "encoding/json"
+	appmodel "miya/internal/appmodel"
+	claude "miya/internal/claude"
+	controller "miya/internal/controller"
+	subagent "miya/internal/subagent"
+	widgets "miya/internal/widgets"
+	os "os"
+	strings "strings"
+	testing "testing"
+	time "time"
 
-	"miya/internal/claude"
-	"miya/internal/subagent"
-
-	"github.com/egoist/mygo/ui"
+	ui "github.com/egoist/mygo/ui"
 )
 
 func TestClaudeAutomaticAsyncAcknowledgementStaysRunning(t *testing.T) {
 	c, emit := claudeTestThread(t)
-	c.cwd = t.TempDir()
-	c.update(1, func(th *Thread) { th.Busy = true; th.StartedAtMs = 1000 })
+	c.Cwd = t.TempDir()
+	c.Update(1, func(th *appmodel.Thread) { th.Busy = true; th.StartedAtMs = 1000 })
 	emit(`{"type":"assistant","message":{"content":[{"type":"tool_use","id":"call1","name":"Agent","input":{"description":"Review diff"}}]}}`)
 	emit(`{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"call1","content":"Launched"}]},"tool_use_result":{"isAsync":true,"agentId":"agent1"}}`)
-	a := c.current().Messages[0].Agents[0]
+	a := c.Current().Messages[0].Agents[0]
 	if a.ID != "agent1" || a.Status != subagent.Running {
 		t.Fatalf("async acknowledgement marked complete: %+v", a)
 	}
-	c.handleClaude(1, claude.Frame{Type: "result", Result: "Review in background", KeepingAlive: true, WaitingForAgents: true})
-	th := c.current()
+	c.HandleClaude(1, claude.Frame{Type: "result", Result: "Review in background", KeepingAlive: true, WaitingForAgents: true})
+	th := c.Current()
 	if !th.Busy || th.CompletedAtMs != 0 {
 		t.Fatalf("pending agent ended the turn: busy=%v end=%d", th.Busy, th.CompletedAtMs)
 	}
-	c.handleClaude(1, claude.Frame{Type: "command_lifecycle", CommandState: "started"})
-	if c.current().StartedAtMs != 1000 {
+	c.HandleClaude(1, claude.Frame{Type: "command_lifecycle", CommandState: "started"})
+	if c.Current().StartedAtMs != 1000 {
 		t.Fatal("background continuation reset turn duration")
 	}
 	emit(`{"type":"system","subtype":"task_notification","task_id":"agent1","status":"completed","summary":"No issues"}`)
-	if a := c.current().Messages[0].Agents[0]; a.Status != subagent.Completed {
+	if a := c.Current().Messages[0].Agents[0]; a.Status != subagent.Completed {
 		t.Fatalf("completion lost: %+v", a)
 	}
-	c.finishClaude(1, c.cwd, nil)
-	if c.current().Busy || c.current().Messages[0].Agents[0].Status != subagent.Completed {
+	c.FinishClaude(1, c.Cwd, nil)
+	if c.Current().Busy || c.Current().Messages[0].Agents[0].Status != subagent.Completed {
 		t.Fatal("completion state changed on process exit")
 	}
 }
 
 func TestClaudePendingAgentsInterruptedOnProcessExit(t *testing.T) {
 	c, emit := claudeTestThread(t)
-	c.cwd = t.TempDir()
+	c.Cwd = t.TempDir()
 	emit(`{"type":"assistant","message":{"content":[{"type":"tool_use","id":"call1","name":"Agent","input":{"description":"Review"}}]}}`)
-	c.finishClaude(1, c.cwd, nil)
-	if a := c.current().Messages[0].Agents[0]; a.Status != subagent.Interrupted {
+	c.FinishClaude(1, c.Cwd, nil)
+	if a := c.Current().Messages[0].Agents[0]; a.Status != subagent.Interrupted {
 		t.Fatalf("exited task still running or falsely completed: %+v", a)
 	}
 }
@@ -69,7 +71,7 @@ func TestClaudeBackgroundHistoryRequiresCompletionEvidence(t *testing.T) {
 				lines = append(lines, `{"type":"user","uuid":"n1","parentUuid":"r1","isMeta":true,"message":{"content":"<task-notification><task-id>agent1</task-id><status>completed</status><summary>Review complete</summary></task-notification>"}}`)
 			}
 			path := writeClaudeSession(t, "/work", terminal, lines...)
-			messages, err := parseClaudeSession(path)
+			messages, err := appmodel.ParseClaudeSession(path)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -91,19 +93,19 @@ func TestClaudeSlashCommandDisplayAndEdit(t *testing.T) {
 	args := "不改变功能的基础上简化代码\n" + strings.Repeat("完整保留参数", 25)
 	raw := "<command-message>simplify</command-message> <command-name>/simplify</command-name> <command-args>" + args + "</command-args>"
 	want := "/simplify " + args
-	if got := claudeCommandText(raw); got != want {
+	if got := appmodel.ClaudeCommandText(raw); got != want {
 		t.Fatalf("command shortened or malformed: %q", got)
 	}
 	for _, literal := range []string{"示例：" + raw, "```xml\n" + raw + "\n```", "`" + raw + "`"} {
-		if claudeCommandText(literal) != literal {
+		if appmodel.ClaudeCommandText(literal) != literal {
 			t.Fatal("rewrote literal example")
 		}
 	}
 	app, _ := testApp(t)
-	m := Message{ID: 1, Role: "user", Content: raw}
+	m := appmodel.Message{ID: 1, Role: "user", Content: raw}
 	for _, mobile := range []bool{false, true} {
-		app.mobile = mobile
-		tt := ui.NewTester(func(c *ui.Context) { app.messageView(c, m, false) }, 390, 560)
+		app.Mobile = mobile
+		tt := ui.NewTester(func(c *ui.Context) { app.MessageView(c, m, false) }, 390, 560)
 		tt.Frame()
 		text := strings.Join(tt.Texts(), "\n")
 		if strings.Contains(text, "<command-") || !strings.Contains(text, "/simplify") || !strings.Contains(text, "不改变功能") {
@@ -111,19 +113,19 @@ func TestClaudeSlashCommandDisplayAndEdit(t *testing.T) {
 		}
 		automationSnapshot(t, tt, map[bool]string{false: "claude-command-desktop", true: "claude-command-mobile"}[mobile])
 	}
-	app.startEdit(m)
-	if app.editText != want || m.Content != raw {
+	app.StartEdit(m)
+	if app.EditText != want || m.Content != raw {
 		t.Fatal("editing loses args or display changes source")
 	}
 }
 
 func TestClaudeBackgroundActivityCountsAndFooter(t *testing.T) {
 	app, _ := testApp(t)
-	applyDesktopPalette(false)
-	t.Cleanup(func() { applyDesktopPalette(false) })
-	c := app.c
-	c.setThreads([]Thread{{ID: 1, Agent: agentClaude, ServerID: "s1", Busy: true, StartedAtMs: time.Now().Add(-10 * time.Second).UnixMilli(), HistoryLoaded: true, Messages: []Message{{ID: c.nextID(), Role: "user", Content: "<command-message>simplify</command-message><command-name>/simplify</command-name><command-args>不改变功能的基础上简化代码</command-args>"}}}})
-	c.setActive(1)
+	widgets.ApplyDesktopPalette(false)
+	t.Cleanup(func() { widgets.ApplyDesktopPalette(false) })
+	c := app.C.(*controller.Controller)
+	c.SetThreads([]appmodel.Thread{{ID: 1, Agent: appmodel.AgentClaude, ServerID: "s1", Busy: true, StartedAtMs: time.Now().Add(-10 * time.Second).UnixMilli(), HistoryLoaded: true, Messages: []appmodel.Message{{ID: c.NextID(), Role: "user", Content: "<command-message>simplify</command-message><command-name>/simplify</command-name><command-args>不改变功能的基础上简化代码</command-args>"}}}})
+	c.SetActive(1)
 	for _, raw := range []string{
 		`{"type":"assistant","message":{"content":[{"type":"tool_use","id":"call1","name":"Agent","input":{"description":"Review diff for reuse"}},{"type":"tool_use","id":"call2","name":"Agent","input":{"description":"Review diff for simplification"}}]}}`,
 		`{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"call1","content":"Async agent launched successfully.\nagentId: agent1"}]}}`,
@@ -133,12 +135,12 @@ func TestClaudeBackgroundActivityCountsAndFooter(t *testing.T) {
 		if err := json.Unmarshal([]byte(raw), &f); err != nil {
 			t.Fatal(err)
 		}
-		c.handleClaude(1, f)
+		c.HandleClaude(1, f)
 	}
-	c.handleClaude(1, claude.Frame{Type: "result", KeepingAlive: true, WaitingForAgents: true, Result: "审查 agent 已在后台运行，完成后会汇总结果。"})
+	c.HandleClaude(1, claude.Frame{Type: "result", KeepingAlive: true, WaitingForAgents: true, Result: "审查 agent 已在后台运行，完成后会汇总结果。"})
 	tt := ui.NewTester(func(ctx *ui.Context) {
-		for _, g := range threadMessageGroups(c.current(), groupMessages(c.current().Messages)) {
-			app.groupView(ctx.Key(g.ID), g)
+		for _, g := range appmodel.ThreadMessageGroups(c.Current(), appmodel.GroupMessages(c.Current().Messages)) {
+			app.GroupView(ctx.Key(g.ID), g)
 		}
 	}, 744, 500)
 	tt.Frame()
@@ -148,9 +150,9 @@ func TestClaudeBackgroundActivityCountsAndFooter(t *testing.T) {
 	}
 	automationSnapshot(t, tt, "claude-background-running")
 	for _, id := range []string{"agent1", "agent2"} {
-		c.handleClaude(1, claude.Frame{Type: "system", Subtype: "task_notification", TaskID: id, Status: json.RawMessage(`"completed"`), Summary: "Review complete"})
+		c.HandleClaude(1, claude.Frame{Type: "system", Subtype: "task_notification", TaskID: id, Status: json.RawMessage(`"completed"`), Summary: "Review complete"})
 	}
-	c.finishClaude(1, c.cwd, nil)
+	c.FinishClaude(1, c.Cwd, nil)
 	tt.Frame()
 	text = strings.Join(tt.Texts(), "\n")
 	if !strings.Contains(text, "2 activities · 2 Completed") || !strings.Contains(text, "Worked for") {

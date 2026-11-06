@@ -1,19 +1,20 @@
 package main
 
 import (
-	"bytes"
-	"image"
-	"image/color"
-	"image/png"
-	"os"
-	"path/filepath"
-	"slices"
-	"testing"
+	bytes "bytes"
+	image "image"
+	color "image/color"
+	png "image/png"
+	appmodel "miya/internal/appmodel"
+	controller "miya/internal/controller"
+	model "miya/internal/model"
+	os "os"
+	filepath "path/filepath"
+	slices "slices"
+	testing "testing"
 
-	"miya/internal/model"
-
-	"github.com/egoist/mygo/transfer"
-	"github.com/egoist/mygo/ui"
+	transfer "github.com/egoist/mygo/transfer"
+	ui "github.com/egoist/mygo/ui"
 )
 
 func TestComposerPastesAttachmentsBeforeClipboardText(t *testing.T) {
@@ -42,11 +43,11 @@ func TestComposerPastesAttachmentsBeforeClipboardText(t *testing.T) {
 		for _, kind := range []string{"image", "image-with-text", "files-with-text-and-thumbnail"} {
 			t.Run(method+"/"+kind, func(t *testing.T) {
 				app, tt := testApp(t)
-				app.c.setThreads([]Thread{{ID: 1, Title: "Current: ", HistoryLoaded: true}, handoffSource()})
-				app.c.setActive(1)
-				app.c.rememberDraft(model.ReferenceText(testReference(handoffSource()), "登录修复") + " 保留这段正文")
+				app.C.(*controller.Controller).SetThreads([]appmodel.Thread{{ID: 1, Title: "Current: ", HistoryLoaded: true}, handoffSource()})
+				app.C.(*controller.Controller).SetActive(1)
+				app.C.(*controller.Controller).RememberDraft(model.ReferenceText(testReference(handoffSource()), "登录修复") + " 保留这段正文")
 				tt.Frame()
-				doc := app.complete.input.doc
+				doc := app.Complete.Input.Doc
 				doc.SetSelection(2, 4)
 				tt.Frame()
 				version := doc.Version()
@@ -74,7 +75,7 @@ func TestComposerPastesAttachmentsBeforeClipboardText(t *testing.T) {
 					}
 				}
 				tt.Frame()
-				attached := app.c.attachments()
+				attached := app.C.(*controller.Controller).Attachments()
 				if kind == "files-with-text-and-thumbnail" {
 					if !slices.Equal(attached, paths) {
 						t.Fatalf("file representations were not preferred: %v", attached)
@@ -89,8 +90,8 @@ func TestComposerPastesAttachmentsBeforeClipboardText(t *testing.T) {
 						t.Fatalf("pasted image data changed: %v", err)
 					}
 				}
-				if app.c.draft() != model.ReferenceText(testReference(handoffSource()), "登录修复")+" 保留这段正文" || doc.Version() != version {
-					t.Fatalf("attachment paste changed the prompt or its undo history: %q", app.c.draft())
+				if app.C.(*controller.Controller).Draft() != model.ReferenceText(testReference(handoffSource()), "登录修复")+" 保留这段正文" || doc.Version() != version {
+					t.Fatalf("attachment paste changed the prompt or its undo history: %q", app.C.(*controller.Controller).Draft())
 				}
 			})
 		}
@@ -99,10 +100,10 @@ func TestComposerPastesAttachmentsBeforeClipboardText(t *testing.T) {
 
 func TestComposerDoesNotDrawKeyboardFocusBorder(t *testing.T) {
 	app, tt := testApp(t)
-	app.appearance = "light"
-	app.applyAppearance()
+	app.Appearance = "light"
+	app.ApplyAppearance()
 	// A distinct color makes the default focus ring visible to this pixel check.
-	app.theme.Focus = ui.Hex("#ff00ff")
+	app.Theme.Focus = ui.Hex("#ff00ff")
 	tt.Frame()
 	tt.Key(0, ui.KeyTab)
 	tt.Key(ui.Shift, ui.KeyTab)

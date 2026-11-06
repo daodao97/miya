@@ -1,8 +1,10 @@
 package main
 
 import (
-	"path/filepath"
-	"testing"
+	appmodel "miya/internal/appmodel"
+	controller "miya/internal/controller"
+	filepath "path/filepath"
+	testing "testing"
 )
 
 func TestSidebarDeletesConversationInItsProject(t *testing.T) {
@@ -13,22 +15,22 @@ func TestSidebarDeletesConversationInItsProject(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			app, tt := testApp(t)
-			c := app.c
+			c := app.C.(*controller.Controller)
 			other := filepath.Join(t.TempDir(), "other")
-			target := Thread{ID: 1, ServerID: "target", Title: "Delete this conversation", Busy: true}
-			keep := Thread{ID: 2, ServerID: "keep", Title: "Keep this conversation", HistoryLoaded: true, Draft: "keep draft"}
-			c.projectCache = map[string][]Thread{other: nil}
-			c.setProjects([]Project{{Name: "current", Path: c.cwd}, {Name: "other", Path: other}})
+			target := appmodel.Thread{ID: 1, ServerID: "target", Title: "Delete this conversation", Busy: true}
+			keep := appmodel.Thread{ID: 2, ServerID: "keep", Title: "Keep this conversation", HistoryLoaded: true, Draft: "keep draft"}
+			c.ProjectCache = map[string][]appmodel.Thread{other: nil}
+			c.SetProjects([]appmodel.Project{{Name: "current", Path: c.Cwd}, {Name: "other", Path: other}})
 			if background {
-				c.setThreads([]Thread{keep})
-				c.projectCache[other] = []Thread{target}
-				c.selectThread(keep)
+				c.SetThreads([]appmodel.Thread{keep})
+				c.ProjectCache[other] = []appmodel.Thread{target}
+				c.SelectThread(keep)
 			} else {
-				c.setThreads([]Thread{target, keep})
-				c.setActive(target.ID)
-				c.rememberDraft("old draft")
+				c.SetThreads([]appmodel.Thread{target, keep})
+				c.SetActive(target.ID)
+				c.RememberDraft("old draft")
 			}
-			c.projectCache[c.cwd] = c.threads()
+			c.ProjectCache[c.Cwd] = c.Threads()
 			tt.Frame()
 			r, ok := tt.Find(target.Title)
 			if !ok {
@@ -42,16 +44,16 @@ func TestSidebarDeletesConversationInItsProject(t *testing.T) {
 				t.Fatal(err)
 			}
 			tt.Frame()
-			if c.threadWithID(target.ID).ID != 0 || tt.HasText(target.Title) {
+			if c.ThreadWithID(target.ID).ID != 0 || tt.HasText(target.Title) {
 				t.Fatal("deleted conversation is still listed")
 			}
-			if c.threadWithID(keep.ID).ID != keep.ID || c.active() != keep.ID {
+			if c.ThreadWithID(keep.ID).ID != keep.ID || c.Active() != keep.ID {
 				t.Fatal("deletion removed or deselected the other conversation")
 			}
-			if c.draft() != keep.Draft {
+			if c.Draft() != keep.Draft {
 				t.Fatal("deletion mixed the conversations' drafts")
 			}
-			if cached := loadThreadListCache(); len(cached[other]) != 0 || len(cached[c.cwd]) != 1 || cached[c.cwd][0].ID != keep.ID {
+			if cached := appmodel.LoadThreadListCache(); len(cached[other]) != 0 || len(cached[c.Cwd]) != 1 || cached[c.Cwd][0].ID != keep.ID {
 				t.Fatal("deletion was not saved to the correct project's cache")
 			}
 		})

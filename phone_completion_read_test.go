@@ -3,25 +3,27 @@
 package main
 
 import (
-	"testing"
-
-	"miya/internal/remote"
+	appmodel "miya/internal/appmodel"
+	controller "miya/internal/controller"
+	remote "miya/internal/remote"
+	uiruntime "miya/internal/uiruntime"
+	testing "testing"
 )
 
 func TestPhoneCompletionReadUpdatesDesktopWithoutPush(t *testing.T) {
 	t.Setenv("MIYA_DIR", t.TempDir())
 	c := serverController(t.TempDir(), "")
-	c.loadDesktopUnread()
-	thread := Thread{ID: 7, ServerID: "session", Agent: agentClaude, CompletedAtMs: 200, HistoryLoaded: true}
-	c.projectCache["/background"] = []Thread{thread}
-	key := desktopUnreadKey(thread)
-	c.desktopUnread[key] = 200
-	oldHook := currentInvalidateHook()
+	c.LoadDesktopUnread()
+	thread := appmodel.Thread{ID: 7, ServerID: "session", Agent: appmodel.AgentClaude, CompletedAtMs: 200, HistoryLoaded: true}
+	c.ProjectCache["/background"] = []appmodel.Thread{thread}
+	key := appmodel.DesktopUnreadKey(thread)
+	c.DesktopUnread[key] = 200
+	oldHook := uiruntime.CurrentInvalidateHook()
 	var updates int
-	setInvalidateHook(func() { updates++ })
-	t.Cleanup(func() { setInvalidateHook(oldHook) })
+	uiruntime.SetInvalidateHook(func() { updates++ })
+	t.Cleanup(func() { uiruntime.SetInvalidateHook(oldHook) })
 	conn, ex := serveTestPhone(t, c)
-	request := remote.Request{Op: "read", Thread: 999, ServerID: thread.ServerID, Agent: agentClaude, Project: "/background"}
+	request := remote.Request{Op: "read", Thread: 999, ServerID: thread.ServerID, Agent: appmodel.AgentClaude, Project: "/background"}
 	for _, version := range []int64{0, 100, 300, 200} {
 		request.ReadCompletedAtMs = version
 		conn.requests <- request
@@ -37,7 +39,7 @@ func TestPhoneCompletionReadUpdatesDesktopWithoutPush(t *testing.T) {
 			break
 		}
 		ex.Do(func() {
-			if got := c.desktopThreadUnread(thread); got != (version != 200) {
+			if got := c.DesktopThreadUnread(thread); got != (version != 200) {
 				t.Errorf("version %d: desktop unread = %v", version, got)
 			}
 			wantUpdates := 0
@@ -49,27 +51,27 @@ func TestPhoneCompletionReadUpdatesDesktopWithoutPush(t *testing.T) {
 			}
 		})
 	}
-	restored := &chatController{}
-	restored.loadDesktopUnread()
-	if restored.desktopThreadUnread(thread) {
+	restored := &controller.Controller{}
+	restored.LoadDesktopUnread()
+	if restored.DesktopThreadUnread(thread) {
 		t.Fatal("the phone's read did not persist across desktop restarts")
 	}
 }
 
 func TestPhoneCompletionReadUsesStableIdentity(t *testing.T) {
 	app, _ := testApp(t)
-	c := app.c
-	c.loadDesktopUnread()
-	thread := Thread{ID: 1, ServerID: "new-session", CompletedAtMs: 200}
-	c.setThreads([]Thread{thread})
-	c.desktopUnread[desktopUnreadKey(thread)] = 200
+	c := app.C.(*controller.Controller)
+	c.LoadDesktopUnread()
+	thread := appmodel.Thread{ID: 1, ServerID: "new-session", CompletedAtMs: 200}
+	c.SetThreads([]appmodel.Thread{thread})
+	c.DesktopUnread[appmodel.DesktopUnreadKey(thread)] = 200
 	for _, r := range []remote.Request{
 		{Thread: 1, ServerID: "old-session", ReadCompletedAtMs: 200},
-		{Thread: 1, ServerID: thread.ServerID, Agent: agentClaude, ReadCompletedAtMs: 200},
+		{Thread: 1, ServerID: thread.ServerID, Agent: appmodel.AgentClaude, ReadCompletedAtMs: 200},
 		{Thread: 1, ServerID: thread.ServerID, Project: "/wrong", ReadCompletedAtMs: 200},
 	} {
-		c.markPhoneCompletionRead(r)
-		if !c.desktopThreadUnread(thread) {
+		c.MarkPhoneCompletionRead(r)
+		if !c.DesktopThreadUnread(thread) {
 			t.Fatal("an acknowledgement for another conversation cleared unread")
 		}
 	}

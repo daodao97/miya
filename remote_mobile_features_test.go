@@ -3,18 +3,18 @@
 package main
 
 import (
-	"context"
-	"encoding/json"
-	"miya/internal/memory"
-	"os"
-	"path/filepath"
-	"strings"
-	"testing"
-	"time"
-
-	"miya/internal/codex"
-	"miya/internal/remote"
-	"miya/internal/thumbnail"
+	context "context"
+	json "encoding/json"
+	appmodel "miya/internal/appmodel"
+	codex "miya/internal/codex"
+	memory "miya/internal/memory"
+	remote "miya/internal/remote"
+	thumbnail "miya/internal/thumbnail"
+	os "os"
+	filepath "path/filepath"
+	strings "strings"
+	testing "testing"
+	time "time"
 )
 
 func TestPhonePreviewRequestChecksConversationAndWorksBeforeSubscribe(t *testing.T) {
@@ -22,9 +22,9 @@ func TestPhonePreviewRequestChecksConversationAndWorksBeforeSubscribe(t *testing
 	if err := os.WriteFile(path, testPNG(t), 0600); err != nil {
 		t.Fatal(err)
 	}
-	source := localImageDataURI(path)
+	source := appmodel.LocalImageDataURI(path)
 	c := serverController(t.TempDir(), "")
-	c.setThreads([]Thread{{ID: 1, ServerID: "s1", HistoryLoaded: true, Messages: []Message{{ID: 1, Role: "user", Images: []string{source}}}}})
+	c.SetThreads([]appmodel.Thread{{ID: 1, ServerID: "s1", HistoryLoaded: true, Messages: []appmodel.Message{{ID: 1, Role: "user", Images: []string{source}}}}})
 	conn, _ := serveTestPhone(t, c)
 	for _, ref := range []string{source, "file:///unmentioned/private.png"} {
 		conn.requests <- remote.Request{Op: "image", Thread: 1, ServerID: "s1", ImageSource: ref}
@@ -55,29 +55,29 @@ func TestPhonePreviewRequestChecksConversationAndWorksBeforeSubscribe(t *testing
 
 func TestPhoneQueueRetainsPerMessageModelAndCanRemove(t *testing.T) {
 	c, _ := queueController(t)
-	c.claudeModel, c.claudeEffort = "claude-opus-5-5", "high"
-	r := remote.Request{Thread: 1, ServerID: "s1", Agent: agentClaude, Text: "later", Options: &remote.SendOptions{Model: "claude-sonnet-5-5", Effort: "low", Policy: "on-request"}}
-	result := c.phoneSend(r, nil)
-	if result.err != "" || result.thread != 1 {
+	c.ClaudeModel, c.ClaudeEffort = "claude-opus-5-5", "high"
+	r := remote.Request{Thread: 1, ServerID: "s1", Agent: appmodel.AgentClaude, Text: "later", Options: &remote.SendOptions{Model: "claude-sonnet-5-5", Effort: "low", Policy: "on-request"}}
+	result := c.PhoneSend(r, nil)
+	if result.Err != "" || result.Thread != 1 {
 		t.Fatalf("busy send was refused: %+v", result)
 	}
-	th := c.threadWithID(1)
+	th := c.ThreadWithID(1)
 	if len(th.Queue) != 1 {
 		t.Fatal("phone message was not queued")
 	}
 	q := th.Queue[0]
-	if q.Model != r.Options.Model || q.Effort != "low" || !q.ExplicitSettings || c.claudeModel != "claude-opus-5-5" {
+	if q.Model != r.Options.Model || q.Effort != "low" || !q.ExplicitSettings || c.ClaudeModel != "claude-opus-5-5" {
 		t.Fatalf("settings were lost or desktop defaults changed: %+v", q)
 	}
-	if err := c.phoneQueueAction(remote.Request{Op: "dequeue", Thread: 1, ServerID: "s1", QueuedID: q.ID}); err != nil || len(c.threadWithID(1).Queue) != 0 {
+	if err := c.PhoneQueueAction(remote.Request{Op: "dequeue", Thread: 1, ServerID: "s1", QueuedID: q.ID}); err != nil || len(c.ThreadWithID(1).Queue) != 0 {
 		t.Fatal("queue item was not removed", err)
 	}
 	r.Steer = true
-	if result := c.phoneSend(r, nil); result.err != "" || len(c.threadWithID(1).Queue) != 1 {
+	if result := c.PhoneSend(r, nil); result.Err != "" || len(c.ThreadWithID(1).Queue) != 1 {
 		t.Fatal("unavailable steer should fall back to queue")
 	}
 	r.Options.Model = "unknown"
-	if result := c.phoneSend(r, nil); result.err == "" || len(c.threadWithID(1).Queue) != 1 {
+	if result := c.PhoneSend(r, nil); result.Err == "" || len(c.ThreadWithID(1).Queue) != 1 {
 		t.Fatal("invalid model changed the queue")
 	}
 }
@@ -88,19 +88,19 @@ func TestPhoneModelChoicesValidatePerModelEffort(t *testing.T) {
 	if err := json.Unmarshal([]byte(`{"model":"test-model","isDefault":true,"defaultReasoningEffort":"medium","supportedReasoningEfforts":[{"reasoningEffort":"medium"},{"reasoningEffort":"high"}]}`), &model); err != nil {
 		t.Fatal(err)
 	}
-	c.setModels([]codex.Model{model})
-	c.setModel("test-model")
-	c.setEffort("high")
+	c.SetModels([]codex.Model{model})
+	c.SetModel("test-model")
+	c.SetEffort("high")
 	r := remote.Request{Options: &remote.SendOptions{Model: "test-model", Effort: "low", Policy: "on-request"}}
-	if _, err := c.phoneSendRequest(r, nil, agentCodex); err == nil {
+	if _, err := c.PhoneSendRequest(r, nil, appmodel.AgentCodex); err == nil {
 		t.Fatal("accepted an unsupported effort")
 	}
 	r.Options.Effort = "medium"
-	if req, err := c.phoneSendRequest(r, nil, agentCodex); err != nil || req.Model != "test-model" || req.Effort != "medium" {
+	if req, err := c.PhoneSendRequest(r, nil, appmodel.AgentCodex); err != nil || req.Model != "test-model" || req.Effort != "medium" {
 		t.Fatalf("valid choice refused: %+v %v", req, err)
 	}
 	r.Options.Policy = "not-a-policy"
-	if _, err := c.phoneSendRequest(r, nil, agentCodex); err == nil {
+	if _, err := c.PhoneSendRequest(r, nil, appmodel.AgentCodex); err == nil {
 		t.Fatal("invalid policy accepted")
 	}
 }
@@ -108,7 +108,7 @@ func TestPhoneModelChoicesValidatePerModelEffort(t *testing.T) {
 func TestPhoneApprovalAcknowledgementReportsValidationFailure(t *testing.T) {
 	c := serverController(t.TempDir(), "")
 	a := codex.Approval{ID: json.RawMessage(`1`), Method: "item/tool/requestUserInput", Questions: []codex.Question{{ID: "q"}}}
-	c.setApprovals([]codex.Approval{a})
+	c.SetApprovals([]codex.Approval{a})
 	conn, _ := serveTestPhone(t, c)
 	conn.requests <- remote.Request{Op: "respond", Approval: a.ID, Result: json.RawMessage(`{"answers":{"wrong":{"answers":["x"]}}}`)}
 	for {
@@ -118,8 +118,8 @@ func TestPhoneApprovalAcknowledgementReportsValidationFailure(t *testing.T) {
 				if f.Error == "" {
 					t.Fatal("missing validation error")
 				}
-				var reply phoneApprovalReply
-				if json.Unmarshal(f.Data, &reply) != nil || !sameJSON(reply.ID, a.ID) {
+				var reply appmodel.PhoneApprovalReply
+				if json.Unmarshal(f.Data, &reply) != nil || !appmodel.SameJSON(reply.ID, a.ID) {
 					t.Fatal("ack identified the wrong request")
 				}
 				return
@@ -147,21 +147,21 @@ func TestPhonePreviewBinaryPathKeepsAuthorization(t *testing.T) {
 	if err := os.WriteFile(path, testPNG(t), 0600); err != nil {
 		t.Fatal(err)
 	}
-	source := localImageDataURI(path)
+	source := appmodel.LocalImageDataURI(path)
 	c := serverController(t.TempDir(), "")
-	c.run = func(f func()) { f() }
-	c.setThreads([]Thread{{ID: 1, ServerID: "s1", HistoryLoaded: true, Messages: []Message{{ID: 1, Images: []string{source}}}}})
+	c.Run = func(f func()) { f() }
+	c.SetThreads([]appmodel.Thread{{ID: 1, ServerID: "s1", HistoryLoaded: true, Messages: []appmodel.Message{{ID: 1, Images: []string{source}}}}})
 	conn := &binaryPreviewConnection{}
 	var frames []remote.Frame
 	send := func(f remote.Frame) bool { frames = append(frames, f); return true }
-	if !c.sendPhonePreview(context.Background(), conn, remote.Request{Thread: 1, ServerID: "s1", ImageSource: source}, false, send) {
+	if !c.SendPhonePreview(context.Background(), conn, remote.Request{Thread: 1, ServerID: "s1", ImageSource: source}, false, send) {
 		t.Fatal("preview failed")
 	}
 	if conn.source != source || len(conn.image) == 0 || len(frames) != 0 {
 		t.Fatal("binary preview was encoded into a control payload")
 	}
 	conn.source, conn.image = "", nil
-	if !c.sendPhonePreview(context.Background(), conn, remote.Request{Thread: 1, ServerID: "s1", ImageSource: "file:///private/unmentioned.png"}, false, send) {
+	if !c.SendPhonePreview(context.Background(), conn, remote.Request{Thread: 1, ServerID: "s1", ImageSource: "file:///private/unmentioned.png"}, false, send) {
 		t.Fatal("error reply failed")
 	}
 	if conn.source != "" || len(conn.image) != 0 || len(frames) != 1 || frames[0].Error == "" {
@@ -172,29 +172,29 @@ func TestPhonePreviewBinaryPathKeepsAuthorization(t *testing.T) {
 func TestPhoneMemoryIsExplicitReadOnlyAndAdvertised(t *testing.T) {
 	c := serverController(t.TempDir(), "")
 	attachMemory(t, c)
-	scope, _ := memory.ProjectScope(c.cwd)
+	scope, _ := memory.ProjectScope(c.Cwd)
 	now := time.Now()
-	e, err := c.memories().Store.Save(scope, memory.Mutation{Kind: "fact", Content: "暂缓手机协议升级", ObservedAt: now, Sources: []memory.Source{{EvidenceKind: "manual", ObservedAt: now}}})
+	e, err := c.Memories().Store.Save(scope, memory.Mutation{Kind: "fact", Content: "暂缓手机协议升级", ObservedAt: now, Sources: []memory.Source{{EvidenceKind: "manual", ObservedAt: now}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !c.phoneSnapshot().Memory {
+	if !c.PhoneSnapshot().Memory {
 		t.Fatal("memory capability missing")
 	}
 	// Normal state carries capability/revision, never the library.
-	b, _ := json.Marshal(c.phoneSnapshot())
+	b, _ := json.Marshal(c.PhoneSnapshot())
 	if strings.Contains(string(b), e.Content) {
 		t.Fatal("library leaked into state")
 	}
 	conn, _ := serveTestPhone(t, c)
-	conn.requests <- remote.Request{Op: "memory", Project: c.cwd, MemoryScope: "project"}
+	conn.requests <- remote.Request{Op: "memory", Project: c.Cwd, MemoryScope: "project"}
 	for {
 		select {
 		case f := <-conn.frames:
 			if f.Type != "memory" {
 				continue
 			}
-			var result phoneMemoryResult
+			var result appmodel.PhoneMemoryResult
 			if f.Error != "" || json.Unmarshal(f.Data, &result) != nil || len(result.List.Entries) != 1 || result.List.Entries[0].ID != e.ID {
 				t.Fatalf("memory response: %s %s", f.Error, f.Data)
 			}

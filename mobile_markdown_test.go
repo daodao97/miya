@@ -1,21 +1,22 @@
 package main
 
 import (
-	"testing"
-	"time"
+	appmodel "miya/internal/appmodel"
+	testing "testing"
+	time "time"
 
-	"github.com/egoist/mygo/ui"
+	ui "github.com/egoist/mygo/ui"
 )
 
 func TestMobileMarkdownTableScrollKeepsConversation(t *testing.T) {
 	for _, streaming := range []bool{false, true} {
 		m := testMobileApp()
-		th := m.state.Projects[0].Threads[0]
+		th := m.State.Projects[0].Threads[0]
 		th.Busy, th.HistoryLoaded = streaming, true
-		th.Messages = []Message{{ID: 1, Role: "assistant", Content: "| First column with a long heading | Second column with a long heading | Last column |\n|---|---|---|\n| First value | Second value | Last value |\n\nTable notes."}}
-		m.openThread(th)
-		m.showThread(th)
-		tt := ui.NewTester(m.viewRoot, 390, 750)
+		th.Messages = []appmodel.Message{{ID: 1, Role: "assistant", Content: "| First column with a long heading | Second column with a long heading | Last column |\n|---|---|---|\n| First value | Second value | Last value |\n\nTable notes."}}
+		m.OpenThread(th)
+		m.ShowThread(th)
+		tt := ui.NewTester(m.ViewRoot, 390, 750)
 		tt.Frame()
 		tt.Advance(time.Second) // Finish the stream's text reveal on the test clock.
 		first, ok := tt.Find("First value")
@@ -36,7 +37,7 @@ func TestMobileMarkdownTableScrollKeepsConversation(t *testing.T) {
 		}
 		tt.Scroll(160, first.Y+first.H/2, -240, 0)
 		restored, _ := tt.Find("First value")
-		if restored.X != first.X || m.router().Path() != "/thread" || m.open != th.ID {
+		if restored.X != first.X || m.Router().Path() != "/thread" || m.Open != th.ID {
 			t.Fatal("scrolling back lost the table position or navigated away")
 		}
 	}

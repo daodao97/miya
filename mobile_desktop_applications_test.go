@@ -1,15 +1,15 @@
 package main
 
 import (
-	"context"
-	"fmt"
-	"testing"
-	"time"
+	context "context"
+	fmt "fmt"
+	desktop "miya/internal/desktop"
+	controltest "miya/internal/desktop/control/controltest"
+	mobile "miya/internal/mobile"
+	testing "testing"
+	time "time"
 
-	"miya/internal/desktop"
-	"miya/internal/desktop/control/controltest"
-
-	"github.com/egoist/mygo/ui"
+	ui "github.com/egoist/mygo/ui"
 )
 
 func TestDesktopApplicationPickerLaunchesAndShowsWindow(t *testing.T) {
@@ -22,13 +22,13 @@ func TestDesktopApplicationPickerLaunchesAndShowsWindow(t *testing.T) {
 	d.CaptureWindow = func(desktop.Window) ([]byte, error) { return jpeg, nil }
 	m := testMobileApp()
 	p := liveTestDesktopPage(t, m)
-	p.client, p.pickable, p.appsAvailable, p.phase, p.sending = controltest.Client(t, d, token), true, true, "live", false
-	m.desktopChooseApps(p)
-	wait(func() bool { return p.phase == "picker" && !p.busy })
-	if len(p.apps) != 1 || p.active || p.image != nil {
+	p.Client, p.Pickable, p.AppsAvailable, p.Phase, p.Sending = controltest.Client(t, d, token), true, true, "live", false
+	m.DesktopChooseApps(p)
+	wait(func() bool { return p.Phase == "picker" && !p.Busy })
+	if len(p.Apps) != 1 || p.Active || p.Image != nil {
 		t.Fatal("app list did not replace the live screen")
 	}
-	tt := ui.NewTester(m.desktopPageView, 390, 750)
+	tt := ui.NewTester(m.DesktopPageView, 390, 750)
 	tt.Frame()
 	tt.Frame()
 	release := d.HoldWork()
@@ -36,14 +36,14 @@ func TestDesktopApplicationPickerLaunchesAndShowsWindow(t *testing.T) {
 	if err := tt.Click("Open Notes"); err != nil {
 		t.Fatal(err)
 	}
-	wait(func() bool { return p.phase == "live" && p.active })
-	if calls.Load() != 1 || !p.windowOnly || p.window.ID != 5 {
-		t.Fatal("app did not open its window", calls.Load(), p.window)
+	wait(func() bool { return p.Phase == "live" && p.Active })
+	if calls.Load() != 1 || !p.WindowOnly || p.Window.ID != 5 {
+		t.Fatal("app did not open its window", calls.Load(), p.Window)
 	}
 	// Complete the in-flight frame before disposing the test UI dispatcher.
-	wait(func() bool { return p.image != nil })
-	p.cancel()
-	if _, err := p.client.Session(context.Background()); err != nil {
+	wait(func() bool { return p.Image != nil })
+	p.Cancel()
+	if _, err := p.Client.Session(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -65,13 +65,13 @@ func TestDesktopLaunchedWindowMatchesBundleAndIdentity(t *testing.T) {
 		{"reused id different pid", []desktop.Window{old, {ID: 2, PID: 9}}, []desktop.Window{old, fresh}, 2},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			w, ok := launchedDesktopWindow(app, tc.before, tc.after)
+			w, ok := mobile.LaunchedDesktopWindow(app, tc.before, tc.after)
 			if (tc.want != 0) != ok || w.ID != tc.want {
 				t.Fatal(w, ok)
 			}
 		})
 	}
-	if _, ok := launchedDesktopWindow(desktop.Application{}, nil, []desktop.Window{old}); ok {
+	if _, ok := mobile.LaunchedDesktopWindow(desktop.Application{}, nil, []desktop.Window{old}); ok {
 		t.Fatal("guessed app identity")
 	}
 }
@@ -81,11 +81,11 @@ func TestDesktopApplicationPickerSearchAndLayout(t *testing.T) {
 		t.Run(fmt.Sprint(width), func(t *testing.T) {
 			m := testMobileApp()
 			p := liveTestDesktopPage(t, m)
-			p.active, p.image, p.pickable, p.appsAvailable, p.pickerTab = false, nil, true, true, 1
-			p.phase = "picker"
-			m.router().Push("/desktop")
-			p.apps = []desktop.Application{{ID: "/Applications/Notes.app", Name: "Notes"}, {ID: "/Applications/Terminal.app", Name: "Terminal"}, {ID: finderApplicationForTest, Name: "Finder"}, {ID: "/Applications/Long.app", Name: "A long application name"}}
-			tt := ui.NewTester(m.viewRoot, width, 750)
+			p.Active, p.Image, p.Pickable, p.AppsAvailable, p.PickerTab = false, nil, true, true, 1
+			p.Phase = "picker"
+			m.Router().Push("/desktop")
+			p.Apps = []desktop.Application{{ID: "/Applications/Notes.app", Name: "Notes"}, {ID: "/Applications/Terminal.app", Name: "Terminal"}, {ID: finderApplicationForTest, Name: "Finder"}, {ID: "/Applications/Long.app", Name: "A long application name"}}
+			tt := ui.NewTester(m.ViewRoot, width, 750)
 			tt.Frame()
 			tt.Frame()
 			for _, s := range []string{"Windows", "Apps", "Search apps", "Notes", "Terminal", "Finder"} {
@@ -99,12 +99,12 @@ func TestDesktopApplicationPickerSearchAndLayout(t *testing.T) {
 				t.Fatal("app grid overflows", a, b)
 			}
 			saveMobileNativeSnapshot(t, tt, fmt.Sprintf("desktop-apps-%d", int(width)))
-			p.appSearch = "terminal"
+			p.AppSearch = "terminal"
 			tt.Frame()
 			if !tt.HasText("Terminal") || tt.HasText("Notes") {
 				t.Fatal("search did not filter apps")
 			}
-			p.appSearch = "no match"
+			p.AppSearch = "no match"
 			tt.Frame()
 			if !tt.HasText("No apps found.") {
 				t.Fatal("missing empty state")
@@ -118,19 +118,19 @@ const finderApplicationForTest = "/System/Library/CoreServices/Finder.app"
 func TestDesktopApplicationEntryOnlyOnSupportedMenuLease(t *testing.T) {
 	m := testMobileApp()
 	p := liveTestDesktopPage(t, m)
-	p.phase, p.pickable, p.appsAvailable = "live", true, true
-	tt := ui.NewTester(m.desktopPageView, 390, 750)
+	p.Phase, p.Pickable, p.AppsAvailable = "live", true, true
+	tt := ui.NewTester(m.DesktopPageView, 390, 750)
 	tt.Frame()
 	tt.Frame()
 	if !tt.HasText("Open app") {
 		t.Fatal("missing app entry")
 	}
-	p.pickable = false
+	p.Pickable = false
 	tt.Frame()
 	if tt.HasText("Open app") {
 		t.Fatal("authorization view offered app launching")
 	}
-	p.pickable, p.appsAvailable = true, false
+	p.Pickable, p.AppsAvailable = true, false
 	tt.Frame()
 	if tt.HasText("Open app") {
 		t.Fatal("old host offered app launching")

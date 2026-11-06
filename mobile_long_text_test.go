@@ -1,11 +1,12 @@
 package main
 
 import (
-	"fmt"
-	"strings"
-	"testing"
+	fmt "fmt"
+	appmodel "miya/internal/appmodel"
+	strings "strings"
+	testing "testing"
 
-	"github.com/egoist/mygo/ui"
+	ui "github.com/egoist/mygo/ui"
 )
 
 const mobileLongPrompt = "🔴 [prod] 📍 [6b592b9c36fc] ⚠️ 计费异常：响应体解析失败，未扣费\n\n📊 查看监控: https://log.aicoding.inc/select/vmui/#/?g0.range_input=30d&g0.relative_time=last_30_days&query=trace_id%3A%3D%226af2176e-d7cb-4c46-b4e5-1e85df4465d1%22&step=1d&view=group\n@大助手|aicoding.sh(大助手|aicoding.sh) relay中的报错，看看那个渠道什么问题"
@@ -14,12 +15,12 @@ func TestMobileLongUserMessageFitsScreen(t *testing.T) {
 	for _, width := range []int{320, 390} {
 		t.Run(fmt.Sprint(width), func(t *testing.T) {
 			m := testMobileApp()
-			th := m.state.Projects[0].Threads[0]
+			th := m.State.Projects[0].Threads[0]
 			th.HistoryLoaded = true
-			th.Messages = []Message{{ID: 1, Role: "user", Content: mobileLongPrompt}}
-			m.openThread(th)
-			m.showThread(th)
-			tt := ui.NewTester(m.viewRoot, width, 844)
+			th.Messages = []appmodel.Message{{ID: 1, Role: "user", Content: mobileLongPrompt}}
+			m.OpenThread(th)
+			m.ShowThread(th)
+			tt := ui.NewTester(m.ViewRoot, width, 844)
 			tt.SetSafeArea(ui.SafeArea{Top: 59, Bottom: 34})
 			tt.Frame()
 			var labels []string
@@ -44,12 +45,12 @@ func TestMobileLongUserMessageFitsScreen(t *testing.T) {
 
 func TestMobileLongDraftPaintStaysInsideEditor(t *testing.T) {
 	m := testMobileApp()
-	th := m.state.Projects[0].Threads[0]
+	th := m.State.Projects[0].Threads[0]
 	th.HistoryLoaded = true
-	m.openThread(th)
-	m.showThread(th)
-	m.draft = strings.Repeat(mobileLongPrompt+"\n", 3)
-	tt := ui.NewTester(m.viewRoot, 390, 510) // The viewport above the keyboard.
+	m.OpenThread(th)
+	m.ShowThread(th)
+	m.Draft = strings.Repeat(mobileLongPrompt+"\n", 3)
+	tt := ui.NewTester(m.ViewRoot, 390, 510) // The viewport above the keyboard.
 	tt.SetDark(true)
 	tt.SetSafeArea(ui.SafeArea{Top: 59})
 	tt.Frame()

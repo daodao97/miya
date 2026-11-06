@@ -1,16 +1,23 @@
 package main
 
-import "testing"
+import (
+	appmodel "miya/internal/appmodel"
+	testing "testing"
+)
 
 func TestServiceInboxSchedulesOnceAndKeepsLatestState(t *testing.T) {
-	var b serviceInbox
-	st := func(status string) svcMessage { return svcMessage{State: &svcState{Status: status}} }
-	msgs := func(thread int) svcMessage { return svcMessage{Messages: &svcMessages{Thread: thread}} }
+	var b appmodel.ServiceInbox
+	st := func(status string) appmodel.SvcMessage {
+		return appmodel.SvcMessage{State: &appmodel.SvcState{Status: status}}
+	}
+	msgs := func(thread int) appmodel.SvcMessage {
+		return appmodel.SvcMessage{Messages: &appmodel.SvcMessages{Thread: thread}}
+	}
 
 	if !b.Push(st("a")) {
 		t.Fatal("first push must schedule a drain")
 	}
-	for _, m := range []svcMessage{msgs(1), st("b"), msgs(2), st("c")} {
+	for _, m := range []appmodel.SvcMessage{msgs(1), st("b"), msgs(2), st("c")} {
 		if b.Push(m) {
 			t.Fatal("pushes before a take must not schedule again")
 		}

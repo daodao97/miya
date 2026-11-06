@@ -1,42 +1,43 @@
 package main
 
 import (
-	"bytes"
-	"compress/flate"
-	"encoding/json"
-	"fmt"
-	"strings"
-	"testing"
-
-	"miya/internal/remote"
+	bytes "bytes"
+	flate "compress/flate"
+	json "encoding/json"
+	fmt "fmt"
+	appmodel "miya/internal/appmodel"
+	mobile "miya/internal/mobile"
+	remote "miya/internal/remote"
+	strings "strings"
+	testing "testing"
 )
 
-func longThread(n int) Thread {
-	t := Thread{ID: 7, ServerID: "srv-7", Title: "long", HistoryLoaded: true}
+func longThread(n int) appmodel.Thread {
+	t := appmodel.Thread{ID: 7, ServerID: "srv-7", Title: "long", HistoryLoaded: true}
 	for i := 1; i <= n; i++ {
 		role := "assistant"
 		if i%2 == 1 {
 			role = "user"
 		}
-		t.Messages = append(t.Messages, Message{ID: i, Role: role, Content: fmt.Sprintf("Message %d. ", i) + strings.Repeat("Some markdown with `code` and a list.\n- item\n", 8), Status: "completed"})
+		t.Messages = append(t.Messages, appmodel.Message{ID: i, Role: role, Content: fmt.Sprintf("Message %d. ", i) + strings.Repeat("Some markdown with `code` and a list.\n- item\n", 8), Status: "completed"})
 	}
 	return t
 }
 
 // phoneOf applies deltas as the phone does, from what it holds.
-func phoneOf(t *testing.T, m *mobileApp, d phoneThreadDelta) []Message {
+func phoneOf(t *testing.T, m *mobile.App, d appmodel.PhoneThreadDelta) []appmodel.Message {
 	t.Helper()
 	data, _ := json.Marshal(d)
-	var back phoneThreadDelta
+	var back appmodel.PhoneThreadDelta
 	if err := json.Unmarshal(data, &back); err != nil {
 		t.Fatal(err)
 	}
-	m.open = back.Thread.ID
-	m.applyThread(back)
-	return m.viewer.current().Messages
+	m.Open = back.Thread.ID
+	m.ApplyThread(back)
+	return m.Viewer.Current().Messages
 }
 
-func sameMessages(a, b []Message) bool {
+func sameMessages(a, b []appmodel.Message) bool {
 	if len(a) != len(b) {
 		return false
 	}
@@ -50,8 +51,8 @@ func sameMessages(a, b []Message) bool {
 
 func TestPhoneThreadDeltas(t *testing.T) {
 	desk := longThread(40)
-	m := newMobileApp()
-	s := newPhoneThreadSync(nil)
+	m := mobile.NewMobileApp()
+	s := appmodel.NewPhoneThreadSync(nil)
 
 	d, ok := s.Update(desk)
 	if !ok || !d.Reset || len(d.Changed) != 40 {
@@ -66,7 +67,7 @@ func TestPhoneThreadDeltas(t *testing.T) {
 
 	// Streaming: the last message grows.
 	desk.Messages[39].Content += " more"
-	desk.Messages = append(desk.Messages, Message{ID: 41, Role: "assistant", Content: "new"})
+	desk.Messages = append(desk.Messages, appmodel.Message{ID: 41, Role: "assistant", Content: "new"})
 	d, ok = s.Update(desk)
 	if !ok || d.Reset || len(d.Changed) != 2 {
 		t.Fatalf("a streamed update should send only what changed: %d changed", len(d.Changed))
@@ -76,13 +77,13 @@ func TestPhoneThreadDeltas(t *testing.T) {
 	}
 
 	// Reopening with what the phone holds sends no message.
-	m.viewer.setActive(0)
-	req := m.subscribeRequest(0)
+	m.Viewer.SetActive(0)
+	req := m.SubscribeRequest(0)
 	req.Thread = desk.ID
-	for _, msg := range m.cachedMessages(desk.ServerID) {
-		req.Have = append(req.Have, remote.Seen{ID: msg.ID, FP: messageFingerprint(msg)})
+	for _, msg := range m.CachedMessages(desk.ServerID) {
+		req.Have = append(req.Have, remote.Seen{ID: msg.ID, FP: appmodel.MessageFingerprint(msg)})
 	}
-	s = newPhoneThreadSync(req.Have)
+	s = appmodel.NewPhoneThreadSync(req.Have)
 	d, ok = s.Update(desk)
 	if !ok || d.Reset || len(d.Changed) != 0 {
 		t.Fatalf("a cached conversation should need no messages: reset %v, %d changed", d.Reset, len(d.Changed))
@@ -99,7 +100,7 @@ func TestPhoneThreadDeltas(t *testing.T) {
 	}
 	restarted.Messages[39].Content = desk.Messages[39].Content
 	restarted.Messages[40].Content = desk.Messages[40].Content
-	s = newPhoneThreadSync(req.Have)
+	s = appmodel.NewPhoneThreadSync(req.Have)
 	d, _ = s.Update(restarted)
 	if len(d.Changed) != 41 {
 		t.Errorf("new IDs should resend everything: %d", len(d.Changed))
@@ -117,18 +118,18 @@ func TestPhoneThreadDeltasKeepHistoryWhileResuming(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			desk := longThread(4)
-			m := newMobileApp()
-			s := newPhoneThreadSync(nil)
+			m := mobile.NewMobileApp()
+			s := appmodel.NewPhoneThreadSync(nil)
 			d, _ := s.Update(desk)
 			phoneOf(t, m, d)
 			if reconnect {
 				var have []remote.Seen
 				for _, msg := range desk.Messages {
-					have = append(have, remote.Seen{ID: msg.ID, FP: messageFingerprint(msg)})
+					have = append(have, remote.Seen{ID: msg.ID, FP: appmodel.MessageFingerprint(msg)})
 				}
-				s = newPhoneThreadSync(have)
+				s = appmodel.NewPhoneThreadSync(have)
 			}
-			loading := listThread(desk)
+			loading := appmodel.ListThread(desk)
 			loading.Loading, loading.Busy = true, true
 			for _, loaded := range []bool{false, true} {
 				loading.HistoryLoaded = loaded
@@ -144,7 +145,7 @@ func TestPhoneThreadDeltasKeepHistoryWhileResuming(t *testing.T) {
 			for i := range desk.Messages {
 				desk.Messages[i].ID += 100
 			}
-			desk.Messages = append(desk.Messages, Message{ID: 105, Role: "user", Content: "Follow-up"})
+			desk.Messages = append(desk.Messages, appmodel.Message{ID: 105, Role: "user", Content: "Follow-up"})
 			d, _ = s.Update(desk)
 			if got := phoneOf(t, m, d); !sameMessages(got, desk.Messages) {
 				t.Fatal("the loaded history and follow-up were not applied")
@@ -175,7 +176,7 @@ func TestPhoneTransferSize(t *testing.T) {
 	desk := longThread(300)
 	var before, after [][]byte
 	full := func() { b, _ := json.Marshal(desk); before = append(before, b) }
-	s := newPhoneThreadSync(nil)
+	s := appmodel.NewPhoneThreadSync(nil)
 	delta := func() {
 		if d, ok := s.Update(desk); ok {
 			b, _ := json.Marshal(d)
@@ -185,7 +186,7 @@ func TestPhoneTransferSize(t *testing.T) {
 	full()
 	delta()
 	openBefore, openAfter := len(before[0]), compressed(after)
-	desk.Messages = append(desk.Messages, Message{ID: 301, Role: "assistant"})
+	desk.Messages = append(desk.Messages, appmodel.Message{ID: 301, Role: "assistant"})
 	for i := 0; i < 20; i++ {
 		desk.Messages[300].Content += "streamed words "
 		full()
@@ -193,10 +194,10 @@ func TestPhoneTransferSize(t *testing.T) {
 	}
 	var have []remote.Seen
 	for _, m := range desk.Messages {
-		have = append(have, remote.Seen{ID: m.ID, FP: messageFingerprint(m)})
+		have = append(have, remote.Seen{ID: m.ID, FP: appmodel.MessageFingerprint(m)})
 	}
 	full()
-	s = newPhoneThreadSync(have)
+	s = appmodel.NewPhoneThreadSync(have)
 	delta()
 	sum := func(fs [][]byte) (n int) {
 		for _, f := range fs {

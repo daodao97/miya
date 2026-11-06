@@ -1,47 +1,50 @@
 package main
 
 import (
-	"context"
-	"encoding/json"
-	"strings"
-	"testing"
+	context "context"
+	json "encoding/json"
+	appmodel "miya/internal/appmodel"
+	codex "miya/internal/codex"
+	controller "miya/internal/controller"
+	desktopui "miya/internal/ui"
+	uiruntime "miya/internal/uiruntime"
+	strings "strings"
+	testing "testing"
 
-	"miya/internal/codex"
-
-	"github.com/egoist/mygo/ui"
+	ui "github.com/egoist/mygo/ui"
 )
 
 // testApp builds the app around a controller that has no Codex process, so
 // views run without a window, as fast as a unit test.
-func testApp(t *testing.T) (*chatApp, *ui.Tester) {
+func testApp(t *testing.T) (*desktopui.App, *ui.Tester) {
 	t.Helper()
 	t.Setenv("HOME", t.TempDir())
-	inlineDispatch.Store(true)
-	t.Cleanup(func() { inlineDispatch.Store(false) })
+	uiruntime.InlineDispatch.Store(true)
+	t.Cleanup(func() { uiruntime.InlineDispatch.Store(false) })
 	cwd := t.TempDir()
-	c := &chatController{cwd: cwd, referenceSource: testReferenceSource}
-	c.ctx, c.cancel = context.WithCancel(context.Background())
-	t.Cleanup(c.cancel)
-	c.agent, c.setAgent = createSignal("codex")
-	c.draftPermission, c.setDraftPermission = createSignal("")
-	c.projects, c.setProjects = createSignal([]Project{{Name: "demo", Path: cwd}})
-	c.threads, c.setThreads = createSignal([]Thread{})
-	c.active, c.setActive = createSignal(0)
-	c.draft, c.setDraft = createSignal("")
-	c.model, c.setModel = createSignal("gpt-test")
-	c.effort, c.setEffort = createSignal("medium")
-	c.permissionPolicy, c.setPermissionPolicy = createSignal("on-request")
-	c.locale, c.setLocale = createSignal("en")
-	c.models, c.setModels = createSignal([]codex.Model{})
-	c.attachments, c.setAttachments = createSignal([]string{})
-	c.status, c.setStatus = createSignal("Connecting to Codex…")
-	c.ready, c.setReady = createSignal(false)
-	c.approvals, c.setApprovals = createSignal([]codex.Approval{})
-	c.historyStatus, c.setHistoryStatus = createSignal("")
-	c.revision, c.setRevision = createSignal(0)
-	app := newChatAppWithController(c)
-	app.projectName = "demo"
-	return app, ui.NewTester(app.view, 1180, 820)
+	c := &controller.Controller{WindowState: appmodel.WindowState{Cwd: cwd, ReferenceSource: testReferenceSource}}
+	c.Ctx, c.Cancel = context.WithCancel(context.Background())
+	t.Cleanup(c.Cancel)
+	c.Agent, c.SetAgent = uiruntime.CreateSignal("codex")
+	c.DraftPermission, c.SetDraftPermission = uiruntime.CreateSignal("")
+	c.Projects, c.SetProjects = uiruntime.CreateSignal([]appmodel.Project{{Name: "demo", Path: cwd}})
+	c.Threads, c.SetThreads = uiruntime.CreateSignal([]appmodel.Thread{})
+	c.Active, c.SetActive = uiruntime.CreateSignal(0)
+	c.Draft, c.SetDraft = uiruntime.CreateSignal("")
+	c.Model, c.SetModel = uiruntime.CreateSignal("gpt-test")
+	c.Effort, c.SetEffort = uiruntime.CreateSignal("medium")
+	c.PermissionPolicy, c.SetPermissionPolicy = uiruntime.CreateSignal("on-request")
+	c.Locale, c.SetLocale = uiruntime.CreateSignal("en")
+	c.Models, c.SetModels = uiruntime.CreateSignal([]codex.Model{})
+	c.Attachments, c.SetAttachments = uiruntime.CreateSignal([]string{})
+	c.Status, c.SetStatus = uiruntime.CreateSignal("Connecting to Codex…")
+	c.Ready, c.SetReady = uiruntime.CreateSignal(false)
+	c.Approvals, c.SetApprovals = uiruntime.CreateSignal([]codex.Approval{})
+	c.HistoryStatus, c.SetHistoryStatus = uiruntime.CreateSignal("")
+	c.Revision, c.SetRevision = uiruntime.CreateSignal(0)
+	app := desktopui.NewChatAppWithController(c)
+	app.ProjectName = "demo"
+	return app, ui.NewTester(app.Render, 1180, 820)
 }
 
 func TestHomeShowsProjectAndSuggestions(t *testing.T) {
@@ -54,19 +57,21 @@ func TestHomeShowsProjectAndSuggestions(t *testing.T) {
 	if err := tt.Click("Find and fix a bug in my code"); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(app.c.draft(), "Find and fix a bug") {
-		t.Fatalf("suggestion did not fill the draft: %q", app.c.draft())
+	if !strings.HasPrefix(app.C.(*controller.Controller).Draft(), "Find and fix a bug") {
+		t.Fatalf("suggestion did not fill the draft: %q", app.C.(*controller.Controller).Draft())
 	}
 }
 
 func TestConversationStreamsAndOffersCopyAfterTurn(t *testing.T) {
 	app, tt := testApp(t)
-	c := app.c
-	c.setThreads([]Thread{{ID: 1, ServerID: "t1", Title: "Greeting", Loaded: true, HistoryLoaded: true, Resumed: true}})
-	c.setActive(1)
-	c.update(1, func(t *Thread) { t.Messages = []Message{{ID: 10, Role: "user", Content: "Say **hi**"}} })
-	c.handle(event("turn/started", `{"threadId":"t1","turn":{"id":"turn1"}}`))
-	c.handle(event("item/agentMessage/delta", `{"threadId":"t1","turnId":"turn1","itemId":"a","delta":"Hello "}`))
+	c := app.C.(*controller.Controller)
+	c.SetThreads([]appmodel.Thread{{ID: 1, ServerID: "t1", Title: "Greeting", Loaded: true, HistoryLoaded: true, Resumed: true}})
+	c.SetActive(1)
+	c.Update(1, func(t *appmodel.Thread) {
+		t.Messages = []appmodel.Message{{ID: 10, Role: "user", Content: "Say **hi**"}}
+	})
+	c.Handle(event("turn/started", `{"threadId":"t1","turn":{"id":"turn1"}}`))
+	c.Handle(event("item/agentMessage/delta", `{"threadId":"t1","turnId":"turn1","itemId":"a","delta":"Hello "}`))
 	tt.Frame()
 	if !tt.HasText("Greeting") || !tt.HasText("hi") {
 		t.Fatalf("conversation not shown: %q", tt.Texts())
@@ -74,8 +79,8 @@ func TestConversationStreamsAndOffersCopyAfterTurn(t *testing.T) {
 	if _, ok := tt.Find("Stop response"); !ok {
 		t.Fatal("busy conversation has no stop button")
 	}
-	c.handle(event("item/completed", `{"threadId":"t1","turnId":"turn1","item":{"id":"a","type":"agentMessage","text":"Hello world"}}`))
-	c.handle(event("turn/completed", `{"threadId":"t1","turn":{"id":"turn1","status":"completed"}}`))
+	c.Handle(event("item/completed", `{"threadId":"t1","turnId":"turn1","item":{"id":"a","type":"agentMessage","text":"Hello world"}}`))
+	c.Handle(event("turn/completed", `{"threadId":"t1","turn":{"id":"turn1","status":"completed"}}`))
 	tt.Advance(2e9)
 	tt.Frame()
 	r, ok := tt.Find("Hello world")
@@ -94,11 +99,11 @@ func TestConversationStreamsAndOffersCopyAfterTurn(t *testing.T) {
 
 func TestActivitiesCollapseIntoOneRow(t *testing.T) {
 	app, tt := testApp(t)
-	c := app.c
-	c.setThreads([]Thread{{ID: 1, ServerID: "t1", Title: "Tools", Loaded: true, HistoryLoaded: true}})
-	c.setActive(1)
-	c.update(1, func(t *Thread) {
-		t.Messages = []Message{
+	c := app.C.(*controller.Controller)
+	c.SetThreads([]appmodel.Thread{{ID: 1, ServerID: "t1", Title: "Tools", Loaded: true, HistoryLoaded: true}})
+	c.SetActive(1)
+	c.Update(1, func(t *appmodel.Thread) {
+		t.Messages = []appmodel.Message{
 			{ID: 1, Role: "user", Content: "run"},
 			{ID: 2, Role: "tool", Kind: "commandExecution", Status: "completed", Item: &codex.Item{Command: "ls -la"}, Content: "out"},
 			{ID: 3, Role: "tool", Kind: "commandExecution", Status: "failed", Item: &codex.Item{Command: "go test"}, Content: "FAIL"},
@@ -126,7 +131,7 @@ func TestActivitiesCollapseIntoOneRow(t *testing.T) {
 func TestApprovalCardResolvesRequest(t *testing.T) {
 	app, tt := testApp(t)
 	id, _ := json.Marshal("claude:1:a1")
-	app.c.setApprovals([]codex.Approval{{ID: id, Method: "claude/permission", Command: "Bash", Reason: `{"command":"pwd"}`}})
+	app.C.(*controller.Controller).SetApprovals([]codex.Approval{{ID: id, Method: "claude/permission", Command: "Bash", Reason: `{"command":"pwd"}`}})
 	tt.Frame()
 	if !tt.HasText("Claude Code requests approval") {
 		t.Fatalf("approval missing: %q", tt.Texts())
@@ -134,7 +139,7 @@ func TestApprovalCardResolvesRequest(t *testing.T) {
 	if err := tt.Click("Decline"); err != nil {
 		t.Fatal(err)
 	}
-	if len(app.c.approvals()) != 0 || tt.HasText("Claude Code requests approval") {
+	if len(app.C.(*controller.Controller).Approvals()) != 0 || tt.HasText("Claude Code requests approval") {
 		t.Fatal("declined approval still pending")
 	}
 }
@@ -142,7 +147,7 @@ func TestApprovalCardResolvesRequest(t *testing.T) {
 func TestQuestionNeedsEveryAnswer(t *testing.T) {
 	app, tt := testApp(t)
 	id, _ := json.Marshal("claude:1:q1")
-	app.c.setApprovals([]codex.Approval{{ID: id, Method: "item/tool/requestUserInput", Questions: []codex.Question{{ID: "q", Question: "Pick a color", Options: []struct {
+	app.C.(*controller.Controller).SetApprovals([]codex.Approval{{ID: id, Method: "item/tool/requestUserInput", Questions: []codex.Question{{ID: "q", Question: "Pick a color", Options: []struct {
 		Label       string `json:"label"`
 		Description string `json:"description"`
 	}{{Label: "Blue", Description: "calm"}}}}}})
@@ -150,7 +155,7 @@ func TestQuestionNeedsEveryAnswer(t *testing.T) {
 	if err := tt.Click("Submit answers"); err != nil {
 		t.Fatal(err)
 	}
-	if len(app.c.approvals()) != 1 {
+	if len(app.C.(*controller.Controller).Approvals()) != 1 {
 		t.Fatal("submitted without an answer")
 	}
 	if err := tt.Click("Blue · calm"); err != nil {
@@ -159,7 +164,7 @@ func TestQuestionNeedsEveryAnswer(t *testing.T) {
 	if err := tt.Click("Submit answers"); err != nil {
 		t.Fatal(err)
 	}
-	if len(app.c.approvals()) != 0 {
+	if len(app.C.(*controller.Controller).Approvals()) != 0 {
 		t.Fatal("answered question still pending")
 	}
 }
@@ -173,24 +178,24 @@ func TestSlashStatusShowsNotice(t *testing.T) {
 	}
 	tt.Key(0, ui.KeyEnter)
 	tt.Frame()
-	if !strings.Contains(app.notice, "Model: gpt-test") || !tt.HasText(app.notice) {
-		t.Fatalf("status notice %q not shown in %q", app.notice, tt.Texts())
+	if !strings.Contains(app.Notice, "Model: gpt-test") || !tt.HasText(app.Notice) {
+		t.Fatalf("status notice %q not shown in %q", app.Notice, tt.Texts())
 	}
 }
 
 func TestSidebarSelectsAndArchivesThreads(t *testing.T) {
 	app, tt := testApp(t)
-	c := app.c
-	c.setThreads([]Thread{{ID: 1, Title: "First thread", Busy: true}, {ID: 2, Title: "Second thread", Agent: "claude-code", HistoryLoaded: true}})
+	c := app.C.(*controller.Controller)
+	c.SetThreads([]appmodel.Thread{{ID: 1, Title: "First thread", Busy: true}, {ID: 2, Title: "Second thread", Agent: "claude-code", HistoryLoaded: true}})
 	tt.Frame()
 	if err := tt.Click("Second thread"); err != nil {
 		t.Fatal(err)
 	}
-	if c.active() != 2 || c.currentAgent() != "claude-code" {
-		t.Fatalf("thread not selected: active %d agent %s", c.active(), c.currentAgent())
+	if c.Active() != 2 || c.CurrentAgent() != "claude-code" {
+		t.Fatalf("thread not selected: active %d agent %s", c.Active(), c.CurrentAgent())
 	}
 	tt.Move(1100, 780)
-	if tt.HasText("Conversation actions") || !tt.HasText(tr("Working…")) {
+	if tt.HasText("Conversation actions") || !tt.HasText(appmodel.Tr("Working…")) {
 		t.Fatal("unhovered conversations should only show run status")
 	}
 	first, _ := tt.Find("First thread")
@@ -200,7 +205,7 @@ func TestSidebarSelectsAndArchivesThreads(t *testing.T) {
 	}
 	// The same conversation also appears under Projects. Its other row
 	// keeps running status while the activity row shows its actions.
-	if status, ok := tt.Find(tr("Working…")); ok && status.Y < first.Y+first.H && status.Y+status.H > first.Y {
+	if status, ok := tt.Find(appmodel.Tr("Working…")); ok && status.Y < first.Y+first.H && status.Y+status.H > first.Y {
 		t.Fatal("the hovered row still shows run status")
 	}
 	if title, _ := tt.Find("First thread"); title != first {
@@ -212,7 +217,7 @@ func TestSidebarSelectsAndArchivesThreads(t *testing.T) {
 	if err := tt.Click("Conversation actions"); err != nil {
 		t.Fatal(err)
 	}
-	if len(c.threads()) != 2 || c.active() != 2 {
+	if len(c.Threads()) != 2 || c.Active() != 2 {
 		t.Fatal("opening the actions menu changed the conversation")
 	}
 	if !tt.HasText("Archive conversation") || !tt.HasText("Delete conversation") {
@@ -222,7 +227,7 @@ func TestSidebarSelectsAndArchivesThreads(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if tt.HasText("First thread") || len(c.threads()) != 1 {
+	if tt.HasText("First thread") || len(c.Threads()) != 1 {
 		t.Fatalf("archived thread still listed: %q", tt.Texts())
 	}
 }
@@ -238,10 +243,10 @@ func TestSettingsGeneralAndAccount(t *testing.T) {
 	if err := tt.Click("Full access"); err != nil {
 		t.Fatal(err)
 	}
-	if app.c.permissionPolicy() != "never" {
-		t.Fatalf("default permission %q", app.c.permissionPolicy())
+	if app.C.(*controller.Controller).PermissionPolicy() != "never" {
+		t.Fatalf("default permission %q", app.C.(*controller.Controller).PermissionPolicy())
 	}
-	app.c.setLocale("zh")
+	app.C.(*controller.Controller).SetLocale("zh")
 	tt.Frame()
 	if !tt.HasText("Appearance") || !tt.HasText("Interface language") {
 		t.Fatalf("legacy locale changed the English interface: %q", tt.Texts())
@@ -256,14 +261,14 @@ func TestSettingsGeneralAndAccount(t *testing.T) {
 
 func TestAccountDetailsAndResetCard(t *testing.T) {
 	data := resetTestDisplay(t)
-	attempt, err := newAccountResetAttempt(data)
+	attempt, err := appmodel.NewAccountResetAttempt(data)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, action := range []accountResetAction{{}, {Attempt: attempt, Confirming: true}, {Attempt: attempt, Confirming: true, Busy: true}} {
+	for _, action := range []appmodel.AccountResetAction{{}, {Attempt: attempt, Confirming: true}, {Attempt: attempt, Confirming: true, Busy: true}} {
 		tt := ui.NewTester(func(c *ui.Context) {
-			accountDetails(c, data)
-			resetCreditCard(c, data, action, true, func() {}, func() {}, func() {})
+			desktopui.AccountDetails(c, data)
+			desktopui.ResetCreditCard(c, data, action, true, func() {}, func() {}, func() {})
 		}, 800, 900)
 		for _, want := range []string{"4 available", "Codex reset", "Usage"} {
 			if !tt.HasText(want) {
@@ -281,22 +286,22 @@ func TestProjectDialogValidatesFolder(t *testing.T) {
 	if err := tt.Click("Select project"); err != nil {
 		t.Fatal(err)
 	}
-	if !app.projectDialog || !tt.HasText("Project folder") {
+	if !app.ProjectDialog || !tt.HasText("Project folder") {
 		t.Fatalf("dialog not open: %q", tt.Texts())
 	}
-	app.projectPath = "/definitely/not/a/folder"
+	app.ProjectPath = "/definitely/not/a/folder"
 	tt.Frame()
 	tt.Key(0, ui.KeyEnter)
 	tt.Frame()
-	if !app.projectDialog || app.projectError == "" {
+	if !app.ProjectDialog || app.ProjectError == "" {
 		t.Fatal("missing folder accepted")
 	}
 }
 
 func TestComposerPopupChoicesAlignLeft(t *testing.T) {
 	app, tt := testApp(t)
-	app.c.setReady(true)
-	app.c.setModels([]codex.Model{{Model: "gpt-a"}, {Model: "gpt-with-a-much-longer-name"}})
+	app.C.(*controller.Controller).SetReady(true)
+	app.C.(*controller.Controller).SetModels([]codex.Model{{Model: "gpt-a"}, {Model: "gpt-with-a-much-longer-name"}})
 	tt.Frame()
 	if err := tt.Click("gpt-test"); err != nil {
 		t.Fatal(err)

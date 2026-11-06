@@ -3,13 +3,13 @@
 package main
 
 import (
-	"testing"
-	"time"
-
-	"miya/internal/claude"
-	"miya/internal/memory"
-	"miya/internal/memory/extractor"
-	"miya/internal/memory/manager"
+	appmodel "miya/internal/appmodel"
+	claude "miya/internal/claude"
+	memory "miya/internal/memory"
+	extractor "miya/internal/memory/extractor"
+	manager "miya/internal/memory/manager"
+	testing "testing"
+	time "time"
 )
 
 // An ordinary Claude turn is not kept alive: its thread Status still reads
@@ -24,20 +24,20 @@ func TestMemoryOrdinaryClaudeResultQueuesExtraction(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			c, d := queueController(t)
 			attachMemory(t, c)
-			scope, _ := memory.ProjectScope(c.cwd)
-			if err := c.memories().Store.Configure(scope, memory.Settings{AutoExtract: true}); err != nil {
+			scope, _ := memory.ProjectScope(c.Cwd)
+			if err := c.Memories().Store.Configure(scope, memory.Settings{AutoExtract: true}); err != nil {
 				t.Fatal(err)
 			}
-			c.memories().Engine = extractor.NewIdleEngine()
+			c.Memories().Engine = extractor.NewIdleEngine()
 			now := time.Now().UnixMilli()
-			c.setThreads([]Thread{{ID: 1, Agent: agentClaude, ServerID: "claude-session", Busy: true, Status: "Claude Code is running…", Messages: []Message{
+			c.SetThreads([]appmodel.Thread{{ID: 1, Agent: appmodel.AgentClaude, ServerID: "claude-session", Busy: true, Status: "Claude Code is running…", Messages: []appmodel.Message{
 				{ID: 10, Role: "user", Content: "以后手机构建都用 scripts/build-ios.sh", SentAtMs: now},
 				{ID: 11, Role: "assistant", Kind: "agentMessage", Content: "好的", SentAtMs: now},
 			}}})
-			c.memories().Turns = map[int]manager.Turn{1: {LocalID: "local", FirstMessage: 10}}
-			c.handleClaude(1, claude.Frame{Type: "result", UUID: "result-uuid", IsError: tc.isError, Result: "好的"})
-			waitCodexResume(t, c, d, func() bool { return c.memories().Calls == 0 })
-			status, err := c.memories().Store.ExtractionStatus(scope)
+			c.Memories().Turns = map[int]manager.Turn{1: {LocalID: "local", FirstMessage: 10}}
+			c.HandleClaude(1, claude.Frame{Type: "result", UUID: "result-uuid", IsError: tc.isError, Result: "好的"})
+			waitCodexResume(t, c, d, func() bool { return c.Memories().Calls == 0 })
+			status, err := c.Memories().Store.ExtractionStatus(scope)
 			if err != nil || status.Pending != tc.want {
 				t.Fatalf("pending extractions = %d, want %d (%v)", status.Pending, tc.want, err)
 			}

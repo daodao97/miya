@@ -3,13 +3,13 @@
 package main
 
 import (
-	"flag"
-	"fmt"
-	"os"
-	"testing"
+	flag "flag"
+	fmt "fmt"
+	os "os"
+	testing "testing"
 
-	"github.com/egoist/mygo"
-	"github.com/egoist/mygo/ui"
+	mygo "github.com/egoist/mygo"
+	ui "github.com/egoist/mygo/ui"
 )
 
 func TestMain(m *testing.M) {

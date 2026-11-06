@@ -1,14 +1,17 @@
 package main
 
-import "testing"
+import (
+	appmodel "miya/internal/appmodel"
+	testing "testing"
+)
 
 // A Codex user message with a turn made the phone's rewind check call a nil
 // ready signal, ending the app as a Codex conversation opened.
 func TestViewerControllerCodexRewindCheck(t *testing.T) {
 	c := newViewerController()
-	th := Thread{ID: 1, ServerID: "thread", Agent: agentCodex}
-	m := Message{ID: 1, Role: "user", TurnID: "turn"}
-	if c.canRewind(th, m) {
+	th := appmodel.Thread{ID: 1, ServerID: "thread", Agent: appmodel.AgentCodex}
+	m := appmodel.Message{ID: 1, Role: "user", TurnID: "turn"}
+	if c.CanRewind(th, m) {
 		t.Fatal("the phone's viewer should not offer a rewind")
 	}
 }

@@ -3,33 +3,35 @@
 package main
 
 import (
-	"miya/internal/memory"
-	"miya/internal/memory/extractor/extractortest"
-	"miya/internal/memory/manager"
-	"testing"
+	appmodel "miya/internal/appmodel"
+	controller "miya/internal/controller"
+	memory "miya/internal/memory"
+	extractortest "miya/internal/memory/extractor/extractortest"
+	manager "miya/internal/memory/manager"
+	testing "testing"
 )
 
 func TestMemoryCodexExtractorDoesNotRequireClaude(t *testing.T) {
 	extractortest.FakeCodex(t)
 	app, _ := testApp(t)
-	c := app.c
+	c := app.C.(*controller.Controller)
 	attachMemory(t, c)
-	c.claudeBinary = ""
-	settings := memory.Settings{AutoExtract: true, ExtractorAgent: agentCodex}
+	c.ClaudeBinary = ""
+	settings := memory.Settings{AutoExtract: true, ExtractorAgent: appmodel.AgentCodex}
 	completeMemory(t, c, "memoryConfigure", manager.Request{Settings: &settings})
 	list := completeMemory(t, c, "memoryList", manager.Request{}).(manager.List)
-	if !list.ExtractorAvailable || list.Settings.ExtractionAgent() != agentCodex || len(list.Extractors) != 2 {
+	if !list.ExtractorAvailable || list.Settings.ExtractionAgent() != appmodel.AgentCodex || len(list.Extractors) != 2 {
 		t.Fatalf("Codex selection still requires Claude: %+v", list)
 	}
 	for _, option := range list.Extractors {
-		if option.Agent == agentClaude && option.Available {
+		if option.Agent == appmodel.AgentClaude && option.Available {
 			t.Fatal("unconfigured Claude marked available")
 		}
 	}
 	other := t.TempDir()
-	c.setProjects(append(c.projects(), Project{Path: other}))
+	c.SetProjects(append(c.Projects(), appmodel.Project{Path: other}))
 	list = completeMemory(t, c, "memoryList", manager.Request{Project: other}).(manager.List)
-	if list.Settings.ExtractionAgent() != agentClaude || list.Settings.AutoExtract {
+	if list.Settings.ExtractionAgent() != appmodel.AgentClaude || list.Settings.AutoExtract {
 		t.Fatal("extractor selection leaked to another project")
 	}
 }
@@ -37,21 +39,21 @@ func TestMemoryCodexExtractorDoesNotRequireClaude(t *testing.T) {
 func TestMemoryUnavailableExtractorSwitchDoesNotReplaceWorkingAgent(t *testing.T) {
 	t.Setenv("CODEX_BINARY", "/missing/miya-codex")
 	app, _ := testApp(t)
-	c := app.c
+	c := app.C.(*controller.Controller)
 	attachMemory(t, c)
-	c.claudeBinary = "configured-claude"
-	settings := memory.Settings{AutoExtract: true, ExtractorAgent: agentClaude}
+	c.ClaudeBinary = "configured-claude"
+	settings := memory.Settings{AutoExtract: true, ExtractorAgent: appmodel.AgentClaude}
 	completeMemory(t, c, "memoryConfigure", manager.Request{Settings: &settings})
-	settings.ExtractorAgent = agentCodex
-	value, err := c.memories().Op("memoryConfigure", manager.Request{Settings: &settings})
-	if d, ok := value.(deferred); ok && err == nil {
+	settings.ExtractorAgent = appmodel.AgentCodex
+	value, err := c.Memories().Op("memoryConfigure", manager.Request{Settings: &settings})
+	if d, ok := value.(appmodel.Deferred); ok && err == nil {
 		_, err = d()
 	}
 	if err == nil {
 		t.Fatal("active extraction switched to missing Codex")
 	}
 	list := completeMemory(t, c, "memoryList", manager.Request{}).(manager.List)
-	if list.Settings.ExtractionAgent() != agentClaude || !list.Settings.AutoExtract {
+	if list.Settings.ExtractionAgent() != appmodel.AgentClaude || !list.Settings.AutoExtract {
 		t.Fatal("failed switch replaced working settings")
 	}
 	settings.AutoExtract = false

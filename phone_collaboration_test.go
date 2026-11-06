@@ -3,13 +3,14 @@
 package main
 
 import (
-	"encoding/json"
-	"sync"
-	"testing"
-	"time"
-
+	json "encoding/json"
+	appmodel "miya/internal/appmodel"
+	controller "miya/internal/controller"
 	dg "miya/internal/delegation"
-	"miya/internal/remote"
+	remote "miya/internal/remote"
+	sync "sync"
+	testing "testing"
+	time "time"
 )
 
 func TestCollaborationPhoneRequestsDoNotBlockStateStreaming(t *testing.T) {
@@ -18,14 +19,14 @@ func TestCollaborationPhoneRequestsDoNotBlockStateStreaming(t *testing.T) {
 	conn, ex := serveTestPhone(t, c)
 	var from string
 	ex.Do(func() {
-		c.collaboration = newCollaboration(c, t.TempDir())
-		c.addThread(c.cwd, Thread{ID: c.nextID(), Agent: agentCodex, ServerID: "source", HistoryLoaded: true})
-		from = c.threadRef(c.threads()[0]).URL()
+		c.Collaboration = controller.NewCollaboration(c, t.TempDir())
+		c.AddThread(c.Cwd, appmodel.Thread{ID: c.NextID(), Agent: appmodel.AgentCodex, ServerID: "source", HistoryLoaded: true})
+		from = c.ThreadRef(c.Threads()[0]).URL()
 	})
-	s := c.collaboration
+	s := c.Collaboration
 	t.Cleanup(func() { s.Stop(); <-s.Done() })
 	value, err := s.Call(func() (any, error) {
-		return s.Manager.Create(dg.StartInput{From: from, RequestID: "fixture", Agent: agentCodex, Workspace: c.cwd, Prompt: "test"})
+		return s.Manager.Create(dg.StartInput{From: from, RequestID: "fixture", Agent: appmodel.AgentCodex, Workspace: c.Cwd, Prompt: "test"})
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -38,13 +39,13 @@ func TestCollaborationPhoneRequestsDoNotBlockStateStreaming(t *testing.T) {
 	s.Post(func() { close(entered); <-gate })
 	<-entered
 	args, _ := json.Marshal(map[string]any{"request_id": "cancel", "task_id": task.ID})
-	raw, _ := json.Marshal(collaborationRequest{Operation: "cancel_task", From: from, Arguments: args})
+	raw, _ := json.Marshal(appmodel.CollaborationRequest{Operation: "cancel_task", From: from, Arguments: args})
 	conn.requests <- remote.Request{Op: "collaboration", RequestID: "correlation", Collaboration: raw}
 	deadline := time.Now().Add(time.Second)
 	for s.Pending() < 2 && time.Now().Before(deadline) {
 		time.Sleep(time.Millisecond)
 	}
-	ex.Do(func() { c.setStatus("State stream remains responsive") })
+	ex.Do(func() { c.SetStatus("State stream remains responsive") })
 	streamed := false
 	for !streamed {
 		select {
@@ -53,7 +54,7 @@ func TestCollaborationPhoneRequestsDoNotBlockStateStreaming(t *testing.T) {
 				t.Fatal("mutation ran before its durable worker was available")
 			}
 			if f.Type == "state" {
-				var state phoneState
+				var state appmodel.PhoneState
 				if json.Unmarshal(f.Data, &state) == nil && state.Status == "State stream remains responsive" {
 					if state.Collaboration == nil || state.Collaboration.Version != 1 {
 						t.Fatal("missing phone capability")
@@ -72,7 +73,7 @@ func TestCollaborationPhoneRequestsDoNotBlockStateStreaming(t *testing.T) {
 			if f.Type != "collaboration" {
 				continue
 			}
-			var response phoneCollaborationResult
+			var response appmodel.PhoneCollaborationResult
 			if json.Unmarshal(f.Data, &response) != nil || f.Error != "" || response.RequestID != "correlation" {
 				t.Fatalf("phone response: %+v", f)
 			}

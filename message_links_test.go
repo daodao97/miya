@@ -1,15 +1,18 @@
 package main
 
 import (
-	"net/url"
-	"path/filepath"
-	"slices"
-	"testing"
-	"time"
+	appmodel "miya/internal/appmodel"
+	controller "miya/internal/controller"
+	model "miya/internal/model"
+	desktopui "miya/internal/ui"
+	widgets "miya/internal/widgets"
+	url "net/url"
+	filepath "path/filepath"
+	slices "slices"
+	testing "testing"
+	time "time"
 
-	"miya/internal/model"
-
-	"github.com/egoist/mygo/ui"
+	ui "github.com/egoist/mygo/ui"
 )
 
 func TestLocalFileLink(t *testing.T) {
@@ -28,14 +31,14 @@ func TestLocalFileLink(t *testing.T) {
 		{filepath.Join(filepath.Dir(cwd), "outside.md"), "../outside.md"},
 	} {
 		t.Run(tc.link, func(t *testing.T) {
-			got, ok := localFileLink(cwd, tc.link)
+			got, ok := appmodel.LocalFileLink(cwd, tc.link)
 			if !ok || got != tc.want {
 				t.Fatalf("localFileLink(%q) = %q, %v; want %q", tc.link, got, ok, tc.want)
 			}
 		})
 	}
 	for _, link := range []string{"", "#results", "https://example.com/report.md", "mailto:test@example.com", "javascript:alert(1)", "//example.com/report.md", "file://server/report.md", "file:report.md", "docs/%00report.md", "docs/%5creport.md", "docs/%zz.md"} {
-		if rel, ok := localFileLink(cwd, link); ok {
+		if rel, ok := appmodel.LocalFileLink(cwd, link); ok {
 			t.Errorf("accepted nonlocal link %q as %q", link, rel)
 		}
 	}
@@ -53,8 +56,8 @@ func TestMessageFileLinkCopiesFullPath(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			app, tt := testApp(t)
-			app.c.setThreads([]Thread{{ID: 1, HistoryLoaded: true, Messages: []Message{{ID: 1, Role: "assistant", Content: "[report.md](" + tc.link + ")"}}}})
-			app.c.setActive(1)
+			app.C.(*controller.Controller).SetThreads([]appmodel.Thread{{ID: 1, HistoryLoaded: true, Messages: []appmodel.Message{{ID: 1, Role: "assistant", Content: "[report.md](" + tc.link + ")"}}}})
+			app.C.(*controller.Controller).SetActive(1)
 			tt.Frame()
 			r, ok := tt.Find("report.md")
 			if !ok {
@@ -71,7 +74,7 @@ func TestMessageFileLinkCopiesFullPath(t *testing.T) {
 			}
 			want := tc.file
 			if !filepath.IsAbs(want) {
-				want = filepath.Join(app.c.cwd, want)
+				want = filepath.Join(app.C.(*controller.Controller).Cwd, want)
 			}
 			if got := tt.Clipboard(); got != want {
 				t.Fatalf("copied %q, want %q", got, want)
@@ -82,13 +85,13 @@ func TestMessageFileLinkCopiesFullPath(t *testing.T) {
 
 func TestMobileMessageFileLinkCopiesDesktopPath(t *testing.T) {
 	m := testMobileApp()
-	th := m.state.Projects[1].Threads[0]
+	th := m.State.Projects[1].Threads[0]
 	th.HistoryLoaded = true
-	th.Messages = []Message{{ID: 1, Role: "assistant", Content: "[report.md](docs/report.md:42)"}}
-	m.state.Projects[1].Threads[0] = th
-	m.selected = "/a"
-	m.openThread(th)
-	tt := ui.NewTester(m.viewRoot, 390, 750)
+	th.Messages = []appmodel.Message{{ID: 1, Role: "assistant", Content: "[report.md](docs/report.md:42)"}}
+	m.State.Projects[1].Threads[0] = th
+	m.Selected = "/a"
+	m.OpenThread(th)
+	tt := ui.NewTester(m.ViewRoot, 390, 750)
 	tt.Frame()
 	r, ok := tt.Find("report.md")
 	if !ok {
@@ -108,8 +111,8 @@ func TestMessageFileLinkMenusAcrossRenderers(t *testing.T) {
 		t.Run(kind, func(t *testing.T) {
 			app, _ := testApp(t)
 			source := handoffSource()
-			app.c.setThreads([]Thread{source})
-			message := Message{Role: "assistant", Content: "[report.md](docs/report.md)"}
+			app.C.(*controller.Controller).SetThreads([]appmodel.Thread{source})
+			message := appmodel.Message{Role: "assistant", Content: "[report.md](docs/report.md)"}
 			if kind != "stream" {
 				message.Role = "user"
 				separator := "\n\n"
@@ -119,8 +122,8 @@ func TestMessageFileLinkMenusAcrossRenderers(t *testing.T) {
 				message.Content += separator + model.ReferenceText(testReference(source), source.Title)
 			}
 			tt := ui.NewTester(func(c *ui.Context) {
-				app.md.LinkMenu = messageLinkMenu(c, app.c.cwd)
-				app.messageView(c, message, kind == "stream")
+				app.Md.LinkMenu = widgets.MessageLinkMenu(c, app.C.(*controller.Controller).Cwd)
+				app.MessageView(c, message, kind == "stream")
 			}, 800, 400)
 			tt.Advance(3 * time.Second)
 			tt.Frame()
@@ -132,7 +135,7 @@ func TestMessageFileLinkMenusAcrossRenderers(t *testing.T) {
 			if err := tt.ChooseMenuItem("Copy path"); err != nil {
 				t.Fatal(err)
 			}
-			if got, want := tt.Clipboard(), filepath.Join(app.c.cwd, "docs/report.md"); got != want {
+			if got, want := tt.Clipboard(), filepath.Join(app.C.(*controller.Controller).Cwd, "docs/report.md"); got != want {
 				t.Fatalf("copied %q, want %q", got, want)
 			}
 		})
@@ -142,10 +145,10 @@ func TestMessageFileLinkMenusAcrossRenderers(t *testing.T) {
 func TestReportLinkOpensFilesPanel(t *testing.T) {
 	syncPanel(t)
 	app, tt := testApp(t)
-	app.md.OnLink = app.openMessageLink
-	app.c.setThreads([]Thread{{ID: 1, Title: "Report", HistoryLoaded: true, Messages: []Message{{ID: 1, Role: "assistant", Content: "[查看测试报告](docs/report.md)"}}}})
-	app.c.setActive(1)
-	writeFile(t, filepath.Join(app.c.cwd, "docs/report.md"), "# 测试结果\n\n35 项检查全部通过。\n")
+	app.Md.OnLink = app.OpenMessageLink
+	app.C.(*controller.Controller).SetThreads([]appmodel.Thread{{ID: 1, Title: "Report", HistoryLoaded: true, Messages: []appmodel.Message{{ID: 1, Role: "assistant", Content: "[查看测试报告](docs/report.md)"}}}})
+	app.C.(*controller.Controller).SetActive(1)
+	writeFile(t, filepath.Join(app.C.(*controller.Controller).Cwd, "docs/report.md"), "# 测试结果\n\n35 项检查全部通过。\n")
 	tt.Frame()
 	clickReport := func() {
 		t.Helper()
@@ -157,31 +160,31 @@ func TestReportLinkOpensFilesPanel(t *testing.T) {
 		tt.ClickAt(r.X+12, r.Y+r.H/2)
 	}
 	clickReport()
-	p := app.panel()
-	ed := p.editors["docs/report.md"]
-	if !p.visible || !app.panelVisible || p.active < 0 || p.surfaces[p.active].kind != surfaceFiles || p.selected != "docs/report.md" {
-		t.Fatalf("report did not open in the files panel: visible=%v selected=%q texts=%q", p.visible, p.selected, tt.Texts())
+	p := app.Panel()
+	ed := p.Editors["docs/report.md"]
+	if !p.Visible || !app.PanelVisible || p.Active < 0 || p.Surfaces[p.Active].Kind != desktopui.SurfaceFiles || p.Selected != "docs/report.md" {
+		t.Fatalf("report did not open in the files panel: visible=%v selected=%q texts=%q", p.Visible, p.Selected, tt.Texts())
 	}
-	if ed == nil || ed.state == nil || !ed.preview || !tt.HasText("测试结果") || !tt.HasText("35 项检查全部通过。") {
+	if ed == nil || ed.State == nil || !ed.Preview || !tt.HasText("测试结果") || !tt.HasText("35 项检查全部通过。") {
 		t.Fatalf("report preview missing: %q", tt.Texts())
 	}
 	// Reopening a link reuses the files tab and the editor's unsaved content.
-	ed.state.Buffer.Set("# 修改后的报告\n")
-	app.hidePanel(p)
+	ed.State.Buffer.Set("# 修改后的报告\n")
+	app.HidePanel(p)
 	tt.Frame()
 	clickReport()
-	if len(p.surfaces) != 1 || !p.visible || ed != p.editors["docs/report.md"] || !tt.HasText("修改后的报告") {
+	if len(p.Surfaces) != 1 || !p.Visible || ed != p.Editors["docs/report.md"] || !tt.HasText("修改后的报告") {
 		t.Fatal("reopening the report lost the editor or duplicated the files tab")
 	}
 }
 
 func TestMessageThreadLinkOpensConversation(t *testing.T) {
 	app, tt := testApp(t)
-	app.md.OnLink = app.openMessageLink
-	target := Thread{ID: 2, ServerID: "target", Title: "Target conversation", HistoryLoaded: true}
-	app.c.setThreads([]Thread{{ID: 1, ServerID: "source", HistoryLoaded: true, Messages: []Message{{ID: 1, Role: "assistant", Content: "[Open linked thread](" + app.c.threadRef(target).URL() + ")"}}}, target})
-	app.c.setActive(1)
-	app.collaborations.pane(app.c.threadRef(target).URL()).open = true
+	app.Md.OnLink = app.OpenMessageLink
+	target := appmodel.Thread{ID: 2, ServerID: "target", Title: "Target conversation", HistoryLoaded: true}
+	app.C.(*controller.Controller).SetThreads([]appmodel.Thread{{ID: 1, ServerID: "source", HistoryLoaded: true, Messages: []appmodel.Message{{ID: 1, Role: "assistant", Content: "[Open linked thread](" + app.C.(*controller.Controller).ThreadRef(target).URL() + ")"}}}, target})
+	app.C.(*controller.Controller).SetActive(1)
+	app.Collaborations.Pane(app.C.(*controller.Controller).ThreadRef(target).URL()).Open = true
 	tt.Frame()
 	r, ok := tt.Find("Open linked thread")
 	if !ok {
@@ -189,7 +192,7 @@ func TestMessageThreadLinkOpensConversation(t *testing.T) {
 	}
 	tt.ClickAt(r.X+12, r.Y+r.H/2)
 	tt.Frame()
-	if app.c.active() != target.ID || app.collaborations.pane(app.c.threadRef(target).URL()).open {
+	if app.C.(*controller.Controller).Active() != target.ID || app.Collaborations.Pane(app.C.(*controller.Controller).ThreadRef(target).URL()).Open {
 		t.Fatal("message link did not open target or retained task popover")
 	}
 }

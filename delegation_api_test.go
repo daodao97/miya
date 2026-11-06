@@ -3,21 +3,22 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
-	"os"
-	"path/filepath"
-	"reflect"
-	"strings"
-	"testing"
-	"time"
-	"unicode/utf8"
-
-	"miya/internal/appdir"
-	"miya/internal/codex"
+	json "encoding/json"
+	fmt "fmt"
+	appdir "miya/internal/appdir"
+	appmodel "miya/internal/appmodel"
+	codex "miya/internal/codex"
+	controller "miya/internal/controller"
 	dg "miya/internal/delegation"
-	"miya/internal/delegation/coordinator"
-	"miya/internal/subagent"
+	coordinator "miya/internal/delegation/coordinator"
+	subagent "miya/internal/subagent"
+	os "os"
+	filepath "path/filepath"
+	reflect "reflect"
+	strings "strings"
+	testing "testing"
+	time "time"
+	utf8 "unicode/utf8"
 )
 
 func collaborationUserCall(t *testing.T, f *serviceFixture, operation, from string, args map[string]any) (map[string]any, error) {
@@ -26,22 +27,24 @@ func collaborationUserCall(t *testing.T, f *serviceFixture, operation, from stri
 	if err != nil {
 		t.Fatal(err)
 	}
-	client, err := dialService(f.sock)
+	client, err := appmodel.DialService(f.sock)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer client.Close()
 	var result map[string]any
-	err = client.Call("collaboration", collaborationRequest{Operation: operation, From: from, Arguments: raw}, &result)
+	err = client.Call("collaboration", appmodel.CollaborationRequest{Operation: operation, From: from, Arguments: raw}, &result)
 	return result, err
 }
 
 func collaborationStoredFixtureTask(t *testing.T, f *serviceFixture, caller int) dg.Task {
 	t.Helper()
 	var from string
-	f.serv.Do(func() { from = f.srv.c.threadRef(f.srv.c.threadWithID(caller)).URL() })
-	value, err := f.srv.c.collaboration.Call(func() (any, error) {
-		return f.srv.c.collaboration.Manager.Create(dg.StartInput{From: from, RequestID: "fixture", Agent: agentClaude, Workspace: f.srv.c.cwd, Prompt: "fixture task"})
+	f.serv.Do(func() {
+		from = f.srv.C.ThreadRef(f.srv.C.ThreadWithID(caller)).URL()
+	})
+	value, err := f.srv.C.Collaboration.Call(func() (any, error) {
+		return f.srv.C.Collaboration.Manager.Create(dg.StartInput{From: from, RequestID: "fixture", Agent: appmodel.AgentClaude, Workspace: f.srv.C.Cwd, Prompt: "fixture task"})
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -51,7 +54,7 @@ func collaborationStoredFixtureTask(t *testing.T, f *serviceFixture, caller int)
 
 func TestCollaborationMCPOperationRetriesKeepOriginalReceipt(t *testing.T) {
 	f := newServiceFixture(t)
-	caller := collaborationCaller(t, f, agentClaude, "source")
+	caller := collaborationCaller(t, f, appmodel.AgentClaude, "source")
 	task := collaborationStoredFixtureTask(t, f, caller)
 	watch := map[string]any{"request_id": "watch", "task_id": task.ID}
 	first, err := collaborationMCPCall(t, f, caller, "watch_task", watch)
@@ -68,42 +71,42 @@ func TestCollaborationMCPOperationRetriesKeepOriginalReceipt(t *testing.T) {
 	if _, err := collaborationMCPCall(t, f, caller, "cancel_task", watch); err == nil || !strings.Contains(err.Error(), "REQUEST_CONFLICT") {
 		t.Fatal(err)
 	}
-	for _, w := range f.srv.c.collaboration.Manager.View().Watches {
+	for _, w := range f.srv.C.Collaboration.Manager.View().Watches {
 		if w.State != "cancelled" {
 			t.Fatal("old watch revived observation")
 		}
 	}
-	if task, _ := f.srv.c.collaboration.Manager.Read(task.ID); task.CancelRequested {
+	if task, _ := f.srv.C.Collaboration.Manager.Read(task.ID); task.CancelRequested {
 		t.Fatal("conflicting cancel produced a side effect")
 	}
 }
 
 func TestCollaborationStopPausesAndExplicitResumeIgnoresOldStopFlag(t *testing.T) {
 	f := newServiceFixture(t)
-	caller := collaborationCaller(t, f, agentClaude, "paused-source")
+	caller := collaborationCaller(t, f, appmodel.AgentClaude, "paused-source")
 	var from string
 	f.serv.Do(func() {
-		c := f.srv.c
-		c.update(caller, func(th *Thread) { th.Busy = true; th.LaunchModel = "original"; th.LaunchEffort = "high" })
-		from = c.threadRef(c.threadWithID(caller)).URL()
+		c := f.srv.C
+		c.Update(caller, func(th *appmodel.Thread) { th.Busy = true; th.LaunchModel = "original"; th.LaunchEffort = "high" })
+		from = c.ThreadRef(c.ThreadWithID(caller)).URL()
 	})
-	result, err := collaborationMCPCall(t, f, caller, "start_task", map[string]any{"request_id": "notification", "agent": agentClaude, "task": "Review", "notify": "on_finish"})
+	result, err := collaborationMCPCall(t, f, caller, "start_task", map[string]any{"request_id": "notification", "agent": appmodel.AgentClaude, "task": "Review", "notify": "on_finish"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	waitCollaborationTask(t, f, result["task_id"].(string))
 	f.serv.Do(func() {
-		f.srv.c.stopThread(caller)
-		f.srv.c.update(caller, func(th *Thread) { th.Busy = false; th.StopRequested = true })
+		f.srv.C.StopThread(caller)
+		f.srv.C.Update(caller, func(th *appmodel.Thread) { th.Busy = false; th.StopRequested = true })
 	})
-	if _, err := f.srv.c.collaboration.Call(func() (any, error) { f.srv.c.collaboration.Tick(); return nil, nil }); err != nil {
+	if _, err := f.srv.C.Collaboration.Call(func() (any, error) { f.srv.C.Collaboration.Tick(); return nil, nil }); err != nil {
 		t.Fatal(err)
 	}
 	list, err := collaborationUserCall(t, f, "list_tasks", from, map[string]any{})
 	if err != nil || list["paused"] != true {
 		t.Fatalf("Stop pause not visible: %v %v", list, err)
 	}
-	for _, d := range f.srv.c.collaboration.Manager.View().Deliveries {
+	for _, d := range f.srv.C.Collaboration.Manager.View().Deliveries {
 		if d.State != "pending" {
 			t.Fatal("Stop allowed a new native turn")
 		}
@@ -114,7 +117,7 @@ func TestCollaborationStopPausesAndExplicitResumeIgnoresOldStopFlag(t *testing.T
 	}
 	deadline := time.Now().Add(8 * time.Second)
 	for time.Now().Before(deadline) {
-		for _, d := range f.srv.c.collaboration.Manager.View().Deliveries {
+		for _, d := range f.srv.C.Collaboration.Manager.View().Deliveries {
 			if d.State == "delivered" {
 				return
 			}
@@ -126,7 +129,7 @@ func TestCollaborationStopPausesAndExplicitResumeIgnoresOldStopFlag(t *testing.T
 
 func TestCollaborationWriteFailureIsVisibleInQueriesAndState(t *testing.T) {
 	f := newServiceFixture(t)
-	caller := collaborationCaller(t, f, agentClaude, "storage-source")
+	caller := collaborationCaller(t, f, appmodel.AgentClaude, "storage-source")
 	task := collaborationStoredFixtureTask(t, f, caller)
 	index := filepath.Join(appdir.Dir(), "delegations", "index.json")
 	if err := os.Rename(index, index+".saved"); err != nil {
@@ -145,14 +148,14 @@ func TestCollaborationWriteFailureIsVisibleInQueriesAndState(t *testing.T) {
 		t.Fatalf("stale query: %v %v", result, err)
 	}
 	f.serv.Do(func() {
-		state := f.srv.c.snapshotState()
-		phone := f.srv.c.phoneSnapshot()
+		state := f.srv.C.SnapshotState()
+		phone := f.srv.C.PhoneSnapshot()
 		if state.Collaboration == nil || !state.Collaboration.Stale || phone.Collaboration == nil || !phone.Collaboration.Stale {
 			t.Error("storage fault missing from desktop/phone capability state")
 		}
-		mirror := newMirrorController()
-		mirror.applyState(state)
-		if !mirror.collaborationCapabilities().Stale {
+		mirror := controller.NewMirrorController()
+		mirror.ApplyState(state)
+		if !mirror.CollaborationCapabilities().Stale {
 			t.Error("mirror dropped storage health")
 		}
 	})
@@ -163,14 +166,14 @@ func TestCollaborationNativeErrorClassificationDoesNotAssumeNoSideEffect(t *test
 		code     int
 		rejected bool
 	}{{-32600, true}, {-32601, true}, {-32602, true}, {-32603, false}, {-32000, false}} {
-		if got := provenCodexRejection(&codex.RPCError{Code: tc.code, Message: "failure"}); got != tc.rejected {
+		if got := appmodel.ProvenCodexRejection(&codex.RPCError{Code: tc.code, Message: "failure"}); got != tc.rejected {
 			t.Fatalf("code %d: rejection=%v", tc.code, got)
 		}
 	}
 }
 
 func TestCollaborationCodexResultsUseNativeFinalAnswerPhase(t *testing.T) {
-	result := managedResult([]Message{
+	result := appmodel.ManagedResult([]appmodel.Message{
 		{Role: "assistant", Content: "earlier commentary", Item: &codex.Item{Phase: "commentary"}},
 		{Role: "assistant", Content: "fixed final", Item: &codex.Item{Phase: "final_answer"}},
 		{Role: "assistant", Content: "late commentary", Item: &codex.Item{Phase: "commentary"}},
@@ -179,26 +182,26 @@ func TestCollaborationCodexResultsUseNativeFinalAnswerPhase(t *testing.T) {
 	if result.Text != "fixed final" {
 		t.Fatalf("native final phase lost: %+v", result)
 	}
-	if codexFinalPhase("final") {
+	if appmodel.CodexFinalPhase("final") {
 		t.Fatal("invented phase admitted as native final")
 	}
 }
 
 func TestCollaborationSessionSettingsSurviveMetadataCache(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
-	writeThreadListCache(map[string][]Thread{"/project": {{ID: 1, Agent: agentClaude, ServerID: "session", LaunchModel: "fixed", LaunchEffort: "high", PermissionPolicy: "never"}}})
-	threads := loadThreadListCache()["/project"]
+	appmodel.WriteThreadListCache(map[string][]appmodel.Thread{"/project": {{ID: 1, Agent: appmodel.AgentClaude, ServerID: "session", LaunchModel: "fixed", LaunchEffort: "high", PermissionPolicy: "never"}}})
+	threads := appmodel.LoadThreadListCache()["/project"]
 	if len(threads) != 1 || threads[0].LaunchModel != "fixed" || threads[0].LaunchEffort != "high" || threads[0].PermissionPolicy != "never" {
 		t.Fatalf("settings lost: %+v", threads)
 	}
 }
 
 func TestCollaborationProgressIsBoundedAndStaysInItsExecution(t *testing.T) {
-	target := Thread{ExecutionID: "task-current", Messages: []Message{
+	target := appmodel.Thread{ExecutionID: "task-current", Messages: []appmodel.Message{
 		{ExecutionID: "task-current", Role: "assistant", Content: strings.Repeat("中", 4000) + " latest"},
 		{ExecutionID: "task-current", Role: "reasoning", Content: "private reasoning"},
 		{ExecutionID: "task-previous", Role: "assistant", Content: "another execution"},
-		{ExecutionID: "task-current", Role: "tool", Content: "tool output", Agents: []SubAgent{{Status: subagent.Running}}},
+		{ExecutionID: "task-current", Role: "tool", Content: "tool output", Agents: []appmodel.SubAgent{{Status: subagent.Running}}},
 	}}
 	progress, wait := coordinator.ThreadProgress(target)
 	if !utf8.ValidString(progress) || len([]rune(progress)) > 1024 || !strings.HasSuffix(progress, " latest") || strings.Contains(progress, "private") || strings.Contains(progress, "another") || wait != "sub_agent" {
@@ -208,22 +211,22 @@ func TestCollaborationProgressIsBoundedAndStaysInItsExecution(t *testing.T) {
 
 func TestCollaborationCorruptStoreDoesNotPanicStopOrLegacyTools(t *testing.T) {
 	f := newServiceFixture(t)
-	callerID := collaborationCaller(t, f, agentClaude, "source")
+	callerID := collaborationCaller(t, f, appmodel.AgentClaude, "source")
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "index.json"), []byte("broken"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	var readErr, createErr error
-	var capability *collaborationStatus
+	var capability *appmodel.CollaborationStatus
 	f.serv.Do(func() {
-		c := f.srv.c
-		c.collaboration.Stop()
-		c.collaboration = newCollaboration(c, dir)
-		caller := c.threadWithID(callerID)
-		c.stopThread(callerID)
-		_, readErr = c.legacyTaskRead(mcpRequest{TaskID: "task-unavailable"}, caller)
-		_, createErr = c.legacyDelegate(mcpRequest{Arguments: json.RawMessage(`{"task":"test"}`)}, caller)
-		capability = c.collaborationCapabilities()
+		c := f.srv.C
+		c.Collaboration.Stop()
+		c.Collaboration = controller.NewCollaboration(c, dir)
+		caller := c.ThreadWithID(callerID)
+		c.StopThread(callerID)
+		_, readErr = c.LegacyTaskRead(appmodel.McpRequest{TaskID: "task-unavailable"}, caller)
+		_, createErr = c.LegacyDelegate(appmodel.McpRequest{Arguments: json.RawMessage(`{"task":"test"}`)}, caller)
+		capability = c.CollaborationCapabilities()
 	})
 	if readErr == nil || createErr == nil || !strings.Contains(readErr.Error(), "STORAGE_UNAVAILABLE") || !strings.Contains(createErr.Error(), "STORAGE_UNAVAILABLE") || capability == nil || !capability.Stale {
 		t.Fatalf("corrupt-store fallback: %v %v %+v", readErr, createErr, capability)
@@ -235,12 +238,14 @@ func TestCollaborationCorruptStoreDoesNotPanicStopOrLegacyTools(t *testing.T) {
 
 func TestCollaborationUnboundTurnBufferIsBoundedAndRequiresRecheck(t *testing.T) {
 	f := newServiceFixture(t)
-	callerID := collaborationCaller(t, f, agentCodex, "source")
+	callerID := collaborationCaller(t, f, appmodel.AgentCodex, "source")
 	var from string
-	f.serv.Do(func() { from = f.srv.c.threadRef(f.srv.c.threadWithID(callerID)).URL() })
-	s := f.srv.c.collaboration
+	f.serv.Do(func() {
+		from = f.srv.C.ThreadRef(f.srv.C.ThreadWithID(callerID)).URL()
+	})
+	s := f.srv.C.Collaboration
 	value, err := s.Call(func() (any, error) {
-		return s.Manager.Create(dg.StartInput{From: from, RequestID: "early", Agent: agentCodex, Workspace: f.srv.c.cwd, Prompt: "test"})
+		return s.Manager.Create(dg.StartInput{From: from, RequestID: "early", Agent: appmodel.AgentCodex, Workspace: f.srv.C.Cwd, Prompt: "test"})
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -248,21 +253,25 @@ func TestCollaborationUnboundTurnBufferIsBoundedAndRequiresRecheck(t *testing.T)
 	task := value.(dg.Task)
 	var targetID int
 	f.serv.Do(func() {
-		c := f.srv.c
-		targetID = c.nextID()
-		worker := Thread{ID: targetID, Agent: agentCodex, ServerID: "worker", ExecutionID: task.ID, Busy: true, HistoryLoaded: true}
-		c.addThread(c.cwd, worker)
-		c.collaboration.Executions = map[string]*managedExecution{task.ID: {Thread: targetID}}
-		c.collaboration.Reservations = map[int]string{targetID: task.ID}
+		c := f.srv.C
+		targetID = c.NextID()
+		worker := appmodel.Thread{ID: targetID, Agent: appmodel.AgentCodex, ServerID: "worker", ExecutionID: task.ID, Busy: true, HistoryLoaded: true}
+		c.AddThread(c.Cwd, worker)
+		c.Collaboration.Executions = map[string]*controller.ManagedExecution{task.ID: {Thread: targetID}}
+		c.Collaboration.Reservations = map[int]string{targetID: task.ID}
 		for i := 0; i < 9; i++ {
-			c.managedCodexOutput(worker, "turn/completed", codex.Event{Turn: codex.Turn{ID: fmt.Sprint(i), Status: "completed"}})
+			c.ManagedCodexOutput(worker, "turn/completed", codex.Event{Turn: codex.Turn{ID: fmt.Sprint(i), Status: "completed"}})
 		}
-		c.managedCodexAccepted(task.ID, "intended-turn", "live-epoch", nil, true)
-		if run := c.collaboration.Executions[task.ID]; !run.PendingOverflow || len(run.Pending) != 0 {
+		c.ManagedCodexAccepted(task.ID, "intended-turn", "live-epoch", nil, true)
+		if run := c.Collaboration.Executions[task.ID]; !run.PendingOverflow || len(run.Pending) != 0 {
 			t.Error("unbound event buffer grew without limit")
 		}
 	})
-	t.Cleanup(func() { f.serv.Do(func() { f.srv.c.update(targetID, func(th *Thread) { th.Busy = false }) }) })
+	t.Cleanup(func() {
+		f.serv.Do(func() {
+			f.srv.C.Update(targetID, func(th *appmodel.Thread) { th.Busy = false })
+		})
+	})
 	value, err = s.Call(func() (any, error) { return s.Manager.Read(task.ID) })
 	if err != nil {
 		t.Fatal(err)

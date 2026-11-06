@@ -1,61 +1,63 @@
 package main
 
 import (
-	"encoding/json"
-	"miya/internal/model"
-	"os"
-	"strings"
-	"testing"
+	json "encoding/json"
+	appmodel "miya/internal/appmodel"
+	model "miya/internal/model"
+	uiruntime "miya/internal/uiruntime"
+	os "os"
+	strings "strings"
+	testing "testing"
 )
 
 func TestClaudeReferencePromptTitles(t *testing.T) {
-	ref := testRef(agentClaude, "alma-design")
+	ref := testRef(appmodel.AgentClaude, "alma-design")
 	mention := model.ReferenceText(ref, "本机中安装了 Alma 看看他有那些好的设计实现值得吸纳")
-	other := model.ReferenceText(testRef(agentCodex, "drawer"), "抽屉 [布局] 调整")
+	other := model.ReferenceText(testRef(appmodel.AgentCodex, "drawer"), "抽屉 [布局] 调整")
 	for _, tc := range []struct{ name, prompt, want string }{
 		{"reference only", mention, "本机中安装了 Alma 看看他有那些好的设计实现值得吸纳"},
 		{"request after reference", mention + "\n参考这个优化抽屉交互", "参考这个优化抽屉交互"},
 		{"multiple leading references", "  " + mention + "，" + other + "\n比较两种抽屉布局", "比较两种抽屉布局"},
-		{"reference labels only", mention + "\n" + other, clippedTitle("本机中安装了 Alma 看看他有那些好的设计实现值得吸纳 抽屉 [布局] 调整")},
+		{"reference labels only", mention + "\n" + other, appmodel.ClippedTitle("本机中安装了 Alma 看看他有那些好的设计实现值得吸纳 抽屉 [布局] 调整")},
 		{"inline reference", "检查 " + other + " 的动画", "检查 抽屉 [布局] 调整 的动画"},
 		{"escaped title", other, "抽屉 [布局] 调整"},
 		{"empty label", model.ReferenceText(ref, ""), "Referenced conversation"},
 		{"command arguments", "<command-name>/review</command-name><command-args>" + other + " 的布局</command-args>", "/review 抽屉 [布局] 调整 的布局"},
-		{"literal example", "`" + other + "`", clippedTitle("`" + other + "`")},
-		{"escaped example", `\` + other, clippedTitle(`\` + other)},
+		{"literal example", "`" + other + "`", appmodel.ClippedTitle("`" + other + "`")},
+		{"escaped example", `\` + other, appmodel.ClippedTitle(`\` + other)},
 		{"ordinary link", "看看 [参考](https://example.com)", "看看 [参考](https://example.com)"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := claudePromptTitle(tc.prompt); got != tc.want {
+			if got := appmodel.ClaudePromptTitle(tc.prompt); got != tc.want {
 				t.Fatalf("title=%q; want %q", got, tc.want)
 			}
 		})
 	}
 	snapshots, _ := json.Marshal([]model.ReferenceSnapshot{{Ref: ref, Title: "本机中安装了 Alma 看看他有那些好的设计实现值得吸纳", Context: "不应进入标题的上下文"}})
-	if got := claudePromptTitle(mention + model.ContextEnvelopeOpen + string(snapshots) + model.ContextEnvelopeClose); got != "本机中安装了 Alma 看看他有那些好的设计实现值得吸纳" {
+	if got := appmodel.ClaudePromptTitle(mention + model.ContextEnvelopeOpen + string(snapshots) + model.ContextEnvelopeClose); got != "本机中安装了 Alma 看看他有那些好的设计实现值得吸纳" {
 		t.Fatalf("context envelope entered the title: %q", got)
 	}
 }
 
 func TestClaudeReferenceSessionTitlePriorityAndRefresh(t *testing.T) {
 	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
-	inlineDispatch.Store(true)
-	t.Cleanup(func() { inlineDispatch.Store(false) })
+	uiruntime.InlineDispatch.Store(true)
+	t.Cleanup(func() { uiruntime.InlineDispatch.Store(false) })
 	c := testController()
-	c.cwd = t.TempDir()
-	c.active, c.setActive = createSignal(0)
-	mention := model.ReferenceText(testRef(agentClaude, "source"), strings.Repeat("很长的参考会话标题", 10))
+	c.Cwd = t.TempDir()
+	c.Active, c.SetActive = uiruntime.CreateSignal(0)
+	mention := model.ReferenceText(testRef(appmodel.AgentClaude, "source"), strings.Repeat("很长的参考会话标题", 10))
 	prompt := mention + "\n优化抽屉布局"
-	entry, _ := json.Marshal(map[string]any{"type": "user", "cwd": c.cwd, "message": map[string]string{"content": prompt}})
-	path := writeClaudeSession(t, c.cwd, "referenced", string(entry))
+	entry, _ := json.Marshal(map[string]any{"type": "user", "cwd": c.Cwd, "message": map[string]string{"content": prompt}})
+	path := writeClaudeSession(t, c.Cwd, "referenced", string(entry))
 	info, err := os.Stat(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	at := info.ModTime().UnixMilli()
-	c.setThreads([]Thread{{ID: 1, Agent: agentClaude, ServerID: "referenced", Title: clippedTitle(prompt), LastActivityAt: at}})
-	c.loadClaudeSessionsSync()
-	thread := c.threadWithID(1)
+	c.SetThreads([]appmodel.Thread{{ID: 1, Agent: appmodel.AgentClaude, ServerID: "referenced", Title: appmodel.ClippedTitle(prompt), LastActivityAt: at}})
+	c.LoadClaudeSessionsSync()
+	thread := c.ThreadWithID(1)
 	if thread.Title != "优化抽屉布局" || thread.LastActivityAt != at {
 		t.Fatalf("cached title or activity incorrect: %+v", thread)
 	}
@@ -75,7 +77,7 @@ func TestClaudeReferenceSessionTitlePriorityAndRefresh(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		session, ok := summarizeClaudeSession(path)
+		session, ok := appmodel.SummarizeClaudeSession(path)
 		if !ok || session.Title != tc.want {
 			t.Fatalf("%s title=%q; want %q", tc.kind, session.Title, tc.want)
 		}

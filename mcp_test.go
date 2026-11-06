@@ -1,18 +1,21 @@
 package main
 
 import (
-	"bufio"
-	"encoding/json"
-	"errors"
-	"fmt"
-	"strings"
-	"testing"
-	"time"
-
-	"miya/internal/codex"
-	"miya/internal/mcpconfig"
-	"miya/internal/model"
-	"miya/internal/subagent"
+	bufio "bufio"
+	json "encoding/json"
+	errors "errors"
+	fmt "fmt"
+	appmodel "miya/internal/appmodel"
+	codex "miya/internal/codex"
+	controller "miya/internal/controller"
+	conversation "miya/internal/conversation"
+	mcpconfig "miya/internal/mcpconfig"
+	model "miya/internal/model"
+	subagent "miya/internal/subagent"
+	uiruntime "miya/internal/uiruntime"
+	strings "strings"
+	testing "testing"
+	time "time"
 )
 
 // mcpExchange runs the MCP server over the given request lines and returns
@@ -20,7 +23,7 @@ import (
 func mcpExchange(t *testing.T, call func(op string, args, out any) error, lines ...string) map[string]map[string]any {
 	t.Helper()
 	var out strings.Builder
-	if err := serveMCP(strings.NewReader(strings.Join(lines, "\n")+"\n"), &out, "/ws", call, func(time.Duration) {}); err != nil {
+	if err := appmodel.ServeMCP(strings.NewReader(strings.Join(lines, "\n")+"\n"), &out, "/ws", call, func(time.Duration) {}); err != nil {
 		t.Fatal(err)
 	}
 	res := map[string]map[string]any{}
@@ -85,21 +88,21 @@ func TestMCPDelegateRetriesThenWaitsForTheReply(t *testing.T) {
 	unknown, statuses := 1, []string{subagent.Running, subagent.Running, subagent.Completed}
 	call := func(op string, args, out any) error {
 		ops = append(ops, op)
-		r := args.(mcpRequest)
+		r := args.(appmodel.McpRequest)
 		switch op {
 		case "mcpDelegate":
 			if unknown > 0 {
 				unknown--
-				return errors.New(mcpCallerUnknown)
+				return errors.New(appmodel.McpCallerUnknown)
 			}
-			if r.Task != "写测试" || r.Agent != agentCodex || !r.NoContext || r.Workspace != "/ws" || r.Tool != "delegate" {
+			if r.Task != "写测试" || r.Agent != appmodel.AgentCodex || !r.NoContext || r.Workspace != "/ws" || r.Tool != "delegate" {
 				t.Errorf("bad delegation: %+v", r)
 			}
-			assign(out, mcpDelegateResult{Thread: 7, Agent: agentCodex})
+			assign(out, appmodel.McpDelegateResult{Thread: 7, Agent: appmodel.AgentCodex})
 		case "mcpStatus":
 			status := statuses[0]
 			statuses = statuses[1:]
-			assign(out, mcpStatusResult{ID: r.Thread, Title: "测试", Agent: agentCodex, Status: status, Reply: "测试都加好了"})
+			assign(out, appmodel.McpStatusResult{ID: r.Thread, Title: "测试", Agent: appmodel.AgentCodex, Status: status, Reply: "测试都加好了"})
 		}
 		return nil
 	}
@@ -123,45 +126,45 @@ func TestMCPToolErrorsAreToolResults(t *testing.T) {
 	}
 }
 
-func mcpHost(t *testing.T) *chatController {
+func mcpHost(t *testing.T) *controller.Controller {
 	c := testController()
-	c.active, c.setActive = createSignal(0)
-	c.agent, c.setAgent = createSignal(agentCodex)
+	c.Active, c.SetActive = uiruntime.CreateSignal(0)
+	c.Agent, c.SetAgent = uiruntime.CreateSignal(appmodel.AgentCodex)
 	src := handoffSource()
 	src.ID = 1
 	src.Busy = true
-	src.Messages = append(src.Messages[:4:4], Message{ID: 9, Role: "tool", Kind: "claudeTool", Status: "inProgress", Content: "mcp__miya__delegate\n{\"task\":\"写测试\"}"})
-	c.setThreads([]Thread{src, {ID: 2, Agent: agentCodex, ServerID: "x", Title: "测试", Busy: true, HistoryLoaded: true}})
+	src.Messages = append(src.Messages[:4:4], appmodel.Message{ID: 9, Role: "tool", Kind: "claudeTool", Status: "inProgress", Content: "mcp__miya__delegate\n{\"task\":\"写测试\"}"})
+	c.SetThreads([]appmodel.Thread{src, {ID: 2, Agent: appmodel.AgentCodex, ServerID: "x", Title: "测试", Busy: true, HistoryLoaded: true}})
 	return c
 }
 
 func TestMCPDelegateHandsWorkWithTheCallersContext(t *testing.T) {
 	c := mcpHost(t)
-	if caller, ok := c.mcpCaller("delegate"); !ok || caller.ID != 1 {
+	if caller, ok := c.McpCaller("delegate"); !ok || caller.ID != 1 {
 		t.Fatalf("caller not found: %+v", caller)
 	}
-	res, err := c.mcpHandle("mcpDelegate", mcpRequest{Tool: "delegate", Task: "给登录补测试", Thread: 2})
-	if err != nil || res.(mcpDelegateResult).Thread != 2 {
+	res, err := c.McpHandle("mcpDelegate", appmodel.McpRequest{Tool: "delegate", Task: "给登录补测试", Thread: 2})
+	if err != nil || res.(appmodel.McpDelegateResult).Thread != 2 {
 		t.Fatalf("delegation failed: %v %v", res, err)
 	}
-	target := c.threadWithID(2)
+	target := c.ThreadWithID(2)
 	if len(target.Queue) != 1 || !strings.HasPrefix(target.Queue[0].Text, "给登录补测试") || !strings.Contains(target.Queue[0].Text, model.ContextEnvelopeOpen) {
 		t.Fatalf("task not sent with the caller's context: %+v", target.Queue)
 	}
-	source := c.threadWithID(1)
+	source := c.ThreadWithID(1)
 	if last := source.Messages[len(source.Messages)-1]; last.Kind != "handoff" || last.Agents[0].Name != "给登录补测试" {
 		t.Fatalf("caller does not follow the work: %+v", last)
 	}
 	// The receiving conversation cannot hand work back up.
-	c.update(2, func(th *Thread) {
-		th.Messages = append(th.Messages, Message{ID: c.nextID(), Role: "tool", Kind: "mcpToolCall", Status: "inProgress", Item: &codex.Item{Server: "miya", Tool: "delegate"}})
+	c.Update(2, func(th *appmodel.Thread) {
+		th.Messages = append(th.Messages, appmodel.Message{ID: c.NextID(), Role: "tool", Kind: "mcpToolCall", Status: "inProgress", Item: &codex.Item{Server: "miya", Tool: "delegate"}})
 	})
-	c.update(1, func(th *Thread) { th.Messages[len(th.Messages)-2].Status = "completed" })
-	if _, err := c.mcpHandle("mcpDelegate", mcpRequest{Tool: "delegate", Task: "回去", Thread: 1}); err == nil || !strings.Contains(err.Error(), "delegated this task to you") {
+	c.Update(1, func(th *appmodel.Thread) { th.Messages[len(th.Messages)-2].Status = "completed" })
+	if _, err := c.McpHandle("mcpDelegate", appmodel.McpRequest{Tool: "delegate", Task: "回去", Thread: 1}); err == nil || !strings.Contains(err.Error(), "delegated this task to you") {
 		t.Fatalf("work went back up: %v", err)
 	}
-	c.delegationParent[3], c.delegationParent[1] = 2, 3
-	if _, err := c.mcpHandle("mcpDelegate", mcpRequest{Tool: "delegate", Task: "再往下"}); err == nil || !strings.Contains(err.Error(), "limited to") {
+	c.DelegationParent[3], c.DelegationParent[1] = 2, 3
+	if _, err := c.McpHandle("mcpDelegate", appmodel.McpRequest{Tool: "delegate", Task: "再往下"}); err == nil || !strings.Contains(err.Error(), "limited to") {
 		t.Fatalf("delegation went too deep: %v", err)
 	}
 }
@@ -172,24 +175,24 @@ func TestMCPDelegateTracksOnlyTheCallerWithOrWithoutContext(t *testing.T) {
 			c := mcpHost(t)
 			other := handoffSource()
 			other.ID, other.ServerID = 3, "reference-only"
-			c.setThreads(append(c.threads(), other))
+			c.SetThreads(append(c.Threads(), other))
 			task := "给登录补测试 " + model.ReferenceText(testReference(other), other.Title)
-			_, err := c.mcpDelegate(mcpRequest{Tool: "delegate", Thread: 2, Task: task, NoContext: noContext})
+			_, err := c.McpDelegate(appmodel.McpRequest{Tool: "delegate", Thread: 2, Task: task, NoContext: noContext})
 			if err != nil {
 				t.Fatal(err)
 			}
-			if len(c.handoffs) != 1 || c.handoffs[0].From != 1 || c.handoffs[0].To != 2 {
-				t.Fatalf("delegation must track only its caller: %+v", c.handoffs)
+			if len(c.Handoffs) != 1 || c.Handoffs[0].From != 1 || c.Handoffs[0].To != 2 {
+				t.Fatalf("delegation must track only its caller: %+v", c.Handoffs)
 			}
-			if got := c.threadWithID(other.ID); len(got.Messages) != len(other.Messages) {
+			if got := c.ThreadWithID(other.ID); len(got.Messages) != len(other.Messages) {
 				t.Fatalf("a context reference became a delegating conversation: %+v", got)
 			}
-			source := c.threadWithID(1)
+			source := c.ThreadWithID(1)
 			last := source.Messages[len(source.Messages)-1]
-			if last.Kind != "handoff" || len(last.Agents) != 1 || last.Agents[0].Status != subagent.Running || last.Agents[0].Name != "给登录补测试" || activityTitle(last) != "Handed off to conversation \"测试\"" {
+			if last.Kind != "handoff" || len(last.Agents) != 1 || last.Agents[0].Status != subagent.Running || last.Agents[0].Name != "给登录补测试" || conversation.ActivityTitle(last) != "Handed off to conversation \"测试\"" {
 				t.Fatalf("explicit delegation not tracked: %+v", last)
 			}
-			_, snapshots := model.SplitReferenceContext(c.threadWithID(2).Queue[0].Text)
+			_, snapshots := model.SplitReferenceContext(c.ThreadWithID(2).Queue[0].Text)
 			wantSnapshots := 2
 			if noContext {
 				wantSnapshots = 1
@@ -197,11 +200,11 @@ func TestMCPDelegateTracksOnlyTheCallerWithOrWithoutContext(t *testing.T) {
 			if len(snapshots) != wantSnapshots {
 				t.Fatalf("wrong context snapshots: %+v", snapshots)
 			}
-			c.update(2, func(th *Thread) {
+			c.Update(2, func(th *appmodel.Thread) {
 				th.Busy, th.Queue = false, nil
-				th.Messages = append(th.Messages, Message{Role: "user", Content: task}, Message{Role: "assistant", Content: "测试已补齐\n全部通过"})
+				th.Messages = append(th.Messages, appmodel.Message{Role: "user", Content: task}, appmodel.Message{Role: "assistant", Content: "测试已补齐\n全部通过"})
 			})
-			source = c.threadWithID(1)
+			source = c.ThreadWithID(1)
 			agent := source.Messages[len(source.Messages)-1].Agents[0]
 			if agent.Status != subagent.Completed || agent.Detail != "测试已补齐" {
 				t.Fatalf("delegated result not followed: %+v", agent)
@@ -212,52 +215,52 @@ func TestMCPDelegateTracksOnlyTheCallerWithOrWithoutContext(t *testing.T) {
 
 func TestMCPDelegateNeedsAVisibleCaller(t *testing.T) {
 	c := mcpHost(t)
-	if _, err := c.mcpHandle("mcpDelegate", mcpRequest{Tool: "read_thread", Task: "x"}); err == nil || err.Error() != mcpCallerUnknown {
+	if _, err := c.McpHandle("mcpDelegate", appmodel.McpRequest{Tool: "read_thread", Task: "x"}); err == nil || err.Error() != appmodel.McpCallerUnknown {
 		t.Fatalf("unknown caller not reported: %v", err)
 	}
-	if _, err := c.mcpHandle("mcpDelegate", mcpRequest{Tool: "delegate", Task: "x", Agent: "gemini"}); err == nil || !strings.Contains(err.Error(), "not found") {
+	if _, err := c.McpHandle("mcpDelegate", appmodel.McpRequest{Tool: "delegate", Task: "x", Agent: "gemini"}); err == nil || !strings.Contains(err.Error(), "not found") {
 		t.Fatalf("unknown agent accepted: %v", err)
 	}
 }
 
 func TestMCPListReadAndStatus(t *testing.T) {
 	c := mcpHost(t)
-	list := c.mcpThreads(mcpRequest{Tool: "delegate"})
+	list := c.McpThreads(appmodel.McpRequest{Tool: "delegate"})
 	if len(list.Threads) != 1 || list.Threads[0].ID != 2 || list.Threads[0].Status != subagent.Running {
 		t.Fatalf("bad list (the caller must be left out): %+v", list)
 	}
-	read, err := c.mcpRead(mcpRequest{Thread: 1})
+	read, err := c.McpRead(appmodel.McpRequest{Thread: 1})
 	if err != nil || !read.Loaded || !strings.Contains(read.Packet, "修复登录过期的问题") {
 		t.Fatalf("bad read: %+v %v", read, err)
 	}
-	if _, err := c.mcpRead(mcpRequest{Thread: 42}); err == nil {
+	if _, err := c.McpRead(appmodel.McpRequest{Thread: 42}); err == nil {
 		t.Fatal("read of a missing conversation succeeded")
 	}
-	c.update(1, func(th *Thread) { th.Busy = false })
-	st, err := c.mcpStatus(mcpRequest{Thread: 1})
+	c.Update(1, func(th *appmodel.Thread) { th.Busy = false })
+	st, err := c.McpStatus(appmodel.McpRequest{Thread: 1})
 	if err != nil || st.Status != subagent.Completed || !strings.Contains(st.Reply, "时区") {
 		t.Fatalf("bad status: %+v %v", st, err)
 	}
 	// Codex's shared app-server may pass any workspace, such as /.
-	if _, err := c.mcpHandle("mcpThreads", mcpRequest{Workspace: "/"}); err != nil {
+	if _, err := c.McpHandle("mcpThreads", appmodel.McpRequest{Workspace: "/"}); err != nil {
 		t.Fatalf("a call with the service's workspace was refused: %v", err)
 	}
 }
 
 func TestMCPPublicThreadIdentifiersAreSessionLinks(t *testing.T) {
 	c := mcpHost(t)
-	s := newMCPServer("/ws", func(op string, args, out any) error {
-		res, err := c.mcpHandle(op, args.(mcpRequest))
+	s := appmodel.NewMCPServer("/ws", func(op string, args, out any) error {
+		res, err := c.McpHandle(op, args.(appmodel.McpRequest))
 		if err == nil {
 			assign(out, res)
 		}
 		return err
 	}, func(time.Duration) {})
 	listing, err := s.CallTool("list_threads", json.RawMessage(`{}`))
-	if err != nil || !strings.Contains(listing, testRef(agentCodex, "x").URL()) || strings.Contains(listing, "#2") {
+	if err != nil || !strings.Contains(listing, testRef(appmodel.AgentCodex, "x").URL()) || strings.Contains(listing, "#2") {
 		t.Fatalf("local number exposed: %q %v", listing, err)
 	}
-	args, _ := json.Marshal(map[string]any{"id": testReference(c.threadWithID(1)).URL()})
+	args, _ := json.Marshal(map[string]any{"id": testReference(c.ThreadWithID(1)).URL()})
 	if packet, err := s.CallTool("read_thread", args); err != nil || !strings.Contains(packet, "修复登录过期的问题") {
 		t.Fatalf("session link unreadable: %s %v", packet, err)
 	}
@@ -267,12 +270,12 @@ func TestMCPPublicThreadIdentifiersAreSessionLinks(t *testing.T) {
 }
 
 func TestAgentsGetTheMiyaServerOnlyInTheService(t *testing.T) {
-	if claudeMCPArgs("/ws") != nil || codexMCPArgs("/ws") != nil || claudeMCPEnv() != nil {
+	if appmodel.ClaudeMCPArgs("/ws") != nil || appmodel.CodexMCPArgs("/ws") != nil || appmodel.ClaudeMCPEnv() != nil {
 		t.Fatal("agents got the miya server outside the service")
 	}
 	mcpconfig.Enabled = true
 	t.Cleanup(func() { mcpconfig.Enabled = false })
-	args := claudeMCPArgs("/w s")
+	args := appmodel.ClaudeMCPArgs("/w s")
 	if len(args) != 4 || args[0] != "--mcp-config" || args[2] != "--allowedTools" || strings.Contains(args[3], "delegate") {
 		t.Fatalf("bad Claude args: %q", args)
 	}
@@ -282,11 +285,11 @@ func TestAgentsGetTheMiyaServerOnlyInTheService(t *testing.T) {
 			Args    []string `json:"args"`
 		} `json:"mcpServers"`
 	}
-	if err := json.Unmarshal([]byte(args[1]), &cfg); err != nil || cfg.MCPServers["miya"].Command == "" || strings.Join(cfg.MCPServers["miya"].Args, "|") != "-mcp|/w s|"+serviceSocket() {
+	if err := json.Unmarshal([]byte(args[1]), &cfg); err != nil || cfg.MCPServers["miya"].Command == "" || strings.Join(cfg.MCPServers["miya"].Args, "|") != "-mcp|/w s|"+appmodel.ServiceSocket() {
 		t.Fatalf("bad Claude MCP config: %s %v", args[1], err)
 	}
-	codexArgs := strings.Join(codexMCPArgs(`/w "s"`), " ")
-	if !strings.Contains(codexArgs, `mcp_servers.miya.args=["-mcp","/w \"s\"",`+tomlString(serviceSocket())+`]`) || !strings.Contains(codexArgs, "tool_timeout_sec=1500") {
+	codexArgs := strings.Join(appmodel.CodexMCPArgs(`/w "s"`), " ")
+	if !strings.Contains(codexArgs, `mcp_servers.miya.args=["-mcp","/w \"s\"",`+appmodel.TomlString(appmodel.ServiceSocket())+`]`) || !strings.Contains(codexArgs, "tool_timeout_sec=1500") {
 		t.Fatalf("bad Codex args: %s", codexArgs)
 	}
 }

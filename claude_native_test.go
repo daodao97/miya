@@ -1,18 +1,20 @@
 package main
 
 import (
-	"os"
-	"path/filepath"
-	"strings"
-	"testing"
-
-	"miya/internal/claude"
-	"miya/internal/claude/transcript"
+	appmodel "miya/internal/appmodel"
+	claude "miya/internal/claude"
+	transcript "miya/internal/claude/transcript"
+	controller "miya/internal/controller"
+	uiruntime "miya/internal/uiruntime"
+	os "os"
+	filepath "path/filepath"
+	strings "strings"
+	testing "testing"
 )
 
 func writeClaudeSession(t *testing.T, cwd, id string, lines ...string) string {
 	t.Helper()
-	dir := claudeProjectDir(cwd)
+	dir := appmodel.ClaudeProjectDir(cwd)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -25,7 +27,7 @@ func writeClaudeSession(t *testing.T, cwd, id string, lines ...string) string {
 
 func TestClaudeProjectDirEncoding(t *testing.T) {
 	t.Setenv("CLAUDE_CONFIG_DIR", "/cfg")
-	if got := claudeProjectDir("/Users/ada/work/my_app.v2"); got != "/cfg/projects/-Users-ada-work-my-app-v2" {
+	if got := appmodel.ClaudeProjectDir("/Users/ada/work/my_app.v2"); got != "/cfg/projects/-Users-ada-work-my-app-v2" {
 		t.Fatalf("encoded %q", got)
 	}
 }
@@ -45,7 +47,7 @@ func TestParseClaudeSessionFollowsActiveBranch(t *testing.T) {
 		`{"type":"assistant","uuid":"a2","parentUuid":"meta","timestamp":"2026-10-31T01:00:05Z","message":{"content":[{"type":"text","text":"It is a main package."}]}}`,
 		`not json`,
 	)
-	messages, err := parseClaudeSession(path)
+	messages, err := appmodel.ParseClaudeSession(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +68,7 @@ func TestParseClaudeSessionFollowsActiveBranch(t *testing.T) {
 	if tool.Kind != "claudeTool" || tool.Status != "completed" || !strings.HasPrefix(tool.Content, "Read\n") || !strings.Contains(tool.Content, "package main") {
 		t.Fatalf("tool %+v", tool)
 	}
-	if got := turnElapsedLabel(messages, false); got != "Worked for 5s" {
+	if got := appmodel.TurnElapsedLabel(messages, false); got != "Worked for 5s" {
 		t.Fatalf("elapsed %q", got)
 	}
 }
@@ -83,49 +85,49 @@ func TestListClaudeSessionsTitlesAndWorkspace(t *testing.T) {
 	// /work-demo encodes to the same folder; its session is not this workspace's.
 	writeClaudeSession(t, cwd, "other", `{"type":"user","uuid":"u","cwd":"/work-demo","message":{"content":"elsewhere"}}`)
 	titles := map[string]string{}
-	for _, s := range listClaudeSessions(cwd) {
+	for _, s := range appmodel.ListClaudeSessions(cwd) {
 		titles[s.ID] = s.Title
 	}
 	if len(titles) != 2 || titles["prompt"] != "Fix the flaky test" || titles["titled"] != "My session" {
 		t.Fatalf("sessions %v", titles)
 	}
-	if findClaudeSession("/somewhere/else", "titled") == "" || findClaudeSession(cwd, "../titled") != "" {
+	if appmodel.FindClaudeSession("/somewhere/else", "titled") == "" || appmodel.FindClaudeSession(cwd, "../titled") != "" {
 		t.Fatal("session lookup")
 	}
 }
 
 func TestNativeClaudeSessionsJoinTheSidebarAndLoad(t *testing.T) {
 	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
-	inlineDispatch.Store(true)
-	t.Cleanup(func() { inlineDispatch.Store(false) })
+	uiruntime.InlineDispatch.Store(true)
+	t.Cleanup(func() { uiruntime.InlineDispatch.Store(false) })
 	cwd := "/work/demo"
 	writeClaudeSession(t, cwd, "cli-session",
 		`{"type":"user","uuid":"u","cwd":"/work/demo","timestamp":"2026-10-31T01:00:00Z","message":{"content":"Started in the CLI"}}`,
 		`{"type":"assistant","uuid":"a","parentUuid":"u","timestamp":"2026-10-31T01:00:01Z","message":{"content":[{"type":"text","text":"Answer from the CLI"}]}}`)
 	c := testController()
-	c.cwd = cwd
-	c.active, c.setActive = createSignal(0)
-	c.draft, c.setDraft = createSignal("")
-	c.attachments, c.setAttachments = createSignal([]string{})
-	c.agent, c.setAgent = createSignal("codex")
-	c.loadClaudeSessionsSync()
-	var native Thread
-	for _, th := range c.threads() {
+	c.Cwd = cwd
+	c.Active, c.SetActive = uiruntime.CreateSignal(0)
+	c.Draft, c.SetDraft = uiruntime.CreateSignal("")
+	c.Attachments, c.SetAttachments = uiruntime.CreateSignal([]string{})
+	c.Agent, c.SetAgent = uiruntime.CreateSignal("codex")
+	c.LoadClaudeSessionsSync()
+	var native appmodel.Thread
+	for _, th := range c.Threads() {
 		if th.ServerID == "cli-session" {
 			native = th
 		}
 	}
 	if native.ID == 0 || native.Agent != "claude-code" || !native.Resumed || native.Title != "Started in the CLI" {
-		t.Fatalf("native session not listed: %+v", c.threads())
+		t.Fatalf("native session not listed: %+v", c.Threads())
 	}
-	before := len(c.threads())
-	c.loadClaudeSessionsSync()
-	if len(c.threads()) != before {
+	before := len(c.Threads())
+	c.LoadClaudeSessionsSync()
+	if len(c.Threads()) != before {
 		t.Fatal("session listed twice")
 	}
-	c.selectThread(native)
-	c.waitClaudeHistory()
-	cur := c.current()
+	c.SelectThread(native)
+	waitClaudeHistory(c)
+	cur := c.Current()
 	if !cur.HistoryLoaded || len(cur.Messages) != 2 || cur.Messages[1].Content != "Answer from the CLI" || cur.Messages[1].ID == 0 {
 		t.Fatalf("history not loaded: %+v", cur)
 	}
@@ -138,8 +140,8 @@ func TestReadRealClaudeSessions(t *testing.T) {
 		t.Skip("set MIYA_CLAUDE_REAL=1")
 	}
 	cwd, _ := os.Getwd()
-	for _, s := range listClaudeSessions(cwd) {
-		messages, err := parseClaudeSession(s.Path)
+	for _, s := range appmodel.ListClaudeSessions(cwd) {
+		messages, err := appmodel.ParseClaudeSession(s.Path)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -147,18 +149,12 @@ func TestReadRealClaudeSessions(t *testing.T) {
 		for _, m := range messages {
 			counts[m.Role]++
 		}
-		groups := groupMessages(messages)
+		groups := appmodel.GroupMessages(messages)
 		t.Logf("%s %q updated %s: %d messages %v, %d groups", s.ID, s.Title, s.UpdatedAt.Format("15:04:05"), len(messages), counts, len(groups))
 		if len(messages) > 0 {
-			t.Logf("first: %q", clippedTitle(messages[0].Content))
-			t.Logf("last: %s %q", messages[len(messages)-1].Role, clippedTitle(messages[len(messages)-1].Content))
+			t.Logf("first: %q", appmodel.ClippedTitle(messages[0].Content))
+			t.Logf("last: %s %q", messages[len(messages)-1].Role, appmodel.ClippedTitle(messages[len(messages)-1].Content))
 		}
-	}
-}
-
-func (c *chatController) waitClaudeHistory() {
-	if c.claudeHistoryDone != nil {
-		<-c.claudeHistoryDone
 	}
 }
 
@@ -170,27 +166,23 @@ func TestClaudeCommandSettingPersistsAndResolves(t *testing.T) {
 	if err := os.WriteFile(bin, []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	c := &chatController{}
-	c.setClaudeCommand("CLAUDE_CONFIG_DIR=/cfg/work " + bin + " --settings ~/client-settings.json")
-	if c.claudeError != "" || c.claudeBinary != bin || len(c.claudeArgs) != 2 || !strings.HasSuffix(c.claudeArgs[1], "/client-settings.json") || strings.HasPrefix(c.claudeArgs[1], "~") {
-		t.Fatalf("resolved %q %q %q", c.claudeBinary, c.claudeArgs, c.claudeError)
+	c := &controller.Controller{}
+	c.SetClaudeCommand("CLAUDE_CONFIG_DIR=/cfg/work " + bin + " --settings ~/client-settings.json")
+	if c.ClaudeError != "" || c.ClaudeBinary != bin || len(c.ClaudeArgs) != 2 || !strings.HasSuffix(c.ClaudeArgs[1], "/client-settings.json") || strings.HasPrefix(c.ClaudeArgs[1], "~") {
+		t.Fatalf("resolved %q %q %q", c.ClaudeBinary, c.ClaudeArgs, c.ClaudeError)
 	}
-	if claudeConfigDir() != "/cfg/work" {
-		t.Fatalf("config dir %q", claudeConfigDir())
+	if appmodel.ClaudeConfigDir() != "/cfg/work" {
+		t.Fatalf("config dir %q", appmodel.ClaudeConfigDir())
 	}
-	if got := claude.LoadCommand(); got != c.claudeCommand {
+	if got := claude.LoadCommand(); got != c.ClaudeCommand {
 		t.Fatalf("saved %q", got)
 	}
 	t.Setenv("CLAUDE_COMMAND", "claude --model opus")
 	if claude.LoadCommand() != "claude --model opus" {
 		t.Fatal("CLAUDE_COMMAND does not override the setting")
 	}
-	c.setClaudeCommand("/missing/claude")
-	if c.claudeError == "" || c.claudeBinary != "" || c.backendReadyFor("claude-code") {
+	c.SetClaudeCommand("/missing/claude")
+	if c.ClaudeError == "" || c.ClaudeBinary != "" || backendReadyFor(c, "claude-code") {
 		t.Fatal("a missing executable resolved")
 	}
-}
-
-func (c *chatController) backendReadyFor(agent string) bool {
-	return agent == "claude-code" && c.claudeBinary != ""
 }

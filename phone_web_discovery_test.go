@@ -1,24 +1,27 @@
 package main
 
 import (
-	"context"
-	"fmt"
-	"io"
-	"miya/internal/webservice"
-	"net"
-	"net/http"
-	"net/http/cookiejar"
-	"net/http/httptest"
-	"net/url"
-	"os"
-	"strconv"
-	"testing"
-	"time"
+	context "context"
+	fmt "fmt"
+	io "io"
+	appmodel "miya/internal/appmodel"
+	mobile "miya/internal/mobile"
+	phoneproxy "miya/internal/phoneproxy"
+	webservice "miya/internal/webservice"
+	net "net"
+	http "net/http"
+	cookiejar "net/http/cookiejar"
+	httptest "net/http/httptest"
+	url "net/url"
+	os "os"
+	strconv "strconv"
+	testing "testing"
+	time "time"
 )
 
 func TestProjectWebServicesEndpointAndPhoneFetch(t *testing.T) {
 	root, fixture := fileServerFixture(t)
-	handler := fixture.(desktopFileServer)
+	handler := fixture.(appmodel.DesktopFileServer)
 	calls := 0
 	handler.WebServices = func(ctx context.Context, project string) ([]webservice.Service, error) {
 		calls++
@@ -32,14 +35,14 @@ func TestProjectWebServicesEndpointAndPhoneFetch(t *testing.T) {
 	dial := func(ctx context.Context) (net.Conn, error) {
 		return (&net.Dialer{}).DialContext(ctx, "tcp", server.Listener.Addr().String())
 	}
-	services, err := fetchPhoneWebServices(context.Background(), dial, root)
+	services, err := mobile.FetchPhoneWebServices(context.Background(), dial, root)
 	if err != nil || len(services) != 1 || services[0].Port != 5173 {
 		t.Fatalf("phone discovery: %+v %v", services, err)
 	}
-	if _, err := fetchPhoneWebServices(context.Background(), dial, t.TempDir()); err == nil {
+	if _, err := mobile.FetchPhoneWebServices(context.Background(), dial, t.TempDir()); err == nil {
 		t.Fatal("unshared project accepted")
 	}
-	if w := fileRequest(t, handler, "POST", "/"+projectFileID(root)+"/"+webservice.ProjectFile, nil); w.Code != 405 {
+	if w := fileRequest(t, handler, "POST", "/"+appmodel.ProjectFileID(root)+"/"+webservice.ProjectFile, nil); w.Code != 405 {
 		t.Fatal("discovery accepted a write")
 	}
 	if calls != 1 {
@@ -67,8 +70,8 @@ func TestProjectWebServiceKeepsIPv6ListenerOnSharedPort(t *testing.T) {
 	defer app.Close()
 	bridge := httptest.NewServer(webservice.Server())
 	defer bridge.Close()
-	p := &phoneFileProxy{webHost: "::1"}
-	if err := p.startProxy(webservice.Prefix+u.Port(), "http://localhost:"+u.Port(), func(ctx context.Context) (net.Conn, error) {
+	p := &phoneproxy.PhoneFileProxy{WebHost: "::1"}
+	if err := p.StartProxy(webservice.Prefix+u.Port(), "http://localhost:"+u.Port(), func(ctx context.Context) (net.Conn, error) {
 		return (&net.Dialer{}).DialContext(ctx, "tcp", bridge.Listener.Addr().String())
 	}); err != nil {
 		t.Fatal(err)

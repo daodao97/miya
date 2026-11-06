@@ -1,36 +1,36 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
-	"image/png"
-	"os"
-	"path/filepath"
-	"strings"
-	"testing"
-	"time"
+	json "encoding/json"
+	fmt "fmt"
+	png "image/png"
+	appmodel "miya/internal/appmodel"
+	automation "miya/internal/automation"
+	os "os"
+	filepath "path/filepath"
+	strings "strings"
+	testing "testing"
+	time "time"
 
-	"miya/internal/automation"
-
-	"github.com/egoist/mygo/ui"
+	ui "github.com/egoist/mygo/ui"
 )
 
 func mobileAutomationFixture() automation.View {
-	return automation.ViewOf(automation.Automation{ID: "daily", Name: "仓库日报", Project: "/a", Agent: agentCodex, Instructions: "总结仓库的最新变化。", Schedule: "0 18 * * *", Enabled: true}, []automation.Run{{Started: atLocal("2026-11-01 18:00"), Thread: 99, ServerID: "s1", Result: automation.Passed, Summary: "日报已完成", Report: &automation.Report{Summary: "已完成检查", Findings: []string{"测试全部通过"}}}}, false, atLocal("2026-11-01 19:00"))
+	return automation.ViewOf(automation.Automation{ID: "daily", Name: "仓库日报", Project: "/a", Agent: appmodel.AgentCodex, Instructions: "总结仓库的最新变化。", Schedule: "0 18 * * *", Enabled: true}, []automation.Run{{Started: atLocal("2026-11-01 18:00"), Thread: 99, ServerID: "s1", Result: automation.Passed, Summary: "日报已完成", Report: &automation.Report{Summary: "已完成检查", Findings: []string{"测试全部通过"}}}}, false, atLocal("2026-11-01 19:00"))
 }
 
 func TestMobileAutomationCreateNavigationAndFeedback(t *testing.T) {
 	m := testMobileApp()
-	m.state.Automations, m.state.AutomationCreate = true, true
-	m.autos.loaded = true
-	m.router().Push("/automations")
-	tt := ui.NewTester(m.viewRoot, 390, 844)
+	m.State.Automations, m.State.AutomationCreate = true, true
+	m.Autos.Loaded = true
+	m.Router().Push("/automations")
+	tt := ui.NewTester(m.ViewRoot, 390, 844)
 	tt.Frame()
 	if err := tt.Click("New automation"); err != nil {
 		t.Fatal(err)
 	}
-	f := &m.autos.form
-	if m.router().Path() != "/automation/new" || f.project != "/a" || !f.enabled || f.agent != agentCodex {
+	f := &m.Autos.Form
+	if m.Router().Path() != "/automation/new" || f.Project != "/a" || !f.Enabled || f.Agent != appmodel.AgentCodex {
 		t.Fatal("new form did not inherit the selected desktop project")
 	}
 	if err := tt.Click("What to do"); err != nil {
@@ -38,35 +38,35 @@ func TestMobileAutomationCreateNavigationAndFeedback(t *testing.T) {
 	}
 	tt.Type("每天 18 点总结仓库变化")
 	tt.Frame()
-	if f.request != "每天 18 点总结仓库变化" || !tt.HasText("Generate settings") {
+	if f.Request != "每天 18 点总结仓库变化" || !tt.HasText("Generate settings") {
 		t.Fatal("form request is not editable")
 	}
 	v := mobileAutomationFixture()
-	f.pending, f.op = "draft", "automation-draft"
-	raw, _ := json.Marshal(phoneAutomationFormResult{RequestID: "stale", View: &v})
-	m.receiveAutomationForm("automation-draft", raw, "")
-	if f.draft != nil || f.pending != "draft" {
+	f.Pending, f.Op = "draft", "automation-draft"
+	raw, _ := json.Marshal(appmodel.PhoneAutomationFormResult{RequestID: "stale", View: &v})
+	m.ReceiveAutomationForm("automation-draft", raw, "")
+	if f.Draft != nil || f.Pending != "draft" {
 		t.Fatal("stale draft replaced the current request")
 	}
-	raw, _ = json.Marshal(phoneAutomationFormResult{RequestID: "draft", View: &v})
-	m.receiveAutomationForm("automation-draft", raw, "")
+	raw, _ = json.Marshal(appmodel.PhoneAutomationFormResult{RequestID: "draft", View: &v})
+	m.ReceiveAutomationForm("automation-draft", raw, "")
 	tt.Frame()
-	if f.draft == nil || f.pending != "" || !tt.HasText("Generated settings") || !tt.HasText("Create") {
+	if f.Draft == nil || f.Pending != "" || !tt.HasText("Generated settings") || !tt.HasText("Create") {
 		t.Fatal("draft preview not shown")
 	}
 	automationSnapshot(t, tt, "mobile-automation-create-preview")
-	f.pending, f.op, f.createKey = "0011223344556677", "automation-create", "0011223344556677"
-	f.createPayload = json.RawMessage(`{"name":"saved"}`)
-	m.interruptAutomationForm()
+	f.Pending, f.Op, f.CreateKey = "0011223344556677", "automation-create", "0011223344556677"
+	f.CreatePayload = json.RawMessage(`{"name":"saved"}`)
+	m.InterruptAutomationForm()
 	tt.Frame()
-	if f.pending != "" || f.createKey == "" || !tt.HasText("Retry creation") || !tt.HasText("Disconnected. Reconnect to try again.") {
+	if f.Pending != "" || f.CreateKey == "" || !tt.HasText("Retry creation") || !tt.HasText("Disconnected. Reconnect to try again.") {
 		t.Fatal("interrupted creation lost its retry identity")
 	}
-	f.pending = f.createKey
-	raw, _ = json.Marshal(phoneAutomationFormResult{RequestID: f.pending, View: &v})
-	m.receiveAutomationForm("automation-create", raw, "")
+	f.Pending = f.CreateKey
+	raw, _ = json.Marshal(appmodel.PhoneAutomationFormResult{RequestID: f.Pending, View: &v})
+	m.ReceiveAutomationForm("automation-create", raw, "")
 	tt.Frame()
-	if m.router().Path() != "/automation" || m.autos.detail != v.ID || len(m.autos.list) != 1 || f.createKey != "" || !tt.HasText(v.Name) {
+	if m.Router().Path() != "/automation" || m.Autos.Detail != v.ID || len(m.Autos.List) != 1 || f.CreateKey != "" || !tt.HasText(v.Name) {
 		t.Fatal("saved automation did not open its desktop-backed detail")
 	}
 }
@@ -74,22 +74,22 @@ func TestMobileAutomationCreateNavigationAndFeedback(t *testing.T) {
 func TestMobileAutomationCreateCompatibilityAndSmallScreens(t *testing.T) {
 	for _, width := range []int{320, 390} {
 		m := testMobileApp()
-		m.state.Automations = true
-		m.autos.loaded = true
-		m.router().Push("/automations")
-		tt := ui.NewTester(m.viewRoot, width, 844)
+		m.State.Automations = true
+		m.Autos.Loaded = true
+		m.Router().Push("/automations")
+		tt := ui.NewTester(m.ViewRoot, width, 844)
 		tt.Frame()
 		if !tt.HasText("Update the desktop app to create automations on your phone") {
 			t.Fatal("old desktop did not explain the missing creation capability")
 		}
-		if err := tt.Click("New automation"); err == nil && m.router().Path() != "/automations" {
+		if err := tt.Click("New automation"); err == nil && m.Router().Path() != "/automations" {
 			t.Fatal("old desktop opened an unsupported form")
 		}
-		m.state.AutomationCreate = true
-		m.openAutomationCreate()
+		m.State.AutomationCreate = true
+		m.OpenAutomationCreate()
 		v := mobileAutomationFixture()
-		m.autos.form.draft = &v
-		m.autos.form.request = "每天 18 点总结仓库变化"
+		m.Autos.Form.Draft = &v
+		m.Autos.Form.Request = "每天 18 点总结仓库变化"
 		for _, dark := range []bool{false, true} {
 			tt.SetDark(dark)
 			tt.SetSafeArea(ui.SafeArea{Top: 59, Bottom: 34})
@@ -112,18 +112,18 @@ func TestMobileAutomationCreateCompatibilityAndSmallScreens(t *testing.T) {
 
 func TestMobileAutomationsNavigationAndRun(t *testing.T) {
 	m := testMobileApp()
-	m.state.Automations = true
+	m.State.Automations = true
 	v := mobileAutomationFixture()
 	data, _ := json.Marshal([]automation.View{v})
-	m.receiveAutomations(data, "")
-	tt := ui.NewTester(m.viewRoot, 390, 844)
+	m.ReceiveAutomations(data, "")
+	tt := ui.NewTester(m.ViewRoot, 390, 844)
 	tt.Frame()
 	openMobileDrawer(t, tt)
 	if err := tt.Click("Automations"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if m.router().Path() != "/automations" || m.menu || !tt.HasText("仓库日报") {
+	if m.Router().Path() != "/automations" || m.Menu || !tt.HasText("仓库日报") {
 		t.Fatal("drawer did not open the automation list")
 	}
 	if err := tt.Click("仓库日报"); err != nil {
@@ -150,18 +150,18 @@ func TestMobileAutomationsNavigationAndRun(t *testing.T) {
 	if err := tt.Click("Open run conversation"); err != nil {
 		t.Fatal(err)
 	}
-	if m.open != 1 || m.router().Path() != "/thread" {
+	if m.Open != 1 || m.Router().Path() != "/thread" {
 		t.Fatal("run did not open its renumbered conversation")
 	}
 	openMobileDrawer(t, tt)
-	if m.router().Path() != "/thread" || m.open != 1 || !m.menu {
+	if m.Router().Path() != "/thread" || m.Open != 1 || !m.Menu {
 		t.Fatal("the conversation's arrow should open the drawer without leaving the run")
 	}
 	if err := tt.Click("Automations"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if m.router().Path() != "/automations" || m.open != 0 {
+	if m.Router().Path() != "/automations" || m.Open != 0 {
 		t.Fatal("the drawer should return to automations and unsubscribe the conversation")
 	}
 	if err := tt.Click("仓库日报"); err != nil {
@@ -190,38 +190,38 @@ func TestMobileAutomationsNavigationAndRun(t *testing.T) {
 
 func TestMobileAutomationsUnavailableAndReadErrors(t *testing.T) {
 	m := testMobileApp()
-	m.router().Push("/automations")
-	tt := ui.NewTester(m.viewRoot, 320, 568)
+	m.Router().Push("/automations")
+	tt := ui.NewTester(m.ViewRoot, 320, 568)
 	tt.Frame()
 	if !tt.HasText("Desktop update required") {
 		t.Fatal("old desktop should explain that an update is needed")
 	}
-	m.state.Automations = true
-	m.receiveAutomations(json.RawMessage(`[]`), "")
+	m.State.Automations = true
+	m.ReceiveAutomations(json.RawMessage(`[]`), "")
 	tt.Frame()
 	if !tt.HasText("No automations yet") {
 		t.Fatal("empty automation state missing")
 	}
 	v := mobileAutomationFixture()
 	data, _ := json.Marshal([]automation.View{v})
-	m.receiveAutomations(data, "")
-	m.receiveAutomations(nil, "Failed to load")
-	m.receiveAutomations(json.RawMessage(`broken`), "")
-	if len(m.autos.list) != 1 || m.autos.loading || m.autos.err == "" {
+	m.ReceiveAutomations(data, "")
+	m.ReceiveAutomations(nil, "Failed to load")
+	m.ReceiveAutomations(json.RawMessage(`broken`), "")
+	if len(m.Autos.List) != 1 || m.Autos.Loading || m.Autos.Err == "" {
 		t.Fatal("a failed read lost the last successful list")
 	}
-	m.connected = false
+	m.Connected = false
 	tt.Frame()
 	if !tt.HasText("Disconnected. Showing the last synced content.") || !tt.HasText(v.Name) {
 		t.Fatal("offline state should retain the last read list")
 	}
-	m.autos.loading, m.autos.requestedAt = true, time.Now().Add(-11*time.Second)
+	m.Autos.Loading, m.Autos.RequestedAt = true, time.Now().Add(-11*time.Second)
 	tt.Frame()
-	if m.autos.loading || !tt.HasText("Read timed out. Try again.") {
+	if m.Autos.Loading || !tt.HasText("Read timed out. Try again.") {
 		t.Fatal("a missing response should time out")
 	}
-	m.forget()
-	if len(m.autos.list) != 0 {
+	m.Forget()
+	if len(m.Autos.List) != 0 {
 		t.Fatal("unpairing retained another desktop's automations")
 	}
 }
@@ -231,27 +231,27 @@ func TestMobileAutomationRunDoesNotOpenReusedThreadID(t *testing.T) {
 	v := mobileAutomationFixture()
 	r := v.Runs[0]
 	r.Thread, r.ServerID = 1, "deleted"
-	if _, ok := m.automationRunThread(v, r); ok {
+	if _, ok := m.AutomationRunThread(v, r); ok {
 		t.Fatal("a stale run opened a reused numeric thread ID")
 	}
 	r.ServerID = "s1"
 	v.Project = "/b"
-	if _, ok := m.automationRunThread(v, r); ok {
+	if _, ok := m.AutomationRunThread(v, r); ok {
 		t.Fatal("a run opened a conversation in another project")
 	}
-	v.Project, v.Agent = "/a", agentClaude
-	if _, ok := m.automationRunThread(v, r); ok {
+	v.Project, v.Agent = "/a", appmodel.AgentClaude
+	if _, ok := m.AutomationRunThread(v, r); ok {
 		t.Fatal("a run opened another agent's conversation")
 	}
 }
 
 func TestMobileAutomationRunFeedbackAndCompatibility(t *testing.T) {
 	m := testMobileApp()
-	m.state.Automations = true
+	m.State.Automations = true
 	v := mobileAutomationFixture()
-	m.autos.list, m.autos.loaded, m.autos.detail = []automation.View{v}, true, v.ID
-	m.router().Push("/automation")
-	tt := ui.NewTester(m.viewRoot, 390, 844)
+	m.Autos.List, m.Autos.Loaded, m.Autos.Detail = []automation.View{v}, true, v.ID
+	m.Router().Push("/automation")
+	tt := ui.NewTester(m.ViewRoot, 390, 844)
 	tt.Frame()
 	if !tt.HasText("Run now") || !tt.HasText("Update the desktop app to run now") {
 		t.Fatal("old desktop did not explain manual run support")
@@ -259,54 +259,54 @@ func TestMobileAutomationRunFeedbackAndCompatibility(t *testing.T) {
 	if err := tt.Click("Run now"); err != nil {
 		t.Fatal(err)
 	}
-	if m.autos.runRequest != "" {
+	if m.Autos.RunRequest != "" {
 		t.Fatal("unsupported desktop received a run request")
 	}
-	m.state.AutomationRun = true
-	m.autos.runID, m.autos.runRequest, m.autos.runRequestedAt = v.ID, "request", time.Now()
+	m.State.AutomationRun = true
+	m.Autos.RunID, m.Autos.RunRequest, m.Autos.RunRequestedAt = v.ID, "request", time.Now()
 	tt.Frame()
 	if !tt.HasText("Starting…") || tt.HasText("Update the desktop app to run now") {
 		t.Fatal("pending run feedback missing")
 	}
 	v.Running = true
-	data, _ := json.Marshal(phoneAutomationRunResult{RequestID: "stale", List: []automation.View{v}})
-	m.receiveAutomationRun(data, "")
-	if m.autos.runRequest != "request" || m.autos.list[0].Running {
+	data, _ := json.Marshal(appmodel.PhoneAutomationRunResult{RequestID: "stale", List: []automation.View{v}})
+	m.ReceiveAutomationRun(data, "")
+	if m.Autos.RunRequest != "request" || m.Autos.List[0].Running {
 		t.Fatal("stale acknowledgement changed a pending request")
 	}
-	data, _ = json.Marshal(phoneAutomationRunResult{RequestID: "request", List: []automation.View{v}})
-	m.receiveAutomationRun(data, "")
+	data, _ = json.Marshal(appmodel.PhoneAutomationRunResult{RequestID: "request", List: []automation.View{v}})
+	m.ReceiveAutomationRun(data, "")
 	tt.Frame()
-	if m.autos.runRequest != "" || !m.autos.list[0].Running || !tt.HasText("Running") {
+	if m.Autos.RunRequest != "" || !m.Autos.List[0].Running || !tt.HasText("Running") {
 		t.Fatal("acknowledgement did not update the run status")
 	}
 	v.Running = false
-	m.autos.runRequest = "failed"
-	data, _ = json.Marshal(phoneAutomationRunResult{RequestID: "failed", List: []automation.View{v}})
-	m.receiveAutomationRun(data, "Project directory does not exist")
+	m.Autos.RunRequest = "failed"
+	data, _ = json.Marshal(appmodel.PhoneAutomationRunResult{RequestID: "failed", List: []automation.View{v}})
+	m.ReceiveAutomationRun(data, "Project directory does not exist")
 	tt.Frame()
-	if !tt.HasText("Project directory does not exist") || m.autos.runRequest != "" {
+	if !tt.HasText("Project directory does not exist") || m.Autos.RunRequest != "" {
 		t.Fatal("run failure was not shown")
 	}
-	m.autos.runRequest, m.autos.runRequestedAt = "timeout", time.Now().Add(-31*time.Second)
+	m.Autos.RunRequest, m.Autos.RunRequestedAt = "timeout", time.Now().Add(-31*time.Second)
 	tt.Frame()
-	if m.autos.runRequest != "" || !tt.HasText("Request timed out. Refresh to check run status.") {
+	if m.Autos.RunRequest != "" || !tt.HasText("Request timed out. Refresh to check run status.") {
 		t.Fatal("run timeout did not release the pending request")
 	}
-	m.autos.runRequest = "disconnect"
-	m.disconnect()
+	m.Autos.RunRequest = "disconnect"
+	m.Disconnect()
 	tt.Frame()
-	if m.autos.runRequest != "" || !tt.HasText("Disconnected. Refresh to check run status.") {
+	if m.Autos.RunRequest != "" || !tt.HasText("Disconnected. Refresh to check run status.") {
 		t.Fatal("disconnect left the run request pending")
 	}
 }
 
 func TestMobileAutomationsDrawerLayout(t *testing.T) {
 	m := mobileHomeFixture()
-	tt := ui.NewTester(m.viewRoot, 844, 390)
+	tt := ui.NewTester(m.ViewRoot, 844, 390)
 	tt.SetSafeArea(ui.SafeArea{Left: 59, Right: 59, Bottom: 21})
 	tt.Frame()
-	m.menu = true
+	m.Menu = true
 	tt.Frame()
 	tt.Advance(100 * time.Millisecond)
 	automationSnapshot(t, tt, "mobile-automation-drawer-opening")
@@ -321,7 +321,7 @@ func TestMobileAutomationsLongContentAndTextScaling(t *testing.T) {
 	for _, width := range []int{320, 390} {
 		for _, dark := range []bool{false, true} {
 			m := testMobileApp()
-			m.state.Automations = true
+			m.State.Automations = true
 			v := mobileAutomationFixture()
 			v.Name = "每日检查仓库 Issue 和持续集成结果"
 			v.Instructions = strings.Repeat("检查新 Issue 和测试结果，记录需要处理的问题。", 12)
@@ -329,9 +329,9 @@ func TestMobileAutomationsLongContentAndTextScaling(t *testing.T) {
 			paused.ID, paused.Name, paused.Enabled = "paused", "仓库日报", false
 			running := v
 			running.ID, running.Name, running.Running = "running", "检查部署状态", true
-			m.autos.list, m.autos.loaded = []automation.View{v, paused, running}, true
-			m.router().Push("/automations")
-			tt := ui.NewTester(m.viewRoot, width, 844)
+			m.Autos.List, m.Autos.Loaded = []automation.View{v, paused, running}, true
+			m.Router().Push("/automations")
+			tt := ui.NewTester(m.ViewRoot, width, 844)
 			tt.SetDark(dark)
 			tt.SetSafeArea(ui.SafeArea{Top: 59, Bottom: 34})
 			tt.Frame()
@@ -358,7 +358,7 @@ func TestMobileAutomationsLongContentAndTextScaling(t *testing.T) {
 				t.Fatal(err)
 			}
 			full, _ := tt.Find(v.Instructions)
-			if !m.autos.instructionsOpen || full.H <= preview.H {
+			if !m.Autos.InstructionsOpen || full.H <= preview.H {
 				t.Fatal("task expansion did not reveal the full instructions")
 			}
 			if err := tt.Click("Collapse instructions"); err != nil {

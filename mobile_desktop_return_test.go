@@ -1,51 +1,52 @@
 package main
 
 import (
-	"context"
-	"encoding/json"
-	"errors"
-	"net"
-	"testing"
-
-	"miya/internal/codex"
-	"miya/internal/desktop/control"
-	"miya/internal/remote"
+	context "context"
+	json "encoding/json"
+	errors "errors"
+	appmodel "miya/internal/appmodel"
+	codex "miya/internal/codex"
+	control "miya/internal/desktop/control"
+	mobile "miya/internal/mobile"
+	remote "miya/internal/remote"
+	net "net"
+	testing "testing"
 )
 
 // openTestDesktopPage stands in for an open native control page whose Mac is
 // unreachable; closing it counts through its context cancel.
-func openTestDesktopPage(m *mobileApp, closed *int) {
+func openTestDesktopPage(m *mobile.App, closed *int) {
 	offline := func(context.Context) (net.Conn, error) { return nil, errors.New("offline") }
 	ctx, cancel := context.WithCancel(context.Background())
-	m.desktopPage = &mobileDesktopPage{phase: "live", client: control.NewClient(offline, "test"), ctx: ctx, cancel: func() { *closed++; cancel() }}
+	m.DesktopPage = &mobile.MobileDesktopPage{Phase: "live", Client: control.NewClient(offline, "test"), Ctx: ctx, Cancel: func() { *closed++; cancel() }}
 }
 
 func TestMobileDesktopReturnsOnlyWhenExactApprovalResolves(t *testing.T) {
 	m := testMobileApp()
 	a := codex.Approval{ID: json.RawMessage(`"authorization"`), ThreadID: "s1", Method: "miya/desktopControl", Reason: "Enter permission details"}
-	m.state.Approvals = []codex.Approval{a}
-	m.desktopApproval = mobileDesktopApproval{ID: a.ID, Version: approvalFingerprint(a)}
+	m.State.Approvals = []codex.Approval{a}
+	m.DesktopApproval = mobile.MobileDesktopApproval{ID: a.ID, Version: appmodel.ApprovalFingerprint(a)}
 	closed := 0
 	openTestDesktopPage(m, &closed)
-	m.desktopRequest = "opening"
+	m.DesktopRequest = "opening"
 	// Wrong passwords and intermediate native buttons keep this request pending.
-	m.applyPhoneState(phoneState{Approvals: []codex.Approval{a}})
-	if closed != 0 || m.desktopPage == nil || m.desktopRequest == "" {
+	m.ApplyPhoneState(appmodel.PhoneState{Approvals: []codex.Approval{a}})
+	if closed != 0 || m.DesktopPage == nil || m.DesktopRequest == "" {
 		t.Fatal("pending authorization closed its input page")
 	}
-	m.approvalAnswered(json.RawMessage(`"other"`), "")
-	if closed != 0 || m.desktopPage == nil {
+	m.ApprovalAnswered(json.RawMessage(`"other"`), "")
+	if closed != 0 || m.DesktopPage == nil {
 		t.Fatal("another approval closed this input page")
 	}
-	m.approvalAnswered(a.ID, "密码不正确")
-	if closed != 0 || m.desktopPage == nil {
+	m.ApprovalAnswered(a.ID, "密码不正确")
+	if closed != 0 || m.DesktopPage == nil {
 		t.Fatal("a rejected submission closed the input page")
 	}
-	m.applyPhoneState(phoneState{Approvals: []codex.Approval{}})
-	if closed != 1 || m.desktopPage != nil || len(m.desktopApproval.ID) != 0 || m.desktopRequest != "" {
+	m.ApplyPhoneState(appmodel.PhoneState{Approvals: []codex.Approval{}})
+	if closed != 1 || m.DesktopPage != nil || len(m.DesktopApproval.ID) != 0 || m.DesktopRequest != "" {
 		t.Fatal("resolved authorization did not dismiss its control page")
 	}
-	m.applyPhoneState(phoneState{})
+	m.ApplyPhoneState(appmodel.PhoneState{})
 	if closed != 1 {
 		t.Fatal("control page dismissed more than once")
 	}
@@ -54,12 +55,12 @@ func TestMobileDesktopReturnsOnlyWhenExactApprovalResolves(t *testing.T) {
 func TestMobileDesktopReusedApprovalIDClosesStalePage(t *testing.T) {
 	m := testMobileApp()
 	a := codex.Approval{ID: json.RawMessage(`"authorization"`), ThreadID: "s1", Method: "miya/desktopControl", Reason: "old window"}
-	m.desktopApproval = mobileDesktopApproval{ID: a.ID, Version: approvalFingerprint(a)}
+	m.DesktopApproval = mobile.MobileDesktopApproval{ID: a.ID, Version: appmodel.ApprovalFingerprint(a)}
 	closed := 0
 	openTestDesktopPage(m, &closed)
 	a.Reason = "different window"
-	m.closeResolvedDesktopControl([]codex.Approval{a})
-	if closed != 1 || m.desktopPage != nil {
+	m.CloseResolvedDesktopControl([]codex.Approval{a})
+	if closed != 1 || m.DesktopPage != nil {
 		t.Fatal("stale authorization page was retained for a reused request ID")
 	}
 }
@@ -67,32 +68,32 @@ func TestMobileDesktopReusedApprovalIDClosesStalePage(t *testing.T) {
 func TestMobileOtherBrowserRemainsOpenWhenApprovalResolves(t *testing.T) {
 	m := testMobileApp()
 	closed := false
-	m.filesCancel = func() { closed = true }
+	m.FilesCancel = func() { closed = true }
 	pages := 0
 	openTestDesktopPage(m, &pages)
-	m.applyPhoneState(phoneState{})
-	if closed || pages != 0 || m.desktopPage == nil {
+	m.ApplyPhoneState(appmodel.PhoneState{})
+	if closed || pages != 0 || m.DesktopPage == nil {
 		t.Fatal("approval state dismissed an unrelated file browser or full desktop page")
 	}
 }
 
 func TestDesktopPageCloseRevokesLeaseBeforeReopen(t *testing.T) {
 	var sent []string
-	old := sendDesktopClose
-	sendDesktopClose = func(_ *remote.Conn, token string) { sent = append(sent, token) }
-	t.Cleanup(func() { sendDesktopClose = old })
+	old := mobile.SendDesktopClose
+	mobile.SendDesktopClose = func(_ *remote.Conn, token string) { sent = append(sent, token) }
+	t.Cleanup(func() { mobile.SendDesktopClose = old })
 	m := testMobileApp()
 	closed := 0
 	openTestDesktopPage(m, &closed)
 	conn := new(remote.Conn)
-	m.conn, m.desktopPage.conn = conn, conn
-	p := m.desktopPage
-	m.desktopFinish(p, "Remote control ended")
-	m.closeDesktopPage(false)
-	if len(sent) != 1 || sent[0] != "test" || len(m.desktopClosing) != 1 || m.desktopClosing[0] != "test" {
-		t.Fatal("closing did not queue one desktop-close", sent, m.desktopClosing)
+	m.Conn, m.DesktopPage.Conn = conn, conn
+	p := m.DesktopPage
+	m.DesktopFinish(p, "Remote control ended")
+	m.CloseDesktopPage(false)
+	if len(sent) != 1 || sent[0] != "test" || len(m.DesktopClosing) != 1 || m.DesktopClosing[0] != "test" {
+		t.Fatal("closing did not queue one desktop-close", sent, m.DesktopClosing)
 	}
-	if m.desktopPage != nil {
+	if m.DesktopPage != nil {
 		t.Fatal("page kept after close")
 	}
 }

@@ -1,13 +1,13 @@
 package main
 
 import (
-	"encoding/json"
-	"testing"
+	json "encoding/json"
+	appmodel "miya/internal/appmodel"
+	claude "miya/internal/claude"
+	codex "miya/internal/codex"
+	testing "testing"
 
-	"miya/internal/claude"
-	"miya/internal/codex"
-
-	"github.com/egoist/mygo/ui"
+	ui "github.com/egoist/mygo/ui"
 )
 
 func TestHistoryRestoresWorkedDuration(t *testing.T) {
@@ -15,22 +15,22 @@ func TestHistoryRestoresWorkedDuration(t *testing.T) {
 	if err := json.Unmarshal([]byte(`{"turns":[{"id":"turn1","status":"completed","startedAt":1700000000,"completedAt":1700000126,"durationMs":125500,"items":[{"id":"u","type":"userMessage","content":[{"type":"text","text":"question"}]},{"id":"a","type":"agentMessage","text":"Done"}]}]}`), &remote); err != nil {
 		t.Fatal(err)
 	}
-	messages := prepareHistoryMessages(remote)
-	groups := groupMessages(messages)
-	if len(groups) != 2 || turnElapsedLabel(groups[1].Messages, false) != "Worked for 2m 5s" {
+	messages := appmodel.PrepareHistoryMessages(remote)
+	groups := appmodel.GroupMessages(messages)
+	if len(groups) != 2 || appmodel.TurnElapsedLabel(groups[1].Messages, false) != "Worked for 2m 5s" {
 		t.Fatalf("history lost duration: %+v", messages)
 	}
 	app, _ := testApp(t)
 	for _, mobile := range []bool{false, true} {
-		app.mobile = mobile
-		tt := ui.NewTester(func(c *ui.Context) { app.groupView(c, groups[1]) }, 390, 200)
+		app.Mobile = mobile
+		tt := ui.NewTester(func(c *ui.Context) { app.GroupView(c, groups[1]) }, 390, 200)
 		tt.Frame()
 		if !tt.HasText("Worked for 2m 5s") {
 			t.Fatalf("footer missing on mobile=%v: %v", mobile, tt.Texts())
 		}
 	}
 	// Repeated history reads must not turn a fixed duration into time since now.
-	if got := turnElapsedLabel(prepareHistoryMessages(remote)[1:], false); got != "Worked for 2m 5s" {
+	if got := appmodel.TurnElapsedLabel(appmodel.PrepareHistoryMessages(remote)[1:], false); got != "Worked for 2m 5s" {
 		t.Fatal(got)
 	}
 }
@@ -50,7 +50,7 @@ func TestCodexTurnTimingOptionalMetadata(t *testing.T) {
 		if err := json.Unmarshal([]byte(tc.payload), &turn); err != nil {
 			t.Fatal(err)
 		}
-		if start, end := codexTurnTimes(turn); start != tc.start || end != tc.end {
+		if start, end := appmodel.CodexTurnTimes(turn); start != tc.start || end != tc.end {
 			t.Fatalf("%s: got %d/%d, want %d/%d", tc.payload, start, end, tc.start, tc.end)
 		}
 	}
@@ -58,10 +58,10 @@ func TestCodexTurnTimingOptionalMetadata(t *testing.T) {
 
 func TestLiveCodexUsesWholeTurnDuration(t *testing.T) {
 	c := testController()
-	c.handle(event("turn/started", `{"threadId":"t1","turn":{"id":"turn1","startedAt":1700000000}}`))
-	c.handle(event("item/completed", `{"threadId":"t1","turnId":"turn1","item":{"id":"a","type":"agentMessage","text":"Done"}}`))
-	c.handle(event("turn/completed", `{"threadId":"t1","turn":{"id":"turn1","status":"completed","startedAt":1700000000,"durationMs":125500}}`))
-	if got := turnElapsedLabel(c.threads()[0].Messages, false); got != "Worked for 2m 5s" {
+	c.Handle(event("turn/started", `{"threadId":"t1","turn":{"id":"turn1","startedAt":1700000000}}`))
+	c.Handle(event("item/completed", `{"threadId":"t1","turnId":"turn1","item":{"id":"a","type":"agentMessage","text":"Done"}}`))
+	c.Handle(event("turn/completed", `{"threadId":"t1","turn":{"id":"turn1","status":"completed","startedAt":1700000000,"durationMs":125500}}`))
+	if got := appmodel.TurnElapsedLabel(c.Threads()[0].Messages, false); got != "Worked for 2m 5s" {
 		t.Fatalf("live footer = %q", got)
 	}
 }
@@ -69,17 +69,17 @@ func TestLiveCodexUsesWholeTurnDuration(t *testing.T) {
 func TestClaudeCompletionFreezesDuration(t *testing.T) {
 	for _, keepAlive := range []bool{false, true} {
 		c := testController()
-		c.update(1, func(th *Thread) {
-			th.Agent = agentClaude
+		c.Update(1, func(th *appmodel.Thread) {
+			th.Agent = appmodel.AgentClaude
 			th.StartedAtMs = 1000
-			th.Messages = []Message{{Role: "assistant", Kind: "agentMessage", Content: "Done", StartedAtMs: 2000}}
+			th.Messages = []appmodel.Message{{Role: "assistant", Kind: "agentMessage", Content: "Done", StartedAtMs: 2000}}
 		})
 		if keepAlive {
-			c.handleClaude(1, claude.Frame{Type: "result", KeepingAlive: true, Result: "Done"})
+			c.HandleClaude(1, claude.Frame{Type: "result", KeepingAlive: true, Result: "Done"})
 		} else {
-			c.finishClaude(1, c.cwd, nil)
+			c.FinishClaude(1, c.Cwd, nil)
 		}
-		th := c.threads()[0]
+		th := c.Threads()[0]
 		if th.Messages[0].StartedAtMs != 1000 || th.Messages[0].CompletedAtMs == 0 || th.Messages[0].CompletedAtMs != th.CompletedAtMs {
 			t.Fatalf("completion did not freeze timing (keepAlive=%v): %+v", keepAlive, th.Messages[0])
 		}
@@ -87,21 +87,21 @@ func TestClaudeCompletionFreezesDuration(t *testing.T) {
 }
 
 func TestCompletedDurationNeverUsesCurrentTime(t *testing.T) {
-	if got := turnElapsedLabel([]Message{{StartedAtMs: 1000}}, false); got != "" {
+	if got := appmodel.TurnElapsedLabel([]appmodel.Message{{StartedAtMs: 1000}}, false); got != "" {
 		t.Fatalf("unknown completion was calculated against now: %q", got)
 	}
-	if got := turnElapsedLabel([]Message{{StartedAtMs: 1000, CompletedAtMs: 12500}}, false); got != "Worked for 11s" {
+	if got := appmodel.TurnElapsedLabel([]appmodel.Message{{StartedAtMs: 1000, CompletedAtMs: 12500}}, false); got != "Worked for 11s" {
 		t.Fatal(got)
 	}
 }
 
 func TestCompletedThreadRecoversLegacyReplyTiming(t *testing.T) {
-	th := Thread{StartedAtMs: 1000, CompletedAtMs: 12500, Messages: []Message{
+	th := appmodel.Thread{StartedAtMs: 1000, CompletedAtMs: 12500, Messages: []appmodel.Message{
 		{Role: "user", Content: "question"},
 		{Role: "assistant", Content: "Done", StartedAtMs: 2000},
 	}}
-	groups := threadMessageGroups(th, groupMessages(th.Messages))
-	if got := turnElapsedLabel(groups[1].Messages, false); got != "Worked for 11s" {
+	groups := appmodel.ThreadMessageGroups(th, appmodel.GroupMessages(th.Messages))
+	if got := appmodel.TurnElapsedLabel(groups[1].Messages, false); got != "Worked for 11s" {
 		t.Fatal(got)
 	}
 	if th.Messages[1].CompletedAtMs != 0 || th.Messages[1].StartedAtMs != 2000 {

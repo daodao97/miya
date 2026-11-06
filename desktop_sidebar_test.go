@@ -1,42 +1,44 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
-	"reflect"
-	"testing"
+	json "encoding/json"
+	fmt "fmt"
+	appmodel "miya/internal/appmodel"
+	controller "miya/internal/controller"
+	reflect "reflect"
+	testing "testing"
 
-	"github.com/egoist/mygo/ui"
+	ui "github.com/egoist/mygo/ui"
 )
 
 func TestSidebarActivityAcrossProjects(t *testing.T) {
 	app, _ := testApp(t)
-	c := app.c
-	c.loadDesktopUnread()
-	c.setProjects([]Project{{Name: "demo", Path: c.cwd}, {Name: "other", Path: "/other"}})
-	current := []Thread{{ID: 1, Title: "当前运行", Busy: true, LastActivityAt: 20}, {ID: 2, Title: "加载历史", Busy: true, Loading: true}}
+	c := app.C.(*controller.Controller)
+	c.LoadDesktopUnread()
+	c.SetProjects([]appmodel.Project{{Name: "demo", Path: c.Cwd}, {Name: "other", Path: "/other"}})
+	current := []appmodel.Thread{{ID: 1, Title: "当前运行", Busy: true, LastActivityAt: 20}, {ID: 2, Title: "加载历史", Busy: true, Loading: true}}
 	for id := 3; id <= 9; id++ {
-		current = append(current, Thread{ID: id, Title: fmt.Sprintf("待查看 %d", id), LastActivityAt: int64(id)})
-		c.desktopUnread[desktopUnreadKey(current[len(current)-1])] = 100
+		current = append(current, appmodel.Thread{ID: id, Title: fmt.Sprintf("待查看 %d", id), LastActivityAt: int64(id)})
+		c.DesktopUnread[appmodel.DesktopUnreadKey(current[len(current)-1])] = 100
 	}
-	c.setThreads(current)
-	c.projectCache = map[string][]Thread{
-		c.cwd: current, // must not duplicate the current project's entries
+	c.SetThreads(current)
+	c.ProjectCache = map[string][]appmodel.Thread{
+		c.Cwd: current, // must not duplicate the current project's entries
 		"/other": {
 			{ID: 10, Title: "其他项目运行", Busy: true, LastActivityAt: 30},
-			{ID: 11, Title: "其他项目完成", Agent: agentClaude, ServerID: "claude-11", LastActivityAt: 40},
+			{ID: 11, Title: "其他项目完成", Agent: appmodel.AgentClaude, ServerID: "claude-11", LastActivityAt: 40},
 		},
 	}
-	c.desktopUnread[desktopUnreadKey(c.projectCache["/other"][1])] = 100
-	running, completed := app.sidebarActivityThreads()
+	c.DesktopUnread[appmodel.DesktopUnreadKey(c.ProjectCache["/other"][1])] = 100
+	running, completed := app.SidebarActivityThreads()
 	if len(running) != 2 || running[0].ID != 10 || running[1].ID != 1 {
 		t.Fatalf("wrong running conversations: %+v", running)
 	}
 	if len(completed) != 8 || completed[0].ID != 11 {
 		t.Fatalf("completed conversations were duplicated, truncated or unsorted: %+v", completed)
 	}
-	app.expandedProject = ""
-	tt := ui.NewTester(app.sidebarView, 260, 1000)
+	app.ExpandedProject = ""
+	tt := ui.NewTester(app.SidebarView, 260, 1000)
 	tt.Frame()
 	for _, label := range []string{"In progress", "Completed", "其他项目运行", "其他项目完成", "待查看 3"} {
 		if !tt.HasText(label) {
@@ -53,9 +55,9 @@ func TestSidebarActivityAcrossProjects(t *testing.T) {
 	if _, ok := tt.Find("Unread: 其他项目完成"); !ok {
 		t.Fatal("unread completion has no green dot")
 	}
-	c.desktopUnread = nil
-	c.setThreads(nil)
-	c.projectCache = nil
+	c.DesktopUnread = nil
+	c.SetThreads(nil)
+	c.ProjectCache = nil
 	tt.Frame()
 	if tt.HasText("In progress") || tt.HasText("Completed") {
 		t.Fatal("empty activity groups should be hidden")
@@ -64,131 +66,131 @@ func TestSidebarActivityAcrossProjects(t *testing.T) {
 
 func TestDesktopUnreadCompletionPersistenceAndReadVersions(t *testing.T) {
 	app, _ := testApp(t)
-	c := app.c
-	c.loadDesktopUnread()
-	c.installNotifications()
-	c.setThreads([]Thread{{ID: 1, ServerID: "session", Busy: true}, {ID: 2, Busy: true, Loading: true}})
-	c.update(1, func(t *Thread) { t.Busy, t.CompletedAtMs = false, 100 })
-	c.update(2, func(t *Thread) { t.Busy, t.Loading, t.CompletedAtMs = false, false, 100 })
-	finished := c.threadWithID(1)
-	if !c.desktopThreadUnread(finished) || c.desktopThreadUnread(c.threadWithID(2)) {
+	c := app.C.(*controller.Controller)
+	c.LoadDesktopUnread()
+	c.InstallNotifications()
+	c.SetThreads([]appmodel.Thread{{ID: 1, ServerID: "session", Busy: true}, {ID: 2, Busy: true, Loading: true}})
+	c.Update(1, func(t *appmodel.Thread) { t.Busy, t.CompletedAtMs = false, 100 })
+	c.Update(2, func(t *appmodel.Thread) { t.Busy, t.Loading, t.CompletedAtMs = false, false, 100 })
+	finished := c.ThreadWithID(1)
+	if !c.DesktopThreadUnread(finished) || c.DesktopThreadUnread(c.ThreadWithID(2)) {
 		t.Fatal("completion should be unread; loaded history should not")
 	}
-	c.projectCache = map[string][]Thread{"/other": {{ID: 3, ServerID: "background", Busy: true}}}
-	c.update(3, func(t *Thread) { t.Busy, t.CompletedAtMs = false, 150 })
-	if !c.desktopThreadUnread(c.threadWithID(3)) {
+	c.ProjectCache = map[string][]appmodel.Thread{"/other": {{ID: 3, ServerID: "background", Busy: true}}}
+	c.Update(3, func(t *appmodel.Thread) { t.Busy, t.CompletedAtMs = false, 150 })
+	if !c.DesktopThreadUnread(c.ThreadWithID(3)) {
 		t.Fatal("background completion was not recorded")
 	}
-	restored := &chatController{}
-	restored.loadDesktopUnread()
+	restored := &controller.Controller{}
+	restored.LoadDesktopUnread()
 	remapped := finished
 	remapped.ID = 77
-	if !restored.desktopThreadUnread(remapped) {
+	if !restored.DesktopThreadUnread(remapped) {
 		t.Fatal("restart or reassigned sidebar ID lost unread state")
 	}
 	otherAgent := remapped
-	otherAgent.Agent = agentClaude
-	if restored.desktopThreadUnread(otherAgent) {
+	otherAgent.Agent = appmodel.AgentClaude
+	if restored.DesktopThreadUnread(otherAgent) {
 		t.Fatal("unread state leaked across backends")
 	}
-	c.update(1, func(t *Thread) { t.Busy = true })
-	c.update(1, func(t *Thread) { t.Busy, t.CompletedAtMs = false, 200 })
-	c.markDesktopRead(desktopRead{Key: desktopUnreadKey(finished), Version: 100})
-	if !c.desktopThreadUnread(finished) {
+	c.Update(1, func(t *appmodel.Thread) { t.Busy = true })
+	c.Update(1, func(t *appmodel.Thread) { t.Busy, t.CompletedAtMs = false, 200 })
+	c.MarkDesktopRead(appmodel.DesktopRead{Key: appmodel.DesktopUnreadKey(finished), Version: 100})
+	if !c.DesktopThreadUnread(finished) {
 		t.Fatal("stale read acknowledgement cleared a newer completion")
 	}
-	c.readDesktopThread(finished)
-	if c.desktopThreadUnread(finished) {
+	c.ReadDesktopThread(finished)
+	if c.DesktopThreadUnread(finished) {
 		t.Fatal("opening the completed conversation did not clear unread state")
 	}
-	restored.loadDesktopUnread()
-	if restored.desktopThreadUnread(remapped) {
+	restored.LoadDesktopUnread()
+	if restored.DesktopThreadUnread(remapped) {
 		t.Fatal("read state did not persist")
 	}
 }
 
 func TestDesktopUnreadServiceSnapshotAndAcknowledgement(t *testing.T) {
 	app, _ := testApp(t)
-	c := app.c
-	c.loadDesktopUnread()
-	thread := Thread{ID: 2, ServerID: "background", Agent: agentClaude}
-	c.setProjects(append(c.projects(), Project{Name: "other", Path: "/other"}))
-	c.projectCache = map[string][]Thread{"/other": {thread}}
-	c.recordDesktopCompletion(Thread{Busy: true}, Thread{ID: 2, ServerID: thread.ServerID, Agent: thread.Agent, CompletedAtMs: 100})
-	data, err := json.Marshal(c.snapshotState())
+	c := app.C.(*controller.Controller)
+	c.LoadDesktopUnread()
+	thread := appmodel.Thread{ID: 2, ServerID: "background", Agent: appmodel.AgentClaude}
+	c.SetProjects(append(c.Projects(), appmodel.Project{Name: "other", Path: "/other"}))
+	c.ProjectCache = map[string][]appmodel.Thread{"/other": {thread}}
+	c.RecordDesktopCompletion(appmodel.Thread{Busy: true}, appmodel.Thread{ID: 2, ServerID: thread.ServerID, Agent: thread.Agent, CompletedAtMs: 100})
+	data, err := json.Marshal(c.SnapshotState())
 	if err != nil {
 		t.Fatal(err)
 	}
-	var state svcState
+	var state appmodel.SvcState
 	if err := json.Unmarshal(data, &state); err != nil {
 		t.Fatal(err)
 	}
-	mirror := newMirrorController()
-	t.Cleanup(mirror.cancel)
-	mirror.applyState(state)
-	if !mirror.desktopThreadUnread(thread) {
+	mirror := controller.NewMirrorController()
+	t.Cleanup(mirror.Cancel)
+	mirror.ApplyState(state)
+	if !mirror.DesktopThreadUnread(thread) {
 		t.Fatal("service did not send background unread state to the window")
 	}
-	key := desktopUnreadKey(thread)
-	mirror.desktopReadPending = map[string]int64{key: 100}
-	mirror.applyState(state)
-	if mirror.desktopThreadUnread(thread) {
+	key := appmodel.DesktopUnreadKey(thread)
+	mirror.DesktopReadPending = map[string]int64{key: 100}
+	mirror.ApplyState(state)
+	if mirror.DesktopThreadUnread(thread) {
 		t.Fatal("in-flight acknowledgement reappeared after an older snapshot")
 	}
-	args, _ := json.Marshal(desktopRead{Key: key, Version: 100})
-	s := &service{c: c, dirty: make(chan struct{}, 1)}
-	if _, err := s.handle(nil, svcRequest{Op: "desktop-read", Args: args}); err != nil {
+	args, _ := json.Marshal(appmodel.DesktopRead{Key: key, Version: 100})
+	s := &controller.Service{C: c, Dirty: make(chan struct{}, 1)}
+	if _, err := s.Handle(nil, appmodel.SvcRequest{Op: "desktop-read", Args: args}); err != nil {
 		t.Fatal(err)
 	}
-	mirror.applyState(c.snapshotState())
-	if mirror.desktopThreadUnread(thread) || len(mirror.desktopReadPending) != 0 {
+	mirror.ApplyState(c.SnapshotState())
+	if mirror.DesktopThreadUnread(thread) || len(mirror.DesktopReadPending) != 0 {
 		t.Fatal("service did not acknowledge read state")
 	}
 	state.DesktopUnread[key] = 200
-	mirror.applyState(state)
-	if !mirror.desktopThreadUnread(thread) {
+	mirror.ApplyState(state)
+	if !mirror.DesktopThreadUnread(thread) {
 		t.Fatal("a newer completion should become unread again")
 	}
 }
 
 func TestSidebarActivityOpensOtherProject(t *testing.T) {
 	app, _ := testApp(t)
-	c := app.c
+	c := app.C.(*controller.Controller)
 	// This test exercises navigation using cached threads, without discovery IO.
-	c.connecting = true
-	c.run = func(func()) {}
+	c.Connecting = true
+	c.Run = func(func()) {}
 	other := t.TempDir()
-	c.setProjects(append(c.projects(), Project{Name: "other", Path: other}))
-	thread := Thread{ID: 2, Title: "跨项目会话", Busy: true, LastActivityAt: 50}
-	c.projectCache = map[string][]Thread{other: {thread}}
-	before := append([]Project(nil), c.projects()...)
-	tt := ui.NewTester(app.sidebarView, 260, 750)
+	c.SetProjects(append(c.Projects(), appmodel.Project{Name: "other", Path: other}))
+	thread := appmodel.Thread{ID: 2, Title: "跨项目会话", Busy: true, LastActivityAt: 50}
+	c.ProjectCache = map[string][]appmodel.Thread{other: {thread}}
+	before := append([]appmodel.Project(nil), c.Projects()...)
+	tt := ui.NewTester(app.SidebarView, 260, 750)
 	if err := tt.Click(thread.Title); err != nil {
 		t.Fatal(err)
 	}
-	if c.cwd != other || c.active() != thread.ID || app.workspace != other || app.expandedProject != other || app.projectName != "other" {
+	if c.Cwd != other || c.Active() != thread.ID || app.Workspace != other || app.ExpandedProject != other || app.ProjectName != "other" {
 		t.Fatal("activity row did not open the conversation in its project")
 	}
-	if !reflect.DeepEqual(before, c.projects()) || c.current().LastActivityAt != 50 {
+	if !reflect.DeepEqual(before, c.Projects()) || c.Current().LastActivityAt != 50 {
 		t.Fatal("viewing a conversation changed activity order")
 	}
 }
 
 func TestDesktopCompletionStaysUnreadWithoutDisplayingMessages(t *testing.T) {
 	app, _ := testApp(t)
-	c := app.c
-	c.loadDesktopUnread()
-	c.installNotifications()
-	c.setThreads([]Thread{{ID: 1, ServerID: "session", Title: "完成后保留待读", Busy: true, HistoryLoaded: true}})
-	app.selectThread(c.threadWithID(1))
-	c.update(1, func(t *Thread) { t.Busy, t.CompletedAtMs = false, 100 })
+	c := app.C.(*controller.Controller)
+	c.LoadDesktopUnread()
+	c.InstallNotifications()
+	c.SetThreads([]appmodel.Thread{{ID: 1, ServerID: "session", Title: "完成后保留待读", Busy: true, HistoryLoaded: true}})
+	app.SelectThread(c.ThreadWithID(1))
+	c.Update(1, func(t *appmodel.Thread) { t.Busy, t.CompletedAtMs = false, 100 })
 	// Sidebar-only frames do not prove that the result has been displayed.
 	for i := 0; i < 3; i++ {
-		app.markRequestedThreadRead()
+		app.MarkRequestedThreadRead()
 	}
-	tt := ui.NewTester(app.sidebarView, 260, 750)
+	tt := ui.NewTester(app.SidebarView, 260, 750)
 	tt.Frame()
-	if !c.desktopThreadUnread(c.current()) || !tt.HasText("Completed") {
+	if !c.DesktopThreadUnread(c.Current()) || !tt.HasText("Completed") {
 		t.Fatal("completion vanished before the user chose to view it")
 	}
 	if _, ok := tt.Find("Unread: 完成后保留待读"); !ok {
@@ -197,41 +199,41 @@ func TestDesktopCompletionStaysUnreadWithoutDisplayingMessages(t *testing.T) {
 	if err := tt.Click("完成后保留待读"); err != nil {
 		t.Fatal(err)
 	}
-	app.markRequestedThreadRead()
+	app.MarkRequestedThreadRead()
 	tt.Frame()
-	if c.desktopThreadUnread(c.current()) || tt.HasText("Completed") {
+	if c.DesktopThreadUnread(c.Current()) || tt.HasText("Completed") {
 		t.Fatal("explicitly viewing the completed result should clear unread")
 	}
 }
 
 func TestDesktopOpenCompletionBecomesReadAfterDisplayingLatest(t *testing.T) {
 	app, tt := testApp(t)
-	c := app.c
-	c.loadDesktopUnread()
-	c.installNotifications()
-	c.setThreads([]Thread{{ID: 1, ServerID: "session", Title: "当前对话", Busy: true, HistoryLoaded: true,
-		Messages: []Message{{ID: 10, Role: "user", Content: "请求"}, {ID: 11, Role: "assistant", Content: "回复"}}}})
-	app.selectThread(c.threadWithID(1))
+	c := app.C.(*controller.Controller)
+	c.LoadDesktopUnread()
+	c.InstallNotifications()
+	c.SetThreads([]appmodel.Thread{{ID: 1, ServerID: "session", Title: "当前对话", Busy: true, HistoryLoaded: true,
+		Messages: []appmodel.Message{{ID: 10, Role: "user", Content: "请求"}, {ID: 11, Role: "assistant", Content: "回复"}}}})
+	app.SelectThread(c.ThreadWithID(1))
 	tt.Frame()
-	c.update(1, func(t *Thread) { t.Busy, t.CompletedAtMs = false, 100 })
+	c.Update(1, func(t *appmodel.Thread) { t.Busy, t.CompletedAtMs = false, 100 })
 	// The previous frame still showed a running turn.
-	app.markDisplayedThreadRead()
-	if !c.desktopThreadUnread(c.current()) {
+	app.MarkDisplayedThreadRead()
+	if !c.DesktopThreadUnread(c.Current()) {
 		t.Fatal("completion was acknowledged before its finished frame")
 	}
 	tt.Frame()
-	if !app.listFor(1).AtEnd() {
+	if !app.ListFor(1).AtEnd() {
 		t.Fatal("the completed result is not on screen")
 	}
 	// An unfocused/headless window cannot acknowledge it merely by repainting.
-	app.markVisibleThreadRead()
-	if !c.desktopThreadUnread(c.current()) {
+	app.MarkVisibleThreadRead()
+	if !c.DesktopThreadUnread(c.Current()) {
 		t.Fatal("a background window acknowledged the completion")
 	}
 	// Exercise the displayed-content check after the window focus guard.
-	app.markDisplayedThreadRead()
+	app.MarkDisplayedThreadRead()
 	tt.Frame()
-	if c.desktopThreadUnread(c.current()) || tt.HasText("Completed") {
+	if c.DesktopThreadUnread(c.Current()) || tt.HasText("Completed") {
 		t.Fatal("the result already displayed at the end stayed unread")
 	}
 	if _, ok := tt.Find("Unread: 当前对话"); ok {
@@ -241,95 +243,95 @@ func TestDesktopOpenCompletionBecomesReadAfterDisplayingLatest(t *testing.T) {
 
 func TestDesktopDisplayedReadWaitsForLatestAndVisibleConversation(t *testing.T) {
 	app, tt := testApp(t)
-	c := app.c
-	c.loadDesktopUnread()
-	c.setThreads([]Thread{{ID: 1, ServerID: "session", HistoryLoaded: true, CompletedAtMs: 100, Messages: scrollTestMessages()}})
-	c.setActive(1)
-	key := desktopUnreadKey(c.current())
-	c.desktopUnread[key] = 100
+	c := app.C.(*controller.Controller)
+	c.LoadDesktopUnread()
+	c.SetThreads([]appmodel.Thread{{ID: 1, ServerID: "session", HistoryLoaded: true, CompletedAtMs: 100, Messages: scrollTestMessages()}})
+	c.SetActive(1)
+	key := appmodel.DesktopUnreadKey(c.Current())
+	c.DesktopUnread[key] = 100
 	tt.Frame()
-	list := app.listFor(1)
+	list := app.ListFor(1)
 	list.ScrollTo(10, ui.Center)
 	tt.Frame()
-	app.markDisplayedThreadRead()
-	if list.AtEnd() || !c.desktopThreadUnread(c.current()) {
+	app.MarkDisplayedThreadRead()
+	if list.AtEnd() || !c.DesktopThreadUnread(c.Current()) {
 		t.Fatal("reading older messages acknowledged an unseen latest result")
 	}
 	list.ScrollToEnd()
 	tt.Frame()
 	for _, hidden := range []string{"settings", "switcher", "shortcuts", "command-palette", "project-dialog", "mobile"} {
-		app.section = ""
-		app.switcher.open, app.shortcutsOpen, app.projectDialog, app.mobile = false, false, false, false
-		app.commandPalette.open = false
+		app.Section = ""
+		app.Switcher.Open, app.ShortcutsOpen, app.ProjectDialog, app.Mobile = false, false, false, false
+		app.CommandPalette.Open = false
 		switch hidden {
 		case "settings":
-			app.section = "Settings"
+			app.Section = "Settings"
 		case "switcher":
-			app.switcher.open = true
+			app.Switcher.Open = true
 		case "shortcuts":
-			app.shortcutsOpen = true
+			app.ShortcutsOpen = true
 		case "command-palette":
-			app.commandPalette.open = true
+			app.CommandPalette.Open = true
 		case "project-dialog":
-			app.projectDialog = true
+			app.ProjectDialog = true
 		case "mobile":
-			app.mobile = true
+			app.Mobile = true
 		}
-		app.markDisplayedThreadRead()
-		if !c.desktopThreadUnread(c.current()) {
+		app.MarkDisplayedThreadRead()
+		if !c.DesktopThreadUnread(c.Current()) {
 			t.Fatalf("hidden conversation acknowledged by %s", hidden)
 		}
 	}
-	app.mobile = false
+	app.Mobile = false
 	// Metadata can publish before the new message contents arrive.
-	c.desktopUnread[key] = 200
-	app.markDisplayedThreadRead()
-	if !c.desktopThreadUnread(c.current()) {
+	c.DesktopUnread[key] = 200
+	app.MarkDisplayedThreadRead()
+	if !c.DesktopThreadUnread(c.Current()) {
 		t.Fatal("an older displayed result acknowledged a newer completion")
 	}
-	c.update(1, func(t *Thread) { t.CompletedAtMs = 200 })
-	app.markDisplayedThreadRead()
-	if !c.desktopThreadUnread(c.current()) {
+	c.Update(1, func(t *appmodel.Thread) { t.CompletedAtMs = 200 })
+	app.MarkDisplayedThreadRead()
+	if !c.DesktopThreadUnread(c.Current()) {
 		t.Fatal("new completion metadata was acknowledged before rendering")
 	}
 	tt.Frame()
-	app.markDisplayedThreadRead()
-	if c.desktopThreadUnread(c.current()) {
+	app.MarkDisplayedThreadRead()
+	if c.DesktopThreadUnread(c.Current()) {
 		t.Fatal("reading the latest completed result did not clear unread")
 	}
 }
 
 func TestDesktopReadIntentWaitsForHistoryAndKeepsNewerCompletion(t *testing.T) {
 	app, _ := testApp(t)
-	c := app.c
-	c.loadDesktopUnread()
-	c.installNotifications()
-	c.setThreads([]Thread{{ID: 1, ServerID: "session", CompletedAtMs: 100}})
-	c.setActive(1)
-	c.desktopUnread[desktopUnreadKey(c.current())] = 100
-	app.selectThread(c.current())
-	app.markRequestedThreadRead()
-	if !c.desktopThreadUnread(c.current()) {
+	c := app.C.(*controller.Controller)
+	c.LoadDesktopUnread()
+	c.InstallNotifications()
+	c.SetThreads([]appmodel.Thread{{ID: 1, ServerID: "session", CompletedAtMs: 100}})
+	c.SetActive(1)
+	c.DesktopUnread[appmodel.DesktopUnreadKey(c.Current())] = 100
+	app.SelectThread(c.Current())
+	app.MarkRequestedThreadRead()
+	if !c.DesktopThreadUnread(c.Current()) {
 		t.Fatal("history must arrive before acknowledging a selected result")
 	}
-	c.update(1, func(t *Thread) { t.HistoryLoaded = true })
-	app.section = "Settings"
-	app.markRequestedThreadRead()
-	if !c.desktopThreadUnread(c.current()) {
+	c.Update(1, func(t *appmodel.Thread) { t.HistoryLoaded = true })
+	app.Section = "Settings"
+	app.MarkRequestedThreadRead()
+	if !c.DesktopThreadUnread(c.Current()) {
 		t.Fatal("a settings page should not acknowledge hidden conversation content")
 	}
-	app.section = ""
-	app.markRequestedThreadRead()
-	if c.desktopThreadUnread(c.current()) {
+	app.Section = ""
+	app.MarkRequestedThreadRead()
+	if c.DesktopThreadUnread(c.Current()) {
 		t.Fatal("loaded history was not acknowledged after selection")
 	}
-	c.update(1, func(t *Thread) { t.Busy = true })
-	c.update(1, func(t *Thread) { t.Busy, t.CompletedAtMs = false, 200 })
-	app.requestDesktopRead(c.current())
-	c.update(1, func(t *Thread) { t.Busy = true })
-	c.update(1, func(t *Thread) { t.Busy, t.CompletedAtMs = false, 300 })
-	app.markRequestedThreadRead()
-	if !c.desktopThreadUnread(c.current()) {
+	c.Update(1, func(t *appmodel.Thread) { t.Busy = true })
+	c.Update(1, func(t *appmodel.Thread) { t.Busy, t.CompletedAtMs = false, 200 })
+	app.RequestDesktopRead(c.Current())
+	c.Update(1, func(t *appmodel.Thread) { t.Busy = true })
+	c.Update(1, func(t *appmodel.Thread) { t.Busy, t.CompletedAtMs = false, 300 })
+	app.MarkRequestedThreadRead()
+	if !c.DesktopThreadUnread(c.Current()) {
 		t.Fatal("an earlier selection acknowledged a result that completed later")
 	}
 }

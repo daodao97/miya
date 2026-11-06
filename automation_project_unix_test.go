@@ -3,37 +3,39 @@
 package main
 
 import (
-	"testing"
+	appmodel "miya/internal/appmodel"
+	controller "miya/internal/controller"
+	testing "testing"
 )
 
 // The Codex fixture is a Python script, which Windows cannot run as a binary.
 func TestWorkspaceSwitchKeepsRunningClaudeConversations(t *testing.T) {
 	c, _, _ := codexResumeFixture(t)
-	first, second := c.cwd, t.TempDir()
-	c.addThread("", Thread{ID: 901, Agent: agentClaude, ServerID: "s-busy", Title: "running", Busy: true, Loaded: true, HistoryLoaded: true})
-	c.addThread("", Thread{ID: 902, Agent: agentClaude, ServerID: "s-idle", Title: "idle", Loaded: true, HistoryLoaded: true})
-	if err := c.changeWorkspace(second); err != nil {
+	first, second := c.Cwd, t.TempDir()
+	c.AddThread("", appmodel.Thread{ID: 901, Agent: appmodel.AgentClaude, ServerID: "s-busy", Title: "running", Busy: true, Loaded: true, HistoryLoaded: true})
+	c.AddThread("", appmodel.Thread{ID: 902, Agent: appmodel.AgentClaude, ServerID: "s-idle", Title: "idle", Loaded: true, HistoryLoaded: true})
+	if err := c.ChangeWorkspace(second); err != nil {
 		t.Fatal(err)
 	}
-	running := c.threadWithID(901)
-	if !running.Busy || !running.Loaded || c.threadWorkspace(901) != first {
-		t.Fatalf("switching project stopped a running Claude conversation: %+v in %q", running, c.threadWorkspace(901))
+	running := c.ThreadWithID(901)
+	if !running.Busy || !running.Loaded || c.ThreadWorkspace(901) != first {
+		t.Fatalf("switching project stopped a running Claude conversation: %+v in %q", running, c.ThreadWorkspace(901))
 	}
-	if c.threadWithID(902).Loaded {
+	if c.ThreadWithID(902).Loaded {
 		t.Fatal("idle Claude conversation was kept loaded")
 	}
-	if !(&service{c: c}).busy() {
+	if !(&controller.Service{C: c}).Busy() {
 		t.Fatal("the background run does not keep the service up")
 	}
-	c.finishClaude(901, first, nil)
-	if done := c.threadWithID(901); done.Busy || done.CompletedAtMs == 0 {
+	c.FinishClaude(901, first, nil)
+	if done := c.ThreadWithID(901); done.Busy || done.CompletedAtMs == 0 {
 		t.Fatalf("background run did not finish: %+v", done)
 	}
-	if err := c.changeWorkspace(first); err != nil {
+	if err := c.ChangeWorkspace(first); err != nil {
 		t.Fatal(err)
 	}
 	found := false
-	for _, th := range c.threads() {
+	for _, th := range c.Threads() {
 		if th.ID == 901 {
 			found = true
 		}

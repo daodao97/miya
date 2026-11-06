@@ -1,15 +1,16 @@
 package main
 
 import (
-	"image/png"
-	"os"
-	"path/filepath"
-	"testing"
-	"time"
+	png "image/png"
+	appmodel "miya/internal/appmodel"
+	automation "miya/internal/automation"
+	controller "miya/internal/controller"
+	os "os"
+	filepath "path/filepath"
+	testing "testing"
+	time "time"
 
-	"miya/internal/automation"
-
-	"github.com/egoist/mygo/ui"
+	ui "github.com/egoist/mygo/ui"
 )
 
 func automationSnapshot(t *testing.T, tt *ui.Tester, name string) {
@@ -27,21 +28,21 @@ func automationSnapshot(t *testing.T, tt *ui.Tester, name string) {
 
 func TestAutomationsPage(t *testing.T) {
 	app, tt := testApp(t)
-	c := app.c
-	c.cwd = t.TempDir()
-	c.startAutomations(filepath.Join(t.TempDir(), "automations.json"), false)
+	c := app.C.(*controller.Controller)
+	c.Cwd = t.TempDir()
+	c.StartAutomations(filepath.Join(t.TempDir(), "automations.json"), false)
 	now := atLocal("2026-11-02 08:30")
-	c.auto.Now = func() time.Time { return now }
-	issue, err := c.auto.Save(automation.Automation{Name: "每日 Issue 分拣", Project: c.cwd, Agent: agentClaude, Instructions: "查看最近 24 小时新开的 Issue。值得处理的直接修复并补测试，修不了的列出来说明原因。", Request: "每个工作日 9 点看新 Issue，能修就修", Schedule: "0 9 * * 1-5", Check: "go test ./...", Rounds: 3, Enabled: true})
+	c.Auto.Now = func() time.Time { return now }
+	issue, err := c.Auto.Save(automation.Automation{Name: "每日 Issue 分拣", Project: c.Cwd, Agent: appmodel.AgentClaude, Instructions: "查看最近 24 小时新开的 Issue。值得处理的直接修复并补测试，修不了的列出来说明原因。", Request: "每个工作日 9 点看新 Issue，能修就修", Schedule: "0 9 * * 1-5", Check: "go test ./...", Rounds: 3, Enabled: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	c.auto.Store.AddRun(issue.ID, automation.Run{Started: atLocal("2026-11-01 09:00"), Finished: atLocal("2026-11-01 09:14"), Round: 2, Rounds: 3, Result: automation.Passed, Summary: "修复 #142 时区判断，补了测试", Thread: 99})
-	c.auto.Store.AddRun(issue.ID, automation.Run{Started: atLocal("2026-10-31 09:00"), Finished: atLocal("2026-10-31 09:31"), Round: 3, Rounds: 3, Result: automation.Failed, Summary: "检查未通过：FAIL demo/auth"})
-	if _, err := c.auto.Save(automation.Automation{Name: "仓库日报", Project: c.cwd, Agent: agentCodex, Instructions: "写今天的仓库日报", Schedule: "0 18 * * *"}); err != nil {
+	c.Auto.Store.AddRun(issue.ID, automation.Run{Started: atLocal("2026-11-01 09:00"), Finished: atLocal("2026-11-01 09:14"), Round: 2, Rounds: 3, Result: automation.Passed, Summary: "修复 #142 时区判断，补了测试", Thread: 99})
+	c.Auto.Store.AddRun(issue.ID, automation.Run{Started: atLocal("2026-10-31 09:00"), Finished: atLocal("2026-10-31 09:31"), Round: 3, Rounds: 3, Result: automation.Failed, Summary: "检查未通过：FAIL demo/auth"})
+	if _, err := c.Auto.Save(automation.Automation{Name: "仓库日报", Project: c.Cwd, Agent: appmodel.AgentCodex, Instructions: "写今天的仓库日报", Schedule: "0 18 * * *"}); err != nil {
 		t.Fatal(err)
 	}
-	app.showAutomations()
+	app.ShowAutomations()
 	tt.Frame()
 	tt.Frame()
 	for _, want := range []string{"Automations", "每日 Issue 分拣", "Weekdays 9:00", "Failed · 3/3 turns", "仓库日报", "Paused", "New"} {
@@ -51,7 +52,7 @@ func TestAutomationsPage(t *testing.T) {
 	}
 	automationSnapshot(t, tt, "automations-list")
 
-	app.autos.page, app.autos.detail = "detail", issue.ID
+	app.Autos.Page, app.Autos.Detail = "detail", issue.ID
 	tt.Frame()
 	for _, want := range []string{"Run history", "Run now", "修复 #142 时区判断，补了测试", "go test ./...", "Last 2 runs"} {
 		if !tt.HasText(want) {
@@ -60,11 +61,11 @@ func TestAutomationsPage(t *testing.T) {
 	}
 	automationSnapshot(t, tt, "automations-detail")
 
-	app.openAutomationForm(nil)
-	app.autos.request = "每个工作日早上 9 点看一下新 Issue，能修的修掉并保证 go test 通过，修不过就多试两次"
+	app.OpenAutomationForm(nil)
+	app.Autos.Request = "每个工作日早上 9 点看一下新 Issue，能修的修掉并保证 go test 通过，修不过就多试两次"
 	draft := automation.ViewOf(issue, nil, false, now)
 	draft.ID = ""
-	app.autos.draft = &draft
+	app.Autos.Draft = &draft
 	tt.Frame()
 	for _, want := range []string{"New automation", "Generated settings", "Ready", "Up to 3 turns", "0 9 * * 1-5", "Create"} {
 		if !tt.HasText(want) {
@@ -73,12 +74,12 @@ func TestAutomationsPage(t *testing.T) {
 	}
 	automationSnapshot(t, tt, "automations-form")
 
-	app.autos.draft.TimeMissing = true
+	app.Autos.Draft.TimeMissing = true
 	tt.Frame()
 	if !tt.HasText("Schedule needed") {
 		t.Fatalf("missing time not shown: %q", tt.Texts())
 	}
-	app.autos.draft, app.autos.drafting = nil, true
+	app.Autos.Draft, app.Autos.Drafting = nil, true
 	tt.Frame()
 	if !tt.HasText("Generating…") {
 		t.Fatalf("drafting not shown: %q", tt.Texts())
@@ -88,13 +89,13 @@ func TestAutomationsPage(t *testing.T) {
 
 func TestAutomationDraftRequiresButton(t *testing.T) {
 	app, tt := testApp(t)
-	app.showAutomations()
-	app.openAutomationForm(nil)
+	app.ShowAutomations()
+	app.OpenAutomationForm(nil)
 	tt.Frame()
 	if err := tt.Click("Generate settings"); err != nil {
 		t.Fatal(err)
 	}
-	if app.autos.draftErr != "" || app.autos.drafting {
+	if app.Autos.DraftErr != "" || app.Autos.Drafting {
 		t.Fatal("empty input started generation")
 	}
 	if err := tt.Click("What to do"); err != nil {
@@ -102,19 +103,19 @@ func TestAutomationDraftRequiresButton(t *testing.T) {
 	}
 	tt.Type("每天 14 点清理存储空间")
 	tt.Frame()
-	if app.autos.request == "" {
+	if app.Autos.Request == "" {
 		t.Fatal("request input was not updated")
 	}
 	// Wait past the former debounce interval to catch accidental auto-generation.
 	time.Sleep(1100 * time.Millisecond)
 	tt.Frame()
-	if app.autos.drafting || app.autos.draft != nil || app.autos.draftErr != "" {
+	if app.Autos.Drafting || app.Autos.Draft != nil || app.Autos.DraftErr != "" {
 		t.Fatal("typing started generation")
 	}
 	if err := tt.Click("Claude Code"); err != nil {
 		t.Fatal(err)
 	}
-	if app.autos.agent != agentClaude || app.autos.drafting || app.autos.draftErr != "" {
+	if app.Autos.Agent != appmodel.AgentClaude || app.Autos.Drafting || app.Autos.DraftErr != "" {
 		t.Fatal("agent selection started generation")
 	}
 	if err := tt.Click("Generate settings"); err != nil {
@@ -122,30 +123,30 @@ func TestAutomationDraftRequiresButton(t *testing.T) {
 	}
 	// This controller has no service. Its error proves the button sent a request
 	// without launching a real agent in the test.
-	if app.autos.draftErr != "Automations require the Miya background service" {
-		t.Fatalf("button did not request generation: %q", app.autos.draftErr)
+	if app.Autos.DraftErr != "Automations require the Miya background service" {
+		t.Fatalf("button did not request generation: %q", app.Autos.DraftErr)
 	}
 }
 
 func TestAutomationInputDiscardsOldDraft(t *testing.T) {
 	app, tt := testApp(t)
-	app.showAutomations()
-	app.openAutomationForm(nil)
-	app.autos.request = "每天 9 点运行测试"
-	app.autos.draft = &automation.View{Automation: automation.Automation{Name: "Old settings"}}
+	app.ShowAutomations()
+	app.OpenAutomationForm(nil)
+	app.Autos.Request = "每天 9 点运行测试"
+	app.Autos.Draft = &automation.View{Automation: automation.Automation{Name: "Old settings"}}
 	tt.Frame()
 	if err := tt.Click("What to do"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Type("，报告失败原因")
 	tt.Frame()
-	if app.autos.draft != nil || app.autos.drafting || tt.HasText("Ready") {
+	if app.Autos.Draft != nil || app.Autos.Drafting || tt.HasText("Ready") {
 		t.Fatal("edited request kept old settings ready to save")
 	}
 	if err := tt.Click("Create"); err != nil {
 		t.Fatal(err)
 	}
-	if app.autos.saving || app.autos.draftErr != "" {
+	if app.Autos.Saving || app.Autos.DraftErr != "" {
 		t.Fatal("edited request allowed saving old settings")
 	}
 }

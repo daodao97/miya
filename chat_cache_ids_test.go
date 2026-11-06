@@ -1,17 +1,19 @@
 package main
 
 import (
-	"testing"
+	appmodel "miya/internal/appmodel"
+	controller "miya/internal/controller"
+	testing "testing"
 )
 
 func TestCachedThreadIDsDoNotCollideWithNewThreads(t *testing.T) {
-	c := &chatController{projectCache: map[string][]Thread{
+	c := &controller.Controller{WindowState: appmodel.WindowState{ProjectCache: map[string][]appmodel.Thread{
 		"/first":  {{ID: 1, ServerID: "a"}, {ID: 1, ServerID: "b"}},
 		"/second": {{ID: 1, ServerID: "c"}, {ID: 0, ServerID: "d"}},
-	}}
-	c.assignCachedThreadIDs()
+	}}}
+	c.AssignCachedThreadIDs()
 	seen := map[int]bool{}
-	for _, threads := range c.projectCache {
+	for _, threads := range c.ProjectCache {
 		for _, thread := range threads {
 			if thread.ID <= 0 || seen[thread.ID] {
 				t.Fatalf("duplicate or invalid restored ID: %d", thread.ID)
@@ -19,22 +21,22 @@ func TestCachedThreadIDsDoNotCollideWithNewThreads(t *testing.T) {
 			seen[thread.ID] = true
 		}
 	}
-	newID := c.nextID()
+	newID := c.NextID()
 	if seen[newID] {
 		t.Fatalf("new thread reused cached ID: %d", newID)
 	}
 }
 
 func TestCachedThreadIDsSurviveDesktopRestart(t *testing.T) {
-	c := &chatController{projectCache: map[string][]Thread{
+	c := &controller.Controller{WindowState: appmodel.WindowState{ProjectCache: map[string][]appmodel.Thread{
 		"/a": {{ID: 345, ServerID: "old"}, {ID: 8, ServerID: "another"}},
 		"/b": {{ID: 900, ServerID: "other-project"}},
-	}}
-	c.assignCachedThreadIDs()
-	if c.projectCache["/a"][0].ID != 345 || c.projectCache["/a"][1].ID != 8 || c.projectCache["/b"][0].ID != 900 {
-		t.Fatalf("restart renumbered a published conversation: %+v", c.projectCache)
+	}}}
+	c.AssignCachedThreadIDs()
+	if c.ProjectCache["/a"][0].ID != 345 || c.ProjectCache["/a"][1].ID != 8 || c.ProjectCache["/b"][0].ID != 900 {
+		t.Fatalf("restart renumbered a published conversation: %+v", c.ProjectCache)
 	}
-	if got := c.nextID(); got <= 900 {
+	if got := c.NextID(); got <= 900 {
 		t.Fatalf("new thread reused a published ID: %d", got)
 	}
 }

@@ -3,11 +3,13 @@
 package main
 
 import (
-	"os"
-	"path/filepath"
-	"strings"
-	"testing"
-	"time"
+	appmodel "miya/internal/appmodel"
+	controller "miya/internal/controller"
+	os "os"
+	filepath "path/filepath"
+	strings "strings"
+	testing "testing"
+	time "time"
 )
 
 // steerClaude records the second message of the turn, then ends it.
@@ -28,22 +30,22 @@ func TestSteerFoldsIntoTheRunningClaudeTurn(t *testing.T) {
 	if err := os.WriteFile(bin, []byte(steerClaude), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	c.claudeBinary, c.claudeEnv = bin, []string{"MIYA_OUT=" + out}
-	c.setThreads(nil)
-	id := c.submit(SendRequest{Agent: agentClaude, Text: "first"})
+	c.ClaudeBinary, c.ClaudeEnv = bin, []string{"MIYA_OUT=" + out}
+	c.SetThreads(nil)
+	id := c.Submit(appmodel.SendRequest{Agent: appmodel.AgentClaude, Text: "first"})
 	for deadline := time.Now().Add(time.Minute); ; time.Sleep(10 * time.Millisecond) {
 		d.drain()
-		if run := c.claudeRuns[id]; run != nil && run.Steerable() {
+		if run := c.ClaudeRuns[id]; run != nil && run.Steerable() {
 			break
 		}
 		if time.Now().After(deadline) {
 			t.Fatal("the run never took more messages")
 		}
 	}
-	if c.submit(SendRequest{ThreadID: id, Text: "steered please", Steer: true}) != id {
+	if c.Submit(appmodel.SendRequest{ThreadID: id, Text: "steered please", Steer: true}) != id {
 		t.Fatal("steer refused")
 	}
-	th := c.threadWithID(id)
+	th := c.ThreadWithID(id)
 	if got := userTexts(th); len(got) != 2 || got[1] != "steered please" || len(th.Queue) != 0 {
 		t.Fatalf("after steering: %q queue %+v", got, th.Queue)
 	}
@@ -60,14 +62,14 @@ func TestSteerFoldsIntoTheRunningClaudeTurn(t *testing.T) {
 func TestSteerFallsBackToTheQueue(t *testing.T) {
 	c, _ := queueController(t)
 	// No running process, as a turn still starting.
-	if c.submit(SendRequest{ThreadID: 1, Text: "later", Steer: true}) != 1 {
+	if c.Submit(appmodel.SendRequest{ThreadID: 1, Text: "later", Steer: true}) != 1 {
 		t.Fatal("refused")
 	}
-	if th := c.threadWithID(1); len(th.Queue) != 1 || th.Queue[0].Steer || len(th.Messages) != 0 {
+	if th := c.ThreadWithID(1); len(th.Queue) != 1 || th.Queue[0].Steer || len(th.Messages) != 0 {
 		t.Fatalf("not queued: %+v", th)
 	}
 	// Codex cannot steer a thread without a running turn either.
-	if (codexBackend{}).Steer(c, Thread{ID: 1, ServerID: "t1", Resumed: true}, SendRequest{Text: "x"}) {
+	if (controller.CodexBackend{}).Steer(c, appmodel.Thread{ID: 1, ServerID: "t1", Resumed: true}, appmodel.SendRequest{Text: "x"}) {
 		t.Fatal("Codex steered without a turn")
 	}
 }

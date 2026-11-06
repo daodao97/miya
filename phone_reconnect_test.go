@@ -3,16 +3,17 @@
 package main
 
 import (
-	"context"
-	"encoding/json"
-	"io"
-	"path/filepath"
-	"testing"
-	"time"
-
-	"miya/internal/async"
-	"miya/internal/codex"
-	"miya/internal/remote"
+	context "context"
+	json "encoding/json"
+	io "io"
+	appmodel "miya/internal/appmodel"
+	async "miya/internal/async"
+	codex "miya/internal/codex"
+	controller "miya/internal/controller"
+	remote "miya/internal/remote"
+	filepath "path/filepath"
+	testing "testing"
+	time "time"
 )
 
 // Drive the real phone-serving loop without a relay or native sockets.
@@ -23,6 +24,7 @@ type testPhoneConnection struct {
 }
 
 func (c *testPhoneConnection) CompressSends() error { return nil }
+
 func (c *testPhoneConnection) Send(v any) error {
 	select {
 	case c.frames <- v.(remote.Frame):
@@ -31,6 +33,7 @@ func (c *testPhoneConnection) Send(v any) error {
 		return io.EOF
 	}
 }
+
 func (c *testPhoneConnection) Receive(v any) error {
 	select {
 	case r := <-c.requests:
@@ -41,15 +44,15 @@ func (c *testPhoneConnection) Receive(v any) error {
 	}
 }
 
-func serveTestPhone(t *testing.T, c *chatController) (*testPhoneConnection, *async.Executor) {
+func serveTestPhone(t *testing.T, c *controller.Controller) (*testPhoneConnection, *async.Executor) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	conn := &testPhoneConnection{ctx: ctx, requests: make(chan remote.Request, 8), frames: make(chan remote.Frame, 32)}
 	ex := async.NewExecutor()
 	quit, done, exited := make(chan struct{}), make(chan struct{}), make(chan struct{})
-	c.run = ex.Push
+	c.Run = ex.Push
 	go func() { defer close(exited); ex.Loop(quit) }()
-	go func() { defer close(done); c.servePhoneConnection(ctx, conn) }()
+	go func() { defer close(done); c.ServePhoneConnection(ctx, conn) }()
 	t.Cleanup(func() {
 		cancel()
 		<-done
@@ -59,7 +62,7 @@ func serveTestPhone(t *testing.T, c *chatController) (*testPhoneConnection, *asy
 	return conn, ex
 }
 
-func (c *testPhoneConnection) nextThread(t *testing.T) phoneThreadDelta {
+func (c *testPhoneConnection) nextThread(t *testing.T) appmodel.PhoneThreadDelta {
 	t.Helper()
 	for {
 		select {
@@ -67,7 +70,7 @@ func (c *testPhoneConnection) nextThread(t *testing.T) phoneThreadDelta {
 			if f.Type != "thread" {
 				continue
 			}
-			var d phoneThreadDelta
+			var d appmodel.PhoneThreadDelta
 			if err := json.Unmarshal(f.Data, &d); err != nil {
 				t.Fatal(err)
 			}
@@ -77,25 +80,25 @@ func (c *testPhoneConnection) nextThread(t *testing.T) phoneThreadDelta {
 			return d
 		case <-c.ctx.Done():
 			t.Fatal("phone-serving loop did not return a thread")
-			return phoneThreadDelta{}
+			return appmodel.PhoneThreadDelta{}
 		}
 	}
 }
 
 func TestPhoneSubscriptionRecoversWhenStartupListArrives(t *testing.T) {
 	c := serverController(t.TempDir(), "")
-	c.connecting = true
+	c.Connecting = true
 	conn, ex := serveTestPhone(t, c)
-	conn.requests <- remote.Request{Op: "subscribe", Thread: 345, ServerID: "original", Agent: agentCodex}
+	conn.requests <- remote.Request{Op: "subscribe", Thread: 345, ServerID: "original", Agent: appmodel.AgentCodex}
 	if d := conn.nextThread(t); !d.Thread.Loading || d.Thread.ServerID != "original" {
 		t.Fatalf("startup incorrectly reported a deleted conversation: %+v", d)
 	}
 	ex.Do(func() {
-		c.connecting = false
-		c.setReady(true)
-		c.setThreads([]Thread{
+		c.Connecting = false
+		c.SetReady(true)
+		c.SetThreads([]appmodel.Thread{
 			{ID: 345, ServerID: "different", HistoryLoaded: true},
-			{ID: 8, ServerID: "original", HistoryLoaded: true, Messages: []Message{{ID: 1, Content: "Original reply"}}},
+			{ID: 8, ServerID: "original", HistoryLoaded: true, Messages: []appmodel.Message{{ID: 1, Content: "Original reply"}}},
 		})
 		// Startup publishes the list without incrementing stream revision.
 	})
@@ -119,11 +122,11 @@ func TestPhoneRetrySameSubscriptionReadsHistoryAgain(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := serverController(t.TempDir(), "")
-	c.setReady(true)
-	c.setThreads([]Thread{{ID: 1, ServerID: "resume-thread"}})
+	c.SetReady(true)
+	c.SetThreads([]appmodel.Thread{{ID: 1, ServerID: "resume-thread"}})
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	client, err := codex.Start(ctx, bin, c.cwd)
+	client, err := codex.Start(ctx, bin, c.Cwd)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +138,7 @@ func TestPhoneRetrySameSubscriptionReadsHistoryAgain(t *testing.T) {
 		t.Fatalf("expected a temporary history-read error, got %+v", d)
 	}
 	// Neither sidebar metadata nor its revision changes as the client returns.
-	ex.Do(func() { c.client = client })
+	ex.Do(func() { c.Client = client })
 	conn.requests <- req
 	d := conn.nextThread(t)
 	if d.Thread.Status != "" || !d.Thread.HistoryLoaded || len(d.Changed) != 2 {

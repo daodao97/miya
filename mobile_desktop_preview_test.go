@@ -1,15 +1,16 @@
 package main
 
 import (
-	"crypto/sha256"
-	"encoding/json"
-	"testing"
+	sha256 "crypto/sha256"
+	json "encoding/json"
+	appmodel "miya/internal/appmodel"
+	codex "miya/internal/codex"
+	desktop "miya/internal/desktop"
+	control "miya/internal/desktop/control"
+	mobile "miya/internal/mobile"
+	testing "testing"
 
-	"miya/internal/codex"
-	"miya/internal/desktop"
-	"miya/internal/desktop/control"
-
-	"github.com/egoist/mygo/ui"
+	ui "github.com/egoist/mygo/ui"
 )
 
 func TestMobileWindowPreviewFailureKeepsLastFrameAndButtons(t *testing.T) {
@@ -20,22 +21,22 @@ func TestMobileWindowPreviewFailureKeepsLastFrameAndButtons(t *testing.T) {
 		t.Fatal(err)
 	}
 	a := codex.Approval{ID: json.RawMessage(`"preview"`), ThreadID: "s1", Method: "miya/desktopControl"}
-	p := &mobileWindowPreview{requestID: "refresh", version: approvalFingerprint(a), loading: true, image: img, imageHash: sha256.Sum256(data), window: desktop.Window{ID: 1, PID: 2}, dialog: desktop.Dialog{Title: "授权", Actions: []desktop.Action{{ID: "allow", Label: "允许访问", Enabled: true}}}}
-	m.desktopPreviews = map[string]*mobileWindowPreview{string(a.ID): p}
-	m.state.Approvals = []codex.Approval{a}
-	m.receiveWindowPreview(nil, control.Preview{RequestID: "refresh", Approval: a.ID}, nil, "采集暂时不可用")
-	if !p.stale || p.loading || p.image != img || p.window.ID != 1 || len(p.dialog.Actions) != 1 || p.message == "" {
+	p := &mobile.MobileWindowPreview{RequestID: "refresh", Version: appmodel.ApprovalFingerprint(a), Loading: true, Image: img, ImageHash: sha256.Sum256(data), Window: desktop.Window{ID: 1, PID: 2}, Dialog: desktop.Dialog{Title: "授权", Actions: []desktop.Action{{ID: "allow", Label: "允许访问", Enabled: true}}}}
+	m.DesktopPreviews = map[string]*mobile.MobileWindowPreview{string(a.ID): p}
+	m.State.Approvals = []codex.Approval{a}
+	m.ReceiveWindowPreview(nil, control.Preview{RequestID: "refresh", Approval: a.ID}, nil, "采集暂时不可用")
+	if !p.Stale || p.Loading || p.Image != img || p.Window.ID != 1 || len(p.Dialog.Actions) != 1 || p.Message == "" {
 		t.Fatal("failed refresh discarded the visible preview", p)
 	}
 	// Late duplicate replies cannot replace the retained frame or restart it.
-	m.receiveWindowPreview(nil, control.Preview{RequestID: "refresh", Approval: a.ID}, nil, "another failure")
-	if p.message != "采集暂时不可用" {
+	m.ReceiveWindowPreview(nil, control.Preview{RequestID: "refresh", Approval: a.ID}, nil, "another failure")
+	if p.Message != "采集暂时不可用" {
 		t.Fatal("duplicate reply changed paused preview")
 	}
-	newer := &mobileWindowPreview{requestID: "new"}
-	m.desktopPreviews[string(a.ID)] = newer
-	m.failWindowPreview(string(a.ID), p, "old timeout")
-	if newer.stale || newer.message != "" {
+	newer := &mobile.MobileWindowPreview{RequestID: "new"}
+	m.DesktopPreviews[string(a.ID)] = newer
+	m.FailWindowPreview(string(a.ID), p, "old timeout")
+	if newer.Stale || newer.Message != "" {
 		t.Fatal("old timeout reached new preview")
 	}
 }
@@ -52,10 +53,10 @@ func TestMobileWindowPreviewUnchangedFrameReusesVisibleImage(t *testing.T) {
 		t.Fatal(err)
 	}
 	id := json.RawMessage(`"preview"`)
-	p := &mobileWindowPreview{requestID: "refresh", loading: true, stale: true, image: first, imageHash: sha256.Sum256(data), message: "old failure"}
-	m.desktopPreviews = map[string]*mobileWindowPreview{string(id): p}
-	m.receiveWindowPreview(nil, control.Preview{RequestID: "refresh", Approval: id, Data: data, Window: desktop.Window{ID: 1, PID: 2}, Dialog: desktop.Dialog{Title: "最新状态"}}, second, "")
-	if p.image != first || p.loading || p.stale || p.message != "" || p.dialog.Title != "最新状态" {
+	p := &mobile.MobileWindowPreview{RequestID: "refresh", Loading: true, Stale: true, Image: first, ImageHash: sha256.Sum256(data), Message: "old failure"}
+	m.DesktopPreviews = map[string]*mobile.MobileWindowPreview{string(id): p}
+	m.ReceiveWindowPreview(nil, control.Preview{RequestID: "refresh", Approval: id, Data: data, Window: desktop.Window{ID: 1, PID: 2}, Dialog: desktop.Dialog{Title: "最新状态"}}, second, "")
+	if p.Image != first || p.Loading || p.Stale || p.Message != "" || p.Dialog.Title != "最新状态" {
 		t.Fatal("unchanged frame was replaced or successful retry kept stale state")
 	}
 }

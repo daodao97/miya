@@ -1,50 +1,52 @@
 package main
 
 import (
-	"encoding/json"
-	"image/png"
-	"os"
-	"path/filepath"
-	"strings"
-	"testing"
-	"time"
+	json "encoding/json"
+	png "image/png"
+	appmodel "miya/internal/appmodel"
+	controller "miya/internal/controller"
+	os "os"
+	filepath "path/filepath"
+	strings "strings"
+	testing "testing"
+	time "time"
 
-	"github.com/egoist/mygo/ui"
+	ui "github.com/egoist/mygo/ui"
 )
 
 func TestReconnectStateReachesDesktopAndPhone(t *testing.T) {
 	for _, surface := range []string{"desktop", "phone"} {
 		t.Run(surface, func(t *testing.T) {
 			app, tt := testApp(t)
-			c := app.c
-			c.serial = 10
-			c.setThreads([]Thread{{ID: 1, ServerID: "t1", Title: "Reconnect test", HistoryLoaded: true,
-				Messages: []Message{{ID: 1, Role: "user", Content: "Continue the task"}}}})
-			c.setActive(1)
+			c := app.C.(*controller.Controller)
+			c.Serial = 10
+			c.SetThreads([]appmodel.Thread{{ID: 1, ServerID: "t1", Title: "Reconnect test", HistoryLoaded: true,
+				Messages: []appmodel.Message{{ID: 1, Role: "user", Content: "Continue the task"}}}})
+			c.SetActive(1)
 			syncView := func() {}
 			if surface == "phone" {
 				m := testMobileApp()
-				m.openThread(c.current())
-				tt = ui.NewTester(m.viewRoot, 390, 750)
-				s := newPhoneThreadSync(nil)
+				m.OpenThread(c.Current())
+				tt = ui.NewTester(m.ViewRoot, 390, 750)
+				s := appmodel.NewPhoneThreadSync(nil)
 				syncView = func() {
-					d, changed := s.Update(c.current())
+					d, changed := s.Update(c.Current())
 					if changed {
 						// Exercise the actual wire format, including status-only deltas.
 						data, _ := json.Marshal(d)
-						var received phoneThreadDelta
+						var received appmodel.PhoneThreadDelta
 						if err := json.Unmarshal(data, &received); err != nil {
 							t.Fatal(err)
 						}
-						m.receiveThread(1, received)
+						m.ReceiveThread(1, received)
 					}
 				}
 			}
 			frame := func() { syncView(); tt.Frame() }
-			c.handle(event("turn/started", `{"threadId":"t1","turn":{"id":"turn1"}}`))
-			c.handle(event("error", `{"threadId":"t1","turnId":"turn1","willRetry":true,"error":{"message":"Reconnecting... 4/5"}}`))
+			c.Handle(event("turn/started", `{"threadId":"t1","turn":{"id":"turn1"}}`))
+			c.Handle(event("error", `{"threadId":"t1","turnId":"turn1","willRetry":true,"error":{"message":"Reconnecting... 4/5"}}`))
 			frame()
-			label := tr("Reconnecting…") + " 4/5"
+			label := appmodel.Tr("Reconnecting…") + " 4/5"
 			if _, ok := tt.Find(label); !ok {
 				t.Fatalf("retry count is hidden by elapsed time: %q", tt.Texts())
 			}
@@ -55,39 +57,39 @@ func TestReconnectStateReachesDesktopAndPhone(t *testing.T) {
 				t.Fatal("reconnecting indicator does not animate")
 			}
 			saveReconnectSnapshot(t, tt, surface+"-reconnecting")
-			c.handle(event("item/commandExecution/outputDelta", `{"threadId":"t1","turnId":"turn1","itemId":"cmd","delta":"Background command output"}`))
-			if threadReconnectLabel(c.current()) == "" {
+			c.Handle(event("item/commandExecution/outputDelta", `{"threadId":"t1","turnId":"turn1","itemId":"cmd","delta":"Background command output"}`))
+			if appmodel.ThreadReconnectLabel(c.Current()) == "" {
 				t.Fatal("background tool output incorrectly ended reconnection")
 			}
-			c.handle(event("error", `{"threadId":"t1","turnId":"old-turn","willRetry":true,"error":{"message":"Reconnecting... 1/5"}}`))
-			if c.current().Status != "Retrying: Reconnecting... 4/5" {
+			c.Handle(event("error", `{"threadId":"t1","turnId":"old-turn","willRetry":true,"error":{"message":"Reconnecting... 1/5"}}`))
+			if c.Current().Status != "Retrying: Reconnecting... 4/5" {
 				t.Fatal("stale retry overwrote the current attempt")
 			}
-			c.handle(event("item/agentMessage/delta", `{"threadId":"t1","turnId":"turn1","itemId":"reply","delta":"Connection restored"}`))
+			c.Handle(event("item/agentMessage/delta", `{"threadId":"t1","turnId":"turn1","itemId":"reply","delta":"Connection restored"}`))
 			frame()
-			if _, ok := tt.Find(label); ok || c.current().Status != "Working…" {
+			if _, ok := tt.Find(label); ok || c.Current().Status != "Working…" {
 				t.Fatal("retry indicator remained after model output resumed")
 			}
-			c.handle(event("error", `{"threadId":"t1","turnId":"turn1","willRetry":true,"error":{"message":"Reconnecting... 5/5"}}`))
+			c.Handle(event("error", `{"threadId":"t1","turnId":"turn1","willRetry":true,"error":{"message":"Reconnecting... 5/5"}}`))
 			frame()
-			if _, ok := tt.Find(tr("Reconnecting…") + " 5/5"); !ok {
+			if _, ok := tt.Find(appmodel.Tr("Reconnecting…") + " 5/5"); !ok {
 				t.Fatal("retry indicator disappeared before recovery or failure")
 			}
-			c.handle(event("error", `{"threadId":"t1","turnId":"turn1","willRetry":false,"error":{"message":"Connection lost after all retries"}}`))
+			c.Handle(event("error", `{"threadId":"t1","turnId":"turn1","willRetry":false,"error":{"message":"Connection lost after all retries"}}`))
 			// Some servers only include the error on the preceding notification.
-			c.handle(event("turn/completed", `{"threadId":"t1","turn":{"id":"turn1","status":"failed"}}`))
+			c.Handle(event("turn/completed", `{"threadId":"t1","turn":{"id":"turn1","status":"failed"}}`))
 			frame()
-			if c.current().Busy || c.current().Status != "Connection lost after all retries" {
+			if c.Current().Busy || c.Current().Status != "Connection lost after all retries" {
 				t.Fatal("terminal failure lost the error or stayed busy")
 			}
-			if _, ok := tt.Find(tr("Reconnecting…") + " 5/5"); ok {
+			if _, ok := tt.Find(appmodel.Tr("Reconnecting…") + " 5/5"); ok {
 				t.Fatal("failed turn still shows reconnection")
 			}
 			if !tt.HasText("Connection lost after all retries") {
 				t.Fatalf("terminal error is invisible: %q", tt.Texts())
 			}
 			errors := 0
-			for _, m := range c.current().Messages {
+			for _, m := range c.Current().Messages {
 				if m.Role == "error" {
 					errors++
 				}
@@ -106,17 +108,17 @@ func TestRetryRecoveryAndMissingFailureDetail(t *testing.T) {
 		{"item/completed", `{"threadId":"t1","turnId":"turn1","item":{"id":"a","type":"agentMessage","text":"Recovered"}}`},
 	} {
 		c := testController()
-		c.handle(event("turn/started", `{"threadId":"t1","turn":{"id":"turn1"}}`))
-		c.handle(event("error", `{"threadId":"t1","turnId":"turn1","willRetry":true,"error":{"message":"temporary"}}`))
-		if got := threadWorkingLabel(c.threads()[0]); got != tr("Reconnecting…") {
+		c.Handle(event("turn/started", `{"threadId":"t1","turn":{"id":"turn1"}}`))
+		c.Handle(event("error", `{"threadId":"t1","turnId":"turn1","willRetry":true,"error":{"message":"temporary"}}`))
+		if got := appmodel.ThreadWorkingLabel(c.Threads()[0]); got != appmodel.Tr("Reconnecting…") {
 			t.Fatalf("generic retry label = %q", got)
 		}
-		c.handle(event(progress.method, progress.params))
-		if strings.HasPrefix(c.threads()[0].Status, "Retrying:") {
+		c.Handle(event(progress.method, progress.params))
+		if strings.HasPrefix(c.Threads()[0].Status, "Retrying:") {
 			t.Fatal("model activity did not clear retry status")
 		}
-		c.handle(event("turn/completed", `{"threadId":"t1","turn":{"id":"turn1","status":"failed"}}`))
-		th := c.threads()[0]
+		c.Handle(event("turn/completed", `{"threadId":"t1","turn":{"id":"turn1","status":"failed"}}`))
+		th := c.Threads()[0]
 		if th.Busy || th.Messages[len(th.Messages)-1].Role != "error" || th.Messages[len(th.Messages)-1].Content == "" {
 			t.Fatal("failure without details needs a visible fallback error")
 		}
