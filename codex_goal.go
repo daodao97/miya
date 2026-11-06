@@ -4,40 +4,11 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
-	"strconv"
-	"strings"
 	"time"
 
 	"miya/internal/codex"
 	"miya/internal/textutil"
 )
-
-type goalCommand struct {
-	Action, Objective string
-	Budget            *int64
-}
-
-func parseGoalCommand(text string) (goalCommand, bool, error) {
-	name, args, _ := strings.Cut(strings.TrimSpace(text), " ")
-	if name != "/goal" {
-		return goalCommand{}, false, nil
-	}
-	args = strings.TrimSpace(args)
-	switch args {
-	case "", "pause", "resume", "clear":
-		return goalCommand{Action: args}, true, nil
-	}
-	g := goalCommand{Action: "set", Objective: args}
-	if strings.HasPrefix(args, "--budget ") {
-		value, objective, _ := strings.Cut(strings.TrimSpace(strings.TrimPrefix(args, "--budget ")), " ")
-		n, err := strconv.ParseInt(value, 10, 64)
-		if err != nil || n <= 0 || strings.TrimSpace(objective) == "" {
-			return g, true, fmt.Errorf("Usage: /goal --budget <positive integer> <goal>")
-		}
-		g.Budget, g.Objective = &n, strings.TrimSpace(objective)
-	}
-	return g, true, nil
-}
 
 func (c *chatController) codexGoalCommand(req SendRequest) (int, string) {
 	g, _, err := parseGoalCommand(req.Text)

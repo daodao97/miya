@@ -511,3 +511,8 @@ var (
 	readGzipJSON  = fsutil.ReadGzipJSON
 	writeGzipJSON = fsutil.WriteGzipJSON
 )
+
+// Moved to internal/codex.
+var (
+	parseGoalCommand = codex.ParseGoalCommand
+)
