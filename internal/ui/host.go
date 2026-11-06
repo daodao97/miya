@@ -12,7 +12,8 @@ import (
 	"miya/internal/interaction"
 	"miya/internal/memory/manager"
 	"miya/internal/runtime/tracker"
-	"miya/internal/svcproto"
+	svcclient "miya/internal/service/client"
+	svcproto "miya/internal/service/protocol"
 )
 
 // Host is the controller contract for one desktop workspace. UI state stays in App.
@@ -27,7 +28,7 @@ type Host interface {
 	ArchiveProject(path string)
 	ArchiveThread(t model.Thread)
 	AskAccountReset()
-	AttachService(cl *svcproto.Client, st svcproto.State)
+	AttachService(cl *svcclient.Client, st svcproto.State)
 	AutomationOp(op string, r automation.Request) (any, error)
 	BackendReady() bool
 	CanRewind(t model.Thread, m model.Message) bool
@@ -35,7 +36,7 @@ type Host interface {
 	ChangeWorkspace(path string) error
 	CollaborationCapabilities() *model.CollaborationStatus
 	CollaborationUserOp(r appmodel.CollaborationRequest) (any, error)
-	ConfigureMirror(remote bool, reconnect func() (*svcproto.Client, svcproto.State, error))
+	ConfigureMirror(remote bool, reconnect func() (*svcclient.Client, svcproto.State, error))
 	ConfirmAccountReset()
 	Connect()
 	Current() model.Thread
@@ -91,7 +92,7 @@ type Environment struct {
 	NewWindow       func() Host
 	NewLocal        func() Host
 	NewMirror       func() Host
-	LocalConnection func() (*svcproto.Client, svcproto.State, error)
+	LocalConnection func() (*svcclient.Client, svcproto.State, error)
 }
 
 var environment Environment

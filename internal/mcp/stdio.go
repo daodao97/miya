@@ -6,7 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"miya/internal/svcproto"
+	svcclient "miya/internal/service/client"
+	svcproto "miya/internal/service/protocol"
 )
 
 // Run serves MCP on stdio for the workspace named after -mcp, reaching
@@ -22,11 +23,11 @@ func Run() error {
 		sock = os.Args[3]
 	}
 	var mu sync.Mutex
-	var cl *svcproto.Client
+	var cl *svcclient.Client
 	call := func(op string, args, out any) error {
 		mu.Lock()
 		if cl == nil {
-			c, err := svcproto.Dial(sock)
+			c, err := svcclient.Dial(sock)
 			if err != nil {
 				mu.Unlock()
 				return errors.New("Miya background service is not running. Open Miya first.")

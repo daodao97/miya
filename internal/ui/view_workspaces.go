@@ -5,8 +5,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"miya/internal/service/workspaces"
 	"miya/internal/widgets"
-	"miya/internal/workspaces"
 )
 
 func (app *App) workspaceSelector(c *ui.Context) {

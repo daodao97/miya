@@ -8,8 +8,8 @@ import (
 
 	"miya/internal/appmodel"
 	"miya/internal/chat/model"
+	"miya/internal/service/workspaces"
 	"miya/internal/widgets"
-	"miya/internal/workspaces"
 )
 
 type desktopCommandPalette struct {

@@ -22,16 +22,21 @@ import (
 	"miya/internal/controller"
 	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/remote"
-	"miya/internal/svcproto"
+	svcclient "miya/internal/service/client"
+	svcproto "miya/internal/service/protocol"
+	serviceserver "miya/internal/service/server"
+	"miya/internal/service/workspaces"
 	desktopui "miya/internal/ui"
 	"miya/internal/webservice"
-	"miya/internal/workspaces"
 	"miya/internal/worktree"
 )
 
 func TestServerPersistentIdleAndTerminalRestart(t *testing.T) {
 	c := serverController(t.TempDir(), "")
-	s := &controller.Service{C: c, Persistent: true, Quit: make(chan struct{}), IdleSince: time.Now().Add(-time.Hour), IdleTimeout: time.Nanosecond}
+	s := serviceserver.New(c, nil)
+	s.Persistent = true
+	s.IdleSince = time.Now().Add(-time.Hour)
+	s.IdleTimeout = time.Nanosecond
 	s.CheckIdle()
 	select {
 	case <-s.Quit:
@@ -86,12 +91,12 @@ func TestServerPrivateConnectionFiles(t *testing.T) {
 
 func TestRemoteHostWorkspaceRPC(t *testing.T) {
 	f := newServiceFixture(t)
-	cl, err := svcproto.Dial(f.sock)
+	cl, err := svcclient.Dial(f.sock)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer cl.Close()
-	root := f.srv.C.Cwd
+	root := f.C.Cwd
 	file := filepath.Join(root, "hello.txt")
 	if err := os.WriteFile(file, []byte("server text"), 0640); err != nil {
 		t.Fatal(err)
@@ -142,7 +147,7 @@ func TestRemoteHostWorkspaceRPC(t *testing.T) {
 
 func TestRemoteHostAttachmentsAndPreview(t *testing.T) {
 	f := newServiceFixture(t)
-	cl, err := svcproto.Dial(f.sock)
+	cl, err := svcclient.Dial(f.sock)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,7 +166,7 @@ func TestRemoteHostAttachmentsAndPreview(t *testing.T) {
 		t.Fatal("preview unavailable", err)
 	}
 	c := controller.NewMirrorController()
-	c.Cwd, c.Remote, c.Mirror.RemoteHost = f.srv.C.Cwd, cl, true
+	c.Cwd, c.Remote, c.Mirror.RemoteHost = f.C.Cwd, cl, true
 	c.SetActive(7)
 	c.RestoreDraft(7, "retry", paths)
 	got := c.Attachments()
@@ -238,14 +243,14 @@ func TestServerTailcatEndToEnd(t *testing.T) {
 	f := newServiceFixture(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
-	root := f.srv.C.Cwd
+	root := f.C.Cwd
 	if err := os.WriteFile(filepath.Join(root, "remote.txt"), []byte("tailcat server file"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	bridge, err := remote.Start(ctx, remote.Options{
-		StateDir: t.TempDir(), Files: f.srv.C.FileServer(), Serve: f.srv.C.ServePhone,
-		Service:  func(ctx context.Context, wire *remote.Conn) { f.srv.HandleConn(&controller.SvcPeer{Wire: wire}) },
-		Terminal: f.srv.C.ServeRemoteTerminal,
+		StateDir: t.TempDir(), Files: f.C.FileServer(), Serve: f.C.ServePhone,
+		Service:  func(ctx context.Context, wire *remote.Conn) { f.srv.HandleConn(&serviceserver.Peer{Wire: wire}) },
+		Terminal: f.C.ServeRemoteTerminal,
 	})
 	if err != nil {
 		t.Fatal("start Tailcat", err)
@@ -303,7 +308,7 @@ func TestServerTailcatEndToEnd(t *testing.T) {
 	if err := json.Unmarshal(frame.Data, &phoneState); err != nil || len(phoneState.Projects) == 0 {
 		t.Fatal("phone projects", err)
 	}
-	term, err := svcproto.OpenTerminal(cl, root)
+	term, err := svcclient.OpenTerminal(cl, root)
 	if err != nil {
 		t.Fatal("terminal open", err)
 	}
@@ -380,7 +385,7 @@ func TestServerLinuxDeployment(t *testing.T) {
 	if err != nil || response.StatusCode != 200 || string(body) != request.Text {
 		t.Fatal("Linux file download", response.StatusCode, err)
 	}
-	term, err := svcproto.OpenTerminal(cl, state.Cwd)
+	term, err := svcclient.OpenTerminal(cl, state.Cwd)
 	if err != nil {
 		t.Fatal("Linux shell", err)
 	}

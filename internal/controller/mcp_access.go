@@ -5,7 +5,7 @@ import (
 
 	"miya/internal/interaction"
 	"miya/internal/mcp/access"
-	"miya/internal/svcproto"
+	svcproto "miya/internal/service/protocol"
 )
 
 func (c *Controller) RememberedMCPAccess(a interaction.Request) bool {

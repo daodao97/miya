@@ -16,6 +16,7 @@ import (
 	mcpproto "miya/internal/mcp/protocol"
 	"miya/internal/memory"
 	"miya/internal/memory/manager"
+	serviceserver "miya/internal/service/server"
 )
 
 func memoryToolMessage(agent, tool string, raw json.RawMessage, id int, at int64) model.Message {
@@ -290,7 +291,7 @@ func TestMemoryPendingIOKeepsServiceBusyAndForgetInvalidatesOldNotices(t *testin
 	app, _ := testApp(t)
 	c := app.C.(*controller.Controller)
 	attachMemory(t, c)
-	s := &controller.Service{C: c}
+	s := serviceserver.New(c, nil)
 	v, err := c.Memories().Op("memorySave", manager.Request{Kind: "fact", Content: "临时背景"})
 	if err != nil {
 		t.Fatal(err)

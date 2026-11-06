@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 
 	"miya/internal/chat/model"
-	"miya/internal/workspaces"
+	"miya/internal/service/workspaces"
 )
 
 func MigrateOptions(dataDir, link string) {

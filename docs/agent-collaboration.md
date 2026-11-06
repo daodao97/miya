@@ -22,7 +22,7 @@ Status: Draft
 
 现有 [agentBackend](../internal/controller/agent.go) 提供 Agent 注册、创建、发送、停止和恢复操作。[internal/mcp](../internal/mcp/server.go) 暴露 `list_threads`、`read_thread`、`thread_status` 和 `delegate`；[mcp_host.go](../internal/controller/mcp_host.go) 在后台调用 `submit`，向新会话或已有会话发送任务。[handoff.go](../internal/controller/handoff.go) 在发起方显示交接活动并跟踪目标进度。
 
-[后台服务](../internal/svcproto/svcproto.go) 持有 Codex app-server、Claude 执行进程和项目会话，窗口只镜像状态。现有架构已经支持多个会话执行，无需另建进程管理器。[ThreadRef](../internal/chat/model/ref.go) 还提供来源、后端、原生会话 ID 组成的稳定身份。
+[后台服务](../internal/service/protocol/svcproto.go) 持有 Codex app-server、Claude 执行进程和项目会话，窗口只镜像状态。现有架构已经支持多个会话执行，无需另建进程管理器。[ThreadRef](../internal/chat/model/ref.go) 还提供来源、后端、原生会话 ID 组成的稳定身份。
 
 ### 改造前的记录混用了会话身份和任务边界
 
@@ -75,7 +75,7 @@ flowchart TD
 
 `delegationManager` 管理任务、去重、调度、结果、通知和恢复，不解析具体 Agent 的原生报文。具体启动、恢复、取消和事件解释仍放在各 Agent 适配代码。
 
-会话检查、目标预留与原生状态投影由现有后台 executor 串行处理；任务状态事务和文件写入由独立的协作 worker 按序完成。两者通过不可变请求、快照和完成回调交接，不共享可变 map。后台 executor 不同步等待协作 worker，worker 等待 executor 回调时也不能持有后者需要的锁。原生 RPC 与有界等待不阻塞这两个串行队列，复用 [service.request](../internal/controller/service_server.go) 已有的 `deferred` 模式，保持手机心跳、审批和停止可用。
+会话检查、目标预留与原生状态投影由现有后台 executor 串行处理；任务状态事务和文件写入由独立的协作 worker 按序完成。两者通过不可变请求、快照和完成回调交接，不共享可变 map。后台 executor 不同步等待协作 worker，worker 等待 executor 回调时也不能持有后者需要的锁。原生 RPC 与有界等待不阻塞这两个串行队列，复用 [service.request](../internal/service/server/server.go) 已有的 `deferred` 模式，保持手机心跳、审批和停止可用。
 
 ### 会话身份和任务身份分别记录
 
@@ -555,7 +555,7 @@ P0 与 P1 可以在同一开发阶段完成。只有单独交付 P0 时，才允
 | `view_delegations.go`、`delegation_desktop.go` | 共用任务卡与表单、桌面服务接线和目标会话导航 |
 | `mobile_delegations.go` | 手机异步调用、断线清理、任务面板接线和目标会话导航 |
 
-现有 agent.go 增加可选受管提交信息，chat_events.go 与 chat_claude.go 提供执行生命周期；mcp_host.go 保留适配入口，handoff.go 改为读取 TaskID 状态。queue.go 与通知共用会话空闲调度，internal/svcproto、service_server.go 及手机协议同步能力与视图。
+现有 agent.go 增加可选受管提交信息，chat_events.go 与 chat_claude.go 提供执行生命周期；mcp_host.go 保留适配入口，handoff.go 改为读取 TaskID 状态。queue.go 与通知共用会话空闲调度，internal/service/protocol、service_server.go 及手机协议同步能力与视图。
 
 ### 测试覆盖归属错误和副作用不确定窗口
 
@@ -607,7 +607,7 @@ P0 与 P1 可以在同一开发阶段完成。只有单独交付 P0 时，才允
 - [handoff.go](../internal/controller/handoff.go)：上下文摘要、内存 handoff 和会话最新轮次状态。
 - [chat_events.go](../internal/controller/chat_events.go)、[chat_claude.go](../internal/controller/chat_claude.go)：原生轮次、消息与进程生命周期。
 - [queue.go](../internal/controller/queue.go)：普通排队消息合并与 Stop 后暂停。
-- [service_server.go](../internal/controller/service_server.go)、[internal/svcproto/client.go](../internal/svcproto/client.go)：executor、deferred、busy 与调用超时。
+- [service_server.go](../internal/service/server/server.go)、[internal/service/protocol/client.go](../internal/service/protocol/client.go)：executor、deferred、busy 与调用超时。
 - [会话引用](thread-references.md)、[原生任务](native-tasks.md)、[会话运行态](conversation-runtime.md)、[服务器版](server.md)：稳定身份、原生长期执行与远程归属约定。
 - codex-host 参考实现：`harness-delegation-coordinator.ts` 的独立会话创建、`delegation-snapshot.ts` 的执行结果投影、`delegation-watch.ts` 的一次性通知。Miya 复用其任务与通知分离的思路，具体传输与生命周期沿用本项目现有后台架构。
 

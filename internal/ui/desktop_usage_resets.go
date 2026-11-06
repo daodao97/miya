@@ -11,7 +11,8 @@ import (
 
 	"miya/internal/agent/account"
 	agentusage "miya/internal/agent/quota"
-	"miya/internal/svcproto"
+	svcclient "miya/internal/service/client"
+	svcproto "miya/internal/service/protocol"
 	"miya/internal/widgets"
 )
 
@@ -162,7 +163,7 @@ func (a *App) consumeUsageReset() {
 	ctx, cancel := context.WithCancel(context.Background())
 	d.cancel = cancel
 	a.invalidateUsageViews()
-	var cl *svcproto.Client
+	var cl *svcclient.Client
 	if a.C.RemoteHost() {
 		cl = a.C.State().Remote
 	}

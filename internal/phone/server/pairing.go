@@ -7,8 +7,9 @@ import (
 	"time"
 
 	qrcode "github.com/skip2/go-qrcode"
+
 	"miya/internal/remote"
-	"miya/internal/svcproto"
+	svcproto "miya/internal/service/protocol"
 )
 
 // Host is what Pairing needs from the controller that answers phones.

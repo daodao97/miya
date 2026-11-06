@@ -11,7 +11,8 @@ import (
 	"miya/internal/appmodel"
 	"miya/internal/chat/model"
 	"miya/internal/controller"
-	"miya/internal/svcproto"
+	svcproto "miya/internal/service/protocol"
+	serviceserver "miya/internal/service/server"
 )
 
 func TestSidebarActivityAcrossProjects(t *testing.T) {
@@ -141,7 +142,7 @@ func TestDesktopUnreadServiceSnapshotAndAcknowledgement(t *testing.T) {
 		t.Fatal("in-flight acknowledgement reappeared after an older snapshot")
 	}
 	args, _ := json.Marshal(appmodel.DesktopRead{Key: key, Version: 100})
-	s := &controller.Service{C: c, Dirty: make(chan struct{}, 1)}
+	s := serviceserver.New(c, nil)
 	if _, err := s.Handle(nil, svcproto.Request{Op: "desktop-read", Args: args}); err != nil {
 		t.Fatal(err)
 	}

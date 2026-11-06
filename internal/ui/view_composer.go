@@ -14,7 +14,8 @@ import (
 	"miya/internal/chat/composer"
 	"miya/internal/chat/model"
 	conversation "miya/internal/chat/view"
-	"miya/internal/svcproto"
+	svcclient "miya/internal/service/client"
+	svcproto "miya/internal/service/protocol"
 	"miya/internal/textutil"
 	"miya/internal/widgets"
 )
@@ -259,7 +260,7 @@ func (m *completion) editAt(app *App, value string, end int) {
 	ctx, stop := context.WithTimeout(c.State().Ctx, 4*time.Second)
 	m.cancel = stop
 	version, root, query := m.generation, c.State().Cwd, m.Token.Query
-	var host *svcproto.Client
+	var host *svcclient.Client
 	if c.RemoteHost() {
 		host = c.State().Remote
 	}

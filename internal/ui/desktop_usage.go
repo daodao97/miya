@@ -14,7 +14,8 @@ import (
 	agentmeta "miya/internal/agent/catalog"
 	agentusage "miya/internal/agent/quota"
 	"miya/internal/prefs"
-	"miya/internal/svcproto"
+	svcclient "miya/internal/service/client"
+	svcproto "miya/internal/service/protocol"
 	"miya/internal/uiruntime"
 )
 
@@ -97,7 +98,7 @@ func (app *App) refreshUsage() {
 	app.invalidateUsageViews()
 	ctx, cancel := context.WithCancel(context.Background())
 	d.cancel = cancel
-	var cl *svcproto.Client
+	var cl *svcclient.Client
 	if app.C.RemoteHost() {
 		cl = app.C.State().Remote
 	}

@@ -17,6 +17,7 @@ import (
 	"miya/internal/chat/model"
 	"miya/internal/controller"
 	"miya/internal/remote"
+	serviceserver "miya/internal/service/server"
 )
 
 func TestCodexCacheDoesNotRestoreProcessState(t *testing.T) {
@@ -280,7 +281,7 @@ func TestCodexWorkspaceSwitchKeepsTwoLiveTurns(t *testing.T) {
 	if err := c.ChangeWorkspace(second); err != nil {
 		t.Fatal(err)
 	}
-	if !(&controller.Service{C: c}).Busy() {
+	if !(serviceserver.New(c, nil)).Busy() {
 		t.Fatal("background turn must prevent service shutdown or upgrade")
 	}
 	id := c.Submit(model.SendRequest{Text: "long", Agent: appmodel.AgentCodex})

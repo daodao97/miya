@@ -129,7 +129,7 @@ func TestCollaborationInvalidArgumentsReleasePendingRequest(t *testing.T) {
 func TestCollaborationDefaultContinuationAndExplicitRecordOnly(t *testing.T) {
 	f := newServiceFixture(t)
 	caller := collaborationCaller(t, f, appmodel.AgentClaude, "notify-source")
-	f.serv.Do(func() { f.srv.C.Update(caller, func(th *model.Thread) { th.Busy = true }) })
+	f.serv.Do(func() { f.C.Update(caller, func(th *model.Thread) { th.Busy = true }) })
 	for _, notify := range []string{"", "none"} {
 		args := map[string]any{"request_id": "default-" + notify, "agent": appmodel.AgentClaude, "task": "review"}
 		if notify != "" {
@@ -148,21 +148,21 @@ func TestCollaborationDefaultContinuationAndExplicitRecordOnly(t *testing.T) {
 			t.Fatal("retry changed notification semantics", retry, err)
 		}
 	}
-	f.serv.Do(func() { f.srv.C.StopThread(caller) })
+	f.serv.Do(func() { f.C.StopThread(caller) })
 	paused, err := collaborationMCPCall(t, f, caller, "start_task", map[string]any{"request_id": "paused-default", "agent": appmodel.AgentClaude, "task": "review paused"})
 	if err != nil || paused["receiving_paused"] != true || paused["notification"] != "watching" {
 		t.Fatal("implicit unpause or missing pause status", paused, err)
 	}
 	waitCollaborationTask(t, f, paused["task_id"].(string))
-	f.serv.Do(func() { f.srv.C.Update(caller, func(th *model.Thread) { th.Busy = false }) })
+	f.serv.Do(func() { f.C.Update(caller, func(th *model.Thread) { th.Busy = false }) })
 }
 
 func TestClaudeFailedRootReplyStillConfirmsNotificationAcceptedInput(t *testing.T) {
 	f := newServiceFixture(t)
 	caller := collaborationCaller(t, f, appmodel.AgentClaude, "source")
-	f.serv.Do(func() { f.srv.C.Update(caller, func(th *model.Thread) { th.Busy = true }) })
+	f.serv.Do(func() { f.C.Update(caller, func(th *model.Thread) { th.Busy = true }) })
 	q := collaborationStoredFixtureTask(t, f, caller)
-	s := f.srv.C.Collaboration
+	s := f.C.Collaboration
 	value, err := s.Call(func() (any, error) {
 		if _, err := s.Manager.Watch(q.From, q.ID); err != nil {
 			return nil, err
@@ -181,7 +181,7 @@ func TestClaudeFailedRootReplyStillConfirmsNotificationAcceptedInput(t *testing.
 	}
 	d := value.(dg.Delivery)
 	f.serv.Do(func() {
-		f.srv.C.ManagedEvent(d.ID, dg.Event{State: dg.Failed, NativeResultID: "bound-root-result", Result: dg.Result{Error: "model reply failed"}})
+		f.C.ManagedEvent(d.ID, dg.Event{State: dg.Failed, NativeResultID: "bound-root-result", Result: dg.Result{Error: "model reply failed"}})
 	})
 	if _, err := s.Call(func() (any, error) { return nil, nil }); err != nil {
 		t.Fatal(err)
@@ -190,7 +190,7 @@ func TestClaudeFailedRootReplyStillConfirmsNotificationAcceptedInput(t *testing.
 	if got.State != "delivered" {
 		t.Fatal("accepted input was confused with successful reply", got)
 	}
-	f.serv.Do(func() { f.srv.C.Update(caller, func(th *model.Thread) { th.Busy = false }) })
+	f.serv.Do(func() { f.C.Update(caller, func(th *model.Thread) { th.Busy = false }) })
 }
 
 func TestCollaborationDefaultChangePreservesLegacyOmittedNotifyRetry(t *testing.T) {

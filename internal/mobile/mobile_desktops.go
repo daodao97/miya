@@ -19,8 +19,8 @@ import (
 	phonecache "miya/internal/phone/cache"
 	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/remote"
+	"miya/internal/service/workspaces"
 	"miya/internal/uiruntime"
-	"miya/internal/workspaces"
 )
 
 type MobileDesktops struct {

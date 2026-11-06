@@ -24,14 +24,14 @@ func TestCollaborationClaudeRootResultCanBeRecheckedAfterRestart(t *testing.T) {
 	var targetID int
 	target := model.ThreadRef{Source: testReferenceSource, Backend: appmodel.AgentClaude, SessionID: "target"}.URL()
 	f.serv.Do(func() {
-		c := f.srv.C
+		c := f.C
 		targetID = c.NextID()
 		c.AddThread(c.Cwd, model.Thread{ID: targetID, Agent: appmodel.AgentClaude, ServerID: "target", HistoryLoaded: true, Busy: true, ExecutionID: task.ID,
 			Messages: []model.Message{{Role: "user", Content: task.Prompt}, {Role: "assistant", Content: "fixed result", ExecutionID: task.ID}}})
 		c.Collaboration.Executions = map[string]*controller.ManagedExecution{task.ID: {Thread: targetID, Epoch: "claude:original"}}
 		c.Collaboration.Reservations = map[int]string{targetID: task.ID}
 	})
-	s := f.srv.C.Collaboration
+	s := f.C.Collaboration
 	if _, err := s.Call(func() (any, error) {
 		return nil, s.Manager.Observe(dg.Event{TaskID: task.ID, Target: target, SessionEpoch: "claude:original", State: dg.Running})
 	}); err != nil {
@@ -45,7 +45,7 @@ func TestCollaborationClaudeRootResultCanBeRecheckedAfterRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.serv.Do(func() {
-		c := f.srv.C
+		c := f.C
 		// A child's result must never create parent completion evidence.
 		c.HandleClaude(targetID, claude.Frame{Type: "result", UUID: "child-result", ParentToolUseID: "child-call", Result: "wrong result"})
 	})
@@ -56,7 +56,7 @@ func TestCollaborationClaudeRootResultCanBeRecheckedAfterRestart(t *testing.T) {
 		t.Fatal("child result created parent terminal evidence")
 	}
 	f.serv.Do(func() {
-		c := f.srv.C
+		c := f.C
 		c.HandleClaude(targetID, claude.Frame{Type: "result", UUID: "root-result", Result: "fixed result"})
 		c.Update(targetID, func(t *model.Thread) { t.Busy = false })
 	})
@@ -80,7 +80,7 @@ func TestCollaborationClaudeRootResultCanBeRecheckedAfterRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.serv.Do(func() {
-		c := f.srv.C
+		c := f.C
 		c.Collaboration = controller.NewCollaboration(c, filepath.Dir(index))
 		c.Collaboration.Executions, c.Collaboration.Reservations = nil, nil
 		c.Update(targetID, func(t *model.Thread) {
@@ -88,12 +88,12 @@ func TestCollaborationClaudeRootResultCanBeRecheckedAfterRestart(t *testing.T) {
 			t.Messages = append(t.Messages, model.Message{Role: "assistant", Content: "later unrelated result"})
 		})
 	})
-	current, _ := f.srv.C.Collaboration.Manager.Read(task.ID)
+	current, _ := f.C.Collaboration.Manager.Read(task.ID)
 	if current.State != dg.NeedsAttention {
 		t.Fatal("restart guessed an uncommitted outcome", current)
 	}
 	var work any
-	f.serv.Do(func() { work, err = f.srv.C.PrepareTaskRecheck(task.From, task.ID) })
+	f.serv.Do(func() { work, err = f.C.PrepareTaskRecheck(task.From, task.ID) })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +110,7 @@ func TestCollaborationClaudeLiveBindingIsSavedBeforeInput(t *testing.T) {
 	f := newServiceFixture(t)
 	// Exercise the actual stream adapter with a native root-result UUID.
 	var binary string
-	f.serv.Do(func() { binary = f.srv.C.ClaudeBinary })
+	f.serv.Do(func() { binary = f.C.ClaudeBinary })
 	protocol := strings.Replace(fakeClaude, `"type":"result",`, `"type":"result","uuid":"root-result",`, 1)
 	if err := os.WriteFile(binary, []byte(protocol), 0o755); err != nil {
 		t.Fatal(err)
@@ -121,7 +121,7 @@ func TestCollaborationClaudeLiveBindingIsSavedBeforeInput(t *testing.T) {
 		t.Fatal(err)
 	}
 	task := waitCollaborationTask(t, f, result["task_id"].(string))
-	proof, err := f.srv.C.Collaboration.Manager.NativeOutcome(task.ID)
+	proof, err := f.C.Collaboration.Manager.NativeOutcome(task.ID)
 	if err != nil || task.State != dg.Completed || proof.Target != task.Target || proof.SessionEpoch != task.SessionEpoch || proof.NativeResultID != "root-result" {
 		t.Fatal("native result was not bound to its persisted process/session", task, proof, err)
 	}

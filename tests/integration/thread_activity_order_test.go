@@ -11,7 +11,8 @@ import (
 	"miya/internal/chat/model"
 	msgfmt "miya/internal/chat/presentation"
 	"miya/internal/controller"
-	"miya/internal/svcproto"
+	svcproto "miya/internal/service/protocol"
+	serviceserver "miya/internal/service/server"
 	desktopui "miya/internal/ui"
 )
 
@@ -68,8 +69,8 @@ func TestServiceOpenDoesNotChangeActivityOrder(t *testing.T) {
 			app, _ := activityOrderFixture(t, agent)
 			c := app.C.(*controller.Controller)
 			beforeProjects := append([]model.Project(nil), c.Projects()...)
-			s := &controller.Service{C: c}
-			if _, err := s.Handle(&controller.SvcPeer{}, svcproto.Request{Op: "open", Args: json.RawMessage(`1`)}); err != nil {
+			s := serviceserver.New(c, nil)
+			if _, err := s.Handle(&serviceserver.Peer{}, svcproto.Request{Op: "open", Args: json.RawMessage(`1`)}); err != nil {
 				t.Fatal(err)
 			}
 			shown := msgfmt.DisplayedThreads(c.Threads(), true)

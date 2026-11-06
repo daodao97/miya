@@ -14,7 +14,7 @@ Miya 使用同一个可执行文件运行不同进程：
 
 磁盘上的文件更新后，旧进程还在运行旧代码。文件时间、窗口启动时间或 MCP 出现新工具，都不能单独证明后台服务已升级。
 
-新窗口调用 `connectService`（[service_client.go](../internal/controller/service_client.go)），通过 `hello` 比较 `version`、`exe`、`exeTime`：
+新窗口调用 `service/client.Connect`（[service_client.go](../internal/service/client/local.go)），通过 `hello` 比较 `version`、`exe`、`exeTime`：
 
 | 后台状态 | 程序已有的行为 | 安装者的操作 |
 | --- | --- | --- |
@@ -24,7 +24,7 @@ Miya 使用同一个可执行文件运行不同进程：
 | 旧后台忙碌，协议兼容 | 连接旧后台，发送 `quitWhenIdle` | 保留运行中的对话，报告后台延迟切换 |
 | 旧后台忙碌，协议不兼容 | 发送 `quitWhenIdle`，窗口等待并重试连接 | 保留旧后台及窗口，报告后台延迟切换 |
 
-`watchIdle` 每 15 秒检查一次，收到 `quitWhenIdle` 后在服务不再忙碌时退出（[service_server.go](../internal/controller/service_server.go)、[service_unix.go](../internal/controller/service_unix.go)）。保持打开的新窗口会检测断开、自动重连并启动新版（[service_mirror.go](../internal/controller/service_mirror.go)）。未保持窗口时，下次打开应用会启动新版。
+`watchIdle` 每 15 秒检查一次，收到 `quitWhenIdle` 后在服务不再忙碌时退出（[service_server.go](../internal/service/server/server.go)、[service_unix.go](../internal/service/server/run_unix.go)）。保持打开的新窗口会检测断开、自动重连并启动新版（[service_mirror.go](../internal/controller/service_mirror.go)）。未保持窗口时，下次打开应用会启动新版。
 
 连接失败或协议不兼容时，支持后台服务的平台只保留等待连接的窗口，不回退启动本地 agent。否则窗口和后台会各自启动 Codex app-server，争用同一个会话写入者。只有显式设置 `MIYA_SERVICE=0` 或平台不支持后台服务时使用独立运行模式。升级前已经回退为独立模式的旧窗口，应在它的任务结束后正常退出并重开。
 
@@ -115,7 +115,7 @@ with socket.socket(socket.AF_UNIX) as conn:
 PY
 ```
 
-自定义数据目录和长路径的 socket 回退算法见 [internal/appdir/appdir.go](../internal/appdir/appdir.go) 中的 `Dir` 和 [internal/svcproto/svcproto.go](../internal/svcproto/svcproto.go) 中的 `Socket`。找不到默认 socket 时先检查实际路径和进程，不能直接认定服务没运行。
+自定义数据目录和长路径的 socket 回退算法见 [internal/appdir/appdir.go](../internal/appdir/appdir.go) 中的 `Dir` 和 [internal/service/protocol/svcproto.go](../internal/service/protocol/svcproto.go) 中的 `Socket`。找不到默认 socket 时先检查实际路径和进程，不能直接认定服务没运行。
 
 ## 3. 备份替换并重开窗口
 
@@ -165,7 +165,7 @@ print('window_reopen_requested')
 PY
 ```
 
-不要执行 `pkill Miya`、`killall Miya`、按名字批量结束进程、强杀 `-server`，也不要删除服务锁或 socket 来绕过单实例保护。后台可能正在执行其他项目、手机端或安装者自己的对话。使用 [service_unix.go](../internal/controller/service_unix.go) 中已有的单实例与升级流程。
+不要执行 `pkill Miya`、`killall Miya`、按名字批量结束进程、强杀 `-server`，也不要删除服务锁或 socket 来绕过单实例保护。后台可能正在执行其他项目、手机端或安装者自己的对话。使用 [service_unix.go](../internal/service/server/run_unix.go) 中已有的单实例与升级流程。
 
 ## 4. 分别验收安装、窗口和后台
 

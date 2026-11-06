@@ -1,4 +1,4 @@
-package svcproto
+package protocol
 
 import (
 	"errors"

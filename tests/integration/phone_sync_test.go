@@ -13,7 +13,7 @@ import (
 	phoneproto "miya/internal/phone/protocol"
 	phoneserver "miya/internal/phone/server"
 	"miya/internal/remote"
-	"miya/internal/svcproto"
+	svcproto "miya/internal/service/protocol"
 )
 
 func longThread(n int) model.Thread {

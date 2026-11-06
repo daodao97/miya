@@ -24,7 +24,7 @@ func collaborationPhoneCall(t *testing.T, f *serviceFixture, operation, from str
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	raw := widgets.CollaborationArgsJSON(appmodel.CollaborationRequest{Operation: operation, From: from, Arguments: widgets.CollaborationArgsJSON(args)})
-	frame := f.srv.C.PhoneCollaboration(ctx, remote.Request{Op: "collaboration", RequestID: "phone-correlation", Collaboration: raw})
+	frame := f.C.PhoneCollaboration(ctx, remote.Request{Op: "collaboration", RequestID: "phone-correlation", Collaboration: raw})
 	var response struct {
 		RequestID string         `json:"request_id"`
 		Result    map[string]any `json:"result"`
@@ -46,7 +46,7 @@ func TestCollaborationPhoneDispatchAndDesktopCardsShareFixedTaskData(t *testing.
 	caller := collaborationCaller(t, f, appmodel.AgentClaude, "source")
 	var from string
 	f.serv.Do(func() {
-		from = f.srv.C.ThreadRef(f.srv.C.ThreadWithID(caller)).URL()
+		from = f.C.ThreadRef(f.C.ThreadWithID(caller)).URL()
 	})
 	created, err := collaborationPhoneCall(t, f, "start_task", from, map[string]any{"request_id": "phone-dispatch", "agent": appmodel.AgentClaude, "task": "Review compatibility", "title": "Compatibility review", "notify": "none"})
 	if err != nil {
@@ -75,7 +75,7 @@ func TestCollaborationPhoneDispatchAndDesktopCardsShareFixedTaskData(t *testing.
 			p := (&widgets.CollaborationUI{}).Pane(from)
 			p.Open = true
 			var capability *model.CollaborationStatus
-			f.serv.Do(func() { capability = f.srv.C.CollaborationCapabilities() })
+			f.serv.Do(func() { capability = f.C.CollaborationCapabilities() })
 			view := widgets.CollaborationPanelView{Palette: widgets.TaskPalette{Surface: widgets.Panel, Border: widgets.Line, Ink: widgets.Ink, Muted: widgets.Muted}, Capability: capability, Connected: true, Call: call, OpenThread: func(string) {}}
 			tt := ui.NewTester(func(c *ui.Context) { ui.Column(c).FillWidth().Padding(12).Children(func() { p.Draw(c, view) }) }, width, 750)
 			tt.Frame()
@@ -99,9 +99,9 @@ func TestCollaborationPhoneAndDesktopCanResolveUnknownNotification(t *testing.T)
 		t.Run(fmt.Sprint(width), func(t *testing.T) {
 			f := newServiceFixture(t)
 			caller := collaborationCaller(t, f, appmodel.AgentClaude, "source")
-			f.serv.Do(func() { f.srv.C.Update(caller, func(th *model.Thread) { th.Busy = true }) })
+			f.serv.Do(func() { f.C.Update(caller, func(th *model.Thread) { th.Busy = true }) })
 			q := collaborationStoredFixtureTask(t, f, caller)
-			s := f.srv.C.Collaboration
+			s := f.C.Collaboration
 			value, err := s.Call(func() (any, error) {
 				if _, err := s.Manager.Watch(q.From, q.ID); err != nil {
 					return nil, err
@@ -136,7 +136,7 @@ func TestCollaborationPhoneAndDesktopCanResolveUnknownNotification(t *testing.T)
 			}
 			p.Read(q.ID, call)
 			var cap *model.CollaborationStatus
-			f.serv.Do(func() { cap = f.srv.C.CollaborationCapabilities() })
+			f.serv.Do(func() { cap = f.C.CollaborationCapabilities() })
 			v := widgets.CollaborationPanelView{Palette: widgets.TaskPalette{Surface: widgets.Panel, Border: widgets.Line, Ink: widgets.Ink, Muted: widgets.Muted}, Capability: cap, Connected: true, Call: call}
 			tt := ui.NewTester(func(c *ui.Context) { ui.Column(c).Fill().Padding(12).Justify(ui.End).Children(func() { p.Draw(c, v) }) }, width, 750)
 			tt.Frame()
@@ -156,7 +156,7 @@ func TestCollaborationPhoneAndDesktopCanResolveUnknownNotification(t *testing.T)
 			if old.State != "needsAttention" || old.Resolution != "abandoned" {
 				t.Fatal("native outcome fabricated", old)
 			}
-			f.serv.Do(func() { f.srv.C.Update(caller, func(th *model.Thread) { th.Busy = false }) })
+			f.serv.Do(func() { f.C.Update(caller, func(th *model.Thread) { th.Busy = false }) })
 		})
 	}
 }

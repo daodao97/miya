@@ -12,10 +12,10 @@ import (
 	"miya/internal/fsutil"
 	phonetransfer "miya/internal/phone/transfer"
 	"miya/internal/remote"
+	"miya/internal/service/workspaces"
 	"miya/internal/thumbnail"
 	"miya/internal/uiruntime"
 	"miya/internal/widgets"
-	"miya/internal/workspaces"
 )
 
 func (m *App) PreviewPath(source string) string {

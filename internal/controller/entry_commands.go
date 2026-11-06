@@ -7,7 +7,7 @@ import (
 
 	"miya/internal/desktop"
 	"miya/internal/mcp"
-	"miya/internal/workspaces"
+	"miya/internal/service/workspaces"
 )
 
 func RunCommands() bool {

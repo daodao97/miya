@@ -7,7 +7,7 @@ import (
 	"miya/internal/appmodel"
 	"miya/internal/automation"
 	"miya/internal/controller"
-	"miya/internal/svcproto"
+	svcclient "miya/internal/service/client"
 )
 
 func TestAutomationOps(t *testing.T) {
@@ -68,13 +68,13 @@ func TestAutomationOps(t *testing.T) {
 }
 
 func TestServiceCallTimeoutsFitSlowOperations(t *testing.T) {
-	if svcproto.CallTimeout("automationDraft") <= 2*time.Minute {
+	if svcclient.CallTimeout("automationDraft") <= 2*time.Minute {
 		t.Fatal("a draft is cut off before the agent's own limit")
 	}
-	if svcproto.CallTimeout("mcpAutomationCreate") <= svcproto.CardTimeout || svcproto.CallTimeout("mcpAutomationUpdate") <= svcproto.CardTimeout {
+	if svcclient.CallTimeout("mcpAutomationCreate") <= svcclient.CardTimeout || svcclient.CallTimeout("mcpAutomationUpdate") <= svcclient.CardTimeout {
 		t.Fatal("a confirmation card is cut off before the person answers")
 	}
-	if svcproto.CallTimeout("state") != 15*time.Second {
+	if svcclient.CallTimeout("state") != 15*time.Second {
 		t.Fatal("ordinary requests lost their timeout")
 	}
 }

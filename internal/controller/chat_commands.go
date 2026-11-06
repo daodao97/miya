@@ -1,7 +1,7 @@
 package controller
 
 import (
-	"miya/internal/svcproto"
+	svcproto "miya/internal/service/protocol"
 )
 
 // RunThreadCommand routes an explicit command through the selected workspace

@@ -5,12 +5,13 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"miya/internal/svcproto"
+	svcclient "miya/internal/service/client"
+	svcproto "miya/internal/service/protocol"
 	"miya/internal/widgets"
 )
 
 type ServiceRestartUI struct {
-	Client     *svcproto.Client
+	Client     *svcclient.Client
 	Pid        int
 	Checking   bool
 	Confirming bool
@@ -20,7 +21,7 @@ type ServiceRestartUI struct {
 	Err        string
 }
 
-func ServiceConnected(cl *svcproto.Client) bool { return cl.Connected() }
+func ServiceConnected(cl *svcclient.Client) bool { return cl.Connected() }
 
 func (app *App) checkServiceRestart() {
 	cl := app.C.State().Remote

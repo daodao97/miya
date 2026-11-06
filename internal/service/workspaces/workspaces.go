@@ -19,14 +19,15 @@ import (
 	"miya/internal/appdir"
 	"miya/internal/fsutil"
 	"miya/internal/remote"
-	"miya/internal/svcproto"
+	svcclient "miya/internal/service/client"
+	svcproto "miya/internal/service/protocol"
 )
 
-func ConnectRemoteService(link string) (*svcproto.Client, svcproto.State, error) {
+func ConnectRemoteService(link string) (*svcclient.Client, svcproto.State, error) {
 	return ConnectRemoteServiceContext(context.Background(), link)
 }
 
-func ConnectRemoteServiceContext(parent context.Context, link string) (*svcproto.Client, svcproto.State, error) {
+func ConnectRemoteServiceContext(parent context.Context, link string) (*svcclient.Client, svcproto.State, error) {
 	if err := PrepareIdentity(); err != nil {
 		return nil, svcproto.State{}, err
 	}
@@ -36,7 +37,7 @@ func ConnectRemoteServiceContext(parent context.Context, link string) (*svcproto
 	if err != nil {
 		return nil, svcproto.State{}, err
 	}
-	cl := svcproto.NewWireClient(wire)
+	cl := svcclient.NewWireClient(wire)
 	stopCancel := context.AfterFunc(ctx, cl.Close)
 	defer stopCancel()
 	var hello svcproto.Hello

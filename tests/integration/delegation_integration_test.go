@@ -17,14 +17,14 @@ import (
 	dg "miya/internal/delegation"
 	"miya/internal/delegation/coordinator"
 	mcpproto "miya/internal/mcp/protocol"
-	"miya/internal/svcproto"
+	svcclient "miya/internal/service/client"
 )
 
 func collaborationCaller(t *testing.T, f *serviceFixture, agent, serverID string) int {
 	t.Helper()
 	var id int
 	f.serv.Do(func() {
-		c := f.srv.C
+		c := f.C
 		id = c.NextID()
 		c.AddThread(c.Cwd, model.Thread{ID: id, Agent: agent, ServerID: serverID, Title: "Initiator", HistoryLoaded: true, Loaded: true, Resumed: true})
 	})
@@ -39,13 +39,13 @@ func collaborationMCPCall(t *testing.T, f *serviceFixture, caller int, name stri
 	}
 	var messageID int
 	f.serv.Do(func() {
-		c := f.srv.C
+		c := f.C
 		messageID = c.NextID()
 		c.Update(caller, func(t *model.Thread) {
 			t.Messages = append(t.Messages, model.Message{ID: messageID, Role: "tool", Kind: "claudeTool", Content: "mcp__miya__" + name + "\n" + string(raw), Status: "inProgress"})
 		})
 	})
-	client, err := svcproto.Dial(f.sock)
+	client, err := svcclient.Dial(f.sock)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,7 +53,7 @@ func collaborationMCPCall(t *testing.T, f *serviceFixture, caller int, name stri
 	var result map[string]any
 	err = client.Call("mcpCollaboration", mcpproto.Request{Tool: name, Arguments: raw}, &result)
 	f.serv.Do(func() {
-		f.srv.C.Update(caller, func(t *model.Thread) {
+		f.C.Update(caller, func(t *model.Thread) {
 			for i := range t.Messages {
 				if t.Messages[i].ID == messageID {
 					t.Messages[i].Status = "completed"
@@ -68,13 +68,13 @@ func waitCollaborationTask(t *testing.T, f *serviceFixture, id string) dg.Task {
 	t.Helper()
 	deadline := time.Now().Add(15 * time.Second)
 	for time.Now().Before(deadline) {
-		task, err := f.srv.C.Collaboration.Manager.Read(id)
+		task, err := f.C.Collaboration.Manager.Read(id)
 		if err == nil && dg.Terminal(task.State) {
 			return task
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	task, err := f.srv.C.Collaboration.Manager.Read(id)
+	task, err := f.C.Collaboration.Manager.Read(id)
 	t.Fatalf("task did not terminate: %+v, %v", task, err)
 	return dg.Task{}
 }
@@ -96,7 +96,7 @@ func TestCollaborationClaudeTasksRunIndependentlyAndFreezeResults(t *testing.T) 
 	}
 	var busy int
 	f.serv.Do(func() {
-		for _, th := range f.srv.C.AllThreads() {
+		for _, th := range f.C.AllThreads() {
 			if th.ExecutionID == aID || th.ExecutionID == bID {
 				if th.Busy {
 					busy++
@@ -119,8 +119,8 @@ func TestCollaborationClaudeTasksRunIndependentlyAndFreezeResults(t *testing.T) 
 	for deadline := time.Now().Add(3 * time.Second); time.Now().Before(deadline); {
 		ready := false
 		f.serv.Do(func() {
-			target, ok := f.srv.C.ThreadByReference(a.Target)
-			ready = ok && !target.Busy && f.srv.C.Collaboration.Reservations[target.ID] == ""
+			target, ok := f.C.ThreadByReference(a.Target)
+			ready = ok && !target.Busy && f.C.Collaboration.Reservations[target.ID] == ""
 		})
 		if ready {
 			break
@@ -129,8 +129,8 @@ func TestCollaborationClaudeTasksRunIndependentlyAndFreezeResults(t *testing.T) 
 	}
 	var sent int
 	f.serv.Do(func() {
-		target, _ := f.srv.C.ThreadByReference(a.Target)
-		sent = f.srv.C.Submit(model.SendRequest{ThreadID: target.ID, Text: "A later unrelated message"})
+		target, _ := f.C.ThreadByReference(a.Target)
+		sent = f.C.Submit(model.SendRequest{ThreadID: target.ID, Text: "A later unrelated message"})
 	})
 	if sent == 0 {
 		t.Fatal("ordinary follow-up rejected")
@@ -147,7 +147,7 @@ func TestCollaborationClaudeTasksRunIndependentlyAndFreezeResults(t *testing.T) 
 func TestCollaborationCodexBindsNativeTurnBeforeReturningFixedResult(t *testing.T) {
 	f := newServiceFixture(t)
 	var dir string
-	f.serv.Do(func() { dir = f.srv.C.Cwd })
+	f.serv.Do(func() { dir = f.C.Cwd })
 	bin, err := filepath.Abs("testdata/codex-server.py")
 	if err != nil {
 		t.Fatal(err)
@@ -162,12 +162,12 @@ func TestCollaborationCodexBindsNativeTurnBeforeReturningFixedResult(t *testing.
 		t.Fatal(err)
 	}
 	f.serv.Do(func() {
-		f.srv.C.Client = client
-		f.srv.C.SetReady(true)
+		f.C.Client = client
+		f.C.SetReady(true)
 	})
 	go func() {
 		for event := range client.Events() {
-			f.srv.C.Dispatch(func() { f.srv.C.Handle(event) })
+			f.C.Dispatch(func() { f.C.Handle(event) })
 		}
 	}()
 	caller := collaborationCaller(t, f, appmodel.AgentCodex, source.Thread.ID)
@@ -195,14 +195,14 @@ func TestCollaborationMCPRejectsAmbiguousCallerBeforeCreatingTasks(t *testing.T)
 	args := map[string]any{"request_id": "same", "agent": appmodel.AgentClaude, "task": "same request"}
 	raw, _ := json.Marshal(args)
 	f.serv.Do(func() {
-		c := f.srv.C
+		c := f.C
 		for _, id := range []int{a, b} {
 			c.Update(id, func(th *model.Thread) {
 				th.Messages = append(th.Messages, model.Message{Role: "tool", Kind: "claudeTool", Status: "inProgress", Content: "mcp__miya__start_task\n" + string(raw)})
 			})
 		}
 	})
-	client, err := svcproto.Dial(f.sock)
+	client, err := svcclient.Dial(f.sock)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -211,7 +211,7 @@ func TestCollaborationMCPRejectsAmbiguousCallerBeforeCreatingTasks(t *testing.T)
 	if err := client.Call("mcpCollaboration", mcpproto.Request{Tool: "start_task", Arguments: raw}, &out); err == nil || !strings.Contains(err.Error(), "ambiguous") {
 		t.Fatalf("ambiguous call accepted: %v", err)
 	}
-	if len(f.srv.C.Collaboration.Manager.View().Tasks) != 0 {
+	if len(f.C.Collaboration.Manager.View().Tasks) != 0 {
 		t.Fatal("ambiguous caller produced a side effect")
 	}
 }
@@ -230,18 +230,18 @@ func TestCollaborationNewToolsValidateArgumentsAndBoundWait(t *testing.T) {
 func TestCollaborationCompletionNotificationWaitsForIdleAndStartsOneTurn(t *testing.T) {
 	f := newServiceFixture(t)
 	caller := collaborationCaller(t, f, appmodel.AgentClaude, "notify-source")
-	f.serv.Do(func() { f.srv.C.Update(caller, func(th *model.Thread) { th.Busy = true }) })
+	f.serv.Do(func() { f.C.Update(caller, func(th *model.Thread) { th.Busy = true }) })
 	result, err := collaborationMCPCall(t, f, caller, "start_task", map[string]any{"request_id": "notify", "agent": appmodel.AgentClaude, "task": "Review compatibility", "notify": "on_finish"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	waitCollaborationTask(t, f, result["task_id"].(string))
-	if len(f.srv.C.Collaboration.Manager.View().Deliveries) != 1 {
+	if len(f.C.Collaboration.Manager.View().Deliveries) != 1 {
 		t.Fatal("no durable completion notification")
 	}
 	var notices int
 	f.serv.Do(func() {
-		for _, m := range f.srv.C.ThreadWithID(caller).Messages {
+		for _, m := range f.C.ThreadWithID(caller).Messages {
 			if m.Role == "user" && strings.HasPrefix(m.Content, "[Miya collaboration]") {
 				notices++
 			}
@@ -250,10 +250,10 @@ func TestCollaborationCompletionNotificationWaitsForIdleAndStartsOneTurn(t *test
 	if notices != 0 {
 		t.Fatal("busy parent received another turn")
 	}
-	f.serv.Do(func() { f.srv.C.Update(caller, func(th *model.Thread) { th.Busy = false }) })
+	f.serv.Do(func() { f.C.Update(caller, func(th *model.Thread) { th.Busy = false }) })
 	for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); {
 		delivered := false
-		for _, d := range f.srv.C.Collaboration.Manager.View().Deliveries {
+		for _, d := range f.C.Collaboration.Manager.View().Deliveries {
 			delivered = d.State == "delivered"
 		}
 		if delivered {
@@ -261,14 +261,14 @@ func TestCollaborationCompletionNotificationWaitsForIdleAndStartsOneTurn(t *test
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	for _, d := range f.srv.C.Collaboration.Manager.View().Deliveries {
+	for _, d := range f.C.Collaboration.Manager.View().Deliveries {
 		if d.State != "delivered" {
 			t.Fatalf("notification not delivered: %+v", d)
 		}
 	}
 	f.serv.Do(func() {
 		notices = 0
-		for _, m := range f.srv.C.ThreadWithID(caller).Messages {
+		for _, m := range f.C.ThreadWithID(caller).Messages {
 			if m.Role == "user" && strings.HasPrefix(m.Content, "[Miya collaboration]") {
 				notices++
 			}

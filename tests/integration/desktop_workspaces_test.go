@@ -19,9 +19,10 @@ import (
 	"miya/internal/chat/model"
 	"miya/internal/controller"
 	"miya/internal/remote"
-	"miya/internal/svcproto"
+	svcclient "miya/internal/service/client"
+	svcproto "miya/internal/service/protocol"
+	"miya/internal/service/workspaces"
 	desktopui "miya/internal/ui"
-	"miya/internal/workspaces"
 )
 
 func TestDesktopWorkspacesMigrateAndKeepLocalSelection(t *testing.T) {
@@ -116,7 +117,7 @@ func TestDesktopWorkspaceSwitchPreservesDraftsAndPanels(t *testing.T) {
 		t.Fatal(err)
 	}
 	calls := 0
-	hub.Connect = func(ctx context.Context, p workspaces.Workspace) (*svcproto.Client, svcproto.State, error) {
+	hub.Connect = func(ctx context.Context, p workspaces.Workspace) (*svcclient.Client, svcproto.State, error) {
 		calls++
 		cl, _ := restartTestClient(t, svcproto.Hello{Version: svcproto.Version}, "")
 		return cl, workspaceState("remote"), nil
@@ -162,7 +163,7 @@ func TestDesktopWorkspaceFailureKeepsCurrentContext(t *testing.T) {
 	local.C.(*controller.Controller).RememberDraft("do not lose")
 	next := hub.Store.Clone()
 	item, _ := next.Remember(testDesktopLink(), "offline")
-	hub.Connect = func(context.Context, workspaces.Workspace) (*svcproto.Client, svcproto.State, error) {
+	hub.Connect = func(context.Context, workspaces.Workspace) (*svcclient.Client, svcproto.State, error) {
 		return nil, svcproto.State{}, errors.New("offline")
 	}
 	hub.ConnectWorkspace(item)
@@ -186,7 +187,7 @@ func TestDesktopWorkspaceCancelDiscardsLateConnection(t *testing.T) {
 			close(dispatched)
 		}
 	}
-	hub.Connect = func(context.Context, workspaces.Workspace) (*svcproto.Client, svcproto.State, error) {
+	hub.Connect = func(context.Context, workspaces.Workspace) (*svcclient.Client, svcproto.State, error) {
 		close(started)
 		<-release
 		return cl, workspaceState("late"), nil

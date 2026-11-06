@@ -32,7 +32,7 @@ import (
 	phonetransfer "miya/internal/phone/transfer"
 	"miya/internal/prefs"
 	"miya/internal/remote"
-	"miya/internal/svcproto"
+	svcproto "miya/internal/service/protocol"
 	"miya/internal/textutil"
 	"miya/internal/thumbnail"
 	"miya/internal/uiruntime"

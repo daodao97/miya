@@ -21,7 +21,7 @@ import (
 	"miya/internal/fsutil"
 	phoneproxy "miya/internal/phone/proxy"
 	"miya/internal/runtime/tracker"
-	"miya/internal/svcproto"
+	svcproto "miya/internal/service/protocol"
 	"miya/internal/uiruntime"
 	"miya/internal/webservice"
 	"miya/internal/widgets"

@@ -21,7 +21,7 @@ import (
 	"miya/internal/mobile"
 	phonecache "miya/internal/phone/cache"
 	"miya/internal/remote"
-	"miya/internal/workspaces"
+	"miya/internal/service/workspaces"
 )
 
 type desktopTestStore struct {

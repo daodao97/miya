@@ -6,7 +6,7 @@ import (
 	"miya/internal/agent/account"
 	"miya/internal/chat/model"
 	"miya/internal/interaction"
-	"miya/internal/svcproto"
+	svcclient "miya/internal/service/client"
 )
 
 // WindowState is the observable state of one window. Mutations run on its executor.
@@ -34,7 +34,7 @@ type WindowState struct {
 	Ready           func() bool
 	ReferenceSource string
 	// Remote is the mirrored service, nil for a controller running agents locally.
-	Remote              *svcproto.Client
+	Remote              *svcclient.Client
 	RevealWorkspace     func()
 	Revision            func() int
 	SetActive           func(int)

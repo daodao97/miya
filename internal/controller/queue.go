@@ -4,7 +4,7 @@ import (
 	"strings"
 
 	"miya/internal/chat/model"
-	"miya/internal/svcproto"
+	svcproto "miya/internal/service/protocol"
 )
 
 func (c *Controller) enqueue(id int, req model.SendRequest) int {

@@ -6,7 +6,8 @@ import (
 	"path/filepath"
 
 	"miya/internal/appmodel"
-	"miya/internal/svcproto"
+	svcclient "miya/internal/service/client"
+	svcproto "miya/internal/service/protocol"
 	"miya/internal/worktree"
 )
 
@@ -52,7 +53,7 @@ func (localFiles) Terminal(string) (io.ReadWriteCloser, error) { return nil, nil
 
 // serverFiles are a remote server workspace, reached through the server's
 // "host" requests. Each call has the service client's own timeout.
-type serverFiles struct{ cl *svcproto.Client }
+type serverFiles struct{ cl *svcclient.Client }
 
 func (s serverFiles) ReadDir(root, rel string) ([]worktree.FileEntry, error) {
 	var rows []svcproto.HostEntry
@@ -89,5 +90,5 @@ func (s serverFiles) Sides(_ context.Context, root string, snap worktree.DiffSna
 }
 
 func (s serverFiles) Terminal(dir string) (io.ReadWriteCloser, error) {
-	return svcproto.OpenTerminal(s.cl, dir)
+	return svcclient.OpenTerminal(s.cl, dir)
 }

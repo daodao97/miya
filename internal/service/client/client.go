@@ -1,4 +1,4 @@
-package svcproto
+package client
 
 import (
 	"bufio"
@@ -11,13 +11,12 @@ import (
 
 	mcpproto "miya/internal/mcp/protocol"
 	"miya/internal/remote"
+	svcproto "miya/internal/service/protocol"
 )
 
 // CardTimeout is how long a confirmation card waits for the person; then it
 // counts as declined. Calls that show one wait longer than this.
 const CardTimeout = 10 * time.Minute
-
-var ErrClosed = errors.New("Background service disconnected")
 
 // Client is a window's connection to the service.
 type Client struct {
@@ -26,14 +25,14 @@ type Client struct {
 	wmu     sync.Mutex
 	mu      sync.Mutex
 	next    int64
-	pending map[int64]chan Envelope
-	events  func(Envelope)
+	pending map[int64]chan svcproto.Envelope
+	events  func(svcproto.Envelope)
 	closed  chan struct{}
 	once    sync.Once
 }
 
 func NewClient(conn net.Conn) *Client {
-	cl := &Client{conn: conn, pending: map[int64]chan Envelope{}, closed: make(chan struct{})}
+	cl := &Client{conn: conn, pending: map[int64]chan svcproto.Envelope{}, closed: make(chan struct{})}
 	go cl.read()
 	return cl
 }
@@ -41,7 +40,7 @@ func NewClient(conn net.Conn) *Client {
 // NewWireClient is a connection to a remote server's service, over
 // the remote link instead of the local socket.
 func NewWireClient(wire *remote.Conn) *Client {
-	cl := &Client{wire: wire, pending: map[int64]chan Envelope{}, closed: make(chan struct{})}
+	cl := &Client{wire: wire, pending: map[int64]chan svcproto.Envelope{}, closed: make(chan struct{})}
 	go cl.read()
 	return cl
 }
@@ -49,7 +48,7 @@ func NewWireClient(wire *remote.Conn) *Client {
 // NewDetachedClient has no connection yet; calls fail once it is
 // closed.
 func NewDetachedClient() *Client {
-	return &Client{pending: map[int64]chan Envelope{}, closed: make(chan struct{})}
+	return &Client{pending: map[int64]chan svcproto.Envelope{}, closed: make(chan struct{})}
 }
 
 // NewClosedClient keeps a window on the service path while it waits
@@ -100,7 +99,7 @@ func Dial(sock string) (*Client, error) {
 }
 
 // setEvents sets what receives the service's events, on the reading goroutine.
-func (cl *Client) SetEvents(f func(Envelope)) {
+func (cl *Client) SetEvents(f func(svcproto.Envelope)) {
 	cl.mu.Lock()
 	cl.events = f
 	cl.mu.Unlock()
@@ -122,7 +121,7 @@ func (cl *Client) read() {
 			line, err = r.ReadBytes('\n')
 		}
 		if len(bytes.TrimSpace(line)) > 0 {
-			var m Envelope
+			var m svcproto.Envelope
 			if json.Unmarshal(line, &m) == nil {
 				cl.mu.Lock()
 				ch, events := cl.pending[m.ID], cl.events
@@ -159,16 +158,16 @@ func (cl *Client) Close() {
 		}
 		cl.mu.Lock()
 		for id, ch := range cl.pending {
-			ch <- Envelope{ID: id, Error: ErrClosed.Error()}
+			ch <- svcproto.Envelope{ID: id, Error: svcproto.ErrClosed.Error()}
 			delete(cl.pending, id)
 		}
 		cl.mu.Unlock()
 	})
 }
 
-func (cl *Client) Send(req Request) error {
+func (cl *Client) Send(req svcproto.Request) error {
 	if cl == nil || cl.conn == nil && cl.wire == nil {
-		return ErrClosed
+		return svcproto.ErrClosed
 	}
 	if cl.wire != nil {
 		return cl.wire.Send(req)
@@ -187,18 +186,18 @@ func (cl *Client) Send(req Request) error {
 // call sends a request and waits for its result.
 func (cl *Client) Call(op string, args, out any) error {
 	if cl == nil {
-		return ErrClosed
+		return svcproto.ErrClosed
 	}
 	raw, err := json.Marshal(args)
 	if err != nil {
 		return err
 	}
-	ch := make(chan Envelope, 1)
+	ch := make(chan svcproto.Envelope, 1)
 	cl.mu.Lock()
 	select {
 	case <-cl.closed:
 		cl.mu.Unlock()
-		return ErrClosed
+		return svcproto.ErrClosed
 	default:
 	}
 	cl.next++
@@ -210,7 +209,7 @@ func (cl *Client) Call(op string, args, out any) error {
 		delete(cl.pending, id)
 		cl.mu.Unlock()
 	}
-	if err := cl.Send(Request{ID: id, Op: op, Args: raw}); err != nil {
+	if err := cl.Send(svcproto.Request{ID: id, Op: op, Args: raw}); err != nil {
 		forget()
 		return err
 	}
@@ -251,7 +250,7 @@ func (cl *Client) Notify(op string, args any) {
 	if err != nil {
 		return
 	}
-	_ = cl.Send(Request{Op: op, Args: raw})
+	_ = cl.Send(svcproto.Request{Op: op, Args: raw})
 }
 
 // Inbox gathers the events a service pushes between two turns of the
@@ -260,13 +259,13 @@ func (cl *Client) Notify(op string, args any) {
 // latest is applied, in its place; messages and drafts are applied in order.
 type Inbox struct {
 	mu        sync.Mutex
-	queued    []Envelope
+	queued    []svcproto.Envelope
 	scheduled bool
 }
 
 // push queues m and reports whether the caller must schedule a drain: only
 // the first event since the last take does.
-func (b *Inbox) Push(m Envelope) bool {
+func (b *Inbox) Push(m svcproto.Envelope) bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.queued = append(b.queued, m)
@@ -279,7 +278,7 @@ func (b *Inbox) Push(m Envelope) bool {
 
 // take returns the queued events in order, without the states a later state
 // of the same batch replaces.
-func (b *Inbox) Take() []Envelope {
+func (b *Inbox) Take() []svcproto.Envelope {
 	b.mu.Lock()
 	queued := b.queued
 	b.queued, b.scheduled = nil, false

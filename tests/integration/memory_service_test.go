@@ -12,7 +12,7 @@ import (
 	"miya/internal/controller"
 	"miya/internal/memory"
 	"miya/internal/memory/manager"
-	"miya/internal/svcproto"
+	svcproto "miya/internal/service/protocol"
 )
 
 func TestMemoryServiceSharesPersistenceAndInvalidationAcrossWindows(t *testing.T) {
@@ -73,7 +73,7 @@ func TestMemoryAutomaticSettingsAndSessionDisableThroughService(t *testing.T) {
 		t.Fatalf("automatic settings not shared: %+v %v", list, err)
 	}
 	f.serv.Do(func() {
-		f.srv.C.SetThreads([]model.Thread{{ID: 1, ServerID: "session", HistoryLoaded: true}})
+		f.C.SetThreads([]model.Thread{{ID: 1, ServerID: "session", HistoryLoaded: true}})
 	})
 	disabled := true
 	if err := a.Remote.Call("memorySessionConfigure", manager.Request{Thread: 1, SessionDisabled: &disabled}, nil); err != nil {

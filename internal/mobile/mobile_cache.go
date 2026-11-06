@@ -10,9 +10,9 @@ import (
 	"miya/internal/fsutil"
 	phonecache "miya/internal/phone/cache"
 	"miya/internal/remote"
-	"miya/internal/svcproto"
+	svcproto "miya/internal/service/protocol"
+	"miya/internal/service/workspaces"
 	"miya/internal/uiruntime"
-	"miya/internal/workspaces"
 )
 
 type mobileCacheWork struct {

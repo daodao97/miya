@@ -6,7 +6,7 @@ import (
 
 	claude "miya/internal/agent/claude/native"
 	"miya/internal/chat/model"
-	"miya/internal/svcproto"
+	svcproto "miya/internal/service/protocol"
 	"miya/internal/uiruntime"
 )
 

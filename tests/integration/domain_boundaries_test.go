@@ -11,7 +11,7 @@ import (
 )
 
 func TestSharedDomainPackagesDoNotImportAgentImplementations(t *testing.T) {
-	for _, root := range []string{"chat/model", "chat/presentation", "chat/text", "chat/subagent", "agent/account", "agent/quota", "agent/catalog"} {
+	for _, root := range []string{"chat/model", "chat/presentation", "chat/text", "chat/subagent", "agent/account", "agent/quota", "agent/catalog", "service/server", "service/client", "service/protocol", "service/process", "service/workspaces"} {
 		err := filepath.WalkDir(filepath.Join("internal", root), func(path string, entry fs.DirEntry, err error) error {
 			if err != nil {
 				return err

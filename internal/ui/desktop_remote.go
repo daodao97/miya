@@ -5,7 +5,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"miya/internal/svcproto"
+	svcproto "miya/internal/service/protocol"
 )
 
 func (app *App) browseServerProject(path string) {

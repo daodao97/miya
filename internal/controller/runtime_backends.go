@@ -9,7 +9,7 @@ import (
 	"miya/internal/async"
 	"miya/internal/chat/model"
 	"miya/internal/runtime/tracker"
-	"miya/internal/svcproto"
+	svcclient "miya/internal/service/client"
 )
 
 func (c *Controller) noteRuntime(t model.Thread) {
@@ -50,7 +50,7 @@ func (c *Controller) PrepareRuntime(ref model.ThreadRef, project string) (async.
 }
 
 func (c *Controller) ReadRuntime(ctx context.Context, ref model.ThreadRef, project string) (tracker.ConversationRuntime, error) {
-	cl, ok := async.OnMain(ctx, c.Dispatch, func() *svcproto.Client { return c.Remote })
+	cl, ok := async.OnMain(ctx, c.Dispatch, func() *svcclient.Client { return c.Remote })
 	if !ok {
 		return tracker.ConversationRuntime{}, ctx.Err()
 	}

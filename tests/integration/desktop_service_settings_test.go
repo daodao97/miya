@@ -14,15 +14,16 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"miya/internal/controller"
-	"miya/internal/svcproto"
+	svcclient "miya/internal/service/client"
+	svcproto "miya/internal/service/protocol"
 	desktopui "miya/internal/ui"
 )
 
 // Only the test pipe is closed: these tests never restart the real service.
-func restartTestClient(t *testing.T, hello svcproto.Hello, helloError string) (*svcproto.Client, func() []string) {
+func restartTestClient(t *testing.T, hello svcproto.Hello, helloError string) (*svcclient.Client, func() []string) {
 	t.Helper()
 	conn, peer := net.Pipe()
-	cl := svcproto.NewClient(conn)
+	cl := svcclient.NewClient(conn)
 	t.Cleanup(func() { cl.Close(); peer.Close() })
 	var mu sync.Mutex
 	var methods []string

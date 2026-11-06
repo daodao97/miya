@@ -13,7 +13,7 @@ import (
 	"miya/internal/chat/model"
 	"miya/internal/notification"
 	"miya/internal/prefs"
-	"miya/internal/svcproto"
+	svcclient "miya/internal/service/client"
 	"miya/internal/uiruntime"
 )
 
@@ -109,7 +109,7 @@ func (c *Controller) deliverNotice(n notification.Notice, kind string) {
 	}
 }
 
-func (c *Controller) StartNotificationPresence(cl *svcproto.Client) <-chan struct{} {
+func (c *Controller) StartNotificationPresence(cl *svcclient.Client) <-chan struct{} {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)

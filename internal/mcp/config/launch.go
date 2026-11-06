@@ -8,7 +8,7 @@ import (
 	"os"
 	"strings"
 
-	"miya/internal/svcproto"
+	svcproto "miya/internal/service/protocol"
 )
 
 // claudeMCPArgs give a Claude Code run the miya server; its read-only tools

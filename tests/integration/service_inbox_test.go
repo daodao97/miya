@@ -3,11 +3,12 @@ package integration
 import (
 	"testing"
 
-	"miya/internal/svcproto"
+	svcclient "miya/internal/service/client"
+	svcproto "miya/internal/service/protocol"
 )
 
 func TestServiceInboxSchedulesOnceAndKeepsLatestState(t *testing.T) {
-	var b svcproto.Inbox
+	var b svcclient.Inbox
 	st := func(status string) svcproto.Envelope {
 		return svcproto.Envelope{State: &svcproto.State{Status: status}}
 	}

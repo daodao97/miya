@@ -1,7 +1,7 @@
-// Package svcproto is what a window and the background service say over the
+// Package protocol is what a window and the background service say over the
 // service socket: one JSON Request per line from the window, one Envelope per
 // line back. Field names and JSON tags are the wire format between versions.
-package svcproto
+package protocol
 
 import (
 	"encoding/json"
@@ -12,9 +12,9 @@ import (
 	"time"
 
 	"miya/internal/agent/account"
-	codex "miya/internal/agent/codex/native"
 	"miya/internal/appdir"
 	"miya/internal/chat/model"
+	"miya/internal/interaction"
 )
 
 const Version = 2
@@ -45,11 +45,11 @@ type State struct {
 	Projects           []model.Project            `json:"projects"`
 	ProjectBusy        map[string]bool            `json:"projectBusy,omitempty"`
 	Threads            []model.Thread             `json:"threads"`
-	Approvals          []codex.Approval           `json:"approvals"`
+	Approvals          []interaction.Request      `json:"approvals"`
 	Status             string                     `json:"status"`
 	HistoryStatus      string                     `json:"historyStatus"`
 	Ready              bool                       `json:"ready"`
-	Models             []codex.Model              `json:"models"`
+	Models             []LegacyModel              `json:"models"`
 	Model              string                     `json:"model"`
 	Effort             string                     `json:"effort"`
 	PermissionPolicy   string                     `json:"permissionPolicy"`

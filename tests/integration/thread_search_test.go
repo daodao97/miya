@@ -11,7 +11,7 @@ import (
 	"miya/internal/appmodel"
 	"miya/internal/chat/model"
 	"miya/internal/controller"
-	"miya/internal/svcproto"
+	svcproto "miya/internal/service/protocol"
 	desktopui "miya/internal/ui"
 )
 

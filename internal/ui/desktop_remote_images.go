@@ -9,7 +9,8 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"miya/internal/async"
-	"miya/internal/svcproto"
+	svcclient "miya/internal/service/client"
+	svcproto "miya/internal/service/protocol"
 	"miya/internal/uiruntime"
 	"miya/internal/widgets"
 )
@@ -29,7 +30,7 @@ func (app *App) remoteImage(src string) *remoteImageResult {
 	return remoteImageFor(c.State().Remote, c.State().ReferenceSource, src)
 }
 
-func remoteImageFor(cl *svcproto.Client, source, src string) *remoteImageResult {
+func remoteImageFor(cl *svcclient.Client, source, src string) *remoteImageResult {
 	key := source + "\x00" + src
 	next := &remoteImageResult{done: make(chan struct{})}
 	actual, loaded := desktopRemoteImages.LoadOrStore(key, next)
@@ -70,7 +71,7 @@ func (app *App) loadRemoteImage(src string) (ui.ImageSource, error) {
 	}
 	c := app.C
 	type imageHost struct {
-		client *svcproto.Client
+		client *svcclient.Client
 		source string
 	}
 	host, ok := async.OnMain(c.State().Ctx, c.Dispatch, func() imageHost { return imageHost{c.State().Remote, c.State().ReferenceSource} })

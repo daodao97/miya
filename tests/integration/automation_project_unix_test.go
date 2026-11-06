@@ -7,7 +7,7 @@ import (
 
 	"miya/internal/appmodel"
 	"miya/internal/chat/model"
-	"miya/internal/controller"
+	serviceserver "miya/internal/service/server"
 )
 
 // The Codex fixture is a Python script, which Windows cannot run as a binary.
@@ -26,7 +26,7 @@ func TestWorkspaceSwitchKeepsRunningClaudeConversations(t *testing.T) {
 	if c.ThreadWithID(902).Loaded {
 		t.Fatal("idle Claude conversation was kept loaded")
 	}
-	if !(&controller.Service{C: c}).Busy() {
+	if !(serviceserver.New(c, nil)).Busy() {
 		t.Fatal("the background run does not keep the service up")
 	}
 	c.FinishClaude(901, first, nil)

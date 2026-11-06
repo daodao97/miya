@@ -15,7 +15,7 @@ import (
 	"miya/internal/chat/composer"
 	"miya/internal/fsutil"
 	phoneserver "miya/internal/phone/server"
-	"miya/internal/svcproto"
+	svcproto "miya/internal/service/protocol"
 	"miya/internal/thumbnail"
 	"miya/internal/worktree"
 )

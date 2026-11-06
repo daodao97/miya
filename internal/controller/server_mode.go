@@ -8,7 +8,8 @@ import (
 
 	"miya/internal/appdir"
 	"miya/internal/fsutil"
-	"miya/internal/svcproto"
+	svcclient "miya/internal/service/client"
+	svcproto "miya/internal/service/protocol"
 )
 
 // -server remains the window-managed background process. -serve is a
@@ -64,7 +65,7 @@ func serveCommand(args []string) error {
 func ConnectionFile() string { return filepath.Join(appdir.Dir(), "connection.txt") }
 
 func requestServerRestart() error {
-	cl, err := svcproto.Dial(svcproto.Socket())
+	cl, err := svcclient.Dial(svcproto.Socket())
 	if err != nil {
 		return err
 	}

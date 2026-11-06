@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"miya/internal/chat/model"
-	"miya/internal/svcproto"
+	svcproto "miya/internal/service/protocol"
 )
 
 func (c *Controller) TaskAction(threadID int, taskID, action string) string {

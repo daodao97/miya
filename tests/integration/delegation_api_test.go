@@ -23,7 +23,7 @@ import (
 	dg "miya/internal/delegation"
 	"miya/internal/delegation/coordinator"
 	mcpproto "miya/internal/mcp/protocol"
-	"miya/internal/svcproto"
+	svcclient "miya/internal/service/client"
 )
 
 func collaborationUserCall(t *testing.T, f *serviceFixture, operation, from string, args map[string]any) (map[string]any, error) {
@@ -32,7 +32,7 @@ func collaborationUserCall(t *testing.T, f *serviceFixture, operation, from stri
 	if err != nil {
 		t.Fatal(err)
 	}
-	client, err := svcproto.Dial(f.sock)
+	client, err := svcclient.Dial(f.sock)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,10 +46,10 @@ func collaborationStoredFixtureTask(t *testing.T, f *serviceFixture, caller int)
 	t.Helper()
 	var from string
 	f.serv.Do(func() {
-		from = f.srv.C.ThreadRef(f.srv.C.ThreadWithID(caller)).URL()
+		from = f.C.ThreadRef(f.C.ThreadWithID(caller)).URL()
 	})
-	value, err := f.srv.C.Collaboration.Call(func() (any, error) {
-		return f.srv.C.Collaboration.Manager.Create(dg.StartInput{From: from, RequestID: "fixture", Agent: appmodel.AgentClaude, Workspace: f.srv.C.Cwd, Prompt: "fixture task"})
+	value, err := f.C.Collaboration.Call(func() (any, error) {
+		return f.C.Collaboration.Manager.Create(dg.StartInput{From: from, RequestID: "fixture", Agent: appmodel.AgentClaude, Workspace: f.C.Cwd, Prompt: "fixture task"})
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -76,12 +76,12 @@ func TestCollaborationMCPOperationRetriesKeepOriginalReceipt(t *testing.T) {
 	if _, err := collaborationMCPCall(t, f, caller, "cancel_task", watch); err == nil || !strings.Contains(err.Error(), "REQUEST_CONFLICT") {
 		t.Fatal(err)
 	}
-	for _, w := range f.srv.C.Collaboration.Manager.View().Watches {
+	for _, w := range f.C.Collaboration.Manager.View().Watches {
 		if w.State != "cancelled" {
 			t.Fatal("old watch revived observation")
 		}
 	}
-	if task, _ := f.srv.C.Collaboration.Manager.Read(task.ID); task.CancelRequested {
+	if task, _ := f.C.Collaboration.Manager.Read(task.ID); task.CancelRequested {
 		t.Fatal("conflicting cancel produced a side effect")
 	}
 }
@@ -91,7 +91,7 @@ func TestCollaborationStopPausesAndExplicitResumeIgnoresOldStopFlag(t *testing.T
 	caller := collaborationCaller(t, f, appmodel.AgentClaude, "paused-source")
 	var from string
 	f.serv.Do(func() {
-		c := f.srv.C
+		c := f.C
 		c.Update(caller, func(th *model.Thread) { th.Busy = true; th.LaunchModel = "original"; th.LaunchEffort = "high" })
 		from = c.ThreadRef(c.ThreadWithID(caller)).URL()
 	})
@@ -101,17 +101,17 @@ func TestCollaborationStopPausesAndExplicitResumeIgnoresOldStopFlag(t *testing.T
 	}
 	waitCollaborationTask(t, f, result["task_id"].(string))
 	f.serv.Do(func() {
-		f.srv.C.StopThread(caller)
-		f.srv.C.Update(caller, func(th *model.Thread) { th.Busy = false; th.StopRequested = true })
+		f.C.StopThread(caller)
+		f.C.Update(caller, func(th *model.Thread) { th.Busy = false; th.StopRequested = true })
 	})
-	if _, err := f.srv.C.Collaboration.Call(func() (any, error) { f.srv.C.Collaboration.Tick(); return nil, nil }); err != nil {
+	if _, err := f.C.Collaboration.Call(func() (any, error) { f.C.Collaboration.Tick(); return nil, nil }); err != nil {
 		t.Fatal(err)
 	}
 	list, err := collaborationUserCall(t, f, "list_tasks", from, map[string]any{})
 	if err != nil || list["paused"] != true {
 		t.Fatalf("Stop pause not visible: %v %v", list, err)
 	}
-	for _, d := range f.srv.C.Collaboration.Manager.View().Deliveries {
+	for _, d := range f.C.Collaboration.Manager.View().Deliveries {
 		if d.State != "pending" {
 			t.Fatal("Stop allowed a new native turn")
 		}
@@ -122,7 +122,7 @@ func TestCollaborationStopPausesAndExplicitResumeIgnoresOldStopFlag(t *testing.T
 	}
 	deadline := time.Now().Add(8 * time.Second)
 	for time.Now().Before(deadline) {
-		for _, d := range f.srv.C.Collaboration.Manager.View().Deliveries {
+		for _, d := range f.C.Collaboration.Manager.View().Deliveries {
 			if d.State == "delivered" {
 				return
 			}
@@ -153,8 +153,8 @@ func TestCollaborationWriteFailureIsVisibleInQueriesAndState(t *testing.T) {
 		t.Fatalf("stale query: %v %v", result, err)
 	}
 	f.serv.Do(func() {
-		state := f.srv.C.SnapshotState()
-		phone := f.srv.C.PhoneSnapshot()
+		state := f.C.SnapshotState()
+		phone := f.C.PhoneSnapshot()
 		if state.Collaboration == nil || !state.Collaboration.Stale || phone.Collaboration == nil || !phone.Collaboration.Stale {
 			t.Error("storage fault missing from desktop/phone capability state")
 		}
@@ -224,7 +224,7 @@ func TestCollaborationCorruptStoreDoesNotPanicStopOrLegacyTools(t *testing.T) {
 	var readErr, createErr error
 	var capability *model.CollaborationStatus
 	f.serv.Do(func() {
-		c := f.srv.C
+		c := f.C
 		c.Collaboration.Stop()
 		c.Collaboration = controller.NewCollaboration(c, dir)
 		caller := c.ThreadWithID(callerID)
@@ -246,11 +246,11 @@ func TestCollaborationUnboundTurnBufferIsBoundedAndRequiresRecheck(t *testing.T)
 	callerID := collaborationCaller(t, f, appmodel.AgentCodex, "source")
 	var from string
 	f.serv.Do(func() {
-		from = f.srv.C.ThreadRef(f.srv.C.ThreadWithID(callerID)).URL()
+		from = f.C.ThreadRef(f.C.ThreadWithID(callerID)).URL()
 	})
-	s := f.srv.C.Collaboration
+	s := f.C.Collaboration
 	value, err := s.Call(func() (any, error) {
-		return s.Manager.Create(dg.StartInput{From: from, RequestID: "early", Agent: appmodel.AgentCodex, Workspace: f.srv.C.Cwd, Prompt: "test"})
+		return s.Manager.Create(dg.StartInput{From: from, RequestID: "early", Agent: appmodel.AgentCodex, Workspace: f.C.Cwd, Prompt: "test"})
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -258,7 +258,7 @@ func TestCollaborationUnboundTurnBufferIsBoundedAndRequiresRecheck(t *testing.T)
 	task := value.(dg.Task)
 	var targetID int
 	f.serv.Do(func() {
-		c := f.srv.C
+		c := f.C
 		targetID = c.NextID()
 		worker := model.Thread{ID: targetID, Agent: appmodel.AgentCodex, ServerID: "worker", ExecutionID: task.ID, Busy: true, HistoryLoaded: true}
 		c.AddThread(c.Cwd, worker)
@@ -274,7 +274,7 @@ func TestCollaborationUnboundTurnBufferIsBoundedAndRequiresRecheck(t *testing.T)
 	})
 	t.Cleanup(func() {
 		f.serv.Do(func() {
-			f.srv.C.Update(targetID, func(th *model.Thread) { th.Busy = false })
+			f.C.Update(targetID, func(th *model.Thread) { th.Busy = false })
 		})
 	})
 	value, err = s.Call(func() (any, error) { return s.Manager.Read(task.ID) })

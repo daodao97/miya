@@ -15,7 +15,7 @@ import (
 	"miya/internal/controller"
 	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/remote"
-	"miya/internal/svcproto"
+	svcclient "miya/internal/service/client"
 )
 
 func TestAgentReferencesRoundTripMixedWithThreadsAndCommands(t *testing.T) {
@@ -178,7 +178,7 @@ func TestMobileAgentSelectionUsesSameChipAndClipboardFormat(t *testing.T) {
 func TestAgentTagsDoNotFallBackToOrdinaryMessagesOnOlderService(t *testing.T) {
 	tag := composer.AgentReferenceText(appmodel.AgentCodex, "Codex")
 	app, _ := testApp(t)
-	app.C.(*controller.Controller).Remote = &svcproto.Client{}
+	app.C.(*controller.Controller).Remote = &svcclient.Client{}
 	if id := app.C.(*controller.Controller).Submit(model.SendRequest{Text: tag + " review"}); id != 0 || !strings.Contains(app.C.(*controller.Controller).LastSubmitError, "Update the Miya") {
 		t.Fatal("old service received unsupported Agent input", id, app.C.(*controller.Controller).LastSubmitError)
 	}

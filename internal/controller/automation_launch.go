@@ -13,6 +13,7 @@ import (
 
 	"miya/internal/appdir"
 	"miya/internal/automation"
+	"miya/internal/service/process"
 )
 
 // syncAutomationLaunchAgent installs the agent while an automation is on and
@@ -35,7 +36,7 @@ func syncAutomationLaunchAgent(enabled bool) {
 }
 
 func installAutomationAgent() error {
-	exe, _ := executableInfo()
+	exe, _ := process.ExecutableInfo()
 	if exe == "" {
 		return fmt.Errorf("no executable")
 	}

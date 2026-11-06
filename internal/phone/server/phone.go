@@ -13,7 +13,7 @@ import (
 	"miya/internal/chat/model"
 	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/remote"
-	"miya/internal/svcproto"
+	svcproto "miya/internal/service/protocol"
 )
 
 func HasHistory(t model.Thread) bool { return len(t.Messages) > 0 || t.HistoryLoaded }

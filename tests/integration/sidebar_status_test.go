@@ -9,7 +9,7 @@ import (
 	"miya/internal/appmodel"
 	"miya/internal/chat/model"
 	"miya/internal/controller"
-	"miya/internal/svcproto"
+	svcproto "miya/internal/service/protocol"
 )
 
 func TestCollapsedProjectShowsRunningConversation(t *testing.T) {

@@ -20,7 +20,7 @@ import (
 	"miya/internal/chat/model"
 	conversation "miya/internal/chat/view"
 	"miya/internal/prefs"
-	"miya/internal/svcproto"
+	svcproto "miya/internal/service/protocol"
 	"miya/internal/uiruntime"
 	"miya/internal/widgets"
 	"miya/locales"

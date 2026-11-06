@@ -6,7 +6,7 @@ import (
 	"context"
 
 	"miya/internal/remote"
-	"miya/internal/svcproto"
+	svcproto "miya/internal/service/protocol"
 )
 
 func (c *Controller) ServeRemoteTerminal(ctx context.Context, wire *remote.Conn) {

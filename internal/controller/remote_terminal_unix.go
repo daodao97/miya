@@ -13,7 +13,7 @@ import (
 
 	"miya/internal/async"
 	"miya/internal/remote"
-	"miya/internal/svcproto"
+	svcproto "miya/internal/service/protocol"
 	"miya/internal/uiruntime"
 )
 

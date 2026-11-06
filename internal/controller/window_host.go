@@ -4,7 +4,8 @@ import (
 	"miya/internal/agent"
 	"miya/internal/appmodel"
 	"miya/internal/chat/model"
-	"miya/internal/svcproto"
+	svcclient "miya/internal/service/client"
+	svcproto "miya/internal/service/protocol"
 )
 
 func (c *Controller) CurrentAgentControls() agent.Controls { return c.CurrentBackend() }
@@ -22,7 +23,7 @@ func (c *Controller) SavedReferenceTitle(ref model.ThreadRef) (string, bool) {
 	saved, ok := c.ForkedReferences[ref]
 	return saved.Title, ok
 }
-func (c *Controller) ConfigureMirror(remote bool, reconnect func() (*svcproto.Client, svcproto.State, error)) {
+func (c *Controller) ConfigureMirror(remote bool, reconnect func() (*svcclient.Client, svcproto.State, error)) {
 	c.Mirror.RemoteHost = remote
 	c.Mirror.Reconnect = reconnect
 }

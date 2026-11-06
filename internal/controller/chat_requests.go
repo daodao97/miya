@@ -9,7 +9,8 @@ import (
 	codex "miya/internal/agent/codex/native"
 	"miya/internal/chat/model"
 	"miya/internal/interaction"
-	"miya/internal/svcproto"
+	svcclient "miya/internal/service/client"
+	svcproto "miya/internal/service/protocol"
 )
 
 func (c *Controller) removeRequest(id json.RawMessage) {
@@ -84,7 +85,7 @@ func (c *Controller) waitUser(id json.RawMessage, ch chan bool) bool {
 	select {
 	case ok := <-ch:
 		return ok
-	case <-time.After(svcproto.CardTimeout):
+	case <-time.After(svcclient.CardTimeout):
 		c.Dispatch(func() {
 			delete(c.miyaPending, string(id))
 			c.removeRequest(id)

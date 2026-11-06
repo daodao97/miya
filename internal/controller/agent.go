@@ -11,7 +11,7 @@ import (
 	"miya/internal/chat/composer"
 	"miya/internal/chat/model"
 	msgfmt "miya/internal/chat/presentation"
-	"miya/internal/svcproto"
+	svcproto "miya/internal/service/protocol"
 )
 
 // Adapters returns integrations bound to this workspace. No adapter captures

@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	phoneproxy "miya/internal/phone/proxy"
-	"miya/internal/svcproto"
+	svcproto "miya/internal/service/protocol"
 	"miya/internal/webservice"
 )
 

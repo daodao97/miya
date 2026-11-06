@@ -6,9 +6,10 @@ import (
 	"runtime"
 
 	"miya/internal/prefs"
-	"miya/internal/svcproto"
+	svcclient "miya/internal/service/client"
+	svcproto "miya/internal/service/protocol"
+	"miya/internal/service/workspaces"
 	"miya/internal/uiruntime"
-	"miya/internal/workspaces"
 )
 
 // Each workspace owns its controller and entire window state. Keeping these
@@ -25,7 +26,7 @@ type DesktopWorkspaces struct {
 	pending            workspaces.Workspace
 	generation         uint64
 	cancel             context.CancelFunc
-	Connect            func(context.Context, workspaces.Workspace) (*svcproto.Client, svcproto.State, error)
+	Connect            func(context.Context, workspaces.Workspace) (*svcclient.Client, svcproto.State, error)
 }
 
 func (app *App) EnsureDesktopWorkspaces() *DesktopWorkspaces {
@@ -65,7 +66,7 @@ func (m *DesktopWorkspaces) bind(app *App) {
 	}
 }
 
-func connectDesktopWorkspace(ctx context.Context, item workspaces.Workspace) (*svcproto.Client, svcproto.State, error) {
+func connectDesktopWorkspace(ctx context.Context, item workspaces.Workspace) (*svcclient.Client, svcproto.State, error) {
 	if item.ID == workspaces.Local {
 		return environment.LocalConnection()
 	}
@@ -137,7 +138,7 @@ func (m *DesktopWorkspaces) ConnectWorkspace(item workspaces.Workspace) {
 	}()
 }
 
-func (m *DesktopWorkspaces) finishConnection(gen uint64, item workspaces.Workspace, cl *svcproto.Client, state svcproto.State, err error) {
+func (m *DesktopWorkspaces) finishConnection(gen uint64, item workspaces.Workspace, cl *svcclient.Client, state svcproto.State, err error) {
 	if m.closed || gen != m.generation {
 		if cl != nil {
 			cl.Close()
@@ -173,7 +174,7 @@ func (m *DesktopWorkspaces) finishConnection(gen uint64, item workspaces.Workspa
 		return
 	}
 	c := environment.NewMirror()
-	c.ConfigureMirror(item.ID != workspaces.Local, func() (*svcproto.Client, svcproto.State, error) { return m.Connect(c.State().Ctx, item) })
+	c.ConfigureMirror(item.ID != workspaces.Local, func() (*svcclient.Client, svcproto.State, error) { return m.Connect(c.State().Ctx, item) })
 	c.AttachService(cl, state)
 	app := NewChatAppWithController(c)
 	m.Store, m.Open = next, false

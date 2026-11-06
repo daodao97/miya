@@ -17,7 +17,7 @@ import (
 	mcpserver "miya/internal/mcp"
 	mcpconfig "miya/internal/mcp/config"
 	mcpproto "miya/internal/mcp/protocol"
-	"miya/internal/svcproto"
+	svcproto "miya/internal/service/protocol"
 	"miya/internal/uiruntime"
 )
 

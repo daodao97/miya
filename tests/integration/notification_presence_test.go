@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"miya/internal/svcproto"
+	svcclient "miya/internal/service/client"
 )
 
 func TestNotificationPresenceStopsWhenItsServiceConnectionCloses(t *testing.T) {
@@ -15,7 +15,7 @@ func TestNotificationPresenceStopsWhenItsServiceConnectionCloses(t *testing.T) {
 	// The dispatcher belongs to this controller; a detached connection must
 	// not keep consulting a window's global dispatch hook every ten seconds.
 	c.Run = func(func()) {}
-	cl := svcproto.NewDetachedClient()
+	cl := svcclient.NewDetachedClient()
 	done := c.StartNotificationPresence(cl)
 	cl.Close()
 	select {

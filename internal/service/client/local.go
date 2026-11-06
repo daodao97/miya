@@ -1,23 +1,24 @@
-package controller
+package client
 
 import (
 	"errors"
 	"time"
 
-	"miya/internal/svcproto"
+	"miya/internal/service/process"
+	svcproto "miya/internal/service/protocol"
 )
 
 // connectService connects to the service, starting it when none runs, and
 // replaces one built from another executable once it is idle.
-func connectService(workspace string) (*svcproto.Client, svcproto.State, error) {
+func Connect(workspace string) (*Client, svcproto.State, error) {
 	sock := svcproto.Socket()
-	cl, err := svcproto.Dial(sock)
+	cl, err := Dial(sock)
 	if err != nil {
 		if cl, err = startService(sock, workspace); err != nil {
 			return nil, svcproto.State{}, err
 		}
 	}
-	exe, exeTime := executableInfo()
+	exe, exeTime := process.ExecutableInfo()
 	var h svcproto.Hello
 	if err := cl.Call("hello", nil, &h); err != nil {
 		cl.Close()
@@ -32,7 +33,7 @@ func connectService(workspace string) (*svcproto.Client, svcproto.State, error) 
 		case !h.Busy:
 			_ = cl.Call("quit", nil, nil)
 			cl.Close()
-			waitProcessGone(h.PID, 3*time.Second)
+			process.WaitGone(h.PID, 3*time.Second)
 			if cl, err = startService(sock, workspace); err != nil {
 				return nil, svcproto.State{}, err
 			}
@@ -55,14 +56,14 @@ func connectService(workspace string) (*svcproto.Client, svcproto.State, error) 
 	return cl, st, nil
 }
 
-func startService(sock, workspace string) (*svcproto.Client, error) {
-	if err := spawnService(workspace); err != nil {
+func startService(sock, workspace string) (*Client, error) {
+	if err := process.Spawn(workspace); err != nil {
 		return nil, err
 	}
 	deadline := time.Now().Add(5 * time.Second)
 	for {
 		time.Sleep(30 * time.Millisecond)
-		cl, err := svcproto.Dial(sock)
+		cl, err := Dial(sock)
 		if err == nil {
 			return cl, nil
 		}

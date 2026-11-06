@@ -30,7 +30,8 @@ import (
 	"miya/internal/notification"
 	"miya/internal/prefs"
 	"miya/internal/runtime/tracker"
-	"miya/internal/svcproto"
+	svcclient "miya/internal/service/client"
+	svcproto "miya/internal/service/protocol"
 	"miya/internal/textutil"
 	"miya/internal/uiruntime"
 )
@@ -82,7 +83,7 @@ type Controller struct {
 	ClaudeHistoryDone chan struct{}
 	// onDraftReturned gives a message that could not be sent back to the window.
 	OnDraftReturned func(id int, text string, attachments []string)
-	Mirror          *mirrorState
+	Mirror          *svcclient.Mirror
 	// run runs dispatched work; nil uses runOnMain.
 	Run          func(func())
 	AccountCache account.Display
@@ -436,7 +437,7 @@ func (c *Controller) ProjectBusy(path string) bool {
 	if path == c.Cwd {
 		threads = c.Threads()
 	} else if c.Mirror != nil {
-		return c.Mirror.projectBusy[path]
+		return c.Mirror.ProjectBusy[path]
 	}
 	for _, t := range threads {
 		if t.Busy && !t.Loading {
