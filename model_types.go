@@ -525,3 +525,8 @@ var (
 	usageAgentName = agentusage.AgentName
 	usageTrayTitle = agentusage.TrayTitle
 )
+
+// Moved to internal/msgfmt.
+var (
+	localFileLink = msgfmt.LocalFileLink
+)
