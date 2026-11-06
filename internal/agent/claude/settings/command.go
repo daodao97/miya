@@ -1,13 +1,15 @@
-package prefs
+package settings
 
 import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+
+	"miya/internal/prefs"
 )
 
-func SaveClaudeCommand(command string) {
-	path := SettingsPath()
+func SaveCommand(command string) {
+	path := prefs.SettingsPath()
 	if path == "" {
 		return
 	}
@@ -27,3 +29,5 @@ func SaveClaudeCommand(command string) {
 	_ = os.MkdirAll(filepath.Dir(path), 0o700)
 	_ = os.WriteFile(path, data, 0o600)
 }
+
+func LoadCommand() string { return prefs.Load("claudeCommand") }

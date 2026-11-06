@@ -7,11 +7,11 @@ import (
 	"miya/internal/agent"
 	agentmeta "miya/internal/agent/catalog"
 	codex "miya/internal/agent/codex/native"
+	codexpolicy "miya/internal/agent/codex/policy"
 	"miya/internal/chat/composer"
 	"miya/internal/chat/model"
 	msgfmt "miya/internal/chat/presentation"
 	"miya/internal/interaction"
-	"miya/internal/prefs"
 	"miya/internal/uiruntime"
 )
 
@@ -88,7 +88,7 @@ func (b Adapter) Rewind(t model.Thread, m model.Message, text string) {
 		defer cancel()
 		var err error
 		if !t.Resumed {
-			err = client.Call(ctx, "thread/resume", map[string]any{"threadId": t.ServerID, "cwd": cwd, "sandbox": prefs.SandboxForPolicy(policy), "approvalPolicy": prefs.ApprovalForPolicy(policy), "approvalsReviewer": prefs.ReviewerForPolicy(policy)}, nil)
+			err = client.Call(ctx, "thread/resume", map[string]any{"threadId": t.ServerID, "cwd": cwd, "sandbox": codexpolicy.SandboxForPolicy(policy), "approvalPolicy": codexpolicy.ApprovalForPolicy(policy), "approvalsReviewer": codexpolicy.ReviewerForPolicy(policy)}, nil)
 		}
 		if err == nil {
 			err = client.Call(ctx, "thread/revert", map[string]any{"threadId": t.ServerID, "beforeTurnId": m.TurnID}, nil)

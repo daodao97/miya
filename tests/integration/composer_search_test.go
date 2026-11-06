@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"miya/internal/chat/composer"
+	projectfiles "miya/internal/project/files"
 )
 
 func TestComposerCompletionPreservesPrompt(t *testing.T) {
@@ -79,7 +80,7 @@ func TestProjectIndex(t *testing.T) {
 			if fallback {
 				t.Setenv("PATH", t.TempDir())
 			}
-			files, err := composer.IndexProjectFiles(context.Background(), root)
+			files, err := projectfiles.IndexProjectFiles(context.Background(), root)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -91,7 +92,7 @@ func TestProjectIndex(t *testing.T) {
 			}
 			ctx, cancel := context.WithCancel(context.Background())
 			cancel()
-			if _, err := composer.IndexProjectFiles(ctx, root); err == nil {
+			if _, err := projectfiles.IndexProjectFiles(ctx, root); err == nil {
 				t.Fatal("cancelled search succeeded")
 			}
 		})

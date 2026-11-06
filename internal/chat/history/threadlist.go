@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"regexp"
 
 	"miya/internal/appdir"
 	"miya/internal/chat/model"
@@ -88,30 +87,4 @@ func Load() map[string][]model.Thread {
 		}
 	}
 	return cache.Projects
-}
-
-func LoadProjects(current string) []model.Project {
-	seen := map[string]bool{}
-	projects := []model.Project{}
-	add := func(path string) {
-		path, _ = filepath.Abs(path)
-		if path == "" || seen[path] {
-			return
-		}
-		seen[path] = true
-		projects = append(projects, model.Project{Name: filepath.Base(path), Path: path})
-	}
-	home, err := os.UserHomeDir()
-	if err == nil {
-		if data, err := os.ReadFile(filepath.Join(home, ".codex", "config.toml")); err == nil {
-			re := regexp.MustCompile(`(?m)^\[projects\."([^"]+)"\]`)
-			for _, match := range re.FindAllStringSubmatch(string(data), -1) {
-				if len(match) > 1 {
-					add(match[1])
-				}
-			}
-		}
-	}
-	add(current)
-	return projects
 }

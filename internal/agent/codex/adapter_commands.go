@@ -7,6 +7,7 @@ import (
 	"time"
 
 	codex "miya/internal/agent/codex/native"
+	codexpolicy "miya/internal/agent/codex/policy"
 	threadmodel "miya/internal/chat/model"
 	"miya/internal/prefs"
 	"miya/internal/uiruntime"
@@ -62,7 +63,7 @@ func (b Adapter) RunCommand(threadID int, command, policy string) (int, string) 
 		var err error
 		if serverID == "" || !t.Resumed {
 			method := "thread/start"
-			params := map[string]any{"cwd": cwd, "sandbox": prefs.SandboxForPolicy(policy), "approvalPolicy": prefs.ApprovalForPolicy(policy), "approvalsReviewer": prefs.ReviewerForPolicy(policy)}
+			params := map[string]any{"cwd": cwd, "sandbox": codexpolicy.SandboxForPolicy(policy), "approvalPolicy": codexpolicy.ApprovalForPolicy(policy), "approvalsReviewer": codexpolicy.ReviewerForPolicy(policy)}
 			if serverID != "" {
 				method = "thread/resume"
 				params["threadId"] = serverID

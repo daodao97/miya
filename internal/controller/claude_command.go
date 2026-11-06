@@ -5,7 +5,7 @@ import (
 
 	claude "miya/internal/agent/claude/native"
 	"miya/internal/agent/claude/native/transcript"
-	"miya/internal/prefs"
+	claudesettings "miya/internal/agent/claude/settings"
 	"miya/internal/uiruntime"
 )
 
@@ -36,7 +36,7 @@ func (c *Controller) SetClaudeCommand(line string) {
 		return
 	}
 	c.applyClaudeCommand(line)
-	prefs.SaveClaudeCommand(c.ClaudeCommand)
+	claudesettings.SaveCommand(c.ClaudeCommand)
 	if c.Threads != nil {
 		c.loadClaudeSessions()
 	}

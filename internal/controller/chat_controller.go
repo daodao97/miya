@@ -17,6 +17,8 @@ import (
 	claude "miya/internal/agent/claude/native"
 	codex "miya/internal/agent/codex/native"
 	codexprojection "miya/internal/agent/codex/projection"
+	integrations "miya/internal/agent/integrations"
+	agentpolicy "miya/internal/agent/policy"
 	"miya/internal/appdir"
 	"miya/internal/appmodel"
 	"miya/internal/automation"
@@ -29,6 +31,8 @@ import (
 	"miya/internal/memory/manager"
 	"miya/internal/notification"
 	"miya/internal/prefs"
+	projectmodel "miya/internal/project/model"
+	projectregistry "miya/internal/project/registry"
 	"miya/internal/runtime/tracker"
 	svcclient "miya/internal/service/client"
 	svcproto "miya/internal/service/protocol"
@@ -98,7 +102,7 @@ type Controller struct {
 	DraftPermission    func() string
 	SetDraftPermission func(string)
 
-	SetProjects func([]model.Project)
+	SetProjects func([]projectmodel.Project)
 
 	SetThreads func([]model.Thread)
 
@@ -146,9 +150,12 @@ func newChatController() *Controller {
 	c.ReferenceSource, c.LastSubmitError = model.ReferenceSourceForService()
 	c.ReferenceDir = appdir.Dir()
 	c.LoadForkedReferences()
-	var setProjects func([]model.Project)
-	c.Projects, setProjects = uiruntime.CreateSignal([]model.Project{})
-	c.SetProjects = func(projects []model.Project) { setProjects(projects); prefs.SaveProjectOrder(projects) }
+	var setProjects func([]projectmodel.Project)
+	c.Projects, setProjects = uiruntime.CreateSignal([]projectmodel.Project{})
+	c.SetProjects = func(projects []projectmodel.Project) {
+		setProjects(projects)
+		projectregistry.SaveProjectOrder(projects)
+	}
 	c.Threads, c.SetThreads = uiruntime.CreateSignal([]model.Thread{})
 	c.InstallNotifications()
 	c.Active, c.SetActive = uiruntime.CreateSignal(0)
@@ -164,7 +171,7 @@ func newChatController() *Controller {
 	var setPermissionPolicy func(string)
 	c.PermissionPolicy, setPermissionPolicy = uiruntime.CreateSignal(initialPermissionPolicy)
 	c.SetPermissionPolicy = func(policy string) {
-		policy = prefs.NormalizePermissionPolicy(policy)
+		policy = agentpolicy.Normalize(policy)
 		setPermissionPolicy(policy)
 		prefs.SavePermissionPolicy(policy)
 	}
@@ -194,7 +201,7 @@ func newChatController() *Controller {
 	c.ProjectCache = threadlist.Load()
 	c.LoadDesktopUnread()
 	c.AssignCachedThreadIDs()
-	projects := threadlist.LoadProjects(c.Cwd)
+	projects := projectregistry.LoadProjects(c.Cwd, integrations.Projects())
 	cachedPaths := make([]string, 0, len(c.ProjectCache))
 	for path := range c.ProjectCache {
 		cachedPaths = append(cachedPaths, path)
@@ -209,10 +216,10 @@ func newChatController() *Controller {
 			}
 		}
 		if !found {
-			projects = append(projects, model.Project{Name: filepath.Base(path), Path: path})
+			projects = append(projects, projectmodel.Project{Name: filepath.Base(path), Path: path})
 		}
 	}
-	c.SetProjects(prefs.RestoreProjectOrder(projects))
+	c.SetProjects(projectregistry.RestoreProjectOrder(projects))
 	if cached := c.ProjectCache[c.Cwd]; len(cached) > 0 {
 		c.SetThreads(cached)
 		c.SetHistoryStatus("")
@@ -236,17 +243,17 @@ func (c *Controller) SelectedPermissionPolicy() string {
 	if c.PermissionPolicy == nil {
 		return "on-request"
 	}
-	return prefs.NormalizePermissionPolicy(c.PermissionPolicy())
+	return agentpolicy.Normalize(c.PermissionPolicy())
 }
 
 func (c *Controller) rememberProject(path string) {
-	items := append([]model.Project(nil), c.Projects()...)
+	items := append([]projectmodel.Project(nil), c.Projects()...)
 	for _, p := range items {
 		if p.Path == path {
 			return
 		}
 	}
-	items = append([]model.Project{{Name: filepath.Base(path), Path: path}}, items...)
+	items = append([]projectmodel.Project{{Name: filepath.Base(path), Path: path}}, items...)
 	c.SetProjects(items)
 	if home, err := os.UserHomeDir(); err == nil {
 		configPath := filepath.Join(home, ".codex", "config.toml")
@@ -265,7 +272,7 @@ func (c *Controller) RenameProject(path, name string) {
 		c.forward("renameProject", svcproto.ProjectRequest{Path: path, Name: name})
 		return
 	}
-	items := append([]model.Project(nil), c.Projects()...)
+	items := append([]projectmodel.Project(nil), c.Projects()...)
 	for i := range items {
 		if items[i].Path == path {
 			items[i].Name = name
@@ -333,7 +340,7 @@ func (c *Controller) deleteCodexThread(t model.Thread) { c.codexAdapter().Delete
 
 func (c *Controller) removeProject(path string, deleteConfig bool) {
 	path, _ = filepath.Abs(path)
-	items := append([]model.Project(nil), c.Projects()...)
+	items := append([]projectmodel.Project(nil), c.Projects()...)
 	projects := items[:0]
 	for _, project := range items {
 		if project.Path != path {
@@ -541,7 +548,7 @@ func (c *Controller) RefreshProjectOrder() {
 	if c.Projects == nil || c.SetProjects == nil {
 		return
 	}
-	projects := append([]model.Project(nil), c.Projects()...)
+	projects := append([]projectmodel.Project(nil), c.Projects()...)
 	latest := func(path string) int64 {
 		var result int64
 		for _, t := range c.ProjectCache[path] {
@@ -1025,7 +1032,7 @@ func (c *Controller) interrupt(t model.Thread) { c.codexAdapter().Interrupt(t) }
 
 func (c *Controller) permissionForThread(t model.Thread) string {
 	if t.PermissionPolicy != "" {
-		return prefs.NormalizePermissionPolicy(t.PermissionPolicy)
+		return agentpolicy.Normalize(t.PermissionPolicy)
 	}
 	return c.SelectedPermissionPolicy()
 }
@@ -1033,13 +1040,13 @@ func (c *Controller) permissionForThread(t model.Thread) string {
 func (c *Controller) CurrentPermissionPolicy() string {
 	t := c.Current()
 	if t.ID == 0 && c.DraftPermission != nil && c.DraftPermission() != "" {
-		return prefs.NormalizePermissionPolicy(c.DraftPermission())
+		return agentpolicy.Normalize(c.DraftPermission())
 	}
 	return c.permissionForThread(t)
 }
 
 func (c *Controller) SetCurrentPermissionPolicy(policy string) {
-	policy = prefs.NormalizePermissionPolicy(policy)
+	policy = agentpolicy.Normalize(policy)
 	if c.Current().ID == 0 {
 		if c.SetDraftPermission != nil {
 			c.SetDraftPermission(policy)

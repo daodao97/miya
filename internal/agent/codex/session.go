@@ -5,10 +5,10 @@ import (
 	"time"
 
 	codex "miya/internal/agent/codex/native"
+	codexpolicy "miya/internal/agent/codex/policy"
 	codexprojection "miya/internal/agent/codex/projection"
 	"miya/internal/chat/model"
 	msgfmt "miya/internal/chat/presentation"
-	"miya/internal/prefs"
 )
 
 func (b Adapter) Archive(t model.Thread) {
@@ -79,7 +79,7 @@ func (b Adapter) Resume(t model.Thread, after *model.SendRequest) {
 		ctx, cancel := context.WithTimeout(c.Context(), 30*time.Second)
 		defer cancel()
 		var result codex.ThreadResponse
-		err := client.Call(ctx, "thread/resume", map[string]any{"threadId": t.ServerID, "cwd": cwd, "sandbox": prefs.SandboxForPolicy(policy), "approvalPolicy": prefs.ApprovalForPolicy(policy), "approvalsReviewer": prefs.ReviewerForPolicy(policy)}, &result)
+		err := client.Call(ctx, "thread/resume", map[string]any{"threadId": t.ServerID, "cwd": cwd, "sandbox": codexpolicy.SandboxForPolicy(policy), "approvalPolicy": codexpolicy.ApprovalForPolicy(policy), "approvalsReviewer": codexpolicy.ReviewerForPolicy(policy)}, &result)
 		readOnly := codex.IsWriterConflict(err)
 		if readOnly {
 			// Another Codex process owns the writer. Read the persisted rollout through

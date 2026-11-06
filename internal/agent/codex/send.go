@@ -10,6 +10,7 @@ import (
 
 	agentmeta "miya/internal/agent/catalog"
 	codex "miya/internal/agent/codex/native"
+	codexpolicy "miya/internal/agent/codex/policy"
 	"miya/internal/chat/composer"
 	"miya/internal/chat/model"
 	msgfmt "miya/internal/chat/presentation"
@@ -74,7 +75,7 @@ func (b Adapter) Send(req model.SendRequest) int {
 		mayHaveStarted := false
 		if serverID == "" {
 			var r codex.ThreadResponse
-			params := map[string]any{"cwd": cwd, "sandbox": prefs.SandboxForPolicy(policy), "approvalPolicy": prefs.ApprovalForPolicy(policy), "approvalsReviewer": prefs.ReviewerForPolicy(policy)}
+			params := map[string]any{"cwd": cwd, "sandbox": codexpolicy.SandboxForPolicy(policy), "approvalPolicy": codexpolicy.ApprovalForPolicy(policy), "approvalsReviewer": codexpolicy.ReviewerForPolicy(policy)}
 			if modelID != "" {
 				params["model"] = modelID
 			}
@@ -110,7 +111,7 @@ func (b Adapter) Send(req model.SendRequest) int {
 			own, _ := model.SplitReferenceContext(text)
 			input = append(input, composer.FileMentionInputs(own, cwd)...)
 			input = append(input, c.AttachmentInputs(attachments)...)
-			params := map[string]any{"threadId": serverID, "cwd": cwd, "input": input, "approvalPolicy": prefs.ApprovalForPolicy(policy), "approvalsReviewer": prefs.ReviewerForPolicy(policy), "sandboxPolicy": prefs.TurnSandboxForPolicy(policy)}
+			params := map[string]any{"threadId": serverID, "cwd": cwd, "input": input, "approvalPolicy": codexpolicy.ApprovalForPolicy(policy), "approvalsReviewer": codexpolicy.ReviewerForPolicy(policy), "sandboxPolicy": codexpolicy.TurnSandboxForPolicy(policy)}
 			if modelID != "" {
 				params["model"] = modelID
 			}
@@ -127,7 +128,7 @@ func (b Adapter) Send(req model.SendRequest) int {
 				// Restore the same thread and retry once, without another user bubble.
 				missingThread = true
 				mayHaveStarted = false
-				err = client.Call(ctx, "thread/resume", map[string]any{"threadId": serverID, "cwd": cwd, "sandbox": prefs.SandboxForPolicy(policy), "approvalPolicy": prefs.ApprovalForPolicy(policy), "approvalsReviewer": prefs.ReviewerForPolicy(policy)}, nil)
+				err = client.Call(ctx, "thread/resume", map[string]any{"threadId": serverID, "cwd": cwd, "sandbox": codexpolicy.SandboxForPolicy(policy), "approvalPolicy": codexpolicy.ApprovalForPolicy(policy), "approvalsReviewer": codexpolicy.ReviewerForPolicy(policy)}, nil)
 				if err == nil {
 					input[0]["text"] = composer.CollaborationTaggedInput(mem.Text(text), req.Parts)
 					mayHaveStarted = true

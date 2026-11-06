@@ -10,9 +10,11 @@ import (
 	"time"
 
 	codex "miya/internal/agent/codex/native"
+	agentpolicy "miya/internal/agent/policy"
 	"miya/internal/appmodel"
 	"miya/internal/chat/model"
 	"miya/internal/prefs"
+	projectmodel "miya/internal/project/model"
 	svcclient "miya/internal/service/client"
 	svcproto "miya/internal/service/protocol"
 	"miya/internal/service/workspaces"
@@ -104,7 +106,7 @@ func NewMirrorController() *Controller {
 	c.Ctx, c.Cancel = context.WithCancel(context.Background())
 	c.Agent, c.SetAgent = uiruntime.CreateSignal(c.Adapters()[0].ID())
 	c.DraftPermission, c.SetDraftPermission = uiruntime.CreateSignal("")
-	c.Projects, c.SetProjects = uiruntime.CreateSignal([]model.Project{})
+	c.Projects, c.SetProjects = uiruntime.CreateSignal([]projectmodel.Project{})
 	c.Threads, c.SetThreads = uiruntime.CreateSignal([]model.Thread{})
 	c.InstallNotifications()
 	c.Active, c.Mirror.SetActive = uiruntime.CreateSignal(0)
@@ -120,7 +122,7 @@ func NewMirrorController() *Controller {
 	c.SetEffort = func(v string) { c.Mirror.SetEffort(v); c.forward("effort", v) }
 	c.PermissionPolicy, c.Mirror.SetPolicy = uiruntime.CreateSignal("on-request")
 	c.SetPermissionPolicy = func(v string) {
-		v = prefs.NormalizePermissionPolicy(v)
+		v = agentpolicy.Normalize(v)
 		c.Mirror.SetPolicy(v)
 		c.forward("policy", v)
 	}

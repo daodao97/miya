@@ -11,6 +11,7 @@ import (
 	"miya/internal/appmodel"
 	"miya/internal/chat/model"
 	phoneproto "miya/internal/phone/protocol"
+	projectmodel "miya/internal/project/model"
 )
 
 func TestMobileClaudeQuestionRoutesFromControllerToForm(t *testing.T) {
@@ -20,7 +21,7 @@ func TestMobileClaudeQuestionRoutesFromControllerToForm(t *testing.T) {
 			c.Cwd = "/a"
 			// The question belongs to a background project, not the active one.
 			th := model.Thread{ID: 3, Agent: appmodel.AgentClaude, ServerID: "claude-session", Title: "解锁设置", Busy: true, HistoryLoaded: true}
-			c.SetProjects([]model.Project{{Name: "proj-b", Path: "/b"}})
+			c.SetProjects([]projectmodel.Project{{Name: "proj-b", Path: "/b"}})
 			c.ProjectCache = map[string][]model.Thread{"/b": {th}}
 			var f claude.Frame
 			if err := json.Unmarshal([]byte(`{"type":"control_request","request_id":"question-1","request":{"subtype":"can_use_tool","tool_name":"AskUserQuestion","tool_use_id":"tool-1","input":{"questions":[{"question":"自动填入密码前是否验证？","header":"验证方式","multiSelect":false,"options":[{"label":"每次 Face ID","description":"取用密码时验证身份。"},{"label":"不验证，全自动","description":"手机解锁后直接取用密码。"}]},{"question":"何时执行解锁？","header":"触发时机","multiSelect":false,"options":[{"label":"连接后自动解锁"},{"label":"显示解锁按钮"}]}]}}}`), &f); err != nil {

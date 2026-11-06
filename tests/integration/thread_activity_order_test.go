@@ -11,6 +11,7 @@ import (
 	"miya/internal/chat/model"
 	msgfmt "miya/internal/chat/presentation"
 	"miya/internal/controller"
+	projectmodel "miya/internal/project/model"
 	svcproto "miya/internal/service/protocol"
 	serviceserver "miya/internal/service/server"
 	desktopui "miya/internal/ui"
@@ -25,7 +26,7 @@ func activityOrderFixture(t *testing.T, agent string) (*desktopui.App, *ui.Teste
 		{ID: 2, Agent: agent, ServerID: "recent", Title: "最近对话", LastActivityAt: 200, HistoryLoaded: true},
 	})
 	c.SetActive(2)
-	c.SetProjects([]model.Project{{Name: "其他项目", Path: "/other"}, {Name: "demo", Path: c.Cwd}})
+	c.SetProjects([]projectmodel.Project{{Name: "其他项目", Path: "/other"}, {Name: "demo", Path: c.Cwd}})
 	c.ProjectCache = map[string][]model.Thread{
 		c.Cwd:    c.Threads(),
 		"/other": {{ID: 3, LastActivityAt: 300}},
@@ -38,7 +39,7 @@ func TestOpeningConversationDoesNotChangeActivityOrder(t *testing.T) {
 		t.Run(agent, func(t *testing.T) {
 			app, tt := activityOrderFixture(t, agent)
 			c := app.C.(*controller.Controller)
-			beforeProjects := append([]model.Project(nil), c.Projects()...)
+			beforeProjects := append([]projectmodel.Project(nil), c.Projects()...)
 			tt.Frame()
 			beforeOld, _ := tt.Find("旧对话")
 			beforeRecent, _ := tt.Find("最近对话")
@@ -68,7 +69,7 @@ func TestServiceOpenDoesNotChangeActivityOrder(t *testing.T) {
 		t.Run(agent, func(t *testing.T) {
 			app, _ := activityOrderFixture(t, agent)
 			c := app.C.(*controller.Controller)
-			beforeProjects := append([]model.Project(nil), c.Projects()...)
+			beforeProjects := append([]projectmodel.Project(nil), c.Projects()...)
 			s := serviceserver.New(c, nil)
 			if _, err := s.Handle(&serviceserver.Peer{}, svcproto.Request{Op: "open", Args: json.RawMessage(`1`)}); err != nil {
 				t.Fatal(err)

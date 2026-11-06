@@ -11,6 +11,7 @@ import (
 	conversation "miya/internal/chat/view"
 	"miya/internal/interaction"
 	"miya/internal/memory/manager"
+	projectaccess "miya/internal/project/access"
 	"miya/internal/runtime/tracker"
 	svcclient "miya/internal/service/client"
 	svcproto "miya/internal/service/protocol"
@@ -83,7 +84,7 @@ type Host interface {
 	ThreadRefProjects() []model.ProjectSnapshot
 	ThreadWithID(id int) model.Thread
 	ThreadWorkspace(id int) string
-	WorkspaceFiles() appmodel.WorkspaceFiles
+	WorkspaceFiles() projectaccess.Files
 }
 
 // Environment supplies controller creation at the executable's composition root.

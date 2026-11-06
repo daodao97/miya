@@ -7,18 +7,20 @@ import (
 	"testing"
 
 	codex "miya/internal/agent/codex/native"
+	codexpolicy "miya/internal/agent/codex/policy"
 	codexprojection "miya/internal/agent/codex/projection"
 	"miya/internal/appmodel"
 	"miya/internal/chat/model"
 	"miya/internal/chat/subagent"
 	"miya/internal/controller"
 	"miya/internal/prefs"
+	projectmodel "miya/internal/project/model"
 	"miya/internal/uiruntime"
 )
 
 func testController() *controller.Controller {
 	c := &controller.Controller{WindowState: appmodel.WindowState{ReferenceSource: testReferenceSource}}
-	c.Projects, c.SetProjects = uiruntime.CreateSignal([]model.Project{})
+	c.Projects, c.SetProjects = uiruntime.CreateSignal([]projectmodel.Project{})
 	c.Status, c.SetStatus = uiruntime.CreateSignal("")
 	c.Threads, c.SetThreads = uiruntime.CreateSignal([]model.Thread{{ID: 1, ServerID: "t1", Busy: true}, {ID: 2, ServerID: "t2"}})
 	c.Approvals, c.SetApprovals = uiruntime.CreateSignal([]codex.Approval{})
@@ -111,7 +113,7 @@ func TestPermissionPolicySandboxMapping(t *testing.T) {
 		{"on-failure", "workspace-write"},
 		{"never", "danger-full-access"},
 	} {
-		if got := prefs.SandboxForPolicy(tc.policy); got != tc.sandbox {
+		if got := codexpolicy.SandboxForPolicy(tc.policy); got != tc.sandbox {
 			t.Fatalf("%s sandbox = %s, want %s", tc.policy, got, tc.sandbox)
 		}
 	}
@@ -278,11 +280,11 @@ func TestPermissionModes(t *testing.T) {
 		{"on-failure", "on-request", "auto_review", "workspaceWrite"},
 		{"never", "never", "user", "dangerFullAccess"},
 	} {
-		if prefs.ApprovalForPolicy(tc.mode) != tc.approval || prefs.ReviewerForPolicy(tc.mode) != tc.reviewer || prefs.TurnSandboxForPolicy(tc.mode)["type"] != tc.sandbox {
+		if codexpolicy.ApprovalForPolicy(tc.mode) != tc.approval || codexpolicy.ReviewerForPolicy(tc.mode) != tc.reviewer || codexpolicy.TurnSandboxForPolicy(tc.mode)["type"] != tc.sandbox {
 			t.Fatalf("incorrect permission routing for %s", tc.mode)
 		}
 	}
-	if prefs.TurnSandboxForPolicy("on-failure")["networkAccess"] != false {
+	if codexpolicy.TurnSandboxForPolicy("on-failure")["networkAccess"] != false {
 		t.Fatal("auto review must retain the network sandbox")
 	}
 }
@@ -290,7 +292,7 @@ func TestPermissionModes(t *testing.T) {
 func TestProjectOrderUsesLatestConversation(t *testing.T) {
 	c := testController()
 	c.Cwd = "/workspace/current"
-	c.Projects, c.SetProjects = uiruntime.CreateSignal([]model.Project{
+	c.Projects, c.SetProjects = uiruntime.CreateSignal([]projectmodel.Project{
 		{Name: "old", Path: "/workspace/old"},
 		{Name: "current", Path: c.Cwd},
 		{Name: "new", Path: "/workspace/new"},

@@ -9,6 +9,7 @@ import (
 	"miya/internal/appmodel"
 	"miya/internal/chat/model"
 	"miya/internal/controller"
+	projectmodel "miya/internal/project/model"
 	svcproto "miya/internal/service/protocol"
 )
 
@@ -37,7 +38,7 @@ func TestCollapsedProjectShowsRunningConversation(t *testing.T) {
 func TestProjectRunningStateReachesServiceWindow(t *testing.T) {
 	app, _ := testApp(t)
 	c := app.C.(*controller.Controller)
-	c.SetProjects([]model.Project{{Name: "demo", Path: c.Cwd}, {Name: "background", Path: "/background"}})
+	c.SetProjects([]projectmodel.Project{{Name: "demo", Path: c.Cwd}, {Name: "background", Path: "/background"}})
 	c.ProjectCache = map[string][]model.Thread{"/background": {{ID: 2, Agent: appmodel.AgentClaude, Busy: true}}}
 	c.SetThreads([]model.Thread{{ID: 1, Busy: true, Loading: true}})
 	mirror := controller.NewMirrorController()

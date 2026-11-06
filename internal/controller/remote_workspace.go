@@ -12,12 +12,12 @@ import (
 	"miya/internal/agent/integrations"
 	agentusage "miya/internal/agent/quota"
 	"miya/internal/async"
-	"miya/internal/chat/composer"
 	"miya/internal/fsutil"
 	phoneserver "miya/internal/phone/server"
+	projectfiles "miya/internal/project/files"
+	projectgit "miya/internal/project/git"
 	svcproto "miya/internal/service/protocol"
 	"miya/internal/thumbnail"
-	"miya/internal/worktree"
 )
 
 func (c *Controller) PrepareHost(r svcproto.HostRequest) (async.Reply, error) {
@@ -75,43 +75,43 @@ func (c *Controller) PrepareHost(r svcproto.HostRequest) (async.Reply, error) {
 		}
 		switch r.Action {
 		case "index":
-			return composer.IndexProjectFiles(ctx, r.Project)
+			return projectfiles.IndexProjectFiles(ctx, r.Project)
 		case "diff":
-			if r.Source < worktree.SourceUncommitted || r.Source > worktree.SourceBranch {
+			if r.Source < projectgit.SourceUncommitted || r.Source > projectgit.SourceBranch {
 				return nil, errors.New("Invalid diff source")
 			}
-			return worktree.CollectDiff(ctx, r.Project, r.Source)
+			return projectgit.CollectDiff(ctx, r.Project, r.Source)
 		case "sides":
-			if _, err := svcproto.HostProjectPath(r.Project, r.File.Path); err != nil {
+			if _, err := projectfiles.ProjectPath(r.Project, r.File.Path); err != nil {
 				return nil, err
 			}
-			old, new := worktree.FileSides(ctx, r.Project, r.Snapshot, r.File)
-			if len(old)+len(new) > 2*worktree.MaxEditableFile {
+			old, new := projectgit.FileSides(ctx, r.Project, r.Snapshot, r.File)
+			if len(old)+len(new) > 2*projectfiles.MaxEditableFile {
 				return nil, errors.New("Diff is too large")
 			}
 			return svcproto.HostSides{Old: old, New: new}, nil
 		}
-		path, err := svcproto.HostProjectPath(r.Project, r.Path)
+		path, err := projectfiles.ProjectPath(r.Project, r.Path)
 		if err != nil {
 			return nil, err
 		}
 		switch r.Action {
 		case "dir":
-			entries, err := worktree.ReadDirEntries(r.Project, r.Path)
+			entries, err := projectfiles.ReadDirEntries(r.Project, r.Path)
 			out := make([]svcproto.HostEntry, 0, len(entries))
 			for _, e := range entries {
 				out = append(out, svcproto.HostEntry{Name: e.Name, Path: e.Rel, Dir: e.Dir})
 			}
 			return out, err
 		case "read":
-			return worktree.ReadTextFile(path)
+			return projectfiles.ReadTextFile(path)
 		case "image":
-			if worktree.ImageFileKind(r.Path) != "bitmap" {
+			if projectfiles.ImageFileKind(r.Path) != "bitmap" {
 				return nil, errors.New("Not a previewable image")
 			}
-			return worktree.ReadImageFile(path)
+			return projectfiles.ReadImageFile(path)
 		case "write":
-			if len(r.Text) > worktree.MaxEditableFile || worktree.IsBinary([]byte(r.Text)) {
+			if len(r.Text) > projectfiles.MaxEditableFile || projectfiles.IsBinary([]byte(r.Text)) {
 				return nil, errors.New("Unable to save this file")
 			}
 			return nil, fsutil.WriteFileAtomic(path, func(f *os.File) error { _, err := io.WriteString(f, r.Text); return err })

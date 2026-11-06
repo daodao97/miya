@@ -2,12 +2,6 @@ package model
 
 // Data the desktop, its service and the phone pass between them.
 
-// Project is a workspace directory and the name it shows.
-type Project struct {
-	Name string
-	Path string
-}
-
 // Only capability and revision metadata travels with chat state. Task bodies,
 // context snapshots and results are fetched explicitly, never broadcast.
 type CollaborationStatus struct {

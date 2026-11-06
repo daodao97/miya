@@ -18,6 +18,7 @@ import (
 	"miya/internal/appmodel"
 	"miya/internal/chat/model"
 	"miya/internal/controller"
+	projectmodel "miya/internal/project/model"
 	"miya/internal/remote"
 	svcclient "miya/internal/service/client"
 	svcproto "miya/internal/service/protocol"
@@ -99,7 +100,7 @@ func waitDesktopWorkspace(t *testing.T, hub *desktopui.DesktopWorkspaces, dispat
 }
 
 func workspaceState(name string) svcproto.State {
-	return svcproto.State{ReferenceSource: "host-" + name, Cwd: "/same/project", Projects: []model.Project{{Name: name, Path: "/same/project"}}, Threads: []model.Thread{{ID: 7, ServerID: "thread-" + name, Title: name, Loaded: true, HistoryLoaded: true}}, Locale: "en", Ready: true, ProjectThreads: map[string][]model.Thread{}}
+	return svcproto.State{ReferenceSource: "host-" + name, Cwd: "/same/project", Projects: []projectmodel.Project{{Name: name, Path: "/same/project"}}, Threads: []model.Thread{{ID: 7, ServerID: "thread-" + name, Title: name, Loaded: true, HistoryLoaded: true}}, Locale: "en", Ready: true, ProjectThreads: map[string][]model.Thread{}}
 }
 
 func TestDesktopWorkspaceSwitchPreservesDraftsAndPanels(t *testing.T) {
@@ -256,7 +257,7 @@ func TestDesktopWorkspaceSidebarRemoteSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	hub.Store.Active = item.ID
-	app.C.(*controller.Controller).SetProjects([]model.Project{{Name: "miya-server", Path: "/srv/miya"}})
+	app.C.(*controller.Controller).SetProjects([]projectmodel.Project{{Name: "miya-server", Path: "/srv/miya"}})
 	app.C.(*controller.Controller).Cwd = "/srv/miya"
 	app.Workspace, app.ProjectName, app.ExpandedProject = app.C.(*controller.Controller).Cwd, "miya-server", app.C.(*controller.Controller).Cwd
 	tt := ui.NewTester(app.Render, 1180, 820)

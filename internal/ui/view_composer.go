@@ -14,6 +14,7 @@ import (
 	"miya/internal/chat/composer"
 	"miya/internal/chat/model"
 	conversation "miya/internal/chat/view"
+	projectfiles "miya/internal/project/files"
 	svcclient "miya/internal/service/client"
 	svcproto "miya/internal/service/protocol"
 	"miya/internal/textutil"
@@ -276,7 +277,7 @@ func (m *completion) editAt(app *App, value string, end int) {
 		var files []string
 		var err error
 		if host == nil {
-			files, err = composer.IndexProjectFiles(ctx, root)
+			files, err = projectfiles.IndexProjectFiles(ctx, root)
 		} else {
 			err = host.Call("host", svcproto.HostRequest{Action: "index", Project: root}, &files)
 		}

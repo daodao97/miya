@@ -11,6 +11,7 @@ import (
 	"miya/internal/appmodel"
 	"miya/internal/chat/model"
 	"miya/internal/controller"
+	projectmodel "miya/internal/project/model"
 	svcproto "miya/internal/service/protocol"
 	desktopui "miya/internal/ui"
 )
@@ -20,7 +21,7 @@ func TestGlobalThreadChoicesIncludeAllProjectsAndMatches(t *testing.T) {
 	c := app.C.(*controller.Controller)
 	c.SetActive(1)
 	c.SetThreads([]model.Thread{{ID: 1, ServerID: "session-1", Title: "登录自己"}, {ID: 2, ServerID: "session-2", Title: "登录当前", LastActivityAt: 100}})
-	c.SetProjects(append(c.Projects(), model.Project{Name: "其他项目", Path: "/other"}))
+	c.SetProjects(append(c.Projects(), projectmodel.Project{Name: "其他项目", Path: "/other"}))
 	c.ProjectCache = map[string][]model.Thread{
 		c.Cwd:          {{ID: 2, ServerID: "session-2", Title: "旧标题"}, {ID: 99, ServerID: "session-99", Title: "登录已删除"}},
 		"/other":       {{ID: 3, ServerID: "session-3", Agent: appmodel.AgentClaude, Title: "登录远程", LastActivityAt: 200}},

@@ -21,6 +21,7 @@ import (
 
 	"miya/internal/chat/composer"
 	"miya/internal/chat/model"
+	projectfiles "miya/internal/project/files"
 	"miya/internal/runtime/tracker"
 	"miya/internal/webservice"
 	"miya/locales"
@@ -119,7 +120,7 @@ func (s DesktopFileServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	defer root.Close()
 	if parts[1] == ".miya-references" {
-		files, err := composer.IndexProjectFiles(ctx, project.Path)
+		files, err := projectfiles.IndexProjectFiles(ctx, project.Path)
 		if err != nil {
 			http.Error(w, "Unable to search project files. Try again later.", http.StatusServiceUnavailable)
 			return

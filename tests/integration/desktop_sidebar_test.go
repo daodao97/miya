@@ -11,6 +11,7 @@ import (
 	"miya/internal/appmodel"
 	"miya/internal/chat/model"
 	"miya/internal/controller"
+	projectmodel "miya/internal/project/model"
 	svcproto "miya/internal/service/protocol"
 	serviceserver "miya/internal/service/server"
 )
@@ -19,7 +20,7 @@ func TestSidebarActivityAcrossProjects(t *testing.T) {
 	app, _ := testApp(t)
 	c := app.C.(*controller.Controller)
 	c.LoadDesktopUnread()
-	c.SetProjects([]model.Project{{Name: "demo", Path: c.Cwd}, {Name: "other", Path: "/other"}})
+	c.SetProjects([]projectmodel.Project{{Name: "demo", Path: c.Cwd}, {Name: "other", Path: "/other"}})
 	current := []model.Thread{{ID: 1, Title: "当前运行", Busy: true, LastActivityAt: 20}, {ID: 2, Title: "加载历史", Busy: true, Loading: true}}
 	for id := 3; id <= 9; id++ {
 		current = append(current, model.Thread{ID: id, Title: fmt.Sprintf("待查看 %d", id), LastActivityAt: int64(id)})
@@ -118,7 +119,7 @@ func TestDesktopUnreadServiceSnapshotAndAcknowledgement(t *testing.T) {
 	c := app.C.(*controller.Controller)
 	c.LoadDesktopUnread()
 	thread := model.Thread{ID: 2, ServerID: "background", Agent: appmodel.AgentClaude}
-	c.SetProjects(append(c.Projects(), model.Project{Name: "other", Path: "/other"}))
+	c.SetProjects(append(c.Projects(), projectmodel.Project{Name: "other", Path: "/other"}))
 	c.ProjectCache = map[string][]model.Thread{"/other": {thread}}
 	c.RecordDesktopCompletion(model.Thread{Busy: true}, model.Thread{ID: 2, ServerID: thread.ServerID, Agent: thread.Agent, CompletedAtMs: 100})
 	data, err := json.Marshal(c.SnapshotState())
@@ -164,10 +165,10 @@ func TestSidebarActivityOpensOtherProject(t *testing.T) {
 	c.Connecting = true
 	c.Run = func(func()) {}
 	other := t.TempDir()
-	c.SetProjects(append(c.Projects(), model.Project{Name: "other", Path: other}))
+	c.SetProjects(append(c.Projects(), projectmodel.Project{Name: "other", Path: other}))
 	thread := model.Thread{ID: 2, Title: "跨项目会话", Busy: true, LastActivityAt: 50}
 	c.ProjectCache = map[string][]model.Thread{other: {thread}}
-	before := append([]model.Project(nil), c.Projects()...)
+	before := append([]projectmodel.Project(nil), c.Projects()...)
 	tt := ui.NewTester(app.SidebarView, 260, 750)
 	if err := tt.Click(thread.Title); err != nil {
 		t.Fatal(err)

@@ -16,6 +16,7 @@ import (
 	mcpproto "miya/internal/mcp/protocol"
 	"miya/internal/memory"
 	"miya/internal/memory/manager"
+	projectmodel "miya/internal/project/model"
 	serviceserver "miya/internal/service/server"
 )
 
@@ -88,7 +89,7 @@ func TestMemoryConcurrentProjectsUseArgumentsForBothAdapters(t *testing.T) {
 			c := app.C.(*controller.Controller)
 			attachMemory(t, c)
 			a, b := c.Cwd, t.TempDir()
-			c.SetProjects([]model.Project{{Path: a}, {Path: b}})
+			c.SetProjects([]projectmodel.Project{{Path: a}, {Path: b}})
 			ra := memoryMCPRequest("remember", mcpproto.MemoryArgs{Kind: "fact", Content: "A 项目临时保留协议", Quote: "记住 A 项目临时保留协议"})
 			rb := memoryMCPRequest("remember", mcpproto.MemoryArgs{Kind: "fact", Content: "B 项目启用新协议", Quote: "记住 B 项目启用新协议"})
 			ta := model.Thread{ID: 1, Agent: agent, ServerID: "session-a", Busy: true, Messages: []model.Message{{ID: 10, Role: "user", ItemID: "u-a", Content: "记住 A 项目临时保留协议", SentAtMs: 1000}, memoryToolMessage(agent, ra.Tool, ra.Arguments, 11, 2000)}}

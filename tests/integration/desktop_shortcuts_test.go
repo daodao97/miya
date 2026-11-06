@@ -9,6 +9,7 @@ import (
 
 	"miya/internal/chat/model"
 	"miya/internal/controller"
+	projectmodel "miya/internal/project/model"
 	desktopui "miya/internal/ui"
 	"miya/internal/uiruntime"
 )
@@ -135,7 +136,7 @@ func TestDesktopConversationSearchAcrossProjects(t *testing.T) {
 	app, _ := testApp(t)
 	c := app.C.(*controller.Controller)
 	c.SetThreads([]model.Thread{{ID: 1, Title: "Starting conversation", LastActivityAt: 10}})
-	c.SetProjects(append(c.Projects(), model.Project{Name: "Other project", Path: "/other"}))
+	c.SetProjects(append(c.Projects(), projectmodel.Project{Name: "Other project", Path: "/other"}))
 	c.ProjectCache = map[string][]model.Thread{
 		c.Cwd:    {{ID: 1, Title: "Stale title"}},
 		"/other": {{ID: 2, ServerID: "session-api", Title: "API review", LastActivityAt: 20}},
@@ -180,7 +181,7 @@ func TestDesktopConversationSwitcherChangesProject(t *testing.T) {
 	app, tt := testApp(t)
 	c := app.C.(*controller.Controller)
 	first, second := c.Cwd, t.TempDir()
-	c.SetProjects([]model.Project{{Name: "First", Path: first}, {Name: "Second", Path: second}})
+	c.SetProjects([]projectmodel.Project{{Name: "First", Path: first}, {Name: "Second", Path: second}})
 	c.SetThreads([]model.Thread{{ID: 1, Title: "First conversation", HistoryLoaded: true}})
 	c.ProjectCache = map[string][]model.Thread{second: {{ID: 2, Title: "Second conversation", HistoryLoaded: true, Draft: "second draft"}}}
 	c.SelectThread(c.ThreadWithID(1))

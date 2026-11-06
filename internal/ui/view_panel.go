@@ -20,12 +20,13 @@ import (
 	"miya/internal/chat/model"
 	"miya/internal/fsutil"
 	phoneproxy "miya/internal/phone/proxy"
+	projectfiles "miya/internal/project/files"
+	projectgit "miya/internal/project/git"
 	"miya/internal/runtime/tracker"
 	svcproto "miya/internal/service/protocol"
 	"miya/internal/uiruntime"
 	"miya/internal/webservice"
 	"miya/internal/widgets"
-	"miya/internal/worktree"
 )
 
 // The right panel follows Waku's: each conversation keeps its own tabs of
@@ -117,15 +118,15 @@ type panelState struct {
 
 	Selected string
 	expanded map[string]bool
-	dirs     map[string][]worktree.FileEntry
+	dirs     map[string][]projectfiles.FileEntry
 	dirErr   map[string]string
 	loading  map[string]bool
 	Editors  map[string]*fileEditor
 	tree     ui.ListState
 
-	source       worktree.DiffSource
+	source       projectgit.DiffSource
 	sourceName   string
-	Diff         *worktree.DiffSnapshot
+	Diff         *projectgit.DiffSnapshot
 	DiffErr      string
 	diffBusy     bool
 	diffGen      int
@@ -136,7 +137,7 @@ type panelState struct {
 }
 
 func newPanelState(cwd string, visible bool) *panelState {
-	p := &panelState{Visible: visible, Active: -1, sourceName: worktree.DiffSourceNames()[0]}
+	p := &panelState{Visible: visible, Active: -1, sourceName: projectgit.DiffSourceNames()[0]}
 	p.resetWorkspace(cwd)
 	return p
 }
@@ -147,7 +148,7 @@ func (p *panelState) resetWorkspace(cwd string) {
 	p.Cwd = cwd
 	p.Selected = ""
 	p.expanded = map[string]bool{}
-	p.dirs = map[string][]worktree.FileEntry{}
+	p.dirs = map[string][]projectfiles.FileEntry{}
 	p.dirErr = map[string]string{}
 	p.loading = map[string]bool{}
 	p.Editors = map[string]*fileEditor{}
@@ -610,7 +611,7 @@ func (app *App) terminalView(c *ui.Context, p *panelState, s *PanelSurface) {
 }
 
 type treeRow struct {
-	entry worktree.FileEntry
+	entry projectfiles.FileEntry
 	depth int
 }
 
@@ -637,7 +638,7 @@ func (app *App) loadDir(p *panelState, rel string) {
 	root := p.Cwd
 	files := app.C.WorkspaceFiles()
 	uiruntime.GoAsync(func() {
-		var entries []worktree.FileEntry
+		var entries []projectfiles.FileEntry
 		var err error
 		entries, err = files.ReadDir(root, rel)
 		app.C.Dispatch(func() {
@@ -662,7 +663,7 @@ func (app *App) openFile(p *panelState, rel string) {
 	if ed := p.Editors[rel]; ed != nil && ed.err == "" {
 		return
 	}
-	kind := worktree.ImageFileKind(rel)
+	kind := projectfiles.ImageFileKind(rel)
 	ed := &fileEditor{loading: true, Preview: strings.EqualFold(path.Ext(rel), ".md") || kind != ""}
 	p.Editors[rel] = ed
 	root := p.Cwd
@@ -809,7 +810,7 @@ func (app *App) fileEditorView(c *ui.Context, p *panelState, rel string) {
 		return
 	}
 	markdownFile := strings.EqualFold(path.Ext(rel), ".md")
-	imageKind := worktree.ImageFileKind(rel)
+	imageKind := projectfiles.ImageFileKind(rel)
 	ui.Column(c).Grow(1).MinHeight(0).Children(func() {
 		panelBar(c, func() {
 			if widgets.ToolButton(c.Key("back"), "arrow-left", tr("Back to file list")).Clicked() {
@@ -884,7 +885,7 @@ func (app *App) refreshDiff(p *panelState) {
 	uiruntime.GoAsync(func() {
 		ctx, cancel := context.WithTimeout(parent, 20*time.Second)
 		defer cancel()
-		var snap worktree.DiffSnapshot
+		var snap projectgit.DiffSnapshot
 		var err error
 		snap, err = files.Diff(ctx, root, src)
 		app.C.Dispatch(func() {
@@ -961,12 +962,12 @@ func (app *App) diffSurface(c *ui.Context, p *panelState) {
 		panelBar(c, func() {
 			// The source, not its name, is the selection: names change with the
 			// interface language.
-			names := worktree.DiffSourceNames()
+			names := projectgit.DiffSourceNames()
 			p.sourceName = names[p.source]
 			if ui.Select(c.Key("source"), &p.sourceName, names).Label(tr("Review source")).FontSize(12).Changed() {
 				for i, name := range names {
 					if name == p.sourceName {
-						p.source = worktree.DiffSource(i)
+						p.source = projectgit.DiffSource(i)
 					}
 				}
 				p.Diff, p.DiffView, p.DiffViewPath, p.DiffErr = nil, nil, "", ""
@@ -999,7 +1000,7 @@ func (app *App) diffSurface(c *ui.Context, p *panelState) {
 			})
 			return
 		case len(p.Diff.Files) == 0:
-			panelMessage(c, tr("No changes"), worktree.DiffSourceNames()[p.Diff.Source]+tr(" is empty"))
+			panelMessage(c, tr("No changes"), projectgit.DiffSourceNames()[p.Diff.Source]+tr(" is empty"))
 			return
 		}
 		ui.Scroll(c.Key("changed-files")).MaxHeight(180).Shrink(0).Children(func() {
@@ -1021,7 +1022,7 @@ func (app *App) diffSurface(c *ui.Context, p *panelState) {
 	})
 }
 
-func (app *App) changedFileRow(c *ui.Context, p *panelState, i int, f worktree.ChangedFile) {
+func (app *App) changedFileRow(c *ui.Context, p *panelState, i int, f projectgit.ChangedFile) {
 	row := widgets.Quiet(c).FillWidth().Height(26).Gap(6).PaddingX(6).Label(f.Path)
 	if i == p.diffFile {
 		row.Background(widgets.Chosen)

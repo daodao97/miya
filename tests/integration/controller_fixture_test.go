@@ -10,6 +10,7 @@ import (
 	"miya/internal/appmodel"
 	"miya/internal/chat/model"
 	"miya/internal/controller"
+	projectmodel "miya/internal/project/model"
 	"miya/internal/uiruntime"
 )
 
@@ -46,7 +47,7 @@ func serverController(dir, claudeBin string) *controller.Controller {
 	c := &controller.Controller{WindowState: appmodel.WindowState{ReferenceSource: testReferenceSource, Cwd: dir, Ctx: context.Background(), ProjectCache: map[string][]model.Thread{}}, ClaudeBinary: claudeBin}
 	c.Agent, c.SetAgent = uiruntime.CreateSignal(appmodel.AgentCodex)
 	c.DraftPermission, c.SetDraftPermission = uiruntime.CreateSignal("")
-	c.Projects, c.SetProjects = uiruntime.CreateSignal([]model.Project{{Name: "demo", Path: dir}})
+	c.Projects, c.SetProjects = uiruntime.CreateSignal([]projectmodel.Project{{Name: "demo", Path: dir}})
 	c.Threads, c.SetThreads = uiruntime.CreateSignal([]model.Thread{})
 	c.Active, c.SetActive = uiruntime.CreateSignal(0)
 	c.Draft, c.SetDraft = uiruntime.CreateSignal("")

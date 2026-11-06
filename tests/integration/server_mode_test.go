@@ -21,6 +21,8 @@ import (
 
 	"miya/internal/controller"
 	phoneproto "miya/internal/phone/protocol"
+	projectfiles "miya/internal/project/files"
+	projectgit "miya/internal/project/git"
 	"miya/internal/remote"
 	svcclient "miya/internal/service/client"
 	svcproto "miya/internal/service/protocol"
@@ -28,7 +30,6 @@ import (
 	"miya/internal/service/workspaces"
 	desktopui "miya/internal/ui"
 	"miya/internal/webservice"
-	"miya/internal/worktree"
 )
 
 func TestServerPersistentIdleAndTerminalRestart(t *testing.T) {
@@ -127,7 +128,7 @@ func TestRemoteHostWorkspaceRPC(t *testing.T) {
 	for _, r := range []svcproto.HostRequest{
 		{Action: "read", Project: root, Path: "../secret"},
 		{Action: "read", Project: "/unregistered", Path: "hello.txt"},
-		{Action: "write", Project: root, Path: "hello.txt", Text: strings.Repeat("x", worktree.MaxEditableFile+1)},
+		{Action: "write", Project: root, Path: "hello.txt", Text: strings.Repeat("x", projectfiles.MaxEditableFile+1)},
 	} {
 		if err := cl.Call("host", r, nil); err == nil {
 			t.Fatalf("invalid host request accepted: %s", r.Action)
@@ -206,7 +207,7 @@ func TestRemoteHostDeletedGitFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := serverController(root, "")
-	snap, err := worktree.CollectDiff(context.Background(), root, worktree.SourceUncommitted)
+	snap, err := projectgit.CollectDiff(context.Background(), root, projectgit.SourceUncommitted)
 	if err != nil || len(snap.Files) != 1 {
 		t.Fatal(snap, err)
 	}

@@ -7,6 +7,7 @@ import (
 	"miya/internal/appmodel"
 	"miya/internal/chat/model"
 	"miya/internal/controller"
+	projectmodel "miya/internal/project/model"
 	"miya/internal/uiruntime"
 )
 
@@ -27,7 +28,7 @@ func newViewerController() *controller.Controller {
 	// The shared views call these; left nil they would panic, as a Codex
 	// message's rewind check once did with ready.
 	c.Ready, c.SetReady = uiruntime.CreateSignal(false)
-	c.Projects, c.SetProjects = uiruntime.CreateSignal([]model.Project{})
+	c.Projects, c.SetProjects = uiruntime.CreateSignal([]projectmodel.Project{})
 	c.Model, c.SetModel = uiruntime.CreateSignal("")
 	c.Effort, c.SetEffort = uiruntime.CreateSignal("")
 	c.Models, c.SetModels = uiruntime.CreateSignal([]codex.Model{})

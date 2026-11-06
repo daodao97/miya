@@ -7,11 +7,11 @@ import (
 
 	"miya/internal/appmodel"
 	"miya/internal/async"
-	"miya/internal/chat/model"
 	"miya/internal/controller"
 	"miya/internal/memory"
 	"miya/internal/memory/extractor/extractortest"
 	"miya/internal/memory/manager"
+	projectmodel "miya/internal/project/model"
 )
 
 func TestMemoryCodexExtractorDoesNotRequireClaude(t *testing.T) {
@@ -32,7 +32,7 @@ func TestMemoryCodexExtractorDoesNotRequireClaude(t *testing.T) {
 		}
 	}
 	other := t.TempDir()
-	c.SetProjects(append(c.Projects(), model.Project{Path: other}))
+	c.SetProjects(append(c.Projects(), projectmodel.Project{Path: other}))
 	list = completeMemory(t, c, "memoryList", manager.Request{Project: other}).(manager.List)
 	if list.Settings.ExtractionAgent() != appmodel.AgentClaude || list.Settings.AutoExtract {
 		t.Fatal("extractor selection leaked to another project")

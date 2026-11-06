@@ -6,6 +6,7 @@ import (
 	"miya/internal/agent/account"
 	"miya/internal/chat/model"
 	"miya/internal/interaction"
+	projectmodel "miya/internal/project/model"
 	svcclient "miya/internal/service/client"
 )
 
@@ -30,7 +31,7 @@ type WindowState struct {
 	MemoryRevision  uint64
 	Model           func() string
 	ProjectCache    map[string][]model.Thread
-	Projects        func() []model.Project
+	Projects        func() []projectmodel.Project
 	Ready           func() bool
 	ReferenceSource string
 	// Remote is the mirrored service, nil for a controller running agents locally.

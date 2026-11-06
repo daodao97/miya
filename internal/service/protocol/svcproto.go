@@ -15,6 +15,7 @@ import (
 	"miya/internal/appdir"
 	"miya/internal/chat/model"
 	"miya/internal/interaction"
+	projectmodel "miya/internal/project/model"
 )
 
 const Version = 2
@@ -42,7 +43,7 @@ type State struct {
 	ReferenceSource    string                     `json:"referenceSource"`
 	FastMode           bool                       `json:"fastMode"`
 	Cwd                string                     `json:"cwd"`
-	Projects           []model.Project            `json:"projects"`
+	Projects           []projectmodel.Project     `json:"projects"`
 	ProjectBusy        map[string]bool            `json:"projectBusy,omitempty"`
 	Threads            []model.Thread             `json:"threads"`
 	Approvals          []interaction.Request      `json:"approvals"`

@@ -7,6 +7,7 @@ import (
 
 	"miya/internal/chat/model"
 	msgfmt "miya/internal/chat/presentation"
+	projectmodel "miya/internal/project/model"
 	"miya/internal/widgets"
 )
 
@@ -111,7 +112,7 @@ func (app *App) nav(c *ui.Context, symbol, label string) ui.Element {
 	return b
 }
 
-func (app *App) projectSection(c *ui.Context, p model.Project) {
+func (app *App) projectSection(c *ui.Context, p projectmodel.Project) {
 	ui.Column(c).Gap(2).Children(func() {
 		app.projectRow(c, p)
 		if p.Path != app.ExpandedProject {
@@ -146,7 +147,7 @@ func (app *App) projectSection(c *ui.Context, p model.Project) {
 }
 
 // projectRow shows a project, with its actions while the pointer is on it.
-func (app *App) projectRow(c *ui.Context, p model.Project) {
+func (app *App) projectRow(c *ui.Context, p projectmodel.Project) {
 	c = c.Key("row")
 	wrap := ui.Box(c).FillWidth()
 	showActions := wrap.Hovered()
@@ -187,7 +188,7 @@ func (app *App) projectRow(c *ui.Context, p model.Project) {
 	})
 }
 
-func (app *App) projectMenu(m *ui.Menu, p model.Project) {
+func (app *App) projectMenu(m *ui.Menu, p projectmodel.Project) {
 	// Archiving hides the project and archives its conversations while keeping
 	// the Codex project trust configuration intact.
 	if m.Item(tr("Archive project")).Chosen() {

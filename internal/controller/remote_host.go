@@ -24,6 +24,7 @@ import (
 	"miya/internal/desktop"
 	phoneproto "miya/internal/phone/protocol"
 	phoneserver "miya/internal/phone/server"
+	projectmodel "miya/internal/project/model"
 	"miya/internal/remote"
 	"miya/internal/thumbnail"
 	"miya/internal/uiruntime"
@@ -61,7 +62,7 @@ func (c *Controller) PhoneSnapshot() phoneproto.State {
 		}
 	}
 	if !found {
-		projects = append([]model.Project{{Name: filepath.Base(c.Cwd), Path: c.Cwd}}, projects...)
+		projects = append([]projectmodel.Project{{Name: filepath.Base(c.Cwd), Path: c.Cwd}}, projects...)
 	}
 	for _, p := range projects {
 		threads := c.ProjectCache[p.Path]

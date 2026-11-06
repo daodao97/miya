@@ -1,9 +1,11 @@
-package prefs
+package policy
+
+import agentpolicy "miya/internal/agent/policy"
 
 // "on-failure" is retained as the stored ID for the existing Help me approve
 // preference; it must not be sent as the protocol's deprecated failure policy.
 func ApprovalForPolicy(policy string) string {
-	if NormalizePermissionPolicy(policy) == "never" {
+	if agentpolicy.Normalize(policy) == "never" {
 		return "never"
 	}
 	return "on-request"

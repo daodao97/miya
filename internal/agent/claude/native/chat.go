@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
+	agentpolicy "miya/internal/agent/policy"
 	"miya/internal/appdir"
 	"miya/internal/chat/model"
-	"miya/internal/prefs"
 	"miya/locales"
 )
 
@@ -64,7 +64,7 @@ func Input(text string, paths []string) ([]map[string]any, error) {
 // claudePermissionMode maps the app's permission choices to Claude Code's
 // modes, so one picker serves both agents.
 func PermissionMode(policy string) string {
-	switch prefs.NormalizePermissionPolicy(policy) {
+	switch agentpolicy.Normalize(policy) {
 	case "never":
 		return "bypassPermissions"
 	case "on-failure":

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
+	agentpolicy "miya/internal/agent/policy"
 	"miya/internal/appdir"
 	"miya/internal/appmodel"
 	"miya/internal/async"
@@ -16,7 +17,6 @@ import (
 	"miya/internal/memory"
 	"miya/internal/memory/manager"
 	"miya/internal/notification"
-	"miya/internal/prefs"
 	"miya/internal/runtime/tracker"
 	svcproto "miya/internal/service/protocol"
 	serviceserver "miya/internal/service/server"
@@ -219,7 +219,7 @@ func (c *Controller) ServiceRequest(req svcproto.Request) (any, error) {
 				if req.Op == "draft" {
 					t.Draft = a.Value
 				} else {
-					t.PermissionPolicy = prefs.NormalizePermissionPolicy(a.Value)
+					t.PermissionPolicy = agentpolicy.Normalize(a.Value)
 				}
 			})
 		}

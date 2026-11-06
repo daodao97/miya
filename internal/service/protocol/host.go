@@ -1,14 +1,10 @@
 package protocol
 
 import (
-	"errors"
-	"os"
-	"path/filepath"
-
 	agentusage "miya/internal/agent/quota"
 	"miya/internal/chat/model"
+	projectgit "miya/internal/project/git"
 	"miya/internal/remote"
-	"miya/internal/worktree"
 )
 
 type HostCommands struct {
@@ -21,41 +17,11 @@ type HostEntry struct {
 	Dir        bool
 }
 
-func HostProjectPath(root, rel string) (string, error) {
-	if rel == "" {
-		return root, nil
-	}
-	if !filepath.IsLocal(rel) {
-		return "", errors.New("Invalid project path")
-	}
-	path := filepath.Join(root, rel)
-	resolved, err := filepath.EvalSymlinks(path)
-	if os.IsNotExist(err) {
-		var parent string
-		parent, err = filepath.EvalSymlinks(filepath.Dir(path))
-		if err == nil {
-			resolved = filepath.Join(parent, filepath.Base(path))
-		}
-	}
-	if err != nil {
-		return "", err
-	}
-	base, err := filepath.EvalSymlinks(root)
-	if err != nil {
-		return "", err
-	}
-	inside, err := filepath.Rel(base, resolved)
-	if err != nil || !filepath.IsLocal(inside) {
-		return "", errors.New("File is outside the project directory")
-	}
-	return path, nil
-}
-
 type HostRequest struct {
 	Action, Project, Path, Text string
-	Source                      worktree.DiffSource
-	Snapshot                    worktree.DiffSnapshot
-	File                        worktree.ChangedFile
+	Source                      projectgit.DiffSource
+	Snapshot                    projectgit.DiffSnapshot
+	File                        projectgit.ChangedFile
 	Images                      []remote.Image
 	Reset                       *agentusage.ResetAttempt
 }

@@ -7,6 +7,7 @@ import (
 	threadlist "miya/internal/chat/history"
 	"miya/internal/chat/model"
 	"miya/internal/controller"
+	projectmodel "miya/internal/project/model"
 )
 
 func TestSidebarDeletesConversationInItsProject(t *testing.T) {
@@ -22,7 +23,7 @@ func TestSidebarDeletesConversationInItsProject(t *testing.T) {
 			target := model.Thread{ID: 1, ServerID: "target", Title: "Delete this conversation", Busy: true}
 			keep := model.Thread{ID: 2, ServerID: "keep", Title: "Keep this conversation", HistoryLoaded: true, Draft: "keep draft"}
 			c.ProjectCache = map[string][]model.Thread{other: nil}
-			c.SetProjects([]model.Project{{Name: "current", Path: c.Cwd}, {Name: "other", Path: other}})
+			c.SetProjects([]projectmodel.Project{{Name: "current", Path: c.Cwd}, {Name: "other", Path: other}})
 			if background {
 				c.SetThreads([]model.Thread{keep})
 				c.ProjectCache[other] = []model.Thread{target}

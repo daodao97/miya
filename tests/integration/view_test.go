@@ -13,6 +13,7 @@ import (
 	"miya/internal/appmodel"
 	"miya/internal/chat/model"
 	"miya/internal/controller"
+	projectmodel "miya/internal/project/model"
 	desktopui "miya/internal/ui"
 	"miya/internal/uiruntime"
 )
@@ -30,7 +31,7 @@ func testApp(t *testing.T) (*desktopui.App, *ui.Tester) {
 	t.Cleanup(c.Cancel)
 	c.Agent, c.SetAgent = uiruntime.CreateSignal("codex")
 	c.DraftPermission, c.SetDraftPermission = uiruntime.CreateSignal("")
-	c.Projects, c.SetProjects = uiruntime.CreateSignal([]model.Project{{Name: "demo", Path: cwd}})
+	c.Projects, c.SetProjects = uiruntime.CreateSignal([]projectmodel.Project{{Name: "demo", Path: cwd}})
 	c.Threads, c.SetThreads = uiruntime.CreateSignal([]model.Thread{})
 	c.Active, c.SetActive = uiruntime.CreateSignal(0)
 	c.Draft, c.SetDraft = uiruntime.CreateSignal("")

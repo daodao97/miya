@@ -20,6 +20,7 @@ import (
 	"miya/internal/chat/model"
 	conversation "miya/internal/chat/view"
 	"miya/internal/prefs"
+	projectmodel "miya/internal/project/model"
 	svcproto "miya/internal/service/protocol"
 	"miya/internal/uiruntime"
 	"miya/internal/widgets"
@@ -435,7 +436,7 @@ func (app *App) confirmProject() {
 	app.Section = ""
 }
 
-func (app *App) selectProject(p model.Project) {
+func (app *App) selectProject(p projectmodel.Project) {
 	c := app.C
 	if p.Path == app.Workspace && app.ExpandedProject == p.Path {
 		app.ExpandedProject = ""
@@ -454,7 +455,7 @@ func (app *App) selectProject(p model.Project) {
 	app.closeMenus()
 }
 
-func (app *App) newThreadIn(p model.Project) {
+func (app *App) newThreadIn(p projectmodel.Project) {
 	c := app.C
 	if err := c.ChangeWorkspace(p.Path); err != nil {
 		c.State().SetStatus(err.Error())
