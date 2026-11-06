@@ -335,3 +335,18 @@ func (c *chatController) runtimeBusy() bool {
 	c.runtimeMu.Unlock()
 	return manager != nil && manager.Busy()
 }
+
+// Context ends when the manager closes.
+func (m *runtimeManager) Context() context.Context { return m.ctx }
+
+// Store is where observed runtimes are kept across restarts.
+func (m *runtimeManager) Store() *rt.Store { return m.store }
+
+// LastObserved is when key's runtime was last observed; key must be
+// registered.
+func (m *runtimeManager) LastObserved(key rt.SessionKey) time.Time {
+	m.mu.Lock()
+	last := m.sources[key].last
+	m.mu.Unlock()
+	return last
+}

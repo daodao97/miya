@@ -87,9 +87,7 @@ func (c *chatController) noteRuntime(t Thread) {
 	key := runtimeKey(c.threadRef(t))
 	manager := c.runtimes()
 	manager.Register(key, source)
-	manager.mu.Lock()
-	last := manager.sources[key].last
-	manager.mu.Unlock()
+	last := manager.LastObserved(key)
 	if time.Since(last) >= 200*time.Millisecond {
 		manager.Kick(key)
 	}
@@ -110,7 +108,7 @@ func (c *chatController) prepareRuntime(ref ThreadRef, project string) (deferred
 	key := runtimeKey(ref)
 	manager.Register(key, source)
 	return func() (any, error) {
-		view := manager.Refresh(manager.ctx, key)
+		view := manager.Refresh(manager.Context(), key)
 		return runtimeResult(manager, key, view), nil
 	}, nil
 }

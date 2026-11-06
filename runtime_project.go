@@ -26,7 +26,7 @@ func (c *chatController) projectRuntimeServices(ctx context.Context, project str
 				continue
 			}
 			key := runtimeKey(c.threadRef(thread))
-			if manager.store.Read(key).Epoch == "" && !thread.Busy && c.claudeRuns[thread.ID] == nil {
+			if manager.Store().Read(key).Epoch == "" && !thread.Busy && c.claudeRuns[thread.ID] == nil {
 				continue
 			}
 			manager.Register(key, backendOf(thread).Runtime(c, thread))

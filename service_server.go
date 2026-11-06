@@ -283,7 +283,7 @@ func (s *service) handle(p *svcPeer, req svcRequest) (any, error) {
 		}
 		manager := c.runtimes()
 		return deferred(func() (any, error) {
-			ctx, cancel := context.WithTimeout(manager.ctx, 5*time.Second)
+			ctx, cancel := context.WithTimeout(manager.Context(), 5*time.Second)
 			defer cancel()
 			return nil, manager.ValidateToken(ctx, r.RuntimeToken, r.Host, r.Port)
 		}), nil
