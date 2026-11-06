@@ -6,6 +6,7 @@ import (
 	"miya/internal/automation"
 	"miya/internal/claude"
 	"miya/internal/claude/transcript"
+	"miya/internal/codex"
 	"miya/internal/composer"
 	"miya/internal/mcpconfig"
 	"miya/internal/mcpproto"
@@ -444,4 +445,11 @@ var (
 	remoteServerLink            = workspaces.RemoteServerLink
 	remoteServerPath            = workspaces.RemoteServerPath
 	saveRemoteServer            = workspaces.SaveRemoteServer
+)
+
+// Moved to internal/codex.
+var (
+	approvalResult = codex.ApprovalResult
+	isMiyaApproval = codex.IsMiyaApproval
+	validateForm   = codex.ValidateForm
 )
