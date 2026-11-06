@@ -530,3 +530,10 @@ var (
 var (
 	localFileLink = msgfmt.LocalFileLink
 )
+
+// Moved to internal/mcpconfig.
+var (
+	mcpAccessAccepted       = mcpconfig.AccessAccepted
+	mcpSessionPermissionKey = mcpconfig.SessionPermissionKey
+	rememberableMCPAccess   = mcpconfig.RememberableMCPAccess
+)
