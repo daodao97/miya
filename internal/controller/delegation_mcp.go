@@ -2,7 +2,6 @@ package controller
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -12,68 +11,9 @@ import (
 	"miya/internal/async"
 	dg "miya/internal/delegation"
 	"miya/internal/delegation/coordinator"
-	"miya/internal/mcpproto"
-	"miya/internal/mcpserver"
+	mcpproto "miya/internal/mcp/protocol"
 	"miya/internal/model"
 )
-
-func init() {
-	for _, t := range coordinator.Tools() {
-		mcpserver.Register(collaborationTool, true, mcpproto.Tool(t))
-	}
-}
-
-func collaborationTool(s *mcpserver.Server, name string, raw json.RawMessage) (string, error) {
-	a, err := coordinator.Decode(name, raw)
-	if err != nil {
-		return "", err
-	}
-	if len(raw) == 0 || string(raw) == "null" {
-		raw = json.RawMessage(`{}`)
-	}
-	start := time.Now()
-	wait := 0
-	if name == "wait_task" {
-		wait = 30
-		if a.WaitSeconds != nil {
-			wait = *a.WaitSeconds
-		}
-	}
-	for {
-		if name == "wait_task" {
-			if err := s.ObserverError(); err != nil {
-				return "", err
-			}
-		}
-		var result json.RawMessage
-		if err := s.CallService("mcpCollaboration", mcpproto.Request{Workspace: s.Workspace(), Tool: name, Arguments: raw}, &result); err != nil {
-			return "", err
-		}
-		if name != "wait_task" {
-			return string(result), nil
-		}
-		var v struct {
-			State      dg.State `json:"state"`
-			Resolution string   `json:"resolution"`
-		}
-		if err := json.Unmarshal(result, &v); err != nil {
-			return "", err
-		}
-		if dg.Terminal(v.State) || v.State == dg.NeedsAttention || v.Resolution == "abandoned" {
-			return string(result), nil
-		}
-		if time.Since(start) >= time.Duration(wait)*time.Second {
-			var object map[string]any
-			_ = json.Unmarshal(result, &object)
-			object["timed_out"] = true
-			data, _ := json.Marshal(object)
-			return string(data), nil
-		}
-		if err := s.ObserverPause(500 * time.Millisecond); err != nil {
-			return "", err
-		}
-	}
-}
 
 func (c *Controller) collaborationMCP(r mcpproto.Request) (any, error) {
 	if c.Collaboration == nil {

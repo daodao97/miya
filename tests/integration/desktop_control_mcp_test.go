@@ -12,11 +12,11 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"miya/internal/agent/codex/native"
+	codex "miya/internal/agent/codex/native"
 	"miya/internal/async"
 	"miya/internal/desktop"
-	"miya/internal/mcpproto"
-	"miya/internal/mcpserver"
+	mcpserver "miya/internal/mcp"
+	mcpproto "miya/internal/mcp/protocol"
 	"miya/internal/model"
 	"miya/internal/phoneapi"
 	"miya/internal/remote"

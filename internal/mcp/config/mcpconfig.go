@@ -1,7 +1,7 @@
-// Package mcpconfig is how Miya hands its MCP server to the agents it runs:
+// Package config is how Miya hands its MCP server to the agents it runs:
 // the arguments and environment that make Codex and Claude Code start
 // miya -mcp, and the tools a delegated conversation may only read.
-package mcpconfig
+package config
 
 import (
 	"encoding/json"

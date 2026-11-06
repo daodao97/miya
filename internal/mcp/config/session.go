@@ -1,4 +1,4 @@
-package mcpconfig
+package config
 
 import (
 	"crypto/sha256"
@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"regexp"
 
-	"miya/internal/agent/codex/native"
+	"miya/internal/interaction"
 )
 
 var ComputerUseAccessPrompt = regexp.MustCompile(`^Allow Computer Use to use "([^"\r\n]+)"\?$`)
@@ -15,7 +15,7 @@ func AccessAccepted() map[string]any {
 	return map[string]any{"action": "accept", "content": map[string]any{}}
 }
 
-func SessionPermissionKey(a codex.Approval) string {
+func SessionPermissionKey(a interaction.Request) string {
 	var schema any
 	_ = json.Unmarshal(a.RequestedSchema, &schema)
 	canonical, _ := json.Marshal(schema)
@@ -25,7 +25,7 @@ func SessionPermissionKey(a codex.Approval) string {
 
 // Only the known application-access prompt supports a session grant. General
 // MCP forms and browser authentication still require a separate response.
-func RememberableMCPAccess(a codex.Approval) bool {
+func RememberableMCPAccess(a interaction.Request) bool {
 	if a.Method != "mcpServer/elicitation/request" || a.ServerName != "cua_repl" || a.ThreadID == "" || (a.Mode != "" && a.Mode != "form") || !ComputerUseAccessPrompt.MatchString(a.Message) {
 		return false
 	}
@@ -35,5 +35,5 @@ func RememberableMCPAccess(a codex.Approval) bool {
 	if json.Unmarshal(a.RequestedSchema, &schema) != nil || len(schema.Properties) != 0 {
 		return false
 	}
-	return codex.ValidateForm(a.RequestedSchema, map[string]any{}) == nil
+	return interaction.ValidateForm(a.RequestedSchema, map[string]any{}) == nil
 }

@@ -12,7 +12,7 @@ import (
 	"miya/internal/agent/claude/native/transcript"
 	"miya/internal/composer"
 	dg "miya/internal/delegation"
-	"miya/internal/mcpconfig"
+	mcpconfig "miya/internal/mcp/config"
 	"miya/internal/model"
 	"miya/internal/msgfmt"
 )

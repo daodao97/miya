@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"miya/internal/mcpproto"
-	"miya/internal/mcpserver"
+	mcpserver "miya/internal/mcp"
+	mcpproto "miya/internal/mcp/protocol"
 )
 
 type mcpFrameWriter chan []byte

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"miya/internal/agent/claude/native"
+	claude "miya/internal/agent/claude/native"
 	"miya/internal/appdir"
 	"miya/internal/appmodel"
 	"miya/internal/async"

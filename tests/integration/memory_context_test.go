@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"miya/internal/agent/claude/native/transcript"
-	"miya/internal/agent/codex/native"
+	codex "miya/internal/agent/codex/native"
 	"miya/internal/memory"
 	"miya/internal/model"
 	"miya/internal/msgfmt"

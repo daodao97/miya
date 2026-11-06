@@ -14,8 +14,8 @@ import (
 
 	"miya/internal/appmodel"
 	"miya/internal/controller"
-	"miya/internal/mcpproto"
-	"miya/internal/mcpserver"
+	mcpserver "miya/internal/mcp"
+	mcpproto "miya/internal/mcp/protocol"
 	"miya/internal/mobile"
 	"miya/internal/model"
 	"miya/internal/phone"

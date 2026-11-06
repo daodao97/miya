@@ -17,7 +17,7 @@ import (
 	"miya/internal/appdir"
 	"miya/internal/async"
 	"miya/internal/automation"
-	"miya/internal/mcpconfig"
+	mcpconfig "miya/internal/mcp/config"
 	"miya/internal/remote"
 	"miya/internal/svcproto"
 	"miya/internal/uiruntime"

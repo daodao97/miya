@@ -10,7 +10,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"miya/internal/interaction"
-	"miya/internal/mcpconfig"
+	mcpconfig "miya/internal/mcp/config"
 	"miya/internal/phone"
 	"miya/internal/phoneapi"
 	"miya/internal/remote"

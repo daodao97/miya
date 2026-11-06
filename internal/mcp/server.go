@@ -1,7 +1,7 @@
-// Package mcpserver is the MCP server the -mcp process runs for an agent: it
+// Package mcp is the MCP server the -mcp process runs for an agent: it
 // answers JSON-RPC on stdio and reaches the background service for each tool.
 // Features add their tools with Register.
-package mcpserver
+package mcp
 
 import (
 	"bufio"
@@ -17,7 +17,7 @@ import (
 
 	"miya/internal/automation"
 	dg "miya/internal/delegation"
-	"miya/internal/mcpproto"
+	mcpproto "miya/internal/mcp/protocol"
 	"miya/internal/model"
 	"miya/internal/subagent"
 	"miya/internal/textutil"

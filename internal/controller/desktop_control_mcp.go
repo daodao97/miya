@@ -9,7 +9,7 @@ import (
 	"miya/internal/async"
 	"miya/internal/desktop"
 	"miya/internal/desktop/control"
-	"miya/internal/mcpproto"
+	mcpproto "miya/internal/mcp/protocol"
 )
 
 func (c *Controller) McpDesktopControl(r mcpproto.Request) (any, error) {

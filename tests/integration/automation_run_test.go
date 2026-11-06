@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"miya/internal/agent/codex/native"
+	codex "miya/internal/agent/codex/native"
 	"miya/internal/appmodel"
 	"miya/internal/automation"
 	"miya/internal/controller"

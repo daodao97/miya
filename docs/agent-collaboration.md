@@ -20,7 +20,7 @@ Status: Draft
 
 ### Miya 已经能够委派任务
 
-现有 [agentBackend](../internal/controller/agent.go) 提供 Agent 注册、创建、发送、停止和恢复操作。[internal/mcpserver](../internal/mcpserver/mcpserver.go) 暴露 `list_threads`、`read_thread`、`thread_status` 和 `delegate`；[mcp_host.go](../internal/controller/mcp_host.go) 在后台调用 `submit`，向新会话或已有会话发送任务。[handoff.go](../internal/controller/handoff.go) 在发起方显示交接活动并跟踪目标进度。
+现有 [agentBackend](../internal/controller/agent.go) 提供 Agent 注册、创建、发送、停止和恢复操作。[internal/mcp](../internal/mcp/mcpserver.go) 暴露 `list_threads`、`read_thread`、`thread_status` 和 `delegate`；[mcp_host.go](../internal/controller/mcp_host.go) 在后台调用 `submit`，向新会话或已有会话发送任务。[handoff.go](../internal/controller/handoff.go) 在发起方显示交接活动并跟踪目标进度。
 
 [后台服务](../internal/svcproto/svcproto.go) 持有 Codex app-server、Claude 执行进程和项目会话，窗口只镜像状态。现有架构已经支持多个会话执行，无需另建进程管理器。[ThreadRef](../internal/model/ref.go) 还提供来源、后端、原生会话 ID 组成的稳定身份。
 
@@ -601,7 +601,7 @@ P0 与 P1 可以在同一开发阶段完成。只有单独交付 P0 时，才允
 ## Appendix / 实现依据
 
 - [agent.go](../internal/controller/agent.go)：Agent 注册、sendRequest、submit 与 submitExpanded。
-- [internal/mcpserver](../internal/mcpserver/mcpserver.go)：既有工具定义、默认等待和 MCP 到服务的桥接。
+- [internal/mcp](../internal/mcp/mcpserver.go)：既有工具定义、默认等待和 MCP 到服务的桥接。
 - [mcp_host.go](../internal/controller/mcp_host.go)：调用方推断、delegate、现有嵌套限制。
 - [mcp_host.go](../internal/controller/mcp_host.go)：按原生工具名称和完整参数识别调用方。
 - [handoff.go](../internal/controller/handoff.go)：上下文摘要、内存 handoff 和会话最新轮次状态。

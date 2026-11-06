@@ -10,11 +10,12 @@ import (
 	"testing"
 	"time"
 
-	"miya/internal/agent/claude/native"
+	mcpserver "miya/internal/mcp"
+
+	claude "miya/internal/agent/claude/native"
 	"miya/internal/agent/claude/native/transcript"
-	"miya/internal/agent/codex/native"
+	codex "miya/internal/agent/codex/native"
 	"miya/internal/appmodel"
-	"miya/internal/controller"
 	dg "miya/internal/delegation"
 	"miya/internal/delegation/coordinator"
 	"miya/internal/model"
@@ -174,7 +175,7 @@ func TestCollaborationMCPBridgeProcess(t *testing.T) {
 	for i, arg := range args {
 		if arg == "--" && i+2 < len(args) {
 			os.Args = []string{args[0], "-mcp", args[i+1], args[i+2]}
-			if err := controller.RunMCP(); err != nil {
+			if err := mcpserver.Run(); err != nil {
 				os.Exit(1)
 			}
 			os.Exit(0)

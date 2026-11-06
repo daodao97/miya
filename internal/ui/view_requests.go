@@ -7,7 +7,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"miya/internal/interaction"
-	"miya/internal/mcpconfig"
+	mcpconfig "miya/internal/mcp/config"
 	"miya/internal/msgfmt"
 	"miya/internal/textutil"
 	"miya/internal/widgets"

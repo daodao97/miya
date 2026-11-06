@@ -10,12 +10,12 @@ import (
 	"testing"
 	"time"
 
-	"miya/internal/agent/codex/native"
+	codex "miya/internal/agent/codex/native"
 	"miya/internal/appdir"
 	"miya/internal/appmodel"
 	dg "miya/internal/delegation"
 	"miya/internal/delegation/coordinator"
-	"miya/internal/mcpproto"
+	mcpproto "miya/internal/mcp/protocol"
 	"miya/internal/model"
 	"miya/internal/svcproto"
 )

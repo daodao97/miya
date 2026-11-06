@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"miya/internal/agent/claude/native"
+	claude "miya/internal/agent/claude/native"
 	"miya/internal/agent/claude/native/transcript"
-	"miya/internal/agent/codex/native"
+	codex "miya/internal/agent/codex/native"
 	"miya/internal/appmodel"
 	"miya/internal/controller"
 	"miya/internal/model"

@@ -1,7 +1,7 @@
-// Package mcpproto is what the -mcp process and the background service pass
+// Package protocol is what the -mcp process and the background service pass
 // for a tool call: the request, its results and the tools' descriptions.
 // Field names and JSON tags are the wire format between versions.
-package mcpproto
+package protocol
 
 import (
 	"encoding/json"

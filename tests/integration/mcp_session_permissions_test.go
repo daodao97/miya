@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"testing"
 
-	"miya/internal/agent/codex/native"
+	codex "miya/internal/agent/codex/native"
 	"miya/internal/controller"
-	"miya/internal/mcpconfig"
+	mcpconfig "miya/internal/mcp/config"
 )
 
 func appAccessRequest() codex.Approval {

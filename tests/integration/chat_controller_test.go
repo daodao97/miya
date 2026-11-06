@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"miya/internal/agent/codex/native"
+	codex "miya/internal/agent/codex/native"
 	"miya/internal/appmodel"
 	"miya/internal/controller"
 	"miya/internal/model"

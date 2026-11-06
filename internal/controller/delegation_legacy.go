@@ -7,7 +7,7 @@ import (
 	claude "miya/internal/agent/claude/native"
 	"miya/internal/async"
 	"miya/internal/delegation/coordinator"
-	"miya/internal/mcpproto"
+	mcpproto "miya/internal/mcp/protocol"
 	"miya/internal/model"
 )
 

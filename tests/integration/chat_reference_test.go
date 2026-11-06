@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"miya/internal/agent/codex/native"
+	codex "miya/internal/agent/codex/native"
 	"miya/internal/controller"
 	"miya/internal/conversation"
 	"miya/internal/model"

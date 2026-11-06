@@ -1,4 +1,4 @@
-package controller
+package mcp
 
 import (
 	"errors"
@@ -6,13 +6,12 @@ import (
 	"sync"
 	"time"
 
-	"miya/internal/mcpserver"
 	"miya/internal/svcproto"
 )
 
 // runMCP serves MCP on stdio for the workspace named after -mcp, reaching
 // the background service that is already running; it never starts one.
-func RunMCP() error {
+func Run() error {
 	workspace, _ := os.Getwd()
 	if len(os.Args) > 2 {
 		workspace = os.Args[2]
@@ -44,5 +43,5 @@ func RunMCP() error {
 		}
 		return err
 	}
-	return mcpserver.Serve(os.Stdin, os.Stdout, workspace, call, time.Sleep)
+	return Serve(os.Stdin, os.Stdout, workspace, call, time.Sleep)
 }

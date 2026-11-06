@@ -20,7 +20,7 @@ import (
 	"miya/internal/appmodel"
 	"miya/internal/automation"
 	"miya/internal/desktop/control"
-	"miya/internal/mcpconfig"
+	mcpconfig "miya/internal/mcp/config"
 	"miya/internal/memory/manager"
 	"miya/internal/model"
 	"miya/internal/msgfmt"

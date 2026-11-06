@@ -11,7 +11,7 @@ import (
 	"miya/internal/appmodel"
 	"miya/internal/composer"
 	"miya/internal/controller"
-	"miya/internal/mcpproto"
+	mcpproto "miya/internal/mcp/protocol"
 	"miya/internal/model"
 	"miya/internal/msgfmt"
 )

@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"miya/internal/desktop"
+	"miya/internal/mcp"
 	"miya/internal/workspaces"
 )
 
@@ -19,7 +20,7 @@ func RunCommands() bool {
 	}
 	// Agents Miya runs start it as their MCP server for the conversations.
 	if len(os.Args) > 1 && os.Args[1] == "-mcp" {
-		if err := RunMCP(); err != nil {
+		if err := mcp.Run(); err != nil {
 			log.Fatal(err)
 		}
 		return true

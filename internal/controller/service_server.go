@@ -17,7 +17,7 @@ import (
 	"miya/internal/appmodel"
 	"miya/internal/async"
 	"miya/internal/automation"
-	"miya/internal/mcpproto"
+	mcpproto "miya/internal/mcp/protocol"
 	"miya/internal/memory"
 	"miya/internal/memory/manager"
 	"miya/internal/model"

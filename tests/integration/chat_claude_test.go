@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"miya/internal/agent/claude/native"
-	"miya/internal/agent/codex/native"
+	claude "miya/internal/agent/claude/native"
+	codex "miya/internal/agent/codex/native"
 	"miya/internal/model"
 	"miya/internal/uiruntime"
 )

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 
 	codex "miya/internal/agent/codex/native"
-	"miya/internal/mcpconfig"
+	mcpconfig "miya/internal/mcp/config"
 )
 
 func (b Adapter) HandleRequest(f codex.Frame) {

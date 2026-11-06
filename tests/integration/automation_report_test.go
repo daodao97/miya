@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"miya/internal/automation"
-	"miya/internal/mcpproto"
+	mcpproto "miya/internal/mcp/protocol"
 	"miya/internal/model"
 )
 

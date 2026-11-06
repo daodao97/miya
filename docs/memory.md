@@ -287,7 +287,7 @@ Go 代码逐项检查：作用域是否允许、来源是否属于本轮、引�
 | `memory_mcp.go`（新增） | 记忆工具、调用者作用域、服务操作和结果；服务端处理现位于 `internal/memory/manager` | 1a |
 | `view_memory.go`（新增） | 记忆管理界面、可撤销提示、提升到项目文件 | 1a |
 | [mcp_host.go](../internal/controller/mcp_host.go) | 写工具的调用者消歧：参数比对、多候选时失败 | 1a |
-| [internal/mcpserver](../internal/mcpserver/mcpserver.go)、[service_server.go](../internal/controller/service_server.go) | 注册工具、串行提交，协调服务退出与恢复 | 1a |
+| [internal/mcp](../internal/mcp/mcpserver.go)、[service_server.go](../internal/controller/service_server.go) | 注册工具、串行提交，协调服务退出与恢复 | 1a |
 | `internal/memory/manager/input.go`（原 `memory_context.go`） | 从实际发送请求构造有界记忆块、按会话计算增量、记录注入快照 | 1b |
 | [agent.go](../internal/controller/agent.go)、[queue.go](../internal/controller/queue.go) | `sendRequest` 原文与上下文分离，普通发送、排队、引导、编辑重发的共同接入 | 1b |
 | [chat_controller.go](../internal/controller/chat_controller.go)、[agent_codex.go](../internal/controller/agent_codex.go)、[chat_claude.go](../internal/controller/chat_claude.go) | 组合实际后端输入；覆盖 Codex steer、Claude 保活发送和后台项目 | 1b |

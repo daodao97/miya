@@ -4,7 +4,7 @@ import (
 	"errors"
 
 	codex "miya/internal/agent/codex/native"
-	"miya/internal/mcpconfig"
+	mcpconfig "miya/internal/mcp/config"
 	"miya/internal/phone"
 	"miya/internal/svcproto"
 )
