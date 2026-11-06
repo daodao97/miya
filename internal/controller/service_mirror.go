@@ -11,7 +11,7 @@ import (
 
 	codex "miya/internal/agent/codex/native"
 	"miya/internal/appmodel"
-	"miya/internal/model"
+	"miya/internal/chat/model"
 	"miya/internal/prefs"
 	"miya/internal/svcproto"
 	"miya/internal/uiruntime"

@@ -12,14 +12,14 @@ import (
 
 	codex "miya/internal/agent/codex/native"
 	"miya/internal/appmodel"
+	"miya/internal/chat/model"
 	"miya/internal/controller"
-	"miya/internal/model"
 )
 
 // All presentation packages consume shared contracts, including phone and shared
 // widgets. Inspect Go syntax rather than an incomplete filename/text convention.
 func TestViewsDoNotKnowAgents(t *testing.T) {
-	for _, dir := range []string{"internal/ui", "internal/mobile", "internal/conversation", "internal/widgets", "internal/agent"} {
+	for _, dir := range []string{"internal/ui", "internal/mobile", "internal/chat/view", "internal/widgets", "internal/agent"} {
 		files, err := filepath.Glob(filepath.Join(dir, "*.go"))
 		if err != nil {
 			t.Fatal(err)

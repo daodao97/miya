@@ -3,7 +3,7 @@ package appmodel
 import (
 	"strings"
 
-	"miya/internal/model"
+	"miya/internal/chat/model"
 	"miya/internal/textutil"
 )
 

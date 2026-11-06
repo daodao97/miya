@@ -14,10 +14,10 @@ import (
 	"miya/internal/agent/claude/native/transcript"
 	codex "miya/internal/agent/codex/native"
 	"miya/internal/appmodel"
+	"miya/internal/chat/model"
 	dg "miya/internal/delegation"
 	"miya/internal/delegation/coordinator"
 	mcpserver "miya/internal/mcp"
-	"miya/internal/model"
 	"miya/internal/svcproto"
 	"miya/internal/widgets"
 )

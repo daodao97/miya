@@ -7,7 +7,7 @@ import (
 	"time"
 
 	codex "miya/internal/agent/codex/native"
-	threadmodel "miya/internal/model"
+	threadmodel "miya/internal/chat/model"
 	"miya/internal/prefs"
 	"miya/internal/uiruntime"
 )

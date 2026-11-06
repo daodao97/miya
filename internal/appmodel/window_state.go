@@ -4,8 +4,8 @@ import (
 	"context"
 
 	"miya/internal/agent/account"
+	"miya/internal/chat/model"
 	"miya/internal/interaction"
-	"miya/internal/model"
 	"miya/internal/svcproto"
 )
 

@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"miya/internal/appmodel"
+	"miya/internal/chat/model"
 	"miya/internal/controller"
-	"miya/internal/model"
 )
 
 // The working label is still: an animated one kept the whole window

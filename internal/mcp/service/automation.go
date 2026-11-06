@@ -7,8 +7,8 @@ import (
 
 	"miya/internal/async"
 	"miya/internal/automation"
+	"miya/internal/chat/model"
 	mcpproto "miya/internal/mcp/protocol"
-	"miya/internal/model"
 	"miya/internal/textutil"
 )
 

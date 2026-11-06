@@ -9,8 +9,8 @@ import (
 	"testing"
 
 	"miya/internal/appmodel"
+	"miya/internal/chat/model"
 	"miya/internal/controller"
-	"miya/internal/model"
 )
 
 func queueController(t *testing.T) (*controller.Controller, *testDispatch) {

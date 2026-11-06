@@ -1,7 +1,7 @@
 package controller
 
 import (
-	"miya/internal/model"
+	"miya/internal/chat/model"
 )
 
 // AllThreads returns conversations across projects, with the open project first.

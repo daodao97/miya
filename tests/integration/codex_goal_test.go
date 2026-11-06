@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"miya/internal/model"
+	"miya/internal/chat/model"
 )
 
 func TestCodexGoalCommandsUseNativeRPC(t *testing.T) {

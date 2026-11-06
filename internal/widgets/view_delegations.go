@@ -8,9 +8,9 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"miya/internal/chat/model"
+	msgfmt "miya/internal/chat/presentation"
 	dg "miya/internal/delegation"
-	"miya/internal/model"
-	"miya/internal/msgfmt"
 	"miya/internal/textutil"
 )
 

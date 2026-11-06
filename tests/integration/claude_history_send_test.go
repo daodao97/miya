@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"miya/internal/appmodel"
+	"miya/internal/chat/model"
 	"miya/internal/mobile"
-	"miya/internal/model"
 	"miya/internal/remote"
 	"miya/internal/uiruntime"
 )

@@ -7,12 +7,12 @@ import (
 	"testing"
 
 	codex "miya/internal/agent/codex/native"
+	codexprojection "miya/internal/agent/codex/projection"
 	"miya/internal/appmodel"
+	"miya/internal/chat/model"
+	"miya/internal/chat/subagent"
 	"miya/internal/controller"
-	"miya/internal/model"
-	"miya/internal/msgfmt"
 	"miya/internal/prefs"
-	"miya/internal/subagent"
 	"miya/internal/uiruntime"
 )
 
@@ -88,7 +88,7 @@ func TestOptimisticUserIsNotDuplicatedAcrossStartedAndCompleted(t *testing.T) {
 }
 
 func TestToolOutputBounded(t *testing.T) {
-	m, ok := msgfmt.ItemMessage(codex.Item{Type: "commandExecution", Command: "test", AggregatedOutput: strings.Repeat("a", 10000)})
+	m, ok := codexprojection.ItemMessage(codex.Item{Type: "commandExecution", Command: "test", AggregatedOutput: strings.Repeat("a", 10000)})
 	if !ok || len(m.Content) > 8100 || !strings.Contains(m.Content, "omitted") {
 		t.Fatal("unbounded tool output")
 	}
@@ -166,7 +166,7 @@ func TestAllProtocolItemTypes(t *testing.T) {
 			if err := json.Unmarshal([]byte(raw), &item); err != nil {
 				t.Fatal(err)
 			}
-			m, ok := msgfmt.ItemMessage(item)
+			m, ok := codexprojection.ItemMessage(item)
 			if !ok || m.Role != f.role || !strings.Contains(m.Content, f.contains) {
 				t.Fatalf("bad mapping: %+v", m)
 			}

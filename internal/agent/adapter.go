@@ -4,8 +4,8 @@ package agent
 
 import (
 	agentmeta "miya/internal/agent/catalog"
+	"miya/internal/chat/model"
 	"miya/internal/interaction"
-	"miya/internal/model"
 	"miya/internal/runtime/tracker"
 )
 

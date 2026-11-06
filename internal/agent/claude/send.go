@@ -8,12 +8,12 @@ import (
 
 	agentmeta "miya/internal/agent/catalog"
 	claude "miya/internal/agent/claude/native"
-	"miya/internal/agent/claude/native/transcript"
-	"miya/internal/composer"
+	"miya/internal/chat/composer"
+	"miya/internal/chat/model"
+	msgfmt "miya/internal/chat/presentation"
+	chattext "miya/internal/chat/text"
 	dg "miya/internal/delegation"
 	mcpconfig "miya/internal/mcp/config"
-	"miya/internal/model"
-	"miya/internal/msgfmt"
 )
 
 func (b Adapter) Send(req model.SendRequest) int {
@@ -34,7 +34,7 @@ func (b Adapter) Send(req model.SendRequest) int {
 		if req.Project != "" {
 			cwd = req.Project
 		}
-		t = model.Thread{ID: c.NextID(), Agent: agentmeta.Claude, PermissionPolicy: policy, ServerID: claude.NewSessionID(), Title: msgfmt.ConversationTitle("", transcript.PromptTitle(text), ""), Project: filepath.Base(cwd), Loaded: true, HistoryLoaded: true}
+		t = model.Thread{ID: c.NextID(), Agent: agentmeta.Claude, PermissionPolicy: policy, ServerID: claude.NewSessionID(), Title: msgfmt.ConversationTitle("", chattext.PromptTitle(text), ""), Project: filepath.Base(cwd), Loaded: true, HistoryLoaded: true}
 		c.AddThread(cwd, t)
 	}
 	id := t.ID

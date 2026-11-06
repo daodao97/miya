@@ -13,9 +13,9 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"miya/internal/conversation"
+	"miya/internal/chat/model"
+	conversation "miya/internal/chat/view"
 	"miya/internal/fsutil"
-	"miya/internal/model"
 	phonecache "miya/internal/phone/cache"
 	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/remote"

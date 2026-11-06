@@ -1,6 +1,6 @@
 package desktopui
 
-import "miya/internal/model"
+import "miya/internal/chat/model"
 
 func (app *App) CommandChoices(query string) []model.ComposerChoice {
 	return app.C.CurrentAgentControls().Commands(app.C.State().Cwd, true).Filter(query)

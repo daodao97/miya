@@ -8,9 +8,9 @@ import (
 	"strings"
 
 	"miya/internal/appmodel"
-	"miya/internal/model"
-	"miya/internal/msgfmt"
-	"miya/internal/subagent"
+	"miya/internal/chat/model"
+	msgfmt "miya/internal/chat/presentation"
+	"miya/internal/chat/subagent"
 	"miya/internal/textutil"
 )
 

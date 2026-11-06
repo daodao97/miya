@@ -3,8 +3,8 @@ package controller
 import (
 	claudeagent "miya/internal/agent/claude"
 	claudenative "miya/internal/agent/claude/native"
+	"miya/internal/chat/model"
 	"miya/internal/interaction"
-	"miya/internal/model"
 )
 
 func (c *Controller) claudeAdapter() *claudeagent.Adapter {

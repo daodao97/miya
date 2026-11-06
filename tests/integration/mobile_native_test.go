@@ -10,7 +10,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"miya/internal/model"
+	"miya/internal/chat/model"
 )
 
 func saveMobileNativeSnapshot(t *testing.T, tt *ui.Tester, name string) {

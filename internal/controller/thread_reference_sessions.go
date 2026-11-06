@@ -7,8 +7,8 @@ import (
 	"sort"
 
 	"miya/internal/appmodel"
+	"miya/internal/chat/model"
 	"miya/internal/fsutil"
-	"miya/internal/model"
 )
 
 // Fork metadata locates the original backend session after its sidebar row has

@@ -5,8 +5,9 @@ import (
 	"time"
 
 	codex "miya/internal/agent/codex/native"
-	"miya/internal/model"
-	"miya/internal/msgfmt"
+	codexprojection "miya/internal/agent/codex/projection"
+	"miya/internal/chat/model"
+	msgfmt "miya/internal/chat/presentation"
 	"miya/internal/prefs"
 )
 
@@ -94,7 +95,7 @@ func (b Adapter) Resume(t model.Thread, after *model.SendRequest) {
 		// Runtime IDs are assigned only after returning to the UI owner.
 		var messages []model.Message
 		if err == nil {
-			messages = msgfmt.HistoryMessages(result.Thread)
+			messages = codexprojection.HistoryMessages(result.Thread)
 		}
 
 		c.Dispatch(func() {
@@ -141,7 +142,7 @@ func (b Adapter) Resume(t model.Thread, after *model.SendRequest) {
 					if turn.Status == "inProgress" && !readOnly {
 						t.Busy = true
 						t.TurnID = turn.ID
-						t.StartedAtMs, t.CompletedAtMs = msgfmt.CodexTurnTimes(turn)
+						t.StartedAtMs, t.CompletedAtMs = codexprojection.CodexTurnTimes(turn)
 						t.Status = "Working…"
 					}
 				}

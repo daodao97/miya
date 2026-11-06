@@ -9,13 +9,13 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"miya/internal/appmodel"
+	"miya/internal/chat/model"
+	msgfmt "miya/internal/chat/presentation"
 	"miya/internal/controller"
 	"miya/internal/memory"
 	"miya/internal/memory/extractor/extractortest"
 	"miya/internal/memory/manager"
 	"miya/internal/mobile"
-	"miya/internal/model"
-	"miya/internal/msgfmt"
 	phoneproto "miya/internal/phone/protocol"
 	desktopui "miya/internal/ui"
 )

@@ -22,7 +22,7 @@ Status: Draft
 
 现有 [agentBackend](../internal/controller/agent.go) 提供 Agent 注册、创建、发送、停止和恢复操作。[internal/mcp](../internal/mcp/server.go) 暴露 `list_threads`、`read_thread`、`thread_status` 和 `delegate`；[mcp_host.go](../internal/controller/mcp_host.go) 在后台调用 `submit`，向新会话或已有会话发送任务。[handoff.go](../internal/controller/handoff.go) 在发起方显示交接活动并跟踪目标进度。
 
-[后台服务](../internal/svcproto/svcproto.go) 持有 Codex app-server、Claude 执行进程和项目会话，窗口只镜像状态。现有架构已经支持多个会话执行，无需另建进程管理器。[ThreadRef](../internal/model/ref.go) 还提供来源、后端、原生会话 ID 组成的稳定身份。
+[后台服务](../internal/svcproto/svcproto.go) 持有 Codex app-server、Claude 执行进程和项目会话，窗口只镜像状态。现有架构已经支持多个会话执行，无需另建进程管理器。[ThreadRef](../internal/chat/model/ref.go) 还提供来源、后端、原生会话 ID 组成的稳定身份。
 
 ### 改造前的记录混用了会话身份和任务边界
 
@@ -551,7 +551,7 @@ P0 与 P1 可以在同一开发阶段完成。只有单独交付 P0 时，才允
 | `delegation_api.go`、`phone_collaboration.go` | 已认证用户 API、手机异步请求与响应关联 |
 | `delegation_legacy.go` | 旧 delegate 的固定任务等待与兼容处理 |
 | `delegation_view.go`、`delegation_panel.go` | 两端共用的能力与健康状态、任务缓存和请求重试状态机 |
-| `internal/composer`、`thread_inline_input.go` | Agent 标签、与会话引用共用的富文本对象、补全和往返格式 |
+| `internal/chat/composer`、`thread_inline_input.go` | Agent 标签、与会话引用共用的富文本对象、补全和往返格式 |
 | `view_delegations.go`、`delegation_desktop.go` | 共用任务卡与表单、桌面服务接线和目标会话导航 |
 | `mobile_delegations.go` | 手机异步调用、断线清理、任务面板接线和目标会话导航 |
 

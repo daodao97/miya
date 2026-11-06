@@ -4,9 +4,9 @@ import (
 	"os"
 	"testing"
 
-	"miya/internal/conversation"
-	"miya/internal/model"
-	"miya/internal/msgfmt"
+	"miya/internal/chat/model"
+	msgfmt "miya/internal/chat/presentation"
+	conversation "miya/internal/chat/view"
 )
 
 func TestClaudeToolTitles(t *testing.T) {

@@ -4,7 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"miya/internal/model"
+	"miya/internal/chat/model"
 	"miya/internal/workspaces"
 )
 

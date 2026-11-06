@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
+	chattext "miya/internal/chat/text"
 	"miya/internal/fsutil"
 )
 
@@ -62,7 +63,7 @@ func Images(blocks []Block) []string {
 				continue
 			}
 		}
-		if uri := LocalImageURI(path); uri != "" {
+		if uri := chattext.LocalImageURI(path); uri != "" {
 			out = append(out, uri)
 		}
 	}

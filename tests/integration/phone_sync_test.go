@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"miya/internal/chat/model"
 	"miya/internal/mobile"
-	"miya/internal/model"
 	phoneproto "miya/internal/phone/protocol"
 	phoneserver "miya/internal/phone/server"
 	"miya/internal/remote"

@@ -3,8 +3,8 @@ package codex
 import (
 	"encoding/json"
 
+	tokenusage "miya/internal/chat/usage"
 	"miya/internal/interaction"
-	"miya/internal/tokenusage"
 )
 
 type Model struct {

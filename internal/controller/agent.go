@@ -8,9 +8,9 @@ import (
 	codexagent "miya/internal/agent/codex"
 	codex "miya/internal/agent/codex/native"
 	"miya/internal/appmodel"
-	"miya/internal/composer"
-	"miya/internal/model"
-	"miya/internal/msgfmt"
+	"miya/internal/chat/composer"
+	"miya/internal/chat/model"
+	msgfmt "miya/internal/chat/presentation"
 	"miya/internal/svcproto"
 )
 

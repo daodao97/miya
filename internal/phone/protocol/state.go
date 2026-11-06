@@ -8,9 +8,9 @@ import (
 
 	agentmeta "miya/internal/agent/catalog"
 	"miya/internal/automation"
+	"miya/internal/chat/model"
 	"miya/internal/interaction"
 	"miya/internal/memory/manager"
-	"miya/internal/model"
 	"miya/internal/notification"
 	"miya/internal/remote"
 )

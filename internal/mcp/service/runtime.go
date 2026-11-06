@@ -4,8 +4,8 @@ import (
 	"errors"
 
 	"miya/internal/async"
+	"miya/internal/chat/model"
 	mcpproto "miya/internal/mcp/protocol"
-	"miya/internal/model"
 	"miya/internal/runtime/tracker"
 )
 

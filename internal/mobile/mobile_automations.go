@@ -11,8 +11,8 @@ import (
 
 	"miya/internal/appmodel"
 	"miya/internal/automation"
-	"miya/internal/model"
-	"miya/internal/msgfmt"
+	"miya/internal/chat/model"
+	msgfmt "miya/internal/chat/presentation"
 	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/remote"
 	"miya/internal/textutil"

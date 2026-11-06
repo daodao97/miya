@@ -8,7 +8,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"miya/internal/appmodel"
-	"miya/internal/model"
+	"miya/internal/chat/model"
 	"miya/internal/remote"
 	"miya/internal/textutil"
 	"miya/internal/uiruntime"

@@ -9,9 +9,9 @@ import (
 	agentmeta "miya/internal/agent/catalog"
 	claude "miya/internal/agent/claude/native"
 	"miya/internal/agent/claude/native/transcript"
+	"miya/internal/chat/model"
+	msgfmt "miya/internal/chat/presentation"
 	"miya/internal/interaction"
-	"miya/internal/model"
-	"miya/internal/msgfmt"
 	"miya/internal/uiruntime"
 )
 

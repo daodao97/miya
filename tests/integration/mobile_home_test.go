@@ -11,8 +11,8 @@ import (
 
 	codex "miya/internal/agent/codex/native"
 	"miya/internal/appmodel"
+	"miya/internal/chat/model"
 	"miya/internal/mobile"
-	"miya/internal/model"
 	"miya/internal/notification"
 )
 

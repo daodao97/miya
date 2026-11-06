@@ -14,8 +14,8 @@ import (
 
 	claude "miya/internal/agent/claude/native"
 	"miya/internal/async"
+	"miya/internal/chat/model"
 	dg "miya/internal/delegation"
-	"miya/internal/model"
 	"miya/internal/textutil"
 )
 

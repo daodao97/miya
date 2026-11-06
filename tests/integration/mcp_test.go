@@ -9,15 +9,14 @@ import (
 	"testing"
 	"time"
 
-	codex "miya/internal/agent/codex/native"
 	"miya/internal/appmodel"
+	"miya/internal/chat/model"
+	"miya/internal/chat/subagent"
+	conversation "miya/internal/chat/view"
 	"miya/internal/controller"
-	"miya/internal/conversation"
 	mcpserver "miya/internal/mcp"
 	mcpconfig "miya/internal/mcp/config"
 	mcpproto "miya/internal/mcp/protocol"
-	"miya/internal/model"
-	"miya/internal/subagent"
 	"miya/internal/svcproto"
 	"miya/internal/uiruntime"
 )
@@ -161,7 +160,7 @@ func TestMCPDelegateHandsWorkWithTheCallersContext(t *testing.T) {
 	}
 	// The receiving conversation cannot hand work back up.
 	c.Update(2, func(th *model.Thread) {
-		th.Messages = append(th.Messages, model.Message{ID: c.NextID(), Role: "tool", Kind: "mcpToolCall", Status: "inProgress", Item: &codex.Item{Server: "miya", Tool: "delegate"}})
+		th.Messages = append(th.Messages, model.Message{ID: c.NextID(), Role: "tool", Kind: "mcpToolCall", Status: "inProgress", Item: &model.Activity{Server: "miya", Tool: "delegate"}})
 	})
 	c.Update(1, func(th *model.Thread) { th.Messages[len(th.Messages)-2].Status = "completed" })
 	if _, err := c.MCP().Handle("mcpDelegate", mcpproto.Request{Tool: "delegate", Task: "回去", Thread: 1}); err == nil || !strings.Contains(err.Error(), "delegated this task to you") {

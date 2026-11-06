@@ -10,7 +10,7 @@ import (
 	"github.com/egoist/mygo"
 
 	codex "miya/internal/agent/codex/native"
-	"miya/internal/model"
+	"miya/internal/chat/model"
 	"miya/internal/notification"
 	"miya/internal/prefs"
 	"miya/internal/svcproto"

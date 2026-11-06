@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"miya/internal/appmodel"
-	"miya/internal/model"
+	"miya/internal/chat/model"
 )
 
 // steerClaude records the second message of the turn, then ends it.

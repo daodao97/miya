@@ -11,9 +11,9 @@ import (
 
 	"miya/internal/agent/claude/native/transcript"
 	codex "miya/internal/agent/codex/native"
+	codexprojection "miya/internal/agent/codex/projection"
+	"miya/internal/chat/model"
 	"miya/internal/memory"
-	"miya/internal/model"
-	"miya/internal/msgfmt"
 )
 
 func TestMemoryInjectedIntoCodexWithoutChangingUserTextOrHistory(t *testing.T) {
@@ -55,7 +55,7 @@ func TestMemoryInjectedIntoCodexWithoutChangingUserTextOrHistory(t *testing.T) {
 		t.Fatalf("user bubble changed: %q", texts)
 	}
 	content, _ := json.Marshal([]map[string]any{{"type": "text", "text": augmented}})
-	m, ok := msgfmt.ItemMessage(codex.Item{Type: "userMessage", Content: content})
+	m, ok := codexprojection.ItemMessage(codex.Item{Type: "userMessage", Content: content})
 	if !ok || m.Content != query {
 		t.Fatalf("history leaked injected content: %q", m.Content)
 	}

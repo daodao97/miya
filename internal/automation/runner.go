@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"miya/internal/model"
+	"miya/internal/chat/model"
+	"miya/internal/chat/subagent"
 	"miya/internal/notification"
-	"miya/internal/subagent"
 	"miya/internal/textutil"
 )
 

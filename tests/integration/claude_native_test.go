@@ -8,9 +8,10 @@ import (
 
 	claude "miya/internal/agent/claude/native"
 	"miya/internal/agent/claude/native/transcript"
+	"miya/internal/chat/model"
+	msgfmt "miya/internal/chat/presentation"
+	chattext "miya/internal/chat/text"
 	"miya/internal/controller"
-	"miya/internal/model"
-	"miya/internal/msgfmt"
 	"miya/internal/uiruntime"
 )
 
@@ -154,8 +155,8 @@ func TestReadRealClaudeSessions(t *testing.T) {
 		groups := msgfmt.GroupMessages(messages)
 		t.Logf("%s %q updated %s: %d messages %v, %d groups", s.ID, s.Title, s.UpdatedAt.Format("15:04:05"), len(messages), counts, len(groups))
 		if len(messages) > 0 {
-			t.Logf("first: %q", transcript.ClippedTitle(messages[0].Content))
-			t.Logf("last: %s %q", messages[len(messages)-1].Role, transcript.ClippedTitle(messages[len(messages)-1].Content))
+			t.Logf("first: %q", chattext.ClippedTitle(messages[0].Content))
+			t.Logf("last: %s %q", messages[len(messages)-1].Role, chattext.ClippedTitle(messages[len(messages)-1].Content))
 		}
 	}
 }

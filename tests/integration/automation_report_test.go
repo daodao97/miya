@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"miya/internal/automation"
+	"miya/internal/chat/model"
 	mcpproto "miya/internal/mcp/protocol"
-	"miya/internal/model"
 )
 
 func reportCall(h *automationHarness, thread int) {

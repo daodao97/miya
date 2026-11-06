@@ -7,11 +7,11 @@ import (
 
 	"miya/internal/appmodel"
 	"miya/internal/async"
+	"miya/internal/chat/model"
 	"miya/internal/controller"
 	"miya/internal/memory"
 	"miya/internal/memory/extractor/extractortest"
 	"miya/internal/memory/manager"
-	"miya/internal/model"
 )
 
 func TestMemoryCodexExtractorDoesNotRequireClaude(t *testing.T) {

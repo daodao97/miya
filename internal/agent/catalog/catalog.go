@@ -25,22 +25,23 @@ type Capabilities struct {
 // Descriptor describes presentation and routing without exposing a native client.
 // NativeCommands means slash commands other than host controls go to the agent.
 type Descriptor struct {
-	ID, Name       string
-	Icon           Icon
-	Capabilities   Capabilities
-	NativeCommands bool
-	StallAfter     time.Duration
-	UsageID        string
-	UsageName      string
-	UsageReset     bool
-	Aliases        []string
+	ID, Name               string
+	Icon                   Icon
+	Capabilities           Capabilities
+	NativeCommands         bool
+	ConnectionBoundSession bool
+	StallAfter             time.Duration
+	UsageID                string
+	UsageName              string
+	UsageReset             bool
+	Aliases                []string
 }
 
 //go:embed assets/codex.png
 var codexPNG []byte
 
 var builtins = []Descriptor{
-	{ID: Codex, Name: "Codex", Icon: Icon{PNG: codexPNG}, Capabilities: Capabilities{Models: true, Effort: true, Quota: true, ThreadCommands: true}, UsageID: "codex", UsageName: "Codex", UsageReset: true},
+	{ID: Codex, ConnectionBoundSession: true, Name: "Codex", Icon: Icon{PNG: codexPNG}, Capabilities: Capabilities{Models: true, Effort: true, Quota: true, ThreadCommands: true}, UsageID: "codex", UsageName: "Codex", UsageReset: true},
 	{ID: Claude, Name: "Claude Code", Icon: Icon{SVG: "claude-code", Color: "#c46b4d"}, Capabilities: Capabilities{Models: true, Effort: true, StallHint: true}, NativeCommands: true, StallAfter: 60 * time.Second, UsageID: "claude", UsageName: "Claude", Aliases: []string{"claude", "claude code"}},
 }
 

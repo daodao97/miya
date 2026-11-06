@@ -9,7 +9,6 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"miya/internal/agent"
 	"miya/internal/agent/account"
 	agentusage "miya/internal/agent/quota"
 	"miya/internal/svcproto"
@@ -172,7 +171,7 @@ func (a *App) consumeUsageReset() {
 		var result agentusage.ResetResult
 		var err error
 		if cl == nil {
-			result, err = agent.Quotas().Reset(ctx, attempt)
+			result, err = quotaService().Reset(ctx, attempt)
 		} else {
 			err = cl.Call("host", svcproto.HostRequest{Action: "usage-reset", Reset: &attempt}, &result)
 		}

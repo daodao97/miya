@@ -3,8 +3,8 @@ package claude
 import (
 	"miya/internal/agent"
 	native "miya/internal/agent/claude/native"
+	"miya/internal/chat/model"
 	dg "miya/internal/delegation"
-	"miya/internal/model"
 )
 
 type State struct {

@@ -3,7 +3,7 @@ package controller
 import (
 	"fmt"
 
-	"miya/internal/model"
+	"miya/internal/chat/model"
 	"miya/internal/svcproto"
 )
 

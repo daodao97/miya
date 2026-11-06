@@ -9,7 +9,7 @@ Miya 的桌面和手机按统一契约使用 Agent。Agent 的模型、命令和
 ```mermaid
 flowchart TD
     UI[桌面 / 手机 / 共享视图] --> Contract[agent.Controls / interaction / model]
-    UI --> Projection[agent/presentation · 历史消息投影]
+    UI --> Projection[chat/presentation · 统一消息展示]
     Host[controller · 工作区与调度] --> Adapter[agent.Adapter]
     Native[agent/codex / agent/claude] -.实现.-> Adapter
     Native --> Protocol[各自 native 子包]
@@ -34,7 +34,7 @@ flowchart TD
 
 ## 消息和交互
 
-`model.MessagePresentation` 描述正文、活动标题、图标、文本格式、文件变更和计划步骤。新接入可以直接提供它。既有快照里的原生 Item 和 Claude 命令封套由 `internal/agent/presentation` 投影；视图不解码它们。原生字段继续用于持久化和执行，避免重写现有历史。渲染一条活动时复用同一份投影，复制和编辑也使用已规范化的正文。
+`model.MessagePresentation` 描述正文、活动标题、图标、文本格式、文件变更和计划步骤。新接入可以直接提供它。既有快照里的原生 Item 和 Claude 命令封套由 `internal/chat/presentation` 投影；视图不解码它们。共享 Activity 保存中立元数据，并保留不透明的旧字段供缓存和跨版本通信往返；原生历史、计划、目标和子任务的转换位于对应 Agent 的 projection 包。渲染一条活动时复用同一份投影，复制和编辑也使用已规范化的正文。
 
 `interaction.Request` 描述审批、问题、表单和桌面接管，`interaction.Response` 描述允许、拒绝、取消、提交和跳过。桌面经 `Host.Answer` 调用 Adapter；手机发送同一类型化响应，服务端先执行共享校验，再交给 Adapter 编码。各 Adapter 保留自己的原生响应语义。Codex 包保留原有类型名作为原生 API 的兼容别名，类型定义与表单校验归公共契约所有。
 

@@ -5,10 +5,10 @@ import (
 	"testing"
 
 	codex "miya/internal/agent/codex/native"
+	codexprojection "miya/internal/agent/codex/projection"
+	"miya/internal/chat/model"
+	conversation "miya/internal/chat/view"
 	"miya/internal/controller"
-	"miya/internal/conversation"
-	"miya/internal/model"
-	"miya/internal/msgfmt"
 )
 
 func TestHistoryPreservesTurnError(t *testing.T) {
@@ -24,7 +24,7 @@ func TestHistoryPreservesTurnError(t *testing.T) {
 }
 
 func TestUserImageIsSeparateFromBubble(t *testing.T) {
-	m, ok := msgfmt.ItemMessage(codex.Item{Type: "userMessage", Content: json.RawMessage(`[{"type":"text","text":"question [Image: image]"},{"type":"image","url":"data:image/png;base64,AAAA"}]`)})
+	m, ok := codexprojection.ItemMessage(codex.Item{Type: "userMessage", Content: json.RawMessage(`[{"type":"text","text":"question [Image: image]"},{"type":"image","url":"data:image/png;base64,AAAA"}]`)})
 	if !ok || m.Content != "question" || len(m.Images) != 1 {
 		t.Fatalf("incorrect image rendering data: %+v", m)
 	}
@@ -35,7 +35,7 @@ func TestCommandActionUsesFileLabel(t *testing.T) {
 	if err := json.Unmarshal([]byte(`{"type":"commandExecution","command":"sed -n '1,180p' registration.go","commandActions":[{"type":"read","name":"registration.go"}]}`), &item); err != nil {
 		t.Fatal(err)
 	}
-	if title := conversation.ActivityTitle(model.Message{Kind: item.Type, Item: &item}); title != "Read registration.go" {
+	if title := conversation.ActivityTitle(model.Message{Kind: item.Type, Item: codexprojection.Activity(item)}); title != "Read registration.go" {
 		t.Fatal(title)
 	}
 }

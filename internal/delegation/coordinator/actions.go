@@ -2,8 +2,8 @@ package coordinator
 
 import (
 	"miya/internal/async"
+	"miya/internal/chat/model"
 	dg "miya/internal/delegation"
-	"miya/internal/model"
 )
 
 // Native identity may still be pending. Persist cancellation first; startup

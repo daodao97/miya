@@ -5,10 +5,10 @@ import (
 	"strings"
 
 	codex "miya/internal/agent/codex/native"
+	"miya/internal/chat/model"
+	msgfmt "miya/internal/chat/presentation"
+	"miya/internal/chat/subagent"
 	dg "miya/internal/delegation"
-	"miya/internal/model"
-	"miya/internal/msgfmt"
-	"miya/internal/subagent"
 )
 
 func CodexFinalPhase(phase string) bool { return phase == "" || phase == "final_answer" }

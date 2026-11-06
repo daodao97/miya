@@ -8,9 +8,9 @@ import (
 
 	"miya/internal/appmodel"
 	"miya/internal/async"
+	"miya/internal/chat/model"
 	dg "miya/internal/delegation"
 	"miya/internal/delegation/coordinator"
-	"miya/internal/model"
 )
 
 func (c *Controller) startCollaboration(caller model.Thread, name string, a coordinator.Args) (any, error) {

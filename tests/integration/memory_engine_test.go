@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"miya/internal/chat/model"
 	"miya/internal/controller"
 	"miya/internal/memory"
-	"miya/internal/model"
 )
 
 func TestMemoryAutomaticSaveOnlyInvalidatesLibrary(t *testing.T) {

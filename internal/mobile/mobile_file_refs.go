@@ -10,7 +10,7 @@ import (
 	"net/url"
 	"time"
 
-	"miya/internal/model"
+	"miya/internal/chat/model"
 	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/remote"
 )

@@ -14,10 +14,10 @@ import (
 
 	codex "miya/internal/agent/codex/native"
 	"miya/internal/async"
+	"miya/internal/chat/model"
 	"miya/internal/desktop"
 	mcpserver "miya/internal/mcp"
 	mcpproto "miya/internal/mcp/protocol"
-	"miya/internal/model"
 	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/remote"
 )
@@ -39,7 +39,7 @@ func (c desktopEOFConnection) Receive(v any) error {
 
 func TestDesktopMCPWaitsForExplicitCompletion(t *testing.T) {
 	c := serverController(t.TempDir(), "")
-	caller := model.Thread{ID: 7, ServerID: "caller", Busy: true, Messages: []model.Message{{Kind: "mcpToolCall", Status: "inProgress", Item: &codex.Item{Server: "miya", Tool: "request_desktop_control"}}}}
+	caller := model.Thread{ID: 7, ServerID: "caller", Busy: true, Messages: []model.Message{{Kind: "mcpToolCall", Status: "inProgress", Item: &model.Activity{Server: "miya", Tool: "request_desktop_control"}}}}
 	c.SetThreads([]model.Thread{caller})
 	v, err := c.MCP().DesktopControl(mcpproto.Request{Tool: "request_desktop_control", Task: "在 Chrome 完成登录"})
 	if err != nil {

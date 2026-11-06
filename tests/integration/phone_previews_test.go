@@ -12,9 +12,9 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"miya/internal/agent/claude/native/transcript"
+	"miya/internal/chat/model"
+	chattext "miya/internal/chat/text"
 	"miya/internal/mobile"
-	"miya/internal/model"
 	phoneserver "miya/internal/phone/server"
 	phonetransfer "miya/internal/phone/transfer"
 	"miya/internal/remote"
@@ -37,7 +37,7 @@ func TestPhonePreviewSurvivesSendAndRelaunch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	source := transcript.LocalImageURI(paths[0])
+	source := chattext.LocalImageURI(paths[0])
 	preview, err := thumbnail.File(source)
 	if err != nil {
 		t.Fatal(err)
@@ -184,7 +184,7 @@ func TestPhonePreviewIsBoundedAndKeepsOriginal(t *testing.T) {
 	}
 	f.Close()
 	original, _ := os.ReadFile(path)
-	thumb, err := thumbnail.File(transcript.LocalImageURI(path))
+	thumb, err := thumbnail.File(chattext.LocalImageURI(path))
 	if err != nil {
 		t.Fatal(err)
 	}

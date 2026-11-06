@@ -17,8 +17,8 @@ import (
 	"github.com/egoist/mygo/ui/editor"
 	"github.com/egoist/mygo/ui/markdown"
 
+	"miya/internal/chat/model"
 	"miya/internal/fsutil"
-	"miya/internal/model"
 	phoneproxy "miya/internal/phone/proxy"
 	"miya/internal/runtime/tracker"
 	"miya/internal/svcproto"

@@ -2,7 +2,7 @@ package desktopui
 
 import (
 	"miya/internal/appmodel"
-	"miya/internal/model"
+	"miya/internal/chat/model"
 )
 
 func (app *App) desktopReferenceTitle(ref model.ThreadRef) string {

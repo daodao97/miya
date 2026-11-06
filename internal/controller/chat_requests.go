@@ -7,8 +7,8 @@ import (
 
 	"miya/internal/agent"
 	codex "miya/internal/agent/codex/native"
+	"miya/internal/chat/model"
 	"miya/internal/interaction"
-	"miya/internal/model"
 	"miya/internal/svcproto"
 )
 

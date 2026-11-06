@@ -6,14 +6,14 @@ import (
 	"strings"
 	"time"
 
-	"miya/internal/interaction"
-
 	claude "miya/internal/agent/claude/native"
 	"miya/internal/agent/claude/native/transcript"
+	claudeprojection "miya/internal/agent/claude/projection"
+	"miya/internal/chat/model"
+	msgfmt "miya/internal/chat/presentation"
+	"miya/internal/chat/subagent"
 	dg "miya/internal/delegation"
-	"miya/internal/model"
-	"miya/internal/msgfmt"
-	"miya/internal/subagent"
+	"miya/internal/interaction"
 	"miya/internal/textutil"
 )
 
@@ -121,10 +121,10 @@ func (b Adapter) Handle(id int, f claude.Frame) {
 			}
 			if e.Type == "message_start" {
 				t.ClaudeMessageID = e.Message.ID
-				msgfmt.RecordClaudeOutput(t, e.Message.ID, e.Message.Usage)
+				claudeprojection.RecordClaudeOutput(t, e.Message.ID, e.Message.Usage)
 			}
 			if e.Type == "message_delta" {
-				msgfmt.RecordClaudeOutput(t, t.ClaudeMessageID, e.Usage)
+				claudeprojection.RecordClaudeOutput(t, t.ClaudeMessageID, e.Usage)
 			}
 			if e.Type == "content_block_delta" && e.Delta.Type == "text_delta" {
 				key := fmt.Sprintf("%s:%d", t.ClaudeMessageID, e.Index)
@@ -137,7 +137,7 @@ func (b Adapter) Handle(id int, f claude.Frame) {
 				t.Messages = append(t.Messages, model.Message{ID: c.NextID(), Role: "assistant", Kind: "agentMessage", ItemID: key, Content: e.Delta.Text, SentAtMs: now, StartedAtMs: now})
 			}
 		case "assistant":
-			msgfmt.RecordClaudeOutput(t, f.Message.ID, f.Message.Usage)
+			claudeprojection.RecordClaudeOutput(t, f.Message.ID, f.Message.Usage)
 			for i, b := range f.Message.Content {
 				if b.Type == "text" {
 					key := claude.TextKey(t, f.Message.ID, i, b.Text)
@@ -209,7 +209,7 @@ func (b Adapter) Handle(id int, f claude.Frame) {
 				t.Messages = append(t.Messages, model.Message{ID: c.NextID(), Role: "assistant", Kind: "agentMessage", Content: f.Result, SentAtMs: now, StartedAtMs: now})
 			}
 			if f.KeepingAlive && !f.WaitingForAgents {
-				msgfmt.CompleteClaudeTiming(t)
+				claudeprojection.CompleteClaudeTiming(t)
 				claude.SaveHistory(*t)
 			}
 			memoryTurnDone = !f.IsError && !emptyResult && !f.WaitingForAgents

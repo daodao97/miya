@@ -9,7 +9,8 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/push/apns"
-	"miya/internal/model"
+
+	"miya/internal/chat/model"
 	"miya/internal/textutil"
 )
 

@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
+	"miya/internal/chat/model"
 	mcpproto "miya/internal/mcp/protocol"
-	"miya/internal/model"
 )
 
 var automationToolProps = map[string]any{

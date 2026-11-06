@@ -6,7 +6,7 @@ import (
 
 	claude "miya/internal/agent/claude/native"
 	"miya/internal/agent/claude/native/transcript"
-	"miya/internal/model"
+	"miya/internal/chat/model"
 )
 
 func (b Adapter) LoadHistory(t model.Thread) {

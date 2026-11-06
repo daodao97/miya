@@ -4,9 +4,9 @@ import (
 	"testing"
 
 	"miya/internal/appmodel"
+	"miya/internal/chat/model"
+	conversation "miya/internal/chat/view"
 	"miya/internal/controller"
-	"miya/internal/conversation"
-	"miya/internal/model"
 )
 
 func TestSentDraftStaysEmptyWhenSwitchingConversations(t *testing.T) {

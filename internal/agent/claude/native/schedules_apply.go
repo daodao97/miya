@@ -1,7 +1,7 @@
 package claude
 
 import (
-	"miya/internal/model"
+	"miya/internal/chat/model"
 )
 
 func ApplySchedules(t *model.Thread, schedules []ScheduledTask) {

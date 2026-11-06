@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"miya/internal/chat/model"
 	"miya/internal/mcp/service"
-	"miya/internal/model"
 )
 
 type snapshotHost struct {

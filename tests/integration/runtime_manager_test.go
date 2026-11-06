@@ -20,11 +20,10 @@ import (
 	"time"
 
 	claude "miya/internal/agent/claude/native"
-	codex "miya/internal/agent/codex/native"
 	"miya/internal/appmodel"
 	"miya/internal/async"
+	"miya/internal/chat/model"
 	mcpproto "miya/internal/mcp/protocol"
-	"miya/internal/model"
 	rt "miya/internal/runtime"
 	"miya/internal/runtime/tracker"
 	"miya/internal/webservice"
@@ -348,7 +347,7 @@ func TestMCPRuntimeCannotBeRedirectedOrChooseLatestCaller(t *testing.T) {
 	c := testController()
 	c.Run = func(f func()) { f() }
 	c.Cwd = t.TempDir()
-	c.SetThreads([]model.Thread{{ID: 1, ServerID: "a", Messages: []model.Message{{Kind: "mcpToolCall", Status: "inProgress", Item: &codex.Item{Server: "miya", Tool: "runtime_info"}}}}, {ID: 2, ServerID: "b", Messages: []model.Message{{Kind: "mcpToolCall", Status: "inProgress", Item: &codex.Item{Server: "miya", Tool: "runtime_info"}}}}})
+	c.SetThreads([]model.Thread{{ID: 1, ServerID: "a", Messages: []model.Message{{Kind: "mcpToolCall", Status: "inProgress", Item: &model.Activity{Server: "miya", Tool: "runtime_info"}}}}, {ID: 2, ServerID: "b", Messages: []model.Message{{Kind: "mcpToolCall", Status: "inProgress", Item: &model.Activity{Server: "miya", Tool: "runtime_info"}}}}})
 	if _, err := c.MCP().Runtime(mcpproto.Request{Reference: testRef(appmodel.AgentCodex, "a").URL(), Thread: 1}); err == nil {
 		t.Fatal("ambiguous callers selected a thread")
 	}

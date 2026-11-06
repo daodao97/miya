@@ -7,7 +7,7 @@ import (
 	"unicode/utf8"
 
 	codex "miya/internal/agent/codex/native"
-	"miya/internal/model"
+	"miya/internal/chat/model"
 )
 
 func TestNoticeSummary(t *testing.T) {
@@ -38,13 +38,13 @@ func TestCompletionNoticeUsesOnlyCurrentFinalReply(t *testing.T) {
 		{Role: "user", Content: "修复手机按钮"},
 		{Role: "activity", TurnID: "current", Content: "正在思考。"},
 		{Role: "tool", TurnID: "current", Content: "工具输出。"},
-		{Role: "assistant", TurnID: "current", Content: "我来检查。", Item: &codex.Item{Phase: "commentary"}},
+		{Role: "assistant", TurnID: "current", Content: "我来检查。", Item: &model.Activity{Phase: "commentary"}},
 		{Role: "assistant", TurnID: "foreign", Content: "其他轮结果。"},
 	}}
 	if got := CompletionBody(old, next); got != "Task: 修复手机按钮" {
 		t.Fatal("used progress or an unrelated reply", got)
 	}
-	next.Messages = append(next.Messages, model.Message{Role: "assistant", TurnID: "current", Content: "# 完成\n按钮已修复。测试通过。", Item: &codex.Item{Phase: "final_answer"}})
+	next.Messages = append(next.Messages, model.Message{Role: "assistant", TurnID: "current", Content: "# 完成\n按钮已修复。测试通过。", Item: &model.Activity{Phase: "final_answer"}})
 	if n, ok := Completion(old, next); !ok || n.Body != "按钮已修复。" || n.Title != "Miya · Completed" {
 		t.Fatal("final answer not used", n)
 	}

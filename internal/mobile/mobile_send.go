@@ -6,8 +6,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"miya/internal/conversation"
-	"miya/internal/model"
+	"miya/internal/chat/model"
+	conversation "miya/internal/chat/view"
 )
 
 // A new conversation has no desktop ID until sent arrives. Keep its first

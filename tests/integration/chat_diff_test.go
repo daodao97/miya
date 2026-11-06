@@ -8,9 +8,10 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	codex "miya/internal/agent/codex/native"
+	codexprojection "miya/internal/agent/codex/projection"
+	"miya/internal/chat/model"
+	msgfmt "miya/internal/chat/presentation"
 	"miya/internal/controller"
-	"miya/internal/model"
-	"miya/internal/msgfmt"
 )
 
 func TestCountDiffLines(t *testing.T) {
@@ -58,7 +59,7 @@ func TestTurnDiffStatsHistoryAndTurnBoundaries(t *testing.T) {
 	if err := json.Unmarshal([]byte(`{"type":"fileChange","status":"completed","changes":[{"path":"a","diff":"+new\n-old"},{"path":"b","diff":"+second"}]}`), &item); err != nil {
 		t.Fatal(err)
 	}
-	m, _ := msgfmt.ItemMessage(item)
+	m, _ := codexprojection.ItemMessage(item)
 	m.TurnID = "history"
 	failed := m
 	failed.Status = "failed"

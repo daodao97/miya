@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"miya/internal/appdir"
-	"miya/internal/model"
+	"miya/internal/chat/model"
 	"miya/internal/prefs"
 	"miya/locales"
 )

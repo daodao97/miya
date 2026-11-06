@@ -3,7 +3,7 @@ package claude
 import (
 	"context"
 
-	"miya/internal/model"
+	"miya/internal/chat/model"
 	rt "miya/internal/runtime"
 	"miya/internal/runtime/tracker"
 	"miya/internal/textutil"

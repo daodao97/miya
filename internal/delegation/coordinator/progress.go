@@ -5,9 +5,9 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"miya/internal/chat/model"
+	"miya/internal/chat/subagent"
 	dg "miya/internal/delegation"
-	"miya/internal/model"
-	"miya/internal/subagent"
 )
 
 // Output keeps streaming through the chat path. Persist only changed, bounded

@@ -6,8 +6,8 @@ import (
 
 	"miya/internal/agent/claude/native/transcript"
 	"miya/internal/appmodel"
-	"miya/internal/model"
-	"miya/internal/threadlist"
+	threadlist "miya/internal/chat/history"
+	"miya/internal/chat/model"
 )
 
 // loadClaudeSessions merges the CLI's sessions of the workspace into its

@@ -13,10 +13,10 @@ import (
 	codex "miya/internal/agent/codex/native"
 	"miya/internal/appdir"
 	"miya/internal/appmodel"
+	"miya/internal/chat/model"
 	dg "miya/internal/delegation"
 	"miya/internal/delegation/coordinator"
 	mcpproto "miya/internal/mcp/protocol"
-	"miya/internal/model"
 	"miya/internal/svcproto"
 )
 

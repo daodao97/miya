@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"miya/internal/chat/model"
 	"miya/internal/memory"
-	"miya/internal/model"
 )
 
 // Evidence identifies the explicit user statement supporting a memory change.

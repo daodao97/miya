@@ -9,8 +9,9 @@ import (
 
 	"miya/internal/agent/claude/native/transcript"
 	"miya/internal/appmodel"
-	"miya/internal/model"
-	"miya/internal/msgfmt"
+	"miya/internal/chat/model"
+	msgfmt "miya/internal/chat/presentation"
+	chattext "miya/internal/chat/text"
 	"miya/internal/uiruntime"
 )
 
@@ -22,7 +23,7 @@ func TestClaudeCommandTitles(t *testing.T) {
 		{"<command-message>unslop</command-message>\n<command-name>/unslop</command-name>\n<command-args>清理 README.md 的文案</command-args>", "/unslop 清理 README.md 的文案"},
 		{"<command-message>review</command-message>", "/review"},
 	} {
-		if got := transcript.PromptTitle(tc.prompt); got != tc.want {
+		if got := chattext.PromptTitle(tc.prompt); got != tc.want {
 			t.Errorf("title of %q = %q; want %q", tc.prompt, got, tc.want)
 		}
 	}
@@ -47,7 +48,7 @@ func TestClaudeCachedCommandTitleRefreshesWithoutNewActivity(t *testing.T) {
 		t.Fatal(err)
 	}
 	at := info.ModTime().UnixMilli()
-	c.SetThreads([]model.Thread{{ID: 1, Agent: appmodel.AgentClaude, ServerID: "command", Title: transcript.ClippedTitle(prompt), LastActivityAt: at}})
+	c.SetThreads([]model.Thread{{ID: 1, Agent: appmodel.AgentClaude, ServerID: "command", Title: chattext.ClippedTitle(prompt), LastActivityAt: at}})
 	c.LoadClaudeSessionsSync()
 	th := c.ThreadWithID(1)
 	if th.Title != "/unslop README.md" || th.LastActivityAt != at {

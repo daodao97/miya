@@ -8,10 +8,10 @@ import (
 
 	claude "miya/internal/agent/claude/native"
 	"miya/internal/appmodel"
+	"miya/internal/chat/model"
 	"miya/internal/memory"
 	"miya/internal/memory/extractor"
 	"miya/internal/memory/manager"
-	"miya/internal/model"
 )
 
 // An ordinary Claude turn is not kept alive: its thread Status still reads

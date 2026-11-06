@@ -13,8 +13,8 @@ import (
 	codex "miya/internal/agent/codex/native"
 	"miya/internal/appmodel"
 	"miya/internal/async"
+	"miya/internal/chat/model"
 	"miya/internal/controller"
-	"miya/internal/model"
 	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/remote"
 )

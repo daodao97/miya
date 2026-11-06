@@ -5,7 +5,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"miya/internal/msgfmt"
+	msgfmt "miya/internal/chat/presentation"
 )
 
 // Copy file destinations rather than their displayed label or URL encoding.

@@ -19,7 +19,7 @@ import (
 	"sync"
 	"time"
 
-	"miya/internal/model"
+	"miya/internal/chat/model"
 	"miya/internal/remote"
 	rt "miya/internal/runtime"
 	"miya/internal/webservice"

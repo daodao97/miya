@@ -8,9 +8,9 @@ import (
 	"strings"
 
 	"miya/internal/appmodel"
+	"miya/internal/chat/model"
 	dg "miya/internal/delegation"
 	"miya/internal/delegation/coordinator"
-	"miya/internal/model"
 )
 
 func (c *Controller) ThreadByReference(raw string) (model.Thread, bool) {

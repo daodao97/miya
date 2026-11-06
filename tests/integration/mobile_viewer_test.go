@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"miya/internal/appmodel"
-	"miya/internal/model"
+	"miya/internal/chat/model"
 )
 
 // A Codex user message with a turn made the phone's rewind check call a nil

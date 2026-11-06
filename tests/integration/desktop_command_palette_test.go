@@ -6,8 +6,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"miya/internal/chat/model"
 	"miya/internal/controller"
-	"miya/internal/model"
 )
 
 func TestDesktopCommandPaletteCommandsAndSidebar(t *testing.T) {

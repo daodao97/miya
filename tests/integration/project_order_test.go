@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"miya/internal/appmodel"
+	"miya/internal/chat/model"
 	"miya/internal/controller"
-	"miya/internal/model"
 	"miya/internal/prefs"
 	"miya/internal/uiruntime"
 )

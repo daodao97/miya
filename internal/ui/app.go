@@ -16,9 +16,9 @@ import (
 	"github.com/egoist/mygo/ui/markdown"
 
 	"miya/internal/appmodel"
-	"miya/internal/composer"
-	"miya/internal/conversation"
-	"miya/internal/model"
+	"miya/internal/chat/composer"
+	"miya/internal/chat/model"
+	conversation "miya/internal/chat/view"
 	"miya/internal/prefs"
 	"miya/internal/svcproto"
 	"miya/internal/uiruntime"

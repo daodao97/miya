@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 
+	"miya/internal/chat/model"
 	dg "miya/internal/delegation"
 	"miya/internal/interaction"
 	"miya/internal/memory/manager"
-	"miya/internal/model"
 )
 
 // Workspace is the application side of an integration. It owns conversation

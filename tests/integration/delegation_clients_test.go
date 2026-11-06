@@ -13,8 +13,8 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"miya/internal/appmodel"
+	"miya/internal/chat/model"
 	dg "miya/internal/delegation"
-	"miya/internal/model"
 	"miya/internal/remote"
 	"miya/internal/widgets"
 )

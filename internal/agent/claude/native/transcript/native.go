@@ -16,9 +16,10 @@ import (
 	"time"
 
 	claude "miya/internal/agent/claude/native"
+	"miya/internal/chat/model"
+	"miya/internal/chat/subagent"
+	chattext "miya/internal/chat/text"
 	"miya/internal/memory"
-	"miya/internal/model"
-	"miya/internal/subagent"
 	"miya/internal/textutil"
 	"miya/locales"
 )
@@ -167,16 +168,6 @@ func ReadLines(path string, limit int64, fn func(Entry) bool) error {
 	}
 }
 
-func ClippedTitle(s string) string {
-	s = strings.Join(strings.Fields(s), " ")
-	if r := []rune(s); len(r) > 45 {
-		return string(r[:45]) + "…"
-	}
-	return s
-}
-
-// summarizeClaudeSession reads the start of a session for its identity and
-// title, without reading the whole file.
 func Summarize(path string) (Session, bool) {
 	info, err := os.Stat(path)
 	if err != nil {
@@ -201,7 +192,7 @@ func Summarize(path string) (Session, bool) {
 					Content json.RawMessage `json:"content"`
 				}
 				_ = json.Unmarshal(e.Message, &m)
-				prompt = PromptTitle(VisibleText(Blocks(m.Content)))
+				prompt = chattext.PromptTitle(VisibleText(Blocks(m.Content)))
 			}
 		}
 		return true
@@ -230,7 +221,7 @@ func Summarize(path string) (Session, bool) {
 		// Sessions without a prompt hold nothing to show.
 		return Session{}, false
 	}
-	s.Title = ClippedTitle(textutil.FirstNonEmpty(custom, ReferenceTitle(aiTitle), ReferenceTitle(summary), prompt, "Claude Code conversation"))
+	s.Title = chattext.ClippedTitle(textutil.FirstNonEmpty(custom, chattext.ReferenceTitle(aiTitle), chattext.ReferenceTitle(summary), prompt, "Claude Code conversation"))
 	return s, true
 }
 

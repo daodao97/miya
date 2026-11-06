@@ -9,9 +9,9 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"miya/internal/async"
+	"miya/internal/chat/model"
 	"miya/internal/memory"
 	"miya/internal/memory/manager"
-	"miya/internal/model"
 	"miya/internal/widgets"
 )
 

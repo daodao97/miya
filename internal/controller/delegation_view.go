@@ -1,7 +1,7 @@
 package controller
 
 import (
-	model "miya/internal/model"
+	model "miya/internal/chat/model"
 )
 
 func (c *Controller) CollaborationCapabilities() *model.CollaborationStatus {

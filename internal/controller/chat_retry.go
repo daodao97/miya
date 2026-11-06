@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	"miya/internal/appmodel"
-	"miya/internal/model"
-	"miya/internal/msgfmt"
+	"miya/internal/chat/model"
+	msgfmt "miya/internal/chat/presentation"
 )
 
 // retryResponse retries the latest failed response. A turn that failed before

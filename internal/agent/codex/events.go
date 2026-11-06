@@ -6,8 +6,9 @@ import (
 	"time"
 
 	codex "miya/internal/agent/codex/native"
-	"miya/internal/model"
-	"miya/internal/msgfmt"
+	codexprojection "miya/internal/agent/codex/projection"
+	"miya/internal/chat/model"
+	msgfmt "miya/internal/chat/presentation"
 	"miya/internal/textutil"
 )
 
@@ -55,12 +56,12 @@ func (b Adapter) Handle(f codex.Frame) {
 		switch f.Method {
 		case "thread/goal/updated":
 			t.GoalRevision++
-			model.ApplyCodexGoal(t, e.Goal)
+			codexprojection.ApplyGoal(t, e.Goal)
 		case "thread/goal/cleared":
 			t.GoalRevision++
-			model.ApplyCodexGoal(t, nil)
+			codexprojection.ApplyGoal(t, nil)
 		case "thread/closed":
-			model.ResetCodexSession(t)
+			model.ResetConnectionSession(t)
 			t.Status = ""
 		case "thread/name/updated", "thread/updated":
 			if strings.TrimSpace(e.Name) != "" {
@@ -76,7 +77,7 @@ func (b Adapter) Handle(f codex.Frame) {
 			t.Busy = true
 			t.Status = "Working…"
 			t.StartedAtMs = now
-			if start, _ := msgfmt.CodexTurnTimes(e.Turn); start > 0 {
+			if start, _ := codexprojection.CodexTurnTimes(e.Turn); start > 0 {
 				t.StartedAtMs = start
 			}
 			t.CompletedAtMs = 0
@@ -126,7 +127,7 @@ func (b Adapter) Handle(f codex.Frame) {
 					}
 				}
 			}
-			m, ok := msgfmt.ItemMessage(e.Item)
+			m, ok := codexprojection.ItemMessage(e.Item)
 			if !ok {
 				return
 			}
@@ -162,14 +163,14 @@ func (b Adapter) Handle(f codex.Frame) {
 			for _, step := range e.Plan {
 				content += "\n" + step.Status + " · " + step.Step
 			}
-			c.Upsert(t, model.Message{Role: "activity", Kind: "plan", Plan: e.Plan, Content: strings.TrimSpace(content), ItemID: "turn-plan", TurnID: e.TurnID})
+			c.Upsert(t, model.Message{Role: "activity", Kind: "plan", Plan: codexprojection.Plan(e.Plan), Content: strings.TrimSpace(content), ItemID: "turn-plan", TurnID: e.TurnID})
 		case "turn/diff/updated":
 			stats := model.CountDiffLines(e.Diff)
 			c.Upsert(t, model.Message{Role: "tool", Kind: "diff", Content: textutil.Bounded(e.Diff), DiffStats: &stats, ItemID: "turn-diff", TurnID: e.TurnID})
 		case "thread/tokenUsage/updated":
 			if e.TokenUsage != nil {
 				if e.TurnID == "" || e.TurnID == t.TurnID {
-					msgfmt.RecordCodexOutput(t, e.TokenUsage)
+					codexprojection.RecordCodexOutput(t, e.TokenUsage)
 				}
 				t.Usage = e.TokenUsage
 				t.Tokens = e.TokenUsage.Last.TotalTokens
@@ -180,7 +181,7 @@ func (b Adapter) Handle(f codex.Frame) {
 			}
 			completedMemory = e.Turn.Status == "completed" && !t.StopRequested && e.Turn.Error == nil
 			t.CompletedAtMs = time.Now().UnixMilli()
-			start, end := msgfmt.CodexTurnTimes(e.Turn)
+			start, end := codexprojection.CodexTurnTimes(e.Turn)
 			if start > 0 {
 				t.StartedAtMs = start
 			}

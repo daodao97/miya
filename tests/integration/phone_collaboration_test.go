@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"miya/internal/appmodel"
+	"miya/internal/chat/model"
 	"miya/internal/controller"
 	dg "miya/internal/delegation"
-	"miya/internal/model"
 	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/remote"
 )

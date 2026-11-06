@@ -3,7 +3,7 @@ package controller
 import (
 	"sort"
 
-	"miya/internal/model"
+	"miya/internal/chat/model"
 )
 
 func (c *Controller) ThreadRefProjects() []model.ProjectSnapshot {

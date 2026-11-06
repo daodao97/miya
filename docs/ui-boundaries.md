@@ -7,7 +7,7 @@ flowchart TD
     main[main.go · 组装入口] --> controller[internal/controller]
     main --> desktop[internal/ui]
     main --> mobile[internal/mobile]
-    desktop --> conversation[internal/conversation]
+    desktop --> conversation[internal/chat/view]
     mobile --> conversation
     desktop --> contracts[internal/appmodel · 共享契约]
     controller --> contracts
@@ -18,7 +18,7 @@ flowchart TD
 
 `internal/ui.Host` 描述桌面需要的操作，控制器通过结构化接口实现该契约。`Environment` 的工厂由入口注入，桌面包不导入控制器包。窗口可观察状态放在 `appmodel.WindowState` 中，界面通过 `Host.State()` 访问；Agent 后端、运行进程、会话镜像、命令缓存和引用持久化仍由控制器管理。Agent 设置及模型选择通过绑定工作区的统一 Adapter 暴露给界面，详见 [Agent Adapter 契约](agent-adapters.md)。
 
-`internal/conversation.View` 负责消息分组、列表、Markdown、工具详情、图片、引用和富文本输入。它只要求读取当前会话、版本和审批以及重新选择会话的少量 `Host` 方法。重试、交接、用户消息编辑、记忆通知、附件粘贴和任务入口通过回调接入。桌面专属的侧栏、工作区、文件面板和设置不在共享视图中。
+`internal/chat/view.View` 负责消息分组、列表、Markdown、工具详情、图片、引用和富文本输入。它只要求读取当前会话、版本和审批以及重新选择会话的少量 `Host` 方法。重试、交接、用户消息编辑、记忆通知、附件粘贴和任务入口通过回调接入。桌面专属的侧栏、工作区、文件面板和设置不在共享视图中。
 
 `internal/mobile.App` 拥有独立的 `mobileViewer`，只保存桌面下发的会话快照，不构造桌面 App 或控制器。它通过手机协议执行动作，并与桌面复用共享渲染器。两端的文件和 Web 代理位于 `internal/phone/proxy`，不依赖任一界面包。
 

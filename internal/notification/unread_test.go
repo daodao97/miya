@@ -2,12 +2,13 @@ package notification
 
 import (
 	"encoding/json"
-	"miya/internal/model"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"miya/internal/chat/model"
 )
 
 func testUnreadHub(t *testing.T) *Hub {

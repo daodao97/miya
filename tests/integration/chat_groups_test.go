@@ -3,8 +3,8 @@ package integration
 import (
 	"testing"
 
-	"miya/internal/model"
-	"miya/internal/msgfmt"
+	"miya/internal/chat/model"
+	msgfmt "miya/internal/chat/presentation"
 )
 
 func TestResponseGroupingBoundaries(t *testing.T) {

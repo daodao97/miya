@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"miya/internal/model"
+	"miya/internal/chat/model"
 )
 
 // View is an automation as the page shows it.

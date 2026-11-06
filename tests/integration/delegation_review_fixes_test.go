@@ -9,10 +9,10 @@ import (
 	"time"
 
 	"miya/internal/appmodel"
+	"miya/internal/chat/model"
 	"miya/internal/controller"
 	dg "miya/internal/delegation"
 	"miya/internal/delegation/coordinator"
-	"miya/internal/model"
 	"miya/internal/widgets"
 )
 

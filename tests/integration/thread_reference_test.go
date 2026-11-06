@@ -9,11 +9,11 @@ import (
 	"testing"
 
 	"miya/internal/appmodel"
-	"miya/internal/composer"
+	"miya/internal/chat/composer"
+	"miya/internal/chat/model"
+	msgfmt "miya/internal/chat/presentation"
 	"miya/internal/controller"
 	mcpproto "miya/internal/mcp/protocol"
-	"miya/internal/model"
-	"miya/internal/msgfmt"
 )
 
 const testReferenceSource = "0123456789abcdef0123456789abcdef"

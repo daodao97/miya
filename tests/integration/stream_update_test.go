@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	claude "miya/internal/agent/claude/native"
-	"miya/internal/model"
-	"miya/internal/threadlist"
+	threadlist "miya/internal/chat/history"
+	"miya/internal/chat/model"
 )
 
 // Streamed text must not write the sidebar's cache on the UI thread for

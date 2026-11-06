@@ -2,8 +2,8 @@ package claude
 
 import (
 	"miya/internal/agent"
-	"miya/internal/composer"
-	"miya/internal/model"
+	"miya/internal/chat/composer"
+	"miya/internal/chat/model"
 )
 
 func (b Adapter) Commands(project string, load bool) agent.CommandCatalog {

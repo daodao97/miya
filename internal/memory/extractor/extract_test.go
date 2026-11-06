@@ -12,8 +12,8 @@ import (
 	"time"
 
 	claude "miya/internal/agent/claude/native"
+	"miya/internal/chat/model"
 	"miya/internal/memory"
-	"miya/internal/model"
 )
 
 func TestMemoryExtractorUsesIsolatedToolFreeProcess(t *testing.T) {

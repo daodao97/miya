@@ -3,8 +3,8 @@ package coordinator
 import (
 	"errors"
 
+	"miya/internal/chat/model"
 	dg "miya/internal/delegation"
-	"miya/internal/model"
 )
 
 // The controller checks eligibility twice, around the durable submission

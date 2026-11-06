@@ -11,8 +11,8 @@ import (
 	"testing"
 	"unicode"
 
+	"miya/internal/chat/model"
 	"miya/internal/controller"
-	"miya/internal/model"
 	"miya/internal/notification"
 	"miya/internal/prefs"
 	"miya/locales"

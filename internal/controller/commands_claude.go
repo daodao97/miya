@@ -5,7 +5,7 @@ import (
 	"time"
 
 	claude "miya/internal/agent/claude/native"
-	"miya/internal/model"
+	"miya/internal/chat/model"
 	"miya/internal/svcproto"
 	"miya/internal/uiruntime"
 )

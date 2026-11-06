@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"miya/internal/agent/claude/native/transcript"
-	"miya/internal/msgfmt"
+	msgfmt "miya/internal/chat/presentation"
 	"miya/internal/widgets"
 )
 

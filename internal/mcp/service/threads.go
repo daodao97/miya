@@ -3,10 +3,10 @@ package service
 import (
 	"errors"
 
+	"miya/internal/chat/model"
+	msgfmt "miya/internal/chat/presentation"
+	"miya/internal/chat/subagent"
 	mcpproto "miya/internal/mcp/protocol"
-	"miya/internal/model"
-	"miya/internal/msgfmt"
-	"miya/internal/subagent"
 	"miya/internal/textutil"
 )
 

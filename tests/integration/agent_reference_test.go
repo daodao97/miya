@@ -9,10 +9,10 @@ import (
 	"github.com/egoist/mygo/ui/richtext"
 
 	"miya/internal/appmodel"
-	"miya/internal/composer"
+	"miya/internal/chat/composer"
+	"miya/internal/chat/model"
+	conversation "miya/internal/chat/view"
 	"miya/internal/controller"
-	"miya/internal/conversation"
-	"miya/internal/model"
 	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/remote"
 	"miya/internal/svcproto"

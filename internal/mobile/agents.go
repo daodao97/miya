@@ -2,7 +2,7 @@ package mobile
 
 import (
 	agentmeta "miya/internal/agent/catalog"
-	"miya/internal/model"
+	"miya/internal/chat/model"
 )
 
 func (m *App) agentDescriptors() []agentmeta.Descriptor {

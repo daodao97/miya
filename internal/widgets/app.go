@@ -3,7 +3,7 @@ package widgets
 import (
 	"strings"
 
-	"miya/internal/msgfmt"
+	msgfmt "miya/internal/chat/presentation"
 )
 
 // imageSourcePath maps a Markdown image to something loadImage reads.

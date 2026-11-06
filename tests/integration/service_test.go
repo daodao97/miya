@@ -13,12 +13,11 @@ import (
 	"testing"
 	"time"
 
-	codex "miya/internal/agent/codex/native"
 	"miya/internal/appmodel"
 	"miya/internal/async"
+	"miya/internal/chat/model"
+	msgfmt "miya/internal/chat/presentation"
 	"miya/internal/controller"
-	"miya/internal/model"
-	"miya/internal/msgfmt"
 	"miya/internal/notification"
 	"miya/internal/prefs"
 	"miya/internal/svcproto"
@@ -137,7 +136,7 @@ func TestCompletionNoticeSurvivesServiceSnapshots(t *testing.T) {
 	c.InstallNotifications()
 	c.SetThreads([]model.Thread{{ID: 1, ServerID: "thread", Busy: true, TurnID: "turn", Messages: []model.Message{
 		{Role: "user", Content: "修复按钮"},
-		{Role: "assistant", TurnID: "turn", Content: "按钮已修复。测试通过。", Item: &codex.Item{Phase: "final_answer"}},
+		{Role: "assistant", TurnID: "turn", Content: "按钮已修复。测试通过。", Item: &model.Activity{Phase: "final_answer"}},
 	}}})
 	c.Update(1, func(t *model.Thread) {
 		t.Busy, t.CompletedAtMs, t.TurnID = false, 10, ""

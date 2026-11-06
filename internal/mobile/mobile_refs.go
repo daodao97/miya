@@ -6,9 +6,9 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"miya/internal/appmodel"
-	"miya/internal/composer"
-	"miya/internal/conversation"
-	"miya/internal/model"
+	"miya/internal/chat/composer"
+	"miya/internal/chat/model"
+	conversation "miya/internal/chat/view"
 	"miya/internal/remote"
 	"miya/internal/widgets"
 )

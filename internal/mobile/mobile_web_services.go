@@ -14,7 +14,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"miya/internal/model"
+	"miya/internal/chat/model"
 	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/remote"
 	rt "miya/internal/runtime"

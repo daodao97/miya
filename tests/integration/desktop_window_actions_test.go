@@ -8,9 +8,9 @@ import (
 	"time"
 
 	codex "miya/internal/agent/codex/native"
+	"miya/internal/chat/model"
 	"miya/internal/desktop"
 	"miya/internal/desktop/control"
-	"miya/internal/model"
 	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/remote"
 )

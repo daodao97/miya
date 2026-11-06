@@ -9,9 +9,9 @@ import (
 	"miya/internal/appmodel"
 	"miya/internal/async"
 	"miya/internal/automation"
+	"miya/internal/chat/model"
 	"miya/internal/controller"
 	mcpproto "miya/internal/mcp/protocol"
-	"miya/internal/model"
 	"miya/internal/widgets"
 )
 
@@ -149,7 +149,7 @@ func TestMCPCreateAutomationFromBackgroundProject(t *testing.T) {
 	h.c.Run = func(f func()) { f() }
 	other := t.TempDir()
 	h.c.ProjectCache = map[string][]model.Thread{h.c.Cwd: h.c.Threads(), other: {{ID: 77, Agent: appmodel.AgentCodex, ServerID: "cx", Busy: true,
-		Messages: []model.Message{{ID: 78, Role: "tool", Kind: "mcpToolCall", Status: "inProgress", Item: &codex.Item{Server: "miya", Tool: "create_automation"}}}}}}
+		Messages: []model.Message{{ID: 78, Role: "tool", Kind: "mcpToolCall", Status: "inProgress", Item: &model.Activity{Server: "miya", Tool: "create_automation"}}}}}}
 	res, err := h.c.MCP().Handle("mcpAutomationCreate", mcpproto.Request{Workspace: "/", Tool: "create_automation", Auto: &mcpproto.AutomationArgs{Name: "上游对账", Schedule: "0 8 * * *", Instructions: "对账"}})
 	out := startDeferred(t, res, err)
 	card := miyaCard(t, h.c)

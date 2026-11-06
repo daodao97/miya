@@ -1,7 +1,7 @@
 package coordinator
 
 import (
-	"miya/internal/model"
+	"miya/internal/chat/model"
 )
 
 // Host is what Coordinator needs from the controller

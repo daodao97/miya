@@ -4,8 +4,8 @@ import (
 	"errors"
 	"fmt"
 
+	"miya/internal/chat/model"
 	mcpproto "miya/internal/mcp/protocol"
-	"miya/internal/model"
 )
 
 func (api *Service) Handle(op string, r mcpproto.Request) (any, error) {

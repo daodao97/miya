@@ -3,8 +3,8 @@ package controller
 import (
 	"miya/internal/appmodel"
 	"miya/internal/async"
+	"miya/internal/chat/model"
 	"miya/internal/delegation/coordinator"
-	"miya/internal/model"
 	"miya/internal/uiruntime"
 )
 

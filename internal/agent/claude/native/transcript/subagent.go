@@ -7,8 +7,9 @@ import (
 	"strings"
 
 	claude "miya/internal/agent/claude/native"
-	"miya/internal/model"
-	"miya/internal/subagent"
+	"miya/internal/chat/model"
+	"miya/internal/chat/subagent"
+	chattext "miya/internal/chat/text"
 	"miya/internal/textutil"
 )
 
@@ -19,7 +20,7 @@ func SubAgents(id, name string, input json.RawMessage, status string) []model.Su
 	}
 	var in map[string]any
 	_ = json.Unmarshal(input, &in)
-	return []model.SubAgent{{ID: id, Name: textutil.FirstLine(InputString(in, "description", "prompt", "subagent_type")), Status: SubAgentStatus(status)}}
+	return []model.SubAgent{{ID: id, Name: textutil.FirstLine(chattext.InputString(in, "description", "prompt", "subagent_type")), Status: SubAgentStatus(status)}}
 }
 
 func SubAgentStatus(toolStatus string) string {
@@ -142,7 +143,7 @@ func SubAgentStep(t *model.Thread, parent string, blocks []claude.Block) {
 			switch b.Type {
 			case "tool_use":
 				a.Steps++
-				a.Detail = ToolTitle(model.Message{Kind: "claudeTool", Status: "inProgress", Content: b.Name + "\n" + string(b.Input)})
+				a.Detail = chattext.ToolTitle(model.Message{Kind: "claudeTool", Status: "inProgress", Content: b.Name + "\n" + string(b.Input)})
 			case "text":
 				if s := textutil.FirstLine(b.Text); s != "" {
 					a.Detail = s
@@ -170,7 +171,7 @@ func FinishSubAgents(m *model.Message, output string, metadata json.RawMessage) 
 		}
 		return
 	}
-	if _, input := ToolCall(*m); input["run_in_background"] == true && m.Status != "failed" {
+	if _, input := chattext.ToolCall(*m); input["run_in_background"] == true && m.Status != "failed" {
 		return
 	}
 	report, steps := TaskReport(output)

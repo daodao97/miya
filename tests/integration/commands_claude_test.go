@@ -8,8 +8,8 @@ import (
 
 	"miya/internal/agent"
 	"miya/internal/appmodel"
+	"miya/internal/chat/model"
 	"miya/internal/controller"
-	"miya/internal/model"
 	desktopui "miya/internal/ui"
 )
 

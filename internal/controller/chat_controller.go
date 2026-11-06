@@ -16,21 +16,22 @@ import (
 	"miya/internal/agent/account"
 	claude "miya/internal/agent/claude/native"
 	codex "miya/internal/agent/codex/native"
+	codexprojection "miya/internal/agent/codex/projection"
 	"miya/internal/appdir"
 	"miya/internal/appmodel"
 	"miya/internal/automation"
+	threadlist "miya/internal/chat/history"
+	"miya/internal/chat/model"
+	msgfmt "miya/internal/chat/presentation"
 	"miya/internal/desktop/control"
 	"miya/internal/mcp/access"
 	mcpconfig "miya/internal/mcp/config"
 	"miya/internal/memory/manager"
-	"miya/internal/model"
-	"miya/internal/msgfmt"
 	"miya/internal/notification"
 	"miya/internal/prefs"
 	"miya/internal/runtime/tracker"
 	"miya/internal/svcproto"
 	"miya/internal/textutil"
-	"miya/internal/threadlist"
 	"miya/internal/uiruntime"
 )
 
@@ -975,7 +976,7 @@ func (c *Controller) Resume(t model.Thread, after *model.SendRequest) {
 }
 
 func (c *Controller) HistoryMessages(remote codex.Thread) []model.Message {
-	out := msgfmt.HistoryMessages(remote)
+	out := codexprojection.HistoryMessages(remote)
 	for i := range out {
 		out[i].ID = c.NextID()
 	}

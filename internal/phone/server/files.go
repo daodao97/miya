@@ -19,8 +19,8 @@ import (
 	"github.com/egoist/mygo/i18n"
 	"golang.org/x/text/language"
 
-	"miya/internal/composer"
-	"miya/internal/model"
+	"miya/internal/chat/composer"
+	"miya/internal/chat/model"
 	"miya/internal/runtime/tracker"
 	"miya/internal/webservice"
 	"miya/locales"

@@ -9,7 +9,7 @@ import (
 
 	"miya/internal/appmodel"
 	"miya/internal/automation"
-	"miya/internal/model"
+	"miya/internal/chat/model"
 	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/remote"
 	"miya/internal/widgets"

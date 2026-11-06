@@ -3,7 +3,7 @@ package integration
 import (
 	"testing"
 
-	"miya/internal/model"
+	"miya/internal/chat/model"
 )
 
 func TestAddThreadToBackgroundProject(t *testing.T) {

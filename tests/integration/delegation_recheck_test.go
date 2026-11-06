@@ -12,9 +12,9 @@ import (
 	"miya/internal/appdir"
 	"miya/internal/appmodel"
 	"miya/internal/async"
+	"miya/internal/chat/model"
 	"miya/internal/controller"
 	dg "miya/internal/delegation"
-	"miya/internal/model"
 )
 
 func TestCollaborationClaudeRootResultCanBeRecheckedAfterRestart(t *testing.T) {

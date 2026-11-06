@@ -11,8 +11,8 @@ import (
 	"miya/internal/agent/account"
 	codex "miya/internal/agent/codex/native"
 	"miya/internal/appmodel"
+	"miya/internal/chat/model"
 	"miya/internal/controller"
-	"miya/internal/model"
 	desktopui "miya/internal/ui"
 	"miya/internal/uiruntime"
 )
@@ -108,8 +108,8 @@ func TestActivitiesCollapseIntoOneRow(t *testing.T) {
 	c.Update(1, func(t *model.Thread) {
 		t.Messages = []model.Message{
 			{ID: 1, Role: "user", Content: "run"},
-			{ID: 2, Role: "tool", Kind: "commandExecution", Status: "completed", Item: &codex.Item{Command: "ls -la"}, Content: "out"},
-			{ID: 3, Role: "tool", Kind: "commandExecution", Status: "failed", Item: &codex.Item{Command: "go test"}, Content: "FAIL"},
+			{ID: 2, Role: "tool", Kind: "commandExecution", Status: "completed", Item: &model.Activity{Command: "ls -la"}, Content: "out"},
+			{ID: 3, Role: "tool", Kind: "commandExecution", Status: "failed", Item: &model.Activity{Command: "go test"}, Content: "FAIL"},
 			{ID: 4, Role: "assistant", Content: "Done"},
 		}
 	})

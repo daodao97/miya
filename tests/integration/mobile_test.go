@@ -6,8 +6,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"miya/internal/chat/model"
 	"miya/internal/mobile"
-	"miya/internal/model"
 	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/widgets"
 )

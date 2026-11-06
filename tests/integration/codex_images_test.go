@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"miya/internal/agent/claude/native/transcript"
-	"miya/internal/model"
+	"miya/internal/chat/model"
+	chattext "miya/internal/chat/text"
 	"miya/internal/widgets"
 )
 
@@ -50,7 +50,7 @@ func TestCodexSentImagesStayPreviews(t *testing.T) {
 				}
 				messages := c.ThreadWithID(1).Messages
 				sent := messages[len(messages)-1]
-				wantImages := []string{transcript.LocalImageURI(path)}
+				wantImages := []string{chattext.LocalImageURI(path)}
 				if sent.Content != wantText || !reflect.DeepEqual(sent.Images, wantImages) {
 					t.Fatalf("sent message must immediately show previews: %+v", sent)
 				}

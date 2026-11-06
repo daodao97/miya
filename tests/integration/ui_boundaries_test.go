@@ -13,10 +13,10 @@ import (
 // to controllers through Host, and both render through conversation.
 func TestUIPackageBoundaries(t *testing.T) {
 	for dir, forbidden := range map[string][]string{
-		"ui":           {"controller", "mobile"},
-		"mobile":       {"controller", "ui"},
-		"conversation": {"controller", "ui", "mobile"},
-		"controller":   {"ui", "mobile", "conversation", "widgets"},
+		"ui":         {"controller", "mobile"},
+		"mobile":     {"controller", "ui"},
+		"chat/view":  {"controller", "ui", "mobile"},
+		"controller": {"ui", "mobile", "chat/view", "widgets"},
 	} {
 		files, err := filepath.Glob(filepath.Join("internal", dir, "*.go"))
 		if err != nil || len(files) == 0 {

@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"miya/internal/async"
+	"miya/internal/chat/model"
 	"miya/internal/desktop/control"
-	"miya/internal/model"
 	phoneproto "miya/internal/phone/protocol"
 	phoneserver "miya/internal/phone/server"
 	"miya/internal/runtime/tracker"

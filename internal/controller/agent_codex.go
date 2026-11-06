@@ -2,8 +2,8 @@ package controller
 
 import (
 	"miya/internal/appmodel"
+	"miya/internal/chat/model"
 	dg "miya/internal/delegation"
-	"miya/internal/model"
 )
 
 func (c *Controller) resetCodexSessions() {
@@ -15,13 +15,13 @@ func (c *Controller) resetCodexSessions() {
 	for path, threads := range c.ProjectCache {
 		threads = append([]model.Thread(nil), threads...)
 		for i := range threads {
-			model.ResetCodexSession(&threads[i])
+			model.ResetConnectionSession(&threads[i])
 		}
 		c.ProjectCache[path] = threads
 	}
 	threads := append([]model.Thread(nil), c.Threads()...)
 	for i := range threads {
-		model.ResetCodexSession(&threads[i])
+		model.ResetConnectionSession(&threads[i])
 	}
 	c.SetThreads(threads)
 	if c.ProjectCache != nil && c.Cwd != "" {

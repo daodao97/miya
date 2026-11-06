@@ -13,11 +13,11 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"miya/internal/appmodel"
+	"miya/internal/chat/model"
 	"miya/internal/controller"
 	mcpserver "miya/internal/mcp"
 	mcpproto "miya/internal/mcp/protocol"
 	"miya/internal/mobile"
-	"miya/internal/model"
 	phoneserver "miya/internal/phone/server"
 	rt "miya/internal/runtime"
 	"miya/internal/runtime/tracker"

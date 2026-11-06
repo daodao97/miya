@@ -4,7 +4,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"miya/internal/model"
+	"miya/internal/chat/model"
 	"miya/internal/widgets"
 )
 

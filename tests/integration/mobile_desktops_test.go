@@ -17,8 +17,8 @@ import (
 	"github.com/tailscale/tailcat"
 
 	"miya/internal/appmodel"
+	"miya/internal/chat/model"
 	"miya/internal/mobile"
-	"miya/internal/model"
 	phonecache "miya/internal/phone/cache"
 	"miya/internal/remote"
 	"miya/internal/workspaces"

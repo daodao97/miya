@@ -11,8 +11,8 @@ import (
 
 	codex "miya/internal/agent/codex/native"
 	"miya/internal/async"
+	"miya/internal/chat/model"
 	"miya/internal/memory"
-	"miya/internal/model"
 	"miya/internal/textutil"
 )
 

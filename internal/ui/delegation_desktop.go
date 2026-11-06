@@ -8,7 +8,7 @@ import (
 
 	"miya/internal/appmodel"
 	"miya/internal/async"
-	"miya/internal/model"
+	"miya/internal/chat/model"
 	"miya/internal/widgets"
 )
 

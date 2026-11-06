@@ -14,7 +14,7 @@ import (
 	"miya/internal/agent/account"
 	codex "miya/internal/agent/codex/native"
 	"miya/internal/appdir"
-	"miya/internal/model"
+	"miya/internal/chat/model"
 )
 
 const Version = 2

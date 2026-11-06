@@ -7,11 +7,11 @@ import (
 
 	"miya/internal/async"
 	"miya/internal/automation"
+	"miya/internal/chat/model"
 	dg "miya/internal/delegation"
 	"miya/internal/delegation/coordinator"
 	"miya/internal/interaction"
 	"miya/internal/memory/manager"
-	"miya/internal/model"
 )
 
 type Host interface {

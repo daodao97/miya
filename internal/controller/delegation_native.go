@@ -5,9 +5,9 @@ import (
 	"strings"
 
 	codex "miya/internal/agent/codex/native"
+	"miya/internal/chat/model"
 	dg "miya/internal/delegation"
 	"miya/internal/delegation/coordinator"
-	"miya/internal/model"
 )
 
 func (c *Controller) ManagedCodexAccepted(id, turn, epoch string, err error, mayHaveStarted bool) {

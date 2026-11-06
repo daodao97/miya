@@ -11,11 +11,11 @@ import (
 	"testing"
 	"time"
 
-	"miya/internal/agent/claude/native/transcript"
 	codex "miya/internal/agent/codex/native"
 	"miya/internal/appmodel"
+	"miya/internal/chat/model"
+	chattext "miya/internal/chat/text"
 	"miya/internal/memory"
-	"miya/internal/model"
 	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/remote"
 	"miya/internal/textutil"
@@ -27,7 +27,7 @@ func TestPhonePreviewRequestChecksConversationAndWorksBeforeSubscribe(t *testing
 	if err := os.WriteFile(path, testPNG(t), 0600); err != nil {
 		t.Fatal(err)
 	}
-	source := transcript.LocalImageURI(path)
+	source := chattext.LocalImageURI(path)
 	c := serverController(t.TempDir(), "")
 	c.SetThreads([]model.Thread{{ID: 1, ServerID: "s1", HistoryLoaded: true, Messages: []model.Message{{ID: 1, Role: "user", Images: []string{source}}}}})
 	conn, _ := serveTestPhone(t, c)
@@ -152,7 +152,7 @@ func TestPhonePreviewBinaryPathKeepsAuthorization(t *testing.T) {
 	if err := os.WriteFile(path, testPNG(t), 0600); err != nil {
 		t.Fatal(err)
 	}
-	source := transcript.LocalImageURI(path)
+	source := chattext.LocalImageURI(path)
 	c := serverController(t.TempDir(), "")
 	c.Run = func(f func()) { f() }
 	c.SetThreads([]model.Thread{{ID: 1, ServerID: "s1", HistoryLoaded: true, Messages: []model.Message{{ID: 1, Images: []string{source}}}}})

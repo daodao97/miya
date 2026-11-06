@@ -34,7 +34,7 @@ func TestMCPModuleBoundaries(t *testing.T) {
 			for _, imp := range file.Imports {
 				name, _ := strconv.Unquote(imp.Path.Value)
 				if root == "internal/mcp" {
-					for _, forbidden := range []string{"miya/internal/controller", "miya/internal/ui", "miya/internal/mobile", "miya/internal/conversation", "miya/internal/widgets", "miya/internal/appmodel", "miya/internal/agent/claude/native", "miya/internal/agent/codex/native"} {
+					for _, forbidden := range []string{"miya/internal/controller", "miya/internal/ui", "miya/internal/mobile", "miya/internal/chat/view", "miya/internal/widgets", "miya/internal/appmodel", "miya/internal/agent/claude/native", "miya/internal/agent/codex/native"} {
 						if name == forbidden || strings.HasPrefix(name, forbidden+"/") {
 							t.Errorf("%s: MCP depends on implementation %s", path, name)
 						}

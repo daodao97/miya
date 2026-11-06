@@ -11,18 +11,17 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	codex "miya/internal/agent/codex/native"
 	"miya/internal/appmodel"
-	"miya/internal/composer"
+	"miya/internal/chat/composer"
+	"miya/internal/chat/model"
+	msgfmt "miya/internal/chat/presentation"
+	"miya/internal/chat/subagent"
 	"miya/internal/controller"
-	"miya/internal/model"
-	"miya/internal/msgfmt"
-	"miya/internal/subagent"
 	"miya/internal/uiruntime"
 )
 
 func handoffSource() model.Thread {
-	change := &codex.Item{}
+	change := &model.Activity{}
 	change.Changes = append(change.Changes, struct {
 		Path string `json:"path"`
 		Diff string `json:"diff"`

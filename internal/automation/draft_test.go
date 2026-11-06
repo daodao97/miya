@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	claude "miya/internal/agent/claude/native"
-	"miya/internal/model"
+	"miya/internal/chat/model"
 )
 
 func TestAutomationDraftPromptAndAnswers(t *testing.T) {

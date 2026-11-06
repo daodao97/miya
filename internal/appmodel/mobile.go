@@ -1,7 +1,7 @@
 package appmodel
 
 import (
-	model "miya/internal/model"
+	model "miya/internal/chat/model"
 )
 
 func AgentName(id string) string { return model.AgentName(id) }

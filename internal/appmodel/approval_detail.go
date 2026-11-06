@@ -3,9 +3,9 @@ package appmodel
 import (
 	"strings"
 
+	"miya/internal/chat/model"
+	msgfmt "miya/internal/chat/presentation"
 	"miya/internal/interaction"
-	"miya/internal/model"
-	"miya/internal/msgfmt"
 )
 
 func ApprovalDetail(threads []model.Thread, a interaction.Request) string {

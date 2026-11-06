@@ -13,10 +13,11 @@ import (
 	claude "miya/internal/agent/claude/native"
 	"miya/internal/agent/claude/native/transcript"
 	"miya/internal/appmodel"
+	"miya/internal/chat/model"
+	msgfmt "miya/internal/chat/presentation"
+	"miya/internal/chat/subagent"
+	chattext "miya/internal/chat/text"
 	"miya/internal/controller"
-	"miya/internal/model"
-	"miya/internal/msgfmt"
-	"miya/internal/subagent"
 	"miya/internal/widgets"
 )
 
@@ -97,11 +98,11 @@ func TestClaudeSlashCommandDisplayAndEdit(t *testing.T) {
 	args := "不改变功能的基础上简化代码\n" + strings.Repeat("完整保留参数", 25)
 	raw := "<command-message>simplify</command-message> <command-name>/simplify</command-name> <command-args>" + args + "</command-args>"
 	want := "/simplify " + args
-	if got := transcript.CommandText(raw); got != want {
+	if got := chattext.CommandText(raw); got != want {
 		t.Fatalf("command shortened or malformed: %q", got)
 	}
 	for _, literal := range []string{"示例：" + raw, "```xml\n" + raw + "\n```", "`" + raw + "`"} {
-		if transcript.CommandText(literal) != literal {
+		if chattext.CommandText(literal) != literal {
 			t.Fatal("rewrote literal example")
 		}
 	}

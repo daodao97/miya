@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"miya/internal/model"
+	"miya/internal/chat/model"
 	"miya/internal/textutil"
 )
 

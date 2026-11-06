@@ -10,8 +10,8 @@ import (
 	codex "miya/internal/agent/codex/native"
 	"miya/internal/appmodel"
 	"miya/internal/automation"
+	"miya/internal/chat/model"
 	"miya/internal/controller"
-	"miya/internal/model"
 )
 
 type automationHarness struct {

@@ -4,9 +4,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	threadlist "miya/internal/chat/history"
+	"miya/internal/chat/model"
 	"miya/internal/controller"
-	"miya/internal/model"
-	"miya/internal/threadlist"
 )
 
 func TestSidebarDeletesConversationInItsProject(t *testing.T) {

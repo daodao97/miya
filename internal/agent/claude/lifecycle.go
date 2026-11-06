@@ -5,14 +5,13 @@ import (
 	"strings"
 	"time"
 
-	"miya/internal/interaction"
-
 	claude "miya/internal/agent/claude/native"
 	"miya/internal/agent/claude/native/transcript"
+	claudeprojection "miya/internal/agent/claude/projection"
+	"miya/internal/chat/model"
+	"miya/internal/chat/subagent"
 	dg "miya/internal/delegation"
-	"miya/internal/model"
-	"miya/internal/msgfmt"
-	"miya/internal/subagent"
+	"miya/internal/interaction"
 )
 
 func (b Adapter) Finish(id int, cwd string, err error) {
@@ -104,7 +103,7 @@ func (b Adapter) Finish(id int, cwd string, err error) {
 				}
 			}
 		}
-		msgfmt.CompleteClaudeTiming(t)
+		claudeprojection.CompleteClaudeTiming(t)
 		claude.SaveHistory(*t)
 	})
 	pending := []interaction.Request{}

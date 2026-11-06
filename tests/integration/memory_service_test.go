@@ -8,10 +8,10 @@ import (
 	"testing"
 
 	"miya/internal/appmodel"
+	"miya/internal/chat/model"
 	"miya/internal/controller"
 	"miya/internal/memory"
 	"miya/internal/memory/manager"
-	"miya/internal/model"
 	"miya/internal/svcproto"
 )
 

@@ -1,8 +1,8 @@
 package mobile
 
 import (
+	"miya/internal/chat/model"
 	"miya/internal/interaction"
-	"miya/internal/model"
 )
 
 func (v *mobileViewer) ViewThread() model.Thread             { return v.Current() }

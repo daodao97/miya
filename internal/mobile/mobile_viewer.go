@@ -2,8 +2,8 @@ package mobile
 
 import (
 	"miya/internal/appmodel"
+	"miya/internal/chat/model"
 	"miya/internal/interaction"
-	"miya/internal/model"
 	"miya/internal/uiruntime"
 )
 

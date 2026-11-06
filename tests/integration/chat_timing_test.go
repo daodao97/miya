@@ -8,9 +8,10 @@ import (
 
 	claude "miya/internal/agent/claude/native"
 	codex "miya/internal/agent/codex/native"
+	codexprojection "miya/internal/agent/codex/projection"
 	"miya/internal/appmodel"
-	"miya/internal/model"
-	"miya/internal/msgfmt"
+	"miya/internal/chat/model"
+	msgfmt "miya/internal/chat/presentation"
 )
 
 func TestHistoryRestoresWorkedDuration(t *testing.T) {
@@ -18,7 +19,7 @@ func TestHistoryRestoresWorkedDuration(t *testing.T) {
 	if err := json.Unmarshal([]byte(`{"turns":[{"id":"turn1","status":"completed","startedAt":1700000000,"completedAt":1700000126,"durationMs":125500,"items":[{"id":"u","type":"userMessage","content":[{"type":"text","text":"question"}]},{"id":"a","type":"agentMessage","text":"Done"}]}]}`), &remote); err != nil {
 		t.Fatal(err)
 	}
-	messages := msgfmt.HistoryMessages(remote)
+	messages := codexprojection.HistoryMessages(remote)
 	groups := msgfmt.GroupMessages(messages)
 	if len(groups) != 2 || msgfmt.TurnElapsedLabel(groups[1].Messages, false) != "Worked for 2m 5s" {
 		t.Fatalf("history lost duration: %+v", messages)
@@ -33,7 +34,7 @@ func TestHistoryRestoresWorkedDuration(t *testing.T) {
 		}
 	}
 	// Repeated history reads must not turn a fixed duration into time since now.
-	if got := msgfmt.TurnElapsedLabel(msgfmt.HistoryMessages(remote)[1:], false); got != "Worked for 2m 5s" {
+	if got := msgfmt.TurnElapsedLabel(codexprojection.HistoryMessages(remote)[1:], false); got != "Worked for 2m 5s" {
 		t.Fatal(got)
 	}
 }
@@ -53,7 +54,7 @@ func TestCodexTurnTimingOptionalMetadata(t *testing.T) {
 		if err := json.Unmarshal([]byte(tc.payload), &turn); err != nil {
 			t.Fatal(err)
 		}
-		if start, end := msgfmt.CodexTurnTimes(turn); start != tc.start || end != tc.end {
+		if start, end := codexprojection.CodexTurnTimes(turn); start != tc.start || end != tc.end {
 			t.Fatalf("%s: got %d/%d, want %d/%d", tc.payload, start, end, tc.start, tc.end)
 		}
 	}

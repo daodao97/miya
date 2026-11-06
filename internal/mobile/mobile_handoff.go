@@ -2,7 +2,7 @@ package mobile
 
 import (
 	"miya/internal/appmodel"
-	"miya/internal/model"
+	"miya/internal/chat/model"
 	"miya/internal/remote"
 )
 

@@ -7,9 +7,10 @@ import (
 	"time"
 
 	codex "miya/internal/agent/codex/native"
+	codexprojection "miya/internal/agent/codex/projection"
 	"miya/internal/appmodel"
-	"miya/internal/model"
-	"miya/internal/msgfmt"
+	"miya/internal/chat/model"
+	msgfmt "miya/internal/chat/presentation"
 	"miya/internal/prefs"
 	"miya/internal/textutil"
 )
@@ -110,7 +111,7 @@ func (c *Controller) CodexGoalCommand(req model.SendRequest) (int, string) {
 					return
 				}
 				if t.GoalRevision == cGoalRevision {
-					model.ApplyCodexGoal(t, response.Goal)
+					codexprojection.ApplyGoal(t, response.Goal)
 				}
 			})
 			if err != nil {
@@ -141,7 +142,7 @@ func (c *Controller) refreshCodexGoal(id int) {
 			}
 			c.Update(id, func(current *model.Thread) {
 				if current.ServerID == t.ServerID && current.GoalRevision == t.GoalRevision {
-					model.ApplyCodexGoal(current, response.Goal)
+					codexprojection.ApplyGoal(current, response.Goal)
 				}
 			})
 		})

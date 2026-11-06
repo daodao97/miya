@@ -6,16 +6,14 @@ import (
 	"errors"
 	"strings"
 
-	codexnative "miya/internal/agent/codex/native"
-
-	dg "miya/internal/delegation"
-
 	"miya/internal/agent"
 	claudeagent "miya/internal/agent/claude"
 	claude "miya/internal/agent/claude/native"
 	codexagent "miya/internal/agent/codex"
+	codexnative "miya/internal/agent/codex/native"
+	"miya/internal/chat/model"
+	dg "miya/internal/delegation"
 	"miya/internal/interaction"
-	"miya/internal/model"
 )
 
 type agentWorkspace struct{ *Controller }

@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"miya/internal/model"
-	rt "miya/internal/runtime"
 	"net"
 	"os"
 	"os/exec"
@@ -13,6 +11,9 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"miya/internal/chat/model"
+	rt "miya/internal/runtime"
 )
 
 const ProjectFile = ".miya-web-services"

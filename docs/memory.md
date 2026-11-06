@@ -31,7 +31,7 @@
 现有代码提供了以下接入基础：
 
 - [agent.go](../internal/controller/agent.go) 的 `submit` / `submitExpanded` 统一路由、排队和发送请求，两个后端通过 `agentBackend` 适配；`sendRequest` 已有 `Text` 与结构化 `Parts`。
-- [handoff.go](../internal/controller/handoff.go) 已能从规范化消息生成有界上下文；[会话引用设计](thread-references.md) 已定义来源、后端、会话身份和发送快照，`ThreadRef` 位于 [thread_reference.go](../internal/model/ref.go)。
+- [handoff.go](../internal/controller/handoff.go) 已能从规范化消息生成有界上下文；[会话引用设计](thread-references.md) 已定义来源、后端、会话身份和发送快照，`ThreadRef` 位于 [thread_reference.go](../internal/chat/model/ref.go)。
 - [identity.go](../internal/mcp/service/identity.go) 已能把 MCP 调用解析到发起会话及其项目（见「MCP 调用者身份」）。
 - [internal/automation/draft.go](../internal/automation/draft.go) 已通过独立 Agent 调用获取结构化结果：Claude 使用 `--tools ""` 禁用工具；Codex 使用 `exec --sandbox read-only`，仍可执行命令和读取磁盘，不等于禁用工具。
 

@@ -13,10 +13,10 @@ import (
 
 	codex "miya/internal/agent/codex/native"
 	"miya/internal/appmodel"
+	threadlist "miya/internal/chat/history"
+	"miya/internal/chat/model"
 	"miya/internal/controller"
-	"miya/internal/model"
 	"miya/internal/remote"
-	"miya/internal/threadlist"
 )
 
 func TestCodexCacheDoesNotRestoreProcessState(t *testing.T) {

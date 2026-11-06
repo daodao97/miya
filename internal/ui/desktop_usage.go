@@ -11,7 +11,6 @@ import (
 
 	"github.com/egoist/mygo"
 
-	"miya/internal/agent"
 	agentmeta "miya/internal/agent/catalog"
 	agentusage "miya/internal/agent/quota"
 	"miya/internal/prefs"
@@ -116,7 +115,7 @@ func (app *App) refreshUsage() {
 			var wg sync.WaitGroup
 			for i, provider := range providers {
 				agentID := provider.UsageID
-				wg.Go(func() { readings[i] = agent.Quotas().Read(ctx, agentID) })
+				wg.Go(func() { readings[i] = quotaService().Read(ctx, agentID) })
 			}
 			wg.Wait()
 		}

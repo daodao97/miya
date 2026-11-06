@@ -10,8 +10,8 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"miya/internal/agent/claude/native/transcript"
-	"miya/internal/msgfmt"
+	msgfmt "miya/internal/chat/presentation"
+	chattext "miya/internal/chat/text"
 )
 
 func TestLargeImageUsesShortFileURL(t *testing.T) {
@@ -37,7 +37,7 @@ func TestLargeImageUsesShortFileURL(t *testing.T) {
 	if err := os.WriteFile(path, data, 0600); err != nil {
 		t.Fatal(err)
 	}
-	if got := transcript.LocalImageURI(path); !strings.HasPrefix(got, "file://") || strings.Contains(got, " ") {
+	if got := chattext.LocalImageURI(path); !strings.HasPrefix(got, "file://") || strings.Contains(got, " ") {
 		t.Fatal(got)
 	}
 }

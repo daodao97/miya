@@ -9,18 +9,17 @@ import (
 	"time"
 
 	claude "miya/internal/agent/claude/native"
-	codex "miya/internal/agent/codex/native"
 	"miya/internal/appmodel"
 	"miya/internal/async"
+	"miya/internal/chat/model"
 	"miya/internal/controller"
 	mcpproto "miya/internal/mcp/protocol"
 	"miya/internal/memory"
 	"miya/internal/memory/manager"
-	"miya/internal/model"
 )
 
 func memoryToolMessage(agent, tool string, raw json.RawMessage, id int, at int64) model.Message {
-	m := model.Message{ID: id, Role: "tool", Status: "inProgress", TurnID: "turn", StartedAtMs: at, Kind: "mcpToolCall", Item: &codex.Item{Server: "miya", Tool: tool, Arguments: raw}}
+	m := model.Message{ID: id, Role: "tool", Status: "inProgress", TurnID: "turn", StartedAtMs: at, Kind: "mcpToolCall", Item: &model.Activity{Server: "miya", Tool: tool, Arguments: raw}}
 	if agent == appmodel.AgentClaude {
 		m.Kind = "claudeTool"
 		m.Item = nil

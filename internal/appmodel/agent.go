@@ -1,7 +1,7 @@
 package appmodel
 
 import (
-	"miya/internal/model"
+	"miya/internal/chat/model"
 )
 
 const (

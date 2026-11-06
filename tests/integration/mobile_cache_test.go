@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
+	"miya/internal/chat/model"
 	"miya/internal/fsutil"
 	"miya/internal/mobile"
-	"miya/internal/model"
 	phonecache "miya/internal/phone/cache"
 	phoneproto "miya/internal/phone/protocol"
 )

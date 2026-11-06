@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"miya/internal/composer"
+	"miya/internal/chat/composer"
 )
 
 func TestComposerCompletionPreservesPrompt(t *testing.T) {

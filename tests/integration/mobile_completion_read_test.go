@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"miya/internal/appmodel"
-	"miya/internal/model"
+	"miya/internal/chat/model"
 	phoneserver "miya/internal/phone/server"
 )
 

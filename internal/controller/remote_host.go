@@ -16,11 +16,12 @@ import (
 	claude "miya/internal/agent/claude/native"
 	"miya/internal/agent/claude/native/transcript"
 	codex "miya/internal/agent/codex/native"
+	codexprojection "miya/internal/agent/codex/projection"
 	"miya/internal/appmodel"
 	"miya/internal/async"
+	"miya/internal/chat/model"
+	msgfmt "miya/internal/chat/presentation"
 	"miya/internal/desktop"
-	"miya/internal/model"
-	"miya/internal/msgfmt"
 	phoneproto "miya/internal/phone/protocol"
 	phoneserver "miya/internal/phone/server"
 	"miya/internal/remote"
@@ -442,7 +443,7 @@ func readOnlyHistory(ctx context.Context, t phoneThread) ([]model.Message, strin
 		var result codex.ThreadResponse
 		err = t.client.Call(cctx, "thread/read", map[string]any{"threadId": th.ServerID, "includeTurns": true}, &result)
 		if err == nil {
-			messages = msgfmt.HistoryMessages(result.Thread)
+			messages = codexprojection.HistoryMessages(result.Thread)
 		}
 	}
 	if err != nil && len(messages) == 0 {

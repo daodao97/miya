@@ -12,7 +12,7 @@ import (
 
 	"miya/internal/async"
 	"miya/internal/automation"
-	"miya/internal/model"
+	"miya/internal/chat/model"
 	"miya/internal/textutil"
 	"miya/internal/widgets"
 )

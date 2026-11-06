@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"miya/internal/appmodel"
+	"miya/internal/chat/model"
 	"miya/internal/controller"
-	"miya/internal/model"
 )
 
 // The Codex fixture is a Python script, which Windows cannot run as a binary.

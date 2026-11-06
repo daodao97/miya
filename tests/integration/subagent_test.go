@@ -9,13 +9,13 @@ import (
 	claude "miya/internal/agent/claude/native"
 	"miya/internal/agent/claude/native/transcript"
 	codex "miya/internal/agent/codex/native"
+	codexprojection "miya/internal/agent/codex/projection"
 	"miya/internal/appmodel"
+	"miya/internal/chat/model"
+	"miya/internal/chat/subagent"
 	"miya/internal/controller"
-	"miya/internal/model"
-	"miya/internal/msgfmt"
 	phoneproto "miya/internal/phone/protocol"
 	phoneserver "miya/internal/phone/server"
-	"miya/internal/subagent"
 	"miya/internal/uiruntime"
 )
 
@@ -124,7 +124,7 @@ func TestClaudeBackgroundSubAgentFollowsItsTask(t *testing.T) {
 }
 
 func TestCodexCollabAgentStatesNormalize(t *testing.T) {
-	m, ok := msgfmt.ItemMessage(codex.Item{Type: "collabAgentToolCall", Status: "inProgress", Tool: "wait", AgentsStates: json.RawMessage(`{"thread-b":{"status":"running","message":null},"thread-a":{"status":"errored","message":"boom"},"thread-c":{"status":"pendingInit"},"thread-d":{"status":"interrupted"}}`)})
+	m, ok := codexprojection.ItemMessage(codex.Item{Type: "collabAgentToolCall", Status: "inProgress", Tool: "wait", AgentsStates: json.RawMessage(`{"thread-b":{"status":"running","message":null},"thread-a":{"status":"errored","message":"boom"},"thread-c":{"status":"pendingInit"},"thread-d":{"status":"interrupted"}}`)})
 	if !ok || len(m.Agents) != 4 {
 		t.Fatalf("collab agents not normalized: %+v", m.Agents)
 	}
@@ -142,11 +142,11 @@ func TestCodexCollabAgentStatesNormalize(t *testing.T) {
 }
 
 func TestCodexSpawnedAgentWithoutState(t *testing.T) {
-	m, _ := msgfmt.ItemMessage(codex.Item{Type: "collabAgentToolCall", Status: "inProgress", Tool: "spawnAgent", ReceiverThreadIDs: []string{"019a7f3c-new"}, Prompt: "Review the parser\nin detail", AgentsStates: json.RawMessage(`{}`)})
+	m, _ := codexprojection.ItemMessage(codex.Item{Type: "collabAgentToolCall", Status: "inProgress", Tool: "spawnAgent", ReceiverThreadIDs: []string{"019a7f3c-new"}, Prompt: "Review the parser\nin detail", AgentsStates: json.RawMessage(`{}`)})
 	if len(m.Agents) != 1 || m.Agents[0].Name != "Review the parser" || m.Agents[0].Status != subagent.Running {
 		t.Fatalf("spawned agent not shown: %+v", m.Agents)
 	}
-	m, _ = msgfmt.ItemMessage(codex.Item{Type: "subAgentActivity", Kind: "started", AgentPath: "reviewer"})
+	m, _ = codexprojection.ItemMessage(codex.Item{Type: "subAgentActivity", Kind: "started", AgentPath: "reviewer"})
 	if m.Content != "Subagent started · reviewer" || len(m.Agents) != 0 {
 		t.Fatalf("bad activity: %+v", m)
 	}
@@ -234,15 +234,15 @@ func TestSubAgentProgressReachesPhone(t *testing.T) {
 }
 
 func TestCodexCollabContentLeavesStatesToTheList(t *testing.T) {
-	m, _ := msgfmt.ItemMessage(codex.Item{Type: "collabAgentToolCall", Status: "inProgress", Tool: "wait", AgentsStates: json.RawMessage(`{"thread-a":{"status":"errored","message":"boom"}}`)})
+	m, _ := codexprojection.ItemMessage(codex.Item{Type: "collabAgentToolCall", Status: "inProgress", Tool: "wait", AgentsStates: json.RawMessage(`{"thread-a":{"status":"errored","message":"boom"}}`)})
 	if m.Content != "" || len(m.Agents) != 1 {
 		t.Fatalf("states shown twice: %q", m.Content)
 	}
-	m, _ = msgfmt.ItemMessage(codex.Item{Type: "collabAgentToolCall", Status: "completed", Tool: "sendInput", ReceiverThreadIDs: []string{"thread-a"}, Prompt: " Also check the docs "})
+	m, _ = codexprojection.ItemMessage(codex.Item{Type: "collabAgentToolCall", Status: "completed", Tool: "sendInput", ReceiverThreadIDs: []string{"thread-a"}, Prompt: " Also check the docs "})
 	if m.Content != "Also check the docs" {
 		t.Fatalf("prompt lost: %q", m.Content)
 	}
-	m, _ = msgfmt.ItemMessage(codex.Item{Type: "collabAgentToolCall", Status: "completed", Tool: "listAgents"})
+	m, _ = codexprojection.ItemMessage(codex.Item{Type: "collabAgentToolCall", Status: "completed", Tool: "listAgents"})
 	if len(m.Agents) != 0 || !strings.Contains(m.Content, "listAgents") {
 		t.Fatalf("call without agents lost its summary: %+v", m)
 	}
@@ -264,11 +264,11 @@ func TestCollapsedRunSummarizesLatestSubAgents(t *testing.T) {
 }
 
 func TestCodexSpawnPromptShownOnce(t *testing.T) {
-	m, _ := msgfmt.ItemMessage(codex.Item{Type: "collabAgentToolCall", Status: "completed", Tool: "spawnAgent", ReceiverThreadIDs: []string{"a"}, Prompt: "Review the parser"})
+	m, _ := codexprojection.ItemMessage(codex.Item{Type: "collabAgentToolCall", Status: "completed", Tool: "spawnAgent", ReceiverThreadIDs: []string{"a"}, Prompt: "Review the parser"})
 	if m.Agents[0].Name != "Review the parser" || m.Content != "" {
 		t.Fatalf("prompt shown twice: %+v", m)
 	}
-	m, _ = msgfmt.ItemMessage(codex.Item{Type: "collabAgentToolCall", Status: "completed", Tool: "spawnAgent", ReceiverThreadIDs: []string{"a"}, Prompt: "Review the parser\nFocus on edge cases"})
+	m, _ = codexprojection.ItemMessage(codex.Item{Type: "collabAgentToolCall", Status: "completed", Tool: "spawnAgent", ReceiverThreadIDs: []string{"a"}, Prompt: "Review the parser\nFocus on edge cases"})
 	if m.Agents[0].Name != "Review the parser" || !strings.Contains(m.Content, "Focus on edge cases") {
 		t.Fatalf("long prompt lost: %+v", m)
 	}

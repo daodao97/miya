@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 
 	agentusage "miya/internal/agent/quota"
-	"miya/internal/model"
+	"miya/internal/chat/model"
 	"miya/internal/remote"
 	"miya/internal/worktree"
 )

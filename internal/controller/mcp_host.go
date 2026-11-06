@@ -5,11 +5,11 @@ import (
 
 	"miya/internal/appmodel"
 	"miya/internal/automation"
+	"miya/internal/chat/model"
 	"miya/internal/delegation"
 	"miya/internal/delegation/coordinator"
 	"miya/internal/interaction"
 	mcpservice "miya/internal/mcp/service"
-	"miya/internal/model"
 )
 
 func (c *Controller) MCP() *mcpservice.Service { return mcpservice.New(mcpHost{c}) }

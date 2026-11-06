@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"miya/internal/model"
+	"miya/internal/chat/model"
 )
 
 func TaskStatusLabel(t model.Thread, task model.ThreadTask, waitingApproval bool) string {

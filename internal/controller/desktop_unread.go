@@ -7,7 +7,7 @@ import (
 
 	"miya/internal/appdir"
 	"miya/internal/appmodel"
-	"miya/internal/model"
+	"miya/internal/chat/model"
 	"miya/internal/notification"
 	"miya/internal/remote"
 	"miya/internal/uiruntime"

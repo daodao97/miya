@@ -5,9 +5,9 @@
 package manager
 
 import (
+	"miya/internal/chat/model"
 	"miya/internal/memory"
 	"miya/internal/memory/extractor"
-	"miya/internal/model"
 )
 
 // Host is what the manager needs from the controller that owns the

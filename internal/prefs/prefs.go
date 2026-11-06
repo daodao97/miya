@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"miya/internal/appdir"
-	"miya/internal/model"
+	"miya/internal/chat/model"
 )
 
 func SettingsPath() string { return appdir.File("quickgui-settings.json") }

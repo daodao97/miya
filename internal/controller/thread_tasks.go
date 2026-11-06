@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"miya/internal/model"
+	"miya/internal/chat/model"
 )
 
 func (c *Controller) TaskWaitingApproval(t model.Thread) bool {

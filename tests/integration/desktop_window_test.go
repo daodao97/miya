@@ -10,9 +10,9 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	codex "miya/internal/agent/codex/native"
+	"miya/internal/chat/model"
 	"miya/internal/desktop"
 	"miya/internal/mobile"
-	"miya/internal/model"
 	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/remote"
 )

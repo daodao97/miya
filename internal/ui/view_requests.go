@@ -6,9 +6,9 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	msgfmt "miya/internal/chat/presentation"
 	"miya/internal/interaction"
 	mcpaccess "miya/internal/mcp/access"
-	"miya/internal/msgfmt"
 	"miya/internal/textutil"
 	"miya/internal/widgets"
 )

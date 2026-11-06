@@ -16,14 +16,14 @@ import (
 	codex "miya/internal/agent/codex/native"
 	"miya/internal/appdir"
 	"miya/internal/appmodel"
+	threadlist "miya/internal/chat/history"
+	"miya/internal/chat/model"
+	"miya/internal/chat/subagent"
 	"miya/internal/controller"
 	dg "miya/internal/delegation"
 	"miya/internal/delegation/coordinator"
 	mcpproto "miya/internal/mcp/protocol"
-	"miya/internal/model"
-	"miya/internal/subagent"
 	"miya/internal/svcproto"
-	"miya/internal/threadlist"
 )
 
 func collaborationUserCall(t *testing.T, f *serviceFixture, operation, from string, args map[string]any) (map[string]any, error) {
@@ -179,10 +179,10 @@ func TestCollaborationNativeErrorClassificationDoesNotAssumeNoSideEffect(t *test
 
 func TestCollaborationCodexResultsUseNativeFinalAnswerPhase(t *testing.T) {
 	result := coordinator.NativeResult([]model.Message{
-		{Role: "assistant", Content: "earlier commentary", Item: &codex.Item{Phase: "commentary"}},
-		{Role: "assistant", Content: "fixed final", Item: &codex.Item{Phase: "final_answer"}},
-		{Role: "assistant", Content: "late commentary", Item: &codex.Item{Phase: "commentary"}},
-		{Role: "assistant", Content: "", Item: &codex.Item{Phase: "final_answer"}},
+		{Role: "assistant", Content: "earlier commentary", Item: &model.Activity{Phase: "commentary"}},
+		{Role: "assistant", Content: "fixed final", Item: &model.Activity{Phase: "final_answer"}},
+		{Role: "assistant", Content: "late commentary", Item: &model.Activity{Phase: "commentary"}},
+		{Role: "assistant", Content: "", Item: &model.Activity{Phase: "final_answer"}},
 	}, true)
 	if result.Text != "fixed final" {
 		t.Fatalf("native final phase lost: %+v", result)

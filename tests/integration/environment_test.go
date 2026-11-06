@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"runtime"
 
+	"miya/internal/agent/integrations"
 	"miya/internal/controller"
 	desktopui "miya/internal/ui"
 )
@@ -41,6 +42,7 @@ func init() {
 		}
 	}
 	desktopui.ConfigureEnvironment(desktopui.Environment{
+		Quotas:          integrations.Quotas,
 		NewWindow:       func() desktopui.Host { return controller.NewWindowController() },
 		NewLocal:        func() desktopui.Host { return controller.NewLocalWindowController() },
 		NewMirror:       func() desktopui.Host { return controller.NewMirrorController() },

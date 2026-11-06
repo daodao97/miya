@@ -10,7 +10,7 @@ import (
 	"miya/internal/agent/account"
 	agentmeta "miya/internal/agent/catalog"
 	"miya/internal/appmodel"
-	"miya/internal/model"
+	"miya/internal/chat/model"
 	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/remote"
 )

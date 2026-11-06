@@ -8,7 +8,8 @@ import (
 
 	"miya/internal/agent/claude/native/transcript"
 	"miya/internal/appmodel"
-	"miya/internal/model"
+	"miya/internal/chat/model"
+	chattext "miya/internal/chat/text"
 	"miya/internal/uiruntime"
 )
 
@@ -20,23 +21,23 @@ func TestClaudeReferencePromptTitles(t *testing.T) {
 		{"reference only", mention, "本机中安装了 Alma 看看他有那些好的设计实现值得吸纳"},
 		{"request after reference", mention + "\n参考这个优化抽屉交互", "参考这个优化抽屉交互"},
 		{"multiple leading references", "  " + mention + "，" + other + "\n比较两种抽屉布局", "比较两种抽屉布局"},
-		{"reference labels only", mention + "\n" + other, transcript.ClippedTitle("本机中安装了 Alma 看看他有那些好的设计实现值得吸纳 抽屉 [布局] 调整")},
+		{"reference labels only", mention + "\n" + other, chattext.ClippedTitle("本机中安装了 Alma 看看他有那些好的设计实现值得吸纳 抽屉 [布局] 调整")},
 		{"inline reference", "检查 " + other + " 的动画", "检查 抽屉 [布局] 调整 的动画"},
 		{"escaped title", other, "抽屉 [布局] 调整"},
 		{"empty label", model.ReferenceText(ref, ""), "Referenced conversation"},
 		{"command arguments", "<command-name>/review</command-name><command-args>" + other + " 的布局</command-args>", "/review 抽屉 [布局] 调整 的布局"},
-		{"literal example", "`" + other + "`", transcript.ClippedTitle("`" + other + "`")},
-		{"escaped example", `\` + other, transcript.ClippedTitle(`\` + other)},
+		{"literal example", "`" + other + "`", chattext.ClippedTitle("`" + other + "`")},
+		{"escaped example", `\` + other, chattext.ClippedTitle(`\` + other)},
 		{"ordinary link", "看看 [参考](https://example.com)", "看看 [参考](https://example.com)"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := transcript.PromptTitle(tc.prompt); got != tc.want {
+			if got := chattext.PromptTitle(tc.prompt); got != tc.want {
 				t.Fatalf("title=%q; want %q", got, tc.want)
 			}
 		})
 	}
 	snapshots, _ := json.Marshal([]model.ReferenceSnapshot{{Ref: ref, Title: "本机中安装了 Alma 看看他有那些好的设计实现值得吸纳", Context: "不应进入标题的上下文"}})
-	if got := transcript.PromptTitle(mention + model.ContextEnvelopeOpen + string(snapshots) + model.ContextEnvelopeClose); got != "本机中安装了 Alma 看看他有那些好的设计实现值得吸纳" {
+	if got := chattext.PromptTitle(mention + model.ContextEnvelopeOpen + string(snapshots) + model.ContextEnvelopeClose); got != "本机中安装了 Alma 看看他有那些好的设计实现值得吸纳" {
 		t.Fatalf("context envelope entered the title: %q", got)
 	}
 }
@@ -57,7 +58,7 @@ func TestClaudeReferenceSessionTitlePriorityAndRefresh(t *testing.T) {
 		t.Fatal(err)
 	}
 	at := info.ModTime().UnixMilli()
-	c.SetThreads([]model.Thread{{ID: 1, Agent: appmodel.AgentClaude, ServerID: "referenced", Title: transcript.ClippedTitle(prompt), LastActivityAt: at}})
+	c.SetThreads([]model.Thread{{ID: 1, Agent: appmodel.AgentClaude, ServerID: "referenced", Title: chattext.ClippedTitle(prompt), LastActivityAt: at}})
 	c.LoadClaudeSessionsSync()
 	thread := c.ThreadWithID(1)
 	if thread.Title != "优化抽屉布局" || thread.LastActivityAt != at {

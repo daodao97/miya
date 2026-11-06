@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
+	"miya/internal/chat/model"
+	msgfmt "miya/internal/chat/presentation"
 	mcpproto "miya/internal/mcp/protocol"
-	"miya/internal/model"
-	"miya/internal/msgfmt"
 	"miya/internal/textutil"
 )
 

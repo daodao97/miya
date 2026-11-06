@@ -9,7 +9,7 @@ import (
 
 	claude "miya/internal/agent/claude/native"
 	"miya/internal/appmodel"
-	"miya/internal/model"
+	"miya/internal/chat/model"
 	phoneproto "miya/internal/phone/protocol"
 )
 

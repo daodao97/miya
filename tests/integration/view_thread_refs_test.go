@@ -11,10 +11,10 @@ import (
 	"github.com/egoist/mygo/ui/richtext"
 
 	"miya/internal/appmodel"
+	"miya/internal/chat/model"
+	msgfmt "miya/internal/chat/presentation"
+	conversation "miya/internal/chat/view"
 	"miya/internal/controller"
-	"miya/internal/conversation"
-	"miya/internal/model"
-	"miya/internal/msgfmt"
 )
 
 func TestInlineThreadReferencesKeepTheirPosition(t *testing.T) {

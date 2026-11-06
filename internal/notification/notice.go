@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"miya/internal/model"
+	"miya/internal/chat/model"
 	"miya/locales"
 )
 

@@ -9,14 +9,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"miya/internal/appdir"
-	"miya/internal/model"
-	"miya/internal/textutil"
-	"miya/locales"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"miya/internal/appdir"
+	"miya/internal/chat/model"
+	"miya/internal/textutil"
+	"miya/locales"
 )
 
 // An automation starts a conversation in a project on a schedule, with the

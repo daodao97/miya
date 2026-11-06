@@ -6,7 +6,7 @@ import (
 
 	"github.com/egoist/mygo"
 
-	"miya/internal/model"
+	"miya/internal/chat/model"
 	"miya/internal/notification"
 	"miya/internal/remote"
 	"miya/internal/uiruntime"

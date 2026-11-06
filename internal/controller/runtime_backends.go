@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"miya/internal/async"
-	"miya/internal/model"
+	"miya/internal/chat/model"
 	"miya/internal/runtime/tracker"
 	"miya/internal/svcproto"
 )

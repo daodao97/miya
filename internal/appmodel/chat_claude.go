@@ -5,8 +5,8 @@ import (
 	"time"
 
 	agentmeta "miya/internal/agent/catalog"
-	"miya/internal/model"
-	"miya/internal/msgfmt"
+	"miya/internal/chat/model"
+	msgfmt "miya/internal/chat/presentation"
 )
 
 // stalledHint tells that Claude Code has sent nothing for a while. A tool

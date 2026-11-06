@@ -12,8 +12,8 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"miya/internal/appmodel"
+	"miya/internal/chat/model"
 	"miya/internal/mobile"
-	"miya/internal/model"
 )
 
 func TestPhoneFileReferencesSearchProject(t *testing.T) {

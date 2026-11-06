@@ -3,8 +3,8 @@ package codex
 import (
 	"miya/internal/agent"
 	native "miya/internal/agent/codex/native"
+	"miya/internal/chat/model"
 	"miya/internal/interaction"
-	"miya/internal/model"
 )
 
 // State is a read of the workspace's current native connection and selection.

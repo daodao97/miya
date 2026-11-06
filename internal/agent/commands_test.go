@@ -3,7 +3,7 @@ package agent
 import (
 	"testing"
 
-	"miya/internal/model"
+	"miya/internal/chat/model"
 )
 
 func TestCommandCatalogMergesWithoutChangingCache(t *testing.T) {

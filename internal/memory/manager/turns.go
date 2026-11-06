@@ -10,8 +10,8 @@ import (
 	"unicode/utf8"
 
 	claude "miya/internal/agent/claude/native"
+	"miya/internal/chat/model"
 	"miya/internal/memory"
-	"miya/internal/model"
 )
 
 type Turn struct {

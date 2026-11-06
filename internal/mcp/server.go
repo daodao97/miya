@@ -16,10 +16,10 @@ import (
 	"time"
 
 	"miya/internal/automation"
+	"miya/internal/chat/model"
+	"miya/internal/chat/subagent"
 	dg "miya/internal/delegation"
 	mcpproto "miya/internal/mcp/protocol"
-	"miya/internal/model"
-	"miya/internal/subagent"
 	"miya/internal/textutil"
 )
 

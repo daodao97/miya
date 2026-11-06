@@ -7,8 +7,8 @@ import (
 	"strings"
 	"unicode"
 
-	codex "miya/internal/agent/codex/native"
-	"miya/internal/model"
+	"miya/internal/chat/model"
+	interaction "miya/internal/interaction"
 	"miya/internal/textutil"
 )
 
@@ -158,7 +158,7 @@ func Task(t model.Thread) string {
 	return noticePlainText(tr("Task: ") + title)
 }
 
-func Approval(t model.Thread, a codex.Approval) Notice {
+func Approval(t model.Thread, a interaction.Request) Notice {
 	n := Notice{Thread: strconv.Itoa(t.ID), Title: tr("Miya · Confirmation needed")}
 	switch a.Method {
 	case "item/tool/requestUserInput":

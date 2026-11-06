@@ -4,12 +4,13 @@ import (
 	"context"
 
 	"miya/internal/agent"
+	"miya/internal/agent/quota"
 	"miya/internal/appmodel"
 	"miya/internal/automation"
-	"miya/internal/conversation"
+	"miya/internal/chat/model"
+	conversation "miya/internal/chat/view"
 	"miya/internal/interaction"
 	"miya/internal/memory/manager"
-	"miya/internal/model"
 	"miya/internal/runtime/tracker"
 	"miya/internal/svcproto"
 )
@@ -86,6 +87,7 @@ type Host interface {
 
 // Environment supplies controller creation at the executable's composition root.
 type Environment struct {
+	Quotas          func() *quota.Service
 	NewWindow       func() Host
 	NewLocal        func() Host
 	NewMirror       func() Host
@@ -95,3 +97,10 @@ type Environment struct {
 var environment Environment
 
 func ConfigureEnvironment(e Environment) { environment = e }
+
+func quotaService() *quota.Service {
+	if environment.Quotas != nil {
+		return environment.Quotas()
+	}
+	return quota.NewService()
+}

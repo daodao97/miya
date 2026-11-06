@@ -1,9 +1,10 @@
 package notification
 
 import (
-	"miya/internal/model"
 	"testing"
 	"time"
+
+	"miya/internal/chat/model"
 )
 
 func TestCompletionNoticeTransitions(t *testing.T) {

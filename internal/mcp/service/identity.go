@@ -5,9 +5,9 @@ import (
 	"errors"
 	"reflect"
 
-	"miya/internal/agent/presentation"
+	"miya/internal/chat/model"
+	"miya/internal/chat/presentation"
 	mcpproto "miya/internal/mcp/protocol"
-	"miya/internal/model"
 )
 
 func (api *Service) Caller(tool string) (model.Thread, bool) {

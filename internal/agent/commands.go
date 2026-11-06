@@ -4,8 +4,8 @@ import (
 	"strings"
 
 	agentmeta "miya/internal/agent/catalog"
-	"miya/internal/composer"
-	"miya/internal/model"
+	"miya/internal/chat/composer"
+	"miya/internal/chat/model"
 )
 
 // CommandCatalog can be read without I/O (load=false), e.g. while styling a draft.

@@ -10,8 +10,8 @@ import (
 	"miya/internal/appmodel"
 	"miya/internal/async"
 	"miya/internal/automation"
-	"miya/internal/model"
-	"miya/internal/msgfmt"
+	"miya/internal/chat/model"
+	msgfmt "miya/internal/chat/presentation"
 	"miya/internal/notification"
 	"miya/internal/textutil"
 )

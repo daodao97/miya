@@ -14,7 +14,7 @@ import (
 
 	claude "miya/internal/agent/claude/native"
 	codex "miya/internal/agent/codex/native"
-	"miya/internal/model"
+	"miya/internal/chat/model"
 	"miya/internal/textutil"
 )
 

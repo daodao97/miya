@@ -1,10 +1,11 @@
 package automation
 
 import (
-	"miya/internal/model"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"miya/internal/chat/model"
 )
 
 func atLocal(s string) time.Time {

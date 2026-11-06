@@ -7,10 +7,10 @@ import (
 	"miya/internal/agent"
 	agentmeta "miya/internal/agent/catalog"
 	codex "miya/internal/agent/codex/native"
-	"miya/internal/composer"
+	"miya/internal/chat/composer"
+	"miya/internal/chat/model"
+	msgfmt "miya/internal/chat/presentation"
 	"miya/internal/interaction"
-	"miya/internal/model"
-	"miya/internal/msgfmt"
 	"miya/internal/prefs"
 	"miya/internal/uiruntime"
 )

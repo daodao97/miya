@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"miya/internal/chat/model"
 	"miya/internal/fsutil"
-	"miya/internal/model"
 	phonecache "miya/internal/phone/cache"
 	"miya/internal/remote"
 	"miya/internal/svcproto"

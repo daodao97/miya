@@ -3,7 +3,7 @@ package controller
 import (
 	"miya/internal/agent"
 	"miya/internal/appmodel"
-	"miya/internal/model"
+	"miya/internal/chat/model"
 	"miya/internal/svcproto"
 )
 

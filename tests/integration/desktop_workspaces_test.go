@@ -16,8 +16,8 @@ import (
 
 	"miya/internal/appdir"
 	"miya/internal/appmodel"
+	"miya/internal/chat/model"
 	"miya/internal/controller"
-	"miya/internal/model"
 	"miya/internal/remote"
 	"miya/internal/svcproto"
 	desktopui "miya/internal/ui"
