@@ -395,3 +395,13 @@ var (
 	runtimeKey           = tracker.KeyOf
 	runtimeResult        = tracker.Result
 )
+
+// Moved to internal/phone.
+type (
+	desktopFileServer = phone.DesktopFileServer
+	fileProject       = phone.FileProject
+)
+
+var (
+	projectFileID = phone.ProjectFileID
+)
