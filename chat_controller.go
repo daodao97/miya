@@ -2,13 +2,11 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"mime"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -25,6 +23,7 @@ import (
 	"miya/internal/model"
 	"miya/internal/notification"
 	"miya/internal/textutil"
+	"miya/internal/threadlist"
 	"miya/locales"
 )
 
@@ -145,10 +144,6 @@ type chatController struct {
 	setRevision         func(int)
 }
 
-type threadListCache struct {
-	Projects map[string][]Thread `json:"projects"`
-}
-
 const (
 	threadPageSize    = 20
 	maxVisibleThreads = 200
@@ -245,110 +240,11 @@ func newChatController() *chatController {
 	return c
 }
 
-func threadListCachePath() string { return appdir.File("quickgui-thread-cache.json") }
-
-func loadThreadListCache() map[string][]Thread {
-	path := threadListCachePath()
-	if path == "" {
-		return map[string][]Thread{}
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return map[string][]Thread{}
-	}
-	var cache threadListCache
-	if json.Unmarshal(data, &cache) != nil || cache.Projects == nil {
-		return map[string][]Thread{}
-	}
-	// Older caches persisted Resumed, but a Codex session belongs to the
-	// app-server process that loaded it, not to the stored conversation.
-	for _, threads := range cache.Projects {
-		for i := range threads {
-			resetCodexSession(&threads[i])
-		}
-	}
-	return cache.Projects
-}
-
-// persistThreadListCache writes the sidebar's cache; tests replace it.
-var persistThreadListCache = writeThreadListCache
-
-// threadMeta is what the sidebar's cache keeps of a conversation.
-type threadMeta struct {
-	MemoryDisabled                              bool
-	ID                                          int
-	ServerID, Title, Agent, Project, Age        string
-	LastActivityAt                              int64
-	Resumed                                     bool
-	LaunchModel, LaunchEffort, PermissionPolicy string
-}
-
-func threadMetaOf(t Thread) threadMeta {
-	return threadMeta{MemoryDisabled: t.MemoryDisabled, ID: t.ID, ServerID: t.ServerID, Title: t.Title, Agent: t.Agent, Project: t.Project, Age: t.Age, LastActivityAt: t.LastActivityAt, Resumed: t.Resumed, LaunchModel: t.LaunchModel, LaunchEffort: t.LaunchEffort, PermissionPolicy: t.PermissionPolicy}
-}
-
-func writeThreadListCache(projects map[string][]Thread) {
-	if projects == nil {
-		return
-	}
-	path := threadListCachePath()
-	if path == "" {
-		return
-	}
-	// The sidebar only needs metadata. Never persist message bodies or tool output.
-	metadata := make(map[string][]Thread, len(projects))
-	for project, threads := range projects {
-		for _, thread := range threads {
-			metadata[project] = append(metadata[project], Thread{
-				MemoryDisabled: thread.MemoryDisabled,
-				ID:             thread.ID, ServerID: thread.ServerID, Title: thread.Title, Agent: thread.Agent,
-				Resumed: model.ThreadAgent(thread) != agentCodex && thread.Resumed,
-				Project: thread.Project, Age: thread.Age, LastActivityAt: thread.LastActivityAt,
-				LaunchModel: thread.LaunchModel, LaunchEffort: thread.LaunchEffort, PermissionPolicy: thread.PermissionPolicy,
-			})
-		}
-	}
-	data, err := json.Marshal(threadListCache{Projects: metadata})
-	if err != nil {
-		return
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-		return
-	}
-	_ = os.WriteFile(path, data, 0600)
-}
-
 func (c *chatController) selectedPermissionPolicy() string {
 	if c.permissionPolicy == nil {
 		return "on-request"
 	}
 	return normalizePermissionPolicy(c.permissionPolicy())
-}
-
-func loadProjects(current string) []Project {
-	seen := map[string]bool{}
-	projects := []Project{}
-	add := func(path string) {
-		path, _ = filepath.Abs(path)
-		if path == "" || seen[path] {
-			return
-		}
-		seen[path] = true
-		projects = append(projects, Project{Name: filepath.Base(path), Path: path})
-	}
-	home, err := os.UserHomeDir()
-	if err == nil {
-		if data, err := os.ReadFile(filepath.Join(home, ".codex", "config.toml")); err == nil {
-			re := regexp.MustCompile(`(?m)^\[projects\."([^"]+)"\]`)
-			for _, match := range re.FindAllStringSubmatch(string(data), -1) {
-				if len(match) > 1 {
-					add(match[1])
-				}
-			}
-		}
-	}
-	add(current)
-	return projects
 }
 
 func (c *chatController) rememberProject(path string) {
@@ -419,7 +315,7 @@ func (c *chatController) removeThreadLocal(id int, serverID string) {
 	if project != c.cwd && c.revision != nil {
 		c.setRevision(c.revision() + 1)
 	}
-	persistThreadListCache(c.projectCache)
+	threadlist.Persist(c.projectCache)
 	c.refreshProjectOrder()
 }
 
@@ -488,7 +384,7 @@ func (c *chatController) removeProject(path string, deleteConfig bool) {
 	}
 	c.setProjects(projects)
 	delete(c.projectCache, path)
-	persistThreadListCache(c.projectCache)
+	threadlist.Persist(c.projectCache)
 	if !deleteConfig {
 		return
 	}
@@ -622,7 +518,7 @@ func (c *chatController) update(id int, fn func(*Thread)) {
 			// cache only when what it keeps changed, not for every delta.
 			if threadMetaOf(items[i]) != before {
 				c.refreshProjectOrder()
-				persistThreadListCache(c.projectCache)
+				threadlist.Persist(c.projectCache)
 			}
 			if c.revision != nil {
 				c.setRevision(c.revision() + 1)
@@ -667,7 +563,7 @@ func (c *chatController) update(id int, fn func(*Thread)) {
 			c.recordDesktopCompletion(old, items[i])
 			if threadMetaOf(items[i]) != threadMetaOf(old) {
 				c.refreshProjectOrder()
-				persistThreadListCache(c.projectCache)
+				threadlist.Persist(c.projectCache)
 			}
 			if c.revision != nil {
 				c.setRevision(c.revision() + 1)
@@ -867,7 +763,7 @@ func (c *chatController) loadThreadList(ctx context.Context, client *codex.Clien
 			if received == len(projectPaths) {
 				c.refreshProjectOrder()
 			}
-			persistThreadListCache(c.projectCache)
+			threadlist.Persist(c.projectCache)
 			// Any successful project means the blocking loading state is over.
 			if result.err == nil || len(result.data) > 0 {
 				c.setHistoryStatus("")

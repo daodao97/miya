@@ -1,9 +1,11 @@
 package main
 
 import (
-	"miya/internal/model"
 	"path/filepath"
 	"sort"
+
+	"miya/internal/model"
+	"miya/internal/threadlist"
 )
 
 // Claude Code keeps each session as JSON lines under
@@ -68,7 +70,7 @@ func (c *chatController) loadClaudeSessionsAt(cwd string) {
 				c.projectCache = map[string][]Thread{}
 			}
 			c.projectCache[cwd] = append([]Thread(nil), items...)
-			persistThreadListCache(c.projectCache)
+			threadlist.Persist(c.projectCache)
 			c.refreshProjectOrder()
 		})
 	}

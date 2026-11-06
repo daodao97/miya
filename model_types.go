@@ -16,6 +16,7 @@ import (
 	"miya/internal/phoneapi"
 	"miya/internal/prefs"
 	"miya/internal/svcproto"
+	"miya/internal/threadlist"
 )
 
 // The conversation data lives in internal/model. These aliases keep
@@ -363,4 +364,17 @@ var (
 // Moved to internal/model.
 var (
 	resetCodexSession = model.ResetCodexSession
+)
+
+// Moved to internal/threadlist.
+type (
+	threadListCache = threadlist.Cache
+)
+
+var (
+	loadProjects         = threadlist.LoadProjects
+	loadThreadListCache  = threadlist.Load
+	threadListCachePath  = threadlist.CachePath
+	threadMetaOf         = threadlist.MetaOf
+	writeThreadListCache = threadlist.Write
 )

@@ -5,15 +5,16 @@ import (
 	"testing"
 
 	"miya/internal/claude"
+	"miya/internal/threadlist"
 )
 
 // Streamed text must not write the sidebar's cache on the UI thread for
 // every delta, which made replies show in bursts.
 func TestStreamingDeltasDoNotRewriteThreadCache(t *testing.T) {
 	writes := 0
-	old := persistThreadListCache
-	persistThreadListCache = func(map[string][]Thread) { writes++ }
-	t.Cleanup(func() { persistThreadListCache = old })
+	old := threadlist.Persist
+	threadlist.Persist = func(map[string][]Thread) { writes++ }
+	t.Cleanup(func() { threadlist.Persist = old })
 
 	c := testController()
 	c.cwd = "/work/demo"
