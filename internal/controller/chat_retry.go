@@ -32,7 +32,7 @@ func (c *Controller) RetryResponse(req appmodel.RetryRequest) error {
 			continue
 		}
 		if msgfmt.FailedAfterOutput(t, i) {
-			if !BackendOf(t).Ready(c) {
+			if !c.BackendOf(t).Ready() {
 				return fmt.Errorf("Unable to retry. Check the connection or agent settings.")
 			}
 			if c.Submit(model.SendRequest{ThreadID: t.ID, Text: msgfmt.RetryContinuePrompt, KeepSessionSettings: true, MemoryControl: true}) == 0 {
@@ -40,7 +40,7 @@ func (c *Controller) RetryResponse(req appmodel.RetryRequest) error {
 			}
 			return nil
 		}
-		if !c.CanRewind(t, m) || !BackendOf(t).Ready(c) {
+		if !c.CanRewind(t, m) || !c.BackendOf(t).Ready() {
 			return fmt.Errorf("Unable to retry. Check the connection or agent settings.")
 		}
 		text := msgfmt.MessagePrompt(m)

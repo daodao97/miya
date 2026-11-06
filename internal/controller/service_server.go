@@ -376,7 +376,7 @@ func (s *Service) Handle(p *SvcPeer, req svcproto.Request) (any, error) {
 		case "delete":
 			c.DeleteThread(t)
 		case "open":
-			BackendOf(t).Open(c, t)
+			c.BackendOf(t).Open(t)
 		case "resume":
 			c.Resume(t, nil)
 		}

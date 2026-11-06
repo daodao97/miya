@@ -198,17 +198,17 @@ func TestClaudeRewindForksAndResends(t *testing.T) {
 func TestCodexCanRewind(t *testing.T) {
 	c := testController()
 	c.Ready, c.SetReady = uiruntime.CreateSignal(false)
-	b := controller.CodexBackend{}
+	b := controller.CodexBackend{C: c}
 	th := model.Thread{ServerID: "t1"}
 	m := model.Message{Role: "user", TurnID: "turn1"}
-	if b.CanRewind(c, th, m) {
+	if b.CanRewind(th, m) {
 		t.Fatal("rewind without a connection")
 	}
 	c.SetReady(true)
-	if !b.CanRewind(c, th, m) {
+	if !b.CanRewind(th, m) {
 		t.Fatal("no rewind once connected")
 	}
-	if b.CanRewind(c, model.Thread{}, m) || b.CanRewind(c, th, model.Message{Role: "user"}) {
+	if b.CanRewind(model.Thread{}, m) || b.CanRewind(th, model.Message{Role: "user"}) {
 		t.Fatal("rewind without a thread or a turn")
 	}
 }

@@ -92,7 +92,7 @@ func (c *Controller) SteerQueued(threadID, queuedID int) {
 		}
 		req := q.SendRequest
 		req.ThreadID, req.Steer = threadID, true
-		if BackendOf(t).Steer(c, t, req) {
+		if c.BackendOf(t).Steer(t, req) {
 			c.RemoveQueued(threadID, queuedID)
 		}
 		return

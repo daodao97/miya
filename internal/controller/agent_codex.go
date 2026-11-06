@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"miya/internal/agent"
+
 	"miya/internal/appmodel"
 	"miya/internal/codex"
 	"miya/internal/composer"
@@ -15,7 +17,7 @@ import (
 )
 
 // codexBackend talks to the local Codex app-server.
-type CodexBackend struct{}
+type CodexBackend struct{ C *Controller }
 
 func (c *Controller) resetCodexSessions() {
 	for _, t := range c.AllThreads() {
@@ -43,56 +45,60 @@ func (c *Controller) resetCodexSessions() {
 	}
 }
 
-func (CodexBackend) ID() string { return appmodel.AgentCodex }
+func (b CodexBackend) ID() string { return appmodel.AgentCodex }
 
-func (CodexBackend) Name() string { return model.AgentName(model.AgentCodex) }
+func (b CodexBackend) Name() string { return model.AgentName(model.AgentCodex) }
 
-func (CodexBackend) Icon() appmodel.AgentIconSpec {
-	return appmodel.AgentIconSpec{PNG: appmodel.CodexAgentPNG}
+func (b CodexBackend) Icon() agent.Icon {
+	return agent.Icon{PNG: appmodel.CodexAgentPNG}
 }
 
-func (CodexBackend) Caps() agentCaps {
-	return agentCaps{Models: true, Effort: true, Quota: true, ThreadCommands: true}
+func (b CodexBackend) Caps() agent.Capabilities {
+	return agent.Capabilities{Models: true, Effort: true, Quota: true, ThreadCommands: true}
 }
 
 // Discover connects, which lists the workspace's threads once connected.
-func (CodexBackend) Discover(c *Controller) { c.Connect() }
+func (b CodexBackend) Discover() { c := b.C; c.Connect() }
 
-func (CodexBackend) Ready(c *Controller) bool { return c.Ready() }
+func (b CodexBackend) Ready() bool { c := b.C; return c.Ready() }
 
-func (CodexBackend) Problem(c *Controller) (string, bool) {
+func (b CodexBackend) Problem() (string, bool) {
+	c := b.C
 	if !c.Ready() {
 		return tr(c.Status()), true
 	}
 	return "", false
 }
 
-func (CodexBackend) Reconnect(c *Controller) { c.Connect() }
+func (b CodexBackend) Reconnect() { c := b.C; c.Connect() }
 
-func (CodexBackend) Open(c *Controller, t model.Thread) {
+func (b CodexBackend) Open(t model.Thread) {
+	c := b.C
 	if (!t.HistoryLoaded || t.ReadOnly) && t.ServerID != "" && !t.Loading && !t.Busy && c.Client != nil {
 		c.readHistory(t)
 	}
 }
 
-func (CodexBackend) Send(c *Controller, req model.SendRequest) int { return c.sendCodex(req) }
+func (b CodexBackend) Send(req model.SendRequest) int { c := b.C; return c.sendCodex(req) }
 
-func (CodexBackend) Stop(c *Controller, t model.Thread) {
+func (b CodexBackend) Stop(t model.Thread) {
+	c := b.C
 	// Without a turn yet, the run interrupts itself once turn/start returns.
 	if t.TurnID != "" {
 		c.interrupt(t)
 	}
 }
 
-func (CodexBackend) Archive(c *Controller, t model.Thread) { c.archiveCodexThread(t) }
+func (b CodexBackend) Archive(t model.Thread) { c := b.C; c.archiveCodexThread(t) }
 
-func (CodexBackend) Delete(c *Controller, t model.Thread) { c.deleteCodexThread(t) }
+func (b CodexBackend) Delete(t model.Thread) { c := b.C; c.deleteCodexThread(t) }
 
-func (CodexBackend) Suspend(*Controller, model.Thread) {}
+func (b CodexBackend) Suspend(model.Thread) {}
 
-func (CodexBackend) Owns(a codex.Approval) bool { return !claudeApproval(a) }
+func (b CodexBackend) Owns(a codex.Approval) bool { return !claudeApproval(a) }
 
-func (CodexBackend) Respond(c *Controller, a codex.Approval, result any) {
+func (b CodexBackend) Respond(a codex.Approval, result any) {
+	c := b.C
 	client := c.Client
 	c.removeRequest(a.ID)
 	if client == nil {
@@ -105,15 +111,17 @@ func (CodexBackend) Respond(c *Controller, a codex.Approval, result any) {
 	}()
 }
 
-func (CodexBackend) Settings() []AgentSetting { return nil }
+func (b CodexBackend) Settings() []agent.Setting { return nil }
 
 // Codex rewinds with thread/revert, which drops a turn and every later one
 // from the thread's history. Local file changes stay as they are.
-func (CodexBackend) CanRewind(c *Controller, t model.Thread, m model.Message) bool {
+func (b CodexBackend) CanRewind(t model.Thread, m model.Message) bool {
+	c := b.C
 	return m.TurnID != "" && t.ServerID != "" && c.Ready()
 }
 
-func (CodexBackend) Rewind(c *Controller, t model.Thread, m model.Message, text string) {
+func (b CodexBackend) Rewind(t model.Thread, m model.Message, text string) {
+	c := b.C
 	client, cwd, policy := c.Client, c.ThreadWorkspace(t.ID), c.permissionForThread(t)
 	parent := c.Ctx
 	if parent == nil {
@@ -138,7 +146,8 @@ func (CodexBackend) Rewind(c *Controller, t model.Thread, m model.Message, text 
 // Codex steers with turn/steer, which the running turn takes as input. The
 // user message shows at once and is matched as a sent one is; a steer Codex
 // refuses, as for a turn that just ended, goes to the queue or is sent.
-func (CodexBackend) Steer(c *Controller, t model.Thread, req model.SendRequest) bool {
+func (b CodexBackend) Steer(t model.Thread, req model.SendRequest) bool {
+	c := b.C
 	if t.TurnID == "" || t.ServerID == "" || !t.Resumed || c.Client == nil {
 		return false
 	}

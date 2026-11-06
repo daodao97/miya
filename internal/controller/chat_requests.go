@@ -74,7 +74,7 @@ func (c *Controller) Respond(a codex.Approval, result any) {
 		c.respondMiya(a, result)
 		return
 	}
-	ApprovalOwner(a).Respond(c, a, result)
+	c.ApprovalOwner(a).Respond(a, result)
 }
 
 // askUser shows a card in caller's conversation and returns its id and the

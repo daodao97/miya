@@ -3,111 +3,46 @@ package controller
 import (
 	"strings"
 
+	"miya/internal/agent"
+
 	"miya/internal/appmodel"
 	"miya/internal/codex"
 	"miya/internal/composer"
 	"miya/internal/model"
 	"miya/internal/msgfmt"
-	"miya/internal/runtime/tracker"
 	"miya/internal/svcproto"
 )
 
-// agentCaps says which shared controls apply to an agent's conversations.
-type agentCaps = appmodel.AgentCaps
-
-// agentSetting is a text setting an agent declares; the settings page shows
-// it without knowing the agent.
-type AgentSetting struct {
-	ID, Title, Help, Placeholder string
-	Value                        func(c *Controller) string
-	Save                         func(c *Controller, value string)
-	// Status returns a line under the field, and whether it is an error.
-	Status func(c *Controller) (string, bool)
+// Adapters returns integrations bound to this workspace. No adapter captures
+// another window's mutable state or shares it through a global registry.
+func (c *Controller) Adapters() []agent.Adapter {
+	return []agent.Adapter{CodexBackend{C: c}, claudeBackend{C: c}}
 }
 
-type agentBackend interface {
-	ID() string
-	Runtime(c *Controller, t model.Thread) tracker.SnapshotSource
-	Name() string
-	Icon() appmodel.AgentIconSpec
-	Caps() agentCaps
-
-	// Discover finds the workspace's conversations, as the app starts and
-	// as the workspace changes.
-	Discover(c *Controller)
-	// Ready reports whether a message can be sent now.
-	Ready(c *Controller) bool
-	// Problem is shown above the composer, with a Reconnect button when
-	// reconnect is true.
-	Problem(c *Controller) (message string, reconnect bool)
-	Reconnect(c *Controller)
-
-	// Open loads a conversation's history as it is selected.
-	Open(c *Controller, t model.Thread)
-	// Send starts a turn of req, which submit checked, and returns the
-	// conversation running it.
-	Send(c *Controller, req model.SendRequest) int
-	Stop(c *Controller, t model.Thread)
-	Archive(c *Controller, t model.Thread)
-	Delete(c *Controller, t model.Thread)
-	// Suspend runs as the app leaves the conversation's workspace or quits.
-	Suspend(c *Controller, t model.Thread)
-
-	// Owns reports whether an approval came from this agent.
-	Owns(a codex.Approval) bool
-	Respond(c *Controller, a codex.Approval, result any)
-
-	Settings() []AgentSetting
-
-	// ModelChoices and EffortChoices are what the pickers offer, "" the
-	// agent's default; Model and Effort the current choices.
-	ModelChoices(c *Controller) []string
-	// ModelLabel is how the pickers show a model choice.
-	ModelLabel(c *Controller, v string) string
-	EffortChoices(c *Controller) []string
-	Model(c *Controller) string
-	Effort(c *Controller) string
-	SetModel(c *Controller, v string)
-	SetEffort(c *Controller, v string)
-
-	// CanRewind reports whether a user message can be edited and sent
-	// again; Rewind drops it and what followed from the agent's history,
-	// then calls finishRewind.
-	CanRewind(c *Controller, t model.Thread, m model.Message) bool
-	Rewind(c *Controller, t model.Thread, m model.Message, text string)
-
-	// Steer adds a message to the running turn of t; false when it cannot,
-	// and the message waits in the queue instead. A steer the agent refuses
-	// later goes to the queue too.
-	Steer(c *Controller, t model.Thread, req model.SendRequest) bool
-}
-
-// agentBackends lists the agents in the order the picker shows them; the
-// first is the default.
-var AgentBackends = []agentBackend{CodexBackend{}, claudeBackend{}}
-
-func BackendFor(id string) agentBackend {
-	for _, b := range AgentBackends {
+func (c *Controller) BackendFor(id string) agent.Adapter {
+	for _, b := range c.Adapters() {
 		if b.ID() == id {
 			return b
 		}
 	}
-	return AgentBackends[0]
+	return c.Adapters()[0]
 }
 
-func BackendOf(t model.Thread) agentBackend { return BackendFor(model.ThreadAgent(t)) }
+func (c *Controller) BackendOf(t model.Thread) agent.Adapter {
+	return c.BackendFor(model.ThreadAgent(t))
+}
 
 // agentStatus is an agent's state now, for features outside the controller.
 func (c *Controller) agentStatus(id string) model.AgentStatus {
-	b := BackendFor(id)
-	return model.AgentStatus{ID: b.ID(), Name: b.Name(), Ready: b.Ready(c), Model: b.Model(c), Effort: b.Effort(c),
-		ModelChoices: b.ModelChoices(c), EffortChoices: b.EffortChoices(c)}
+	b := c.BackendFor(id)
+	return model.AgentStatus{ID: b.ID(), Name: b.Name(), Ready: b.Ready(), Model: b.Model(), Effort: b.Effort(),
+		ModelChoices: b.ModelChoices(), EffortChoices: b.EffortChoices()}
 }
 
 // agentStatuses are every agent's states now, in agentBackends' order.
 func (c *Controller) agentStatuses() []model.AgentStatus {
 	var out []model.AgentStatus
-	for _, b := range AgentBackends {
+	for _, b := range c.Adapters() {
 		out = append(out, c.agentStatus(b.ID()))
 	}
 	return out
@@ -124,15 +59,15 @@ func (c *Controller) agentList() map[string]any {
 }
 
 // stopAgentRun asks a conversation's agent to stop its turn.
-func (c *Controller) stopAgentRun(t model.Thread) { BackendOf(t).Stop(c, t) }
+func (c *Controller) stopAgentRun(t model.Thread) { c.BackendOf(t).Stop(t) }
 
-func ApprovalOwner(a codex.Approval) agentBackend {
-	for _, b := range AgentBackends {
+func (c *Controller) ApprovalOwner(a codex.Approval) agent.Adapter {
+	for _, b := range c.Adapters() {
 		if b.Owns(a) {
 			return b
 		}
 	}
-	return AgentBackends[0]
+	return c.Adapters()[0]
 }
 
 // currentAgent is the open conversation's agent, or the one chosen for a
@@ -142,25 +77,25 @@ func (c *Controller) CurrentAgent() string {
 		return model.ThreadAgent(t)
 	}
 	if c.Agent != nil {
-		return BackendFor(c.Agent()).ID()
+		return c.BackendFor(c.Agent()).ID()
 	}
-	return AgentBackends[0].ID()
+	return c.Adapters()[0].ID()
 }
 
-func (c *Controller) CurrentBackend() agentBackend { return BackendFor(c.CurrentAgent()) }
+func (c *Controller) CurrentBackend() agent.Adapter { return c.BackendFor(c.CurrentAgent()) }
 
-func (c *Controller) BackendReady() bool { return c.CurrentBackend().Ready(c) }
+func (c *Controller) BackendReady() bool { return c.CurrentBackend().Ready() }
 
 func (c *Controller) discoverAll() {
-	for _, b := range AgentBackends {
-		b.Discover(c)
+	for _, b := range c.Adapters() {
+		b.Discover()
 	}
 }
 
 func claudeApproval(a codex.Approval) bool { return strings.Contains(string(a.ID), "claude:") }
 
 func (c *Controller) CanRewind(t model.Thread, m model.Message) bool {
-	return m.Role == "user" && !t.Busy && !t.Loading && !t.ReadOnly && BackendOf(t).CanRewind(c, t, m)
+	return m.Role == "user" && !t.Busy && !t.Loading && !t.ReadOnly && c.BackendOf(t).CanRewind(t, m)
 }
 
 // rewind sends an edited user message of the open conversation in place of
@@ -179,7 +114,7 @@ func (c *Controller) Rewind(threadID, messageID int, text string) {
 			}
 			if c.CanRewind(t, m) {
 				c.Update(t.ID, func(t *model.Thread) { t.Busy = true; t.Status = tr("Rewinding conversation…") })
-				BackendOf(t).Rewind(c, t, m, text)
+				c.BackendOf(t).Rewind(t, m, text)
 			}
 			return
 		}
@@ -352,28 +287,28 @@ func (c *Controller) SubmitExpanded(req model.SendRequest) int {
 		return c.enqueue(t.ID, req)
 	}
 	if t.Busy || t.Loading {
-		if req.Steer && t.Busy && !t.Loading && BackendOf(t).Steer(c, t, req) {
+		if req.Steer && t.Busy && !t.Loading && c.BackendOf(t).Steer(t, req) {
 			return t.ID
 		}
 		return c.enqueue(t.ID, req)
 	}
-	b := BackendOf(t)
+	b := c.BackendOf(t)
 	if t.ID == 0 {
-		b = BackendFor(req.Agent)
+		b = c.BackendFor(req.Agent)
 	}
-	if !b.Ready(c) {
+	if !b.Ready() {
 		return 0
 	}
 	if req.Policy == "" {
 		req.Policy = c.permissionForThread(t)
 	}
 	if req.Model == "" && !req.ExplicitSettings {
-		req.Model = b.Model(c)
+		req.Model = b.Model()
 	}
 	if req.Effort == "" && !req.ExplicitSettings {
-		req.Effort = b.Effort(c)
+		req.Effort = b.Effort()
 	}
-	return b.Send(c, req)
+	return b.Send(req)
 }
 
 // returnDraft gives back a message that could not be sent.
@@ -398,11 +333,4 @@ func (c *Controller) RestoreDraft(id int, text string, attachments []string) {
 	}
 }
 
-func registeredBackend(id string) bool {
-	for _, backend := range AgentBackends {
-		if backend.ID() == id {
-			return true
-		}
-	}
-	return false
-}
+func registeredBackend(id string) bool { return model.RegisteredBackend(id) }

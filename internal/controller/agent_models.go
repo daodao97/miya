@@ -11,38 +11,41 @@ import (
 	"miya/internal/uiruntime"
 )
 
-func (CodexBackend) ModelChoices(c *Controller) []string { return c.modelNames() }
+func (b CodexBackend) ModelChoices() []string { c := b.C; return c.modelNames() }
 
-func (CodexBackend) ModelLabel(_ *Controller, v string) string {
+func (b CodexBackend) ModelLabel(v string) string {
 	return textutil.FirstNonEmpty(v, tr("Default model"))
 }
 
-func (CodexBackend) EffortChoices(c *Controller) []string { return c.efforts() }
+func (b CodexBackend) EffortChoices() []string { c := b.C; return c.efforts() }
 
-func (CodexBackend) Model(c *Controller) string {
+func (b CodexBackend) Model() string {
+	c := b.C
 	if c.Model == nil {
 		return ""
 	}
 	return c.Model()
 }
 
-func (CodexBackend) Effort(c *Controller) string {
+func (b CodexBackend) Effort() string {
+	c := b.C
 	if c.Effort == nil {
 		return ""
 	}
 	return c.Effort()
 }
 
-func (CodexBackend) SetModel(c *Controller, v string) { c.SelectModel(v) }
+func (b CodexBackend) SetModel(v string) { c := b.C; c.SelectModel(v) }
 
-func (CodexBackend) SetEffort(c *Controller, v string) { c.setCodexEffort(v) }
+func (b CodexBackend) SetEffort(v string) { c := b.C; c.setCodexEffort(v) }
 
 // Claude Code takes a model's alias or full name and an effort level.
 var claudeModelChoices = []string{"", "claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"}
 
 var claudeEffortChoices = []string{"", "low", "medium", "high", "xhigh", "max"}
 
-func (claudeBackend) ModelChoices(c *Controller) []string {
+func (b claudeBackend) ModelChoices() []string {
+	c := b.C
 	out := append([]string(nil), claudeModelChoices...)
 	if m := c.ClaudeModel; m != "" && !slices.Contains(out, m) {
 		out = append(out, m)
@@ -51,7 +54,8 @@ func (claudeBackend) ModelChoices(c *Controller) []string {
 }
 
 // ModelLabel names the default by the model Claude Code last reported.
-func (claudeBackend) ModelLabel(c *Controller, v string) string {
+func (b claudeBackend) ModelLabel(v string) string {
+	c := b.C
 	if v != "" {
 		return claude.ModelName(v)
 	}
@@ -71,15 +75,15 @@ func (c *Controller) NoteClaudeModel(model string) {
 	uiruntime.Invalidate()
 }
 
-func (claudeBackend) EffortChoices(*Controller) []string { return claudeEffortChoices }
+func (b claudeBackend) EffortChoices() []string { return claudeEffortChoices }
 
-func (claudeBackend) Model(c *Controller) string { return c.ClaudeModel }
+func (b claudeBackend) Model() string { c := b.C; return c.ClaudeModel }
 
-func (claudeBackend) Effort(c *Controller) string { return c.ClaudeEffort }
+func (b claudeBackend) Effort() string { c := b.C; return c.ClaudeEffort }
 
-func (claudeBackend) SetModel(c *Controller, v string) { c.setClaudeModel(v) }
+func (b claudeBackend) SetModel(v string) { c := b.C; c.setClaudeModel(v) }
 
-func (claudeBackend) SetEffort(c *Controller, v string) { c.setClaudeEffort(v) }
+func (b claudeBackend) SetEffort(v string) { c := b.C; c.setClaudeEffort(v) }
 
 func (c *Controller) setClaudeModel(v string) {
 	c.ClaudeModel = v

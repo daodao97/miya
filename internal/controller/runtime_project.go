@@ -30,7 +30,7 @@ func (c *Controller) ProjectRuntimeServices(ctx context.Context, project string)
 			if manager.Store().Read(key).Epoch == "" && !thread.Busy && c.ClaudeRuns[thread.ID] == nil {
 				continue
 			}
-			manager.Register(key, BackendOf(thread).Runtime(c, thread))
+			manager.Register(key, c.BackendOf(thread).Runtime(thread))
 			out.keys = append(out.keys, key)
 		}
 		return out

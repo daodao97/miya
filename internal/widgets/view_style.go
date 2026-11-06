@@ -8,6 +8,8 @@ import (
 	"strings"
 	"sync"
 
+	"miya/internal/agent"
+
 	"github.com/egoist/mygo/ui"
 
 	"miya/internal/appmodel"
@@ -213,10 +215,10 @@ func WorkingLabel(c *ui.Context, symbol, s string) ui.Element {
 	return row
 }
 
-func AgentSpec(agent string) appmodel.AgentIconSpec {
-	spec := appmodel.AgentIconSpec{PNG: appmodel.CodexAgentPNG}
-	if agent == appmodel.AgentClaude {
-		spec = appmodel.AgentIconSpec{SVG: "claude-code", Color: "#c46b4d"}
+func AgentSpec(id string) agent.Icon {
+	spec := agent.Icon{PNG: appmodel.CodexAgentPNG}
+	if id == appmodel.AgentClaude {
+		spec = agent.Icon{SVG: "claude-code", Color: "#c46b4d"}
 	}
 	return spec
 }

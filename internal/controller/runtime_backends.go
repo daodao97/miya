@@ -14,7 +14,8 @@ import (
 	"miya/internal/textutil"
 )
 
-func (CodexBackend) Runtime(c *Controller, t model.Thread) tracker.SnapshotSource {
+func (b CodexBackend) Runtime(t model.Thread) tracker.SnapshotSource {
+	c := b.C
 	client := c.Client
 	caps := rt.Capabilities{Tasks: true, Snapshot: true, NativePID: true, SessionTag: true, RequiresHost: true}
 	if client == nil {
@@ -50,7 +51,8 @@ func (CodexBackend) Runtime(c *Controller, t model.Thread) tracker.SnapshotSourc
 	}}
 }
 
-func (claudeBackend) Runtime(c *Controller, t model.Thread) tracker.SnapshotSource {
+func (b claudeBackend) Runtime(t model.Thread) tracker.SnapshotSource {
+	c := b.C
 	client := c.ClaudeRuns[t.ID]
 	caps := rt.Capabilities{Tasks: true, Snapshot: true, SessionRoot: true, RequiresHost: true}
 	if client == nil {
@@ -84,7 +86,7 @@ func (c *Controller) noteRuntime(t model.Thread) {
 	if t.ServerID == "" || c.Remote != nil || c.Closed {
 		return
 	}
-	source := BackendOf(t).Runtime(c, t)
+	source := c.BackendOf(t).Runtime(t)
 	if source.Epoch == "" || source.Epoch == "disconnected" {
 		return
 	}
@@ -107,7 +109,7 @@ func (c *Controller) PrepareRuntime(ref model.ThreadRef, project string) (async.
 	if !target.Found {
 		return nil, errors.New("Conversation does not exist or is no longer in the selected project")
 	}
-	source := BackendOf(target.Thread).Runtime(c, target.Thread)
+	source := c.BackendOf(target.Thread).Runtime(target.Thread)
 	manager := c.Runtimes()
 	key := tracker.KeyOf(ref)
 	manager.Register(key, source)

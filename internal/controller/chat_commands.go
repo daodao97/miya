@@ -41,9 +41,9 @@ func (c *Controller) ThreadCommand(threadID int, agent, command, policy string) 
 		return c.CodexGoalCommand(threadmodel.SendRequest{ThreadID: threadID, Agent: appmodel.AgentCodex, Text: "/" + command, Policy: policy, Model: c.Model(), Effort: c.Effort()})
 	}
 	t := c.ThreadWithID(threadID)
-	b := BackendOf(t)
+	b := c.BackendOf(t)
 	if t.ID == 0 {
-		b = BackendFor(agent)
+		b = c.BackendFor(agent)
 	}
 	if command == "fast" || command == "fast on" || command == "fast off" {
 		if b.ID() != appmodel.AgentCodex {

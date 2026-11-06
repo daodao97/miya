@@ -118,7 +118,7 @@ func NewServiceWindow(workspace string, connect func() (*svcproto.Client, svcpro
 func NewMirrorController() *Controller {
 	c := &Controller{WindowState: appmodel.WindowState{ProjectCache: map[string][]model.Thread{}}, Mirror: &mirrorState{Messages: map[int][]model.Message{}, Drafts: map[int]string{}}}
 	c.Ctx, c.Cancel = context.WithCancel(context.Background())
-	c.Agent, c.SetAgent = uiruntime.CreateSignal(AgentBackends[0].ID())
+	c.Agent, c.SetAgent = uiruntime.CreateSignal(c.Adapters()[0].ID())
 	c.DraftPermission, c.SetDraftPermission = uiruntime.CreateSignal("")
 	c.Projects, c.SetProjects = uiruntime.CreateSignal([]model.Project{})
 	c.Threads, c.SetThreads = uiruntime.CreateSignal([]model.Thread{})

@@ -32,9 +32,9 @@ func TestClaudeRunUsesTheChosenModelAndEffort(t *testing.T) {
 	c := &controller.Controller{WindowState: appmodel.WindowState{Cwd: dir, Ctx: context.Background()}, ClaudeBinary: bin, ClaudeEnv: []string{"MIYA_OUT=" + out}, Run: d.push}
 	c.Threads, c.SetThreads = uiruntime.CreateSignal([]model.Thread{})
 	c.Approvals, c.SetApprovals = uiruntime.CreateSignal([]codex.Approval{})
-	b := controller.BackendFor(appmodel.AgentClaude)
-	b.SetModel(c, "opus")
-	b.SetEffort(c, "high")
+	b := c.BackendFor(appmodel.AgentClaude)
+	b.SetModel("opus")
+	b.SetEffort("high")
 	if prefs.Load("claudeModel") != "opus" || prefs.Load("claudeEffort") != "high" {
 		t.Fatal("choices not saved")
 	}
@@ -52,7 +52,7 @@ func TestClaudeRunUsesTheChosenModelAndEffort(t *testing.T) {
 	if !strings.Contains(args, "--model\nopus\n") || !strings.Contains(args, "--effort\nhigh\n") {
 		t.Fatalf("CLI arguments %q", args)
 	}
-	if got := b.ModelChoices(c); got[0] != "" || !strings.Contains(strings.Join(got, ","), "sonnet") {
+	if got := b.ModelChoices(); got[0] != "" || !strings.Contains(strings.Join(got, ","), "sonnet") {
 		t.Fatalf("choices %q", got)
 	}
 }
@@ -86,15 +86,15 @@ func TestComposerPicksClaudeModel(t *testing.T) {
 func TestClaudeDefaultModelFromInit(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	c := testController()
-	b := controller.BackendFor(appmodel.AgentClaude)
-	if b.ModelLabel(c, "") != "Default model" {
+	b := c.BackendFor(appmodel.AgentClaude)
+	if b.ModelLabel("") != "Default model" {
 		t.Fatal("label before any run")
 	}
 	c.NoteClaudeModel("claude-opus-5-5")
-	if got := b.ModelLabel(c, ""); got != "Default · Claude Opus 5.5" || prefs.Load("claudeDefaultModel") != "claude-opus-5-5" {
+	if got := b.ModelLabel(""); got != "Default · Claude Opus 5.5" || prefs.Load("claudeDefaultModel") != "claude-opus-5-5" {
 		t.Fatalf("label %q", got)
 	}
-	if b.ModelLabel(c, "opus") != "Opus (latest)" || b.ModelLabel(c, "my-model") != "my-model" {
+	if b.ModelLabel("opus") != "Opus (latest)" || b.ModelLabel("my-model") != "my-model" {
 		t.Fatal("alias labels")
 	}
 }

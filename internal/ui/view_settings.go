@@ -7,10 +7,11 @@ import (
 	"strings"
 	"time"
 
+	"miya/internal/agent"
+
 	"github.com/egoist/mygo/ui"
 
 	"miya/internal/account"
-	"miya/internal/appmodel"
 	"miya/internal/codex"
 	"miya/internal/textutil"
 	"miya/internal/widgets"
@@ -373,7 +374,7 @@ func (app *App) agentSettings(c *ui.Context) {
 }
 
 // agentSetting is one agent-declared setting: an input saved on demand.
-func (app *App) agentSetting(c *ui.Context, s appmodel.SettingControls) {
+func (app *App) agentSetting(c *ui.Context, s agent.Setting) {
 	ui.Column(c.Key("setting:" + s.ID)).FillWidth().Gap(10).Children(func() {
 		widgets.SettingLabel(c, s.Title, s.Help)
 		current := s.Value()

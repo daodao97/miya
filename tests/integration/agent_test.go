@@ -39,8 +39,9 @@ func TestViewsDoNotKnowAgents(t *testing.T) {
 }
 
 func TestAgentRegistry(t *testing.T) {
+	c := &controller.Controller{}
 	seen := map[string]bool{}
-	for _, b := range controller.AgentBackends {
+	for _, b := range c.Adapters() {
 		if b.ID() == "" || seen[b.ID()] || b.Name() == "" {
 			t.Fatalf("bad agent %q %q", b.ID(), b.Name())
 		}
@@ -54,11 +55,11 @@ func TestAgentRegistry(t *testing.T) {
 			}
 		}
 	}
-	if model.ThreadAgent(model.Thread{}) != appmodel.AgentCodex || controller.BackendFor("unknown").ID() != controller.AgentBackends[0].ID() {
+	if model.ThreadAgent(model.Thread{}) != appmodel.AgentCodex || c.BackendFor("unknown").ID() != c.Adapters()[0].ID() {
 		t.Fatal("defaults")
 	}
 	claudeID, _ := json.Marshal("claude:3:r1")
-	if controller.ApprovalOwner(codex.Approval{ID: claudeID}).ID() != appmodel.AgentClaude || controller.ApprovalOwner(codex.Approval{ID: json.RawMessage("7")}).ID() != appmodel.AgentCodex {
+	if c.ApprovalOwner(codex.Approval{ID: claudeID}).ID() != appmodel.AgentClaude || c.ApprovalOwner(codex.Approval{ID: json.RawMessage("7")}).ID() != appmodel.AgentCodex {
 		t.Fatal("approval routing")
 	}
 }
@@ -66,14 +67,15 @@ func TestAgentRegistry(t *testing.T) {
 // ThreadRef.Valid checks backends against model.Backends, which cannot see
 // agentBackends. Adding an adapter must add its ID there too.
 func TestModelBackendsMatchAgentBackends(t *testing.T) {
+	c := &controller.Controller{}
 	var ids []string
-	for _, b := range controller.AgentBackends {
+	for _, b := range c.Adapters() {
 		ids = append(ids, b.ID())
 	}
 	if strings.Join(ids, ",") != strings.Join(model.Backends, ",") {
 		t.Fatalf("model.Backends = %v, agentBackends = %v", model.Backends, ids)
 	}
-	if got, want := model.AgentName("unknown"), controller.BackendFor("unknown").Name(); got != want {
+	if got, want := model.AgentName("unknown"), c.BackendFor("unknown").Name(); got != want {
 		t.Fatalf("model.AgentName falls back to %q, backendFor to %q", got, want)
 	}
 }

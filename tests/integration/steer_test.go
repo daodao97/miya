@@ -71,7 +71,7 @@ func TestSteerFallsBackToTheQueue(t *testing.T) {
 		t.Fatalf("not queued: %+v", th)
 	}
 	// Codex cannot steer a thread without a running turn either.
-	if (controller.CodexBackend{}).Steer(c, model.Thread{ID: 1, ServerID: "t1", Resumed: true}, model.SendRequest{Text: "x"}) {
+	if (controller.CodexBackend{C: c}).Steer(model.Thread{ID: 1, ServerID: "t1", Resumed: true}, model.SendRequest{Text: "x"}) {
 		t.Fatal("Codex steered without a turn")
 	}
 }

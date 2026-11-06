@@ -59,7 +59,7 @@ func threadPacket(t model.Thread, messages []model.Message) string {
 	title := appmodel.ThreadRefTitle(t)
 	var b strings.Builder
 	fmt.Fprintf(&b, tr("Session ID: %s\nBackend: %s\n"), t.ServerID, model.ThreadAgent(t))
-	fmt.Fprintf(&b, tr("The following context from conversation \"%s\" (%s) was compiled by Miya from its history for reference.\n"), title, BackendOf(t).Name())
+	fmt.Fprintf(&b, tr("The following context from conversation \"%s\" (%s) was compiled by Miya from its history for reference.\n"), title, model.AgentName(model.ThreadAgent(t)))
 	var requests []string
 	var turns [][]model.Message
 	for _, m := range messages {

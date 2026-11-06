@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"miya/internal/agent"
+
 	"miya/internal/appmodel"
 	"miya/internal/claude"
 	"miya/internal/claude/transcript"
@@ -16,65 +18,71 @@ import (
 
 // claudeBackend runs the Claude Code CLI over stream-json, one process per
 // turn, and reads its native sessions.
-type claudeBackend struct{}
+type claudeBackend struct{ C *Controller }
 
-func (claudeBackend) ID() string { return appmodel.AgentClaude }
+func (b claudeBackend) ID() string { return appmodel.AgentClaude }
 
-func (claudeBackend) Name() string { return model.AgentName(model.AgentClaude) }
+func (b claudeBackend) Name() string { return model.AgentName(model.AgentClaude) }
 
-func (claudeBackend) Icon() appmodel.AgentIconSpec {
-	return appmodel.AgentIconSpec{SVG: "claude-code", Color: "#c46b4d"}
+func (b claudeBackend) Icon() agent.Icon {
+	return agent.Icon{SVG: "claude-code", Color: "#c46b4d"}
 }
 
-func (claudeBackend) Caps() agentCaps { return agentCaps{Models: true, Effort: true, StallHint: true} }
+func (b claudeBackend) Caps() agent.Capabilities {
+	return agent.Capabilities{Models: true, Effort: true, StallHint: true}
+}
 
-func (claudeBackend) Discover(c *Controller) { c.loadClaudeSessions() }
+func (b claudeBackend) Discover() { c := b.C; c.loadClaudeSessions() }
 
-func (claudeBackend) Ready(c *Controller) bool { return c.ClaudeBinary != "" }
+func (b claudeBackend) Ready() bool { c := b.C; return c.ClaudeBinary != "" }
 
-func (claudeBackend) Problem(c *Controller) (string, bool) { return c.ClaudeError, false }
+func (b claudeBackend) Problem() (string, bool) { c := b.C; return c.ClaudeError, false }
 
-func (claudeBackend) Reconnect(*Controller) {}
+func (b claudeBackend) Reconnect() {}
 
-func (claudeBackend) Open(c *Controller, t model.Thread) { c.LoadClaudeHistory(t) }
+func (b claudeBackend) Open(t model.Thread) { c := b.C; c.LoadClaudeHistory(t) }
 
-func (claudeBackend) Send(c *Controller, req model.SendRequest) int { return c.sendClaude(req) }
+func (b claudeBackend) Send(req model.SendRequest) int { c := b.C; return c.sendClaude(req) }
 
-func (claudeBackend) Stop(c *Controller, t model.Thread) {
+func (b claudeBackend) Stop(t model.Thread) {
+	c := b.C
 	if run := c.ClaudeRuns[t.ID]; run != nil {
 		go run.Stop()
 	}
 }
 
 // Archive and delete forget the app's entry; Claude Code keeps its session.
-func (b claudeBackend) Archive(c *Controller, t model.Thread) {
-	b.Stop(c, t)
+func (b claudeBackend) Archive(t model.Thread) {
+	c := b.C
+	b.Stop(t)
 	c.removeThreadLocal(t.ID, t.ServerID)
 }
 
-func (b claudeBackend) Delete(c *Controller, t model.Thread) { b.Archive(c, t) }
+func (b claudeBackend) Delete(t model.Thread) { b.Archive(t) }
 
-func (b claudeBackend) Suspend(c *Controller, t model.Thread) {
-	b.Stop(c, t)
+func (b claudeBackend) Suspend(t model.Thread) {
+	b.Stop(t)
 	t.Busy = false
 	claude.SaveHistory(t)
 }
 
-func (claudeBackend) Owns(a codex.Approval) bool { return claudeApproval(a) }
+func (b claudeBackend) Owns(a codex.Approval) bool { return claudeApproval(a) }
 
-func (claudeBackend) Respond(c *Controller, a codex.Approval, result any) {
+func (b claudeBackend) Respond(a codex.Approval, result any) {
+	c := b.C
 	c.RespondClaude(a, result)
 }
 
-func (claudeBackend) Settings() []AgentSetting {
-	return []AgentSetting{{
+func (b claudeBackend) Settings() []agent.Setting {
+	c := b.C
+	return []agent.Setting{{
 		ID:          "claude-command",
 		Title:       tr("Claude Code launch command"),
 		Help:        tr("Leave blank to use claude. Arguments and environment variables are supported, for example: claude --settings ~/settings.json. Changes apply to new turns."),
 		Placeholder: "claude",
-		Value:       func(c *Controller) string { return c.ClaudeCommand },
-		Save:        func(c *Controller, v string) { c.SetClaudeCommand(v) },
-		Status: func(c *Controller) (string, bool) {
+		Value:       func() string { return c.ClaudeCommand },
+		Save:        func(v string) { c.SetClaudeCommand(v) },
+		Status: func() (string, bool) {
 			if c.ClaudeError != "" {
 				return c.ClaudeError, true
 			}
@@ -87,11 +95,13 @@ func (claudeBackend) Settings() []AgentSetting {
 // Claude Code rewinds by writing the session's history before the message
 // as a new session, which the next turn resumes; the old one is left as it
 // is and no longer listed.
-func (claudeBackend) CanRewind(c *Controller, t model.Thread, m model.Message) bool {
+func (b claudeBackend) CanRewind(t model.Thread, m model.Message) bool {
+	c := b.C
 	return t.ServerID != "" && c.ClaudeBinary != ""
 }
 
-func (claudeBackend) Rewind(c *Controller, t model.Thread, m model.Message, text string) {
+func (b claudeBackend) Rewind(t model.Thread, m model.Message, text string) {
+	c := b.C
 	prompt := 0
 	for _, x := range t.Messages {
 		if x.ID == m.ID {
@@ -131,7 +141,8 @@ func (claudeBackend) Rewind(c *Controller, t model.Thread, m model.Message, text
 
 // Claude Code steers by a user message written to the running turn's
 // input, which it folds into the turn.
-func (claudeBackend) Steer(c *Controller, t model.Thread, req model.SendRequest) bool {
+func (b claudeBackend) Steer(t model.Thread, req model.SendRequest) bool {
+	c := b.C
 	run := c.ClaudeRuns[t.ID]
 	if run == nil || !run.Steerable() {
 		return false

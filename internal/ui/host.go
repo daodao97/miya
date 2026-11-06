@@ -3,6 +3,8 @@ package desktopui
 import (
 	"context"
 
+	"miya/internal/agent"
+
 	"miya/internal/appmodel"
 	"miya/internal/automation"
 	"miya/internal/codex"
@@ -19,7 +21,7 @@ type Host interface {
 	conversation.Host
 	State() *appmodel.WindowState
 	AddAttachments(paths []string)
-	AgentSettings() []appmodel.SettingControls
+	AgentSettings() []agent.Setting
 	AgentSpeedBadge(agent string) string
 	AllThreads() []model.Thread
 	ApprovalDetail(a codex.Approval) string
@@ -40,7 +42,7 @@ type Host interface {
 	Connect()
 	Current() model.Thread
 	CurrentAgent() string
-	CurrentAgentControls() appmodel.AgentControls
+	CurrentAgentControls() agent.Controls
 	CurrentPermissionPolicy() string
 	DeleteProject(path string)
 	DeleteThread(t model.Thread)

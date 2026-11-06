@@ -40,7 +40,7 @@ func TestCodexEffortSurvivesModelSelection(t *testing.T) {
 	c.Model, c.SetModel = uiruntime.CreateSignal("model-a")
 	c.Effort, c.SetEffort = uiruntime.CreateSignal("medium")
 	c.Models, _ = uiruntime.CreateSignal([]codex.Model{m})
-	controller.CodexBackend{}.SetEffort(c, "high")
+	controller.CodexBackend{C: c}.SetEffort("high")
 	c.SetEffort("medium")
 	c.SelectModel("model-a")
 	if c.Effort() != "high" {

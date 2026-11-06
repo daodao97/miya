@@ -219,7 +219,7 @@ func newChatController() *Controller {
 	c.Ctx, c.Cancel = context.WithCancel(context.Background())
 	uiruntime.OnCleanup(func() {
 		for _, t := range c.Threads() {
-			BackendOf(t).Suspend(c, t)
+			c.BackendOf(t).Suspend(t)
 		}
 		c.Closed = true
 		c.Cancel()
@@ -315,7 +315,7 @@ func (c *Controller) ArchiveThread(t model.Thread) {
 		c.forward("archive", t.ID)
 		return
 	}
-	BackendOf(t).Archive(c, t)
+	c.BackendOf(t).Archive(t)
 }
 
 func (c *Controller) archiveCodexThread(t model.Thread) {
@@ -346,7 +346,7 @@ func (c *Controller) DeleteThread(t model.Thread) {
 		c.forward("delete", t.ID)
 		return
 	}
-	BackendOf(t).Delete(c, t)
+	c.BackendOf(t).Delete(t)
 }
 
 func (c *Controller) deleteCodexThread(t model.Thread) {
@@ -873,7 +873,7 @@ func (c *Controller) ChangeWorkspace(path string) error {
 			continue
 		}
 		if model.ThreadAgent(cached[i]) != appmodel.AgentCodex {
-			BackendOf(cached[i]).Suspend(c, cached[i])
+			c.BackendOf(cached[i]).Suspend(cached[i])
 			cached[i].Loaded = false
 			cached[i].Loading = false
 			cached[i].Busy = false
@@ -1029,7 +1029,7 @@ func (c *Controller) SelectThread(t model.Thread) {
 		c.forward("open", t.ID)
 		return
 	}
-	BackendOf(t).Open(c, t)
+	c.BackendOf(t).Open(t)
 }
 
 // resume continues a Codex thread, then submits after, when given.
@@ -1166,7 +1166,7 @@ func (c *Controller) Send() { c.SendDraft(false) }
 // sendDraft submits the window's draft; in a running turn it steers the
 // turn, or waits in the queue when steer is false.
 func (c *Controller) SendDraft(steer bool) int {
-	req := model.SendRequest{Steer: steer, ThreadID: c.Current().ID, Text: c.Draft(), Attachments: append([]string(nil), c.Attachments()...), Agent: c.CurrentAgent(), Model: c.CurrentBackend().Model(c), Effort: c.CurrentBackend().Effort(c), Policy: c.CurrentPermissionPolicy()}
+	req := model.SendRequest{Steer: steer, ThreadID: c.Current().ID, Text: c.Draft(), Attachments: append([]string(nil), c.Attachments()...), Agent: c.CurrentAgent(), Model: c.CurrentBackend().Model(), Effort: c.CurrentBackend().Effort(), Policy: c.CurrentPermissionPolicy()}
 	id := c.Submit(req)
 	if id != 0 {
 		c.SetActive(id)
@@ -1349,7 +1349,7 @@ func (c *Controller) StopThread(id int) {
 		return
 	}
 	c.Update(t.ID, func(t *model.Thread) { t.StopRequested = true; t.Status = "Stopping…" })
-	BackendOf(t).Stop(c, t)
+	c.BackendOf(t).Stop(t)
 }
 
 func (c *Controller) interrupt(t model.Thread) {

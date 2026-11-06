@@ -16,23 +16,23 @@ import (
 
 func (c *Controller) phoneAgentOptions() []phoneapi.AgentOptions {
 	var out []phoneapi.AgentOptions
-	for _, b := range AgentBackends {
-		a := phoneapi.AgentOptions{Agent: b.ID(), Current: remote.SendOptions{Model: b.Model(c), Effort: b.Effort(c), Policy: c.SelectedPermissionPolicy()}}
+	for _, b := range c.Adapters() {
+		a := phoneapi.AgentOptions{Agent: b.ID(), Current: remote.SendOptions{Model: b.Model(), Effort: b.Effort(), Policy: c.SelectedPermissionPolicy()}}
 		var choices []string
 		if b.ID() == appmodel.AgentCodex && c.Models == nil {
 			if a.Current.Model != "" {
 				choices = []string{a.Current.Model}
 			}
 		} else {
-			choices = b.ModelChoices(c)
+			choices = b.ModelChoices()
 		}
 		if !slices.Contains(choices, "") {
 			choices = append([]string{""}, choices...)
 		}
 		for _, value := range choices {
-			m := phoneapi.ModelOption{Value: value, Label: b.ModelLabel(c, value)}
+			m := phoneapi.ModelOption{Value: value, Label: b.ModelLabel(value)}
 			if b.ID() == appmodel.AgentClaude {
-				m.Efforts = b.EffortChoices(c)
+				m.Efforts = b.EffortChoices()
 			} else if c.Models != nil {
 				for _, model := range c.Models() {
 					if model.Model == value || value == "" && model.IsDefault {
