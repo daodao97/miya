@@ -500,21 +500,21 @@ func TestServiceDraftSurvivesStaleSnapshotsAndQuickSwitches(t *testing.T) {
 func TestServicePublishesOnlyChangedMessages(t *testing.T) {
 	p := &svcPeer{sub: 7}
 	th := Thread{ID: 7, Messages: []Message{{ID: 1, Role: "user", Content: "hi"}, {ID: 2, Role: "assistant", Content: "a"}}}
-	first, ok := p.diff(th)
+	first, ok := p.Diff(th)
 	if !ok || !first.Reset || len(first.Changed) != 2 {
 		t.Fatalf("first update %+v", first)
 	}
 	th.Messages = append([]Message(nil), th.Messages...)
 	th.Messages[1].Content = "ab"
-	second, ok := p.diff(th)
+	second, ok := p.Diff(th)
 	if !ok || second.Reset || len(second.Changed) != 1 || second.Changed[0].Content != "ab" || len(second.Order) != 2 {
 		t.Fatalf("second update %+v", second)
 	}
-	if _, ok := p.diff(th); ok {
+	if _, ok := p.Diff(th); ok {
 		t.Fatal("an unchanged conversation was sent again")
 	}
 	th.Messages = th.Messages[:1]
-	third, ok := p.diff(th)
+	third, ok := p.Diff(th)
 	if !ok || len(third.Order) != 1 || len(third.Changed) != 0 {
 		t.Fatalf("a removed message was not sent: %+v", third)
 	}

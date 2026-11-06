@@ -61,7 +61,7 @@ type svcPeer struct {
 	lastState []byte
 }
 
-func (p *svcPeer) write(data []byte) error {
+func (p *svcPeer) Write(data []byte) error {
 	if p.wire != nil {
 		if p.queued.Add(int64(len(data))) <= 64<<20 {
 			select {
@@ -217,7 +217,7 @@ func (s *service) request(p *svcPeer, req svcRequest) {
 		select {
 		case msg := <-done:
 			if data, err := json.Marshal(msg); err == nil {
-				_ = p.write(data)
+				_ = p.Write(data)
 			}
 		case <-disconnected:
 		case <-s.quit:
@@ -584,7 +584,7 @@ func (s *service) publish() {
 	}
 	for _, p := range s.peerList() {
 		if !bytes.Equal(p.lastState, data) {
-			if p.write(data) == nil {
+			if p.Write(data) == nil {
 				p.lastState = data
 			}
 		}
@@ -599,16 +599,16 @@ func (s *service) publishMessages(p *svcPeer) {
 	if t.ID == 0 {
 		return
 	}
-	if update, ok := p.diff(t); ok {
+	if update, ok := p.Diff(t); ok {
 		if data, err := json.Marshal(svcMessage{Event: "messages", Messages: &update}); err == nil {
-			_ = p.write(data)
+			_ = p.Write(data)
 		}
 	}
 }
 
 // diff is the update that brings the window's copy of t up to date, and
 // whether there is one; it records the update as sent.
-func (p *svcPeer) diff(t Thread) (svcMessages, bool) {
+func (p *svcPeer) Diff(t Thread) (svcMessages, bool) {
 	update := svcMessages{Thread: t.ID, Reset: p.sent == nil}
 	if update.Reset {
 		p.sent = map[int]uint64{}
@@ -640,7 +640,7 @@ func (s *service) draftReturned(id int, text string, attachments []string) {
 		return
 	}
 	for _, p := range s.peerList() {
-		_ = p.write(data)
+		_ = p.Write(data)
 	}
 }
 
