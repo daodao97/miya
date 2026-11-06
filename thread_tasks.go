@@ -4,42 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
-
-	"miya/internal/codex"
 )
-
-func activeThreadGoal(t Thread) bool {
-	for _, task := range t.Tasks {
-		if task.Kind == "goal" && task.Status == "active" {
-			return true
-		}
-	}
-	return false
-}
-
-func setThreadTask(t *Thread, task ThreadTask) {
-	for i := range t.Tasks {
-		if t.Tasks[i].ID == task.ID {
-			t.Tasks[i] = task
-			return
-		}
-	}
-	t.Tasks = append(t.Tasks, task)
-}
-
-func applyCodexGoal(t *Thread, goal *codex.Goal) {
-	if goal == nil {
-		for i, task := range t.Tasks {
-			if task.Kind == "goal" {
-				t.Tasks = append(t.Tasks[:i:i], t.Tasks[i+1:]...)
-				return
-			}
-		}
-		return
-	}
-	setThreadTask(t, ThreadTask{ID: "goal", Kind: "goal", Title: goal.Objective, Status: goal.Status,
-		TokensUsed: goal.TokensUsed, TokenBudget: goal.TokenBudget, TimeUsedSeconds: goal.TimeUsedSeconds})
-}
 
 func taskStatusLabel(t Thread, task ThreadTask, waitingApproval bool) string {
 	if task.Status == "active" || task.Status == "waiting" || task.Status == "running" {

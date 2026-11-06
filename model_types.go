@@ -492,3 +492,10 @@ var (
 	failedAfterOutput = msgfmt.FailedAfterOutput
 	retryableError    = msgfmt.RetryableError
 )
+
+// Moved to internal/model.
+var (
+	activeThreadGoal = model.ActiveGoal
+	applyCodexGoal   = model.ApplyCodexGoal
+	setThreadTask    = model.SetThreadTask
+)
