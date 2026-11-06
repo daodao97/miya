@@ -11,6 +11,7 @@ import (
 	"miya/internal/msgfmt"
 	"miya/internal/phone"
 	"miya/internal/phoneapi"
+	"miya/internal/prefs"
 	"miya/internal/svcproto"
 )
 
@@ -274,4 +275,21 @@ var (
 	readPhoneImages     = phone.ReadImages
 	sameJSON            = phone.SameJSON
 	savePhoneImages     = phone.SaveImages
+)
+
+// Moved to internal/prefs.
+var (
+	loadLocale                 = prefs.LoadLocale
+	loadPermissionPolicy       = prefs.LoadPermissionPolicy
+	loadSetting                = prefs.Load
+	normalizeAppearance        = prefs.NormalizeAppearance
+	normalizeInterfaceLanguage = prefs.NormalizeInterfaceLanguage
+	normalizeLocale            = prefs.NormalizeLocale
+	normalizePermissionPolicy  = prefs.NormalizePermissionPolicy
+	permissionPolicyPath       = prefs.SettingsPath
+	persistLocale              = prefs.SaveLocale
+	persistPermissionPolicy    = prefs.SavePermissionPolicy
+	persistProjectOrder        = prefs.SaveProjectOrder
+	persistSetting             = prefs.Save
+	restoreProjectOrder        = prefs.RestoreProjectOrder
 )

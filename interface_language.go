@@ -1,27 +1,12 @@
 package main
 
 import (
-	"strings"
-
 	"miya/locales"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/i18n"
 	"github.com/egoist/mygo/ui"
 )
-
-// Interface language belongs to this device, independently of the service
-// or workspace it connects to. MyGo owns matching, persistence and updates.
-func normalizeInterfaceLanguage(value string) string {
-	switch strings.ToLower(strings.ReplaceAll(strings.TrimSpace(value), "_", "-")) {
-	case "en", "en-us", "en-gb":
-		return "en"
-	case "zh", "zh-cn", "zh-hans", "zh-hans-cn", "zh-tw", "zh-hant", "zh-hk":
-		return "zh-Hans"
-	default:
-		return ""
-	}
-}
 
 var applyInterfaceLanguage = func(tag string) { mygo.App.SetLocale(tag) }
 

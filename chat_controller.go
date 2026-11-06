@@ -245,20 +245,6 @@ func newChatController() *chatController {
 	return c
 }
 
-func normalizePermissionPolicy(policy string) string {
-	switch policy {
-	case "on-request", "on-failure", "never":
-		return policy
-	default:
-		return "on-request"
-	}
-}
-
-// Keep the legacy service preference stable; device UI uses MyGo i18n.
-func normalizeLocale(_ string) string { return "en" }
-
-func permissionPolicyPath() string { return appdir.File("quickgui-settings.json") }
-
 func threadListCachePath() string { return appdir.File("quickgui-thread-cache.json") }
 
 func loadThreadListCache() map[string][]Thread {
@@ -327,84 +313,6 @@ func writeThreadListCache(projects map[string][]Thread) {
 		return
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-		return
-	}
-	_ = os.WriteFile(path, data, 0600)
-}
-
-func loadPermissionPolicy() string {
-	path := permissionPolicyPath()
-	if path == "" {
-		return "on-request"
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return "on-request"
-	}
-	var settings struct {
-		PermissionPolicy string `json:"permissionPolicy"`
-	}
-	if json.Unmarshal(data, &settings) != nil {
-		return "on-request"
-	}
-	return normalizePermissionPolicy(settings.PermissionPolicy)
-}
-
-func loadLocale() string {
-	path := permissionPolicyPath()
-	if path == "" {
-		return "en"
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return "en"
-	}
-	var settings struct {
-		Locale string `json:"locale"`
-	}
-	if json.Unmarshal(data, &settings) != nil {
-		return "en"
-	}
-	return normalizeLocale(settings.Locale)
-}
-
-func persistLocale(locale string) {
-	path := permissionPolicyPath()
-	if path == "" {
-		return
-	}
-	settings := map[string]string{"locale": normalizeLocale(locale)}
-	// Preserve the permission preference when adding the locale to an existing
-	// settings file. Unknown future keys are intentionally left untouched.
-	if data, err := os.ReadFile(path); err == nil {
-		var existing map[string]any
-		if json.Unmarshal(data, &existing) == nil {
-			existing["locale"] = settings["locale"]
-			data, _ = json.Marshal(existing)
-			_ = os.WriteFile(path, data, 0600)
-			return
-		}
-	}
-	data, _ := json.Marshal(settings)
-	_ = os.MkdirAll(filepath.Dir(path), 0700)
-	_ = os.WriteFile(path, data, 0600)
-}
-
-func persistPermissionPolicy(policy string) {
-	path := permissionPolicyPath()
-	if path == "" {
-		return
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-		return
-	}
-	settings := map[string]any{}
-	if data, err := os.ReadFile(path); err == nil {
-		_ = json.Unmarshal(data, &settings)
-	}
-	settings["permissionPolicy"] = normalizePermissionPolicy(policy)
-	data, err := json.Marshal(settings)
-	if err != nil {
 		return
 	}
 	_ = os.WriteFile(path, data, 0600)

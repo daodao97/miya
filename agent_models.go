@@ -1,11 +1,8 @@
 package main
 
 import (
-	"encoding/json"
 	"miya/internal/codex"
 	"miya/internal/textutil"
-	"os"
-	"path/filepath"
 	"slices"
 )
 
@@ -14,23 +11,29 @@ import (
 // is the agent's own default.
 
 func (codexBackend) ModelChoices(c *chatController) []string { return c.modelNames() }
+
 func (codexBackend) ModelLabel(_ *chatController, v string) string {
 	return textutil.FirstNonEmpty(v, tr("Default model"))
 }
+
 func (codexBackend) EffortChoices(c *chatController) []string { return c.efforts() }
+
 func (codexBackend) Model(c *chatController) string {
 	if c.model == nil {
 		return ""
 	}
 	return c.model()
 }
+
 func (codexBackend) Effort(c *chatController) string {
 	if c.effort == nil {
 		return ""
 	}
 	return c.effort()
 }
-func (codexBackend) SetModel(c *chatController, v string)  { c.selectModel(v) }
+
+func (codexBackend) SetModel(c *chatController, v string) { c.selectModel(v) }
+
 func (codexBackend) SetEffort(c *chatController, v string) { c.setCodexEffort(v) }
 
 // Claude Code takes a model's alias or full name and an effort level.
@@ -88,10 +91,14 @@ func (c *chatController) noteClaudeModel(model string) {
 }
 
 func (claudeBackend) EffortChoices(*chatController) []string { return claudeEffortChoices }
-func (claudeBackend) Model(c *chatController) string         { return c.claudeModel }
-func (claudeBackend) Effort(c *chatController) string        { return c.claudeEffort }
-func (claudeBackend) SetModel(c *chatController, v string)   { c.setClaudeModel(v) }
-func (claudeBackend) SetEffort(c *chatController, v string)  { c.setClaudeEffort(v) }
+
+func (claudeBackend) Model(c *chatController) string { return c.claudeModel }
+
+func (claudeBackend) Effort(c *chatController) string { return c.claudeEffort }
+
+func (claudeBackend) SetModel(c *chatController, v string) { c.setClaudeModel(v) }
+
+func (claudeBackend) SetEffort(c *chatController, v string) { c.setClaudeEffort(v) }
 
 func (c *chatController) setClaudeModel(v string) {
 	c.claudeModel = v
@@ -115,49 +122,13 @@ func (c *chatController) setClaudeEffort(v string) {
 	invalidate()
 }
 
-// loadSetting and persistSetting read and write one string of the
-// settings file, keeping the others.
-func loadSetting(key string) string {
-	path := permissionPolicyPath()
-	if path == "" {
-		return ""
-	}
-	var settings map[string]any
-	if data, err := os.ReadFile(path); err == nil {
-		_ = json.Unmarshal(data, &settings)
-	}
-	s, _ := settings[key].(string)
-	return s
-}
-
-func persistSetting(key, value string) {
-	path := permissionPolicyPath()
-	if path == "" {
-		return
-	}
-	settings := map[string]any{}
-	if data, err := os.ReadFile(path); err == nil {
-		_ = json.Unmarshal(data, &settings)
-	}
-	if value == "" {
-		delete(settings, key)
-	} else {
-		settings[key] = value
-	}
-	data, err := json.Marshal(settings)
-	if err != nil {
-		return
-	}
-	_ = os.MkdirAll(filepath.Dir(path), 0o700)
-	_ = os.WriteFile(path, data, 0o600)
-}
-
 func (c *chatController) setCodexEffort(v string) {
 	c.setEffort(v)
 	if c.remote == nil {
 		persistSetting("codexEffort:"+c.model(), v)
 	}
 }
+
 func savedCodexEffort(m codex.Model) string {
 	saved := loadSetting("codexEffort:" + m.Model)
 	for _, option := range m.SupportedReasoningEfforts {

@@ -70,14 +70,6 @@ func applyDesktopPalette(dark bool) *ui.Theme {
 	return &t
 }
 
-// The appearance setting: "" follows the system, else "light" or "dark".
-func normalizeAppearance(v string) string {
-	if v == "light" || v == "dark" {
-		return v
-	}
-	return ""
-}
-
 // systemDark is the system's appearance, kept by mygo.Theme's updates so a
 // frame never asks the system.
 var systemDark atomic.Bool
