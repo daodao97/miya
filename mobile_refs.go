@@ -3,9 +3,10 @@ package main
 import (
 	"strconv"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/model"
 	"miya/internal/remote"
+
+	"github.com/egoist/mygo/ui"
 )
 
 // threadMenu offers conversations and files from the composer's project.

@@ -10,7 +10,7 @@ func (m *mobileApp) handoffToNewThread() {
 		m.sendErr = tr("A message is being sent. Wait before handing off.")
 		return
 	}
-	source := m.view.c.current()
+	source := m.viewer.current()
 	ref := ThreadRef{Source: m.state.ReferenceSource, Backend: model.ThreadAgent(source), SessionID: source.ServerID}
 	if source.ID == 0 || !ref.Valid() {
 		m.sendErr = tr("Available once the session is created")

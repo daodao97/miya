@@ -3,9 +3,10 @@ package main
 import (
 	"path/filepath"
 
+	"miya/internal/model"
+
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
-	"miya/internal/model"
 )
 
 // Copy file destinations rather than their displayed label or URL encoding.

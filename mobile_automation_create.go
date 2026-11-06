@@ -5,9 +5,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/automation"
 	"miya/internal/remote"
+
+	"github.com/egoist/mygo/ui"
 )
 
 type mobileAutomationForm struct {

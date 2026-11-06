@@ -12,9 +12,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/appdir"
 	"miya/internal/remote"
+
+	"github.com/egoist/mygo/ui"
 )
 
 func TestDesktopWorkspacesMigrateAndKeepLocalSelection(t *testing.T) {

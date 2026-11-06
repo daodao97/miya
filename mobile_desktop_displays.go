@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/desktop"
 	"miya/internal/desktop/control"
 	"miya/internal/textutil"
+
+	"github.com/egoist/mygo/ui"
 )
 
 func (p *mobileDesktopPage) invalidateTarget() {

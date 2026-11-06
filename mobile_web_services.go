@@ -12,12 +12,13 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/model"
 	"miya/internal/remote"
 	rt "miya/internal/runtime"
 	"miya/internal/textutil"
 	"miya/internal/webservice"
+
+	"github.com/egoist/mygo/ui"
 )
 
 type mobileWebServices struct {

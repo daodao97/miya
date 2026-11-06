@@ -4,9 +4,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/desktop"
 	"miya/internal/desktop/control"
+
+	"github.com/egoist/mygo/ui"
 )
 
 // liveTestDesktopPage is a live page whose queue is held, so tests can read

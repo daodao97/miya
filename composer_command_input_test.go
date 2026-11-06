@@ -8,9 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"miya/internal/model"
+
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/richtext"
-	"miya/internal/model"
 )
 
 func TestComposerCommandSelectionStagesChipAndEditableArguments(t *testing.T) {

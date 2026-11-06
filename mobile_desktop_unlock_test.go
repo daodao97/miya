@@ -15,10 +15,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/egoist/mygo"
-	"github.com/egoist/mygo/ui"
 	"miya/internal/desktop"
 	"miya/internal/desktop/control"
+
+	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/ui"
 )
 
 func unlockClient(t *testing.T, status int, receive func(string)) *control.Client {

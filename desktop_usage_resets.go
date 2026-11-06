@@ -6,9 +6,10 @@ import (
 	"strings"
 	"time"
 
+	"miya/internal/agentusage"
+
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
-	"miya/internal/agentusage"
 )
 
 func usageResetExpiryText(r *agentusage.ResetCredits) (string, string) {

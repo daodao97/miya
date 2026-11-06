@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/remote"
+
+	"github.com/egoist/mygo/ui"
 )
 
 func (m *mobileApp) queueAction(op string, id int) {
@@ -30,7 +31,7 @@ func (m *mobileApp) sendPhoneAction(r remote.Request) {
 	}()
 }
 func (m *mobileApp) queueView(c *ui.Context) {
-	t := m.view.c.current()
+	t := m.viewer.current()
 	if len(t.Queue) == 0 {
 		return
 	}

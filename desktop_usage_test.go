@@ -9,8 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/agentusage"
+
+	"github.com/egoist/mygo/ui"
 )
 
 func usageFixture() *chatApp {

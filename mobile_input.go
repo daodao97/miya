@@ -42,7 +42,7 @@ func (f *mobileTextField) paste(c *ui.Context, input ui.Element, value *string, 
 }
 
 func (m *mobileApp) taskStatus(c *ui.Context) {
-	t := m.view.c.current()
+	t := m.viewer.current()
 	p := m.pal
 	taskStatusBar(c, t, len(m.approvalsFor(t.ServerID)) > 0, taskPalette{p.surface, p.line, p.ink, p.muted}, func(id, action string) {
 		if m.conn == nil || !m.connected {

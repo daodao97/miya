@@ -8,11 +8,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/egoist/mygo"
-	"github.com/egoist/mygo/ui"
 	"miya/internal/remote"
 	"miya/internal/textutil"
 	"miya/internal/webservice"
+
+	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/ui"
 )
 
 func newPhoneWebProxy(conn *remote.Conn, port int, host string, tokens ...string) (*phoneFileProxy, error) {

@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/desktop/control"
 	"miya/internal/desktop/control/controltest"
+
+	"github.com/egoist/mygo/ui"
 )
 
 func TestDesktopPrivacyPageToggleAndServerState(t *testing.T) {

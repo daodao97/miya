@@ -6,9 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/egoist/mygo/ui"
 	dg "miya/internal/delegation"
 	"miya/internal/model"
+
+	"github.com/egoist/mygo/ui"
 )
 
 func TestMobileTaskOpensTargetConversation(t *testing.T) {
@@ -51,8 +52,8 @@ func TestMobileTaskOpensTargetConversation(t *testing.T) {
 					t.Fatal(err)
 				}
 				tt.Frame()
-				if m.open != target.ID || m.view.c.current().ServerID != target.ServerID || m.selected != "/b" || m.view.c.current().Agent != agentClaude {
-					t.Fatalf("did not navigate to exact target: open=%d current=%+v err=%q", m.open, m.view.c.current(), m.sendErr)
+				if m.open != target.ID || m.viewer.current().ServerID != target.ServerID || m.selected != "/b" || m.viewer.current().Agent != agentClaude {
+					t.Fatalf("did not navigate to exact target: open=%d current=%+v err=%q", m.open, m.viewer.current(), m.sendErr)
 				}
 				if pane.open || destination.open || tt.HasText("Back to tasks") {
 					t.Fatal("cached task popover covered destination")
@@ -80,7 +81,7 @@ func TestMobileTaskOpensTargetConversation(t *testing.T) {
 					t.Fatal(err)
 				}
 				tt.Frame()
-				if m.view.c.current().ServerID != source.ServerID || m.selected != "/a" || pane.open || destination.open {
+				if m.viewer.current().ServerID != source.ServerID || m.selected != "/a" || pane.open || destination.open {
 					t.Fatal("source navigation failed or left a popover open")
 				}
 			})

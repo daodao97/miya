@@ -82,7 +82,7 @@ func TestMobileRebindsOpenThreadAfterDesktopRestart(t *testing.T) {
 		{ID: 77, ServerID: "s1", Title: "Original"},
 	}}}}
 	m.applyPhoneState(s)
-	cur := m.view.c.current()
+	cur := m.viewer.current()
 	if m.open != 77 || cur.ID != 77 || cur.ServerID != "s1" || len(cur.Messages) != 1 || cur.Messages[0].Content != "Cached reply" {
 		t.Fatalf("reconnect lost or changed the open conversation: open %d, %+v", m.open, cur)
 	}
@@ -97,7 +97,7 @@ func TestMobileRebindsOpenThreadAfterDesktopRestart(t *testing.T) {
 	}
 	// A delayed frame for the old number must not replace the rebound page.
 	m.receiveThread(1, phoneThreadDelta{Thread: Thread{ID: 1, ServerID: "different"}, Reset: true})
-	if cur := m.view.c.current(); cur.ServerID != "s1" || len(cur.Messages) != 1 {
+	if cur := m.viewer.current(); cur.ServerID != "s1" || len(cur.Messages) != 1 {
 		t.Fatal("a stale frame replaced the open conversation")
 	}
 }
@@ -116,12 +116,12 @@ func TestMobileReconnectKeepsIdentityBeforeListArrives(t *testing.T) {
 	// Both old and new desktops can temporarily report a missing thread.
 	for _, sid := range []string{"", "s1"} {
 		m.receiveThread(1, phoneThreadDelta{Thread: Thread{ID: 1, ServerID: sid, Status: "Conversation is no longer on the desktop"}, Reset: true})
-		if cur := m.view.c.current(); cur.ServerID != "s1" {
+		if cur := m.viewer.current(); cur.ServerID != "s1" {
 			t.Fatalf("missing-thread frame erased the stable identity: %+v", cur)
 		}
 	}
 	m.applyPhoneState(phoneState{Projects: []phoneProject{{Path: "/a", Threads: []Thread{{ID: 8, ServerID: "s1"}}}}})
-	if m.open != 8 || m.view.c.current().ServerID != "s1" {
+	if m.open != 8 || m.viewer.current().ServerID != "s1" {
 		t.Fatal("a later startup list did not repair the open page")
 	}
 }
@@ -131,7 +131,7 @@ func TestMobileRejectsReusedIDFromStaleDesktopFrame(t *testing.T) {
 	m.openThread(m.state.Projects[0].Threads[0])
 	m.receiveThread(1, phoneThreadDelta{Thread: Thread{ID: 1, ServerID: "other"}, Reset: true,
 		Changed: []Message{{ID: 2, Content: "Wrong reply"}}, Order: []int{2}})
-	if m.view.c.current().ServerID != "s1" || len(m.view.c.current().Messages) != 0 {
+	if m.viewer.current().ServerID != "s1" || len(m.viewer.current().Messages) != 0 {
 		t.Fatal("reused numeric ID exposed another conversation")
 	}
 }

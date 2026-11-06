@@ -4,11 +4,11 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/egoist/mygo/transfer"
-	"github.com/egoist/mygo/ui"
-	"github.com/egoist/mygo/ui/richtext"
 	"miya/internal/model"
 	"miya/internal/textutil"
+
+	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/richtext"
 )
 
 type threadMentionStyle struct {
@@ -61,7 +61,7 @@ func inlineThreadText(raw string, _ bool, style threadMentionStyle, title func(T
 			attachment = style.attachment(*m.Part.Ref, name)
 		} else {
 			if name == "" {
-				name = backendFor(m.Part.Agent).Name()
+				name = agentName(m.Part.Agent)
 			}
 			uri = model.AgentURL(m.Part.Agent)
 			attachment = style.tagAttachment(uri, name, "# ")
@@ -179,110 +179,4 @@ func (s *inlineThreadInput) insert(text string) {
 		part = s.text(text)
 	}
 	s.doc.Edit(func(e *richtext.Edit) { e.Replace(start, end, part); e.Select(start+part.Len(), start+part.Len()) })
-}
-
-func (app *chatApp) threadInput(c *ui.Context, state *inlineThreadInput, raw, owner, label, placeholder string, size, width float32, minLines, maxLines int, changed func(string)) ui.Element {
-	notify := func(text string) { changed(text); c.Invalidate() }
-	state.style, state.title = mentionStyle(c, size), app.referenceTitle
-	if state.owner != owner {
-		state.doc, state.raw, state.owner = nil, "", owner
-	}
-	state.moved = false
-	if state.doc != nil && state.raw == raw && inlineThreadRaw(state.doc.Text()) == raw {
-		a, z := state.doc.Selection()
-		state.moved = a != state.anchor || z != state.caret
-	}
-	state.sync(raw, notify)
-	// Drawing colors follow the appearance without changing the undo history.
-	for _, run := range state.doc.Text().Runs(0, state.doc.Text().Len()) {
-		if a := run.Attributes.Attachment; a != nil {
-			if run.Attributes.Tag == composerCommandTag {
-				fresh := state.style.commandAttachment(a.Name)
-				a.Draw, a.Width, a.Height = fresh.Draw, fresh.Width, fresh.Height
-				continue
-			}
-			ref, ok := model.ParseThreadURL(a.URL)
-			if ok {
-				fresh := state.style.attachment(ref, a.Name)
-				a.Draw, a.Width, a.Height = fresh.Draw, fresh.Width, fresh.Height
-			}
-		}
-	}
-	services := c.Services()
-	paste := func() {
-		// File managers and image sources may also offer plain text. Read
-		// attachment formats first, before falling back to that text.
-		clipboard := services.ReadClipboardData(transfer.FileList, transfer.URIList, transfer.PNG, transfer.Text)
-		if !app.mobile && app.pasteAttachments(clipboard) {
-			services.Invalidate()
-			return
-		}
-		if text, err := clipboard.Read(transfer.Text); err == nil && len(text) > 0 {
-			state.insert(string(text))
-		}
-	}
-	copySelection := func(cut bool) {
-		a, z := state.doc.Selection()
-		if a == z {
-			return
-		}
-		start, end := min(a, z), max(a, z)
-		services.WriteClipboard(inlineThreadRaw(state.doc.Text().Slice(start, end)))
-		if cut {
-			state.doc.Edit(func(e *richtext.Edit) { e.ReplaceString(start, end, "", richtext.Attributes{}); e.Select(start, start) })
-		}
-	}
-	contextMenu := func(menu *ui.Menu) {
-		a, z := state.doc.Selection()
-		selection := state.doc.Text().Slice(min(a, z), max(a, z))
-		mentions := model.ThreadMentions(inlineThreadRaw(selection))
-		if menu.Item(tr("Copy session link")).Disabled(len(mentions) != 1).Chosen() && len(mentions) == 1 {
-			services.WriteClipboard(mentions[0].Ref.URL())
-		}
-		if menu.Item(tr("Copy")).Disabled(a == z).Chosen() {
-			copySelection(false)
-		}
-		if menu.Item(tr("Cut")).Disabled(a == z).Chosen() {
-			copySelection(true)
-		}
-		if menu.Item(tr("Paste")).Chosen() {
-			paste()
-		}
-		if menu.Item(tr("Paste as conversation reference")).Chosen() {
-			if data, err := services.ReadClipboardData(transfer.Text).Read(transfer.Text); err == nil {
-				if ref, ok := model.ParseThreadURL(strings.TrimSpace(string(data))); ok {
-					state.insert(model.ReferenceText(ref, app.referenceTitle(ref)))
-				} else {
-					app.notice = tr("No valid session link in the clipboard")
-				}
-			}
-		}
-		if menu.Item(tr("Select all")).Chosen() {
-			state.doc.SetSelection(0, state.doc.Text().Len())
-		}
-	}
-	in := richtext.EditorBase(c, state.doc, richtext.EditorOptions{
-		Label: label, Placeholder: placeholder, NoMarkdown: true, Font: state.style.font,
-		OnPaste: func() bool { paste(); return true }, ContextMenu: contextMenu,
-		OnCopy:   func(cut bool) bool { copySelection(cut); return true },
-		TagStyle: func(_ string, span *ui.Span) { span.ObjectDescent = size * 0.25 },
-	}).FillWidth().MinWidth(0).FocusRing(false).InputOptions(ui.InputOptions{Dismiss: ui.KeyboardDismissInteractive})
-	if measured := in.Bounds().W; measured > 0 {
-		width = measured
-	}
-	spans := inlineThreadSpans(state.doc.Text(), size)
-	_, height := ui.ShapeRichText(spans, state.style.font, max(1, width)).Size()
-	lineHeight := size * 1.6
-	height = max(float32(minLines)*lineHeight, min(float32(maxLines)*lineHeight, height))
-	in.Height(height)
-	if in.Shortcut(ui.Cmd, ui.KeyC) {
-		copySelection(false)
-	}
-	if in.Shortcut(ui.Cmd, ui.KeyX) {
-		copySelection(true)
-	}
-
-	state.sync(state.raw, notify)
-	state.anchor, state.caret = state.doc.Selection()
-	return in
 }

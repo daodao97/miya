@@ -7,10 +7,11 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/codex"
 	"miya/internal/remote"
 	"miya/internal/textutil"
+
+	"github.com/egoist/mygo/ui"
 )
 
 func (m *mobileApp) fieldsFor(a codex.Approval) map[string]string {
@@ -29,24 +30,24 @@ func (m *mobileApp) submitApproval(a codex.Approval, result any, allow, remember
 		return
 	}
 	if m.conn == nil {
-		m.view.formErrors[id] = tr("Not connected to desktop")
+		m.formErrors[id] = tr("Not connected to desktop")
 		return
 	}
 	raw, err := json.Marshal(result)
 	if err != nil {
-		m.view.formErrors[id] = err.Error()
+		m.formErrors[id] = err.Error()
 		return
 	}
 	if m.approvalPending == nil {
 		m.approvalPending = map[string]bool{}
 	}
 	m.approvalPending[id] = true
-	delete(m.view.formErrors, id)
+	delete(m.formErrors, id)
 	conn, gen := m.conn, m.generation
 	r := remote.Request{ApprovalVersion: approvalFingerprint(a), Op: "respond", Approval: a.ID, Result: raw, Allow: allow, Remember: remember}
 	go func() {
 		if err := conn.Send(r); err != nil {
-			m.onMain(gen, func() { delete(m.approvalPending, id); m.view.formErrors[id] = tr("Failed to submit: ") + err.Error() })
+			m.onMain(gen, func() { delete(m.approvalPending, id); m.formErrors[id] = tr("Failed to submit: ") + err.Error() })
 		}
 	}()
 }
@@ -54,12 +55,12 @@ func (m *mobileApp) approvalAnswered(id json.RawMessage, message string) {
 	key := string(id)
 	delete(m.approvalPending, key)
 	if message != "" {
-		m.view.formErrors[key] = message
+		m.formErrors[key] = message
 		return
 	}
 	delete(m.approvalFields, key)
 	delete(m.desktopPreviews, key)
-	delete(m.view.formErrors, key)
+	delete(m.formErrors, key)
 	out := make([]codex.Approval, 0, len(m.state.Approvals))
 	for _, a := range m.state.Approvals {
 		if !sameJSON(a.ID, id) {
@@ -67,7 +68,7 @@ func (m *mobileApp) approvalAnswered(id json.RawMessage, message string) {
 		}
 	}
 	m.state.Approvals = out
-	m.view.c.setApprovals(out)
+	m.viewer.setApprovals(out)
 	m.closeResolvedDesktopControl(out)
 	if m.router().Path() == "/approval" && sameJSON(m.approvalID, id) {
 		m.router().Back()
@@ -91,7 +92,7 @@ func (m *mobileApp) approvalCard(c *ui.Context, a codex.Approval) {
 			if m.state.DesktopWindows {
 				break
 			}
-			ui.Text(c, m.view.c.approvalDetail(a)).FontSize(m.font(13)).LineHeight(1.45)
+			ui.Text(c, m.viewer.approvalDetail(a)).FontSize(m.font(13)).LineHeight(1.45)
 			ui.Row(c).Gap(8).Children(func() {
 				if m.pill(c, "done", tr("Done, continue"), true).Disabled(m.approvalPending[id]).Clicked() {
 					m.submitApproval(a, nil, true, false)
@@ -126,7 +127,7 @@ func (m *mobileApp) approvalCard(c *ui.Context, a codex.Approval) {
 				m.router().Push("/approval")
 			}
 		default:
-			ui.Scroll(c).MaxHeight(140).Children(func() { ui.Text(c, m.view.c.approvalDetail(a)).FontSize(m.font(13)).LineHeight(1.45).Selectable() })
+			ui.Scroll(c).MaxHeight(140).Children(func() { ui.Text(c, m.viewer.approvalDetail(a)).FontSize(m.font(13)).LineHeight(1.45).Selectable() })
 			ui.Row(c).Gap(8).Children(func() {
 				if m.approvalButton(c, "allow", tr("Allow once"), true, m.approvalPending[id]).Clicked() {
 					m.submitApproval(a, nil, true, false)
@@ -136,7 +137,7 @@ func (m *mobileApp) approvalCard(c *ui.Context, a codex.Approval) {
 				}
 			})
 		}
-		if message := m.view.formErrors[id]; message != "" {
+		if message := m.formErrors[id]; message != "" {
 			ui.Text(c, message).FontSize(m.font(13)).TextColor(danger)
 		}
 	})
@@ -187,7 +188,7 @@ func (m *mobileApp) approvalPage(c *ui.Context) {
 		})
 	})
 	ui.Column(c).FillWidth().Padding(12, 16).Gap(8).Background(p.bg).Children(func() {
-		if message := m.view.formErrors[string(a.ID)]; message != "" {
+		if message := m.formErrors[string(a.ID)]; message != "" {
 			ui.Text(c, message).TextColor(danger).FontSize(m.font(13)).MaxLines(2)
 		}
 		if m.approvalPending[string(a.ID)] {
@@ -326,7 +327,7 @@ func (m *mobileApp) elicitationActions(c *ui.Context, a codex.Approval) {
 			if a.Mode != "url" {
 				content, err := validateMobileForm(a, fields)
 				if err != nil {
-					m.view.formErrors[id] = err.Error()
+					m.formErrors[id] = err.Error()
 					return
 				}
 				result["content"] = content

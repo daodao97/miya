@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/model"
+
+	"github.com/egoist/mygo/ui"
 )
 
 // queueView lists the messages waiting for the running turn to end.

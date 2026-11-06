@@ -7,10 +7,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/fsutil"
 	"miya/internal/remote"
 	"miya/internal/thumbnail"
+
+	"github.com/egoist/mygo/ui"
 )
 
 func (m *mobileApp) previewPath(source string) string {

@@ -33,7 +33,7 @@ func phoneOf(t *testing.T, m *mobileApp, d phoneThreadDelta) []Message {
 	}
 	m.open = back.Thread.ID
 	m.applyThread(back)
-	return m.view.c.current().Messages
+	return m.viewer.current().Messages
 }
 
 func sameMessages(a, b []Message) bool {
@@ -76,7 +76,7 @@ func TestPhoneThreadDeltas(t *testing.T) {
 	}
 
 	// Reopening with what the phone holds sends no message.
-	m.view.c.setActive(0)
+	m.viewer.setActive(0)
 	req := m.subscribeRequest(0)
 	req.Thread = desk.ID
 	for _, msg := range m.cachedMessages(desk.ServerID) {

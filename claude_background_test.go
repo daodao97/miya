@@ -8,9 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/claude"
 	"miya/internal/subagent"
+
+	"github.com/egoist/mygo/ui"
 )
 
 func TestClaudeAutomaticAsyncAcknowledgementStaysRunning(t *testing.T) {

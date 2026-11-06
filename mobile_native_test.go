@@ -177,7 +177,7 @@ func TestMobileConversationEdgeOpensDrawer(t *testing.T) {
 				t.Fatal("a cancelled edge drag should stay in the current conversation")
 			}
 			drag(tt, 8, float32(width)-40, 350)
-			if !m.menu || m.open != 1 || m.router().Path() != "/thread" || m.view.c.current().ServerID != "s1" || m.draft != "保留草稿" {
+			if !m.menu || m.open != 1 || m.router().Path() != "/thread" || m.viewer.current().ServerID != "s1" || m.draft != "保留草稿" {
 				t.Fatal("the edge swipe should open the drawer and preserve the conversation and draft")
 			}
 			if _, ok := tt.Find("Project proj-a"); !ok {

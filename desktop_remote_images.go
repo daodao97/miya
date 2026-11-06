@@ -6,8 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/async"
+
+	"github.com/egoist/mygo/ui"
 )
 
 type remoteImageResult struct {

@@ -76,10 +76,12 @@ type mobileApp struct {
 	dialDesktop                  func(context.Context, string) (*remote.Conn, error)
 	// view renders a conversation with the desktop's own message views, over
 	// a controller that only holds what the desktop sent.
-	view *chatApp
-	nav  *ui.Router
-	pal  mobilePalette
-	dark bool
+	view       *conversationView
+	viewer     *mobileViewer
+	formErrors map[string]string
+	nav        *ui.Router
+	pal        mobilePalette
+	dark       bool
 	// themed reports pal and the theme set for the current appearance.
 	themed            bool
 	textScale         float32
@@ -216,48 +218,12 @@ func agentName(agent string) string {
 	return "Codex"
 }
 
-// newViewerController holds a conversation for the message views without
-// starting Codex or Claude Code.
-func newViewerController() *chatController {
-	c := &chatController{projectCache: map[string][]Thread{}}
-	c.threads, c.setThreads = createSignal([]Thread{})
-
-	c.active, c.setActive = createSignal(0)
-	c.revision, c.setRevision = createSignal(0)
-	c.draft, c.setDraft = createSignal("")
-	c.attachments, c.setAttachments = createSignal([]string{})
-	c.approvals, c.setApprovals = createSignal([]codex.Approval{})
-
-	c.status, c.setStatus = createSignal("")
-	c.agent, c.setAgent = createSignal(agentCodex)
-	// The shared views call these; left nil they would panic, as a Codex
-	// message's rewind check once did with ready.
-	c.ready, c.setReady = createSignal(false)
-	c.projects, c.setProjects = createSignal([]Project{})
-	c.model, c.setModel = createSignal("")
-	c.effort, c.setEffort = createSignal("")
-	c.models, c.setModels = createSignal([]codex.Model{})
-	c.permissionPolicy, c.setPermissionPolicy = createSignal("")
-	c.draftPermission, c.setDraftPermission = createSignal("")
-	c.locale, c.setLocale = createSignal("en")
-	c.historyStatus, c.setHistoryStatus = createSignal("")
-	c.ctx, c.cancel = context.WithCancel(context.Background())
-	return c
-}
-
 func newMobileApp() *mobileApp {
 	m := &mobileApp{badgeApplied: -1}
-	m.view = &chatApp{
-		c:          newViewerController(),
-		theme:      appTheme(),
-		mobile:     true,
-		lists:      map[int]*ui.ListState{},
-		copied:     map[int]bool{},
-		open:       map[int]bool{},
-		answers:    map[string]map[string]string{},
-		forms:      map[string]string{},
-		formErrors: map[string]string{},
-	}
+	m.viewer = newMobileViewer()
+	m.view = newConversationView(m.viewer)
+	m.view.mobile = true
+	m.formErrors = map[string]string{}
 	m.view.md = markdown.Options{
 		OnLink:    m.openMessageLink,
 		LoadImage: func(src string) (ui.ImageSource, error) { return loadImage(imageSourcePath(src)) },
@@ -747,10 +713,10 @@ func (m *mobileApp) applyPhoneState(s phoneState) {
 			delete(m.approvalFields, id)
 			delete(m.approvalPending, id)
 			delete(m.desktopPreviews, id)
-			delete(m.view.formErrors, id)
+			delete(m.formErrors, id)
 		}
 	}
-	cur := m.view.c.current()
+	cur := m.viewer.current()
 	if cur.ServerID == "" && m.open != 0 {
 		cur, _ = m.find(m.open)
 	}
@@ -782,10 +748,10 @@ func (m *mobileApp) applyPhoneState(s phoneState) {
 		if !live {
 			delete(m.approvalFields, id)
 			delete(m.approvalPending, id)
-			delete(m.view.formErrors, id)
+			delete(m.formErrors, id)
 		}
 	}
-	m.view.c.setApprovals(s.Approvals)
+	m.viewer.setApprovals(s.Approvals)
 	m.persistState()
 }
 
@@ -793,7 +759,7 @@ func (m *mobileApp) receiveThread(id int, d phoneThreadDelta) {
 	if m.open != id {
 		return
 	}
-	cur := m.view.c.current()
+	cur := m.viewer.current()
 	if cur.ID == id && cur.ServerID != "" {
 		if d.Thread.ServerID == "" || (d.Thread.ServerID == cur.ServerID && (d.Thread.Loading || !d.Thread.HistoryLoaded) && len(d.Order) == 0) {
 			// A loading or missing-thread response is not an empty history.
@@ -809,10 +775,10 @@ func (m *mobileApp) receiveThread(id int, d phoneThreadDelta) {
 	}
 	d.Thread.ID = id
 	m.applyThread(d)
-	m.receiveNewSend(m.view.c.current())
+	m.receiveNewSend(m.viewer.current())
 	// Only a live delta confirms that the phone has the completed contents;
 	// sidebar metadata combined with cached messages does not.
-	if sameMessageOrder(m.view.c.current().Messages, d.Order) {
+	if sameMessageOrder(m.viewer.current().Messages, d.Order) {
 		m.completionReceived = desktopRead{Key: desktopUnreadKey(d.Thread), Version: d.Thread.CompletedAtMs}
 		m.markCompletionRead()
 	}
@@ -823,7 +789,7 @@ func (m *mobileApp) showThread(t Thread) {
 }
 
 func (m *mobileApp) updateThreadView(t Thread, messagesChanged bool) {
-	v := m.view.c
+	v := m.viewer
 	v.setThreads([]Thread{t})
 	v.setActive(t.ID)
 	if messagesChanged {
@@ -907,7 +873,7 @@ func (m *mobileApp) openThread(t Thread) {
 	if project.Path != "" {
 		m.selected, m.expandedProject, m.projectsExpanded = project.Path, project.Path, true
 	}
-	cur := m.view.c.current()
+	cur := m.viewer.current()
 	if m.open == t.ID && cur.ServerID == t.ServerID && model.ThreadAgent(cur) == model.ThreadAgent(t) && m.router().Path() == "/thread" {
 		m.menu = false
 		return
@@ -931,7 +897,7 @@ func (m *mobileApp) openThread(t Thread) {
 func (m *mobileApp) leave() {
 	m.desktopRequest = ""
 	m.open, m.newProject = 0, ""
-	m.view.c.setActive(0)
+	m.viewer.setActive(0)
 	m.subscribe(0)
 	m.resetComposer()
 }
@@ -985,7 +951,7 @@ func (m *mobileApp) sendDraft(steer bool) {
 	r.Steer = steer
 	agent := m.composerAgent()
 	if m.open != 0 {
-		agent = model.ThreadAgent(m.view.c.current())
+		agent = model.ThreadAgent(m.viewer.current())
 	}
 	if len(m.state.Agents) > 0 {
 		o := m.sendOptions(agent)
@@ -1583,7 +1549,7 @@ func (m *mobileApp) threadStatus(c *ui.Context, t Thread) {
 
 func (m *mobileApp) threadView(c *ui.Context) {
 	p := m.pal
-	cur := m.view.c.current()
+	cur := m.viewer.current()
 	listed, proj := m.find(m.open)
 	title, agent, busy := m.title, cur.Agent, cur.Busy || listed.Busy
 	if listed.Title != "" {
@@ -2030,7 +1996,7 @@ func (m *mobileApp) threadRequest(op string, id int) remote.Request {
 	t, p := m.find(id)
 	// The currently displayed page is authoritative when a new state has
 	// already reused its numeric ID for a different conversation.
-	if cur := m.view.c.current(); cur.ID == id && cur.ServerID != "" {
+	if cur := m.viewer.current(); cur.ID == id && cur.ServerID != "" {
 		if cur.ServerID != t.ServerID || model.ThreadAgent(cur) != model.ThreadAgent(t) {
 			p = phoneProject{}
 		}
@@ -2049,7 +2015,7 @@ func (m *mobileApp) applyThread(d phoneThreadDelta) {
 	var base []Message
 	if !d.Reset {
 		boundIdentity := false
-		if cur := m.view.c.current(); cur.ID == t.ID && (cur.ServerID == t.ServerID || cur.ServerID == "" && model.ThreadAgent(cur) == model.ThreadAgent(t)) {
+		if cur := m.viewer.current(); cur.ID == t.ID && (cur.ServerID == t.ServerID || cur.ServerID == "" && model.ThreadAgent(cur) == model.ThreadAgent(t)) {
 			// A new thread's first messages can arrive before its durable ID.
 			// Binding that ID changes metadata, not the history already received
 			// under its numeric ID; the desktop need not resend those messages.

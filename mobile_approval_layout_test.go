@@ -6,9 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/codex"
 	"miya/internal/desktop"
+
+	"github.com/egoist/mygo/ui"
 )
 
 func TestMobileToolPermissionKeepsActionsVisibleWithoutUnrelatedPreview(t *testing.T) {
@@ -73,7 +74,7 @@ func TestMobileMCPAccessActionsStayInConversation(t *testing.T) {
 				if err := tt.Click("Allow once"); err != nil {
 					t.Fatal(err)
 				}
-				if m.router().Path() != "/thread" || len(m.state.Approvals) != 1 || m.view.formErrors[string(a.ID)] != "Not connected to desktop" {
+				if m.router().Path() != "/thread" || len(m.state.Approvals) != 1 || m.formErrors[string(a.ID)] != "Not connected to desktop" {
 					t.Fatal("failed inline submission navigated away or consumed the approval")
 				}
 			})

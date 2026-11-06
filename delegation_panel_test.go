@@ -9,8 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/egoist/mygo/ui"
 	dg "miya/internal/delegation"
+
+	"github.com/egoist/mygo/ui"
 )
 
 func TestCollaborationPanelRetriesExactRequestAfterAmbiguousResponse(t *testing.T) {

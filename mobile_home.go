@@ -1,9 +1,10 @@
 package main
 
 import (
-	"github.com/egoist/mygo/ui"
 	"miya/internal/model"
 	"miya/internal/textutil"
+
+	"github.com/egoist/mygo/ui"
 )
 
 func (m *mobileApp) homeBackground() ui.Color {

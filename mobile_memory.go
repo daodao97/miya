@@ -4,10 +4,11 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/memory/manager"
 	"miya/internal/model"
 	"miya/internal/remote"
+
+	"github.com/egoist/mygo/ui"
 )
 
 type mobileMemory struct {

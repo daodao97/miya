@@ -64,7 +64,7 @@ func (m *mobileApp) newSendThread(cur Thread) (Thread, bool) {
 }
 
 func (m *mobileApp) newSendStatus(c *ui.Context) {
-	t := m.view.c.current()
+	t := m.viewer.current()
 	if m.newSend.thread != 0 && !t.Busy && !t.Loading && t.Status != "" {
 		ui.Text(c, t.Status).FontSize(m.font(12)).TextColor(m.pal.warn).Padding(6)
 		return

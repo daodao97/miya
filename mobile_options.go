@@ -6,10 +6,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/model"
 	"miya/internal/remote"
 	"miya/internal/textutil"
+
+	"github.com/egoist/mygo/ui"
 )
 
 func (m *mobileApp) agentOptions(agent string) phoneAgentOptions {
@@ -26,7 +27,7 @@ func (m *mobileApp) sendOptions(agent string) remote.SendOptions {
 	}
 	o := m.agentOptions(agent).Current
 	if m.open != 0 {
-		t := m.view.c.current()
+		t := m.viewer.current()
 		if model.ThreadAgent(t) == agent && t.PermissionPolicy != "" {
 			o.Policy = t.PermissionPolicy
 		}

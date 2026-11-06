@@ -7,11 +7,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/automation"
 	"miya/internal/model"
 	"miya/internal/remote"
 	"miya/internal/textutil"
+
+	"github.com/egoist/mygo/ui"
 )
 
 type mobileAutomations struct {

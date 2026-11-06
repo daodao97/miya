@@ -2,7 +2,6 @@ package main
 
 import (
 	"miya/internal/model"
-	"strings"
 )
 
 type threadTag struct {
@@ -10,7 +9,7 @@ type threadTag struct {
 	Title string
 }
 
-func (app *chatApp) referenceTitle(ref ThreadRef) string {
+func (app *chatApp) desktopReferenceTitle(ref ThreadRef) string {
 	if app.referenceThread != nil {
 		if t, ok := app.referenceThread(ref); ok {
 			return threadRefTitle(t)
@@ -32,20 +31,3 @@ func (app *chatApp) referenceTitle(ref ThreadRef) string {
 }
 
 // Tokens retain their identities; history never reconstructs them from titles.
-func (app *chatApp) threadReferenceContent(text string) (string, []threadTag) {
-	own, _ := model.SplitReferenceContext(text)
-	seen := map[ThreadRef]bool{}
-	var tags []threadTag
-	for _, m := range model.ThreadMentions(own) {
-		if seen[m.Ref] {
-			continue
-		}
-		seen[m.Ref] = true
-		title := strings.TrimSpace(m.Title)
-		if title == "" {
-			title = app.referenceTitle(m.Ref)
-		}
-		tags = append(tags, threadTag{Ref: m.Ref, Title: title})
-	}
-	return own, tags
-}

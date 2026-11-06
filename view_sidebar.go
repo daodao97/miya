@@ -3,8 +3,9 @@ package main
 import (
 	"strings"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/model"
+
+	"github.com/egoist/mygo/ui"
 )
 
 func (app *chatApp) sidebarView(c *ui.Context) {

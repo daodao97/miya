@@ -23,20 +23,8 @@ import (
 // chatApp holds what only the interface needs; conversations, connections
 // and settings stay in the controller.
 type chatApp struct {
-	c     *chatController
-	theme *ui.Theme
-	md    markdown.Options
-	// imagePreview resolves message attachments on the phone's filesystem.
-	imagePreview func(string) ui.ImageSource
-	// referenceThread resolves titles in the phone's global conversation list.
-	referenceThread func(ThreadRef) (Thread, bool)
-	// onRetry routes the shared error-card action through the phone bridge.
-	onRetry func(retryRequest)
-	// onHandoff creates the phone's draft rather than a desktop-controller draft.
-	onHandoff func()
-	// workingAccessory draws controls at the trailing edge of the turn status
-	// row, as the phone's Agent tasks toggle.
-	workingAccessory func(*ui.Context)
+	c *chatController
+	*conversationView
 
 	sidebar   bool
 	section   string // "", "Settings", "Automations" or "Skills"
@@ -60,11 +48,6 @@ type chatApp struct {
 	projectDirectories                  []hostEntry
 	threadListExpanded                  map[string]bool
 	desktopReadIntent                   desktopRead // a completed result the user chose to view
-
-	lists  map[int]*ui.ListState
-	groups groupCache
-	copied map[int]bool
-	open   map[int]bool // expanded activity runs and tool details, by ID
 
 	answers        map[string]map[string]string // question answers, by approval ID
 	forms          map[string]string            // MCP form JSON, by approval ID
@@ -98,7 +81,6 @@ type chatApp struct {
 	panelVisible bool
 	panelWidth   float32
 	nextSurface  int
-	mobile       bool // the phone's compact layout
 }
 
 func newChatApp() *chatApp {
@@ -111,21 +93,33 @@ func newChatApp() *chatApp {
 func newChatAppWithController(c *chatController) *chatApp {
 	app := &chatApp{
 		c:                  c,
-		theme:              appTheme(),
+		conversationView:   newConversationView(c),
 		sidebar:            true,
 		workspace:          c.cwd,
 		projectName:        filepath.Base(c.cwd),
 		projectPath:        c.cwd,
 		expandedProject:    c.cwd,
 		threadListExpanded: map[string]bool{},
-		lists:              map[int]*ui.ListState{},
-		copied:             map[int]bool{},
-		open:               map[int]bool{},
 		answers:            map[string]map[string]string{},
 		forms:              map[string]string{},
 		formErrors:         map[string]string{},
 		settingDrafts:      map[string]string{},
 		appearance:         normalizeAppearance(loadSetting("appearance")),
+	}
+	app.resolveTitle = app.desktopReferenceTitle
+	app.onRetry = func(req retryRequest) {
+		if err := c.retryResponse(req); err != nil {
+			app.notice = err.Error()
+		}
+	}
+	app.onHandoff = app.handoffToNewThread
+	app.desktopAccessory = app.collaborationToggle
+	app.userGroup = app.userGroupView
+	app.memoryNotice = app.memoryNoticeView
+	app.pasteAttachments = app.pasteAttachmentsData
+	app.setNotice = func(s string) { app.notice = s }
+	app.needsReadFrame = func(t Thread, state *ui.ListState, groups int) bool {
+		return !app.projectDialog && !app.switcher.open && !app.shortcutsOpen && !app.commandPalette.open && !t.Busy && !t.Loading && t.HistoryLoaded && groups > 0 && c.desktopThreadUnread(t) && state.AtEnd()
 	}
 	app.md = markdown.Options{
 		OnLink:    app.openMessageLink,
@@ -392,7 +386,7 @@ func (app *chatApp) attachFiles() {
 
 // pasteAttachments turns files or an image on the clipboard into
 // attachments. It reports whether it found any, so that text pastes as text.
-func (app *chatApp) pasteAttachments(clipboard transfer.Data) bool {
+func (app *chatApp) pasteAttachmentsData(clipboard transfer.Data) bool {
 	if paths, err := clipboard.Files(); err == nil && len(paths) > 0 {
 		app.c.addAttachments(paths)
 		return true

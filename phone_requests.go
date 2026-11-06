@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/egoist/mygo/push/apns"
 	"miya/internal/appdir"
 	"miya/internal/async"
 	"miya/internal/automation"
@@ -18,6 +17,8 @@ import (
 	"miya/internal/notification"
 	"miya/internal/remote"
 	"miya/internal/thumbnail"
+
+	"github.com/egoist/mygo/push/apns"
 )
 
 // phoneSession is one phone connection's state, shared by servePhoneConnection

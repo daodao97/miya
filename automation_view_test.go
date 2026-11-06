@@ -7,8 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/automation"
+
+	"github.com/egoist/mygo/ui"
 )
 
 func automationSnapshot(t *testing.T, tt *ui.Tester, name string) {

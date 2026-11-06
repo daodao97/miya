@@ -4,8 +4,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/model"
+
+	"github.com/egoist/mygo/ui"
 )
 
 // userGroupView shows a user message, with an edit button while the pointer

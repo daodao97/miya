@@ -6,10 +6,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/egoist/mygo/ui"
 	dg "miya/internal/delegation"
 	"miya/internal/model"
 	"miya/internal/textutil"
+
+	"github.com/egoist/mygo/ui"
 )
 
 type collaborationPanelView struct {

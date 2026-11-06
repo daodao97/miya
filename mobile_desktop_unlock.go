@@ -5,9 +5,10 @@ import (
 	"errors"
 	"time"
 
+	"miya/internal/desktop/control"
+
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
-	"miya/internal/desktop/control"
 )
 
 // Only the Keychain holds a saved password. The page retains flags and its

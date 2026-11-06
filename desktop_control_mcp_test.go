@@ -10,11 +10,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/async"
 	"miya/internal/codex"
 	"miya/internal/desktop"
 	"miya/internal/remote"
+
+	"github.com/egoist/mygo/ui"
 )
 
 type desktopEOFConnection struct{ *testPhoneConnection }

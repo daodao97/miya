@@ -23,7 +23,7 @@ func TestMobileNewSendStaysVisibleUntilHistoryArrives(t *testing.T) {
 				if !tt.HasText(m.draft) || !tt.HasText("Sending…") || tt.HasText("Let’s build") {
 					t.Fatalf("first message is not immediately visible: %v", tt.Texts())
 				}
-				if len(m.view.c.current().Messages) != 0 || len(m.msgCache) != 0 {
+				if len(m.viewer.current().Messages) != 0 || len(m.msgCache) != 0 {
 					t.Fatal("the local preview entered synchronized history")
 				}
 				m.sent(3, "")
@@ -45,7 +45,7 @@ func TestMobileNewSendStaysVisibleUntilHistoryArrives(t *testing.T) {
 				if m.newSend != nil || !tt.HasText("请修复手机新建对话的空白问题") || tt.HasText("Syncing conversation…") {
 					t.Fatalf("authoritative history did not replace the preview: %v", tt.Texts())
 				}
-				messages := m.view.c.current().Messages
+				messages := m.viewer.current().Messages
 				if len(messages) != 1 || messages[0].ID != 10 || len(m.subscribeRequest(3).Have) != 1 {
 					t.Fatal("the first message was duplicated or lost during synchronization")
 				}
@@ -86,7 +86,7 @@ func TestMobileNewSendKeepsMessageWhenServerIdentityArrives(t *testing.T) {
 	}
 	m.receiveThread(3, delta)
 	tt.Frame()
-	if !tt.HasText("首条消息应一直可见") || len(m.view.c.current().Messages) != 1 {
+	if !tt.HasText("首条消息应一直可见") || len(m.viewer.current().Messages) != 1 {
 		t.Fatalf("assigning the durable ID hid the first message: %v", tt.Texts())
 	}
 	if got := m.subscribeRequest(3); got.ServerID != "created" || len(got.Have) != 1 || got.Have[0].ID != 10 {
@@ -96,7 +96,7 @@ func TestMobileNewSendKeepsMessageWhenServerIdentityArrives(t *testing.T) {
 	delta, _ = sync.Update(thread)
 	m.receiveThread(3, delta)
 	tt.Frame()
-	messages := m.view.c.current().Messages
+	messages := m.viewer.current().Messages
 	if !tt.HasText("首条消息应一直可见") || len(messages) != 2 || messages[1].Content != "正在处理" {
 		t.Fatal("subsequent streaming lost or duplicated the first message")
 	}
@@ -122,7 +122,7 @@ func TestMobileNewSendFailureKeepsDraftAndPhotos(t *testing.T) {
 		t.Fatal("failed send deleted the photo needed for retry")
 	}
 	m.beginNewSend("修改后重试", nil)
-	shown, ok := m.newSendThread(m.view.c.current())
+	shown, ok := m.newSendThread(m.viewer.current())
 	if !ok || shown.Messages[0].Content != "修改后重试" {
 		t.Fatal("retry reused the earlier message preview")
 	}

@@ -7,9 +7,10 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/textutil"
 	"miya/internal/webservice"
+
+	"github.com/egoist/mygo/ui"
 )
 
 func (app *chatApp) runtimeSurface(c *ui.Context, p *panelState, s *panelSurface) {

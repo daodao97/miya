@@ -46,7 +46,7 @@ func TestPhoneClaudeSendPreservesReadOnlyHistory(t *testing.T) {
 			t.Fatalf("sending erased the phone's history: %+v", messages)
 		}
 		if !d.Thread.Busy && len(messages) >= 4 {
-			users := userTexts(m.view.c.current())
+			users := userTexts(m.viewer.current())
 			if len(users) != 2 || users[1] != "Follow-up" {
 				t.Fatalf("follow-up was lost or duplicated: %q", users)
 			}

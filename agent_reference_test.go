@@ -5,10 +5,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/egoist/mygo/ui"
-	"github.com/egoist/mygo/ui/richtext"
 	"miya/internal/model"
 	"miya/internal/remote"
+
+	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/richtext"
 )
 
 func TestAgentReferencesRoundTripMixedWithThreadsAndCommands(t *testing.T) {

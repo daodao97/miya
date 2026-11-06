@@ -3,9 +3,10 @@ package main
 import (
 	"strconv"
 
-	"github.com/egoist/mygo"
 	"miya/internal/notification"
 	"miya/internal/remote"
+
+	"github.com/egoist/mygo"
 )
 
 func (m *mobileApp) unreadFor(t Thread) (notification.Unread, bool) {
@@ -43,7 +44,7 @@ func (m *mobileApp) markOpenRead() {
 	if m.open == 0 || m.conn == nil || m.win != nil && mygo.App.Lifecycle() != mygo.LifecycleActive {
 		return
 	}
-	t := m.view.c.current()
+	t := m.viewer.current()
 	u, ok := m.unreadFor(t)
 	if !ok {
 		return
@@ -87,7 +88,7 @@ func (m *mobileApp) markCompletionRead() {
 }
 
 func (m *mobileApp) completionReadRequest() (remote.Request, desktopRead, bool) {
-	t := m.view.c.current()
+	t := m.viewer.current()
 	if m.open == 0 || t.ID != m.open || t.Busy || t.Loading || !t.HistoryLoaded || len(t.Messages) == 0 || t.CompletedAtMs <= 0 {
 		return remote.Request{}, desktopRead{}, false
 	}

@@ -6,9 +6,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/desktop"
 	"miya/internal/desktop/control"
+
+	"github.com/egoist/mygo/ui"
 )
 
 func (m *mobileApp) desktopChooseApps(p *mobileDesktopPage) {

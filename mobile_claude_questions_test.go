@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/claude"
+
+	"github.com/egoist/mygo/ui"
 )
 
 func TestMobileClaudeQuestionRoutesFromControllerToForm(t *testing.T) {
@@ -66,7 +67,7 @@ func TestMobileClaudeQuestionRoutesFromControllerToForm(t *testing.T) {
 			if err := tt.Click("Submit answer"); err != nil {
 				t.Fatal(err)
 			}
-			if m.view.formErrors[string(a.ID)] != "Not connected to desktop" || len(m.state.Approvals) != 1 {
+			if m.formErrors[string(a.ID)] != "Not connected to desktop" || len(m.state.Approvals) != 1 {
 				t.Fatal("failed submission lost the question or its answers")
 			}
 			f.Type = "control_cancel_request"

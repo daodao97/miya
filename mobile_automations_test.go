@@ -10,8 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/automation"
+
+	"github.com/egoist/mygo/ui"
 )
 
 func mobileAutomationFixture() automation.View {

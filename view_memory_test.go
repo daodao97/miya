@@ -6,10 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/memory"
 	"miya/internal/memory/extractor/extractortest"
 	"miya/internal/memory/manager"
+
+	"github.com/egoist/mygo/ui"
 )
 
 func TestMemoryManagementPageAndPromotionPreview(t *testing.T) {

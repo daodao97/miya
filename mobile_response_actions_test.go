@@ -7,8 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/model"
+
+	"github.com/egoist/mygo/ui"
 )
 
 func TestMobileResponseActionsWorkWithoutHover(t *testing.T) {
@@ -62,7 +63,7 @@ func TestMobileResponseActionsWorkWithoutHover(t *testing.T) {
 					t.Fatal(err)
 				}
 				want := model.ReferenceText(testRef(agent, th.ServerID), th.Title) + " 继续修复这个问题"
-				if m.open != 0 || m.view.c.active() != 0 || m.draft != want || m.selected != "/a" || m.newAgent != agent {
+				if m.open != 0 || m.viewer.active() != 0 || m.draft != want || m.selected != "/a" || m.newAgent != agent {
 					t.Fatalf("handoff did not create the phone draft: open=%d draft=%q project=%s agent=%s", m.open, m.draft, m.selected, m.newAgent)
 				}
 				if len(m.images) != 1 || m.images[0] != photo {

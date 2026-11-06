@@ -9,8 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/egoist/mygo"
 	"miya/internal/agentusage"
+
+	"github.com/egoist/mygo"
 )
 
 type usagePreferences struct {

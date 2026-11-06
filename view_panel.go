@@ -11,14 +11,15 @@ import (
 	"strings"
 	"time"
 
+	"miya/internal/fsutil"
+	"miya/internal/webservice"
+	"miya/internal/worktree"
+
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/plugins/terminal"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
 	"github.com/egoist/mygo/ui/markdown"
-	"miya/internal/fsutil"
-	"miya/internal/webservice"
-	"miya/internal/worktree"
 )
 
 // The right panel follows Waku's: each conversation keeps its own tabs of

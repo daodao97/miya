@@ -155,7 +155,7 @@ func TestWorkingOutputRateReachesDesktopAndPhone(t *testing.T) {
 				}
 				m.receiveThread(1, received)
 				tt = ui.NewTester(m.viewRoot, 390, 750)
-				if n := m.view.c.current().TurnOutputTokens; n == nil || *n != 400 {
+				if n := m.viewer.current().TurnOutputTokens; n == nil || *n != 400 {
 					t.Fatal("phone lost token usage during transport")
 				}
 			}

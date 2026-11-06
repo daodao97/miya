@@ -7,8 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/model"
+
+	"github.com/egoist/mygo/ui"
 )
 
 func TestLocalFileLink(t *testing.T) {

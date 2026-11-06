@@ -5,10 +5,11 @@ import (
 	"errors"
 	"time"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/claude"
 	"miya/internal/model"
 	"miya/internal/remote"
+
+	"github.com/egoist/mygo/ui"
 )
 
 type mobileCollaborationCall struct {
@@ -89,7 +90,7 @@ func (m *mobileApp) collaborationPane() (*collaborationPanel, collaborationPanel
 	if capability == nil || capability.Version < 1 {
 		return nil, collaborationPanelView{}, false
 	}
-	t := m.view.c.current()
+	t := m.viewer.current()
 	from := ThreadRef{Source: m.state.ReferenceSource, Backend: model.ThreadAgent(t), SessionID: t.ServerID}.URL()
 	p := m.pal
 	// Running and completed turns share the same status row and task toggle.

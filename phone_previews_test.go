@@ -10,9 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/remote"
 	"miya/internal/thumbnail"
+
+	"github.com/egoist/mygo/ui"
 )
 
 func TestPhonePreviewSurvivesSendAndRelaunch(t *testing.T) {

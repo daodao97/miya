@@ -53,19 +53,19 @@ func TestMobileMetadataUpdateReusesHistory(t *testing.T) {
 	s := newPhoneThreadSync(nil)
 	d, _ := s.Update(desk)
 	m.receiveThread(desk.ID, d)
-	before := m.view.c.current()
-	groups := m.view.groups.of(m.view.c)
-	revision := m.view.c.revision()
+	before := m.viewer.current()
+	groups := m.view.groups.of(m.viewer)
+	revision := m.viewer.revision()
 	m.cacheDir = t.TempDir()
 	t.Cleanup(func() { m.flushCache(true) })
 	desk.Tokens, desk.Title = 123, "Updated title"
 	d, _ = s.Update(desk)
 	m.receiveThread(desk.ID, d)
-	cur := m.view.c.current()
+	cur := m.viewer.current()
 	if cur.Tokens != 123 || m.title != "Updated title" {
 		t.Fatal("metadata was not applied")
 	}
-	if &cur.Messages[0] != &before.Messages[0] || &m.view.groups.of(m.view.c)[0] != &groups[0] || m.view.c.revision() != revision {
+	if &cur.Messages[0] != &before.Messages[0] || &m.view.groups.of(m.viewer)[0] != &groups[0] || m.viewer.revision() != revision {
 		t.Fatal("metadata update rebuilt unchanged history")
 	}
 	if len(m.dirty) != 0 {
@@ -75,7 +75,7 @@ func TestMobileMetadataUpdateReusesHistory(t *testing.T) {
 	desk.Busy = true
 	d, _ = s.Update(desk)
 	m.receiveThread(desk.ID, d)
-	groups = m.view.groups.of(m.view.c)
+	groups = m.view.groups.of(m.viewer)
 	if !groups[len(groups)-1].Streaming {
 		t.Fatal("reusing messages hid the running turn")
 	}
@@ -83,8 +83,8 @@ func TestMobileMetadataUpdateReusesHistory(t *testing.T) {
 	desk.Messages[len(desk.Messages)-1].Content = "Updated reply"
 	d, _ = s.Update(desk)
 	m.receiveThread(desk.ID, d)
-	cur = m.view.c.current()
-	if cur.Messages[len(cur.Messages)-1].Content != "Updated reply" || m.view.c.revision() == revision || len(m.dirty) == 0 {
+	cur = m.viewer.current()
+	if cur.Messages[len(cur.Messages)-1].Content != "Updated reply" || m.viewer.revision() == revision || len(m.dirty) == 0 {
 		t.Fatal("changed messages were not rendered and persisted")
 	}
 }
@@ -98,7 +98,7 @@ func BenchmarkMobileThreadUpdate(b *testing.B) {
 			s := newPhoneThreadSync(nil)
 			d, _ := s.Update(desk)
 			m.receiveThread(desk.ID, d)
-			m.view.groups.of(m.view.c)
+			m.view.groups.of(m.viewer)
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
@@ -110,7 +110,7 @@ func BenchmarkMobileThreadUpdate(b *testing.B) {
 					d.Changed = []Message{msg}
 				}
 				m.receiveThread(desk.ID, d)
-				m.view.groups.of(m.view.c)
+				m.view.groups.of(m.viewer)
 			}
 		})
 	}

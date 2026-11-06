@@ -4,8 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/model"
+
+	"github.com/egoist/mygo/ui"
 )
 
 func (app *chatApp) collaborationCall(request collaborationRequest, done func(json.RawMessage, error)) {

@@ -9,9 +9,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/creack/pty"
 	"miya/internal/async"
 	"miya/internal/remote"
+
+	"github.com/creack/pty"
 )
 
 func (c *chatController) serveRemoteTerminal(ctx context.Context, wire *remote.Conn) {

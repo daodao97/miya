@@ -5,8 +5,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/textutil"
+
+	"github.com/egoist/mygo/ui"
 )
 
 type desktopShortcut struct {

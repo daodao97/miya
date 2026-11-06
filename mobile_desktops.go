@@ -10,10 +10,11 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/egoist/mygo"
-	"github.com/egoist/mygo/ui"
 	"miya/internal/model"
 	"miya/internal/remote"
+
+	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/ui"
 )
 
 type mobileDesktops struct {
@@ -251,17 +252,14 @@ func (m *mobileApp) resetDesktopState() {
 	m.drawerSearch, m.drawerQuery, m.menu, m.quotaOpen = false, "", false, false
 	m.drawerOffset, m.drawerDragging, m.drawerVisible = ui.Point{}, false, false
 	m.quotaDrawerShown, m.rowPressed, m.pressOpen = false, false, false
-	if m.view.c.cancel != nil {
-		m.view.c.cancel()
-	}
-	m.view.c = newViewerController()
+	m.viewer = newMobileViewer()
+	m.view.c = m.viewer
 	m.view.groups = groupCache{}
 	m.view.lists = map[int]*ui.ListState{}
 	m.view.copied, m.view.open = map[int]bool{}, map[int]bool{}
-	m.view.answers = map[string]map[string]string{}
-	m.view.forms, m.view.formErrors = map[string]string{}, map[string]string{}
-	m.view.editing, m.view.editText, m.view.menu = 0, "", ""
-	m.view.editInput = inlineThreadInput{}
+
+	m.formErrors = map[string]string{}
+
 	m.inlineInput = inlineThreadInput{}
 }
 
@@ -273,7 +271,7 @@ func (m *mobileApp) saveDesktopSession() {
 	if m.desktopSessions == nil {
 		m.desktopSessions = map[string]mobileDesktopSession{}
 	}
-	thread := m.view.c.current()
+	thread := m.viewer.current()
 	if thread.ServerID != "" && len(thread.Messages) > 0 {
 		m.remember(thread.ServerID, thread.Messages)
 	}

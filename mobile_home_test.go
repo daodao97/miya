@@ -7,9 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/codex"
 	"miya/internal/notification"
+
+	"github.com/egoist/mygo/ui"
 )
 
 func mobileHomeFixture() *mobileApp {
@@ -55,7 +56,7 @@ func TestMobileDrawerGroupsConversationsByProject(t *testing.T) {
 	if err := tt.Click("实现手机端对话列表"); err != nil {
 		t.Fatal(err)
 	}
-	if m.open != 4 || m.router().Path() != "/thread" || m.view.c.current().ServerID != "busy" {
+	if m.open != 4 || m.router().Path() != "/thread" || m.viewer.current().ServerID != "busy" {
 		t.Fatal("drawer did not open the conversation from the other project")
 	}
 }

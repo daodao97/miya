@@ -4,8 +4,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/desktop/control"
+
+	"github.com/egoist/mygo/ui"
 )
 
 type mobileDesktopPrivacy struct {

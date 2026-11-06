@@ -6,8 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/model"
+
+	"github.com/egoist/mygo/ui"
 )
 
 func TestGlobalThreadChoicesIncludeAllProjectsAndMatches(t *testing.T) {

@@ -7,8 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/claude"
+
+	"github.com/egoist/mygo/ui"
 )
 
 func TestGoalEventsAndClaudeSchedulesStayOnTheirThread(t *testing.T) {

@@ -2,11 +2,12 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/egoist/mygo"
 	"log"
 	"miya/internal/model"
 	"miya/internal/notification"
 	"miya/internal/remote"
+
+	"github.com/egoist/mygo"
 )
 
 func (m *mobileApp) setupPush() {
@@ -29,7 +30,7 @@ func (m *mobileApp) setupPush() {
 			return mygo.PresentNotificationDefault
 		}
 		target := notificationTarget(e.Data)
-		current := m.view.c.current()
+		current := m.viewer.current()
 		viewing := target.Thread != 0 && target.Thread == m.open
 		if target.ServerID != "" {
 			viewing = m.open != 0 && current.ServerID == target.ServerID && (target.Agent == "" || target.Agent == model.ThreadAgent(current))

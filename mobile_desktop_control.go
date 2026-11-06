@@ -7,12 +7,13 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/codex"
 	"miya/internal/desktop"
 	"miya/internal/desktop/control"
 	"miya/internal/remote"
 	"miya/internal/textutil"
+
+	"github.com/egoist/mygo/ui"
 )
 
 type mobileDesktopApproval struct {

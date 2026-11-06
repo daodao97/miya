@@ -8,8 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/textutil"
+
+	"github.com/egoist/mygo/ui"
 )
 
 func (app *chatApp) composerArea(c *ui.Context) {

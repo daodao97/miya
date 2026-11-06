@@ -7,9 +7,10 @@ import (
 	"strings"
 	"testing"
 
+	"miya/internal/model"
+
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/richtext"
-	"miya/internal/model"
 )
 
 func TestInlineThreadReferencesKeepTheirPosition(t *testing.T) {

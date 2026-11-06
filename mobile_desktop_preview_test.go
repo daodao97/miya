@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/codex"
 	"miya/internal/desktop"
 	"miya/internal/desktop/control"
+
+	"github.com/egoist/mygo/ui"
 )
 
 func TestMobileWindowPreviewFailureKeepsLastFrameAndButtons(t *testing.T) {

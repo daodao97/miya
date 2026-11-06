@@ -3,9 +3,10 @@ package main
 import (
 	"fmt"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/subagent"
 	"miya/internal/textutil"
+
+	"github.com/egoist/mygo/ui"
 )
 
 // subAgentList shows the sub-agents an activity tracks, whichever agent's

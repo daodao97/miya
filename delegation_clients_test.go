@@ -10,9 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/egoist/mygo/ui"
 	dg "miya/internal/delegation"
 	"miya/internal/remote"
+
+	"github.com/egoist/mygo/ui"
 )
 
 func collaborationPhoneCall(t *testing.T, f *serviceFixture, operation, from string, args map[string]any) (map[string]any, error) {

@@ -6,8 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/webservice"
+
+	"github.com/egoist/mygo/ui"
 )
 
 func TestMobileWebServiceNavigation(t *testing.T) {

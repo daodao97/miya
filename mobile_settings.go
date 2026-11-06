@@ -3,9 +3,10 @@ package main
 import (
 	"fmt"
 
+	"miya/internal/textutil"
+
 	"github.com/egoist/mygo/i18n"
 	"github.com/egoist/mygo/ui"
-	"miya/internal/textutil"
 )
 
 func (m *mobileApp) settingsView(c *ui.Context) {

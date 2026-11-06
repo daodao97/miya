@@ -9,10 +9,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/codex"
 	"miya/internal/model"
 	"miya/internal/subagent"
+
+	"github.com/egoist/mygo/ui"
 )
 
 func handoffSource() Thread {

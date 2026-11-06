@@ -7,9 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/codex"
 	"miya/internal/remote"
+
+	"github.com/egoist/mygo/ui"
 )
 
 func TestMobileModelSettingsRemainLocalAndKeepDraft(t *testing.T) {
@@ -99,7 +100,7 @@ func TestMobileQuestionPageAcceptsOptionsAndKeepsFailedAnswer(t *testing.T) {
 	if err := tt.Click("Submit answer"); err != nil {
 		t.Fatal(err)
 	}
-	if m.fieldsFor(a)["choice"] != "方案 A" || len(m.state.Approvals) != 1 || m.view.formErrors["1"] == "" {
+	if m.fieldsFor(a)["choice"] != "方案 A" || len(m.state.Approvals) != 1 || m.formErrors["1"] == "" {
 		t.Fatal("failed/offline submission lost the answer or card")
 	}
 	m.approvalAnswered(a.ID, "")
@@ -176,7 +177,7 @@ func TestMobileAgentTasksToggleSharesWorkingRow(t *testing.T) {
 	pane, _, _ := m.collaborationPane()
 	pane.loaded, pane.rows = true, []collaborationTaskView{{ID: "t1", Title: "Review", Agent: agentCodex}}
 	tt.Frame()
-	working, ok := tt.Find(threadWorkingLabel(m.view.c.current()))
+	working, ok := tt.Find(threadWorkingLabel(m.viewer.current()))
 	if !ok {
 		t.Fatal("missing working status")
 	}

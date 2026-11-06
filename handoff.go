@@ -385,10 +385,6 @@ func (app *chatApp) threadChoices(query string) []composerChoice {
 }
 
 func (app *chatApp) handoffToNewThread() {
-	if app.onHandoff != nil {
-		app.onHandoff()
-		return
-	}
 	c := app.c
 	t := c.current()
 	ref := c.threadRef(t)

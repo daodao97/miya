@@ -6,9 +6,10 @@ import (
 	"runtime"
 	"time"
 
+	"miya/internal/agentusage"
+
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
-	"miya/internal/agentusage"
 )
 
 const usagePanelWidth, usagePanelHeader, usagePanelFooter = 320, 54, 44

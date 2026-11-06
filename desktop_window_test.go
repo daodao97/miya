@@ -7,10 +7,11 @@ import (
 	"image/jpeg"
 	"testing"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/codex"
 	"miya/internal/desktop"
 	"miya/internal/remote"
+
+	"github.com/egoist/mygo/ui"
 )
 
 func windowJPEG(t *testing.T) []byte {

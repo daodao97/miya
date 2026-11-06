@@ -10,9 +10,10 @@ import (
 	"slices"
 	"testing"
 
+	"miya/internal/model"
+
 	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
-	"miya/internal/model"
 )
 
 func TestComposerPastesAttachmentsBeforeClipboardText(t *testing.T) {

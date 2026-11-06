@@ -12,10 +12,11 @@ import (
 	"testing"
 	"time"
 
+	"miya/internal/remote"
+
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 	"github.com/tailscale/tailcat"
-	"miya/internal/remote"
 )
 
 type desktopTestStore struct {
@@ -184,10 +185,10 @@ func TestMobileDesktopSwitchKeepsCachesAndOptionsSeparate(t *testing.T) {
 	m.badgeRevision = 999
 	m.commands = map[string][]composerChoice{"/a": {{Name: "secret-command"}}}
 	m.approvalFields = map[string]map[string]string{"1": {"answer": "A"}}
-	m.view.c.setThreads([]Thread{{ID: 7, ServerID: "shared", Messages: []Message{{Content: "Only A"}}}})
-	m.view.c.setActive(7)
+	m.viewer.setThreads([]Thread{{ID: 7, ServerID: "shared", Messages: []Message{{Content: "Only A"}}}})
+	m.viewer.setActive(7)
 	m.connect(b)
-	if len(m.desktops.Items) != 2 || len(m.state.Projects) != 0 || len(m.cachedMessages("shared")) != 0 || len(m.options) != 0 || len(m.commands) != 0 || len(m.approvalFields) != 0 || m.view.c.current().ID != 0 || m.badgeRevision != 0 {
+	if len(m.desktops.Items) != 2 || len(m.state.Projects) != 0 || len(m.cachedMessages("shared")) != 0 || len(m.options) != 0 || len(m.commands) != 0 || len(m.approvalFields) != 0 || m.viewer.current().ID != 0 || m.badgeRevision != 0 {
 		t.Fatal("switching desktops leaked the previous desktop's state")
 	}
 	m.host = "Mac B"
@@ -306,7 +307,7 @@ func TestMobileDesktopSwitchPreservesDraftAndAttachments(t *testing.T) {
 	m.draft = "B 的草稿"
 	bID := m.currentDesktopID()
 	m.switchDesktop(aID)
-	if m.open != 1 || m.view.c.current().ServerID != "a-thread" || m.draft != "A 的草稿" || len(m.images) != 1 || m.images[0] != photo {
+	if m.open != 1 || m.viewer.current().ServerID != "a-thread" || m.draft != "A 的草稿" || len(m.images) != 1 || m.images[0] != photo {
 		t.Fatal("switching back did not restore the conversation, draft and attachment")
 	}
 	m.switchDesktop(bID)
@@ -363,7 +364,7 @@ func TestMobileNotificationsSelectTheCorrectDesktop(t *testing.T) {
 	m.connect(b)
 	m.state.Projects = []phoneProject{{Path: "/b", Threads: []Thread{{ID: 7, ServerID: "only-b", Title: "B"}}}}
 	m.openNotification(map[string]string{"thread": "7", "serverId": "only-a", "project": "/a", "agent": agentCodex})
-	if m.currentDesktopID() != aID || m.view.c.current().ServerID != "only-a" {
+	if m.currentDesktopID() != aID || m.viewer.current().ServerID != "only-a" {
 		t.Fatal("notification opened a same-numbered conversation on the wrong desktop")
 	}
 	m.openNotification(map[string]string{"thread": "7"})

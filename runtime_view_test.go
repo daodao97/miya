@@ -10,9 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/egoist/mygo/ui"
 	rt "miya/internal/runtime"
 	"miya/internal/webservice"
+
+	"github.com/egoist/mygo/ui"
 )
 
 func sampleConversationRuntime(ref ThreadRef) conversationRuntime {

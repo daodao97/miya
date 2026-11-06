@@ -4,9 +4,10 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"miya/internal/textutil"
+
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/richtext"
-	"miya/internal/textutil"
 )
 
 const composerCommandTag = "composer-command"

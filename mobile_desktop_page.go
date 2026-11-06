@@ -10,11 +10,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/desktop"
 	"miya/internal/desktop/control"
 	"miya/internal/remote"
 	"miya/internal/textutil"
+
+	"github.com/egoist/mygo/ui"
 )
 
 // The remote desktop page is native MyGo UI. Frames and input travel over the

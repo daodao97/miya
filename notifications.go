@@ -3,13 +3,14 @@ package main
 import (
 	"crypto/sha256"
 	"fmt"
-	"github.com/egoist/mygo"
 	"log"
 	"miya/internal/codex"
 	"miya/internal/model"
 	"miya/internal/notification"
 	"strconv"
 	"time"
+
+	"github.com/egoist/mygo"
 )
 
 func (c *chatController) installNotifications() {

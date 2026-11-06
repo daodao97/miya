@@ -8,9 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/automation"
 	"miya/internal/textutil"
+
+	"github.com/egoist/mygo/ui"
 )
 
 // automationsUI is the Automations page's state; the automations live in

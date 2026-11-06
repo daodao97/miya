@@ -39,14 +39,8 @@ func testApp(t *testing.T) (*chatApp, *ui.Tester) {
 	c.approvals, c.setApprovals = createSignal([]codex.Approval{})
 	c.historyStatus, c.setHistoryStatus = createSignal("")
 	c.revision, c.setRevision = createSignal(0)
-	app := &chatApp{
-		c: c, theme: appTheme(), sidebar: true,
-		workspace: cwd, projectName: "demo", projectPath: cwd, expandedProject: cwd,
-		threadListExpanded: map[string]bool{}, lists: map[int]*ui.ListState{},
-		copied: map[int]bool{}, open: map[int]bool{},
-		answers: map[string]map[string]string{}, forms: map[string]string{}, formErrors: map[string]string{},
-	}
-	app.account.init(app)
+	app := newChatAppWithController(c)
+	app.projectName = "demo"
 	return app, ui.NewTester(app.view, 1180, 820)
 }
 

@@ -1,9 +1,10 @@
 package main
 
 import (
+	"miya/internal/model"
+
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
-	"miya/internal/model"
 )
 
 // Primary destinations belong to the drawer; only their child pages pop

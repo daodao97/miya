@@ -6,10 +6,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/egoist/mygo/ui"
 	"miya/internal/memory"
 	"miya/internal/memory/manager"
 	"miya/internal/model"
+
+	"github.com/egoist/mygo/ui"
 )
 
 type memoryUI struct {
