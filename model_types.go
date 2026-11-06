@@ -601,3 +601,8 @@ var (
 var (
 	atomicWriteFile = fsutil.AtomicWriteFile
 )
+
+// Moved to internal/codex.
+var (
+	isMissingCodexThread = codex.IsMissingThread
+)

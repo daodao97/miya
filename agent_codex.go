@@ -3,8 +3,6 @@ package main
 import (
 	"context"
 	_ "embed"
-	"errors"
-	"strings"
 	"time"
 
 	"miya/internal/codex"
@@ -42,12 +40,6 @@ func (c *chatController) resetCodexSessions() {
 	if c.revision != nil {
 		c.setRevision(c.revision() + 1)
 	}
-}
-
-func isMissingCodexThread(err error, threadID string) bool {
-	var rpc *codex.RPCError
-	return errors.As(err, &rpc) && rpc.Code == -32600 &&
-		strings.TrimSpace(rpc.Message) == "thread not found: "+threadID
 }
 
 func (codexBackend) ID() string { return agentCodex }
