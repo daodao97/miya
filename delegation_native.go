@@ -6,7 +6,6 @@ import (
 
 	"miya/internal/codex"
 	dg "miya/internal/delegation"
-	"miya/internal/subagent"
 )
 
 func (c *chatController) managedCodexAccepted(id, turn, epoch string, err error, mayHaveStarted bool) {
@@ -63,13 +62,6 @@ func (c *chatController) managedCodexAccepted(id, turn, epoch string, err error,
 		c.managedEvent(id, event)
 	}
 	run.Pending = nil
-}
-
-// Generic native/internal errors can occur after side effects. Only protocol
-// validation/method rejection proves a sent start request was not accepted.
-func provenCodexRejection(err error) bool {
-	var rpc *codex.RPCError
-	return errors.As(err, &rpc) && (rpc.Code == -32600 || rpc.Code == -32601 || rpc.Code == -32602)
 }
 
 func (c *chatController) managedCodexOutput(before Thread, method string, e codex.Event) {
@@ -135,25 +127,6 @@ func (c *chatController) managedCodexOutput(before Thread, method string, e code
 	c.managedEvent(id, event)
 }
 
-func managedResult(messages []Message, phases bool) dg.Result {
-	r := dg.Result{Artifacts: changedFiles(messages)}
-	for _, m := range messages {
-		if m.Role == "error" {
-			r.Error = m.Content
-		}
-		if m.Role != "assistant" || strings.TrimSpace(m.Content) == "" {
-			continue
-		}
-		if phases && m.Item != nil && !codexFinalPhase(m.Item.Phase) {
-			continue
-		}
-		r.Text = m.Content
-	}
-	return r
-}
-
-func codexFinalPhase(phase string) bool { return phase == "" || phase == "final_answer" }
-
 // The adapter has not attempted turn/start or written a user input. A failed
 // resume must not turn into an unknown notification or a user draft.
 func (c *chatController) managedBeforeInputFailed(id, reason string) {
@@ -205,25 +178,6 @@ func (c *chatController) managedClaudeStarted(id int) {
 	}
 	run.Started = true
 	c.managedEvent(t.ExecutionID, dg.Event{Target: c.threadRef(t).URL(), SessionEpoch: run.Epoch, State: dg.Running})
-}
-
-func managedLongRunning(t Thread) bool {
-	for _, task := range t.Tasks {
-		if task.Kind == "goal" && task.Status == "active" {
-			return true
-		}
-		if task.Kind == "loop" && (task.Status == "waiting" || task.Status == "running" || task.Status == "active" || task.Status == "starting") {
-			return true
-		}
-	}
-	for _, m := range t.Messages {
-		for _, agent := range m.Agents {
-			if subagent.Active(agent.Status) || agent.Status == subagent.Unconfirmed {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 func (c *chatController) managedTargetUnavailable(t Thread) bool {

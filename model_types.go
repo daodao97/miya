@@ -8,6 +8,7 @@ import (
 	"miya/internal/claude/transcript"
 	"miya/internal/codex"
 	"miya/internal/composer"
+	"miya/internal/delegation/coordinator"
 	"miya/internal/mcpconfig"
 	"miya/internal/mcpproto"
 	"miya/internal/mcpserver"
@@ -472,4 +473,12 @@ var (
 // Moved to internal/composer.
 var (
 	insertThreadReference = composer.InsertThreadReference
+)
+
+// Moved to internal/delegation/coordinator.
+var (
+	codexFinalPhase      = coordinator.CodexFinalPhase
+	managedLongRunning   = coordinator.LongRunning
+	managedResult        = coordinator.NativeResult
+	provenCodexRejection = coordinator.ProvenCodexRejection
 )
