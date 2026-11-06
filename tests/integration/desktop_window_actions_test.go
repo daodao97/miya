@@ -19,7 +19,7 @@ func TestDesktopAuthorizationButtonsUseCurrentNativeState(t *testing.T) {
 	window := desktop.Window{ID: 81, PID: 120}
 	enabled := false
 	presses := 0
-	d := &control.Server{
+	d := &control.Server{Native: control.Native{
 		Windows: func() ([]desktop.Window, error) { return []desktop.Window{window}, nil },
 		Dialog: func(w desktop.Window) (desktop.Dialog, error) {
 			if w != window {
@@ -34,7 +34,7 @@ func TestDesktopAuthorizationButtonsUseCurrentNativeState(t *testing.T) {
 			presses++
 			return nil
 		},
-	}
+	}}
 	if _, _, err := d.PerformWindowAction(window, "允许访问"); err == nil || presses != 0 {
 		t.Fatal("disabled password action pressed")
 	}
@@ -60,7 +60,7 @@ func TestDesktopAuthorizationRejectedPasswordKeepsTakeoverPending(t *testing.T) 
 	list[0].Method = "miya/desktopControl"
 	c.SetApprovals(list)
 	r := remote.Request{ServerID: "s", Approval: id, ApprovalVersion: phoneapi.ApprovalFingerprint(list[0]), WindowID: 81, WindowPID: 120}
-	c.Desktop = &control.Server{Windows: func() ([]desktop.Window, error) { return []desktop.Window{{ID: 81, PID: 120}}, nil }}
+	c.Desktop = &control.Server{Native: control.Native{Windows: func() ([]desktop.Window, error) { return []desktop.Window{{ID: 81, PID: 120}}, nil }}}
 	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
 	defer cancel()
 	c.ConfirmDesktopAction(ctx, r, desktop.Action{Label: "任意文字"}, []desktop.Window{{ID: 81, PID: 120}})
@@ -131,13 +131,13 @@ func TestDesktopAuthorizationCompletionDoesNotDependOnButtonText(t *testing.T) {
 			c.SetApprovals(list)
 			r := remote.Request{ServerID: "s", Approval: id, ApprovalVersion: phoneapi.ApprovalFingerprint(list[0]), WindowID: 81, WindowPID: 120}
 			reads := 0
-			c.Desktop = &control.Server{Windows: func() ([]desktop.Window, error) {
+			c.Desktop = &control.Server{Native: control.Native{Windows: func() ([]desktop.Window, error) {
 				reads++
 				if reads == 1 {
 					return nil, errors.New("temporary window read failure")
 				}
 				return []desktop.Window{{ID: 99, PID: 321}}, nil // Unrelated app is irrelevant.
-			}}
+			}}}
 			ctx, stop := context.WithTimeout(context.Background(), time.Second)
 			defer stop()
 			c.ConfirmDesktopAction(ctx, r, desktop.Action{ID: "button", Label: tc.label, Cancel: tc.cancel}, []desktop.Window{{ID: 81, PID: 120}})
@@ -163,13 +163,13 @@ func TestDesktopAuthorizationTransitionKeepsTakeoverPending(t *testing.T) {
 	c.SetApprovals(list)
 	r := remote.Request{ServerID: "s", Approval: id, ApprovalVersion: phoneapi.ApprovalFingerprint(list[0]), WindowID: 81, WindowPID: 120}
 	reads := 0
-	c.Desktop = &control.Server{Windows: func() ([]desktop.Window, error) {
+	c.Desktop = &control.Server{Native: control.Native{Windows: func() ([]desktop.Window, error) {
 		reads++
 		if reads == 1 {
 			return nil, nil
 		} // Brief gap between authorization steps.
 		return []desktop.Window{{ID: 82, PID: 120}}, nil
-	}}
+	}}}
 	c.ConfirmDesktopAction(context.Background(), r, desktop.Action{Label: "允许访问", Default: true}, []desktop.Window{{ID: 81, PID: 120}})
 	select {
 	case <-ch:

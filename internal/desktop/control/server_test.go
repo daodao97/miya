@@ -23,7 +23,7 @@ func desktopHTTP(d *Server, token, method, path, body string) *httptest.Response
 func mockDesktop(t *testing.T) (*Server, string, *atomic.Int32) {
 	t.Helper()
 	calls := new(atomic.Int32)
-	d := &Server{Authorize: func() error { return nil }, Capture: func() ([]byte, error) { return []byte("jpeg"), nil }, Input: func(desktop.Input) error { calls.Add(1); return nil }}
+	d := &Server{Native: Native{Authorize: func() error { return nil }, Capture: func() ([]byte, error) { return []byte("jpeg"), nil }, Input: func(desktop.Input) error { calls.Add(1); return nil }}}
 	token, err := d.Open(context.Background())
 	if err != nil {
 		t.Fatal(err)

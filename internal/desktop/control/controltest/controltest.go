@@ -19,7 +19,7 @@ import (
 func mock(t *testing.T) (*control.Server, string, *atomic.Int32) {
 	t.Helper()
 	calls := new(atomic.Int32)
-	d := &control.Server{Authorize: func() error { return nil }, Capture: func() ([]byte, error) { return []byte("jpeg"), nil }, Input: func(desktop.Input) error { calls.Add(1); return nil }}
+	d := &control.Server{Native: control.Native{Authorize: func() error { return nil }, Capture: func() ([]byte, error) { return []byte("jpeg"), nil }, Input: func(desktop.Input) error { calls.Add(1); return nil }}}
 	token, err := d.Open(context.Background())
 	if err != nil {
 		t.Fatal(err)

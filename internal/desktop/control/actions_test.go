@@ -15,7 +15,7 @@ func TestDesktopLeaseActionsRecheckNativeStateAndWindow(t *testing.T) {
 	var enabled atomic.Bool
 	var presses atomic.Int32
 	entered, release := make(chan desktop.Window, 1), make(chan struct{})
-	d := &Server{
+	d := &Server{Native: Native{
 		Authorize:     func() error { return nil },
 		Windows:       func() ([]desktop.Window, error) { return []desktop.Window{window}, nil },
 		CaptureWindow: func(desktop.Window) ([]byte, error) { return []byte("jpeg"), nil },
@@ -32,7 +32,7 @@ func TestDesktopLeaseActionsRecheckNativeStateAndWindow(t *testing.T) {
 			presses.Add(1)
 			return nil
 		},
-	}
+	}}
 	token, err := d.OpenWindow(context.Background(), &window)
 	if err != nil {
 		t.Fatal(err)

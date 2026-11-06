@@ -79,7 +79,7 @@ func TestDesktopWindowPreviewIsReadOnlyAndMatchesTarget(t *testing.T) {
 	password := desktop.Window{ID: 21, PID: 80, App: "系统设置", BundleID: "com.apple.systempreferences", Title: "授权密码"}
 	other := desktop.Window{ID: 22, PID: 81, App: "Browser", Title: "私人网页"}
 	data := windowJPEG(t)
-	d := &Server{
+	d := &Server{Native: Native{
 		Windows: func() ([]desktop.Window, error) { return []desktop.Window{other, password}, nil },
 		CaptureWindow: func(w desktop.Window) ([]byte, error) {
 			if w != password {
@@ -89,7 +89,7 @@ func TestDesktopWindowPreviewIsReadOnlyAndMatchesTarget(t *testing.T) {
 		},
 		Authorize: func() error { t.Fatal("preview requested OS permissions"); return nil },
 		Capture:   func() ([]byte, error) { t.Fatal("preview captured display"); return nil, nil },
-	}
+	}}
 	w, preview, err := d.PreviewWindow(WindowHint{App: password.BundleID, Title: "密码"})
 	if err != nil || w != password || len(preview) == 0 || d.lease != nil {
 		t.Fatal(w, err)

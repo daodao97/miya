@@ -18,7 +18,7 @@ func (c *Controller) desktopControls() *control.Server {
 	c.desktopMu.Lock()
 	defer c.desktopMu.Unlock()
 	if c.Desktop == nil {
-		c.Desktop = &control.Server{Authorize: desktop.Authorize, Capture: desktop.Capture, Input: desktop.SendInput, Windows: desktop.Windows, Apps: desktop.Applications, OpenApp: desktop.OpenApplication, Privacy: desktop.StartPrivacy, CaptureWindow: desktop.CaptureWindow, InputWindow: desktop.SendWindowInput, Dialog: desktop.WindowDialog, PressAction: desktop.PressWindowAction, Wake: desktop.WakeDisplay, Locked: desktop.ScreenLocked}
+		c.Desktop = &control.Server{Native: control.Native{Authorize: desktop.Authorize, Capture: desktop.Capture, Input: desktop.SendInput, Windows: desktop.Windows, Apps: desktop.Applications, OpenApp: desktop.OpenApplication, Privacy: desktop.StartPrivacy, CaptureWindow: desktop.CaptureWindow, InputWindow: desktop.SendWindowInput, Dialog: desktop.WindowDialog, PressAction: desktop.PressWindowAction, Wake: desktop.WakeDisplay, Locked: desktop.ScreenLocked}}
 		c.Desktop.Displays, c.Desktop.CaptureDisplay, c.Desktop.InputDisplay = desktop.Displays, desktop.CaptureDisplay, desktop.SendDisplayInput
 	}
 	return c.Desktop
