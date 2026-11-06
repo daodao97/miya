@@ -359,3 +359,8 @@ var (
 	resetExpiryText        = account.ResetExpiryText
 	resetOutcomeText       = account.ResetOutcomeText
 )
+
+// Moved to internal/model.
+var (
+	resetCodexSession = model.ResetCodexSession
+)

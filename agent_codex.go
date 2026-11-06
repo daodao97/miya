@@ -18,21 +18,6 @@ var codexAgentPNG []byte
 // codexBackend talks to the local Codex app-server.
 type codexBackend struct{}
 
-// Resumed and writer ownership are valid only for the current app-server.
-// Claude's Resumed instead describes its persisted CLI session.
-func resetCodexSession(t *Thread) {
-	if model.ThreadAgent(*t) != agentCodex {
-		return
-	}
-	t.Resumed, t.ReadOnly = false, false
-	t.Loaded, t.Loading, t.Busy, t.StopRequested = false, false, false, false
-	t.TurnID = ""
-	t.MemoryEpoch++
-	if t.Status == "Working…" || t.Status == "Starting…" || t.Status == "Stopping…" {
-		t.Status = ""
-	}
-}
-
 func (c *chatController) resetCodexSessions() {
 	for _, t := range c.allThreads() {
 		if model.ThreadAgent(t) == agentCodex && t.ExecutionID != "" {
@@ -65,15 +50,19 @@ func isMissingCodexThread(err error, threadID string) bool {
 		strings.TrimSpace(rpc.Message) == "thread not found: "+threadID
 }
 
-func (codexBackend) ID() string          { return agentCodex }
-func (codexBackend) Name() string        { return model.AgentName(model.AgentCodex) }
+func (codexBackend) ID() string { return agentCodex }
+
+func (codexBackend) Name() string { return model.AgentName(model.AgentCodex) }
+
 func (codexBackend) Icon() agentIconSpec { return agentIconSpec{PNG: codexAgentPNG} }
+
 func (codexBackend) Caps() agentCaps {
 	return agentCaps{Models: true, Effort: true, Quota: true, ThreadCommands: true}
 }
 
 // Discover connects, which lists the workspace's threads once connected.
-func (codexBackend) Discover(c *chatController)   { c.connect() }
+func (codexBackend) Discover(c *chatController) { c.connect() }
+
 func (codexBackend) Ready(c *chatController) bool { return c.ready() }
 
 func (codexBackend) Problem(c *chatController) (string, bool) {
@@ -101,8 +90,10 @@ func (codexBackend) Stop(c *chatController, t Thread) {
 }
 
 func (codexBackend) Archive(c *chatController, t Thread) { c.archiveCodexThread(t) }
-func (codexBackend) Delete(c *chatController, t Thread)  { c.deleteCodexThread(t) }
-func (codexBackend) Suspend(*chatController, Thread)     {}
+
+func (codexBackend) Delete(c *chatController, t Thread) { c.deleteCodexThread(t) }
+
+func (codexBackend) Suspend(*chatController, Thread) {}
 
 func (codexBackend) Owns(a codex.Approval) bool { return !claudeApproval(a) }
 
