@@ -579,3 +579,9 @@ var (
 var (
 	isWriterConflict = codex.IsWriterConflict
 )
+
+// Moved to internal/claude.
+var (
+	applyClaudeSchedules = claude.ApplySchedules
+	stopClaudeTasks      = claude.StopTasks
+)
