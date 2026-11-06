@@ -16,38 +16,10 @@ import (
 	"miya/internal/remote"
 )
 
-const mobileDesktopsKey = "desktops-v1"
-
-type mobileSecretStore interface {
-	Get(string) ([]byte, error)
-	Set(string, []byte) error
-	Delete(string) error
-}
-
-// Links contain pairing secrets. The complete registry lives in Keychain;
-// its opaque IDs, rather than links, identify controls and notifications.
-type mobileDesktop struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-	Link string `json:"link"`
-}
-
 type mobileDesktops struct {
 	Version int             `json:"version"`
 	Active  string          `json:"active"`
 	Items   []mobileDesktop `json:"items"`
-}
-
-// Retain the phone's in-progress composer when switching workspaces, keeping
-// attachments owned by that desktop instead of deleting them on navigation.
-type mobileDesktopSession struct {
-	Thread             Thread
-	Selected, Agent    string
-	Draft              string
-	Images             []string
-	ExpandedProject    string
-	ProjectsExpanded   bool
-	ThreadListExpanded map[string]bool
 }
 
 type desktopPersistence struct {
@@ -331,21 +303,6 @@ func (m *mobileApp) restoreDesktopSession(id string) {
 		m.openThread(thread)
 	}
 	m.draft, m.images = session.Draft, session.Images
-}
-
-func migrateDesktopOptions(dataDir, link string) {
-	if dataDir == "" || link == "" {
-		return
-	}
-	destination := filepath.Join(dataDir, "threads", cacheName(link), "message-options.json")
-	if _, err := os.Stat(destination); !os.IsNotExist(err) {
-		return
-	}
-	if data, err := os.ReadFile(filepath.Join(dataDir, "message-options.json")); err == nil {
-		if os.MkdirAll(filepath.Dir(destination), 0700) == nil {
-			_ = os.WriteFile(destination, data, 0600)
-		}
-	}
 }
 
 // Older desktop versions omit a desktop identifier from notifications.

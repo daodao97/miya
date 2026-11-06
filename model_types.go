@@ -554,3 +554,18 @@ const (
 var (
 	pruneCache = phonecache.Prune
 )
+
+// Moved to internal/phonecache.
+type (
+	mobileDesktop        = phonecache.Desktop
+	mobileDesktopSession = phonecache.Session
+	mobileSecretStore    = phonecache.SecretStore
+)
+
+const (
+	mobileDesktopsKey = phonecache.DesktopsKey
+)
+
+var (
+	migrateDesktopOptions = phonecache.MigrateOptions
+)
