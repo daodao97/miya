@@ -844,14 +844,6 @@ func (c *chatController) readHistory(t Thread) {
 	c.resume(t, nil)
 }
 
-func isWriterConflict(err error) bool {
-	if err == nil {
-		return false
-	}
-	message := strings.ToLower(err.Error())
-	return strings.Contains(message, "already has an active writer") || strings.Contains(message, "already has a live local writer")
-}
-
 // changeWorkspace changes the selected project while keeping Codex sessions
 // alive on the shared app-server. The native directory picker validates that
 // the user selected a directory, but keep this check here as well because the

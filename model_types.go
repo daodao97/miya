@@ -574,3 +574,8 @@ var (
 var (
 	prepareHistoryMessages = msgfmt.HistoryMessages
 )
+
+// Moved to internal/codex.
+var (
+	isWriterConflict = codex.IsWriterConflict
+)
