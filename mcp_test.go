@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"miya/internal/codex"
+	"miya/internal/mcpconfig"
 	"miya/internal/model"
 	"miya/internal/subagent"
 )
@@ -269,8 +270,8 @@ func TestAgentsGetTheMiyaServerOnlyInTheService(t *testing.T) {
 	if claudeMCPArgs("/ws") != nil || codexMCPArgs("/ws") != nil || claudeMCPEnv() != nil {
 		t.Fatal("agents got the miya server outside the service")
 	}
-	miyaMCPEnabled = true
-	t.Cleanup(func() { miyaMCPEnabled = false })
+	mcpconfig.Enabled = true
+	t.Cleanup(func() { mcpconfig.Enabled = false })
 	args := claudeMCPArgs("/w s")
 	if len(args) != 4 || args[0] != "--mcp-config" || args[2] != "--allowedTools" || strings.Contains(args[3], "delegate") {
 		t.Fatalf("bad Claude args: %q", args)

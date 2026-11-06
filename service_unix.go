@@ -17,6 +17,7 @@ import (
 	"miya/internal/appdir"
 	"miya/internal/async"
 	"miya/internal/automation"
+	"miya/internal/mcpconfig"
 	"miya/internal/remote"
 )
 
@@ -50,7 +51,7 @@ func runServiceWithOptions(options serverOptions) error {
 	os.Chmod(sock, 0o600)
 	ex := async.NewExecutor()
 	runOnMain = ex.Push
-	miyaMCPEnabled = true
+	mcpconfig.Enabled = true
 	var s *service
 	ready := make(chan struct{})
 	ex.Push(func() {

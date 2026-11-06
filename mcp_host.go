@@ -7,75 +7,12 @@ import (
 	"miya/internal/model"
 	"miya/internal/subagent"
 	"miya/internal/textutil"
-	"os"
-	"path/filepath"
 	"reflect"
 	"strings"
 )
 
 // The service's side of the miya MCP server: the conversations it lists,
 // reads and hands work to, and the arguments that give agents the server.
-
-// miyaMCPEnabled is set in the background service, whose socket the miya
-// MCP server reaches; agents get the server only there.
-var miyaMCPEnabled bool
-
-// maxDelegationDepth bounds how far conversations hand work on: one that
-// was handed work this many times over hands none further.
-const maxDelegationDepth = 2
-
-// miyaReadOnlyTools are the miya tools an agent may call without asking.
-var miyaReadOnlyTools = []string{"list_threads", "read_thread", "thread_status", "list_agents", "read_task", "wait_task", "list_tasks", "list_automations", "report_result", "search_memory", "runtime_info", "request_desktop_control"}
-
-func miyaMCPCommand() (string, bool) {
-	if !miyaMCPEnabled {
-		return "", false
-	}
-	exe, err := os.Executable()
-	return exe, err == nil
-}
-
-// claudeMCPArgs give a Claude Code run the miya server; its read-only tools
-// run without asking, delegate asks as any tool does.
-func claudeMCPArgs(cwd string) []string {
-	exe, ok := miyaMCPCommand()
-	if !ok {
-		return nil
-	}
-	cfg, _ := json.Marshal(map[string]any{"mcpServers": map[string]any{"miya": map[string]any{"type": "stdio", "command": exe, "args": []string{"-mcp", cwd, serviceSocket()}}}})
-	allowed := make([]string, len(miyaReadOnlyTools))
-	for i, tool := range miyaReadOnlyTools {
-		allowed[i] = "mcp__miya__" + tool
-	}
-	return []string{"--mcp-config", string(cfg), "--allowedTools", strings.Join(allowed, ",")}
-}
-
-// claudeMCPEnv lets a delegation wait for its reply.
-func claudeMCPEnv() []string {
-	if _, ok := miyaMCPCommand(); !ok {
-		return nil
-	}
-	return []string{"MCP_TOOL_TIMEOUT=1500000"}
-}
-
-// codexMCPArgs give a Codex app-server the miya server, as config overrides.
-func codexMCPArgs(cwd string) []string {
-	exe, ok := miyaMCPCommand()
-	if !ok {
-		return nil
-	}
-	return []string{
-		"-c", "mcp_servers.miya.command=" + tomlString(exe),
-		"-c", "mcp_servers.miya.args=[" + tomlString("-mcp") + "," + tomlString(cwd) + "," + tomlString(serviceSocket()) + "]",
-		"-c", "mcp_servers.miya.tool_timeout_sec=1500",
-	}
-}
-
-// tomlString quotes s as a TOML basic string, whose escapes JSON's are.
-func tomlString(s string) string {
-	b, _ := json.Marshal(s)
-	return string(b)
-}
 
 // mcpHandle answers a miya tool call the service received.
 func (c *chatController) mcpHandle(op string, r mcpRequest) (any, error) {
@@ -191,17 +128,6 @@ func (c *chatController) mcpCaller(tool string) (Thread, bool) {
 		}
 	}
 	return caller, found
-}
-
-func isMiyaToolCall(m Message, tool string) bool {
-	switch strings.ToLower(m.Kind) {
-	case "claudetool":
-		name, _ := claudeToolCall(m)
-		return name == "mcp__miya__"+tool
-	case "mcptoolcall":
-		return m.Item != nil && m.Item.Server == "miya" && m.Item.Tool == tool
-	}
-	return false
 }
 
 func (c *chatController) mcpThreads(r mcpRequest) mcpThreadsResult {
@@ -335,18 +261,6 @@ func (c *chatController) delegatedFrom(id, ancestor int) bool {
 		seen[parent] = true
 		id = parent
 	}
-}
-
-// samePath reports whether two paths name one directory, through symlinks
-// such as macOS's /var to /private/var.
-func samePath(a, b string) bool {
-	resolve := func(p string) string {
-		if r, err := filepath.EvalSymlinks(p); err == nil {
-			return r
-		}
-		return filepath.Clean(p)
-	}
-	return resolve(a) == resolve(b)
 }
 
 func (c *chatController) mcpRuntime(r mcpRequest) (any, error) {

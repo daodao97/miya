@@ -6,6 +6,7 @@ import (
 	"miya/internal/claude"
 	"miya/internal/claude/transcript"
 	"miya/internal/composer"
+	"miya/internal/mcpconfig"
 	"miya/internal/mcpproto"
 	"miya/internal/mcpserver"
 	"miya/internal/model"
@@ -317,4 +318,17 @@ var (
 	claudeTextKey        = claude.TextKey
 	saveClaudeHistory    = claude.SaveHistory
 	turnHasOutput        = claude.TurnHasOutput
+)
+
+// Moved to internal/mcpconfig.
+const (
+	maxDelegationDepth = mcpconfig.MaxDelegationDepth
+)
+
+var (
+	claudeMCPArgs  = mcpconfig.ClaudeArgs
+	claudeMCPEnv   = mcpconfig.ClaudeEnv
+	codexMCPArgs   = mcpconfig.CodexArgs
+	isMiyaToolCall = mcpconfig.IsMiyaToolCall
+	tomlString     = mcpconfig.TomlString
 )
