@@ -98,7 +98,7 @@ func writeTaskSnapshot(t *testing.T, name string, tt *ui.Tester) {
 
 func TestGoalCommandParsing(t *testing.T) {
 	g, ok, err := parseGoalCommand("/goal --budget 50000 fix /tmp/example")
-	if !ok || err != nil || g.budget == nil || *g.budget != 50000 || g.objective != "fix /tmp/example" {
+	if !ok || err != nil || g.Budget == nil || *g.Budget != 50000 || g.Objective != "fix /tmp/example" {
 		t.Fatalf("%+v %v", g, err)
 	}
 	_, _, err = parseGoalCommand("/goal --budget -1 fix")
@@ -107,7 +107,7 @@ func TestGoalCommandParsing(t *testing.T) {
 	}
 	for _, a := range []string{"pause", "resume", "clear"} {
 		g, _, _ := parseGoalCommand("/goal " + a)
-		if g.action != a {
+		if g.Action != a {
 			t.Fatal(g)
 		}
 	}

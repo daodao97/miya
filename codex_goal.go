@@ -13,8 +13,8 @@ import (
 )
 
 type goalCommand struct {
-	action, objective string
-	budget            *int64
+	Action, Objective string
+	Budget            *int64
 }
 
 func parseGoalCommand(text string) (goalCommand, bool, error) {
@@ -25,16 +25,16 @@ func parseGoalCommand(text string) (goalCommand, bool, error) {
 	args = strings.TrimSpace(args)
 	switch args {
 	case "", "pause", "resume", "clear":
-		return goalCommand{action: args}, true, nil
+		return goalCommand{Action: args}, true, nil
 	}
-	g := goalCommand{action: "set", objective: args}
+	g := goalCommand{Action: "set", Objective: args}
 	if strings.HasPrefix(args, "--budget ") {
 		value, objective, _ := strings.Cut(strings.TrimSpace(strings.TrimPrefix(args, "--budget ")), " ")
 		n, err := strconv.ParseInt(value, 10, 64)
 		if err != nil || n <= 0 || strings.TrimSpace(objective) == "" {
 			return g, true, fmt.Errorf("Usage: /goal --budget <positive integer> <goal>")
 		}
-		g.budget, g.objective = &n, strings.TrimSpace(objective)
+		g.Budget, g.Objective = &n, strings.TrimSpace(objective)
 	}
 	return g, true, nil
 }
@@ -54,7 +54,7 @@ func (c *chatController) codexGoalCommand(req SendRequest) (int, string) {
 	if c.client == nil || !c.ready() {
 		return 0, "Connect to Codex first."
 	}
-	if t.ID == 0 && g.action != "set" {
+	if t.ID == 0 && g.Action != "set" {
 		return 0, "This conversation has no goal. Use /goal <goal> to create one."
 	}
 	if len(req.Attachments) > 0 {
@@ -67,7 +67,7 @@ func (c *chatController) codexGoalCommand(req SendRequest) (int, string) {
 	if t.ID == 0 {
 		cwd := textutil.FirstNonEmpty(req.Project, c.cwd)
 		t = Thread{ID: c.nextID(), Agent: agentCodex, PermissionPolicy: policy,
-			Title: conversationTitle("", g.objective, ""), Project: filepath.Base(cwd), Loaded: true, HistoryLoaded: true}
+			Title: conversationTitle("", g.Objective, ""), Project: filepath.Base(cwd), Loaded: true, HistoryLoaded: true}
 		c.addThread(cwd, t)
 	}
 	client, id, cwd := c.client, t.ID, c.threadWorkspace(t.ID)
@@ -103,19 +103,19 @@ func (c *chatController) codexGoalCommand(req SendRequest) (int, string) {
 		if err == nil {
 			method := "thread/goal/get"
 			params := map[string]any{"threadId": serverID}
-			if g.action == "clear" {
+			if g.Action == "clear" {
 				method = "thread/goal/clear"
-			} else if g.action != "" {
+			} else if g.Action != "" {
 				method, params["origin"] = "thread/goal/set", "user"
-				switch g.action {
+				switch g.Action {
 				case "pause":
 					params["status"] = "paused"
 				case "resume":
 					params["status"] = "active"
 				case "set":
-					params["objective"], params["status"] = g.objective, "active"
-					if g.budget != nil {
-						params["tokenBudget"] = *g.budget
+					params["objective"], params["status"] = g.Objective, "active"
+					if g.Budget != nil {
+						params["tokenBudget"] = *g.Budget
 					}
 				}
 			}
