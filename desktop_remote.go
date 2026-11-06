@@ -23,7 +23,7 @@ func remoteServerLink() string {
 	if err != nil {
 		return ""
 	}
-	return store.current().Link
+	return store.Current().Link
 }
 
 func saveRemoteServer(link string) error {
@@ -39,13 +39,13 @@ func saveRemoteServer(link string) error {
 	}
 	store.Active = localDesktopWorkspace
 	if link != "" {
-		item, err := store.remember(link, "")
+		item, err := store.Remember(link, "")
 		if err != nil {
 			return err
 		}
 		store.Active = item.ID
 	}
-	return store.save()
+	return store.Save()
 }
 
 func connectRemoteService(link string) (*serviceClient, svcState, error) {

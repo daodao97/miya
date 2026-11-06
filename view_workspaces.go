@@ -8,7 +8,7 @@ import (
 
 func (app *chatApp) workspaceSelector(c *ui.Context) {
 	m := app.ensureDesktopWorkspaces()
-	current := m.store.current()
+	current := m.store.Current()
 	name := current.Name
 	if current.ID == localDesktopWorkspace {
 		name = tr("Local")
@@ -111,8 +111,8 @@ func (m *desktopWorkspaces) dialog(c *ui.Context) {
 					label = tr("Connecting…")
 				}
 				if ui.PrimaryButton(c.Key("workspace-connect"), label).Disabled(m.busy || strings.TrimSpace(m.link) == "").Clicked() {
-					next := m.store.clone()
-					item, err := next.remember(m.link, m.name)
+					next := m.store.Clone()
+					item, err := next.Remember(m.link, m.name)
 					if err != nil {
 						m.err = err.Error()
 					} else {
@@ -128,13 +128,13 @@ func (m *desktopWorkspaces) dialog(c *ui.Context) {
 }
 
 func (m *desktopWorkspaces) renameCurrent() {
-	next := m.store.clone()
+	next := m.store.Clone()
 	for i := range next.Items {
 		if next.Items[i].ID == m.editID {
 			next.Items[i].Name = strings.TrimSpace(m.name)
 		}
 	}
-	if err := next.save(); err != nil {
+	if err := next.Save(); err != nil {
 		m.err = err.Error()
 		return
 	}

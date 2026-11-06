@@ -44,7 +44,7 @@ func newWindowController() *chatController {
 		onCleanup(func() { c.cancel(); c.remote.Close() })
 		return c
 	}
-	if link := store.current().Link; link != "" {
+	if link := store.Current().Link; link != "" {
 		c := newServiceWindow("", func() (*serviceClient, svcState, error) { return connectRemoteService(link) })
 		c.mirror.remoteHost = true
 		onCleanup(func() { c.cancel(); c.remote.Close() })

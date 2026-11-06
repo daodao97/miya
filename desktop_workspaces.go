@@ -31,7 +31,7 @@ func defaultDesktopWorkspaces() desktopWorkspaceStore {
 	return desktopWorkspaceStore{Version: 1, Active: localDesktopWorkspace, Items: []desktopWorkspace{{ID: localDesktopWorkspace, Name: "Local"}}}
 }
 
-func (s desktopWorkspaceStore) find(id string) (desktopWorkspace, bool) {
+func (s desktopWorkspaceStore) Find(id string) (desktopWorkspace, bool) {
 	for _, item := range s.Items {
 		if item.ID == id {
 			return item, true
@@ -39,16 +39,16 @@ func (s desktopWorkspaceStore) find(id string) (desktopWorkspace, bool) {
 	}
 	return desktopWorkspace{}, false
 }
-func (s desktopWorkspaceStore) current() desktopWorkspace {
-	item, _ := s.find(s.Active)
+func (s desktopWorkspaceStore) Current() desktopWorkspace {
+	item, _ := s.Find(s.Active)
 	return item
 }
-func (s desktopWorkspaceStore) clone() desktopWorkspaceStore {
+func (s desktopWorkspaceStore) Clone() desktopWorkspaceStore {
 	s.Items = append([]desktopWorkspace(nil), s.Items...)
 	return s
 }
 
-func (s *desktopWorkspaceStore) remember(link, name string) (desktopWorkspace, error) {
+func (s *desktopWorkspaceStore) Remember(link, name string) (desktopWorkspace, error) {
 	id, err := desktopID(link)
 	if err != nil {
 		return desktopWorkspace{}, err
@@ -83,12 +83,12 @@ func loadDesktopWorkspaces() (desktopWorkspaceStore, error) {
 			if item.ID == localDesktopWorkspace {
 				continue
 			}
-			remembered, err := store.remember(item.Link, item.Name)
+			remembered, err := store.Remember(item.Link, item.Name)
 			if err != nil || remembered.ID != item.ID {
 				return defaultDesktopWorkspaces(), errors.New("The saved workspace connection is invalid")
 			}
 		}
-		if _, ok := store.find(saved.Active); ok {
+		if _, ok := store.Find(saved.Active); ok {
 			store.Active = saved.Active
 		}
 		return store, nil
@@ -112,7 +112,7 @@ func loadDesktopWorkspaces() (desktopWorkspaceStore, error) {
 		return store, errors.New("The previous server connection is invalid")
 	}
 	if legacy.Link != "" {
-		item, err := store.remember(legacy.Link, "")
+		item, err := store.Remember(legacy.Link, "")
 		if err != nil {
 			return store, errors.New("The previous server connection is invalid")
 		}
@@ -121,7 +121,7 @@ func loadDesktopWorkspaces() (desktopWorkspaceStore, error) {
 	return store, nil
 }
 
-func (s desktopWorkspaceStore) save() error {
+func (s desktopWorkspaceStore) Save() error {
 	if err := os.MkdirAll(appdir.Dir(), 0700); err != nil {
 		return err
 	}
@@ -203,7 +203,7 @@ func (m *desktopWorkspaces) cancelConnection() {
 }
 
 func (m *desktopWorkspaces) selectWorkspace(id string) {
-	item, ok := m.store.find(id)
+	item, ok := m.store.Find(id)
 	if !ok || m.closed {
 		return
 	}
@@ -218,15 +218,15 @@ func (m *desktopWorkspaces) connectWorkspace(item desktopWorkspace) {
 	m.cancelConnection()
 	m.err = ""
 	if session := m.sessions[item.ID]; session != nil {
-		next := m.store.clone()
+		next := m.store.Clone()
 		if item.ID != localDesktopWorkspace {
-			if _, err := next.remember(item.Link, item.Name); err != nil {
+			if _, err := next.Remember(item.Link, item.Name); err != nil {
 				m.err = err.Error()
 				return
 			}
 		}
 		next.Active = item.ID
-		if err := next.save(); err != nil {
+		if err := next.Save(); err != nil {
 			m.err = err.Error()
 			return
 		}
@@ -235,9 +235,9 @@ func (m *desktopWorkspaces) connectWorkspace(item desktopWorkspace) {
 		return
 	}
 	if item.ID == localDesktopWorkspace && (runtime.GOOS == "windows" || os.Getenv("MIYA_SERVICE") == "0") {
-		next := m.store.clone()
+		next := m.store.Clone()
 		next.Active = item.ID
-		if err := next.save(); err != nil {
+		if err := next.Save(); err != nil {
 			m.err = err.Error()
 			return
 		}
@@ -280,13 +280,13 @@ func (m *desktopWorkspaces) finishConnection(gen uint64, item desktopWorkspace, 
 		m.err = err.Error()
 		return
 	}
-	next := m.store.clone()
+	next := m.store.Clone()
 	if item.ID != localDesktopWorkspace {
-		item, err = next.remember(item.Link, item.Name)
+		item, err = next.Remember(item.Link, item.Name)
 	}
 	if err == nil {
 		next.Active = item.ID
-		err = next.save()
+		err = next.Save()
 	}
 	if err != nil {
 		cl.Close()

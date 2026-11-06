@@ -25,16 +25,16 @@ func TestDesktopWorkspacesMigrateAndKeepLocalSelection(t *testing.T) {
 		t.Fatal(err)
 	}
 	store, err := loadDesktopWorkspaces()
-	if err != nil || len(store.Items) != 2 || store.current().Link != link {
+	if err != nil || len(store.Items) != 2 || store.Current().Link != link {
 		t.Fatal("legacy workspace did not migrate", err)
 	}
 	addr, _ := remote.ParseLink(link)
-	item, err := store.remember(string(addr), "prod-us")
+	item, err := store.Remember(string(addr), "prod-us")
 	if err != nil || len(store.Items) != 2 || item.Name != "prod-us" {
 		t.Fatal("same pairing created multiple workspaces", err)
 	}
 	store.Active = localDesktopWorkspace
-	if err := store.save(); err != nil {
+	if err := store.Save(); err != nil {
 		t.Fatal(err)
 	}
 	loaded, err := loadDesktopWorkspaces()
@@ -103,8 +103,8 @@ func TestDesktopWorkspaceSwitchPreservesDraftsAndPanels(t *testing.T) {
 	localPanel := local.panel()
 	localPanel.selected = "unsaved-local.txt"
 	link := testDesktopLink()
-	next := hub.store.clone()
-	item, err := next.remember(link, "prod-us")
+	next := hub.store.Clone()
+	item, err := next.Remember(link, "prod-us")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,8 +153,8 @@ func TestDesktopWorkspaceSwitchPreservesDraftsAndPanels(t *testing.T) {
 func TestDesktopWorkspaceFailureKeepsCurrentContext(t *testing.T) {
 	local, hub, dispatch := desktopWorkspaceFixture(t)
 	local.c.rememberDraft("do not lose")
-	next := hub.store.clone()
-	item, _ := next.remember(testDesktopLink(), "offline")
+	next := hub.store.Clone()
+	item, _ := next.Remember(testDesktopLink(), "offline")
 	hub.connect = func(context.Context, desktopWorkspace) (*serviceClient, svcState, error) {
 		return nil, svcState{}, errors.New("offline")
 	}
@@ -167,8 +167,8 @@ func TestDesktopWorkspaceFailureKeepsCurrentContext(t *testing.T) {
 
 func TestDesktopWorkspaceCancelDiscardsLateConnection(t *testing.T) {
 	local, hub, dispatch := desktopWorkspaceFixture(t)
-	next := hub.store.clone()
-	item, _ := next.remember(testDesktopLink(), "slow")
+	next := hub.store.Clone()
+	item, _ := next.Remember(testDesktopLink(), "slow")
 	cl, _ := restartTestClient(t, svcHello{Version: serviceVersion}, "")
 	started, release, dispatched := make(chan struct{}), make(chan struct{}), make(chan struct{})
 	local.c.run = func(f func()) {
@@ -243,7 +243,7 @@ func TestDesktopWorkspaceSidebarFlow(t *testing.T) {
 
 func TestDesktopWorkspaceSidebarRemoteSnapshot(t *testing.T) {
 	app, hub, _ := desktopWorkspaceFixture(t)
-	item, err := hub.store.remember(testDesktopLink(), "prod-us")
+	item, err := hub.store.Remember(testDesktopLink(), "prod-us")
 	if err != nil {
 		t.Fatal(err)
 	}
