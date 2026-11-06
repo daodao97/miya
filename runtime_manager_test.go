@@ -43,10 +43,10 @@ func TestCodexRuntimeRecoversTaggedServicesWithoutNativeTerminals(t *testing.T) 
 		port    int
 	}{{"detached-a", portA}, {"detached-b", portB}} {
 		key := runtimeKey(testRef(agentCodex, tc.session))
-		m.register(key, runtimeSource{Epoch: "e", Caps: rt.Capabilities{SessionTag: true}, Snapshot: func(context.Context) (runtimeSnapshot, error) {
+		m.Register(key, runtimeSource{Epoch: "e", Caps: rt.Capabilities{SessionTag: true}, Snapshot: func(context.Context) (runtimeSnapshot, error) {
 			return runtimeSnapshot{Known: true, Tasks: []rt.Task{}}, nil
 		}})
-		result := runtimeResult(m, key, m.refresh(context.Background(), key))
+		result := runtimeResult(m, key, m.Refresh(context.Background(), key))
 		if len(result.Services) != 1 || result.Services[0].Port != tc.port || !result.View.TasksKnown || len(result.View.Tasks) != 0 {
 			t.Fatalf("tagged recovery failed (unowned port %d): %+v", unowned, result)
 		}
@@ -78,8 +78,8 @@ func TestRuntimeOwnedServiceOnDesktopLANInterface(t *testing.T) {
 	m := newRuntimeManager(nil, "")
 	defer m.Close()
 	key := runtimeKey(testRef(agentCodex, "lan-session"))
-	m.register(key, runtimeSource{Epoch: "e", Caps: rt.Capabilities{SessionTag: true}, Snapshot: func(context.Context) (runtimeSnapshot, error) { return runtimeSnapshot{Known: true}, nil }})
-	result := runtimeResult(m, key, m.refresh(context.Background(), key))
+	m.Register(key, runtimeSource{Epoch: "e", Caps: rt.Capabilities{SessionTag: true}, Snapshot: func(context.Context) (runtimeSnapshot, error) { return runtimeSnapshot{Known: true}, nil }})
+	result := runtimeResult(m, key, m.Refresh(context.Background(), key))
 	if len(result.Services) != 1 || result.Services[0].Host != host || result.Services[0].Port != port {
 		t.Fatalf("LAN listener missing: %+v", result)
 	}
@@ -88,20 +88,20 @@ func TestRuntimeOwnedServiceOnDesktopLANInterface(t *testing.T) {
 	request.Header.Set("X-Miya-Web-Host", host)
 	request.Header.Set("X-Miya-Runtime", svc.RuntimeToken)
 	response := httptest.NewRecorder()
-	webservice.Server(m.validateToken).ServeHTTP(response, request)
+	webservice.Server(m.ValidateToken).ServeHTTP(response, request)
 	if response.Code != 404 {
 		t.Fatalf("owned LAN proxy = %d: %s", response.Code, response.Body.String())
 	}
 	request.Header.Del("X-Miya-Runtime")
 	response = httptest.NewRecorder()
-	webservice.Server(m.validateToken).ServeHTTP(response, request)
+	webservice.Server(m.ValidateToken).ServeHTTP(response, request)
 	if response.Code != 400 {
 		t.Fatal("LAN proxy accepted missing ownership token")
 	}
 	request.Header.Set("X-Miya-Runtime", svc.RuntimeToken)
 	request.Header.Set("X-Miya-Web-Host", "203.0.113.1")
 	response = httptest.NewRecorder()
-	webservice.Server(m.validateToken).ServeHTTP(response, request)
+	webservice.Server(m.ValidateToken).ServeHTTP(response, request)
 	if response.Code != 400 {
 		t.Fatal("LAN proxy accepted another computer")
 	}
@@ -258,7 +258,7 @@ func TestClaudeRuntimeUsesDedicatedSessionProcessTrees(t *testing.T) {
 			}
 		}
 	}
-	if !c.runtimes().busy() {
+	if !c.runtimes().Busy() {
 		t.Fatal("managed background resource did not delay upgrade")
 	}
 }
@@ -268,22 +268,22 @@ func TestRuntimeEndpointTokensRejectReusedPortsAndTampering(t *testing.T) {
 	manager := newRuntimeManager(nil, filepath.Join(t.TempDir(), "runtime.json"))
 	defer manager.Close()
 	key := runtimeKey(testRef(agentCodex, "a"))
-	manager.register(key, runtimeSource{Epoch: "e1", Caps: rt.Capabilities{RequiresHost: true}, Snapshot: func(context.Context) (runtimeSnapshot, error) {
+	manager.Register(key, runtimeSource{Epoch: "e1", Caps: rt.Capabilities{RequiresHost: true}, Snapshot: func(context.Context) (runtimeSnapshot, error) {
 		return runtimeSnapshot{Known: true, Tasks: []rt.Task{{ID: "opaque", Status: "running"}}, Roots: []rt.Root{{PID: pid, TaskID: "opaque"}}}, nil
 	}})
-	view := manager.refresh(context.Background(), key)
+	view := manager.Refresh(context.Background(), key)
 	result := runtimeResult(manager, key, view)
 	if len(result.Services) != 1 || result.Services[0].Port != port {
 		t.Fatalf("missing owned service: %+v", result)
 	}
 	service := result.Services[0]
-	if err := manager.validateToken(context.Background(), service.RuntimeToken, service.Host, port); err != nil {
+	if err := manager.ValidateToken(context.Background(), service.RuntimeToken, service.Host, port); err != nil {
 		t.Fatal(err)
 	}
-	if err := manager.validateToken(context.Background(), service.RuntimeToken+"bad", service.Host, port); err == nil {
+	if err := manager.ValidateToken(context.Background(), service.RuntimeToken+"bad", service.Host, port); err == nil {
 		t.Fatal("tampered token accepted")
 	}
-	if err := manager.validateToken(context.Background(), service.RuntimeToken, service.Host, port+1); err == nil {
+	if err := manager.ValidateToken(context.Background(), service.RuntimeToken, service.Host, port+1); err == nil {
 		t.Fatal("token allowed another port")
 	}
 	stop()
@@ -292,7 +292,7 @@ func TestRuntimeEndpointTokensRejectReusedPortsAndTampering(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer reused.Close()
-	if err := manager.validateToken(context.Background(), service.RuntimeToken, service.Host, port); err == nil {
+	if err := manager.ValidateToken(context.Background(), service.RuntimeToken, service.Host, port); err == nil {
 		t.Fatal("another process inherited a reused endpoint")
 	}
 }
@@ -301,10 +301,10 @@ func TestRuntimeUnavailableNativeDataNeverGuessesByDirectory(t *testing.T) {
 	manager := newRuntimeManager(nil, "")
 	defer manager.Close()
 	key := runtimeKey(testRef(agentCodex, "unknown"))
-	manager.register(key, runtimeSource{Epoch: "e", Snapshot: func(context.Context) (runtimeSnapshot, error) {
+	manager.Register(key, runtimeSource{Epoch: "e", Snapshot: func(context.Context) (runtimeSnapshot, error) {
 		return runtimeSnapshot{}, errors.New("unsupported native method")
 	}})
-	view := manager.refresh(context.Background(), key)
+	view := manager.Refresh(context.Background(), key)
 	if view.TasksKnown || len(view.Endpoints) != 0 || len(view.Processes) != 0 || view.Notice == "" {
 		t.Fatalf("missing evidence became guessed ownership: %+v", view)
 	}
@@ -313,12 +313,12 @@ func TestRuntimeManagerCloseWaitsForOutstandingObservation(t *testing.T) {
 	manager := newRuntimeManager(nil, "")
 	key := runtimeKey(testRef(agentCodex, "close"))
 	started := make(chan struct{})
-	manager.register(key, runtimeSource{Epoch: "e", Snapshot: func(ctx context.Context) (runtimeSnapshot, error) {
+	manager.Register(key, runtimeSource{Epoch: "e", Snapshot: func(ctx context.Context) (runtimeSnapshot, error) {
 		close(started)
 		<-ctx.Done()
 		return runtimeSnapshot{}, ctx.Err()
 	}})
-	manager.kick(key)
+	manager.Kick(key)
 	<-started
 	finished := make(chan struct{})
 	go func() { manager.Close(); close(finished) }()
@@ -327,7 +327,7 @@ func TestRuntimeManagerCloseWaitsForOutstandingObservation(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("runtime observation did not stop with its host")
 	}
-	if manager.busy() {
+	if manager.Busy() {
 		t.Fatal("closed runtime retained in-flight observer")
 	}
 }

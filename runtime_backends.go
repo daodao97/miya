@@ -86,12 +86,12 @@ func (c *chatController) noteRuntime(t Thread) {
 	}
 	key := runtimeKey(c.threadRef(t))
 	manager := c.runtimes()
-	manager.register(key, source)
+	manager.Register(key, source)
 	manager.mu.Lock()
 	last := manager.sources[key].last
 	manager.mu.Unlock()
 	if time.Since(last) >= 200*time.Millisecond {
-		manager.kick(key)
+		manager.Kick(key)
 	}
 }
 
@@ -108,9 +108,9 @@ func (c *chatController) prepareRuntime(ref ThreadRef, project string) (deferred
 	source := backendOf(target.thread).Runtime(c, target.thread)
 	manager := c.runtimes()
 	key := runtimeKey(ref)
-	manager.register(key, source)
+	manager.Register(key, source)
 	return func() (any, error) {
-		view := manager.refresh(manager.ctx, key)
+		view := manager.Refresh(manager.ctx, key)
 		return runtimeResult(manager, key, view), nil
 	}, nil
 }
@@ -127,7 +127,7 @@ func runtimeResult(manager *runtimeManager, key rt.SessionKey, view rt.View) con
 				break
 			}
 		}
-		result.Services = append(result.Services, webservice.Service{Port: e.Port, Host: e.Host, Process: name, RuntimeToken: manager.token(key, e), Owner: &ThreadRef{Source: key.Source, Backend: key.Backend, SessionID: key.SessionID}})
+		result.Services = append(result.Services, webservice.Service{Port: e.Port, Host: e.Host, Process: name, RuntimeToken: manager.Token(key, e), Owner: &ThreadRef{Source: key.Source, Backend: key.Backend, SessionID: key.SessionID}})
 	}
 	return result
 }

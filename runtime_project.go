@@ -29,7 +29,7 @@ func (c *chatController) projectRuntimeServices(ctx context.Context, project str
 			if manager.store.Read(key).Epoch == "" && !thread.Busy && c.claudeRuns[thread.ID] == nil {
 				continue
 			}
-			manager.register(key, backendOf(thread).Runtime(c, thread))
+			manager.Register(key, backendOf(thread).Runtime(c, thread))
 			out.keys = append(out.keys, key)
 		}
 		return out
@@ -43,7 +43,7 @@ func (c *chatController) projectRuntimeServices(ctx context.Context, project str
 	for range min(4, len(views)) {
 		workers.Go(func() {
 			for i := range jobs {
-				views[i] = prepared.manager.refresh(ctx, prepared.keys[i])
+				views[i] = prepared.manager.Refresh(ctx, prepared.keys[i])
 			}
 		})
 	}

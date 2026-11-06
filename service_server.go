@@ -285,7 +285,7 @@ func (s *service) handle(p *svcPeer, req svcRequest) (any, error) {
 		return deferred(func() (any, error) {
 			ctx, cancel := context.WithTimeout(manager.ctx, 5*time.Second)
 			defer cancel()
-			return nil, manager.validateToken(ctx, r.RuntimeToken, r.Host, r.Port)
+			return nil, manager.ValidateToken(ctx, r.RuntimeToken, r.Host, r.Port)
 		}), nil
 	case "runtime":
 		var r runtimeRequest

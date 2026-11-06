@@ -75,7 +75,7 @@ func (c *chatController) fileServer() http.Handler {
 		if !ok {
 			return ctx.Err()
 		}
-		return manager.validateToken(ctx, token, host, port)
+		return manager.ValidateToken(ctx, token, host, port)
 	})
 	controls := c.desktopControls()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

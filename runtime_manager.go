@@ -77,7 +77,7 @@ func (m *runtimeManager) Close() {
 		_ = m.store.Save(m.path)
 	}
 }
-func (m *runtimeManager) persist() {
+func (m *runtimeManager) Persist() {
 	if m.path == "" {
 		return
 	}
@@ -107,7 +107,7 @@ func (c *chatController) runtimes() *runtimeManager {
 func runtimeKey(ref ThreadRef) rt.SessionKey {
 	return rt.SessionKey{Source: ref.Source, Backend: ref.Backend, SessionID: ref.SessionID}
 }
-func (m *runtimeManager) register(key rt.SessionKey, source runtimeSource) {
+func (m *runtimeManager) Register(key rt.SessionKey, source runtimeSource) {
 	if key.SessionID == "" || source.Epoch == "" {
 		return
 	}
@@ -124,8 +124,8 @@ func (m *runtimeManager) register(key rt.SessionKey, source runtimeSource) {
 		old.wake = time.Now()
 	}
 }
-func (m *runtimeManager) kick(key rt.SessionKey) { go m.refresh(m.ctx, key) }
-func (m *runtimeManager) refresh(ctx context.Context, key rt.SessionKey) rt.View {
+func (m *runtimeManager) Kick(key rt.SessionKey) { go m.Refresh(m.ctx, key) }
+func (m *runtimeManager) Refresh(ctx context.Context, key rt.SessionKey) rt.View {
 	m.mu.Lock()
 	if m.closed {
 		m.mu.Unlock()
@@ -209,7 +209,7 @@ func (m *runtimeManager) refresh(ctx context.Context, key rt.SessionKey) rt.View
 	}
 	m.store.Observe(key, source.Epoch, all, nil, endpoints)
 	if work.Err() == nil {
-		m.persist()
+		m.Persist()
 	}
 	return m.store.Read(key)
 }
@@ -243,12 +243,12 @@ func (m *runtimeManager) watch() {
 			}
 			m.mu.Unlock()
 			for _, key := range keys {
-				m.kick(key)
+				m.Kick(key)
 			}
 		}
 	}
 }
-func (m *runtimeManager) busy() bool {
+func (m *runtimeManager) Busy() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if len(m.flights) > 0 {
@@ -283,13 +283,13 @@ type runtimeEndpointToken struct {
 	Expires  int64
 }
 
-func (m *runtimeManager) token(key rt.SessionKey, endpoint rt.Endpoint) string {
+func (m *runtimeManager) Token(key rt.SessionKey, endpoint rt.Endpoint) string {
 	data, _ := json.Marshal(runtimeEndpointToken{key, endpoint, time.Now().Add(30 * time.Minute).Unix()})
 	mac := hmac.New(sha256.New, m.secret[:])
 	mac.Write(data)
 	return base64.RawURLEncoding.EncodeToString(append(mac.Sum(nil), data...))
 }
-func (m *runtimeManager) validateToken(ctx context.Context, token, host string, port int) error {
+func (m *runtimeManager) ValidateToken(ctx context.Context, token, host string, port int) error {
 	raw, err := base64.RawURLEncoding.DecodeString(token)
 	if err != nil || len(raw) <= sha256.Size {
 		return errors.New("Invalid service access token")
@@ -333,5 +333,5 @@ func (c *chatController) runtimeBusy() bool {
 	c.runtimeMu.Lock()
 	manager := c.runtime
 	c.runtimeMu.Unlock()
-	return manager != nil && manager.busy()
+	return manager != nil && manager.Busy()
 }
