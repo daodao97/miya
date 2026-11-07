@@ -1723,5 +1723,21 @@
   "eachRunWorksOnItsOwnGit_d8b29b": "每次运行使用独立的 Git 分支，不会与你的修改冲突；结束后可合并或丢弃改动",
   "dCommitsDUncommittedFiles_eb3916": " · %d 个提交，%d 个未提交文件",
   "discard_36fff6": "丢弃",
-  "merge_ea8f0d": "合并"
+  "merge_ea8f0d": "合并",
+  "piLaunchCommand_1da2c7": "Pi 启动命令",
+  "leaveBlankToUsePiArgumentsAnd_2dcddf": "留空则使用 pi。支持参数和环境变量。当 Claude Code 启动命令设置了 ANTHROPIC_BASE_URL 和令牌时，Pi 复用该 Anthropic 提供方，否则使用 pi 自己的配置。Pi 执行工具时不会请求批准。",
+  "provider_cef6be": "提供方：",
+  "fromClaudeCodeSettings_d99acd": "来自 Claude Code 设置",
+  "providerPiSOwnConfiguration_5b90bd": "提供方：pi 自己的配置",
+  "piIsRunning_c44e30": "Pi 正在运行…",
+  "retryingDD_862066": "正在重试（%d/%d）…",
+  "compactingTheConversation_d5af0b": "正在压缩对话…",
+  "piRequestFailed_fc62d5": "Pi 请求失败",
+  "piNotFoundInstallItWithNpm_872359": "未找到 pi。请使用 npm install -g @mariozechner/pi-coding-agent 安装。",
+  "availableAgents_3f0987": "可用的 Agent",
+  "turnAgentsOnOrOffForNew_f90cac": "为新对话启用或停用 Agent。已有对话保留原来的 Agent。",
+  "installed_a2465e": "已安装 · ",
+  "notInstalled_1aab9f": "未安装",
+  "enable_f70b90": "启用 ",
+  "checkAgain_e18504": "重新检测"
 }

@@ -361,15 +361,50 @@ func (app *App) agentSettings(c *ui.Context) {
 	if app.settingDrafts == nil {
 		app.settingDrafts = map[string]string{}
 	}
-	var rows []func()
+	rows := []func(){func() { app.agentSwitches(c) }}
 	for _, s := range app.C.AgentSettings() {
 		s := s
 		rows = append(rows, func() { app.agentSetting(c, s) })
 	}
 
-	if len(rows) > 0 {
-		widgets.SettingsGroup(c, tr("Agents"), "", rows...)
-	}
+	widgets.SettingsGroup(c, tr("Agents"), "", rows...)
+}
+
+// agentSwitches lists every agent with whether its CLI is installed and a
+// switch for offering it to new conversations.
+func (app *App) agentSwitches(c *ui.Context) {
+	ui.Column(c.Key("agent-switches")).FillWidth().Gap(10).Children(func() {
+		widgets.SettingLabel(c, tr("Available agents"), tr("Turn agents on or off for new conversations. Existing conversations keep their agent."))
+		agents := app.C.Agents()
+		enabled := 0
+		for _, a := range agents {
+			if a.Enabled {
+				enabled++
+			}
+		}
+		for _, a := range agents {
+			a := a
+			ui.Row(c.Key("agent:" + a.ID)).FillWidth().Gap(10).AlignItems(ui.Center).Children(func() {
+				widgets.AgentIcon(c, a.ID, 18)
+				ui.Column(c).Grow(1).Gap(2).Children(func() {
+					ui.Text(c, a.Name).FontWeight(600)
+					if a.Installed() {
+						ui.Text(c, tr("Installed · ")+a.Path).TextColor(widgets.Muted).FontSize(11).Font(widgets.MonoFont).SingleLine().Selectable()
+					} else {
+						ui.Text(c, textutil.FirstNonEmpty(a.Problem, tr("Not installed"))).TextColor(widgets.Danger).FontSize(11).Selectable()
+					}
+				})
+				on := a.Enabled
+				// The last enabled agent stays on, so a conversation can start.
+				if ui.Switch(c.Key("on"), &on).Label(tr("Enable ") + a.Name).Disabled(a.Enabled && enabled <= 1).Shrink(0).Changed() {
+					app.C.SetAgentEnabled(a.ID, on)
+				}
+			})
+		}
+		if ui.Button(c.Key("recheck"), tr("Check again")).AlignSelf(ui.Start).Clicked() {
+			app.C.RecheckAgents()
+		}
+	})
 }
 
 // agentSetting is one agent-declared setting: an input saved on demand.

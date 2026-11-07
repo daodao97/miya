@@ -81,6 +81,12 @@ type Controller struct {
 	claudeDefaultModel string
 
 	ClaudeRuns map[int]*claude.Client
+	// Pi is the pi agent's command, choices and running processes.
+	Pi piState
+	// agents records which agents the user turned on or off, and installs
+	// caches whether their CLIs are installed.
+	agents   agentSwitches
+	installs map[string]agentInstall
 	// claudeCmdCache keeps Claude Code\'s slash commands, by project.
 	ClaudeCmdCache    map[string]ClaudeCommandList
 	claudeCmdLoading  map[string]bool
@@ -163,6 +169,8 @@ func newChatController() *Controller {
 	c.applyClaudeCommand(claude.LoadCommand())
 	c.ClaudeModel, c.ClaudeEffort = prefs.Load("claudeModel"), prefs.Load("claudeEffort")
 	c.claudeDefaultModel = prefs.Load("claudeDefaultModel")
+	c.loadPiSettings()
+	c.agents = loadAgentSwitches()
 	c.Draft, c.SetDraft = uiruntime.CreateSignal("")
 	c.Model, c.SetModel = uiruntime.CreateSignal("")
 	c.Effort, c.SetEffort = uiruntime.CreateSignal("")

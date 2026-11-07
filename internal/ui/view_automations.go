@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -705,6 +706,9 @@ func (app *App) automationComposer(c *ui.Context) {
 				}
 			})
 			for _, ag := range model.Backends {
+				if ag != a.Agent && !slices.Contains(app.C.EnabledAgents(), ag) {
+					continue
+				}
 				b := widgets.Quiet(c.Key("agent:" + ag)).Height(28).Gap(6).PaddingX(9).Label(model.AgentName(ag))
 				if a.Agent == ag {
 					b.Background(widgets.SelectedBg)

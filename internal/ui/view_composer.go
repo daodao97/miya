@@ -246,7 +246,7 @@ func (m *completion) editAt(app *App, value string, end int) {
 			m.Close()
 			return
 		}
-		m.Choices = composer.AgentChoices(m.Token.Query, nil)
+		m.Choices = composer.AgentChoices(m.Token.Query, c.EnabledAgents())
 		return
 	}
 	m.state = tr("Searching project files…")
@@ -254,7 +254,7 @@ func (m *completion) editAt(app *App, value string, end int) {
 	// files follow as found.
 	var refs []model.ComposerChoice
 	if capability := c.CollaborationCapabilities(); capability != nil && capability.Version >= 1 {
-		refs = composer.AgentChoices(m.Token.Query, nil)
+		refs = composer.AgentChoices(m.Token.Query, c.EnabledAgents())
 	}
 	refs = append(refs, app.ThreadChoices(m.Token.Query)...)
 	m.Choices = refs
@@ -547,7 +547,7 @@ func (app *App) agentPicker(c *ui.Context) {
 	ui.PopoverBase(c, b, &app.agentOpen, func(p ui.Element) {
 		p.AttachTo(b, ui.AnchorTopLeft, ui.AnchorBottomLeft).Margin(0, 0, 8, 0).
 			Width(220).Padding(6).Background(widgets.Canvas).Border(1, widgets.Line).Radius(10).Shadow(0, 8, 24, 0, widgets.Shadow)
-		for _, agent := range model.Backends {
+		for _, agent := range cc.EnabledAgents() {
 			choice := struct{ id, name string }{agent, model.AgentName(agent)}
 			item := widgets.Quiet(c.Key(choice.id)).FillWidth()
 			if choice.id == agent {

@@ -270,6 +270,15 @@ func (c *Controller) ApplyState(s svcproto.State) {
 	c.ClaudeCommand, c.ClaudeError, c.ClaudeBinary, c.ClaudeArgs, c.ClaudeEnv = s.ClaudeCommand, s.ClaudeError, s.ClaudeBinary, s.ClaudeArgs, s.ClaudeEnv
 	c.ClaudeModel, c.ClaudeEffort = s.ClaudeModel, s.ClaudeEffort
 	c.claudeDefaultModel = s.ClaudeDefaultModel
+	if c.Pi.Command != s.PiCommand || c.Pi.Binary != s.PiBinary || c.Pi.Error != s.PiError {
+		c.forgetInstalls()
+	}
+	c.Pi.Command, c.Pi.Error, c.Pi.Binary, c.Pi.Args, c.Pi.Env = s.PiCommand, s.PiError, s.PiBinary, s.PiArgs, s.PiEnv
+	c.Pi.Model, c.Pi.Effort = s.PiModel, s.PiEffort
+	c.agents = agentSwitches{}
+	for id, on := range s.AgentEnabled {
+		c.agents[id] = on
+	}
 	c.AccountState, c.AccountReset, c.QuotaLimits, c.quotaStatus = s.Account, s.AccountReset, s.QuotaLimits, s.QuotaStatus
 	c.Mirror.Phone = s.Phone
 	// Each window owns its selection. When a conversation disappears from

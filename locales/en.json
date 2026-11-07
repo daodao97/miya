@@ -1723,5 +1723,21 @@
   "eachRunWorksOnItsOwnGit_d8b29b": "Each run works on its own Git branch, so it cannot collide with your edits; merge or discard its changes afterwards",
   "dCommitsDUncommittedFiles_eb3916": " · %d commits, %d uncommitted files",
   "discard_36fff6": "Discard",
-  "merge_ea8f0d": "Merge"
+  "merge_ea8f0d": "Merge",
+  "piLaunchCommand_1da2c7": "Pi launch command",
+  "leaveBlankToUsePiArgumentsAnd_2dcddf": "Leave blank to use pi. Arguments and environment variables are supported. Pi uses the Anthropic provider of the Claude Code launch command when it sets ANTHROPIC_BASE_URL and a token, otherwise its own configuration. Pi runs tools without asking for approval.",
+  "provider_cef6be": "Provider: ",
+  "fromClaudeCodeSettings_d99acd": "from Claude Code settings",
+  "providerPiSOwnConfiguration_5b90bd": "Provider: pi's own configuration",
+  "piIsRunning_c44e30": "Pi is running…",
+  "retryingDD_862066": "Retrying (%d/%d)…",
+  "compactingTheConversation_d5af0b": "Compacting the conversation…",
+  "piRequestFailed_fc62d5": "Pi request failed",
+  "piNotFoundInstallItWithNpm_872359": "pi not found. Install it with npm install -g @mariozechner/pi-coding-agent.",
+  "availableAgents_3f0987": "Available agents",
+  "turnAgentsOnOrOffForNew_f90cac": "Turn agents on or off for new conversations. Existing conversations keep their agent.",
+  "installed_a2465e": "Installed · ",
+  "notInstalled_1aab9f": "Not installed",
+  "enable_f70b90": "Enable ",
+  "checkAgain_e18504": "Check again"
 }

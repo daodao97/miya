@@ -63,11 +63,20 @@ type State struct {
 	ClaudeModel        string                     `json:"claudeModel"`
 	ClaudeEffort       string                     `json:"claudeEffort"`
 	ClaudeDefaultModel string                     `json:"claudeDefaultModel"`
-	Account            account.Display            `json:"account"`
-	AccountReset       account.ResetAction        `json:"accountReset"`
-	QuotaLimits        account.Limits             `json:"quotaLimits"`
-	QuotaStatus        string                     `json:"quotaStatus"`
-	Phone              PhoneStatus                `json:"phone"`
+	PiCommand          string                     `json:"piCommand,omitempty"`
+	PiError            string                     `json:"piError,omitempty"`
+	PiBinary           string                     `json:"piBinary,omitempty"`
+	PiArgs             []string                   `json:"piArgs,omitempty"`
+	PiEnv              []string                   `json:"piEnv,omitempty"`
+	PiModel            string                     `json:"piModel,omitempty"`
+	PiEffort           string                     `json:"piEffort,omitempty"`
+	// AgentEnabled holds the agents the user turned on or off.
+	AgentEnabled map[string]bool     `json:"agentEnabled,omitempty"`
+	Account      account.Display     `json:"account"`
+	AccountReset account.ResetAction `json:"accountReset"`
+	QuotaLimits  account.Limits      `json:"quotaLimits"`
+	QuotaStatus  string              `json:"quotaStatus"`
+	Phone        PhoneStatus         `json:"phone"`
 
 	ProjectThreads map[string][]model.Thread `json:"projectThreads,omitempty"`
 	DesktopUnread  map[string]int64          `json:"desktopUnread,omitempty"`

@@ -7,6 +7,7 @@ import (
 	claudeagent "miya/internal/agent/claude"
 	codexagent "miya/internal/agent/codex"
 	codex "miya/internal/agent/codex/native"
+	piagent "miya/internal/agent/pi"
 	"miya/internal/appmodel"
 	"miya/internal/chat/composer"
 	"miya/internal/chat/model"
@@ -17,7 +18,7 @@ import (
 // Adapters returns integrations bound to this workspace. No adapter captures
 // another window's mutable state or shares it through a global registry.
 func (c *Controller) Adapters() []agent.Adapter {
-	return []agent.Adapter{codexagent.New(codexAgentHost{agentWorkspace{c}}), claudeagent.New(claudeAgentHost{agentWorkspace{c}})}
+	return []agent.Adapter{codexagent.New(codexAgentHost{agentWorkspace{c}}), claudeagent.New(claudeAgentHost{agentWorkspace{c}}), piagent.New(piAgentHost{agentWorkspace{c}})}
 }
 
 func (c *Controller) BackendFor(id string) agent.Adapter {
@@ -71,7 +72,10 @@ func (c *Controller) CurrentAgent() string {
 		return model.ThreadAgent(t)
 	}
 	if c.Agent != nil {
-		return c.BackendFor(c.Agent()).ID()
+		if id := c.BackendFor(c.Agent()).ID(); c.AgentEnabled(id) {
+			return id
+		}
+		return c.EnabledAgents()[0]
 	}
 	return c.Adapters()[0].ID()
 }

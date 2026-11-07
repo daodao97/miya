@@ -252,6 +252,24 @@ func (c *Controller) ServiceRequest(req svcproto.Request) (any, error) {
 	case "claudeModel":
 		_ = arg(&value)
 		c.setClaudeModel(value)
+	case "piCommand":
+		_ = arg(&value)
+		c.SetPiCommand(value)
+	case "piModel":
+		_ = arg(&value)
+		c.setPiChoice("piModel", &c.Pi.Model, value)
+	case "piEffort":
+		_ = arg(&value)
+		c.setPiChoice("piEffort", &c.Pi.Effort, value)
+	case "agentEnabled":
+		var a struct {
+			ID      string `json:"id"`
+			Enabled bool   `json:"enabled"`
+		}
+		_ = arg(&a)
+		c.SetAgentEnabled(a.ID, a.Enabled)
+	case "recheckAgents":
+		c.RecheckAgents()
 	case "claudeEffort":
 		_ = arg(&value)
 		c.setClaudeEffort(value)
@@ -355,6 +373,7 @@ func (c *Controller) SnapshotState() svcproto.State {
 		Status: c.Status(), HistoryStatus: c.HistoryStatus(), Ready: c.Ready(),
 		Models: snapshotModels(c.Models()), Model: c.Model(), Effort: c.Effort(), PermissionPolicy: c.PermissionPolicy(), Locale: c.Locale(),
 		ClaudeCommand: c.ClaudeCommand, ClaudeError: c.ClaudeError, ClaudeBinary: c.ClaudeBinary, ClaudeArgs: c.ClaudeArgs, ClaudeEnv: c.ClaudeEnv, ClaudeModel: c.ClaudeModel, ClaudeEffort: c.ClaudeEffort, ClaudeDefaultModel: c.claudeDefaultModel,
+		PiCommand: c.Pi.Command, PiError: c.Pi.Error, PiBinary: c.Pi.Binary, PiArgs: c.Pi.Args, PiEnv: c.Pi.Env, PiModel: c.Pi.Model, PiEffort: c.Pi.Effort, AgentEnabled: c.AgentSwitches(),
 		Account: c.AccountState, AccountReset: c.AccountReset, QuotaLimits: c.QuotaLimits, QuotaStatus: c.quotaStatus,
 		Phone: DesktopPhone.Status(),
 	}

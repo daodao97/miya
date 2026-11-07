@@ -174,7 +174,7 @@ func (c *Controller) managedClaudeStarted(id int) {
 	}
 	if task, err := c.Collaboration.Manager.Read(t.ExecutionID); err == nil && task.CancelRequested {
 		c.Update(id, func(t *model.Thread) { t.StopRequested = true })
-		if c.ClaudeRuns[id] != nil {
+		if c.ClaudeRuns[id] != nil || c.Pi.Runs[id] != nil {
 			c.stopAgentRun(t)
 		}
 	}

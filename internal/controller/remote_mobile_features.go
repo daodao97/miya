@@ -18,6 +18,9 @@ import (
 func (c *Controller) phoneAgentOptions() []phoneproto.AgentOptions {
 	var out []phoneproto.AgentOptions
 	for _, b := range c.Adapters() {
+		if !c.AgentEnabled(b.ID()) {
+			continue
+		}
 		a := phoneproto.AgentOptions{Agent: b.ID(), Current: remote.SendOptions{Model: b.Model(), Effort: b.Effort(), Policy: c.SelectedPermissionPolicy()}}
 		a.Descriptor = agentmeta.For(b.ID())
 		if !a.Descriptor.NativeCommands {

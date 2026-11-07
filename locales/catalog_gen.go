@@ -18625,3 +18625,171 @@ func MergeEa8f0d() string { return In(i18n.Locale()).MergeEa8f0d() }
 func (msgs Messages) MergeEa8f0d() string {
 	return Catalog.Format(msgs.locale, "merge_ea8f0d", nil)
 }
+
+// PiLaunchCommand1da2c7 says "Pi launch command"
+// in the language the app shows.
+func PiLaunchCommand1da2c7() string { return In(i18n.Locale()).PiLaunchCommand1da2c7() }
+
+// PiLaunchCommand1da2c7 says "Pi launch command"
+// in the language of msgs.
+func (msgs Messages) PiLaunchCommand1da2c7() string {
+	return Catalog.Format(msgs.locale, "piLaunchCommand_1da2c7", nil)
+}
+
+// LeaveBlankToUsePiArgumentsAnd2dcddf says "Leave blank to use pi. Arguments and environment variables are supported. Pi uses the Anthropic provider of the Claud…"
+// in the language the app shows.
+func LeaveBlankToUsePiArgumentsAnd2dcddf() string {
+	return In(i18n.Locale()).LeaveBlankToUsePiArgumentsAnd2dcddf()
+}
+
+// LeaveBlankToUsePiArgumentsAnd2dcddf says "Leave blank to use pi. Arguments and environment variables are supported. Pi uses the Anthropic provider of the Claud…"
+// in the language of msgs.
+func (msgs Messages) LeaveBlankToUsePiArgumentsAnd2dcddf() string {
+	return Catalog.Format(msgs.locale, "leaveBlankToUsePiArgumentsAnd_2dcddf", nil)
+}
+
+// ProviderCef6be says "Provider: "
+// in the language the app shows.
+func ProviderCef6be() string { return In(i18n.Locale()).ProviderCef6be() }
+
+// ProviderCef6be says "Provider: "
+// in the language of msgs.
+func (msgs Messages) ProviderCef6be() string {
+	return Catalog.Format(msgs.locale, "provider_cef6be", nil)
+}
+
+// FromClaudeCodeSettingsD99acd says "from Claude Code settings"
+// in the language the app shows.
+func FromClaudeCodeSettingsD99acd() string { return In(i18n.Locale()).FromClaudeCodeSettingsD99acd() }
+
+// FromClaudeCodeSettingsD99acd says "from Claude Code settings"
+// in the language of msgs.
+func (msgs Messages) FromClaudeCodeSettingsD99acd() string {
+	return Catalog.Format(msgs.locale, "fromClaudeCodeSettings_d99acd", nil)
+}
+
+// ProviderPiSOwnConfiguration5b90bd says "Provider: pi's own configuration"
+// in the language the app shows.
+func ProviderPiSOwnConfiguration5b90bd() string {
+	return In(i18n.Locale()).ProviderPiSOwnConfiguration5b90bd()
+}
+
+// ProviderPiSOwnConfiguration5b90bd says "Provider: pi's own configuration"
+// in the language of msgs.
+func (msgs Messages) ProviderPiSOwnConfiguration5b90bd() string {
+	return Catalog.Format(msgs.locale, "providerPiSOwnConfiguration_5b90bd", nil)
+}
+
+// PiIsRunningC44e30 says "Pi is running…"
+// in the language the app shows.
+func PiIsRunningC44e30() string { return In(i18n.Locale()).PiIsRunningC44e30() }
+
+// PiIsRunningC44e30 says "Pi is running…"
+// in the language of msgs.
+func (msgs Messages) PiIsRunningC44e30() string {
+	return Catalog.Format(msgs.locale, "piIsRunning_c44e30", nil)
+}
+
+// RetryingDD862066 says "Retrying (%d/%d)…"
+// in the language the app shows.
+func RetryingDD862066() string { return In(i18n.Locale()).RetryingDD862066() }
+
+// RetryingDD862066 says "Retrying (%d/%d)…"
+// in the language of msgs.
+func (msgs Messages) RetryingDD862066() string {
+	return Catalog.Format(msgs.locale, "retryingDD_862066", nil)
+}
+
+// CompactingTheConversationD5af0b says "Compacting the conversation…"
+// in the language the app shows.
+func CompactingTheConversationD5af0b() string {
+	return In(i18n.Locale()).CompactingTheConversationD5af0b()
+}
+
+// CompactingTheConversationD5af0b says "Compacting the conversation…"
+// in the language of msgs.
+func (msgs Messages) CompactingTheConversationD5af0b() string {
+	return Catalog.Format(msgs.locale, "compactingTheConversation_d5af0b", nil)
+}
+
+// PiRequestFailedFc62d5 says "Pi request failed"
+// in the language the app shows.
+func PiRequestFailedFc62d5() string { return In(i18n.Locale()).PiRequestFailedFc62d5() }
+
+// PiRequestFailedFc62d5 says "Pi request failed"
+// in the language of msgs.
+func (msgs Messages) PiRequestFailedFc62d5() string {
+	return Catalog.Format(msgs.locale, "piRequestFailed_fc62d5", nil)
+}
+
+// PiNotFoundInstallItWithNpm872359 says "pi not found. Install it with npm install -g @mariozechner/pi-coding-agent."
+// in the language the app shows.
+func PiNotFoundInstallItWithNpm872359() string {
+	return In(i18n.Locale()).PiNotFoundInstallItWithNpm872359()
+}
+
+// PiNotFoundInstallItWithNpm872359 says "pi not found. Install it with npm install -g @mariozechner/pi-coding-agent."
+// in the language of msgs.
+func (msgs Messages) PiNotFoundInstallItWithNpm872359() string {
+	return Catalog.Format(msgs.locale, "piNotFoundInstallItWithNpm_872359", nil)
+}
+
+// AvailableAgents3f0987 says "Available agents"
+// in the language the app shows.
+func AvailableAgents3f0987() string { return In(i18n.Locale()).AvailableAgents3f0987() }
+
+// AvailableAgents3f0987 says "Available agents"
+// in the language of msgs.
+func (msgs Messages) AvailableAgents3f0987() string {
+	return Catalog.Format(msgs.locale, "availableAgents_3f0987", nil)
+}
+
+// TurnAgentsOnOrOffForNewF90cac says "Turn agents on or off for new conversations. Existing conversations keep their agent."
+// in the language the app shows.
+func TurnAgentsOnOrOffForNewF90cac() string { return In(i18n.Locale()).TurnAgentsOnOrOffForNewF90cac() }
+
+// TurnAgentsOnOrOffForNewF90cac says "Turn agents on or off for new conversations. Existing conversations keep their agent."
+// in the language of msgs.
+func (msgs Messages) TurnAgentsOnOrOffForNewF90cac() string {
+	return Catalog.Format(msgs.locale, "turnAgentsOnOrOffForNew_f90cac", nil)
+}
+
+// InstalledA2465e says "Installed · "
+// in the language the app shows.
+func InstalledA2465e() string { return In(i18n.Locale()).InstalledA2465e() }
+
+// InstalledA2465e says "Installed · "
+// in the language of msgs.
+func (msgs Messages) InstalledA2465e() string {
+	return Catalog.Format(msgs.locale, "installed_a2465e", nil)
+}
+
+// NotInstalled1aab9f says "Not installed"
+// in the language the app shows.
+func NotInstalled1aab9f() string { return In(i18n.Locale()).NotInstalled1aab9f() }
+
+// NotInstalled1aab9f says "Not installed"
+// in the language of msgs.
+func (msgs Messages) NotInstalled1aab9f() string {
+	return Catalog.Format(msgs.locale, "notInstalled_1aab9f", nil)
+}
+
+// EnableF70b90 says "Enable "
+// in the language the app shows.
+func EnableF70b90() string { return In(i18n.Locale()).EnableF70b90() }
+
+// EnableF70b90 says "Enable "
+// in the language of msgs.
+func (msgs Messages) EnableF70b90() string {
+	return Catalog.Format(msgs.locale, "enable_f70b90", nil)
+}
+
+// CheckAgainE18504 says "Check again"
+// in the language the app shows.
+func CheckAgainE18504() string { return In(i18n.Locale()).CheckAgainE18504() }
+
+// CheckAgainE18504 says "Check again"
+// in the language of msgs.
+func (msgs Messages) CheckAgainE18504() string {
+	return Catalog.Format(msgs.locale, "checkAgain_e18504", nil)
+}

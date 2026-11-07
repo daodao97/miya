@@ -11,6 +11,7 @@ import (
 const (
 	Codex  = "codex"
 	Claude = "claude-code"
+	Pi     = "pi"
 )
 
 type Icon struct {
@@ -35,14 +36,20 @@ type Descriptor struct {
 	UsageName              string
 	UsageReset             bool
 	Aliases                []string
+	// Command is the CLI's executable, which Miya looks for to tell whether
+	// the agent is installed.
+	Command string
+	// OptIn agents stay off until the user turns them on in settings.
+	OptIn bool
 }
 
 //go:embed assets/codex.png
 var codexPNG []byte
 
 var builtins = []Descriptor{
-	{ID: Codex, ConnectionBoundSession: true, Name: "Codex", Icon: Icon{PNG: codexPNG}, Capabilities: Capabilities{Models: true, Effort: true, Quota: true, ThreadCommands: true}, UsageID: "codex", UsageName: "Codex", UsageReset: true},
-	{ID: Claude, Name: "Claude Code", Icon: Icon{SVG: "claude-code", Color: "#c46b4d"}, Capabilities: Capabilities{Models: true, Effort: true, StallHint: true}, NativeCommands: true, StallAfter: 60 * time.Second, UsageID: "claude", UsageName: "Claude", Aliases: []string{"claude", "claude code"}},
+	{ID: Codex, ConnectionBoundSession: true, Name: "Codex", Icon: Icon{PNG: codexPNG}, Capabilities: Capabilities{Models: true, Effort: true, Quota: true, ThreadCommands: true}, UsageID: "codex", UsageName: "Codex", UsageReset: true, Command: "codex"},
+	{ID: Claude, Name: "Claude Code", Icon: Icon{SVG: "claude-code", Color: "#c46b4d"}, Capabilities: Capabilities{Models: true, Effort: true, StallHint: true}, NativeCommands: true, StallAfter: 60 * time.Second, UsageID: "claude", UsageName: "Claude", Aliases: []string{"claude", "claude code"}, Command: "claude"},
+	{ID: Pi, Name: "Pi", Icon: Icon{SVG: "pi", Color: "#3f7fbf"}, Capabilities: Capabilities{Models: true, Effort: true}, StallAfter: 90 * time.Second, Aliases: []string{"pi agent", "pi coding agent"}, Command: "pi", OptIn: true},
 }
 
 func All() []Descriptor   { return append([]Descriptor(nil), builtins...) }

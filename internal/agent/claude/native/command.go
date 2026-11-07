@@ -24,7 +24,11 @@ type Command struct {
 // NAME=value words are variables, the next word the executable (claude when
 // there is none), the rest its options. Quotes and backslashes group words,
 // and ~/ at the start of a word or after its = is the home directory.
-func ParseCommand(line string) (Command, error) {
+func ParseCommand(line string) (Command, error) { return ParseCommandFor(line, "claude") }
+
+// ParseCommandFor reads another CLI's launch command the same way, with
+// name as its executable when the line names none.
+func ParseCommandFor(line, name string) (Command, error) {
 	words, err := splitWords(line)
 	if err != nil {
 		return Command{}, err
@@ -34,7 +38,6 @@ func ParseCommand(line string) (Command, error) {
 	for ; i < len(words) && isAssignment(words[i]); i++ {
 		cmd.Env = append(cmd.Env, expandHome(words[i]))
 	}
-	name := "claude"
 	if i < len(words) {
 		name = expandHome(words[i])
 		i++
@@ -139,13 +142,16 @@ func resolve(name string) (string, error) {
 		return p, nil
 	}
 	home, _ := os.UserHomeDir()
-	for _, dir := range []string{filepath.Join(home, ".local/bin"), "/opt/homebrew/bin", "/usr/local/bin"} {
+	for _, dir := range []string{filepath.Join(home, ".local/bin"), "/opt/homebrew/bin", "/usr/local/bin", filepath.Join(home, ".npm-global/bin"), filepath.Join(home, ".bun/bin"), filepath.Join(home, ".volta/bin")} {
 		if p := filepath.Join(dir, name); executable(p) {
 			return p, nil
 		}
 	}
 	if name == "claude" {
 		return "", errors.New("Claude Code not found. Install and sign in to the Claude Code CLI first.")
+	}
+	if name == "pi" {
+		return "", errors.New("pi not found. Install it with npm install -g @mariozechner/pi-coding-agent.")
 	}
 	return "", fmt.Errorf("Command %s not found", name)
 }

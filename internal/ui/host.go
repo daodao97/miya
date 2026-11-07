@@ -23,6 +23,10 @@ type Host interface {
 	State() *appmodel.WindowState
 	AddAttachments(paths []string)
 	AgentSettings() []agent.Setting
+	Agents() []agent.Availability
+	EnabledAgents() []string
+	SetAgentEnabled(id string, on bool)
+	RecheckAgents()
 	AgentSpeedBadge(agent string) string
 	AllThreads() []model.Thread
 	ApprovalDetail(a interaction.Request) string

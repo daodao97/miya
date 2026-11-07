@@ -26,6 +26,8 @@ flowchart TD
 
 ## 命令和模型
 
+Pi 启动时默认通过 `--system-prompt <文件路径>` 加载内置的 `internal/agent/pi/native/assets/miya-system.md`。运行时文件保存在 Miya 状态目录的 `pi/miya-system.md`，随内置内容更新；要自定义提示词，在设置的「Pi 启动命令」中显式指定 `pi --system-prompt /绝对路径/custom-system.md`。这会替换基础提示词，并保留 pi 加载的项目指令、技能和附加提示词。新的提示词在下次启动 pi 进程时生效，已有常驻进程继续使用启动时的配置。
+
 `Commands(project, load)` 返回 `CommandCatalog`。`load=false` 只读缓存，供草稿样式计算；`load=true` 可以启动原生命令发现。`Known` 区分“目录为空”和“目录尚未加载”，`Native` 表示除 Miya 自己的控制命令外，其他斜杠命令交给 Agent。合并目录时 Miya 控制命令优先，名称忽略大小写去重。
 
 桌面根据目录过滤和路由命令，不判断具体 Agent。手机读取服务端下发的 `AgentOptions` 和目录，命令请求、响应及缓存都包含 Agent ID；同一项目的不同 Agent 不会共用命令缓存。旧版未带 ID 的命令响应仍按原有 Claude 原生命令目录解释，这个兼容规则集中在声明层。
