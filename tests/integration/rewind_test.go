@@ -15,6 +15,7 @@ import (
 	"miya/internal/agent/claude/native/transcript"
 	"miya/internal/appmodel"
 	"miya/internal/chat/model"
+	msgfmt "miya/internal/chat/presentation"
 	"miya/internal/controller"
 	"miya/internal/uiruntime"
 )
@@ -95,6 +96,20 @@ func TestForkClaudeSessionBefore(t *testing.T) {
 	}
 	if _, err := transcript.ForkBefore(path, 5); err == nil {
 		t.Fatal("forked before a prompt that does not exist")
+	}
+}
+
+func TestClaudeHistoryAPIErrorIsNotOutput(t *testing.T) {
+	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
+	path := writeClaudeSession(t, t.TempDir(), "api-failure",
+		`{"type":"user","uuid":"u1","message":{"content":"同步上游"}}`,
+		`{"type":"assistant","uuid":"a1","parentUuid":"u1","isApiErrorMessage":true,"message":{"content":[{"type":"text","text":"服务暂不可用"}]}}`)
+	messages, err := transcript.Parse(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(messages) != 2 || messages[1].Status != "failed" || msgfmt.FailedAfterOutput(model.Thread{Messages: messages}, 0) {
+		t.Fatalf("historical API failure counted as completed work: %+v", messages)
 	}
 }
 

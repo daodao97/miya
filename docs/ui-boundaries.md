@@ -22,6 +22,8 @@ flowchart TD
 
 `internal/mobile.App` 拥有独立的 `mobileViewer`，只保存桌面下发的会话快照，不构造桌面 App 或控制器。它通过手机协议执行动作，并与桌面复用共享渲染器。两端的文件和 Web 代理位于 `internal/phone/proxy`，不依赖任一界面包。
 
+语音输入的长按、松手、取消、识别状态和草稿插入由共享 Go 界面处理，使用 MyGo 的 `TouchSelection` 与富文本输入拦截，不在 UIKit 中实现业务手势。`internal/voiceinput` 用 Go 完成 Opus 编码、微信输入法协议的密钥交换、加密和云端转写；平台录音桥只提供 16 kHz 单声道 PCM、停止和取消。当前 iOS 通过 AVAudioEngine 采集；Android 后续只需实现相同的录音接口，复用界面、编码和云端协议。未支持的平台明确返回不支持，不回退到本地模型。
+
 `internal/widgets` 保存通用控件、主题、图标和设备语言处理。`internal/uiruntime` 保存窗口调度、信号失效通知与退出清理，供窗口和后台使用。各领域的数据和算法直接引用现有领域包，原有根包的兼容别名已删除。
 
 MCP 协议和工具适配已统一到 `internal/mcp/`，Controller 通过 Host 接入，详见 [MCP 范围与边界](mcp-boundaries.md)。

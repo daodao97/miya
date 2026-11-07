@@ -66,6 +66,14 @@ func TestMobileLanguageChoicesFitLargeText(t *testing.T) {
 		tt.SetSafeArea(ui.SafeArea{Top: 59, Bottom: 34})
 		tt.SetPreferences(ui.Preferences{TextScale: 3})
 		tt.Frame()
+		value, ok := tt.Find("Follow system")
+		if !ok || value.X < 16 || value.X+value.W > float32(width)-16 {
+			t.Fatalf("large setting value overflows at width %d: %v", width, value)
+		}
+		saveMobileNativeSnapshot(t, tt, fmt.Sprintf("native-settings-large-%d", width))
+		if err := tt.Click("Language"); err != nil {
+			t.Fatal(err)
+		}
 		var bottom float32
 		for _, label := range []string{"Follow system", "简体中文", "English"} {
 			r, ok := tt.Find(label)

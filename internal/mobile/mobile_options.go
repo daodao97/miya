@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"strings"
+	"unicode"
 
 	"github.com/egoist/mygo/ui"
 
@@ -74,166 +74,169 @@ func (m *App) setOptions(agent string, o remote.SendOptions) {
 func (m *App) openOptions(agent string) { m.optionsAgent = agent; m.Router().Push("/options") }
 
 func (m *App) optionsView(c *ui.Context) {
-	p := m.Pal
 	agent := m.optionsAgent
-	a := m.agentOptions(agent)
-	o := m.SendOptions(agent)
-	_, customized := m.Options[agent]
-	ui.Row(c).FillWidth().MinHeight(64).Padding(0, 12).Gap(8).AlignItems(ui.Center).Children(func() {
-		m.navigationBack(c, "/options")
-		ui.Text(c, tr("Conversation settings")).Grow(1).TextAlign(ui.Center).FontSize(m.Font(16)).FontWeight(600)
-		ui.Box(c).Size(44, 44)
-	})
-	ui.Scroll(c).FillWidth().Grow(1).MinHeight(0).Children(func() {
-		ui.Column(c).FillWidth().Padding(8, 16, 32, 16).Gap(28).Children(func() {
-			m.optionsHeader(c.Key("header"), agent, customized)
-			ui.Column(c).FillWidth().Gap(8).Children(func() {
-				m.optionsTitle(c, tr("Model"))
-				ui.Column(c).FillWidth().Background(p.surface).Radius(16).Role(ui.RoleRadioGroup).Label(tr("Model")).Children(func() {
-					for i, model := range a.Models {
-						if i > 0 {
-							m.optionsDivider(c.Key("model-divider:"+model.Value), 16)
-						}
-						selected := model.Value == o.Model
-						row := m.phoneButton(c.Key("model:" + model.Value)).FillWidth().MinHeight(50).PaddingX(16).Gap(12).Radius(0).Role(ui.RoleRadio).Checked(selected).Label(tr("Model ") + model.Label)
-						row.Children(func() {
-							name := ui.Text(c, model.Label).FontSize(m.Font(16)).Grow(1).MinWidth(0)
-							if selected {
-								name.FontWeight(600)
-								widgets.Icon(c, "check", 18, p.link)
-							}
-						})
-						if row.Clicked() {
-							o.Model, o.Effort = model.Value, model.DefaultEffort
-							m.setOptions(agent, o)
-						}
-					}
-					if len(a.Models) == 0 {
-						ui.Text(c, tr("Connect to your desktop to select a model")).FontSize(m.Font(14)).Padding(16).TextColor(p.muted)
-					}
-				})
-			})
-			ui.Column(c).FillWidth().Gap(8).Children(func() {
-				m.optionsTitle(c, tr("Reasoning effort"))
-				ui.Row(c).FillWidth().Wrap().Gap(4).Padding(4).Radius(14).Background(p.surface).Role(ui.RoleRadioGroup).Label(tr("Reasoning effort")).Children(func() {
-					choices := []string{""}
-					for _, model := range a.Models {
-						if model.Value == o.Model {
-							for _, e := range model.Efforts {
-								if e != "" {
-									choices = append(choices, e)
-								}
-							}
-						}
-					}
-					for _, e := range choices {
-						label := tr(strings.ToUpper(e))
-						if e == "" {
-							label = tr("Model default")
-						}
-						selected := e == o.Effort
-						seg := m.phoneButton(c.Key("effort:" + e)).Grow(1).MinHeight(40).PaddingX(12).Radius(10).Justify(ui.Center).Role(ui.RoleRadio).Checked(selected).Label(tr("Effort ") + label)
-						if selected {
-							seg.Background(p.Bg)
-						}
-						seg.Children(func() {
-							text := ui.Text(c, label).FontSize(m.Font(14)).TextColor(p.muted)
-							if selected {
-								text.FontWeight(600).TextColor(p.ink)
-							}
-						})
-						if seg.Clicked() {
-							o.Effort = e
-							m.setOptions(agent, o)
-						}
-					}
-				})
-			})
-			ui.Column(c).FillWidth().Gap(8).Children(func() {
-				m.optionsTitle(c, tr("Permission mode"))
-				policies := []struct {
-					value, label, detail, icon string
-					tint                       ui.Color
-				}{
-					{"on-request", tr("Ask when needed"), tr("Confirm sensitive actions yourself"), "hand-stop", p.link},
-					{"on-failure", tr("Automatic approval"), tr("Automatic approval handles requests and asks you when needed"), "shield-check", p.ok},
-					{"never", tr("Full access"), tr("Allow the agent to act without asking"), "lock-open", p.warn},
+	a, o := m.agentOptions(agent), m.SendOptions(agent)
+	m.settingsHeader(c, "/options", tr("Conversation settings"))
+	m.settingsBody(c, func() {
+		label := textutil.FirstNonEmpty(o.Model, tr("Model default"))
+		for _, model := range a.Models {
+			if model.Value == o.Model {
+				label = textutil.FirstNonEmpty(model.Label, label)
+				break
+			}
+		}
+		policy := o.Policy
+		for _, choice := range mobilePermissionChoices() {
+			if choice.value == o.Policy {
+				policy = choice.label
+				break
+			}
+		}
+		m.settingsGroup(c.Key("choices"), appmodel.AgentName(agent), tr("Applies to new messages sent from your phone. Desktop defaults are unchanged."), func() {
+			if m.settingsNavigation(c.Key("model"), tr("Model"), label).Clicked() {
+				m.Router().Push("/options/model")
+			}
+			m.settingsSeparator(c)
+			if m.settingsNavigation(c.Key("effort"), tr("Reasoning effort"), mobileEffortLabel(o.Effort)).Clicked() {
+				m.Router().Push("/options/effort")
+			}
+			m.settingsSeparator(c)
+			if m.settingsNavigation(c.Key("policy"), tr("Permission mode"), policy).Clicked() {
+				m.Router().Push("/options/permissions")
+			}
+		})
+		if _, customized := m.Options[agent]; customized {
+			m.settingsGroup(c.Key("defaults"), "", "", func() {
+				if m.settingsAction(c.Key("reset"), tr("Use desktop defaults")).Clicked() {
+					delete(m.Options, agent)
+					m.SaveOptions()
 				}
-				ui.Column(c).FillWidth().Background(p.surface).Radius(16).Role(ui.RoleRadioGroup).Label(tr("Permission mode")).Children(func() {
-					for i, policy := range policies {
-						if i > 0 {
-							m.optionsDivider(c.Key("policy-divider:"+policy.value), 64)
-						}
-						selected := policy.value == o.Policy
-						b := m.phoneButton(c.Key("policy:"+policy.value)).FillWidth().MinHeight(64).Padding(12, 16).Gap(14).Radius(0).Role(ui.RoleRadio).Checked(selected).Label(policy.label)
-						b.Children(func() {
-							ui.Row(c).Size(34, 34).Shrink(0).Radius(10).Background(p.surface.Mix(policy.tint, 0.16)).Justify(ui.Center).AlignItems(ui.Center).Children(func() {
-								widgets.Icon(c, policy.icon, 18, policy.tint)
-							})
-							ui.Column(c).Grow(1).MinWidth(0).Gap(3).Children(func() {
-								ui.Text(c, policy.label).FontSize(m.Font(16)).FontWeight(500)
-								ui.Text(c, policy.detail).FontSize(m.Font(13)).TextColor(p.muted).LineHeight(1.35)
-							})
-							m.radioMark(c, selected)
-						})
-						if b.Clicked() {
-							o.Policy = policy.value
-							m.setOptions(agent, o)
-						}
-					}
-				})
 			})
-		})
-	})
-}
-
-// optionsHeader names the agent being configured and offers a way back to
-// the desktop defaults once the phone has its own choices.
-func (m *App) optionsHeader(c *ui.Context, agent string, customized bool) {
-	p := m.Pal
-	ui.Column(c).FillWidth().Padding(16).Gap(14).Radius(20).Background(p.surface).Children(func() {
-		ui.Row(c).FillWidth().Gap(14).AlignItems(ui.Center).Children(func() {
-			ui.Row(c).Size(52, 52).Shrink(0).Radius(16).Background(p.Bg).Justify(ui.Center).AlignItems(ui.Center).Children(func() {
-				widgets.AgentIcon(c, agent, 30)
-			})
-			ui.Column(c).Grow(1).MinWidth(0).Gap(4).Children(func() {
-				ui.Text(c, appmodel.AgentName(agent)).FontSize(m.Font(19)).FontWeight(600)
-				ui.Text(c, tr("Applies to new messages sent from your phone. Desktop defaults are unchanged.")).FontSize(m.Font(13)).TextColor(p.muted).LineHeight(1.4)
-			})
-		})
-		if !customized {
-			return
-		}
-		reset := m.phoneButton(c.Key("defaults")).FillWidth().MinHeight(44).Radius(14).Background(p.Bg).Justify(ui.Center).Label(tr("Use desktop defaults"))
-		reset.Children(func() {
-			widgets.Icon(c, "refresh", 16, p.link)
-			ui.Text(c, tr("Use desktop defaults")).FontSize(m.Font(14)).FontWeight(500).TextColor(p.link)
-		})
-		if reset.Clicked() {
-			delete(m.Options, agent)
-			m.SaveOptions()
 		}
 	})
 }
 
-func (m *App) optionsTitle(c *ui.Context, title string) {
-	ui.Text(c, title).FontSize(m.Font(13)).FontWeight(500).TextColor(m.Pal.muted).PaddingX(16)
-}
-
-// optionsDivider separates rows of a grouped list, inset to the row text.
-func (m *App) optionsDivider(c *ui.Context, inset float32) {
-	ui.Row(c).FillWidth().Padding(0, 0, 0, inset).Children(func() {
-		ui.Box(c).Grow(1).Height(0.5).Background(m.Pal.line)
-	})
-}
-
-func (m *App) radioMark(c *ui.Context, on bool) {
-	p := m.Pal
-	if on {
-		ui.Row(c).Size(22, 22).Shrink(0).Radius(11).Background(p.link).Justify(ui.Center).AlignItems(ui.Center).Children(func() {
-			widgets.Icon(c, "check", 14, ui.RGB(255, 255, 255))
-		})
-		return
+func mobileEffortLabel(effort string) string {
+	switch effort {
+	case "":
+		return tr("Model default")
+	case "xhigh":
+		return tr("Extra high")
+	case "max":
+		return tr("Maximum")
 	}
-	ui.Box(c).Size(22, 22).Shrink(0).Radius(11).Border(1.5, p.muted)
+	label := []rune(tr(effort))
+	if len(label) > 0 {
+		label[0] = unicode.ToUpper(label[0])
+	}
+	return string(label)
+}
+
+func (m *App) optionChoice(c *ui.Context, label, detail string, selected bool) ui.Element {
+	return m.settingsButton(c, label).Gap(12).Role(ui.RoleRadio).Checked(selected).Children(func() {
+		ui.Column(c).Grow(1).MinWidth(0).Gap(4).Children(func() {
+			ui.Text(c, label).FontSize(m.Font(17)).MinWidth(0).Wrap()
+			if detail != "" {
+				ui.Text(c, detail).FontSize(m.Font(13)).TextColor(m.Pal.muted).LineHeight(1.3).MinWidth(0).Wrap()
+			}
+		})
+		ui.Box(c).Size(18, 18).Shrink(0).Children(func() {
+			if selected {
+				widgets.Icon(c, "check", 18, m.Pal.link)
+			}
+		})
+	})
+}
+
+func (m *App) modelOptionsView(c *ui.Context) {
+	agent := m.optionsAgent
+	a, o := m.agentOptions(agent), m.SendOptions(agent)
+	m.settingsHeader(c, "/options/model", tr("Model"))
+	m.settingsBody(c, func() {
+		m.settingsGroup(c, "", "", func() {
+			ui.Column(c).FillWidth().Role(ui.RoleRadioGroup).Label(tr("Model")).Children(func() {
+				for i, model := range a.Models {
+					if i > 0 {
+						m.settingsSeparator(c.Key("divider:" + model.Value))
+					}
+					row := m.optionChoice(c.Key("model:"+model.Value), model.Label, "", model.Value == o.Model).Label(tr("Model ") + model.Label)
+					if row.Clicked() {
+						o.Model, o.Effort = model.Value, model.DefaultEffort
+						m.setOptions(agent, o)
+						m.Router().Back()
+					}
+				}
+				if len(a.Models) == 0 {
+					ui.Text(c, tr("Connect to your desktop to select a model")).FontSize(m.Font(15)).Padding(16).TextColor(m.Pal.muted).Wrap()
+				}
+			})
+		})
+	})
+}
+
+func (m *App) effortOptionsView(c *ui.Context) {
+	agent := m.optionsAgent
+	a, o := m.agentOptions(agent), m.SendOptions(agent)
+	choices := []string{""}
+	for _, model := range a.Models {
+		if model.Value == o.Model {
+			for _, effort := range model.Efforts {
+				if effort != "" {
+					choices = append(choices, effort)
+				}
+			}
+			break
+		}
+	}
+	m.settingsHeader(c, "/options/effort", tr("Reasoning effort"))
+	m.settingsBody(c, func() {
+		m.settingsGroup(c, "", "", func() {
+			ui.Column(c).FillWidth().Role(ui.RoleRadioGroup).Label(tr("Reasoning effort")).Children(func() {
+				for i, effort := range choices {
+					if i > 0 {
+						m.settingsSeparator(c.Key("divider:" + effort))
+					}
+					label := mobileEffortLabel(effort)
+					row := m.optionChoice(c.Key("effort:"+effort), label, "", effort == o.Effort).Label(tr("Effort ") + label)
+					if row.Clicked() {
+						o.Effort = effort
+						m.setOptions(agent, o)
+						m.Router().Back()
+					}
+				}
+			})
+		})
+	})
+}
+
+type mobilePermissionChoice struct{ value, label, detail string }
+
+func mobilePermissionChoices() []mobilePermissionChoice {
+	return []mobilePermissionChoice{
+		{"on-request", tr("Ask when needed"), tr("Confirm sensitive actions yourself")},
+		{"on-failure", tr("Automatic approval"), tr("Automatic approval handles requests and asks you when needed")},
+		{"never", tr("Full access"), tr("Allow the agent to act without asking")},
+	}
+}
+
+func (m *App) permissionOptionsView(c *ui.Context) {
+	agent := m.optionsAgent
+	o := m.SendOptions(agent)
+	m.settingsHeader(c, "/options/permissions", tr("Permission mode"))
+	m.settingsBody(c, func() {
+		m.settingsGroup(c, "", "", func() {
+			ui.Column(c).FillWidth().Role(ui.RoleRadioGroup).Label(tr("Permission mode")).Children(func() {
+				for i, policy := range mobilePermissionChoices() {
+					if i > 0 {
+						m.settingsSeparator(c.Key("divider:" + policy.value))
+					}
+					if m.optionChoice(c.Key("policy:"+policy.value), policy.label, policy.detail, policy.value == o.Policy).Clicked() {
+						o.Policy = policy.value
+						m.setOptions(agent, o)
+						m.Router().Back()
+					}
+				}
+			})
+		})
+	})
 }

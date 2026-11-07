@@ -215,6 +215,10 @@ func (m *App) automationCreatePage(c *ui.Context) {
 					}
 					ui.Text(c, tr("Include previous result")).FontSize(m.Font(14))
 				})
+				ui.Row(c).FillWidth().Gap(10).AlignItems(ui.Center).Children(func() {
+					ui.Switch(c.Key("worktree"), &f.Draft.Worktree).Label(tr("Run in a separate worktree")).Disabled(locked)
+					ui.Text(c, tr("Run in a separate worktree")).FontSize(m.Font(14))
+				})
 			}
 		})
 	})

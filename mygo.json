@@ -15,10 +15,12 @@
   "ios": {
     "capabilities": [
       "camera",
+      "microphone",
       "biometrics"
     ],
     "minimumSystemVersion": "15.0",
     "infoPlist": {
+      "NSMicrophoneUsageDescription": "Record your voice while you hold the input to convert it to text using cloud recognition.",
       "NSFaceIDUsageDescription": "Verify your identity to save or use your Mac login password to unlock remote desktop.",
       "NSCameraUsageDescription": "Scan the QR code in Miya on your desktop to view conversations.",
       "NSLocalNetworkUsageDescription": "Connect to Miya on your desktop over the same Wi-Fi using an encrypted local connection for lower latency.",

@@ -140,11 +140,28 @@ func (p *CollaborationPanel) drawContent(c *ui.Context, v CollaborationPanelView
 	})
 }
 
-// hidden reports whether the panel has nothing to show. Agents delegate
-// tasks, so the panel appears once the conversation has one; a request in
-// flight keeps it visible.
+// Hidden reports whether the panel has nothing that needs the person. The
+// entry appears while a delegated task runs or still has something to
+// resolve, and goes away once every task has ended and returned its result.
+// A request in flight or an open popover keeps it visible.
 func (p *CollaborationPanel) Hidden() bool {
-	return len(p.Rows) == 0 && p.Pending == nil
+	if p.Pending != nil || p.Open {
+		return false
+	}
+	return !slices.ContainsFunc(p.Rows, collaborationTaskLive)
+}
+
+// collaborationTaskLive reports whether a task still runs, or ended but its
+// result is still on its way back or needs attention.
+func collaborationTaskLive(task CollaborationTaskView) bool {
+	if !dg.Terminal(task.State) {
+		return true
+	}
+	switch task.Notification {
+	case "watching", "pending", "submitting", "needsAttention":
+		return true
+	}
+	return false
 }
 
 // drawToggle is the Agent tasks button that opens and closes the panel.

@@ -13,6 +13,7 @@ import (
 	agentpolicy "miya/internal/agent/policy"
 	"miya/internal/appdir"
 	"miya/internal/chat/model"
+	msgfmt "miya/internal/chat/presentation"
 	"miya/locales"
 )
 
@@ -139,15 +140,7 @@ func SaveHistory(t model.Thread) {
 // turnHasOutput reports whether the turn since the last prompt produced a
 // reply or a tool call.
 func TurnHasOutput(messages []model.Message) bool {
-	for i := len(messages) - 1; i >= 0; i-- {
-		switch messages[i].Role {
-		case "user":
-			return false
-		case "assistant", "tool":
-			return true
-		}
-	}
-	return false
+	return msgfmt.TurnHasOutput(messages)
 }
 
 func ModelName(v string) string {

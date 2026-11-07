@@ -421,6 +421,20 @@ func (app *App) automationDetail(c *ui.Context) {
 		}
 		ui.Text(c, tr("Include the previous structured result with each run so the agent can compare changes")).FontSize(12).TextColor(widgets.Muted)
 	})
+	ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
+		isolated := v.Worktree
+		if ui.Switch(c.Key("worktree"), &isolated).Label(tr("Run in a separate worktree")).Shrink(0).Changed() {
+			next := v.Automation
+			next.Worktree = isolated
+			app.autoCall("automationSave", automation.Request{Automation: &next}, func(_ json.RawMessage, err error) {
+				if err != nil {
+					app.Autos.err = err.Error()
+				}
+				app.loadAutomations()
+			})
+		}
+		ui.Text(c, tr("Each run works on its own Git branch, so it cannot collide with your edits; merge or discard its changes afterwards")).FontSize(12).TextColor(widgets.Muted)
+	})
 	ui.Row(c).FillWidth().AlignItems(ui.End).Margin(8, 0, 0, 0).Children(func() {
 		ui.Text(c, tr("Run history")).FontWeight(600).Grow(1)
 		ui.Text(c, fmt.Sprintf(tr("Last %d runs"), automation.RunHistory)).FontSize(12).TextColor(widgets.Muted)
@@ -494,7 +508,46 @@ func (app *App) runRow(c *ui.Context, v automation.View, r automation.Run, runni
 		}
 	})
 	if row.Clicked() && r.Thread != 0 {
-		app.openAutomationThread(v.Project, r.Thread)
+		app.openAutomationThread(automation.Workspace(v.Project, r), r.Thread)
+	}
+	app.worktreeRow(c.Key("worktree"), v, r)
+}
+
+// worktreeRow shows what a run left in its worktree and, while it waits,
+// merges or discards it.
+func (app *App) worktreeRow(c *ui.Context, v automation.View, r automation.Run) {
+	label := automation.WorktreeLabel(r)
+	if label == "" {
+		return
+	}
+	if automation.WorktreePending(r) && (r.Changes.Commits > 0 || r.Changes.Files > 0) {
+		label += fmt.Sprintf(tr(" · %d commits, %d uncommitted files"), r.Changes.Commits, r.Changes.Files)
+	}
+	ui.Row(c).FillWidth().Gap(8).Padding(0, 12, 6, 33).AlignItems(ui.Center).Children(func() {
+		widgets.Icon(c, "git-branch", 12, widgets.Muted)
+		ui.Text(c, label).Grow(1).MinWidth(0).FontSize(12).TextColor(widgets.Muted).SingleLine().Ellipsis("…")
+		if !automation.WorktreePending(r) {
+			return
+		}
+		act := func(action string) {
+			app.autoCall("automationWorktree", automation.Request{ID: v.ID, Started: r.Started, Action: action}, func(_ json.RawMessage, err error) {
+				if err != nil {
+					app.Autos.err = err.Error()
+				}
+				app.loadAutomations()
+			})
+		}
+		if widgets.Quiet(c.Key("discard")).PaddingX(8).Label(tr("Discard")).Children(func() {
+			ui.Text(c, tr("Discard")).FontSize(12)
+		}).Clicked() {
+			act(automation.WorktreeDiscard)
+		}
+		if ui.PrimaryButton(c.Key("merge"), tr("Merge")).Clicked() {
+			act(automation.WorktreeMerge)
+		}
+	})
+	if r.WorktreeError != "" {
+		ui.Text(c, r.WorktreeError).Padding(0, 12, 6, 33).FontSize(12).TextColor(widgets.Danger)
 	}
 }
 

@@ -112,6 +112,10 @@ func (app *View) MessageList(c *ui.Context, t model.Thread) {
 			widgets.MutedText(c, tr("No visible messages (reasoning-only or unsupported items)")).Margin(ui.Auto)
 		}
 	})
+	// Selecting a message must keep its text under the pointer while new
+	// output arrives. Allow following again after focus leaves the messages;
+	// Latest can still explicitly scroll to the end.
+	state.FollowEnd = !list.FocusWithin()
 	messageScrollbars(c, list)
 	if app.Mobile {
 		// Claim whitespace before the drawer's Draggable ancestor, but keep
@@ -136,8 +140,14 @@ func (app *View) MessageList(c *ui.Context, t model.Thread) {
 		})
 	}
 	if status != "" || completedGroup >= 0 {
-		ui.Row(c).FillWidth().Justify(ui.Center).Padding(0, app.listPadding(), 6, app.listPadding()).Children(func() {
-			row := ui.Row(c.Key("turn-status")).FillWidth().MaxWidth(744).MinHeight(44).Gap(8).AlignItems(ui.Center)
+		ui.Row(c).FillWidth().Justify(ui.Center).Padding(0, app.listPadding()).Children(func() {
+			// Match the response actions so finishing a turn does not move
+			// the label. Phone actions retain their full touch target.
+			height := float32(28)
+			if app.Mobile {
+				height = 44
+			}
+			row := ui.Row(c.Key("turn-status")).FillWidth().MaxWidth(744).MinHeight(height).Gap(8).AlignItems(ui.Center)
 			if app.Mobile {
 				row.Gap(6)
 			}
@@ -223,8 +233,9 @@ func (app *View) groupViewWithFooter(c *ui.Context, g msgfmt.MessageGroup, inlin
 		if g.ShowTimestamp {
 			ui.Text(c, msgfmt.FormatMessageTimestamp(g.Timestamp)).AlignSelf(ui.Start).TextColor(widgets.Muted).FontSize(11)
 		}
-		for _, run := range msgfmt.ActivityRuns(g.Messages) {
-			app.activityRunView(c.Key(msgfmt.MessageViewKey(run.Messages[0])), run, g.Streaming)
+		runs := msgfmt.ActivityRuns(g.Messages)
+		for i, run := range runs {
+			app.activityRunView(c.Key(msgfmt.MessageViewKey(run.Messages[0])), run, g.Streaming && i == len(runs)-1)
 		}
 		if g.Streaming {
 			return
@@ -294,13 +305,12 @@ func (app *View) activityRunView(c *ui.Context, run msgfmt.ActivityRun, streamin
 		app.MessageView(c.Key(msgfmt.MessageViewKey(run.Messages[0])), run.Messages[0], streaming)
 		return
 	}
-	// Keep the current turn visible without saving its automatic expansion as
-	// a user preference. Completion and historical replay then collapse it.
-	expanded := streaming || app.Open[-run.ID]
+	// Activity batches only expand through the user's explicit toggle.
+	agents := subagent.Latest(run.Messages)
+	expanded := app.Open[-run.ID]
 	ui.Column(c).FillWidth().Gap(4).Children(func() {
-		header := widgets.Quiet(c.Key("header")).PaddingX(0).AlignSelf(ui.Start).Disabled(streaming)
+		header := widgets.Quiet(c.Key("header")).PaddingX(0).AlignSelf(ui.Start)
 		// Sub-agents inside a collapsed run still show that they work.
-		agents := subagent.Latest(run.Messages)
 		header.Children(func() {
 			widgets.Icon(c, "stack-2", 14, widgets.Muted)
 			if subagent.AnyActive(agents) {
@@ -552,23 +562,29 @@ func (app *View) ThreadInput(c *ui.Context, state *InlineThreadInput, raw, owner
 			state.Doc.Edit(func(e *richtext.Edit) { e.ReplaceString(start, end, "", richtext.Attributes{}); e.Select(start, start) })
 		}
 	}
+	var in ui.Element
 	contextMenu := func(menu *ui.Menu) {
 		a, z := state.Doc.Selection()
 		selection := state.Doc.Text().Slice(min(a, z), max(a, z))
 		mentions := model.ThreadMentions(InlineThreadRaw(selection))
 		if menu.Item(tr("Copy session link")).Disabled(len(mentions) != 1).Chosen() && len(mentions) == 1 {
 			services.WriteClipboard(mentions[0].Ref.URL())
+			in.Focus()
 		}
 		if menu.Item(tr("Copy")).Disabled(a == z).Chosen() {
 			copySelection(false)
+			in.Focus()
 		}
 		if menu.Item(tr("Cut")).Disabled(a == z).Chosen() {
 			copySelection(true)
+			in.Focus()
 		}
 		if menu.Item(tr("Paste")).Chosen() {
 			paste()
+			in.Focus()
 		}
 		if menu.Item(tr("Paste as conversation reference")).Chosen() {
+			in.Focus()
 			if data, err := services.ReadClipboardData(transfer.Text).Read(transfer.Text); err == nil {
 				if ref, ok := model.ParseThreadURL(strings.TrimSpace(string(data))); ok {
 					state.insert(model.ReferenceText(ref, app.ReferenceTitle(ref)))
@@ -581,14 +597,20 @@ func (app *View) ThreadInput(c *ui.Context, state *InlineThreadInput, raw, owner
 		}
 		if menu.Item(tr("Select all")).Chosen() {
 			state.Doc.SetSelection(0, state.Doc.Text().Len())
+			in.Focus()
 		}
 	}
-	in := richtext.EditorBase(c, state.Doc, richtext.EditorOptions{
-		Label: label, Placeholder: placeholder, NoMarkdown: true, Font: state.Style.Font,
+	in = richtext.EditorBase(c, state.Doc, richtext.EditorOptions{
+		OnInput: state.InputHook,
+		Label:   label, Placeholder: placeholder, NoMarkdown: true, Font: state.Style.Font,
 		OnPaste: func() bool { paste(); return true }, ContextMenu: contextMenu,
 		OnCopy:   func(cut bool) bool { copySelection(cut); return true },
 		TagStyle: func(_ string, span *ui.Span) { span.ObjectDescent = size * 0.25 },
 	}).FillWidth().MinWidth(0).FocusRing(false).InputOptions(ui.InputOptions{Dismiss: ui.KeyboardDismissInteractive})
+	if state.InputHook != nil {
+		in.TouchSelection()
+	}
+	state.EditMenu = contextMenu
 	if measured := in.Bounds().W; measured > 0 {
 		width = measured
 	}

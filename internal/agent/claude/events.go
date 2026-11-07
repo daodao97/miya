@@ -141,7 +141,11 @@ func (b Adapter) Handle(id int, f claude.Frame) {
 			for i, b := range f.Message.Content {
 				if b.Type == "text" {
 					key := claude.TextKey(t, f.Message.ID, i, b.Text)
-					c.Upsert(t, model.Message{Role: "assistant", Kind: "agentMessage", ItemID: key, Content: b.Text, SentAtMs: now, StartedAtMs: now})
+					status := ""
+					if f.Error != "" {
+						status = "failed"
+					}
+					c.Upsert(t, model.Message{Role: "assistant", Kind: "agentMessage", Status: status, ItemID: key, Content: b.Text, SentAtMs: now, StartedAtMs: now})
 				}
 				if b.Type == "tool_use" {
 					m := model.Message{Role: "tool", Kind: "claudeTool", ItemID: b.ID, Content: b.Name + "\n" + string(b.Input), Status: "inProgress", Agents: transcript.SubAgents(b.ID, b.Name, b.Input, "inProgress")}

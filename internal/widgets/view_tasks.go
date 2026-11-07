@@ -1,18 +1,32 @@
 package widgets
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/egoist/mygo/ui"
 
 	"miya/internal/appmodel"
 	"miya/internal/chat/model"
 	msgfmt "miya/internal/chat/presentation"
+	"miya/internal/chat/subagent"
+	"miya/internal/textutil"
 )
 
 type TaskPalette struct{ Surface, Border, Ink, Muted ui.Color }
 
-// taskStatusBar is shared by the desktop and phone composers.
+// TaskStatusBar is shared by the desktop and phone composers. Besides loops
+// and goals it lists the sub-agents still running, whichever agent started
+// them, which would otherwise scroll away with the message list; each row
+// leaves once its agent ends. Only a working conversation lists them: a
+// launch snapshot that never got a final state must not linger after the
+// turn (Claude keeps the conversation busy while background agents run).
 func TaskStatusBar(c *ui.Context, t model.Thread, approval bool, p TaskPalette, action func(string, string)) {
-	if len(t.Tasks) == 0 {
+	var agents []model.SubAgent
+	if t.Busy {
+		agents = subagent.ActiveAgents(t.Messages)
+	}
+	if len(t.Tasks) == 0 && len(agents) == 0 {
 		return
 	}
 	ui.Column(c.Key("task-status")).FillWidth().MinWidth(0).Background(p.Surface).Border(1, p.Border).Radius(12).Children(func() {
@@ -63,14 +77,56 @@ func TaskStatusBar(c *ui.Context, t model.Thread, approval bool, p TaskPalette, 
 							button(tr("Clear goal"), "clear", "trash-2")
 						} else if task.Status == "waiting" || task.Status == "running" {
 							name := tr("Stop loop")
-							if len(t.Tasks) > 1 {
+							if activeLoops(t) > 1 {
 								name = tr("Stop all loops")
 							}
 							button(name, "stop", "")
+						} else if model.LoopFinished(task) {
+							button(tr("Clear loop"), "clear", "trash-2")
 						}
 					})
+				}
+				for i, a := range agents {
+					subAgentStatusRow(c.Key("agent:"+textutil.FirstNonEmpty(a.ID, string(rune('0'+i%10)))), a, p)
 				}
 			})
 		})
 	})
+}
+
+func subAgentStatusRow(c *ui.Context, a model.SubAgent, p TaskPalette) {
+	ui.Row(c).FillWidth().MinWidth(0).MinHeight(40).Gap(10).AlignItems(ui.Center).Children(func() {
+		ui.Column(c).Grow(1).MinWidth(0).Gap(4).Children(func() {
+			ui.Row(c).FillWidth().MinWidth(0).Gap(6).AlignItems(ui.Center).Children(func() {
+				if a.Status == subagent.Running {
+					ui.Spinner(c).FontSize(12).TextColor(p.Ink)
+				} else {
+					Icon(c, "clock", 13, p.Muted)
+				}
+				ui.Text(c, tr("Subagent")+" · "+subagent.StatusLabel(a.Status)).FontSize(12).FontWeight(600).TextColor(p.Ink).Shrink(0)
+				name := textutil.FirstNonEmpty(a.Name, a.ID)
+				ui.Text(c, msgfmt.NativeText(name)).FontSize(12).TextColor(p.Ink).SingleLine().Ellipsis("…").Tooltip(name).Grow(1).MinWidth(0)
+			})
+			var parts []string
+			if a.Steps > 0 {
+				parts = append(parts, fmt.Sprintf(tr("%d steps"), a.Steps))
+			}
+			if a.Detail != "" {
+				parts = append(parts, textutil.FirstLine(a.Detail))
+			}
+			if detail := strings.Join(parts, " · "); detail != "" {
+				ui.Text(c, msgfmt.NativeText(detail)).FontSize(11).TextColor(p.Muted).SingleLine().Ellipsis("…").Tooltip(detail)
+			}
+		})
+	})
+}
+
+func activeLoops(t model.Thread) int {
+	n := 0
+	for _, task := range t.Tasks {
+		if task.Kind == "loop" && (task.Status == "waiting" || task.Status == "running") {
+			n++
+		}
+	}
+	return n
 }

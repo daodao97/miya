@@ -115,6 +115,9 @@ func TestMobileLanguageChoiceFitsNarrowScreen(t *testing.T) {
 			m.Router().Push("/settings")
 			tt := ui.NewTester(m.ViewRoot, width, 844)
 			tt.SetLocale("zh-Hans")
+			if err := tt.Click("语言"); err != nil {
+				t.Fatal(err)
+			}
 			for _, label := range []string{"跟随系统", "简体中文", "English"} {
 				rect, ok := tt.Find(label)
 				if !ok || rect.W <= 0 || rect.X < 0 || rect.X+rect.W > float32(width) {

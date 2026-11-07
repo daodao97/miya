@@ -32,7 +32,7 @@ func TestMobileUserGroupPreservesTimestampWithoutDesktopHost(t *testing.T) {
 	}
 }
 
-func TestActivityRunsExpandDuringCurrentTurn(t *testing.T) {
+func TestActivityRunsOnlyExpandManually(t *testing.T) {
 	for _, mobile := range []bool{false, true} {
 		name, width := "desktop", 744
 		if mobile {
@@ -40,13 +40,9 @@ func TestActivityRunsExpandDuringCurrentTurn(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			host := &snapshotHost{thread: model.Thread{ID: 1, Busy: true, TurnID: "live", Messages: []model.Message{
-				{ID: 1, Role: "user", Content: "previous"},
-				{ID: 2, Role: "tool", TurnID: "old", Kind: "commandExecution", Status: "inProgress", Item: &model.Activity{Command: "old-one"}},
-				{ID: 3, Role: "tool", TurnID: "old", Kind: "commandExecution", Status: "completed", Item: &model.Activity{Command: "old-two"}},
-				{ID: 4, Role: "tool", TurnID: "old", Kind: "commandExecution", Status: "completed", Item: &model.Activity{Command: "old-three"}},
-				{ID: 5, Role: "user", Content: "current"},
-				{ID: 6, Role: "tool", TurnID: "live", Kind: "commandExecution", Status: "completed", Item: &model.Activity{Command: "live-one"}},
-				{ID: 7, Role: "tool", TurnID: "live", Kind: "commandExecution", Status: "inProgress", Item: &model.Activity{Command: "live-two"}},
+				{ID: 1, Role: "user", Content: "current"},
+				{ID: 2, Role: "tool", TurnID: "live", Kind: "commandExecution", Status: "completed", Item: &model.Activity{Command: "first"}},
+				{ID: 3, Role: "tool", TurnID: "live", Kind: "commandExecution", Status: "inProgress", Item: &model.Activity{Command: "second"}},
 			}}}
 			v := NewConversationView(host)
 			v.Mobile = mobile
@@ -55,28 +51,43 @@ func TestActivityRunsExpandDuringCurrentTurn(t *testing.T) {
 					v.GroupView(c.Key(g.ID), g)
 				}
 			}, width, 600)
-			assertVisible := func(active bool) {
+			assertVisible := func(want bool) {
 				t.Helper()
-				if tt.HasText("Ran live-one") != active || tt.HasText("Running live-two") != active {
-					t.Fatalf("current activities visible = %v: %v", active, tt.Texts())
+				if tt.HasText("Ran first") != want || (tt.HasText("Running second") || tt.HasText("Ran second")) != want {
+					t.Fatalf("activities visible = %v, want %v: %v", !want, want, tt.Texts())
 				}
-				if tt.HasText("Running old-one") || tt.HasText("Ran old-two") || tt.HasText("Ran old-three") {
-					t.Fatalf("historical activities expanded: %v", tt.Texts())
-				}
+			}
+			assertVisible(false)
+			if err := tt.Click("2 activities"); err != nil {
+				t.Fatal(err)
 			}
 			assertVisible(true)
-			// A running group's header cannot hide its activities or save an
-			// expansion that would leave it open after the turn finishes.
-			header, ok := tt.Find("2 activities")
-			if !ok {
-				t.Fatal("current activity header missing")
-			}
-			tt.ClickAt(header.X+header.W/2, header.Y+header.H/2)
+			// Completion and incoming body text must preserve a manual expansion.
+			host.thread.Messages[2].Status = "completed"
+			host.thread.Messages = append(host.thread.Messages, model.Message{ID: 4, Role: "assistant", TurnID: "live", Content: "Result"})
+			tt.Frame()
 			assertVisible(true)
 			host.thread.Busy = false
 			tt.Frame()
+			assertVisible(true)
+			if err := tt.Click("2 activities"); err != nil {
+				t.Fatal(err)
+			}
 			assertVisible(false)
-			// Reopening history must ignore stale inProgress item statuses.
+			// Running again, including pending sub-agents, never opens a closed batch.
+			host.thread.Busy = true
+			host.thread.Messages[2].Agents = []model.SubAgent{{ID: "agent", Status: "running"}}
+			tt.Frame()
+			assertVisible(false)
+			if err := tt.Click("2 activities · 1 Running"); err != nil {
+				t.Fatal(err)
+			}
+			assertVisible(true)
+			if err := tt.Click("2 activities · 1 Running"); err != nil {
+				t.Fatal(err)
+			}
+			assertVisible(false)
+			// Reopened history starts collapsed as well.
 			v = NewConversationView(host)
 			v.Mobile = mobile
 			tt.Frame()

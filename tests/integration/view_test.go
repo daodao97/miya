@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -132,6 +133,67 @@ func TestActivitiesCollapseIntoOneRow(t *testing.T) {
 	}
 }
 
+func TestMessageListTextCanBeSelectedAndCopied(t *testing.T) {
+	for _, busy := range []bool{false, true} {
+		t.Run(map[bool]string{false: "completed", true: "running"}[busy], func(t *testing.T) {
+			app, tt := testApp(t)
+			c := app.C.(*controller.Controller)
+			c.SetThreads([]model.Thread{{ID: 1, ServerID: "t1", Busy: busy, Loaded: true, HistoryLoaded: true, Messages: []model.Message{
+				{ID: 1, Role: "user", Content: "Select this user message 鼠标拖选"},
+				{ID: 2, Role: "assistant", Content: "Select this assistant reply 正文复制\n\n" + strings.Repeat("Longer message text for scrolling.\n\n", 45)},
+			}}})
+			c.SetActive(1)
+			tt.Frame()
+			app.ListFor(1).ScrollTo(0, ui.Start)
+			tt.Frame()
+			for _, text := range []string{"Select this user message 鼠标拖选", "Select this assistant reply 正文复制"} {
+				r, ok := tt.Find(text)
+				if !ok {
+					t.Fatalf("message missing: %v", tt.Texts())
+				}
+				tt.Press(r.X+1, r.Y+r.H/2)
+				// Native windows can repaint while a drag is in progress.
+				tt.Frame()
+				tt.Move(r.X+r.W-1, r.Y+r.H/2)
+				tt.Frame()
+				tt.Release(r.X+r.W-1, r.Y+r.H/2)
+				tt.Key(ui.Cmd, ui.KeyC)
+				if got := tt.Clipboard(); got != text {
+					t.Fatalf("drag-selected message copied %q, want %q", got, text)
+				}
+			}
+		})
+	}
+}
+
+func TestMessageSelectionStaysPutWhileResponseGrows(t *testing.T) {
+	app, tt := testApp(t)
+	c := app.C.(*controller.Controller)
+	const text = "Select this assistant reply 鼠标拖选正文"
+	c.SetThreads([]model.Thread{{ID: 1, ServerID: "t1", Busy: true, Loaded: true, HistoryLoaded: true, Messages: []model.Message{
+		{ID: 1, Role: "user", Content: "question"},
+		{ID: 2, Role: "assistant", Content: text, Status: "completed"},
+	}}})
+	c.SetActive(1)
+	tt.Frame()
+	r, ok := tt.Find(text)
+	if !ok {
+		t.Fatal("reply missing")
+	}
+	tt.Press(r.X+1, r.Y+r.H/2)
+	c.Update(1, func(th *model.Thread) {
+		th.Messages[1].Content += "\n\n" + strings.Repeat("More output arrives while selecting.\n\n", 40)
+	})
+	tt.Frame()
+	tt.Advance(time.Second)
+	tt.Move(r.X+r.W-1, r.Y+r.H/2)
+	tt.Release(r.X+r.W-1, r.Y+r.H/2)
+	tt.Key(ui.Cmd, ui.KeyC)
+	if got := tt.Clipboard(); got != text {
+		t.Fatalf("new output disrupted selection: copied %q", got)
+	}
+}
+
 func TestApprovalCardResolvesRequest(t *testing.T) {
 	app, tt := testApp(t)
 	id, _ := json.Marshal("claude:1:a1")
@@ -200,17 +262,15 @@ func TestSidebarSelectsAndArchivesThreads(t *testing.T) {
 	}
 	tt.Move(1100, 780)
 	if tt.HasText("Conversation actions") || !tt.HasText(appmodel.Tr("Working…")) {
-		t.Fatal("unhovered conversations should only show run status")
+		t.Fatal("run status should stay visible while conversation actions wait for hover")
 	}
 	first, _ := tt.Find("First thread")
 	tt.Move(first.X+first.W/2, first.Y+first.H/2)
 	if !tt.HasText("Conversation actions") {
-		t.Fatal("hovering should replace run status with the more button")
+		t.Fatal("hovering hid the more button")
 	}
-	// The same conversation also appears under Projects. Its other row
-	// keeps running status while the activity row shows its actions.
 	if status, ok := tt.Find(appmodel.Tr("Working…")); ok && status.Y < first.Y+first.H && status.Y+status.H > first.Y {
-		t.Fatal("the hovered row still shows run status")
+		t.Fatal("the more icon should replace run status on hover")
 	}
 	if title, _ := tt.Find("First thread"); title != first {
 		t.Fatal("hovering changed the title's layout")
@@ -233,6 +293,23 @@ func TestSidebarSelectsAndArchivesThreads(t *testing.T) {
 	tt.Frame()
 	if tt.HasText("First thread") || len(c.Threads()) != 1 {
 		t.Fatalf("archived thread still listed: %q", tt.Texts())
+	}
+	completedTitle := strings.Repeat("已完成的长标题会话", 8)
+	c.Update(2, func(thread *model.Thread) { thread.Title = completedTitle })
+	tt.Move(1100, 780)
+	second, ok := tt.Find(completedTitle)
+	if !ok {
+		t.Fatal("completed conversation is missing")
+	}
+	tt.Move(second.X+4, second.Y+second.H/2)
+	if more, ok := tt.Find("Conversation actions"); !ok || more.Y >= second.Y+second.H || more.Y+more.H <= second.Y {
+		t.Fatal("hovering a completed conversation should show its more icon")
+	}
+	if err := tt.Click("Conversation actions"); err != nil {
+		t.Fatal(err)
+	}
+	if !tt.HasText("Archive conversation") || !tt.HasText("Delete conversation") {
+		t.Fatal("completed conversation actions should open normally")
 	}
 }
 

@@ -242,5 +242,21 @@ func TestMobileHomeSnapshot(t *testing.T) {
 		saveMobileNativeSnapshot(t, tt, name)
 		openMobileDrawer(t, tt)
 		saveMobileNativeSnapshot(t, tt, name+"-drawer")
+		if err := tt.Click("Settings"); err != nil {
+			t.Fatal(err)
+		}
+		saveMobileNativeSnapshot(t, tt, name+"-settings")
+		for _, page := range []struct{ label, name string }{{"Language", "language"}, {"Voice input", "voice"}} {
+			if err := tt.Click(page.label); err != nil {
+				t.Fatal(err)
+			}
+			saveMobileNativeSnapshot(t, tt, name+"-settings-"+page.name)
+			if err := tt.Click("Back"); err != nil {
+				t.Fatal(err)
+			}
+		}
+		tt.SetLocale("zh-Hans")
+		saveMobileNativeSnapshot(t, tt, name+"-settings-zh")
+		tt.SetLocale("en")
 	}
 }

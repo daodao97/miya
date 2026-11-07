@@ -2,6 +2,7 @@ package integration
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -36,10 +37,34 @@ func TestMobileModelSettingsRemainLocalAndKeepDraft(t *testing.T) {
 	if m.Router().Path() != "/options" {
 		t.Fatal("settings page did not open")
 	}
+	saveMobileNativeSnapshot(t, tt, "conversation-settings")
+	if err := tt.Click("Model"); err != nil {
+		t.Fatal(err)
+	}
+	if m.Router().Path() != "/options/model" {
+		t.Fatal("model picker did not open")
+	}
+	saveMobileNativeSnapshot(t, tt, "conversation-settings-models")
+	if err := tt.Click("Back"); err != nil {
+		t.Fatal(err)
+	}
+	if _, customized := m.Options[appmodel.AgentCodex]; customized {
+		t.Fatal("opening and dismissing a picker changed the phone settings")
+	}
+	if err := tt.Click("Model"); err != nil {
+		t.Fatal(err)
+	}
 	if err := tt.Click("Model Second"); err != nil {
 		t.Fatal(err)
 	}
-	if err := tt.Click("Effort HIGH"); err != nil {
+	if m.Router().Path() != "/options" || m.SendOptions(appmodel.AgentCodex).Effort != "medium" {
+		t.Fatal("model choice did not restore its default effort and return")
+	}
+	if err := tt.Click("Reasoning effort"); err != nil {
+		t.Fatal(err)
+	}
+	saveMobileNativeSnapshot(t, tt, "conversation-settings-efforts")
+	if err := tt.Click("Effort High"); err != nil {
 		t.Fatal(err)
 	}
 	if got := m.SendOptions(appmodel.AgentCodex); got.Model != "second" || got.Effort != "high" {
@@ -48,6 +73,33 @@ func TestMobileModelSettingsRemainLocalAndKeepDraft(t *testing.T) {
 	if m.State.Agents[0].Current.Model != "first" {
 		t.Fatal("phone changed desktop defaults")
 	}
+	if err := tt.Click("Permission mode"); err != nil {
+		t.Fatal(err)
+	}
+	saveMobileNativeSnapshot(t, tt, "conversation-settings-permissions")
+	if err := tt.Click("Automatic approval"); err != nil {
+		t.Fatal(err)
+	}
+	if m.Router().Path() != "/options" || m.SendOptions(appmodel.AgentCodex).Policy != "on-failure" {
+		t.Fatal("permission choice did not apply locally and return")
+	}
+	for _, width := range []int{320, 390} {
+		tt.SetSize(width, 844)
+		tt.SetPreferences(ui.Preferences{TextScale: 2})
+		value, ok := tt.Find("Second")
+		if !ok || value.X < 16 || value.X+value.W > float32(width)-16 {
+			t.Fatalf("large model value overflows at width %d: %v", width, value)
+		}
+		saveMobileNativeSnapshot(t, tt, fmt.Sprintf("conversation-settings-large-%d", width))
+	}
+	tt.SetSize(390, 750)
+	tt.SetPreferences(ui.Preferences{TextScale: 1})
+	tt.SetLocale("zh-Hans")
+	saveMobileNativeSnapshot(t, tt, "conversation-settings-zh")
+	tt.SetDark(true)
+	saveMobileNativeSnapshot(t, tt, "conversation-settings-zh-dark")
+	tt.SetDark(false)
+	tt.SetLocale("en")
 	if err := tt.Click("Back"); err != nil {
 		t.Fatal(err)
 	}
@@ -59,8 +111,25 @@ func TestMobileModelSettingsRemainLocalAndKeepDraft(t *testing.T) {
 		t.Fatal(err)
 	}
 	var saved map[string]remote.SendOptions
-	if json.Unmarshal(data, &saved) != nil || saved[appmodel.AgentCodex].Model != "second" {
+	if json.Unmarshal(data, &saved) != nil || saved[appmodel.AgentCodex] != (remote.SendOptions{Model: "second", Effort: "high", Policy: "on-failure"}) {
 		t.Fatal("choice was not persisted")
+	}
+	if err := tt.Click("Model settings"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.Click("Use desktop defaults"); err != nil {
+		t.Fatal(err)
+	}
+	if got := m.SendOptions(appmodel.AgentCodex); got != m.State.Agents[0].Current || m.Draft != "未发送的内容" {
+		t.Fatalf("restore defaults changed the draft or failed to remove overrides: %+v", got)
+	}
+	data, err = os.ReadFile(filepath.Join(m.DataDir, "message-options.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var restored map[string]remote.SendOptions
+	if json.Unmarshal(data, &restored) != nil || len(restored) != 0 {
+		t.Fatal("restore defaults did not clear the saved phone overrides")
 	}
 }
 

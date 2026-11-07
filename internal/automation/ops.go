@@ -29,6 +29,9 @@ type Request struct {
 	Request string `json:"request,omitempty"`
 	Project string `json:"project,omitempty"`
 	Agent   string `json:"agent,omitempty"`
+	// Started and Action pick a run and merge or discard its worktree.
+	Started time.Time `json:"started,omitzero"`
+	Action  string    `json:"action,omitempty"`
 }
 
 func ViewOf(a Automation, runs []Run, running bool, now time.Time) View {
@@ -53,6 +56,14 @@ func CheckText(a Automation) string {
 	return fmt.Sprintf("Check: %s; up to %d rounds", a.Check, a.Rounds)
 }
 
+// WhereText says where an automation's runs work.
+func WhereText(a Automation) string {
+	if a.Worktree {
+		return "a separate Git worktree on its own branch"
+	}
+	return "the project directory"
+}
+
 // CardDetail is what the confirmation card shows of a new one.
 func (rn *Runner) CardDetail(a Automation, now time.Time) string {
 	return strings.Join([]string{
@@ -60,6 +71,7 @@ func (rn *Runner) CardDetail(a Automation, now time.Time) string {
 		"Project: " + a.Project,
 		"Agent: " + model.AgentName(a.Agent),
 		"Completion check: " + CheckText(a),
+		"Runs in: " + WhereText(a),
 		"Instructions: " + a.Instructions,
 	}, "\n")
 }
@@ -76,6 +88,7 @@ func (rn *Runner) Diff(old, next Automation) string {
 	add("Schedule", DescribeCron(old.Schedule), DescribeCron(next.Schedule))
 	add("Agent", model.AgentName(old.Agent), model.AgentName(next.Agent))
 	add("Completion check", CheckText(old), CheckText(next))
+	add("Runs in", WhereText(old), WhereText(next))
 	add("Instructions", old.Instructions, next.Instructions)
 	return strings.Join(lines, "\n")
 }

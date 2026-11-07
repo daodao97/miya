@@ -111,4 +111,16 @@ func Latest(messages []model.Message) []model.SubAgent {
 	return out
 }
 
+// ActiveAgents are the sub-agents still at work across a conversation, each once
+// in its latest state, so they stay in view while the message list scrolls.
+func ActiveAgents(messages []model.Message) []model.SubAgent {
+	var out []model.SubAgent
+	for _, a := range Latest(messages) {
+		if Active(a.Status) {
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
 func tr(s string) string { return locales.T(s) }

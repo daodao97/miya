@@ -16,6 +16,7 @@ import (
 
 	"miya/internal/appdir"
 	"miya/internal/chat/model"
+	"miya/internal/project/worktree"
 	"miya/internal/textutil"
 	"miya/locales"
 )
@@ -43,6 +44,9 @@ type Automation struct {
 	Due time.Time `json:"due,omitzero"`
 	// NoCarryOver leaves the previous result out of the next run.
 	NoCarryOver bool `json:"noCarryOver,omitempty"`
+	// Worktree runs each run in a new Git worktree on its own branch, so
+	// that it cannot collide with edits in the project (worktree.go).
+	Worktree bool `json:"worktree,omitempty"`
 }
 
 // Run is one run of an automation.
@@ -61,6 +65,13 @@ type Run struct {
 	CatchUp bool `json:"catchUp,omitempty"`
 	// Report is the run\'s structured result.
 	Report *Report `json:"report,omitempty"`
+	// Worktree is where a run of a Worktree automation worked, and
+	// WorktreeState what became of it.
+	Worktree      *worktree.Worktree `json:"worktree,omitempty"`
+	WorktreeState string             `json:"worktreeState,omitempty"`
+	Changes       worktree.Changes   `json:"changes,omitzero"`
+	// WorktreeError is why the last merge or discard failed.
+	WorktreeError string `json:"worktreeError,omitempty"`
 }
 
 // A run's result is one of these.
@@ -212,6 +223,19 @@ func (s *Store) AddRun(id string, r Run) {
 		runs = runs[len(runs)-RunHistory:]
 	}
 	s.Runs[id] = runs
+}
+
+// UpdateRun changes the run of an automation that started at started,
+// reporting whether there is one.
+func (s *Store) UpdateRun(id string, started time.Time, change func(*Run)) bool {
+	runs := s.Runs[id]
+	for i := range runs {
+		if runs[i].Started.Equal(started) {
+			change(&runs[i])
+			return true
+		}
+	}
+	return false
 }
 
 // UpdateLastRun changes an automation's latest run.

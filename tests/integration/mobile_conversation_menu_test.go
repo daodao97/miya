@@ -39,6 +39,10 @@ func TestMobileConversationActionsSheet(t *testing.T) {
 				tt.SetPreferences(ui.Preferences{TextScale: 1})
 				tt.Frame()
 				saveMobileNativeSnapshot(t, tt, fmt.Sprintf("conversation-actions-normal-%d-dark-%v", width, dark))
+				tt.SetLocale("zh-Hans")
+				tt.Advance(time.Second)
+				saveMobileNativeSnapshot(t, tt, fmt.Sprintf("conversation-actions-zh-%d-dark-%v", width, dark))
+				tt.SetLocale("en")
 				tt.SetPreferences(ui.Preferences{TextScale: 1.8})
 				tt.Frame()
 				if err := tt.Click("Cancel"); err != nil {

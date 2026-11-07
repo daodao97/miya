@@ -35,7 +35,7 @@ func TestMobileTaskOpensTargetConversation(t *testing.T) {
 				m.ShowThread(source)
 				pane, _, _ := m.CollaborationPane()
 				pane.Loaded, pane.LoadedAt = true, time.Now()
-				pane.Rows = []widgets.CollaborationTaskView{{ID: "review", Title: "Review", State: dg.Completed}}
+				pane.Rows = []widgets.CollaborationTaskView{{ID: "review", Title: "Review", State: dg.Running}}
 				pane.Selected = "review"
 				pane.Details["review"] = widgets.CollaborationTaskView{ID: "review", Title: "Review", State: dg.Completed, Thread: targetRef}
 				// The destination's previously opened task popover must not reappear

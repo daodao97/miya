@@ -10,6 +10,7 @@ import (
 	claude "miya/internal/agent/claude/native"
 	"miya/internal/appmodel"
 	"miya/internal/chat/model"
+	msgfmt "miya/internal/chat/presentation"
 	"miya/internal/controller"
 	"miya/internal/notification"
 )
@@ -32,6 +33,25 @@ func TestClaudeEmptyResultExplained(t *testing.T) {
 	}
 	if got := claude.ErrorMessage("x", false, false); strings.Contains(got, "custom launch command") {
 		t.Fatalf("custom hint without a custom command: %q", got)
+	}
+}
+
+func TestClaudeAssistantAPIErrorIsNotOutput(t *testing.T) {
+	c := testController()
+	c.SetThreads([]model.Thread{{ID: 1, Agent: appmodel.AgentClaude, Busy: true, Messages: []model.Message{{Role: "user", Content: "同步上游"}}}})
+	var f claude.Frame
+	if err := json.Unmarshal([]byte(`{"type":"assistant","error":"api_error","message":{"id":"api-failure","content":[{"type":"text","text":"服务暂不可用"}]}}`), &f); err != nil {
+		t.Fatal(err)
+	}
+	c.HandleClaude(1, f)
+	th := c.ThreadWithID(1)
+	if len(th.Messages) != 2 || th.Messages[1].Status != "failed" || msgfmt.FailedAfterOutput(th, 0) || claude.TurnHasOutput(th.Messages) {
+		t.Fatalf("assistant API failure counted as completed work: %+v", th.Messages)
+	}
+	c.HandleClaude(1, claude.Frame{Type: "result", IsError: true, Errors: []string{"upstream unavailable"}})
+	last := c.ThreadWithID(1).Messages[2]
+	if last.Role != "error" || !strings.Contains(last.Content, "returned no response") {
+		t.Fatalf("API failure reported as a partial reply: %+v", last)
 	}
 }
 

@@ -41,6 +41,11 @@ type Host interface {
 	SyncLoginItem(enabled bool)
 	// Changed tells windows the automations changed.
 	Changed()
+	// AddWorkspace lists a run's worktree as a project while it exists,
+	// without trusting it in an agent's configuration; RemoveWorkspace
+	// takes it and its conversations off the list.
+	AddWorkspace(path string)
+	RemoveWorkspace(path string)
 }
 
 // Runner runs the automations of the controller that owns them: the
@@ -56,7 +61,9 @@ type Runner struct {
 	Check  func(dir, command string) (bool, string)
 	// Background runs work off the host's thread, then its result on it.
 	Background func(work func() func())
-	host       Host
+	// WorktreeRoot is where runs of Worktree automations get theirs.
+	WorktreeRoot string
+	host         Host
 }
 
 // ActiveRun is a run in progress: its conversation and round.
@@ -64,6 +71,13 @@ type ActiveRun struct {
 	Thread   int
 	round    int
 	checking bool
+	// started identifies the run in the store: runs skipped meanwhile
+	// come after it.
+	started time.Time
+	// preparing marks a run whose worktree is being made; dir is where
+	// the run works, "" for the automation's project.
+	preparing bool
+	dir       string
 }
 
 // TickInterval is how often the scheduler looks for due automations and
@@ -73,7 +87,7 @@ const TickInterval = 15 * time.Second
 // NewRunner loads the automations stored at path.
 func NewRunner(host Host, path string) *Runner {
 	rn := &Runner{Path: path, Store: Load(path), Active: map[string]*ActiveRun{},
-		Now: time.Now, Submit: host.Submit, Check: runCheck, host: host}
+		Now: time.Now, Submit: host.Submit, Check: runCheck, WorktreeRoot: WorktreeRoot(), host: host}
 	rn.Background = func(work func() func()) {
 		go func() {
 			done := work()
@@ -92,6 +106,14 @@ func (rn *Runner) Start(done <-chan struct{}, schedule bool) {
 			rn.Store.UpdateLastRun(a.ID, func(r *Run) {
 				r.Result, r.Summary, r.Finished = Interrupted, "Still running when Miya exited", rn.Now()
 			})
+		}
+		// A worktree left by a run that ended with the service, or before
+		// it was settled, is settled now.
+		for _, r := range rn.Store.Runs[a.ID] {
+			if r.Worktree != nil && (r.WorktreeState == WorktreeActive || r.WorktreeState == WorktreeBusy || r.WorktreeState == "") {
+				rn.Store.UpdateRun(a.ID, r.Started, func(x *Run) { x.WorktreeState = WorktreeActive })
+				rn.settle(a.ID, r.Started, false)
+			}
 		}
 	}
 	rn.Persist()
@@ -200,19 +222,18 @@ func (rn *Runner) StartRun(id string, catchUp bool) error {
 	thread := 0
 	if info, err := os.Stat(a.Project); err != nil || !info.IsDir() {
 		run.Result, run.Summary, run.Finished = Failed, "Project directory does not exist: "+a.Project, now
+	} else if a.Worktree {
+		rn.startInWorktree(a, run, prev)
+		return nil
 	} else if thread = rn.Submit(model.SendRequest{Agent: a.Agent, Project: a.Project, Text: RunMessage(a, prev), MemoryControl: true}); thread == 0 {
 		run.Result, run.Summary, run.Finished = Failed, model.AgentName(a.Agent)+" is not ready", now
 	}
-	if thread != 0 {
-		title := a.Name + " · " + now.Format("Jan 2, 15:04")
-		rn.host.UpdateThread(thread, func(t *model.Thread) {
-			t.Title = title
-			t.Automation = a.ID
-		})
-		run.Thread, run.ServerID = thread, rn.host.Thread(thread).ServerID
-		rn.Active[id] = &ActiveRun{Thread: thread, round: 1}
-	}
 	rn.Store.AddRun(id, run)
+	if thread != 0 {
+		r := &ActiveRun{round: 1, started: now}
+		rn.Active[id] = r
+		rn.attach(id, a, r, thread)
+	}
 	rn.Persist()
 	if run.Result == Failed {
 		rn.notice(a, run)
@@ -221,10 +242,29 @@ func (rn *Runner) StartRun(id string, catchUp bool) error {
 	return nil
 }
 
+// attach makes thread the conversation of a's run in progress, r.
+func (rn *Runner) attach(id string, a Automation, r *ActiveRun, thread int) {
+	title := a.Name + " · " + r.started.Format("Jan 2, 15:04")
+	rn.host.UpdateThread(thread, func(t *model.Thread) {
+		t.Title = title
+		t.Automation = a.ID
+	})
+	r.Thread = thread
+	serverID := rn.host.Thread(thread).ServerID
+	rn.Store.UpdateRun(id, r.started, func(run *Run) { run.Thread, run.ServerID = thread, serverID })
+}
+
+// updateRun changes the run r follows, or the latest without one.
+func (rn *Runner) updateRun(id string, r *ActiveRun, change func(*Run)) {
+	if r == nil || !rn.Store.UpdateRun(id, r.started, change) {
+		rn.Store.UpdateLastRun(id, change)
+	}
+}
+
 // advance follows a run: once its round has ended, it checks the work and
 // finishes the run or starts the next round.
 func (rn *Runner) advance(id string, r *ActiveRun) {
-	if r.checking {
+	if r.checking || r.preparing {
 		return
 	}
 	i, ok := rn.Store.Find(id)
@@ -238,7 +278,7 @@ func (rn *Runner) advance(id string, r *ActiveRun) {
 		return
 	}
 	if sid := t.ServerID; sid != "" {
-		rn.Store.UpdateLastRun(id, func(run *Run) { run.ServerID = sid })
+		rn.updateRun(id, r, func(run *Run) { run.ServerID = sid })
 	}
 	// A round waiting for an approval or an answer has not ended.
 	if t.Busy || t.Loading || len(t.Queue) > 0 || rn.host.AwaitsUser(t) {
@@ -259,7 +299,7 @@ func (rn *Runner) advance(id string, r *ActiveRun) {
 		rn.finish(id, Passed, reply)
 	default:
 		r.checking = true
-		dir, command, check := a.Project, a.Check, rn.Check
+		dir, command, check := textutil.FirstNonEmpty(r.dir, a.Project), a.Check, rn.Check
 		rn.Background(func() func() {
 			passed, output := check(dir, command)
 			return func() { rn.afterCheck(id, r, passed, output, reply) }
@@ -290,7 +330,7 @@ func (rn *Runner) afterCheck(id string, r *ActiveRun, passed bool, output, reply
 		return
 	}
 	r.round++
-	rn.Store.UpdateLastRun(id, func(run *Run) { run.Round = r.round })
+	rn.updateRun(id, r, func(run *Run) { run.Round = r.round })
 	rn.Persist()
 	if rn.Submit(model.SendRequest{ThreadID: r.Thread, Text: checkMessage(a, r.round-1, output), MemoryControl: true}) == 0 {
 		rn.finish(id, Failed, "Unable to start the next round")
@@ -310,7 +350,7 @@ func (rn *Runner) finish(id, result, summary string) {
 	delete(rn.Active, id)
 	now := rn.Now()
 	var run Run
-	rn.Store.UpdateLastRun(id, func(x *Run) {
+	rn.updateRun(id, r, func(x *Run) {
 		x.Result, x.Summary, x.Finished = result, textutil.ClipRunes(textutil.FirstLine(summary), 200), now
 		if r != nil {
 			x.Round = r.round
@@ -324,6 +364,11 @@ func (rn *Runner) finish(id, result, summary string) {
 		run = *x
 	})
 	rn.Persist()
+	if run.Worktree != nil {
+		// The notification says what the run left in its worktree.
+		rn.settle(id, run.Started, true)
+		return
+	}
 	if i, ok := rn.Store.Find(id); ok {
 		rn.notice(rn.Store.Automations[i], run)
 	}
@@ -337,7 +382,17 @@ func (rn *Runner) notice(a Automation, run Run) {
 		title += fmt.Sprintf("(round %d/%d)", run.Round, run.Rounds)
 	}
 	rn.host.Deliver(notification.Notice{ID: fmt.Sprintf("miya-auto-%s-%d", a.ID, run.Started.Unix()), Thread: strconv.Itoa(run.Thread),
-		Title: title, Body: textutil.FirstNonEmpty(run.Summary, a.Name)})
+		Title: title, Body: noticeBody(a, run)})
+}
+
+// noticeBody is the run's summary and, for a worktree run, where its
+// changes are.
+func noticeBody(a Automation, run Run) string {
+	body := textutil.FirstNonEmpty(run.Summary, a.Name)
+	if label := WorktreeLabel(run); label != "" {
+		body += "\n" + label
+	}
+	return body
 }
 
 // runCheck runs a check command in a login shell, as the person would in a

@@ -12,6 +12,11 @@ func ApplySchedules(t *model.Thread, schedules []ScheduledTask) {
 		}
 	}
 	for _, s := range schedules {
+		// The session tracker keeps reporting ended schedules. Once the user
+		// clears one, do not bring it back; a new wakeup arrives as waiting.
+		if model.LoopFinished(model.ThreadTask{Status: s.Status}) && !model.HasThreadTask(*t, "loop:"+s.ID) {
+			continue
+		}
 		title := s.Prompt
 		if title == "<<autonomous-loop>>" || title == "<<autonomous-loop-dynamic>>" {
 			title = "Automatic maintenance"

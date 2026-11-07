@@ -145,12 +145,31 @@ func TestRetryAfterStreamedOutputContinuesInsteadOfRewinding(t *testing.T) {
 }
 
 func TestFailedAfterOutput(t *testing.T) {
-	th := failedResponse()
-	if !msgfmt.FailedAfterOutput(th, 0) {
-		t.Fatal("tool output before the error was not detected")
-	}
-	th.Messages = append(th.Messages[:1], th.Messages[2])
-	if msgfmt.FailedAfterOutput(th, 0) {
-		t.Fatal("an error alone counted as output")
+	apiError := model.Message{Role: "assistant", Content: "API Error: 503 no healthy node with capacity supports this model."}
+	for _, tc := range []struct {
+		name     string
+		messages []model.Message
+		want     bool
+	}{
+		{name: "error only"},
+		{name: "API error text", messages: []model.Message{apiError}},
+		{name: "empty assistant", messages: []model.Message{{Role: "assistant"}}},
+		{name: "whitespace assistant", messages: []model.Message{{Role: "assistant", Content: " \n\t"}}},
+		{name: "marked API error", messages: []model.Message{{Role: "assistant", Status: "failed", Content: "服务暂不可用"}}},
+		{name: "reasoning only", messages: []model.Message{{Role: "activity", Kind: "reasoning", Content: "thinking"}}},
+		{name: "real reply", messages: []model.Message{{Role: "assistant", Content: "已完成检查"}}, want: true},
+		{name: "reply then API error", messages: []model.Message{{Role: "assistant", Content: "部分结果"}, apiError}, want: true},
+		{name: "tool then API error", messages: []model.Message{{Role: "tool", Content: "构建完成", Status: "completed"}, apiError}, want: true},
+		{name: "tool without result", messages: []model.Message{{Role: "tool", Status: "failed"}, apiError}, want: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// Previous turns must never make an empty failed turn look useful.
+			messages := []model.Message{{Role: "user", Content: "earlier"}, {Role: "assistant", Content: "earlier reply"}, {Role: "user", Content: "同步上游"}}
+			messages = append(messages, tc.messages...)
+			messages = append(messages, model.Message{Role: "error", Content: apiError.Content})
+			if got := msgfmt.FailedAfterOutput(model.Thread{Messages: messages}, 2); got != tc.want {
+				t.Fatalf("FailedAfterOutput = %v, want %v", got, tc.want)
+			}
+		})
 	}
 }

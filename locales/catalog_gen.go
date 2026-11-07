@@ -2614,6 +2614,16 @@ func (msgs Messages) ClearGoalE9633e() string {
 	return Catalog.Format(msgs.locale, "clearGoal_e9633e", nil)
 }
 
+// ClearLoopF3e761 says "Clear loop"
+// in the language the app shows.
+func ClearLoopF3e761() string { return In(i18n.Locale()).ClearLoopF3e761() }
+
+// ClearLoopF3e761 says "Clear loop"
+// in the language of msgs.
+func (msgs Messages) ClearLoopF3e761() string {
+	return Catalog.Format(msgs.locale, "clearLoop_f3e761", nil)
+}
+
 // ClickScroll9e09bf says "Click / Scroll"
 // in the language the app shows.
 func ClickScroll9e09bf() string { return In(i18n.Locale()).ClickScroll9e09bf() }
@@ -12490,6 +12500,18 @@ func (msgs Messages) StopLoopAda526() string {
 	return Catalog.Format(msgs.locale, "stopLoop_ada526", nil)
 }
 
+// StopTheLoopBeforeClearingIt25f76a says "Stop the loop before clearing it."
+// in the language the app shows.
+func StopTheLoopBeforeClearingIt25f76a() string {
+	return In(i18n.Locale()).StopTheLoopBeforeClearingIt25f76a()
+}
+
+// StopTheLoopBeforeClearingIt25f76a says "Stop the loop before clearing it."
+// in the language of msgs.
+func (msgs Messages) StopTheLoopBeforeClearingIt25f76a() string {
+	return Catalog.Format(msgs.locale, "stopTheLoopBeforeClearingIt_25f76a", nil)
+}
+
 // StopResponse68a76b says "Stop response"
 // in the language the app shows.
 func StopResponse68a76b() string { return In(i18n.Locale()).StopResponse68a76b() }
@@ -18268,4 +18290,338 @@ func LoadingCommands993c5d() string { return In(i18n.Locale()).LoadingCommands99
 // in the language of msgs.
 func (msgs Messages) LoadingCommands993c5d() string {
 	return Catalog.Format(msgs.locale, "loadingCommands_993c5d", nil)
+}
+
+// VoiceInput0 says "Voice input"
+// in the language the app shows.
+func VoiceInput0() string { return In(i18n.Locale()).VoiceInput0() }
+
+// VoiceInput0 says "Voice input"
+// in the language of msgs.
+func (msgs Messages) VoiceInput0() string {
+	return Catalog.Format(msgs.locale, "voiceInput_0", nil)
+}
+
+// VoiceInput1 says "WeChat cloud recognition"
+// in the language the app shows.
+func VoiceInput1() string { return In(i18n.Locale()).VoiceInput1() }
+
+// VoiceInput1 says "WeChat cloud recognition"
+// in the language of msgs.
+func (msgs Messages) VoiceInput1() string {
+	return Catalog.Format(msgs.locale, "voiceInput_1", nil)
+}
+
+// VoiceInput2 says "Hold the input to speak. Release to insert the recognized text without sending."
+// in the language the app shows.
+func VoiceInput2() string { return In(i18n.Locale()).VoiceInput2() }
+
+// VoiceInput2 says "Hold the input to speak. Release to insert the recognized text without sending."
+// in the language of msgs.
+func (msgs Messages) VoiceInput2() string {
+	return Catalog.Format(msgs.locale, "voiceInput_2", nil)
+}
+
+// VoiceInput3 says "Allow microphone"
+// in the language the app shows.
+func VoiceInput3() string { return In(i18n.Locale()).VoiceInput3() }
+
+// VoiceInput3 says "Allow microphone"
+// in the language of msgs.
+func (msgs Messages) VoiceInput3() string {
+	return Catalog.Format(msgs.locale, "voiceInput_3", nil)
+}
+
+// VoiceInput4 says "Allow microphone access in iOS Settings to use voice input."
+// in the language the app shows.
+func VoiceInput4() string { return In(i18n.Locale()).VoiceInput4() }
+
+// VoiceInput4 says "Allow microphone access in iOS Settings to use voice input."
+// in the language of msgs.
+func (msgs Messages) VoiceInput4() string {
+	return Catalog.Format(msgs.locale, "voiceInput_4", nil)
+}
+
+// VoiceInput5 says "Microphone access allowed"
+// in the language the app shows.
+func VoiceInput5() string { return In(i18n.Locale()).VoiceInput5() }
+
+// VoiceInput5 says "Microphone access allowed"
+// in the language of msgs.
+func (msgs Messages) VoiceInput5() string {
+	return Catalog.Format(msgs.locale, "voiceInput_5", nil)
+}
+
+// VoiceInput6 says "Voice recognition failed. Check your network and microphone permission, then try again."
+// in the language the app shows.
+func VoiceInput6() string { return In(i18n.Locale()).VoiceInput6() }
+
+// VoiceInput6 says "Voice recognition failed. Check your network and microphone permission, then try again."
+// in the language of msgs.
+func (msgs Messages) VoiceInput6() string {
+	return Catalog.Format(msgs.locale, "voiceInput_6", nil)
+}
+
+// VoiceInput7 says "No speech recognized. Press and hold to try again."
+// in the language the app shows.
+func VoiceInput7() string { return In(i18n.Locale()).VoiceInput7() }
+
+// VoiceInput7 says "No speech recognized. Press and hold to try again."
+// in the language of msgs.
+func (msgs Messages) VoiceInput7() string {
+	return Catalog.Format(msgs.locale, "voiceInput_7", nil)
+}
+
+// VoiceInput8 says "The draft changed during recording. Please try again."
+// in the language the app shows.
+func VoiceInput8() string { return In(i18n.Locale()).VoiceInput8() }
+
+// VoiceInput8 says "The draft changed during recording. Please try again."
+// in the language of msgs.
+func (msgs Messages) VoiceInput8() string {
+	return Catalog.Format(msgs.locale, "voiceInput_8", nil)
+}
+
+// VoiceInput9 says "Listening… Release to finish"
+// in the language the app shows.
+func VoiceInput9() string { return In(i18n.Locale()).VoiceInput9() }
+
+// VoiceInput9 says "Listening… Release to finish"
+// in the language of msgs.
+func (msgs Messages) VoiceInput9() string {
+	return Catalog.Format(msgs.locale, "voiceInput_9", nil)
+}
+
+// VoiceInput10 says "Recognizing…"
+// in the language the app shows.
+func VoiceInput10() string { return In(i18n.Locale()).VoiceInput10() }
+
+// VoiceInput10 says "Recognizing…"
+// in the language of msgs.
+func (msgs Messages) VoiceInput10() string {
+	return Catalog.Format(msgs.locale, "voiceInput_10", nil)
+}
+
+// VoiceInput11 says "Cancel voice input"
+// in the language the app shows.
+func VoiceInput11() string { return In(i18n.Locale()).VoiceInput11() }
+
+// VoiceInput11 says "Cancel voice input"
+// in the language of msgs.
+func (msgs Messages) VoiceInput11() string {
+	return Catalog.Format(msgs.locale, "voiceInput_11", nil)
+}
+
+// VoiceInput12 says "Hold the input to speak"
+// in the language the app shows.
+func VoiceInput12() string { return In(i18n.Locale()).VoiceInput12() }
+
+// VoiceInput12 says "Hold the input to speak"
+// in the language of msgs.
+func (msgs Messages) VoiceInput12() string {
+	return Catalog.Format(msgs.locale, "voiceInput_12", nil)
+}
+
+// VoiceEditText says "Edit text"
+// in the language the app shows.
+func VoiceEditText() string { return In(i18n.Locale()).VoiceEditText() }
+
+// VoiceEditText says "Edit text"
+// in the language of msgs.
+func (msgs Messages) VoiceEditText() string {
+	return Catalog.Format(msgs.locale, "voiceEditText", nil)
+}
+
+// MobileSettingsWeChat says "WeChat"
+// in the language the app shows.
+func MobileSettingsWeChat() string { return In(i18n.Locale()).MobileSettingsWeChat() }
+
+// MobileSettingsWeChat says "WeChat"
+// in the language of msgs.
+func (msgs Messages) MobileSettingsWeChat() string {
+	return Catalog.Format(msgs.locale, "mobileSettingsWeChat", nil)
+}
+
+// MobileEffortExtraHigh says "Extra high"
+// in the language the app shows.
+func MobileEffortExtraHigh() string { return In(i18n.Locale()).MobileEffortExtraHigh() }
+
+// MobileEffortExtraHigh says "Extra high"
+// in the language of msgs.
+func (msgs Messages) MobileEffortExtraHigh() string {
+	return Catalog.Format(msgs.locale, "mobileEffortExtraHigh", nil)
+}
+
+// MobileEffortMaximum says "Maximum"
+// in the language the app shows.
+func MobileEffortMaximum() string { return In(i18n.Locale()).MobileEffortMaximum() }
+
+// MobileEffortMaximum says "Maximum"
+// in the language of msgs.
+func (msgs Messages) MobileEffortMaximum() string {
+	return Catalog.Format(msgs.locale, "mobileEffortMaximum", nil)
+}
+
+// VoiceSendWhenDone says "Send when done speaking"
+// in the language the app shows.
+func VoiceSendWhenDone() string { return In(i18n.Locale()).VoiceSendWhenDone() }
+
+// VoiceSendWhenDone says "Send when done speaking"
+// in the language of msgs.
+func (msgs Messages) VoiceSendWhenDone() string {
+	return Catalog.Format(msgs.locale, "voiceSendWhenDone", nil)
+}
+
+// VoiceAutoSendHelp says "Hold the input to speak. Release to recognize and send automatically."
+// in the language the app shows.
+func VoiceAutoSendHelp() string { return In(i18n.Locale()).VoiceAutoSendHelp() }
+
+// VoiceAutoSendHelp says "Hold the input to speak. Release to recognize and send automatically."
+// in the language of msgs.
+func (msgs Messages) VoiceAutoSendHelp() string {
+	return Catalog.Format(msgs.locale, "voiceAutoSendHelp", nil)
+}
+
+// VoiceListeningAutoSend says "Listening… Release to send"
+// in the language the app shows.
+func VoiceListeningAutoSend() string { return In(i18n.Locale()).VoiceListeningAutoSend() }
+
+// VoiceListeningAutoSend says "Listening… Release to send"
+// in the language of msgs.
+func (msgs Messages) VoiceListeningAutoSend() string {
+	return Catalog.Format(msgs.locale, "voiceListeningAutoSend", nil)
+}
+
+// VoiceRecognizingAutoSend says "Recognizing… Will send when ready"
+// in the language the app shows.
+func VoiceRecognizingAutoSend() string { return In(i18n.Locale()).VoiceRecognizingAutoSend() }
+
+// VoiceRecognizingAutoSend says "Recognizing… Will send when ready"
+// in the language of msgs.
+func (msgs Messages) VoiceRecognizingAutoSend() string {
+	return Catalog.Format(msgs.locale, "voiceRecognizingAutoSend", nil)
+}
+
+// VoiceAutoSendToggle says "Enable sending after voice recognition"
+// in the language the app shows.
+func VoiceAutoSendToggle() string { return In(i18n.Locale()).VoiceAutoSendToggle() }
+
+// VoiceAutoSendToggle says "Enable sending after voice recognition"
+// in the language of msgs.
+func (msgs Messages) VoiceAutoSendToggle() string {
+	return Catalog.Format(msgs.locale, "voiceAutoSendToggle", nil)
+}
+
+// WorkingOnBranchSF8b708 says "Working on branch %s"
+// in the language the app shows.
+func WorkingOnBranchSF8b708() string { return In(i18n.Locale()).WorkingOnBranchSF8b708() }
+
+// WorkingOnBranchSF8b708 says "Working on branch %s"
+// in the language of msgs.
+func (msgs Messages) WorkingOnBranchSF8b708() string {
+	return Catalog.Format(msgs.locale, "workingOnBranchS_f8b708", nil)
+}
+
+// ChangesOnBranchS4519d0 says "Changes on branch %s"
+// in the language the app shows.
+func ChangesOnBranchS4519d0() string { return In(i18n.Locale()).ChangesOnBranchS4519d0() }
+
+// ChangesOnBranchS4519d0 says "Changes on branch %s"
+// in the language of msgs.
+func (msgs Messages) ChangesOnBranchS4519d0() string {
+	return Catalog.Format(msgs.locale, "changesOnBranchS_4519d0", nil)
+}
+
+// NoChangesWorktreeRemoved8f7530 says "No changes; worktree removed"
+// in the language the app shows.
+func NoChangesWorktreeRemoved8f7530() string {
+	return In(i18n.Locale()).NoChangesWorktreeRemoved8f7530()
+}
+
+// NoChangesWorktreeRemoved8f7530 says "No changes; worktree removed"
+// in the language of msgs.
+func (msgs Messages) NoChangesWorktreeRemoved8f7530() string {
+	return Catalog.Format(msgs.locale, "noChangesWorktreeRemoved_8f7530", nil)
+}
+
+// MergedBranchSCf58c6 says "Merged branch %s"
+// in the language the app shows.
+func MergedBranchSCf58c6() string { return In(i18n.Locale()).MergedBranchSCf58c6() }
+
+// MergedBranchSCf58c6 says "Merged branch %s"
+// in the language of msgs.
+func (msgs Messages) MergedBranchSCf58c6() string {
+	return Catalog.Format(msgs.locale, "mergedBranchS_cf58c6", nil)
+}
+
+// WorktreeDiscardedCbb01f says "Worktree discarded"
+// in the language the app shows.
+func WorktreeDiscardedCbb01f() string { return In(i18n.Locale()).WorktreeDiscardedCbb01f() }
+
+// WorktreeDiscardedCbb01f says "Worktree discarded"
+// in the language of msgs.
+func (msgs Messages) WorktreeDiscardedCbb01f() string {
+	return Catalog.Format(msgs.locale, "worktreeDiscarded_cbb01f", nil)
+}
+
+// UpdatingWorktree814466 says "Updating worktree…"
+// in the language the app shows.
+func UpdatingWorktree814466() string { return In(i18n.Locale()).UpdatingWorktree814466() }
+
+// UpdatingWorktree814466 says "Updating worktree…"
+// in the language of msgs.
+func (msgs Messages) UpdatingWorktree814466() string {
+	return Catalog.Format(msgs.locale, "updatingWorktree_814466", nil)
+}
+
+// RunInASeparateWorktree844fc1 says "Run in a separate worktree"
+// in the language the app shows.
+func RunInASeparateWorktree844fc1() string { return In(i18n.Locale()).RunInASeparateWorktree844fc1() }
+
+// RunInASeparateWorktree844fc1 says "Run in a separate worktree"
+// in the language of msgs.
+func (msgs Messages) RunInASeparateWorktree844fc1() string {
+	return Catalog.Format(msgs.locale, "runInASeparateWorktree_844fc1", nil)
+}
+
+// EachRunWorksOnItsOwnGitD8b29b says "Each run works on its own Git branch, so it cannot collide with your edits; merge or discard its changes afterwards"
+// in the language the app shows.
+func EachRunWorksOnItsOwnGitD8b29b() string { return In(i18n.Locale()).EachRunWorksOnItsOwnGitD8b29b() }
+
+// EachRunWorksOnItsOwnGitD8b29b says "Each run works on its own Git branch, so it cannot collide with your edits; merge or discard its changes afterwards"
+// in the language of msgs.
+func (msgs Messages) EachRunWorksOnItsOwnGitD8b29b() string {
+	return Catalog.Format(msgs.locale, "eachRunWorksOnItsOwnGit_d8b29b", nil)
+}
+
+// DCommitsDUncommittedFilesEb3916 says " · %d commits, %d uncommitted files"
+// in the language the app shows.
+func DCommitsDUncommittedFilesEb3916() string {
+	return In(i18n.Locale()).DCommitsDUncommittedFilesEb3916()
+}
+
+// DCommitsDUncommittedFilesEb3916 says " · %d commits, %d uncommitted files"
+// in the language of msgs.
+func (msgs Messages) DCommitsDUncommittedFilesEb3916() string {
+	return Catalog.Format(msgs.locale, "dCommitsDUncommittedFiles_eb3916", nil)
+}
+
+// Discard36fff6 says "Discard"
+// in the language the app shows.
+func Discard36fff6() string { return In(i18n.Locale()).Discard36fff6() }
+
+// Discard36fff6 says "Discard"
+// in the language of msgs.
+func (msgs Messages) Discard36fff6() string {
+	return Catalog.Format(msgs.locale, "discard_36fff6", nil)
+}
+
+// MergeEa8f0d says "Merge"
+// in the language the app shows.
+func MergeEa8f0d() string { return In(i18n.Locale()).MergeEa8f0d() }
+
+// MergeEa8f0d says "Merge"
+// in the language of msgs.
+func (msgs Messages) MergeEa8f0d() string {
+	return Catalog.Format(msgs.locale, "merge_ea8f0d", nil)
 }

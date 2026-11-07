@@ -27,6 +27,13 @@ func (c *Controller) TaskAction(threadID int, taskID, action string) string {
 			_, message := c.CodexGoalCommand(model.SendRequest{ThreadID: threadID, Text: "/goal " + action})
 			return message
 		}
+		if task.Kind == "loop" && action == "clear" {
+			if !model.LoopFinished(task) {
+				return "Stop the loop before clearing it."
+			}
+			c.Update(threadID, func(t *model.Thread) { model.RemoveThreadTask(t, taskID) })
+			return ""
+		}
 		if task.Kind == "loop" && action == "stop" {
 			if t.TaskStopping {
 				return ""

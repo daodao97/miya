@@ -34,6 +34,9 @@ func (api *Service) automation(op string, r mcpproto.Request) (any, error) {
 		if a.Rounds == 0 {
 			a.Rounds = 3
 		}
+		if args.Worktree != nil {
+			a.Worktree = *args.Worktree
+		}
 		if err := a.Normalize(); err != nil {
 			return nil, err
 		}
@@ -98,6 +101,9 @@ func (api *Service) updateAutomation(r mcpproto.Request, args mcpproto.Automatio
 	}
 	if args.Enabled != nil {
 		next.Enabled = *args.Enabled
+	}
+	if args.Worktree != nil {
+		next.Worktree = *args.Worktree
 	}
 	if err := next.Normalize(); err != nil {
 		return nil, err

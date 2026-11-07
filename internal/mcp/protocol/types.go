@@ -91,4 +91,5 @@ type AutomationArgs struct {
 	Rounds       int    `json:"rounds,omitempty"`
 	Agent        string `json:"agent,omitempty"`
 	Enabled      *bool  `json:"enabled,omitempty"`
+	Worktree     *bool  `json:"worktree,omitempty"`
 }

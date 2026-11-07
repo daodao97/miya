@@ -1,18 +1,38 @@
 package presentation
 
 import (
+	"strings"
+
 	"miya/internal/chat/model"
 )
 
-// failedAfterOutput reports whether anything besides errors followed the user
-// message at index user, i.e. the failed turn had already streamed output.
-func FailedAfterOutput(t model.Thread, user int) bool {
-	for _, m := range t.Messages[user+1:] {
-		if m.Role != "error" && m.Role != "user" {
+// TurnHasOutput reports whether the latest request produced a reply or tool
+// call worth preserving. Claude Code can send API failures as assistant text;
+// those and empty streaming placeholders are not completed work.
+func TurnHasOutput(messages []model.Message) bool {
+	for i := len(messages) - 1; i >= 0; i-- {
+		m := messages[i]
+		switch m.Role {
+		case "user":
+			return false
+		case "tool":
 			return true
+		case "assistant":
+			text := strings.TrimSpace(m.Content)
+			// Also recognize errors saved before assistant error metadata was
+			// recorded, including the duplicated API error in older histories.
+			if m.Status != "failed" && text != "" && !strings.HasPrefix(text, "API Error:") {
+				return true
+			}
 		}
 	}
 	return false
+}
+
+// FailedAfterOutput reports whether the failed request at user produced work
+// that must be kept when retrying.
+func FailedAfterOutput(t model.Thread, user int) bool {
+	return TurnHasOutput(t.Messages[user:])
 }
 
 // retryContinuePrompt resumes a turn that failed after it had already produced

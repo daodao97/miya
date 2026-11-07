@@ -14,11 +14,12 @@ import (
 	"miya/internal/chat/model"
 	msgfmt "miya/internal/chat/presentation"
 	"miya/internal/notification"
+	projectregistry "miya/internal/project/registry"
 	"miya/internal/textutil"
 )
 
 var automationOps = map[string]bool{"automationList": true, "automationDraft": true, "automationSave": true,
-	"automationToggle": true, "automationDelete": true, "automationRunNow": true}
+	"automationToggle": true, "automationDelete": true, "automationRunNow": true, "automationWorktree": true}
 
 // automationCall runs an operation where the automations are, decoding its
 // reply into out. A window's call waits for the service: make it off the
@@ -99,6 +100,8 @@ func (c *Controller) AutomationOp(op string, r automation.Request) (any, error) 
 		return nil, nil
 	case "automationRunNow":
 		return nil, c.Auto.StartRun(r.ID, false)
+	case "automationWorktree":
+		return nil, c.Auto.WorktreeAction(r.ID, r.Started, r.Action)
 	}
 	return nil, errors.New("Unknown automation operation: " + op)
 }
@@ -152,6 +155,18 @@ func (h automationHost) AutoReport(t model.Thread) *automation.Report { return a
 func (h automationHost) Deliver(n notification.Notice) { h.c.deliverNotice(n, "completion") }
 
 func (h automationHost) SyncLoginItem(enabled bool) { syncAutomationLaunchAgent(enabled) }
+
+// AddWorkspace lists a run's worktree as a project, without trusting it in
+// an agent's configuration, so that its conversation shows on both ends.
+func (h automationHost) AddWorkspace(path string) {
+	if items, added := projectregistry.Remember(h.c.Projects(), path); added {
+		h.c.SetProjects(items)
+	}
+}
+
+// RemoveWorkspace takes a removed worktree and its conversations off the
+// project list; its agent configuration was never changed.
+func (h automationHost) RemoveWorkspace(path string) { h.c.removeProject(path, false) }
 
 func (h automationHost) Changed() {
 	if h.c.Revision != nil {

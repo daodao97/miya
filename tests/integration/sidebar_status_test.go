@@ -20,7 +20,12 @@ func TestCollapsedProjectShowsRunningConversation(t *testing.T) {
 	tt := ui.NewTester(app.SidebarView, 260, 750)
 	tt.Frame()
 	if _, ok := tt.Find("Project activity: demo"); !ok {
-		t.Fatal("a collapsed project with a running conversation should show its spinner")
+		t.Fatal("project run status should stay visible outside hover")
+	}
+	project, _ := tt.Find("demo")
+	tt.Move(project.X+4, project.Y+project.H/2)
+	if _, ok := tt.Find("Project activity: demo"); ok {
+		t.Fatal("project actions should replace run status on hover")
 	}
 	app.ExpandedProject = app.Workspace
 	tt.Frame()

@@ -153,20 +153,22 @@ func (app *App) projectRow(c *ui.Context, p projectmodel.Project) {
 	showActions := wrap.Hovered()
 	wrap.ContextMenu(func(m *ui.Menu) { app.projectMenu(m, p) })
 	wrap.Children(func() {
-		row := widgets.Quiet(c.Key("open")).FillWidth().Height(34).FontSize(13)
+		row := widgets.Quiet(c.Key("open")).FillWidth().Height(34).FontSize(13).Clip()
 		row.Children(func() {
 			widgets.Icon(c, "folder", 16, widgets.Faint)
-			ui.Text(c, p.Name).Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
+			ui.Box(c).Grow(1).MinWidth(0).Clip().Children(func() {
+				ui.Text(c, p.Name).NoWrap()
+			})
 			if !showActions {
 				if p.Path != app.ExpandedProject && app.C.ProjectBusy(p.Path) {
 					ui.Spinner(c).FontSize(13).Label(tr("Project activity: ") + p.Name)
-				} else {
-					symbol := "chevron-right"
-					if p.Path == app.ExpandedProject {
-						symbol = "chevron-down"
-					}
-					widgets.Icon(c, symbol, 12, widgets.Faint)
+					return
 				}
+				symbol := "chevron-right"
+				if p.Path == app.ExpandedProject {
+					symbol = "chevron-down"
+				}
+				widgets.Icon(c, symbol, 12, widgets.Faint)
 			}
 		})
 		if row.Clicked() {
@@ -212,9 +214,11 @@ func (app *App) threadMenu(m *ui.Menu, t model.Thread) {
 func (app *App) threadRow(c *ui.Context, t model.Thread) {
 	wrap := ui.Box(c).FillWidth()
 	hovered := wrap.Hovered()
+	running := t.Busy && !t.Loading
+	unread := !t.Busy && app.C.DesktopThreadUnread(t)
 	wrap.ContextMenu(func(m *ui.Menu) { app.threadMenu(m, t) })
 	wrap.Children(func() {
-		row := widgets.Quiet(c.Key("row")).FillWidth().Height(32).FontSize(13)
+		row := widgets.Quiet(c.Key("row")).FillWidth().Height(32).FontSize(13).Clip()
 		if app.C.State().Active() == t.ID {
 			row.Background(widgets.Chosen)
 		}
@@ -225,34 +229,42 @@ func (app *App) threadRow(c *ui.Context, t model.Thread) {
 			} else {
 				widgets.AgentIcon(c, agent, 14)
 			}
-			ui.Text(c, t.Title).Grow(1).MinWidth(0).SingleLine().Ellipsis("…").TextColor(widgets.Ink)
-			ui.Box(c.Key("status-actions")).Size(24, 24).Shrink(0).Children(func() {
-				// Keep the menu anchor built when the pointer leaves the row
-				// for its dropdown, while sharing one slot with run status.
-				more := widgets.Quiet(c.Key("more")).Size(24, 24).PaddingX(4).Justify(ui.Center).Label(tr("Conversation actions")).Tooltip(tr("More"))
-				more.Children(func() { widgets.Icon(c, "dots", 16, widgets.Muted) })
-				more.PopoverMenuButton(func(m *ui.Menu) { app.threadMenu(m, t) })
-				if !hovered {
-					more.Invisible()
-					if t.Busy && !t.Loading {
-						ui.Row(c.Key("running")).Absolute().Top(0).Right(0).Bottom(0).Left(0).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
-							ui.Spinner(c).FontSize(13).Label(tr("Working…"))
-						})
-					} else if !t.Busy && app.C.DesktopThreadUnread(t) {
-						color := ui.Hex("#30a46c")
-						if app.Dark {
-							color = ui.Hex("#3dd68c")
-						}
-						ui.Row(c.Key("unread")).Absolute().Top(0).Right(0).Bottom(0).Left(0).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
-							ui.Box(c).Size(8, 8).Radius(4).Background(color).Label(tr("Unread: ") + t.Title)
-						})
-					}
-				}
+			title := ui.Box(c).Grow(1).MinWidth(0).Clip()
+			if hovered || running || unread {
+				title.Margin(0, 24, 0, 0)
+			}
+			title.Children(func() {
+				ui.Text(c, t.Title).NoWrap().TextColor(widgets.Ink)
 			})
 		})
 		if row.Clicked() {
 			app.SelectThread(t)
 		}
+		// Every conversation shares one trailing slot for status and its
+		// hover menu, including completed conversations without unread status.
+		ui.Row(c.Key("status-actions")).Absolute().Right(5).Top(4).Size(24, 24).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
+			if !hovered {
+				if running {
+					ui.Spinner(c.Key("running")).Size(16, 16).FontSize(13).Label(tr("Working…"))
+				} else if unread {
+					color := ui.Hex("#30a46c")
+					if app.Dark {
+						color = ui.Hex("#3dd68c")
+					}
+					ui.Box(c.Key("unread")).Size(8, 8).Radius(4).Background(color).Label(tr("Unread: ") + t.Title)
+				}
+			}
+			// Keep the anchor built while the pointer moves into its menu.
+			more := widgets.Quiet(c.Key("more")).Absolute().Top(0).Left(0).Size(24, 24).PaddingX(4).Justify(ui.Center).Background(widgets.Hover).Label(tr("Conversation actions")).Tooltip(tr("More"))
+			if app.C.State().Active() == t.ID {
+				more.Background(widgets.Chosen)
+			}
+			if !hovered {
+				more.Invisible()
+			}
+			more.Children(func() { widgets.Icon(c, "dots", 16, widgets.Muted) })
+			more.PopoverMenuButton(func(m *ui.Menu) { app.threadMenu(m, t) })
+		})
 	})
 }
 

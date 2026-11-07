@@ -55,6 +55,42 @@ func TestMobilePairCodePaste(t *testing.T) {
 	}
 }
 
+func TestMobileComposerEditMenuRetainsCopyPasteAndSelection(t *testing.T) {
+	m := testMobileApp()
+	m.StartConversation("/a", appmodel.AgentCodex)
+	m.Draft = "description"
+	tt := ui.NewTester(m.ViewRoot, 390, 750)
+	tt.Frame()
+	if err := tt.Click("Message"); err != nil {
+		t.Fatal(err)
+	}
+	choose := func(label string) {
+		t.Helper()
+		if err := tt.RightClick("Message"); err != nil {
+			t.Fatal(err)
+		}
+		if err := tt.ChooseMenuItem(label); err != nil {
+			t.Fatal(err)
+		}
+		tt.Frame()
+	}
+	choose("Select all")
+	a, z := m.InlineInput.Doc.Selection()
+	if a != 0 || z != len("description") || !tt.Focused("Message") {
+		t.Fatalf("menu selection=%d:%d focus=%v", a, z, tt.Focused("Message"))
+	}
+	choose("Copy")
+	tt.Type("draft")
+	tt.Frame()
+	if m.Draft != "draft" {
+		t.Fatalf("replace copied selection=%q", m.Draft)
+	}
+	choose("Paste")
+	if m.Draft != "draftdescription" || !tt.Focused("Message") {
+		t.Fatalf("paste=%q focus=%v", m.Draft, tt.Focused("Message"))
+	}
+}
+
 func TestMobileComposerExpandsWithoutLosingFocus(t *testing.T) {
 	m := testMobileApp()
 	m.StartConversation("/a", appmodel.AgentCodex)

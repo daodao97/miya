@@ -83,6 +83,7 @@ type Frame struct {
 	Message Message         `json:"message"`
 	Result  string          `json:"result"`
 	IsError bool            `json:"is_error"`
+	Error   string          `json:"error"`
 	Errors  []string        `json:"errors"`
 	// Task frames (system task_started, task_progress, task_updated and
 	// task_notification) report a sub-agent's state.

@@ -87,6 +87,9 @@ type Entry struct {
 	ToolUseID     string          `json:"tool_use_id"`
 	Status        json.RawMessage `json:"status"`
 	Patch         json.RawMessage `json:"patch"`
+
+	// API failures are stored as synthetic assistant messages by Claude Code.
+	IsAPIErrorMessage bool `json:"isApiErrorMessage"`
 }
 
 type Block struct {
@@ -364,12 +367,16 @@ func Parse(path string) ([]model.Message, error) {
 				out = append(out, model.Message{Role: "user", Content: text, Parts: model.MessageParts(own), Images: images, ItemID: e.UUID, SentAtMs: at})
 			}
 		case "assistant":
+			status := "completed"
+			if e.IsAPIErrorMessage {
+				status = "failed"
+			}
 			for i, b := range blocks {
 				item := e.UUID + ":" + strconv.Itoa(i)
 				switch b.Type {
 				case "text":
 					if strings.TrimSpace(b.Text) != "" {
-						out = append(out, model.Message{Role: "assistant", Kind: "agentMessage", Status: "completed", Content: b.Text, ItemID: item, StartedAtMs: turnStart, CompletedAtMs: at})
+						out = append(out, model.Message{Role: "assistant", Kind: "agentMessage", Status: status, Content: b.Text, ItemID: item, StartedAtMs: turnStart, CompletedAtMs: at})
 					}
 				case "thinking":
 					if b.Thinking != "" {

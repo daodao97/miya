@@ -4,8 +4,6 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
-
-	"miya/internal/widgets"
 )
 
 func (m *App) conversationActionsSheet(c *ui.Context) {
@@ -22,41 +20,45 @@ func (m *App) conversationActionsSheet(c *ui.Context) {
 			Padding(safe.Top+12, safe.Right+12, safe.Bottom+8, safe.Left+12)
 		panel.Column().FillWidth().MaxWidth(520).MaxHeight(height).MinHeight(0).Gap(8).Translate(0, c.Root().Bounds().H*(1-shown)).Disabled(!m.ConversationMenu).Label(tr("Conversation actions"))
 		// Keep Cancel visible while long actions scroll within the safe area.
-		ui.Scroll(c.Key("actions-list")).FillWidth().MinHeight(0).Shrink(1).Radius(22).Clip().Background(p.surface).Children(func() {
-			ui.Column(c).FillWidth().Padding(8).Children(func() {
-				ui.Text(c, tr("Conversation actions")).FillWidth().TextAlign(ui.Center).FontSize(m.Font(13)).TextColor(p.muted).Padding(12, 8)
-				files := m.conversationAction(c.Key("files"), tr("Project files"), "folder").Disabled(!m.Connected || m.conversationMenuProject == "")
+		ui.Scroll(c.Key("actions-list")).FillWidth().MinHeight(0).Shrink(1).Radius(14).Clip().Background(m.settingsSurface()).Children(func() {
+			ui.Column(c).FillWidth().Children(func() {
+				ui.Text(c, tr("Conversation actions")).FillWidth().Wrap().TextAlign(ui.Center).FontSize(m.Font(13)).TextColor(p.muted).Padding(16)
+				m.conversationActionDivider(c.Key("title-divider"))
+				files := m.conversationAction(c.Key("files"), tr("Project files"), !m.Connected || m.conversationMenuProject == "")
 				if files.Clicked() {
 					m.ConversationMenu = false
 					m.openProjectFiles(m.conversationMenuProject)
 				}
-				if m.conversationAction(c.Key("web"), tr("Web services"), "globe").Disabled(!m.Connected).Clicked() {
+				m.conversationActionDivider(c.Key("files-divider"))
+				if m.conversationAction(c.Key("web"), tr("Web services"), !m.Connected).Clicked() {
 					m.ConversationMenu = false
 					m.OpenWebServices(m.conversationMenuProject)
 				}
 				if m.Open != 0 {
-					if m.conversationAction(c.Key("desktop-control"), tr("Remote desktop"), "device-desktop").Disabled(!m.Connected || m.DesktopRequest != "").Clicked() {
+					m.conversationActionDivider(c.Key("web-divider"))
+					if m.conversationAction(c.Key("desktop-control"), tr("Remote desktop"), !m.Connected || m.DesktopRequest != "").Clicked() {
 						m.ConversationMenu = false
 						m.openRemoteDesktop()
 					}
-					if m.conversationAction(c.Key("runtime"), tr("Background tasks"), "terminal-2").Disabled(!m.Connected).Clicked() {
+					m.conversationActionDivider(c.Key("desktop-divider"))
+					if m.conversationAction(c.Key("runtime"), tr("Background tasks"), !m.Connected).Clicked() {
 						m.ConversationMenu = false
 						m.OpenWebServices(m.conversationMenuProject)
 						m.WebDetails = true
 					}
 				}
-				ui.Column(c).FillWidth().Padding(0, 16).Children(func() {
-					ui.Box(c).FillWidth().Height(1).Background(p.line)
-				})
-				newThread := m.conversationAction(c.Key("new"), tr("New conversation"), "edit").Disabled(m.conversationMenuProject == "")
+				m.conversationActionDivider(c.Key("new-divider"))
+				newThread := m.conversationAction(c.Key("new"), tr("New conversation"), m.conversationMenuProject == "")
 				if newThread.Clicked() {
 					m.ConversationMenu = false
 					m.StartConversation(m.conversationMenuProject, m.conversationMenuAgent)
 				}
 			})
 		})
-		cancel := m.phoneButton(c.Key("cancel")).FillWidth().MinHeight(56).Shrink(0).Padding(14).Radius(18).Background(p.surface).Justify(ui.Center).Label(tr("Cancel"))
-		cancel.Children(func() { ui.Text(c, tr("Cancel")).FontSize(m.Font(17)).FontWeight(600) })
+		cancel := m.phoneButton(c.Key("cancel")).FillWidth().MinHeight(58).Shrink(0).Padding(14, 16).Radius(14).Background(m.settingsSurface()).Justify(ui.Center).Label(tr("Cancel"))
+		cancel.Children(func() {
+			ui.Text(c, tr("Cancel")).FontSize(m.Font(20)).FontWeight(600).TextColor(p.link).MinWidth(0).Wrap().TextAlign(ui.Center)
+		})
 		if cancel.Clicked() {
 			m.ConversationMenu = false
 		}
@@ -66,14 +68,20 @@ func (m *App) conversationActionsSheet(c *ui.Context) {
 	}
 }
 
-func (m *App) conversationAction(c *ui.Context, label, glyph string) ui.Element {
-	button := m.phoneButton(c).FillWidth().MinHeight(58).Shrink(0).Padding(14, 16).Gap(14).Radius(14).Label(label)
-	if button.Pressed() {
+func (m *App) conversationAction(c *ui.Context, label string, disabled bool) ui.Element {
+	button := m.phoneButton(c).FillWidth().MinHeight(58).Shrink(0).Padding(14, 16).Radius(0).Justify(ui.Center).Label(label).Disabled(disabled).Opacity(1)
+	color := m.Pal.link
+	if disabled {
+		color = m.Pal.muted
+	} else if button.Pressed() {
 		button.Background(m.Pal.line)
 	}
 	button.Children(func() {
-		widgets.Icon(c, glyph, 22, m.Pal.ink)
-		ui.Text(c, label).Grow(1).MinWidth(0).FontSize(m.Font(17))
+		ui.Text(c, label).Grow(1).MinWidth(0).FontSize(m.Font(20)).TextColor(color).Wrap().TextAlign(ui.Center)
 	})
 	return button
+}
+
+func (m *App) conversationActionDivider(c *ui.Context) {
+	ui.Box(c).FillWidth().Height(1).Background(m.Pal.line)
 }

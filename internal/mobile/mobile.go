@@ -136,13 +136,17 @@ type App struct {
 
 	// The conversation page shows open, or a new conversation in newProject
 	// when open is 0.
-	Open        int
-	Title       string
-	NewProject  string
-	NewAgent    string
-	Draft       string
-	InlineInput conversation.InlineThreadInput
-	pairInput   mobileTextField
+	Open            int
+	Title           string
+	NewProject      string
+	NewAgent        string
+	Draft           string
+	InlineInput     conversation.InlineThreadInput
+	voice           *mobileVoice
+	voiceStart      func(context.Context) (mobileVoiceSession, error)
+	voicePermission string
+	VoiceAutoSend   bool
+	pairInput       mobileTextField
 	// images are photos to attach to the next message, as cache copies.
 	Images []string
 	// previewPaths maps desktop image sources to phone-local thumbnails.
@@ -224,7 +228,7 @@ func (m *App) ApplyPalette(dark bool) {
 }
 
 func NewMobileApp() *App {
-	m := &App{badgeApplied: -1}
+	m := &App{badgeApplied: -1, VoiceAutoSend: prefs.Load(voiceAutoSendPreference) == "on"}
 	m.Viewer = newMobileViewer()
 	m.View = conversation.NewConversationView(m.Viewer)
 	m.View.Mobile = true
@@ -273,6 +277,7 @@ func mobileMain() {
 	// Write the conversations before iOS suspends the app, which may end it.
 	mygo.App.OnDidEnterBackground(func() {
 		uiruntime.RunOnMain(func() {
+			m.cancelVoice()
 			m.FlushCache(true)
 			m.Disconnect()
 		})
@@ -411,6 +416,7 @@ func (m *App) Disconnect() {
 }
 
 func (m *App) DisconnectDesktop(unregister bool) {
+	m.cancelVoice()
 	m.DesktopApproval = MobileDesktopApproval{}
 	m.interruptAutomationRequest()
 	m.clearFileReferences()
@@ -869,6 +875,7 @@ func (m *App) ApprovalsFor(serverID string) []interaction.Request {
 }
 
 func (m *App) resetComposer() {
+	m.cancelVoice()
 	m.clearNewSend()
 	m.clearImages()
 	m.Draft, m.SendErr, m.Sending = "", "", false
@@ -936,7 +943,7 @@ func (m *App) Router() *ui.Router {
 func (m *App) Send() { m.sendDraft(false) }
 
 func (m *App) sendDraft(steer bool) {
-	if m.Sending {
+	if m.Sending || m.voice != nil {
 		return
 	}
 	conn := m.Conn
@@ -1086,6 +1093,9 @@ func (m *App) ConnectionLine() string {
 }
 
 func (m *App) ViewRoot(c *ui.Context) {
+	if m.voice != nil && (m.voice.owner != m.voiceOwner() || !m.voicePage() || m.Menu || m.ConversationMenu) {
+		m.cancelVoice()
+	}
 	widgets.UseInterfaceLanguage(c)
 	m.View.Md.LinkMenu = widgets.MessageLinkMenu(c, m.ComposerProject())
 	m.updateReconnectCountdown(c)
@@ -1104,6 +1114,8 @@ func (m *App) ViewRoot(c *ui.Context) {
 	if m.Loaded && m.Link != "" {
 		if m.Router().Path() == "/" {
 			pageColor = m.HomeBackground()
+		} else if mobileSettingsPage(m.Router().Path()) {
+			pageColor = m.settingsBackground()
 		}
 		// Keep the router's bounds fixed throughout navigation. Each page
 		// owns its safe-area padding, including the outgoing page, so a
@@ -1131,18 +1143,31 @@ func (m *App) ViewRoot(c *ui.Context) {
 			}
 			m.Router().View(c, func(page *ui.Route) {
 				page.Page().Background(p.Bg).Padding(safe.Top, safe.Right, safe.Bottom, safe.Left)
+				if mobileSettingsPage(page.Path()) {
+					page.Page().Background(m.settingsBackground())
+				}
 				if mobilePageHasDrawer(page.Path()) {
 					page.Page().Padding(0)
 					m.listPage(c, page.Path())
 					return
 				}
 				switch page.Path() {
+				case "/settings/language":
+					m.languageSettingsPage(c)
+				case "/settings/voice":
+					m.voiceSettingsPage(c)
 				case "/automation":
 					m.automationsPage(c, true)
 				case "/automation/new":
 					m.automationCreatePage(c)
 				case "/options":
 					m.optionsView(c)
+				case "/options/model":
+					m.modelOptionsView(c)
+				case "/options/effort":
+					m.effortOptionsView(c)
+				case "/options/permissions":
+					m.permissionOptionsView(c)
 				case "/web":
 					m.webPage(c)
 				case "/approval":
@@ -1366,6 +1391,9 @@ func (m *App) listPage(c *ui.Context, path string) {
 			background := m.HomeBackground()
 			if path != "/" {
 				background = p.Bg
+			}
+			if mobileSettingsPage(path) {
+				background = m.settingsBackground()
 			}
 			if m.Dark {
 				background = background.Mix(ui.Hex("#141414"), shown)
@@ -1667,7 +1695,12 @@ func (m *App) composer(c *ui.Context, agent string, busy bool) {
 	if m.InlineInput.Doc != nil && m.InlineInput.Owner == owner {
 		m.InlineInput.Sync(m.Draft, func(text string) { m.Draft = text })
 	}
-	ui.Column(c).FillWidth().Padding(6, 12, 10, 12).Gap(6).Children(func() {
+	topPadding := float32(6)
+	if m.NewSend != nil || m.View.TurnStatusVisible(m.Viewer.Current()) {
+		topPadding = 0
+	}
+	ui.Column(c).FillWidth().Padding(topPadding, 12, 10, 12).Gap(6).Children(func() {
+		m.voiceStatus(c)
 		if m.SendErr != "" {
 			ui.Text(c, m.SendErr).FontSize(m.Font(13)).TextColor(widgets.Danger).Margin(0, 8)
 		}
@@ -1723,6 +1756,7 @@ func (m *App) composer(c *ui.Context, agent string, busy bool) {
 				// Clip in a parent: EditorBase's custom drawing can extend beyond
 				// its own bounds when it scrolls a long paragraph to the caret.
 				ui.Column(c.Key("editor-clip")).FillWidth().Clip().Children(func() {
+					m.InlineInput.InputHook = m.voiceInput
 					input := m.View.ThreadInput(c.Key("composer"), &m.InlineInput, m.Draft, owner, tr("Message"), placeholder, m.Font(16), inputWidth, 1, 6, func(text string) { m.Draft = text })
 					// EditorBase padding does not inset its text. Center it
 					// using the enclosing column instead.
@@ -1744,7 +1778,7 @@ func (m *App) composer(c *ui.Context, agent string, busy bool) {
 			})
 			ui.Row(c.Key("right-tools")).Absolute().Right(6).Bottom(6).Width(right - 8).MinHeight(44).Gap(8).AlignItems(ui.Center).Children(func() {
 				if steerAvailable {
-					b := m.phoneButton(c.Key("steer")).Size(64, 44).Padding(0).Justify(ui.Center).Label(tr("Steer now")).Disabled(m.Sending)
+					b := m.phoneButton(c.Key("steer")).Size(64, 44).Padding(0).Justify(ui.Center).Label(tr("Steer now")).Disabled(m.Sending || m.voice != nil)
 					b.Children(func() { ui.Text(c, tr("Steer")).FontSize(m.Font(12)).TextColor(p.ink) })
 					if b.Clicked() {
 						m.sendDraft(true)
@@ -1757,7 +1791,7 @@ func (m *App) composer(c *ui.Context, agent string, busy bool) {
 						m.openOptions(agent)
 					}
 				}
-				canSend := m.Connected && !m.Sending && (strings.TrimSpace(m.Draft) != "" || len(m.Images) > 0)
+				canSend := m.Connected && !m.Sending && m.voice == nil && (strings.TrimSpace(m.Draft) != "" || len(m.Images) > 0)
 				bg, fg, name, label := p.line, p.muted, "arrow-up", tr("Send")
 				if busy && !hasDraft {
 					bg, fg, name, label = p.ink, p.Bg, "x", tr("Stop")
@@ -1766,7 +1800,7 @@ func (m *App) composer(c *ui.Context, agent string, busy bool) {
 				} else if canSend {
 					bg, fg = p.ink, p.Bg
 				}
-				b := m.phoneButton(c.Key("send")).Size(44, 44).Shrink(0).Padding(0).Radius(22).Background(bg).Justify(ui.Center).Label(label)
+				b := m.phoneButton(c.Key("send")).Size(44, 44).Shrink(0).Padding(0).Radius(22).Background(bg).Justify(ui.Center).Label(label).Disabled(m.voice != nil)
 				b.Children(func() {
 					if m.Sending {
 						ui.Spinner(c).FontSize(m.Font(12)).TextColor(fg)

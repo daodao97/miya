@@ -16,6 +16,7 @@ var automationToolProps = map[string]any{
 	"check":        map[string]any{"type": "string", "description": "Optional shell command run in the project after each round; exit 0 passes, otherwise its output starts another round"},
 	"rounds":       map[string]any{"type": "integer", "minimum": 1, "maximum": 5, "description": "Most rounds when check fails (default 3; 1 without check)"},
 	"agent":        map[string]any{"type": "string", "enum": model.Backends, "description": "Agent that runs it (default: this conversation's)"},
+	"worktree":     map[string]any{"type": "boolean", "description": "Run each run in a separate Git worktree on its own branch, so it cannot collide with edits in the project; the user merges or discards its changes afterwards. Use for automations that change code"},
 }
 
 func init() {

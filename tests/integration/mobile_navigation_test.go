@@ -59,6 +59,8 @@ func TestMobileDrawerDestinationsReturnToDrawer(t *testing.T) {
 func TestMobileDrawerChildPagesReturnToTheirParent(t *testing.T) {
 	for _, destination := range []struct{ label, path, child, childPath string }{
 		{"Settings", "/settings", "Model and permissions", "/options"},
+		{"Settings", "/settings", "Language", "/settings/language"},
+		{"Settings", "/settings", "Voice input", "/settings/voice"},
 		{"Automations", "/automations", "仓库日报", "/automation"},
 	} {
 		t.Run(destination.path, func(t *testing.T) {

@@ -416,14 +416,17 @@ func TestServiceRetryRewindsOnlyTheLastUserMessage(t *testing.T) {
 			{ID: 10, Role: "user", Content: "first"},
 			{ID: 11, Role: "assistant", Content: "reply one"},
 			{ID: 12, Role: "user", Content: shown, Images: images, Attachments: paths},
-			// The failed turn produced nothing, so retry replays the request.
+			// Claude can emit an API error as assistant text before the error
+			// result. Neither it nor an empty stream is useful output to resume.
+			{ID: 13, Role: "assistant", Content: "API Error: 503 no healthy node with capacity supports this model."},
+			{ID: 15, Role: "assistant", Content: " \n"},
 			{ID: 14, Role: "error", Content: "Connection dropped"},
 		}}})
 	})
 	a := f.window()
 	f.waitWindow("the failed conversation", func() bool { return a.ThreadWithID(1).ID == 1 })
 	f.win.Do(func() { a.SelectThread(a.ThreadWithID(1)) })
-	f.waitWindow("the failed turn", func() bool { return len(a.ThreadWithID(1).Messages) == 4 })
+	f.waitWindow("the failed turn", func() bool { return len(a.ThreadWithID(1).Messages) == 6 })
 	f.win.Do(func() {
 		a.RememberDraft("keep my draft")
 		a.SetAttachments([]string{"/tmp/unsent.txt"})

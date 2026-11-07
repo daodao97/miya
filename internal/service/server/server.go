@@ -193,14 +193,10 @@ func (s *Service) request(p *Peer, req svcproto.Request) {
 		case <-s.Quit:
 		}
 	}
-	// Keep accepting remote heartbeats and stop/approval requests while a
-	// deferred operation (such as drafting an automation) waits on an agent.
+	// Keep accepting page changes, heartbeats and stop/approval requests on
+	// both local and remote connections while a deferred operation waits.
 	// Enqueue above, before spawning the waiter, to preserve request order.
-	if p.Wire != nil {
-		go wait()
-	} else {
-		wait()
-	}
+	go wait()
 }
 
 // svcReply is the reply to a request.

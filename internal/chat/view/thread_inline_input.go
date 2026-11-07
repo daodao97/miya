@@ -121,6 +121,8 @@ func InlineThreadSpans(text richtext.Text, size float32) []ui.Span {
 // A document stores each reference as one editable object. The wire prompt
 // preserves the stable identity and title snapshot at its original position.
 type InlineThreadInput struct {
+	InputHook     func(ui.InputEvent) bool
+	EditMenu      func(*ui.Menu)
 	Commands      []model.ComposerChoice
 	Doc           *richtext.Document
 	Raw, Owner    string
@@ -182,4 +184,12 @@ func (s *InlineThreadInput) insert(text string) {
 		part = s.Text(text)
 	}
 	s.Doc.Edit(func(e *richtext.Edit) { e.Replace(start, end, part); e.Select(start+part.Len(), start+part.Len()) })
+}
+
+// InsertText inserts dictated text at the selection, retaining reference
+// attachments and a single undoable edit.
+func (s *InlineThreadInput) InsertText(text string) string {
+	s.insert(text)
+	s.Raw = InlineThreadRaw(s.Doc.Text())
+	return s.Raw
 }

@@ -107,10 +107,42 @@ func TestCollaborationPanelRefreshesSelectedNotificationWithoutTaskRevisionChang
 func TestCollaborationRefreshDoesNotOpenPopover(t *testing.T) {
 	pane := (&widgets.CollaborationUI{}).Pane("source")
 	pane.Refresh(&model.CollaborationStatus{Version: 1}, func(_ appmodel.CollaborationRequest, done func(json.RawMessage, error)) {
-		done(widgets.CollaborationArgsJSON(widgets.CollaborationListView{Tasks: []widgets.CollaborationTaskView{{ID: "review", Title: "Review", State: dg.Completed}}}), nil)
+		done(widgets.CollaborationArgsJSON(widgets.CollaborationListView{Tasks: []widgets.CollaborationTaskView{{ID: "review", Title: "Review", State: dg.Running}}}), nil)
 	}, false)
 	if pane.Hidden() || pane.Open {
 		t.Fatal("refresh should reveal the task entry without opening its popover")
+	}
+}
+
+func TestCollaborationEntryHidesOnceTasksFinish(t *testing.T) {
+	pane := (&widgets.CollaborationUI{}).Pane("source")
+	done := widgets.CollaborationTaskView{ID: "done", Title: "Review", State: dg.Completed, Notification: "delivered"}
+	pane.Rows = []widgets.CollaborationTaskView{done, {ID: "run", Title: "Fix", State: dg.Running}}
+	if pane.Hidden() {
+		t.Fatal("running task hidden")
+	}
+	pane.Rows = []widgets.CollaborationTaskView{done, {ID: "failed", Title: "Fix", State: dg.Failed}}
+	if !pane.Hidden() {
+		t.Fatal("finished tasks still shown above the composer")
+	}
+	for _, row := range []widgets.CollaborationTaskView{
+		{ID: "attention", State: dg.NeedsAttention},
+		{ID: "returning", State: dg.Completed, Notification: "submitting"},
+		{ID: "undelivered", State: dg.Completed, Notification: "needsAttention"},
+	} {
+		pane.Rows = []widgets.CollaborationTaskView{done, row}
+		if pane.Hidden() {
+			t.Fatalf("%s hidden before the person can resolve it", row.ID)
+		}
+	}
+	pane.Rows = []widgets.CollaborationTaskView{done}
+	pane.Open = true
+	if pane.Hidden() {
+		t.Fatal("open popover vanished")
+	}
+	pane.Open = false
+	if !pane.Hidden() {
+		t.Fatal("closing the popover kept the finished entry")
 	}
 }
 

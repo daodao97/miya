@@ -412,6 +412,12 @@ func (m *App) automationPhoneRun(c *ui.Context, v automation.View, r automation.
 			}
 			ui.Text(c, label).FontSize(m.Font(13)).TextColor(p.muted)
 		})
+		if label := automation.WorktreeLabel(r); label != "" {
+			ui.Row(c).FillWidth().Gap(6).AlignItems(ui.Center).Children(func() {
+				widgets.Icon(c, "git-branch", 13, p.muted)
+				ui.Text(c, label).Grow(1).MinWidth(0).FontSize(m.Font(13)).TextColor(p.muted)
+			})
+		}
 		if summary != "" {
 			t := ui.Text(c, msgfmt.NativeText(summary)).FontSize(m.Font(15)).LineHeight(1.5).Selectable()
 			if expandable && !expanded {
@@ -474,8 +480,9 @@ func (m *App) automationPhoneRun(c *ui.Context, v automation.View, r automation.
 }
 
 func (m *App) AutomationRunThread(v automation.View, r automation.Run) (model.Thread, bool) {
+	workspace := automation.Workspace(v.Project, r)
 	for _, p := range m.State.Projects {
-		if p.Path != v.Project {
+		if p.Path != workspace {
 			continue
 		}
 		for _, t := range p.Threads {

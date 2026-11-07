@@ -29,6 +29,8 @@ func TestTurnStatusKeepsPositionAfterCompletion(t *testing.T) {
 			if surface == "desktop" {
 				app, tester := testApp(t)
 				tt = tester
+				app.C.(*controller.Controller).SetReady(true)
+				app.C.(*controller.Controller).SetStatus("")
 				app.C.(*controller.Controller).CollaborationRemote = &model.CollaborationStatus{Version: 1}
 				setThread = func(th model.Thread) {
 					app.C.(*controller.Controller).SetThreads([]model.Thread{th})
