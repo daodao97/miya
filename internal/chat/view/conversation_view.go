@@ -294,9 +294,11 @@ func (app *View) activityRunView(c *ui.Context, run msgfmt.ActivityRun, streamin
 		app.MessageView(c.Key(msgfmt.MessageViewKey(run.Messages[0])), run.Messages[0], streaming)
 		return
 	}
-	expanded := app.Open[-run.ID]
+	// Keep the current turn visible without saving its automatic expansion as
+	// a user preference. Completion and historical replay then collapse it.
+	expanded := streaming || app.Open[-run.ID]
 	ui.Column(c).FillWidth().Gap(4).Children(func() {
-		header := widgets.Quiet(c.Key("header")).PaddingX(0).AlignSelf(ui.Start)
+		header := widgets.Quiet(c.Key("header")).PaddingX(0).AlignSelf(ui.Start).Disabled(streaming)
 		// Sub-agents inside a collapsed run still show that they work.
 		agents := subagent.Latest(run.Messages)
 		header.Children(func() {
