@@ -62,45 +62,26 @@ func (app *App) SidebarView(c *ui.Context) {
 // Activity spans projects, including conversations hidden by the compact list.
 func (app *App) sidebarActivity(c *ui.Context) {
 	running, completed := app.SidebarActivityThreads()
-	for _, group := range []struct {
-		label   string
-		threads []model.Thread
-	}{{tr("In progress"), running}, {tr("Completed"), completed}} {
-		if len(group.threads) == 0 {
-			continue
-		}
-		ui.Column(c.Key(group.label)).Margin(20, 0, 0, 0).PaddingX(12).Gap(2).Children(func() {
-			ui.Text(c, group.label).FontSize(11).TextColor(widgets.Faint).Padding(0, 8, 4, 8)
-			for _, t := range group.threads {
-				app.threadRow(c.Key(t.ID), t)
-			}
-		})
-	}
+	ui.Column(c).PaddingX(12).Children(func() {
+		widgets.SidebarActivity(c, running, completed, 11, widgets.Faint, app.threadRow)
+	})
 }
 
 func (app *App) SidebarActivityThreads() (running, completed []model.Thread) {
-	c := app.C
-	seen := map[int]bool{}
-	add := func(threads []model.Thread) {
-		for _, t := range threads {
-			if seen[t.ID] {
-				continue
-			}
-			seen[t.ID] = true
-			if t.Busy && !t.Loading {
-				running = append(running, t)
-			} else if !t.Busy && !t.Loading && c.DesktopThreadUnread(t) {
-				completed = append(completed, t)
-			}
+	s := app.C.State()
+	projects := make([]model.ProjectSnapshot, 0, len(s.Projects())+1)
+	current := false
+	for _, project := range s.Projects() {
+		threads := s.ProjectCache[project.Path]
+		if project.Path == s.Cwd {
+			threads, current = s.Threads(), true
 		}
+		projects = append(projects, model.ProjectSnapshot{Threads: threads})
 	}
-	add(c.State().Threads())
-	for _, p := range c.State().Projects() {
-		if p.Path != c.State().Cwd {
-			add(c.State().ProjectCache[p.Path])
-		}
+	if !current {
+		projects = append([]model.ProjectSnapshot{{Threads: s.Threads()}}, projects...)
 	}
-	return msgfmt.DisplayedThreads(running, true), msgfmt.DisplayedThreads(completed, true)
+	return msgfmt.SidebarActivityThreads(projects, app.C.DesktopThreadUnread)
 }
 
 func (app *App) nav(c *ui.Context, symbol, label string) ui.Element {

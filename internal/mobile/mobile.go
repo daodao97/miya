@@ -1524,6 +1524,7 @@ func (m *App) drawerContent(c *ui.Context) {
 				m.OpenDrawerPage("/automations")
 			}
 			ui.Box(c.Key("navigation-separator")).FillWidth().Height(1).Margin(16, 0, 12, 0).Background(p.line)
+			m.drawerActivity(c.Key("activity"))
 			ui.Text(c, tr("Projects")).FontSize(m.Font(13)).TextColor(p.muted).Margin(0, 0, 6, 0)
 			if !m.projectsExpanded && len(m.State.Projects) > 0 {
 				m.ExpandedProject, m.projectsExpanded = m.selectedProject().Path, true
@@ -1580,7 +1581,7 @@ func (m *App) threadStatus(c *ui.Context, t model.Thread) {
 	case t.Busy:
 		ui.Spinner(c).FontSize(m.Font(13))
 	default:
-		if _, unread := m.unreadFor(t); unread {
+		if m.completionUnread(t) {
 			ui.Box(c).Size(8, 8).Radius(4).Background(p.ok)
 		}
 	}

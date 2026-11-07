@@ -328,7 +328,21 @@ func (c *Controller) remoteWorkspace(path string) error {
 	if res.Error != "" {
 		return errors.New(res.Error)
 	}
-	c.Cwd = res.Cwd
+	if res.Cwd != c.Cwd {
+		// The reply can precede its state push. Move both project lists
+		// together so cross-project activity never loses the incoming
+		// project's conversations in the intervening frames.
+		if c.ProjectCache == nil {
+			c.ProjectCache = map[string][]model.Thread{}
+		}
+		outgoing := make([]model.Thread, len(c.Threads()))
+		for i, thread := range c.Threads() {
+			outgoing[i] = model.ListThread(thread)
+		}
+		c.ProjectCache[c.Cwd] = outgoing
+		c.Cwd = res.Cwd
+		c.SetThreads(append([]model.Thread(nil), c.ProjectCache[c.Cwd]...))
+	}
 	c.Mirror.Messages = map[int][]model.Message{}
 	c.SetActive(0)
 	c.SetDraft("")

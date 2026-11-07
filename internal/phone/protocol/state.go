@@ -31,11 +31,14 @@ type State struct {
 	AutomationRun    bool                       `json:"automationRun,omitempty"`
 	AutomationCreate bool                       `json:"automationCreate,omitempty"`
 	Projects         []model.ProjectSnapshot    `json:"projects"`
-	Status           string                     `json:"status"`
-	Approvals        []interaction.Request      `json:"approvals"`
-	Agents           []AgentOptions             `json:"agents,omitempty"`
-	Quotas           []AgentQuota               `json:"quotas,omitempty"`
-	Notifications    notification.PhoneState    `json:"notifications"`
+	// An empty map is authoritative; nil means an older desktop that only
+	// provides per-phone push unread state.
+	CompletionUnread map[string]int64        `json:"completionUnread"`
+	Status           string                  `json:"status"`
+	Approvals        []interaction.Request   `json:"approvals"`
+	Agents           []AgentOptions          `json:"agents,omitempty"`
+	Quotas           []AgentQuota            `json:"quotas,omitempty"`
+	Notifications    notification.PhoneState `json:"notifications"`
 	// Agent, Model and Effort are the desktop's defaults for new messages.
 	Agent  string `json:"agent"`
 	Model  string `json:"model"`

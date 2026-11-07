@@ -26,6 +26,8 @@ flowchart TD
 
 `internal/widgets` 保存通用控件、主题、图标和设备语言处理。`internal/uiruntime` 保存窗口调度、信号失效通知与退出清理，供窗口和后台使用。各领域的数据和算法直接引用现有领域包，原有根包的兼容别名已删除。
 
+侧边栏「进行中」「已完成」由 `internal/chat/presentation` 统一筛选、去重并排序，`internal/widgets.SidebarActivity` 共用分组标题和列表结构；桌面和手机只提供各自的会话行、字号和颜色。手机快照的 `completionUnread` 与桌面完成未读状态共用同一来源，不依赖 APNs 注册；新增字段兼容协议 v5 的旧端。
+
 MCP 协议和工具适配已统一到 `internal/mcp/`，Controller 通过 Host 接入，详见 [MCP 范围与边界](mcp-boundaries.md)。
 
 ## 验证

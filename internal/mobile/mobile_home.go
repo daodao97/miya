@@ -3,6 +3,7 @@ package mobile
 import (
 	"github.com/egoist/mygo/ui"
 
+	"miya/internal/appmodel"
 	"miya/internal/chat/model"
 	msgfmt "miya/internal/chat/presentation"
 	"miya/internal/textutil"
@@ -54,6 +55,28 @@ func (m *App) StartConversation(project, agent string) {
 	if project != "" {
 		m.ExpandedProject, m.projectsExpanded = project, true
 	}
+}
+
+func (m *App) SidebarActivityThreads() (running, completed []model.Thread) {
+	return msgfmt.SidebarActivityThreads(m.State.Projects, m.completionUnread)
+}
+
+func (m *App) completionUnread(thread model.Thread) bool {
+	if m.State.CompletionUnread != nil {
+		return m.State.CompletionUnread[appmodel.DesktopUnreadKey(thread)] > 0
+	}
+	_, unread := m.unreadFor(thread)
+	return unread
+}
+
+func (m *App) drawerActivity(c *ui.Context) {
+	running, completed := m.SidebarActivityThreads()
+	if len(running)+len(completed) == 0 {
+		return
+	}
+	ui.Column(c).FillWidth().Margin(0, 0, 16, 0).Children(func() {
+		widgets.SidebarActivity(c, running, completed, m.Font(13), m.Pal.muted, m.drawerThread)
+	})
 }
 
 func (m *App) drawerProject(c *ui.Context, project model.ProjectSnapshot) {

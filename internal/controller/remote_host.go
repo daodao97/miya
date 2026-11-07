@@ -41,6 +41,10 @@ const (
 
 func (c *Controller) PhoneSnapshot() phoneproto.State {
 	s := phoneproto.State{DesktopControl: desktop.Available(), ReferenceSource: c.ReferenceSource, MemoryRevision: c.MemoryRevision, Memory: c.Memories().Store != nil, Files: true, WebPorts: true, WebServices: true, Runtime: true, FileReferences: true, Automations: c.Auto != nil, Status: c.Status(), Approvals: c.Approvals(), Agents: c.phoneAgentOptions(), Quotas: c.PhoneQuotas()}
+	s.CompletionUnread = make(map[string]int64, len(c.DesktopUnread))
+	for key, version := range c.DesktopUnread {
+		s.CompletionUnread[key] = version
+	}
 	s.Collaboration = c.CollaborationCapabilities()
 	s.DesktopWindows = s.DesktopControl
 	s.AutomationRun = c.Auto != nil
