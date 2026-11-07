@@ -36,12 +36,12 @@ func TestActivitiesStayWithOneAssistantResponse(t *testing.T) {
 		{ID: 3, Role: "tool", Kind: "commandExecution", TurnID: "turn-b", Content: "command"},
 		{ID: 4, Role: "assistant", TurnID: "turn-b", Content: "continued"},
 	})
-	if len(groups) != 1 || len(groups[0].Messages) != 3 {
+	if len(groups) != 1 || len(groups[0].Messages) != 4 {
 		t.Fatalf("response was split by activity metadata: %+v", groups)
 	}
 }
 
-func TestReasoningHiddenWithoutEmptyGroups(t *testing.T) {
+func TestReasoningVisibleWithOtherActivities(t *testing.T) {
 	messages := []model.Message{
 		{ID: 1, Role: "activity", Kind: "reasoning", Content: "internal summary"},
 		{ID: 2, Role: "tool", Kind: "commandExecution"},
@@ -49,15 +49,15 @@ func TestReasoningHiddenWithoutEmptyGroups(t *testing.T) {
 		{ID: 4, Role: "tool", Kind: "commandExecution"},
 		{ID: 5, Role: "error", Kind: "error", Content: "capacity"},
 	}
-	if groups := msgfmt.GroupMessages(messages[:1]); len(groups) != 0 {
-		t.Fatalf("empty response: %+v", groups)
+	if groups := msgfmt.GroupMessages(messages[:1]); len(groups) != 1 || groups[0].Messages[0].Content != "internal summary" {
+		t.Fatalf("reasoning-only response hidden: %+v", groups)
 	}
 	groups := msgfmt.GroupMessages(messages)
-	if len(groups) != 1 || groups[0].ID != 2 || len(groups[0].Messages) != 3 {
+	if len(groups) != 1 || groups[0].ID != 1 || len(groups[0].Messages) != 5 {
 		t.Fatalf("unexpected visible groups: %+v", groups)
 	}
 	runs := msgfmt.ActivityRuns(groups[0].Messages)
-	if len(runs) != 2 || len(runs[0].Messages) != 2 || !runs[0].Activity || runs[1].Activity {
+	if len(runs) != 2 || len(runs[0].Messages) != 4 || !runs[0].Activity || runs[1].Activity {
 		t.Fatalf("tool chain/error changed: %+v", runs)
 	}
 	if messages[0].Content != "internal summary" || len(messages) != 5 {

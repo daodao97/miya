@@ -85,17 +85,26 @@ const StallAfter = 60 * time.Second
 // whole reply; so the block completes the streamed message of its text, and
 // an unstreamed block takes the first key no other text holds.
 func TextKey(t *model.Thread, messageID string, index int, text string) string {
-	prefix := messageID + ":"
+	return blockKey(t, messageID+":", index, text, "assistant")
+}
+
+// Thinking blocks use a separate namespace because complete assistant frames
+// carry one block at index zero, while stream events use the original index.
+func ThinkingKey(t *model.Thread, messageID string, index int, text string) string {
+	return blockKey(t, messageID+":thinking:", index, text, "activity")
+}
+
+func blockKey(t *model.Thread, prefix string, index int, text, role string) string {
 	partial := ""
 	used := map[string]bool{}
 	for _, m := range t.Messages {
-		if m.Role != "assistant" || !strings.HasPrefix(m.ItemID, prefix) {
+		if m.Role != role || !strings.HasPrefix(m.ItemID, prefix) {
 			continue
 		}
 		if m.Content == text {
 			return m.ItemID
 		}
-		if partial == "" && m.Content != "" && strings.HasPrefix(text, m.Content) {
+		if partial == "" && (m.Content != "" || role == "activity") && strings.HasPrefix(text, m.Content) {
 			partial = m.ItemID
 		}
 		used[m.ItemID] = true
@@ -104,7 +113,7 @@ func TextKey(t *model.Thread, messageID string, index int, text string) string {
 		return partial
 	}
 	for k := index; ; k++ {
-		if key := fmt.Sprintf("%s:%d", messageID, k); !used[key] {
+		if key := fmt.Sprintf("%s%d", prefix, k); !used[key] {
 			return key
 		}
 	}

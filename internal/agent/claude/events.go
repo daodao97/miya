@@ -110,11 +110,12 @@ func (b Adapter) Handle(id int, f claude.Frame) {
 		switch f.Type {
 		case "stream_event":
 			var e struct {
-				Type    string
-				Index   int
-				Message claude.Message
-				Delta   struct{ Type, Text string }
-				Usage   json.RawMessage
+				Type         string
+				Index        int
+				Message      claude.Message
+				ContentBlock claude.Block `json:"content_block"`
+				Delta        struct{ Type, Text, Thinking string }
+				Usage        json.RawMessage
 			}
 			if json.Unmarshal(f.Event, &e) != nil {
 				return
@@ -125,6 +126,27 @@ func (b Adapter) Handle(id int, f claude.Frame) {
 			}
 			if e.Type == "message_delta" {
 				claudeprojection.RecordClaudeOutput(t, t.ClaudeMessageID, e.Usage)
+			}
+			thinkingKey := fmt.Sprintf("%s:thinking:%d", t.ClaudeMessageID, e.Index)
+			if e.Type == "content_block_start" && e.ContentBlock.Type == "thinking" {
+				c.Upsert(t, model.Message{Role: "activity", Kind: "reasoning", ItemID: thinkingKey, Content: e.ContentBlock.Thinking, Status: "inProgress", SentAtMs: now, StartedAtMs: now})
+			}
+			if e.Type == "content_block_delta" && e.Delta.Type == "thinking_delta" && e.Delta.Thinking != "" {
+				for i := range t.Messages {
+					if t.Messages[i].ItemID == thinkingKey {
+						t.Messages[i].Content += e.Delta.Thinking
+						return
+					}
+				}
+				c.Upsert(t, model.Message{Role: "activity", Kind: "reasoning", ItemID: thinkingKey, Content: e.Delta.Thinking, Status: "inProgress", SentAtMs: now, StartedAtMs: now})
+			}
+			if e.Type == "content_block_stop" {
+				for i := range t.Messages {
+					if t.Messages[i].ItemID == thinkingKey {
+						t.Messages[i].Status = "completed"
+						t.Messages[i].CompletedAtMs = now
+					}
+				}
 			}
 			if e.Type == "content_block_delta" && e.Delta.Type == "text_delta" {
 				key := fmt.Sprintf("%s:%d", t.ClaudeMessageID, e.Index)
@@ -139,6 +161,10 @@ func (b Adapter) Handle(id int, f claude.Frame) {
 		case "assistant":
 			claudeprojection.RecordClaudeOutput(t, f.Message.ID, f.Message.Usage)
 			for i, b := range f.Message.Content {
+				if b.Type == "thinking" && b.Thinking != "" {
+					key := claude.ThinkingKey(t, f.Message.ID, i, b.Thinking)
+					c.Upsert(t, model.Message{Role: "activity", Kind: "reasoning", Status: "completed", ItemID: key, Content: b.Thinking, SentAtMs: now, StartedAtMs: now, CompletedAtMs: now})
+				}
 				if b.Type == "text" {
 					key := claude.TextKey(t, f.Message.ID, i, b.Text)
 					status := ""

@@ -64,3 +64,35 @@ func TestClaudeApprovalAndQuestions(t *testing.T) {
 		t.Fatal("question parsing failed")
 	}
 }
+
+func TestClaudeThinkingStreamsAndReconciles(t *testing.T) {
+	c, emit := claudeTestThread(t)
+	emit(`{"type":"stream_event","event":{"type":"message_start","message":{"id":"m1"}}}`)
+	emit(`{"type":"stream_event","event":{"type":"content_block_start","index":2,"content_block":{"type":"thinking","thinking":""}}}`)
+	if messages := c.Current().Messages; len(messages) != 1 || messages[0].Kind != "reasoning" || messages[0].Status != "inProgress" {
+		t.Fatalf("thinking start missing: %+v", messages)
+	}
+	emit(`{"type":"stream_event","event":{"type":"content_block_delta","index":2,"delta":{"type":"thinking_delta","thinking":"Check "}}}`)
+	emit(`{"type":"stream_event","event":{"type":"content_block_delta","index":2,"delta":{"type":"thinking_delta","thinking":"libraries"}}}`)
+	if messages := c.Current().Messages; len(messages) != 1 || messages[0].Content != "Check libraries" {
+		t.Fatalf("thinking deltas lost: %+v", messages)
+	}
+	emit(`{"type":"stream_event","event":{"type":"content_block_stop","index":2}}`)
+	emit(`{"type":"assistant","message":{"id":"m1","content":[{"type":"thinking","thinking":"Check libraries"}]}}`)
+	emit(`{"type":"assistant","message":{"id":"m1","content":[{"type":"thinking","thinking":"Check libraries"}]}}`)
+	emit(`{"type":"stream_event","event":{"type":"content_block_delta","index":3,"delta":{"type":"text_delta","text":"Ready"}}}`)
+	emit(`{"type":"assistant","message":{"id":"m1","content":[{"type":"text","text":"Ready"}]}}`)
+	emit(`{"type":"assistant","message":{"id":"m1","content":[{"type":"thinking","thinking":"Next check"}]}}`)
+	messages := c.Current().Messages
+	if len(messages) != 3 || messages[0].Content != "Check libraries" || messages[0].Status != "completed" || messages[0].CompletedAtMs == 0 || messages[1].Content != "Ready" || messages[2].Content != "Next check" {
+		t.Fatalf("thinking repeated or mixed with replies: %+v", messages)
+	}
+	// Some streams omit the text deltas and only supply content on completion.
+	emit(`{"type":"stream_event","event":{"type":"message_start","message":{"id":"m2"}}}`)
+	emit(`{"type":"stream_event","event":{"type":"content_block_start","index":1,"content_block":{"type":"thinking","thinking":""}}}`)
+	emit(`{"type":"stream_event","event":{"type":"content_block_stop","index":1}}`)
+	emit(`{"type":"assistant","message":{"id":"m2","content":[{"type":"thinking","thinking":"Completion only"}]}}`)
+	if messages := c.Current().Messages; len(messages) != 4 || messages[3].Content != "Completion only" {
+		t.Fatalf("completion repeated its empty thinking placeholder: %+v", messages)
+	}
+}

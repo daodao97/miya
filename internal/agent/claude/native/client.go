@@ -137,11 +137,11 @@ func (m *Message) UnmarshalJSON(b []byte) error {
 }
 
 type Block struct {
-	Type, ID, Name, Text string
-	Input                json.RawMessage `json:"input"`
-	ToolUseID            string          `json:"tool_use_id"`
-	Content              json.RawMessage `json:"content"`
-	IsError              bool            `json:"is_error"`
+	Type, ID, Name, Text, Thinking string
+	Input                          json.RawMessage `json:"input"`
+	ToolUseID                      string          `json:"tool_use_id"`
+	Content                        json.RawMessage `json:"content"`
+	IsError                        bool            `json:"is_error"`
 }
 type Client struct {
 	pid             int

@@ -95,3 +95,45 @@ func TestActivityRunsOnlyExpandManually(t *testing.T) {
 		})
 	}
 }
+
+func TestReasoningVisibleAndExpandable(t *testing.T) {
+	for _, mobile := range []bool{false, true} {
+		name, width := "desktop", 744
+		if mobile {
+			name, width = "phone", 390
+		}
+		t.Run(name, func(t *testing.T) {
+			host := &snapshotHost{thread: model.Thread{ID: 1, Busy: true, Messages: []model.Message{
+				{ID: 1, Role: "activity", Kind: "reasoning", Status: "inProgress", Content: "Checking available libraries."},
+			}}}
+			v := NewConversationView(host)
+			v.Mobile = mobile
+			tt := ui.NewTester(func(c *ui.Context) {
+				for _, g := range msgfmt.GroupMessages(host.thread.Messages) {
+					v.GroupView(c.Key(g.ID), g)
+				}
+			}, width, 600)
+			if !tt.HasText("Thinking…") {
+				t.Fatalf("reasoning hidden: %v", tt.Texts())
+			}
+			if err := tt.Click("Thinking…"); err != nil {
+				t.Fatal(err)
+			}
+			if !tt.HasText("Checking available libraries.") {
+				t.Fatalf("reasoning cannot expand: %v", tt.Texts())
+			}
+			host.thread.Messages[0].Content += " Found a candidate."
+			host.thread.Messages[0].Status = "completed"
+			tt.Frame()
+			if !tt.HasText("Thought") || !tt.HasText("Checking available libraries. Found a candidate.") {
+				t.Fatalf("completed reasoning lost: %v", tt.Texts())
+			}
+			if err := tt.Click("Thought"); err != nil {
+				t.Fatal(err)
+			}
+			if tt.HasText("Checking available libraries. Found a candidate.") {
+				t.Fatal("reasoning cannot collapse")
+			}
+		})
+	}
+}

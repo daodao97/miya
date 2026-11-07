@@ -1302,9 +1302,6 @@ func (m *App) listView(c *ui.Context) {
 				ui.Text(c, strings.TrimSuffix(label, ".local")).FontSize(m.Font(11)).TextColor(p.muted).SingleLine().Ellipsis("…")
 			})
 		})
-		if m.homeAction(c, "new-conversation", tr("New thread"), "edit").Clicked() {
-			m.StartConversation(m.selectedProject().Path, m.composerAgent())
-		}
 		more := m.homeAction(c, "more", tr("More"), "dots")
 		m.conversationActions(c, more, m.selectedProject().Path, m.composerAgent())
 	})

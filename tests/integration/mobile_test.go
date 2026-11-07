@@ -43,17 +43,18 @@ func TestMobileHomeStartsNewConversation(t *testing.T) {
 	m := testMobileApp()
 	tt := ui.NewTester(m.ViewRoot, 390, 750)
 	tt.Frame()
-	for _, label := range []string{"Miya", "New thread", "Let’s build", "Message", "Send", "Select project"} {
+	for _, label := range []string{"Miya", "More", "Let’s build", "Message", "Send", "Select project"} {
 		if _, ok := tt.Find(label); !ok {
 			t.Fatalf("the new-conversation page should show %q", label)
 		}
 	}
-	for _, label := range []string{"thread-one", "thread-two", "全部对话"} {
+	for _, label := range []string{"New thread", "thread-one", "thread-two", "全部对话"} {
 		if _, ok := tt.Find(label); ok {
 			t.Fatalf("conversation navigation belongs in the drawer: %s", label)
 		}
 	}
 	m.Draft = "未发送的消息"
+	openMobileDrawer(t, tt)
 	if err := tt.Click("New thread"); err != nil {
 		t.Fatal(err)
 	}

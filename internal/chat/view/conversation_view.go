@@ -405,8 +405,7 @@ func (app *View) MessageView(c *ui.Context, m model.Message, streaming bool) {
 		app.markdown(c, m, streaming && m.Status != "completed")
 		return
 	}
-	isReasoning := strings.EqualFold(m.Kind, "reasoning")
-	expanded := app.Open[m.ID] && !isReasoning
+	expanded := app.Open[m.ID]
 	ui.Column(c).FillWidth().Gap(6).Children(func() {
 		title := msgfmt.NativeText(ActivityTitle(m))
 		if s := subagent.Summary(m.Agents); s != "" {
@@ -416,18 +415,16 @@ func (app *View) MessageView(c *ui.Context, m model.Message, streaming bool) {
 		header.Children(func() {
 			widgets.Icon(c, msgfmt.Message(m).Icon, 14, widgets.Muted)
 			color := widgets.Muted
-			if m.Status == "failed" && !isReasoning {
+			if m.Status == "failed" {
 				color = widgets.Failed
 			}
 			if m.Status == "inProgress" || m.Status == "in_progress" || subagent.AnyActive(m.Agents) {
 				ui.Spinner(c).FontSize(12)
 			}
 			ui.Text(c, title).Grow(1).MinWidth(0).SingleLine().Ellipsis("…").FontSize(12).TextColor(color)
-			if !isReasoning {
-				app.Chevron(c, expanded)
-			}
+			app.Chevron(c, expanded)
 		})
-		if header.Clicked() && !isReasoning {
+		if header.Clicked() {
 			app.Open[m.ID] = !expanded
 		}
 		if expanded {
