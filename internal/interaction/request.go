@@ -106,5 +106,7 @@ const (
 type Response struct {
 	Action  Action            `json:"action"`
 	Answers map[string]string `json:"answers,omitempty"`
-	Content map[string]any    `json:"content,omitempty"`
+	// An empty object confirms a form with no fields; nil means no form
+	// was submitted. Preserve that distinction across the phone transport.
+	Content map[string]any `json:"content"`
 }

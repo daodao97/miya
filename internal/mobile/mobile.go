@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -279,7 +280,12 @@ func mobileMain() {
 		uiruntime.RunOnMain(func() {
 			m.cancelVoice()
 			m.FlushCache(true)
-			m.Disconnect()
+			// Android's document provider is outside our Activity. Keep only
+			// the open browser's desktop/proxy resources until it closes;
+			// background lifecycle and checkpointing still run normally.
+			if runtime.GOOS != "android" || m.FilesCancel == nil {
+				m.Disconnect()
+			}
 		})
 	})
 	mygo.App.OnDidBecomeActive(func() {
@@ -1071,7 +1077,7 @@ func scanError(err error) string {
 	case errors.Is(err, mygo.ErrScanCanceled):
 		return ""
 	case errors.Is(err, mygo.ErrUnsupported):
-		return tr("Scan on your iPhone, or paste a desktop connection code")
+		return tr("Scan on your phone, or paste a desktop connection code")
 	case errors.Is(err, mygo.ErrCameraDenied):
 		return tr("Allow Miya to use the camera in Settings, or paste a connection code")
 	case errors.Is(err, mygo.ErrCameraUnavailable):

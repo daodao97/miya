@@ -1,4 +1,4 @@
-//go:build !ios || !cgo
+//go:build (!ios && !android) || !cgo
 
 package voiceinput
 

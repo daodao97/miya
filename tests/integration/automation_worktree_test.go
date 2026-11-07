@@ -146,3 +146,22 @@ func TestAutomationWorktreeNeedsRepository(t *testing.T) {
 		t.Fatalf("run = %+v, sent %d", run, len(h.sent))
 	}
 }
+
+func TestAutomationPausedWorktreeRunNowCompletes(t *testing.T) {
+	h := newAutomationHarness(t)
+	gitProject(t, h)
+	a := h.add(t, automation.Automation{Name: "Manual check", Instructions: "Reply done", Schedule: "0 9 1 1 *", Worktree: true})
+	h.s.Store.Automations[0].Enabled = false
+	if err := h.s.StartRun(a.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	run := h.last(a.ID)
+	if run.Worktree == nil || run.Thread == 0 {
+		t.Fatalf("worktree run did not start: %+v", run)
+	}
+	h.endTurn(run.Thread, "Done")
+	h.s.Tick()
+	if run = h.last(a.ID); run.Result != automation.Passed || run.WorktreeState != automation.WorktreeCleaned || h.s.Enabled() {
+		t.Fatalf("paused manual worktree run did not finish and clean up: %+v", run)
+	}
+}

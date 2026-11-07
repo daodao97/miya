@@ -140,6 +140,42 @@ func TestAutomationFailsWhenRoundsRunOut(t *testing.T) {
 	}
 }
 
+func TestAutomationRunNowWhilePaused(t *testing.T) {
+	for _, check := range []string{"", "make test"} {
+		t.Run(check, func(t *testing.T) {
+			h := newAutomationHarness(t)
+			a := h.add(t, automation.Automation{Name: "Manual QA", Instructions: "Reply QA_DONE", Schedule: "0 9 1 1 *", Check: check, Rounds: 2})
+			h.s.Store.Automations[0].Enabled = false
+			if err := h.c.AutomationCall("automationRunNow", automation.Request{ID: a.ID}, nil); err != nil {
+				t.Fatal(err)
+			}
+			thread := h.last(a.ID).Thread
+			h.checks = []bool{false, true}
+			h.endTurn(thread, "QA_DONE")
+			h.s.Tick()
+			if check != "" {
+				if len(h.sent) != 2 {
+					t.Fatalf("paused manual run did not retry: %+v", h.last(a.ID))
+				}
+				h.endTurn(thread, "QA_DONE")
+				h.s.Tick()
+			}
+			if r := h.last(a.ID); r.Result != automation.Passed {
+				t.Fatalf("manual run incorrectly interrupted: %+v", r)
+			}
+			if h.s.Store.Automations[0].Enabled || h.s.Enabled() {
+				t.Fatal("manual run enabled its schedule")
+			}
+			sent := len(h.sent)
+			h.now = atLocal("2027-01-01 09:01")
+			h.s.Tick()
+			if len(h.sent) != sent {
+				t.Fatal("paused schedule ran after manual completion")
+			}
+		})
+	}
+}
+
 func TestAutomationSkipsCatchesUpAndStops(t *testing.T) {
 	h := newAutomationHarness(t)
 	h.now = atLocal("2026-11-02 08:00")

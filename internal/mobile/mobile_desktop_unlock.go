@@ -147,13 +147,13 @@ func desktopUnlockAuthenticationError(err error) error {
 		case mygo.AuthenticationMissingPurpose:
 			message = "Identity verification is unavailable in this app build. Update Miya, or disable password saving to unlock manually."
 		case mygo.AuthenticationPasscodeNotSet:
-			message = "Set a device passcode in iPhone Settings to save or use your Mac password."
+			message = "Set a device passcode in system settings to save or use your Mac password."
 		case mygo.AuthenticationInactive, mygo.AuthenticationBusy:
 			message = "Return to Miya and close any system dialog, then retry identity verification."
 		case mygo.AuthenticationFailed:
-			message = "Identity verification failed. Try Face ID or your device passcode again."
+			message = "Identity verification failed. Try biometrics or your device passcode again."
 		case mygo.AuthenticationUnavailable, mygo.AuthenticationNotEnrolled, mygo.AuthenticationLockedOut:
-			message = "Device authentication is unavailable. Check Face ID and passcode in iPhone Settings, or unlock manually without saving."
+			message = "Device authentication is unavailable. Check biometrics and your device passcode in system settings, or unlock manually without saving."
 		}
 	}
 	return errors.New(tr(message))

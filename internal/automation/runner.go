@@ -71,6 +71,9 @@ type ActiveRun struct {
 	Thread   int
 	round    int
 	checking bool
+	// A manual run may start with its schedule paused. Keep that run
+	// independent of the schedule without turning future scheduled runs on.
+	allowPaused bool
 	// started identifies the run in the store: runs skipped meanwhile
 	// come after it.
 	started time.Time
@@ -230,7 +233,7 @@ func (rn *Runner) StartRun(id string, catchUp bool) error {
 	}
 	rn.Store.AddRun(id, run)
 	if thread != 0 {
-		r := &ActiveRun{round: 1, started: now}
+		r := &ActiveRun{round: 1, started: now, allowPaused: !a.Enabled}
 		rn.Active[id] = r
 		rn.attach(id, a, r, thread)
 	}
@@ -289,7 +292,7 @@ func (rn *Runner) advance(id string, r *ActiveRun) {
 	switch {
 	case t.StopRequested || t.Status == "Stopped":
 		rn.finish(id, Interrupted, "Stopped in conversation")
-	case !a.Enabled:
+	case !a.Enabled && !r.allowPaused:
 		rn.finish(id, Interrupted, "Automation paused")
 	case status == subagent.Failed:
 		rn.finish(id, Failed, reply)
@@ -322,7 +325,7 @@ func (rn *Runner) afterCheck(id string, r *ActiveRun, passed bool, output, reply
 	case passed:
 		rn.finish(id, Passed, reply)
 		return
-	case !a.Enabled:
+	case !a.Enabled && !r.allowPaused:
 		rn.finish(id, Interrupted, "Automation paused")
 		return
 	case r.round >= a.Rounds:

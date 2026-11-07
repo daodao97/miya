@@ -56,7 +56,12 @@ func (m *App) requestPush() {
 	m.pushRequesting = true
 	go func() {
 
-		status, e := mygo.Permissions.Request(mygo.PermissionNotifications)
+		status, e := mygo.Permissions.Query(mygo.PermissionNotifications)
+		// Returning from a denied system prompt activates the app again. Only
+		// the first request should prompt; later denials belong in Settings.
+		if e == nil && status == mygo.PermissionNotDetermined {
+			status, e = mygo.Permissions.Request(mygo.PermissionNotifications)
+		}
 		log.Printf("miya: notification permission: %v, error: %v", status, e)
 		uiruntime.RunOnMain(func() {
 			m.pushRequesting = false

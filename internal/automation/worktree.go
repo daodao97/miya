@@ -53,7 +53,7 @@ func worktreeNote(w worktree.Worktree) string {
 // startInWorktree starts run once its worktree exists. Making it runs
 // off the host's thread; the run counts as in progress meanwhile.
 func (rn *Runner) startInWorktree(a Automation, run Run, prev *Run) {
-	r := &ActiveRun{round: 1, started: run.Started, preparing: true}
+	r := &ActiveRun{round: 1, started: run.Started, preparing: true, allowPaused: !a.Enabled}
 	rn.Active[a.ID] = r
 	rn.Store.AddRun(a.ID, run)
 	rn.Persist()

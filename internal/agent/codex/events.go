@@ -202,7 +202,9 @@ func (b Adapter) Handle(f codex.Frame) {
 			}
 			t.Busy = false
 			t.TurnID = ""
-			t.StopRequested = false
+			// Completion must preserve a user's queue pause. A new send or an
+			// explicit ResumeQueue clears it; otherwise the update drains queued
+			// messages immediately after an interrupted turn.
 			t.Status = ""
 			if e.Turn.Status == "interrupted" {
 				t.Status = "Stopped"

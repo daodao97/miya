@@ -99,6 +99,24 @@ func TestStoppedTurnPausesTheQueue(t *testing.T) {
 	}
 }
 
+func TestCodexStopCompletionKeepsQueuePaused(t *testing.T) {
+	for _, status := range []string{"interrupted", "completed", "failed"} {
+		t.Run(status, func(t *testing.T) {
+			c := testController()
+			d := &testDispatch{}
+			c.Run = d.push
+			c.SetThreads([]model.Thread{{ID: 1, ServerID: "t1", TurnID: "turn1", Busy: true, StopRequested: true,
+				Queue: []model.QueuedMessage{{ID: 2, SendRequest: model.SendRequest{Text: "later"}}}}})
+			c.Handle(event("turn/completed", `{"threadId":"t1","turn":{"id":"turn1","status":"`+status+`"}}`))
+			d.drain()
+			th := c.ThreadWithID(1)
+			if th.Busy || !th.StopRequested || len(th.Queue) != 1 {
+				t.Fatalf("completion resumed a user-stopped queue: busy=%v paused=%v queued=%d", th.Busy, th.StopRequested, len(th.Queue))
+			}
+		})
+	}
+}
+
 func TestComposerQueuesWhileBusy(t *testing.T) {
 	app, tt := testApp(t)
 	c := app.C.(*controller.Controller)

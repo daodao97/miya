@@ -226,7 +226,7 @@ func (m *App) voiceSettings(c *ui.Context) {
 				status, err := mygo.Permissions.Request(mygo.PermissionMicrophone)
 				uiruntime.RunOnMain(func() {
 					if err != nil || status != mygo.PermissionGranted {
-						m.voicePermission = tr("Allow microphone access in iOS Settings to use voice input.")
+						m.voicePermission = tr("Allow microphone access in system settings to use voice input.")
 					} else {
 						m.voicePermission = tr("Microphone access allowed")
 					}

@@ -11336,13 +11336,13 @@ func (msgs Messages) Saving56a228() string {
 	return Catalog.Format(msgs.locale, "saving_56a228", nil)
 }
 
-// ScanOnYourIphoneOrPasteAF176dd says "Scan on your iPhone, or paste a desktop connection code"
+// ScanOnYourIphoneOrPasteAF176dd says "Scan on your phone, or paste a desktop connection code"
 // in the language the app shows.
 func ScanOnYourIphoneOrPasteAF176dd() string {
 	return In(i18n.Locale()).ScanOnYourIphoneOrPasteAF176dd()
 }
 
-// ScanOnYourIphoneOrPasteAF176dd says "Scan on your iPhone, or paste a desktop connection code"
+// ScanOnYourIphoneOrPasteAF176dd says "Scan on your phone, or paste a desktop connection code"
 // in the language of msgs.
 func (msgs Messages) ScanOnYourIphoneOrPasteAF176dd() string {
 	return Catalog.Format(msgs.locale, "scanOnYourIphoneOrPasteA_f176dd", nil)
@@ -17364,13 +17364,13 @@ func (msgs Messages) DesktopUnlockAuthenticationE5b1d6a2() string {
 	return Catalog.Format(msgs.locale, "desktopUnlockAuthentication_e5b1d6a2", nil)
 }
 
-// DesktopUnlockAuthentication973a1552 says "Set a device passcode in iPhone Settings to save or use your Mac password."
+// DesktopUnlockAuthentication973a1552 says "Set a device passcode in system settings to save or use your Mac password."
 // in the language the app shows.
 func DesktopUnlockAuthentication973a1552() string {
 	return In(i18n.Locale()).DesktopUnlockAuthentication973a1552()
 }
 
-// DesktopUnlockAuthentication973a1552 says "Set a device passcode in iPhone Settings to save or use your Mac password."
+// DesktopUnlockAuthentication973a1552 says "Set a device passcode in system settings to save or use your Mac password."
 // in the language of msgs.
 func (msgs Messages) DesktopUnlockAuthentication973a1552() string {
 	return Catalog.Format(msgs.locale, "desktopUnlockAuthentication_973a1552", nil)
@@ -17388,25 +17388,25 @@ func (msgs Messages) DesktopUnlockAuthenticationAc96ae89() string {
 	return Catalog.Format(msgs.locale, "desktopUnlockAuthentication_ac96ae89", nil)
 }
 
-// DesktopUnlockAuthenticationDdf4187b says "Identity verification failed. Try Face ID or your device passcode again."
+// DesktopUnlockAuthenticationDdf4187b says "Identity verification failed. Try biometrics or your device passcode again."
 // in the language the app shows.
 func DesktopUnlockAuthenticationDdf4187b() string {
 	return In(i18n.Locale()).DesktopUnlockAuthenticationDdf4187b()
 }
 
-// DesktopUnlockAuthenticationDdf4187b says "Identity verification failed. Try Face ID or your device passcode again."
+// DesktopUnlockAuthenticationDdf4187b says "Identity verification failed. Try biometrics or your device passcode again."
 // in the language of msgs.
 func (msgs Messages) DesktopUnlockAuthenticationDdf4187b() string {
 	return Catalog.Format(msgs.locale, "desktopUnlockAuthentication_ddf4187b", nil)
 }
 
-// DesktopUnlockAuthenticationB80abded says "Device authentication is unavailable. Check Face ID and passcode in iPhone Settings, or unlock manually without saving."
+// DesktopUnlockAuthenticationB80abded says "Device authentication is unavailable. Check biometrics and your device passcode in system settings, or unlock manuall…"
 // in the language the app shows.
 func DesktopUnlockAuthenticationB80abded() string {
 	return In(i18n.Locale()).DesktopUnlockAuthenticationB80abded()
 }
 
-// DesktopUnlockAuthenticationB80abded says "Device authentication is unavailable. Check Face ID and passcode in iPhone Settings, or unlock manually without saving."
+// DesktopUnlockAuthenticationB80abded says "Device authentication is unavailable. Check biometrics and your device passcode in system settings, or unlock manuall…"
 // in the language of msgs.
 func (msgs Messages) DesktopUnlockAuthenticationB80abded() string {
 	return Catalog.Format(msgs.locale, "desktopUnlockAuthentication_b80abded", nil)
@@ -18332,11 +18332,11 @@ func (msgs Messages) VoiceInput3() string {
 	return Catalog.Format(msgs.locale, "voiceInput_3", nil)
 }
 
-// VoiceInput4 says "Allow microphone access in iOS Settings to use voice input."
+// VoiceInput4 says "Allow microphone access in system settings to use voice input."
 // in the language the app shows.
 func VoiceInput4() string { return In(i18n.Locale()).VoiceInput4() }
 
-// VoiceInput4 says "Allow microphone access in iOS Settings to use voice input."
+// VoiceInput4 says "Allow microphone access in system settings to use voice input."
 // in the language of msgs.
 func (msgs Messages) VoiceInput4() string {
 	return Catalog.Format(msgs.locale, "voiceInput_4", nil)

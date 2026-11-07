@@ -406,7 +406,7 @@ func TestDesktopUnlockAuthenticationFailureIsActionable(t *testing.T) {
 		{"inactive", &mygo.AuthenticationError{Code: mygo.AuthenticationInactive}, "Return to Miya"},
 		{"busy", &mygo.AuthenticationError{Code: mygo.AuthenticationBusy}, "Return to Miya"},
 		{"failed", &mygo.AuthenticationError{Code: mygo.AuthenticationFailed}, "verification failed"},
-		{"lockedout", &mygo.AuthenticationError{Code: mygo.AuthenticationLockedOut}, "iPhone Settings"},
+		{"lockedout", &mygo.AuthenticationError{Code: mygo.AuthenticationLockedOut}, "system settings"},
 		{"timeout", context.DeadlineExceeded, "timed out"},
 		{"canceled", &mygo.AuthenticationError{Code: mygo.AuthenticationCanceled}, "incomplete"},
 	}

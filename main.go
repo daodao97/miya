@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	if runtime.GOOS == "ios" {
+	if runtime.GOOS == "ios" || runtime.GOOS == "android" {
 		mobile.MobileEntry()
 		return
 	}
