@@ -256,11 +256,6 @@ func GroupMessages(messages []model.Message) []MessageGroup {
 		if m.Role == "memory" && (m.Memory == nil || !m.Memory.Explicit) {
 			continue
 		}
-		// Reasoning stays in the thread model, but is not a visible timeline item.
-		// Filter before grouping so it creates neither empty responses nor counts.
-		if strings.EqualFold(m.Kind, "reasoning") {
-			continue
-		}
 		user := m.Role == "user"
 		newGroup := len(groups) == 0 || user
 		if !newGroup {
