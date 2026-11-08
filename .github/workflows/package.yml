@@ -216,7 +216,8 @@ jobs:
         run: python3 scripts/ci-config.py --version "$GITHUB_REF_NAME"
       - name: Install the NDK
         run: |
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
+          # yes dies of SIGPIPE once sdkmanager stops reading; pipefail would fail the step.
+          (yes || true) | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$ANDROID_NDK_VERSION" > /dev/null
       # The same prebuilt HarfBuzz/FreeType that MyGo's Android workflow uses.
       - name: Download HarfBuzz and FreeType for Android
