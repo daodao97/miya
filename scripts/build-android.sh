@@ -22,7 +22,10 @@ case "$(uname -s)" in
     *) echo "Android build script currently supports macOS/Linux hosts" >&2; exit 2 ;;
 esac
 SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$SDK_DEFAULT}}"
+# go list -m reports no directory for a module that is not in the cache yet.
+go mod download github.com/egoist/mygo
 MYGO_ROOT=$(go list -m -f '{{.Dir}}' github.com/egoist/mygo)
+test -d "$MYGO_ROOT/android" || { echo "MyGo's Android host not found (module dir: '$MYGO_ROOT')" >&2; exit 1; }
 HB_ROOT="${MYGO_HB_ANDROID:-$MYGO_ROOT/third_party/hb-build/src/lib/android}"
 export CC="${MYGO_ANDROID_CC:-$SDK/ndk/$NDK_VERSION/toolchains/llvm/prebuilt/$HOST_TAG/bin/aarch64-linux-android29-clang}"
 test -x "$CC" || { echo "Android NDK compiler not found: $CC" >&2; exit 1; }
