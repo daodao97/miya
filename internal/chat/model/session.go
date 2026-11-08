@@ -9,6 +9,7 @@ func ResetConnectionSession(t *Thread) {
 		return
 	}
 	t.Resumed, t.ReadOnly = false, false
+	t.NativeSandbox = nil
 	t.Loaded, t.Loading, t.Busy, t.StopRequested = false, false, false, false
 	t.TurnID = ""
 	t.MemoryEpoch++

@@ -3,6 +3,8 @@
 package model
 
 import (
+	"encoding/json"
+
 	tokenusage "miya/internal/chat/usage"
 	"miya/internal/contacts"
 )
@@ -67,7 +69,10 @@ type Thread struct {
 	Loaded, Busy, StopRequested bool
 	ReadOnly                    bool
 	Resumed                     bool
-	Messages                    []Message
+	// NativeSandbox is the sandbox Codex resolved when this connection last
+	// started or resumed the thread.
+	NativeSandbox json.RawMessage `json:"-"`
+	Messages      []Message
 	// Queue waits for the running turn to end.
 	Queue []QueuedMessage `json:"queue,omitempty"`
 }

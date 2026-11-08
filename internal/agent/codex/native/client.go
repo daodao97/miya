@@ -167,7 +167,10 @@ func StartWithEnv(ctx context.Context, binary, cwd string, env []string, args ..
 		input.Close()
 		return nil, err
 	}
-	cmd.Stderr = io.Discard // Never put auth/config contents in UI logs.
+	stderr := &stderrTail{}
+	cmd.Stderr = stderr
+	// A background command Codex started can hold stderr open after Codex exits.
+	cmd.WaitDelay = 2 * time.Second
 	if err = cmd.Start(); err != nil {
 		input.Close()
 		output.Close()
@@ -178,16 +181,40 @@ func StartWithEnv(ctx context.Context, binary, cwd string, env []string, args ..
 	c.epoch = fmt.Sprintf("%d:%d", cmd.Process.Pid, time.Now().UnixNano())
 	c.exited = make(chan struct{})
 	go func() {
-		c.read(output)
-		err := cmd.Wait()
+		err := c.readFrames(output)
+		waited := make(chan error, 1)
+		go func() { waited <- cmd.Wait() }()
+		var exitErr error
+		exited := false
 		if err != nil {
-			c.fail(fmt.Errorf("Codex process exited: %w", err))
+			// The stream usually ends because the process is exiting; its status
+			// and stderr explain the end better than EOF does.
+			select {
+			case exitErr = <-waited:
+				exited = true
+			case <-time.After(time.Second):
+			}
+			if exitErr != nil {
+				err = fmt.Errorf("Codex process exited: %w", exitErr)
+			}
+			c.fail(withStderr(err, stderr))
+		}
+		close(c.events)
+		c.Close()
+		if !exited {
+			if exitErr = <-waited; exitErr != nil {
+				c.fail(fmt.Errorf("Codex process exited: %w", exitErr))
+			}
 		}
 		close(c.exited)
 	}()
 	if err = c.Call(ctx, "initialize", map[string]any{"clientInfo": map[string]string{"name": "quickgui_chat", "title": "QuickGUI Chat", "version": "0.1.0"}, "capabilities": map[string]any{"experimentalApi": true}}, nil); err != nil {
 		c.Close()
-		return nil, err
+		select {
+		case <-c.exited:
+		case <-time.After(3 * time.Second):
+		}
+		return nil, withStderr(err, stderr)
 	}
 	if err = c.write(map[string]any{"method": "initialized"}); err != nil {
 		c.Close()
@@ -273,15 +300,23 @@ func (c *Client) write(v any) error {
 	return err
 }
 func (c *Client) read(r io.Reader) {
-	defer c.Close()
-	defer close(c.events)
+	if err := c.readFrames(r); err != nil {
+		c.fail(err)
+	}
+	close(c.events)
+	c.Close()
+}
+
+// readFrames delivers frames until the stream ends and says why it ended; nil
+// means the client was closed first. Its caller fails the client before
+// closing events, so a consumer that sees events end finds Err set.
+func (c *Client) readFrames(r io.Reader) error {
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 64*1024), 16*1024*1024)
 	for scanner.Scan() {
 		var f Frame
 		if err := json.Unmarshal(scanner.Bytes(), &f); err != nil {
-			c.fail(fmt.Errorf("invalid Codex protocol frame: %w", err))
-			return
+			return fmt.Errorf("invalid Codex protocol frame: %w", err)
 		}
 		if f.Method == "" && len(f.ID) > 0 {
 			c.mu.Lock()
@@ -311,7 +346,7 @@ func (c *Client) read(r io.Reader) {
 			select {
 			case c.events <- f:
 			case <-c.done:
-				return
+				return nil
 			}
 		}
 	}
@@ -319,7 +354,7 @@ func (c *Client) read(r io.Reader) {
 	if err == nil {
 		err = io.EOF
 	}
-	c.fail(fmt.Errorf("Codex connection closed: %w", err))
+	return fmt.Errorf("Codex connection closed: %w", err)
 }
 func (c *Client) fail(err error) {
 	c.once.Do(func() {
@@ -340,6 +375,12 @@ func (c *Client) Close() {
 			case <-c.exited:
 				return
 			case <-time.After(2 * time.Second):
+			}
+			// Ask first, so Codex can flush its rollout and stop its commands.
+			interruptProcess(c.cmd)
+			select {
+			case <-c.exited:
+			case <-time.After(3 * time.Second):
 				terminateProcess(c.cmd)
 			}
 		}()

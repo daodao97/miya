@@ -66,12 +66,17 @@ func (c *Controller) CodexGoalCommand(req model.SendRequest) (int, string) {
 			var response codex.ThreadResponse
 			err = client.Call(ctx, method, params, &response)
 			if err == nil {
+				err = codexpolicy.Verify(policy, response.Sandbox, response.ApprovalPolicy)
+			}
+			if err == nil {
 				serverID = response.Thread.ID
 				if serverID == "" {
 					err = fmt.Errorf("Codex returned an empty conversation ID")
 				} else {
-					sid := serverID
-					c.Dispatch(func() { c.Update(id, func(t *model.Thread) { t.ServerID, t.Resumed = sid, true }) })
+					sid, sandbox := serverID, response.Sandbox
+					c.Dispatch(func() {
+						c.Update(id, func(t *model.Thread) { t.ServerID, t.Resumed, t.NativeSandbox = sid, true, sandbox })
+					})
 				}
 			}
 		}

@@ -67,9 +67,12 @@ func (b Adapter) Send(req model.SendRequest) int {
 		t.Messages = append(t.Messages, model.Message{ID: pendingUserID, Role: "user", Content: content, Images: images, Attachments: append([]string(nil), req.Attachments...), Parts: req.Parts, ItemID: "pending-user", SentAtMs: sentAt, MemoryTurnID: localTurn, MemoryControl: req.MemoryControl || req.KeepSessionSettings})
 	})
 	go func() {
-		ctx, cancel := context.WithTimeout(c.Context(), 45*time.Second)
+		// thread/start waits for the configured MCP servers, so thread setup and
+		// turn/start each get their own budget.
+		ctx, cancel := context.WithTimeout(c.Context(), 60*time.Second)
 		defer cancel()
 		serverID := t.ServerID
+		resolved := t.NativeSandbox
 		var err error
 		missingThread := false
 		mayHaveStarted := false
@@ -81,16 +84,21 @@ func (b Adapter) Send(req model.SendRequest) int {
 			}
 			err = client.Call(ctx, "thread/start", params, &r)
 			if err == nil {
+				err = codexpolicy.Verify(policy, r.Sandbox, r.ApprovalPolicy)
+			}
+			if err == nil {
 				serverID = r.Thread.ID
 				if serverID == "" {
 					err = fmt.Errorf("Codex returned an empty thread ID")
 				} else {
-					sid := serverID
+					sid, sandbox := serverID, r.Sandbox
+					resolved = sandbox
 					serverName := strings.TrimSpace(r.Thread.Name)
 					c.Dispatch(func() {
 						c.Update(id, func(t *model.Thread) {
 							t.ServerID = sid
 							t.Resumed = true
+							t.NativeSandbox = sandbox
 							if serverName != "" {
 								t.Title = serverName
 							}
@@ -111,7 +119,7 @@ func (b Adapter) Send(req model.SendRequest) int {
 			own, _ := model.SplitReferenceContext(text)
 			input = append(input, composer.FileMentionInputs(own, cwd)...)
 			input = append(input, c.AttachmentInputs(attachments)...)
-			params := map[string]any{"threadId": serverID, "cwd": cwd, "input": input, "approvalPolicy": codexpolicy.ApprovalForPolicy(policy), "approvalsReviewer": codexpolicy.ReviewerForPolicy(policy), "sandboxPolicy": codexpolicy.TurnSandboxForPolicy(policy)}
+			params := map[string]any{"threadId": serverID, "cwd": cwd, "input": input, "approvalPolicy": codexpolicy.ApprovalForPolicy(policy), "approvalsReviewer": codexpolicy.ReviewerForPolicy(policy), "sandboxPolicy": codexpolicy.TurnSandbox(policy, resolved)}
 			if modelID != "" {
 				params["model"] = modelID
 			}
@@ -121,18 +129,27 @@ func (b Adapter) Send(req model.SendRequest) int {
 			if serviceTier != "" {
 				params["serviceTierForTurn"] = serviceTier
 			}
+			turnCtx, turnCancel := context.WithTimeout(c.Context(), 45*time.Second)
+			defer turnCancel()
 			mayHaveStarted = true
-			err = client.Call(ctx, "turn/start", params, &result)
+			err = client.Call(turnCtx, "turn/start", params, &result)
 			if codex.IsMissingThread(err, serverID) {
 				// The server explicitly rejected this turn before accepting input.
 				// Restore the same thread and retry once, without another user bubble.
 				missingThread = true
 				mayHaveStarted = false
-				err = client.Call(ctx, "thread/resume", map[string]any{"threadId": serverID, "cwd": cwd, "sandbox": codexpolicy.SandboxForPolicy(policy), "approvalPolicy": codexpolicy.ApprovalForPolicy(policy), "approvalsReviewer": codexpolicy.ReviewerForPolicy(policy)}, nil)
+				var resumed codex.ThreadResponse
+				err = client.Call(turnCtx, "thread/resume", map[string]any{"threadId": serverID, "cwd": cwd, "sandbox": codexpolicy.SandboxForPolicy(policy), "approvalPolicy": codexpolicy.ApprovalForPolicy(policy), "approvalsReviewer": codexpolicy.ReviewerForPolicy(policy)}, &resumed)
 				if err == nil {
+					err = codexpolicy.Verify(policy, resumed.Sandbox, resumed.ApprovalPolicy)
+				}
+				if err == nil {
+					sandbox := resumed.Sandbox
+					c.Dispatch(func() { c.Update(id, func(t *model.Thread) { t.NativeSandbox = sandbox }) })
+					params["sandboxPolicy"] = codexpolicy.TurnSandbox(policy, sandbox)
 					input[0]["text"] = composer.CollaborationTaggedInput(mem.Text(text), req.Parts)
 					mayHaveStarted = true
-					err = client.Call(ctx, "turn/start", params, &result)
+					err = client.Call(turnCtx, "turn/start", params, &result)
 				}
 			}
 			mem.Finish(err == nil)
@@ -143,6 +160,18 @@ func (b Adapter) Send(req model.SendRequest) int {
 				return
 			}
 			c.ManagedCodexAccepted(req.ExecutionID, result.Turn.ID, client.RuntimeEpoch(), err, mayHaveStarted)
+			if err != nil && mayHaveStarted && !codex.Refused(err) {
+				// Codex may be running this turn; a returned draft invites a second
+				// copy. Its bubble stays, and turn/started takes the thread over.
+				c.Update(id, func(t *model.Thread) {
+					if t.TurnID == "" {
+						t.Busy = false
+					}
+					t.Status = "Codex did not confirm this message"
+					c.Upsert(t, model.Message{Role: "error", Kind: "error", Status: "failed", Content: "Codex did not confirm this message (" + err.Error() + "). It may still run, so it was not returned to the composer.", ItemID: "send-error-" + fmt.Sprint(c.NextID())})
+				})
+				return
+			}
 			if err != nil {
 				c.Update(id, func(t *model.Thread) {
 					t.Busy = false

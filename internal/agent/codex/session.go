@@ -91,6 +91,9 @@ func (b Adapter) Resume(t model.Thread, after *model.SendRequest) {
 				err = nil
 			}
 		}
+		if err == nil && !readOnly {
+			err = codexpolicy.Verify(policy, result.Sandbox, result.ApprovalPolicy)
+		}
 		// Decode attachments and normalize the complete rollout off the UI thread.
 		// Runtime IDs are assigned only after returning to the UI owner.
 		var messages []model.Message
@@ -126,6 +129,7 @@ func (b Adapter) Resume(t model.Thread, after *model.SendRequest) {
 				}
 				t.Loaded = true
 				t.Resumed = !readOnly
+				t.NativeSandbox = result.Sandbox
 				t.HistoryLoaded = true
 				t.ReadOnly = readOnly
 				if readOnly {

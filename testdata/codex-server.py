@@ -32,6 +32,12 @@ def item(tid,turn,kind,i,**extra):
  threads[tid]['turns'][-1]['items'].append(value)
  notify('item/started',threadId=tid,turnId=turn,item=value)
  notify('item/completed',threadId=tid,turnId=turn,item=value)
+def session(p):
+ mode=p.get('sandbox','workspace-write')
+ sandbox={'danger-full-access':{'type':'dangerFullAccess'},'read-only':{'type':'readOnly','networkAccess':False}}.get(mode,{'type':'workspaceWrite','writableRoots':[],'networkAccess':False,'excludeTmpdirEnvVar':False,'excludeSlashTmp':False})
+ forced=os.environ.get('QUICKGUI_FIXTURE_SANDBOX')
+ if forced:sandbox=json.loads(forced)
+ return {'sandbox':sandbox,'approvalPolicy':p.get('approvalPolicy','on-request'),'approvalsReviewer':p.get('approvalsReviewer','user'),'cwd':p.get('cwd',os.getcwd()),'model':'fixture','modelProvider':'fixture'}
 def finish(tid,turn,text='Fixture interaction completed',status='completed'):
  item(tid,turn,'agentMessage',turn+'-final',text=text)
  threads[tid]['turns'][-1]['status']=status
@@ -62,13 +68,13 @@ for line in sys.stdin:
  elif method=='thread/list':
   reply(r,{'data':[{k:v for k,v in thread.items() if k!='turns'} for thread in threads.values() if thread['cwd']==p.get('cwd',os.getcwd())]})
  elif method=='thread/start':
-  serial+=1;tid='fixture-'+str(serial);threads[tid]={'id':tid,'cwd':p.get('cwd',os.getcwd()),'preview':'Fixture thread','turns':[]};loaded.add(tid);reply(r,{'thread':threads[tid]})
+  serial+=1;tid='fixture-'+str(serial);threads[tid]={'id':tid,'cwd':p.get('cwd',os.getcwd()),'preview':'Fixture thread','turns':[]};loaded.add(tid);reply(r,{'thread':threads[tid],**session(p)})
  elif method in ('thread/read','thread/resume'):
   tid=p['threadId']
   if tid not in threads:
    emit({'id':r['id'],'error':{'code':-32600,'message':'no rollout found for thread id '+tid}});continue
-  if method=='thread/resume':loaded.add(tid)
-  reply(r,{'thread':threads[tid]})
+  if method=='thread/resume':loaded.add(tid);reply(r,{'thread':threads[tid],**session(p)})
+  else:reply(r,{'thread':threads[tid]})
  elif method=='thread/revert':
   tid=p['threadId'];turns=threads[tid]['turns'];cut=next((i for i,turn in enumerate(turns) if turn['id']==p['beforeTurnId']),None)
   if cut is None:emit({'id':r['id'],'error':{'code':-32600,'message':'turn not found'}})

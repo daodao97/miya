@@ -87,21 +87,29 @@ func (b Adapter) Rewind(t model.Thread, m model.Message, text string) {
 		ctx, cancel := context.WithTimeout(parent, 30*time.Second)
 		defer cancel()
 		var err error
+		sandbox := t.NativeSandbox
 		if !t.Resumed {
-			err = client.Call(ctx, "thread/resume", map[string]any{"threadId": t.ServerID, "cwd": cwd, "sandbox": codexpolicy.SandboxForPolicy(policy), "approvalPolicy": codexpolicy.ApprovalForPolicy(policy), "approvalsReviewer": codexpolicy.ReviewerForPolicy(policy)}, nil)
+			var resumed codex.ThreadResponse
+			err = client.Call(ctx, "thread/resume", map[string]any{"threadId": t.ServerID, "cwd": cwd, "sandbox": codexpolicy.SandboxForPolicy(policy), "approvalPolicy": codexpolicy.ApprovalForPolicy(policy), "approvalsReviewer": codexpolicy.ReviewerForPolicy(policy)}, &resumed)
+			if err == nil {
+				err = codexpolicy.Verify(policy, resumed.Sandbox, resumed.ApprovalPolicy)
+			}
+			sandbox = resumed.Sandbox
 		}
 		if err == nil {
 			err = client.Call(ctx, "thread/revert", map[string]any{"threadId": t.ServerID, "beforeTurnId": m.TurnID}, nil)
 		}
 		c.Dispatch(func() {
-			c.FinishRewind(t.ID, m.ID, text, err, func(t *model.Thread) { t.Resumed, t.HistoryLoaded = true, true })
+			c.FinishRewind(t.ID, m.ID, text, err, func(t *model.Thread) { t.Resumed, t.HistoryLoaded, t.NativeSandbox = true, true, sandbox })
 		})
 	})
 }
 
 // Codex steers with turn/steer, which the running turn takes as input. The
 // user message shows at once and is matched as a sent one is; a steer Codex
-// refuses, as for a turn that just ended, goes to the queue or is sent.
+// refuses, as for a turn that just ended, goes to the queue or is sent. A steer
+// whose outcome is unknown (timeout, lost connection) is never resent: Codex
+// may already have taken it, and a delivered one still claims its bubble.
 func (b Adapter) Steer(t model.Thread, req model.SendRequest) bool {
 	c := b.host
 	if t.TurnID == "" || t.ServerID == "" || !t.Resumed || c.Snapshot().Client == nil {
@@ -128,6 +136,14 @@ func (b Adapter) Steer(t model.Thread, req model.SendRequest) bool {
 		err := client.Call(ctx, "turn/steer", params, nil)
 		mem.Finish(err == nil)
 		if err == nil {
+			return
+		}
+		if !codex.Refused(err) {
+			c.Dispatch(func() {
+				c.Update(t.ID, func(t *model.Thread) {
+					t.Status = "Codex did not confirm this message (" + err.Error() + "); it was not resent"
+				})
+			})
 			return
 		}
 		c.Dispatch(func() {

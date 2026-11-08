@@ -74,14 +74,17 @@ func (b Adapter) RunCommand(threadID int, command, policy string) (int, string) 
 			var result codex.ThreadResponse
 			err = client.Call(ctx, method, params, &result)
 			if err == nil {
+				err = codexpolicy.Verify(policy, result.Sandbox, result.ApprovalPolicy)
+			}
+			if err == nil {
 				serverID = result.Thread.ID
 				if serverID == "" {
 					err = fmt.Errorf("%s", tr("Codex returned an empty thread ID"))
 				} else {
-					sid := serverID
+					sid, sandbox := serverID, result.Sandbox
 					c.Dispatch(func() {
 						if c.Snapshot().Client == client {
-							c.Update(id, func(t *threadmodel.Thread) { t.ServerID = sid; t.Resumed = true })
+							c.Update(id, func(t *threadmodel.Thread) { t.ServerID = sid; t.Resumed = true; t.NativeSandbox = sandbox })
 						}
 					})
 				}

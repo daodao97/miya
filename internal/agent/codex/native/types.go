@@ -82,6 +82,10 @@ type Thread struct {
 type ThreadResponse struct {
 	Thread Thread `json:"thread"`
 	Model  string `json:"model"`
+	// Sandbox and ApprovalPolicy are what the app-server applied to the
+	// thread, after the person's config and any managed requirements.
+	Sandbox        json.RawMessage `json:"sandbox"`
+	ApprovalPolicy json.RawMessage `json:"approvalPolicy"`
 }
 type PlanStep struct {
 	Step   string `json:"step"`
