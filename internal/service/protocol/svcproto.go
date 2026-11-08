@@ -14,7 +14,6 @@ import (
 	"miya/internal/agent/account"
 	"miya/internal/appdir"
 	"miya/internal/chat/model"
-	"miya/internal/contacts"
 	"miya/internal/interaction"
 	projectmodel "miya/internal/project/model"
 )
@@ -39,7 +38,6 @@ type Envelope struct {
 
 // State is everything a window shows but the messages.
 type State struct {
-	Contacts           contacts.Snapshot          `json:"contacts,omitempty"`
 	Collaboration      *model.CollaborationStatus `json:"collaboration,omitempty"`
 	MemoryRevision     uint64                     `json:"memoryRevision,omitempty"`
 	ReferenceSource    string                     `json:"referenceSource"`

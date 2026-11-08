@@ -15,7 +15,6 @@ import (
 	"miya/internal/async"
 	"miya/internal/automation"
 	"miya/internal/chat/model"
-	"miya/internal/contacts"
 	"miya/internal/desktop"
 	"miya/internal/desktop/control"
 	"miya/internal/memory/manager"
@@ -57,7 +56,6 @@ type previewRequest struct {
 
 // phoneRequests answer a phone's requests by their Op; unknown ones are ignored.
 var phoneRequests = map[string]func(*phoneSession, remote.Request) bool{
-	"contacts":          (*phoneSession).onContacts,
 	"desktop-preview":   (*phoneSession).onDesktopPreview,
 	"desktop-action":    (*phoneSession).onDesktopPreview,
 	"desktop-open":      (*phoneSession).onDesktopOpen,
@@ -474,26 +472,4 @@ func (ps *phoneSession) onCommands(r remote.Request) bool {
 		ps.cmdAgent = agentmeta.LegacyCommandAgent()
 	}
 	return true
-}
-
-func (ps *phoneSession) onContacts(r remote.Request) bool {
-	var request contacts.Request
-	if err := json.Unmarshal(r.Contacts, &request); err != nil {
-		return ps.send(remote.Frame{Type: "contacts", Error: err.Error()})
-	}
-	type answer struct {
-		Result appmodel.ContactResult
-		Err    error
-	}
-	out, ok := async.OnMain(ps.ctx, ps.c.Dispatch, func() answer { v, err := ps.c.ContactOp(request); return answer{v, err} })
-	if !ok {
-		return false
-	}
-	out.Result.RequestID = request.ID
-	data, _ := json.Marshal(out.Result)
-	frame := remote.Frame{Type: "contacts", Data: data}
-	if out.Err != nil {
-		frame.Error = out.Err.Error()
-	}
-	return ps.send(frame)
 }

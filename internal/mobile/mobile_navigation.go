@@ -13,16 +13,13 @@ import (
 // the navigation stack. Rendering, buttons and edge gestures share this rule.
 func mobilePageHasDrawer(path string) bool {
 	switch path {
-	case "/", "/contacts", "/thread", "/automations", "/memory", "/settings", "/desktops":
+	case "/", "/thread", "/automations", "/memory", "/settings", "/desktops":
 		return true
 	}
 	return false
 }
 
 func (m *App) OpenDrawerPage(path string) {
-	if path == "/contacts" {
-		m.Contacts.Reopen()
-	}
 	m.Menu = false
 	m.DrawerSearch, m.DrawerQuery = false, ""
 	m.Router().Push(path)

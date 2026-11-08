@@ -240,28 +240,8 @@ func (c *Controller) ApplyState(s svcproto.State) {
 		projects[path] = threads
 	}
 	projects[s.Cwd] = s.Threads
-	previous := c.AllThreads()
-	var incoming []model.Thread
-	for _, threads := range projects {
-		incoming = append(incoming, threads...)
-	}
-	c.Mirror.RemapContacts(previous, incoming, c.ReferenceSource == s.ReferenceSource)
+	c.Mirror.ResetForSource(c.ReferenceSource == s.ReferenceSource)
 	selectionChanged := false
-	if previousThread.Contact != nil {
-		resolved := 0
-		if c.ReferenceSource == s.ReferenceSource {
-			for _, threads := range projects {
-				for _, t := range threads {
-					if t.Contact != nil && t.Contact.ID == previousThread.Contact.ID {
-						resolved = t.ID
-					}
-				}
-			}
-		}
-		if resolved != active {
-			active, selectionChanged = resolved, true
-		}
-	}
 	known := false
 	for _, p := range s.Projects {
 		known = known || p.Path == windowCwd
@@ -290,7 +270,6 @@ func (c *Controller) ApplyState(s svcproto.State) {
 			delete(c.DesktopReadPending, key)
 		}
 	}
-	c.contactSnapshot = s.Contacts
 	c.Mirror.ProjectBusy = s.ProjectBusy
 	threads := append([]model.Thread(nil), projects[windowCwd]...)
 	for i := range threads {

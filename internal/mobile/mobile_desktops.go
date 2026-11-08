@@ -21,7 +21,6 @@ import (
 	"miya/internal/remote"
 	"miya/internal/service/workspaces"
 	"miya/internal/uiruntime"
-	"miya/internal/widgets"
 )
 
 type MobileDesktops struct {
@@ -247,8 +246,6 @@ func (m *App) ResetDesktopState() {
 	m.ConversationMenu = false
 	m.Home()
 	m.State, m.Host, m.Selected = phoneproto.State{}, "", ""
-	m.Contacts = widgets.ContactUI{}
-	m.contactCalls = nil
 	m.Autos = mobileAutomations{}
 	m.Memories = MobileMemory{}
 	m.Options, m.optionsAgent, m.NewAgent = nil, "", ""

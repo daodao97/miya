@@ -50,7 +50,6 @@ func (app *App) composerArea(c *ui.Context) {
 					}
 				})
 			}
-			app.contactBar(c.Key("contact-bar"))
 			app.queueView(c, cur)
 			app.taskStatus(c, cur)
 			app.collaborationTasks(c, cur)

@@ -26,10 +26,6 @@ func (api *Service) Memory(r mcpproto.Request) (any, error) {
 		return nil, err
 	}
 	project, err := memory.ProjectScope(c.ThreadWorkspace(caller.ID))
-	daily := caller.Contact != nil && caller.Contact.Daily
-	if daily {
-		project, err = memory.UserScope(), nil
-	}
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +54,7 @@ func (api *Service) Memory(r mcpproto.Request) (any, error) {
 		if settings.Disabled {
 			return nil, errors.New("Memory tools are disabled for this project. Enable them in memory settings.")
 		}
-		if scope.Kind == "user" && !daily && r.Tool == "forget_memory" && !settings.UseUserPreferences {
+		if scope.Kind == "user" && r.Tool == "forget_memory" && !settings.UseUserPreferences {
 			return nil, errors.New("User preferences are not enabled for this project. Enable them in memory settings.")
 		}
 		switch r.Tool {
@@ -74,7 +70,7 @@ func (api *Service) Memory(r mcpproto.Request) (any, error) {
 			if err != nil {
 				return nil, err
 			}
-			if scope.Kind == "user" && !daily && a.ID != "" && !settings.UseUserPreferences {
+			if scope.Kind == "user" && a.ID != "" && !settings.UseUserPreferences {
 				return nil, errors.New("User preferences are not enabled for this project. Enable them in memory settings.")
 			}
 			// Existing provenance survives a correction; append its new evidence.

@@ -19,7 +19,6 @@ import (
 	"miya/internal/chat/model"
 	"miya/internal/chat/subagent"
 	chattext "miya/internal/chat/text"
-	"miya/internal/contacts"
 	"miya/internal/memory"
 	"miya/internal/textutil"
 	"miya/locales"
@@ -128,7 +127,7 @@ func VisibleText(blocks []Block) string {
 		if b.Type != "text" {
 			continue
 		}
-		text := strings.TrimSpace(contacts.StripInput(memory.StripContext(b.Text)))
+		text := strings.TrimSpace(memory.StripLegacyContact(memory.StripContext(b.Text)))
 		if text == "" || strings.HasPrefix(text, "[Request interrupted by user") || strings.HasPrefix(text, "<system-reminder>") || strings.HasPrefix(text, "<local-command-") {
 			continue
 		}

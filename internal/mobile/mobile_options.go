@@ -32,9 +32,6 @@ func (m *App) SendOptions(agent string) remote.SendOptions {
 	o := m.agentOptions(agent).Current
 	if m.Open != 0 {
 		t := m.Viewer.Current()
-		if t.Contact != nil && model.ThreadAgent(t) == agent {
-			o.Model, o.Effort = t.LaunchModel, t.LaunchEffort
-		}
 		if model.ThreadAgent(t) == agent && t.PermissionPolicy != "" {
 			o.Policy = t.PermissionPolicy
 		}
@@ -245,8 +242,5 @@ func (m *App) permissionOptionsView(c *ui.Context) {
 }
 
 func (m *App) optionsKey(agent string) string {
-	if t := m.Viewer.Current(); m.Open != 0 && t.Contact != nil && model.ThreadAgent(t) == agent {
-		return "contact:" + t.Contact.ID
-	}
 	return agent
 }

@@ -9,7 +9,6 @@ import (
 	agentmeta "miya/internal/agent/catalog"
 	"miya/internal/automation"
 	"miya/internal/chat/model"
-	"miya/internal/contacts"
 	"miya/internal/interaction"
 	"miya/internal/memory/manager"
 	"miya/internal/notification"
@@ -17,8 +16,6 @@ import (
 )
 
 type State struct {
-	Contacts         contacts.Snapshot          `json:"contacts,omitempty"`
-	ContactThreads   []model.ProjectSnapshot    `json:"contactThreads,omitempty"`
 	Collaboration    *model.CollaborationStatus `json:"collaboration,omitempty"`
 	DesktopWindows   bool                       `json:"desktopWindows,omitempty"`
 	DesktopControl   bool                       `json:"desktopControl,omitempty"`

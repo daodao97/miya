@@ -55,7 +55,7 @@ func (h memoryHost) Projects() (string, []string) {
 		}
 	}
 	cwd := h.c.Cwd
-	if h.c.isContactWorkspace(cwd) {
+	if legacyContactWorkspace(cwd) {
 		cwd = ""
 	}
 	return cwd, paths

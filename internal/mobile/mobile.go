@@ -105,8 +105,6 @@ type App struct {
 	Link, Host         string
 	State              phoneproto.State
 	Memories           MobileMemory
-	Contacts           widgets.ContactUI
-	contactCalls       map[string]contactCall
 	Autos              mobileAutomations
 	Collaborations     widgets.CollaborationUI
 	CollaborationCalls map[string]*MobileCollaborationCall
@@ -631,9 +629,6 @@ func (m *App) read(gen int, conn *remote.Conn) (greeted bool, err error) {
 		case "memory":
 			data, message := f.Data, f.Error
 			m.onMain(gen, func() { m.ReceiveMemory(data, message) })
-		case "contacts":
-			data, message := f.Data, f.Error
-			m.onMain(gen, func() { m.ReceiveContacts(data, message) })
 		case "automations":
 			data, message := f.Data, f.Error
 			m.onMain(gen, func() { m.ReceiveAutomations(data, message) })
@@ -764,7 +759,7 @@ func (m *App) ApplyPhoneState(s phoneproto.State) {
 	m.State.Notifications = notifications
 	m.ApplyNotifications(s.Notifications)
 	if m.Open != 0 && cur.ServerID != "" {
-		for _, p := range append(append([]model.ProjectSnapshot(nil), s.Projects...), s.ContactThreads...) {
+		for _, p := range s.Projects {
 			for _, t := range p.Threads {
 				if t.ServerID == cur.ServerID && model.ThreadAgent(t) == model.ThreadAgent(cur) && t.ID != m.Open {
 					m.Open, cur.ID = t.ID, t.ID
@@ -1383,8 +1378,6 @@ func (m *App) listPage(c *ui.Context, path string) {
 					m.threadView(c)
 				case "/memory":
 					m.memoryPage(c)
-				case "/contacts":
-					m.contactsPage(c)
 				case "/automations":
 					m.automationsPage(c, false)
 				case "/settings":
@@ -1487,9 +1480,6 @@ func (m *App) drawerContent(c *ui.Context) {
 				}
 				return
 			}
-			if m.phoneButton(c.Key("contacts")).FillWidth().MinHeight(48).Padding(0).Gap(12).Label(tr("Contacts")).Children(func() { widgets.Icon(c, "message-circle", 21, p.ink); ui.Text(c, tr("Contacts")).FontSize(m.Font(17)) }).Clicked() {
-				m.OpenDrawerPage("/contacts")
-			}
 			if m.phoneButton(c.Key("memory")).FillWidth().MinHeight(48).Padding(0).Gap(12).Label(tr("Shared memory")).Children(func() {
 				widgets.Icon(c, "stack-2", 21, p.ink)
 				ui.Text(c, tr("Shared memory")).FontSize(m.Font(17))
@@ -1587,12 +1577,6 @@ func (m *App) threadView(c *ui.Context) {
 	if agent == "" {
 		agent = m.defaultAgent()
 	}
-	if cur.Contact != nil {
-		title = cur.Contact.Name
-		if profile, ok := m.State.Contacts.Find(cur.Contact.BotID); ok {
-			title = profile.Name
-		}
-	}
 	if title == "" {
 		title = tr("Conversations")
 	}
@@ -1612,7 +1596,6 @@ func (m *App) threadView(c *ui.Context) {
 		more := m.circle(c, "more", tr("More"), func() { widgets.Icon(c, "dots", 20, p.ink) })
 		m.conversationActions(c, more, proj.Path, agent)
 	})
-	m.contactBar(c.Key("contact-bar"), cur)
 	ui.Column(c).Grow(1).MinHeight(0).FillWidth().Children(func() {
 		if pending, ok := m.PendingSendThread(cur); ok {
 			m.View.MessageList(c, pending)
@@ -2095,3 +2078,5 @@ func (m *App) ApplyThread(d phoneproto.ThreadDelta) {
 	m.Remember(t.ServerID, list)
 	m.ShowThread(t)
 }
+
+func (m *App) allPhoneProjects() []model.ProjectSnapshot { return m.State.Projects }

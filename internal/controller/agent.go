@@ -295,33 +295,16 @@ func (c *Controller) SubmitExpanded(req model.SendRequest) int {
 		b = c.BackendFor(req.Agent)
 	}
 	if !b.Ready() {
-		if t.Contact != nil {
-			c.LastSubmitError, _ = b.Problem()
-			if c.LastSubmitError == "" {
-				c.LastSubmitError = "This contact’s execution engine is unavailable"
-			}
-			c.SetStatus(c.LastSubmitError)
-		}
 		return 0
 	}
 	if req.Policy == "" {
 		req.Policy = c.permissionForThread(t)
-	}
-	if t.Contact != nil && !req.ExplicitSettings {
-		req.Model, req.Effort, req.ExplicitSettings = t.LaunchModel, t.LaunchEffort, true
 	}
 	if req.Model == "" && !req.ExplicitSettings {
 		req.Model = b.Model()
 	}
 	if req.Effort == "" && !req.ExplicitSettings {
 		req.Effort = b.Effort()
-	}
-	if t.Contact != nil && (t.LaunchModel != req.Model || t.LaunchEffort != req.Effort) {
-		if err := c.contactStore().SetChoices(t.Contact.ID, req.Model, req.Effort); err != nil {
-			c.LastSubmitError = err.Error()
-			c.SetStatus(c.LastSubmitError)
-			return 0
-		}
 	}
 	return b.Send(req)
 }

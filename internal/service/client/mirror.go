@@ -22,48 +22,10 @@ type Mirror struct {
 	Phone svcproto.PhoneStatus
 }
 
-// RemapContacts preserves contact-local edits across service renumbering.
-// Ordinary native sessions retain their existing cache lifecycle: a native
-// rewind can change their session ID while retaining earlier message IDs.
-func (m *Mirror) RemapContacts(previous, incoming []model.Thread, sameSource bool) {
+// ResetForSource drops cached drafts and messages when the service changed.
+func (m *Mirror) ResetForSource(sameSource bool) {
 	if !sameSource {
 		m.Drafts = map[int]string{}
 		m.Messages = map[int][]model.Message{}
-		return
-	}
-	drafts := map[string]string{}
-	messages := map[string][]model.Message{}
-	for _, t := range previous {
-		if t.Contact == nil {
-			continue
-		}
-		if v, ok := m.Drafts[t.ID]; ok {
-			drafts[t.Contact.ID] = v
-		}
-		if v, ok := m.Messages[t.ID]; ok {
-			messages[t.Contact.ID] = v
-		}
-		delete(m.Drafts, t.ID)
-		delete(m.Messages, t.ID)
-	}
-	if m.Drafts == nil {
-		m.Drafts = map[int]string{}
-	}
-	if m.Messages == nil {
-		m.Messages = map[int][]model.Message{}
-	}
-	for _, t := range incoming {
-		if t.Contact == nil {
-			continue
-		}
-		// A new contact number may previously have belonged to another session.
-		delete(m.Drafts, t.ID)
-		delete(m.Messages, t.ID)
-		if v, ok := drafts[t.Contact.ID]; ok {
-			m.Drafts[t.ID] = v
-		}
-		if v, ok := messages[t.Contact.ID]; ok {
-			m.Messages[t.ID] = v
-		}
 	}
 }

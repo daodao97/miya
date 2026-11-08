@@ -6,14 +6,12 @@ import (
 	"unicode"
 
 	"miya/internal/chat/model"
-	"miya/internal/contacts"
 	"miya/internal/memory"
 )
 
 // Memory preparation is called from backend workers, never the service's main
 // scheduler. req.Text retains only the user text and explicit reference context.
 type Input struct {
-	contact  *contacts.Session
 	store    *memory.Store
 	scope    memory.Scope
 	prepared memory.Prepared
@@ -35,17 +33,11 @@ func Command(text string) bool {
 }
 
 func (mg *Manager) PrepareInput(t model.Thread, req model.SendRequest, project, session string) Input {
-	base := Input{contact: t.Contact}
-	if Command(req.Text) {
-		base.contact = nil
-	}
+	base := Input{}
 	if mg.Store == nil || t.MemoryDisabled || t.Automation != "" || req.MemoryControl || req.KeepSessionSettings || Command(req.Text) {
 		return base
 	}
 	scope, err := memory.ProjectScope(project)
-	if t.Contact != nil && t.Contact.Daily {
-		scope, err = memory.UserScope(), nil
-	}
 	if err != nil {
 		return base
 	}
@@ -59,7 +51,6 @@ func (mg *Manager) PrepareInput(t model.Thread, req model.SendRequest, project, 
 }
 
 func (m Input) Text(raw string) string {
-	raw = contacts.Input(m.contact, raw)
 	if m.store == nil || m.prepared.Block == "" {
 		return raw
 	}
