@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"miya/internal/agent"
+	"miya/internal/agent/login"
 	"miya/internal/agent/quota"
 	"miya/internal/appmodel"
 	"miya/internal/automation"
@@ -62,6 +63,7 @@ type Host interface {
 	ReadDesktopThread(t model.Thread)
 	ReadRuntime(ctx context.Context, ref model.ThreadRef, project string) (tracker.ConversationRuntime, error)
 	RefreshAccount()
+	AccountLoginTarget() func(login.Request) (login.State, error)
 	RememberDraft(value string)
 	RemoteHost() bool
 	RemoveAttachment(path string)

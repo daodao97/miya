@@ -4,9 +4,11 @@ package mobile
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -15,6 +17,7 @@ import (
 
 	agentmeta "miya/internal/agent/catalog"
 	"miya/internal/chat/model"
+	"miya/internal/interaction"
 	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/uiruntime"
 )
@@ -30,6 +33,15 @@ func MobileEntry() {
 	m.Router().Transition = ui.TransitionNone
 	m.OpenThread(thread)
 	m.ShowThread(thread)
+	if os.Getenv("MIYA_INPUT_AUTH_TEST") == "1" {
+		a := interaction.Request{ID: json.RawMessage(`"input-authorization"`), ThreadID: thread.ServerID,
+			Category: interaction.Form, Mode: "form",
+			Message:         strings.Repeat("Complete the official sign-in and paste the authorization code.\n", 7),
+			RequestedSchema: json.RawMessage(`{"type":"object","properties":{"code":{"type":"string","title":"Authorization code"}},"required":["code"]}`)}
+		m.State.Approvals = []interaction.Request{a}
+		m.approvalID = a.ID
+		m.Router().Push("/approval")
+	}
 	m.Draft = os.Getenv("MIYA_INPUT_SAMPLE")
 	if m.Draft == "" {
 		m.Draft = "description"

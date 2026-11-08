@@ -11,14 +11,16 @@ import (
 
 	"miya/internal/agent"
 	"miya/internal/agent/account"
+	"miya/internal/agent/login"
 	tokenusage "miya/internal/chat/usage"
+	svcclient "miya/internal/service/client"
 	"miya/internal/textutil"
 	"miya/internal/widgets"
 )
 
 func (app *App) settingsView(c *ui.Context) {
 	cc := app.C
-	tabs := []string{tr("General"), tr("Account"), tr("Phone"), tr("Usage"), tr("Memory")}
+	tabs := []string{tr("General"), tr("Account"), tr("Phone"), tr("Memory")}
 
 	ui.Column(c).FillWidth().MaxWidth(760).Gap(20).Children(func() {
 		ui.Tabs(c.Key("settings-tabs"), &app.SettingsTab, tabs...).AlignSelf(ui.Start)
@@ -38,10 +40,8 @@ func (app *App) settingsView(c *ui.Context) {
 			})
 		} else if app.SettingsTab == 1 {
 			app.account.view(c)
-		} else if app.SettingsTab == 4 {
-			app.memoryView(c)
 		} else if app.SettingsTab == 3 {
-			app.usageSettings(c)
+			app.memoryView(c)
 		} else {
 			app.phoneSettings(c)
 		}
@@ -51,9 +51,14 @@ func (app *App) settingsView(c *ui.Context) {
 // accountView shows the account the controller reads, from when the tab
 // opens and whenever the connection changes.
 type accountView struct {
-	app   *App
-	ready bool
-	shown bool
+	app         *App
+	ready       bool
+	shown       bool
+	logins      map[string]*AccountLoginUI
+	loginCall   func(login.Request) (login.State, error)
+	loginClient *svcclient.Client
+	loginRemote bool
+	loginDone   chan struct{}
 }
 
 func (s *accountView) init(app *App) { s.app = app }
@@ -65,20 +70,10 @@ func (s *accountView) view(c *ui.Context) {
 		s.shown, s.ready = true, cc.State().Ready()
 		cc.RefreshAccount()
 	}
-	data, action := cc.State().AccountState, cc.State().AccountReset
 	ui.Column(c).FillWidth().Gap(16).Children(func() {
-		widgets.SettingsHeader(c, tr("Current account"), tr("Synced with Codex sign-in"), func() {
-			if data.Refreshing {
-				widgets.MutedText(c, tr("Updating…"))
-			}
-			if widgets.SmallButton(c.Key("refresh"), tr("Refresh"), data.Loading || data.Refreshing || action.Busy).Clicked() {
-				cc.RefreshAccount()
-			}
-		})
-		AccountDetails(c, data)
-		if data.Identity != nil && data.Identity.Type == "chatgpt" {
-			ResetCreditCard(c, data, action, cc.State().Ready(), cc.AskAccountReset, cc.CancelAccountReset, cc.ConfirmAccountReset)
-		}
+		s.loginViews(c)
+		s.subscriptionSettings(c)
+		s.app.usageMenuBarSettings(c)
 	})
 }
 
@@ -100,7 +95,7 @@ func AccountDetails(c *ui.Context, data account.Display) {
 			return
 		case data.Identity == nil:
 			ui.Text(c, tr("Not signed in")).FontWeight(600)
-			ui.Text(c, tr("Sign in to the Codex CLI, then refresh this page.")).TextColor(widgets.Muted)
+			ui.Text(c, tr("Use the sign-in controls above to connect your Codex account.")).TextColor(widgets.Muted)
 			return
 		}
 		a := data.Identity

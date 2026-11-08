@@ -18,6 +18,7 @@ import (
 	codex "miya/internal/agent/codex/native"
 	codexprojection "miya/internal/agent/codex/projection"
 	integrations "miya/internal/agent/integrations"
+	"miya/internal/agent/login"
 	agentpolicy "miya/internal/agent/policy"
 	"miya/internal/appdir"
 	"miya/internal/appmodel"
@@ -97,6 +98,7 @@ type Controller struct {
 	// run runs dispatched work; nil uses runOnMain.
 	Run          func(func())
 	AccountCache account.Display
+	logins       *login.Manager
 
 	// Account display lives in WindowState; quota* tracks composer refreshes.
 	accountVersion     int

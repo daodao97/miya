@@ -36,18 +36,40 @@ type response struct {
 	err  error
 }
 type Client struct {
-	epoch   string
-	cmd     *exec.Cmd
-	input   io.WriteCloser
-	writeMu sync.Mutex
-	mu      sync.Mutex
-	pending map[string]chan response
-	next    uint64
-	err     error
-	done    chan struct{}
-	events  chan Frame
-	once    sync.Once
-	exited  chan struct{}
+	epoch       string
+	cmd         *exec.Cmd
+	input       io.WriteCloser
+	writeMu     sync.Mutex
+	mu          sync.Mutex
+	pending     map[string]chan response
+	next        uint64
+	err         error
+	done        chan struct{}
+	events      chan Frame
+	once        sync.Once
+	exited      chan struct{}
+	watchers    map[uint64]notificationWatcher
+	nextWatcher uint64
+}
+
+type notificationWatcher struct {
+	method string
+	frames chan Frame
+}
+
+// WatchNotifications observes a native notification without taking it away
+// from the controller's event stream. Register before starting an operation.
+func (c *Client) WatchNotifications(method string) (<-chan Frame, func()) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.watchers == nil {
+		c.watchers = make(map[uint64]notificationWatcher)
+	}
+	c.nextWatcher++
+	id := c.nextWatcher
+	frames := make(chan Frame, 8)
+	c.watchers[id] = notificationWatcher{method, frames}
+	return frames, func() { c.mu.Lock(); delete(c.watchers, id); c.mu.Unlock() }
 }
 
 func Binary() (string, error) {
@@ -109,6 +131,12 @@ func CommandEnv() []string { return withToolchainPath(os.Environ()) }
 // Start runs the app-server for cwd; args follow app-server, such as -c
 // config overrides.
 func Start(ctx context.Context, binary, cwd string, args ...string) (*Client, error) {
+	return StartWithEnv(ctx, binary, cwd, CommandEnv(), args...)
+}
+
+// StartWithEnv starts an isolated native operation with the CLI's account
+// directory and toolchain environment supplied by its caller.
+func StartWithEnv(ctx context.Context, binary, cwd string, env []string, args ...string) (*Client, error) {
 	if !filepath.IsAbs(cwd) {
 		return nil, errors.New("workspace must be an absolute path")
 	}
@@ -129,7 +157,7 @@ func Start(ctx context.Context, binary, cwd string, args ...string) (*Client, er
 	configureProcess(cmd)
 	cmd.Dir = cwd
 	// Authentication and provider configuration remain owned by Codex.
-	cmd.Env = CommandEnv()
+	cmd.Env = env
 	input, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, err
@@ -270,6 +298,16 @@ func (c *Client) read(r io.Reader) {
 			continue
 		}
 		if f.Method != "" {
+			c.mu.Lock()
+			for _, w := range c.watchers {
+				if f.Method == w.method {
+					select {
+					case w.frames <- f:
+					default:
+					}
+				}
+			}
+			c.mu.Unlock()
 			select {
 			case c.events <- f:
 			case <-c.done:
@@ -305,6 +343,21 @@ func (c *Client) Close() {
 				terminateProcess(c.cmd)
 			}
 		}()
+	}
+}
+
+// CloseAndWait is for owned short-lived processes. Their temporary account
+// and working directories must outlive native shutdown and its final writes.
+func (c *Client) CloseAndWait(ctx context.Context) error {
+	c.Close()
+	if c.exited == nil {
+		return nil
+	}
+	select {
+	case <-c.exited:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 

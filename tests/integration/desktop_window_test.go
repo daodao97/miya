@@ -68,13 +68,13 @@ func TestDesktopMobileAuthorizationWindowPreview(t *testing.T) {
 		m.DesktopPreviews = map[string]*mobile.MobileWindowPreview{string(a.ID): {Version: phoneproto.ApprovalFingerprint(a), Image: img, Window: desktop.Window{ID: 21, PID: 80, App: "系统设置", Title: "系统设置 · 授权密码"}, Dialog: desktop.Dialog{Title: "要允许此应用作为管理员访问吗？", Message: "输入你的密码以继续。", Actions: []desktop.Action{{ID: "允许访问", Label: "允许访问", Enabled: false, Default: true}, {ID: "不允许", Label: "不允许", Enabled: true, Cancel: true}}}}}
 		tt := ui.NewTester(m.ViewRoot, width, 844)
 		tt.Frame()
-		for _, label := range []string{"Control permission window", "Enter permission details", "不允许"} {
+		for _, label := range []string{"Control permission window", "Enter permission details", "不允许", "Done, continue", "Cancel takeover"} {
 			r, ok := tt.Find(label)
 			if !ok || r.H < 44 || r.X < 0 || r.X+r.W > float32(width) {
 				t.Fatalf("preview action missing at %d: %s %v", width, label, r)
 			}
 		}
-		for _, label := range []string{"Select window", "Done, continue", "刷新预览"} {
+		for _, label := range []string{"Select window", "刷新预览"} {
 			if _, ok := tt.Find(label); ok {
 				t.Fatalf("extra control rendered: %s", label)
 			}

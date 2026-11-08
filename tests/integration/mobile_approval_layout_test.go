@@ -1,8 +1,13 @@
 package integration
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/color"
+	"image/draw"
+	"image/png"
 	"strings"
 	"testing"
 
@@ -49,6 +54,105 @@ func TestMobileToolPermissionKeepsActionsVisibleWithoutUnrelatedPreview(t *testi
 		}
 		saveMobileNativeSnapshot(t, tt, "tool-permission-phone")
 	}
+}
+
+func TestMobileTakeoverAlwaysOffersCompletionAndCancellation(t *testing.T) {
+	portrait := image.NewRGBA(image.Rect(0, 0, 600, 1100))
+	draw.Draw(portrait, portrait.Bounds(), image.NewUniform(color.White), image.Point{}, draw.Src)
+	var data bytes.Buffer
+	if err := png.Encode(&data, portrait); err != nil {
+		t.Fatal(err)
+	}
+	img, err := ui.DecodeImage(data.Bytes())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, mode := range []string{"missing", "loading", "no-native-actions", "browser-toolbar", "stale", "no-desktop-control"} {
+		for _, width := range []int{320, 390} {
+			t.Run(fmt.Sprintf("%s/%d", mode, width), func(t *testing.T) {
+				m := testMobileApp()
+				m.State.DesktopControl, m.State.DesktopWindows = true, true
+				th := m.State.Projects[0].Threads[0]
+				m.OpenThread(th)
+				m.ShowThread(th)
+				a := codex.Approval{ID: json.RawMessage(`"manual-takeover"`), ThreadID: th.ServerID, Method: "miya/desktopControl", Reason: "Finish the official sign-in in Chrome"}
+				m.State.Approvals = []codex.Approval{a}
+				p := &mobile.MobileWindowPreview{Version: phoneproto.ApprovalFingerprint(a), Image: img, Window: desktop.Window{ID: 3, PID: 4}, Dialog: desktop.Dialog{Title: "Signed in to Codex - OpenAI - Google Chrome"}}
+				switch mode {
+				case "loading":
+					p.Image, p.Loading = nil, true
+				case "browser-toolbar":
+					p.Dialog.Actions = []desktop.Action{{ID: "new-tab", Label: "New tab", Enabled: true}}
+				case "stale":
+					p.Stale, p.Message = true, "Window preview unavailable"
+				case "no-desktop-control":
+					m.State.DesktopControl = false
+				}
+				if mode != "missing" {
+					m.DesktopPreviews = map[string]*mobile.MobileWindowPreview{string(a.ID): p}
+				}
+				tt := ui.NewTester(m.ViewRoot, width, 750)
+				tt.Frame()
+				for _, label := range []string{"Done, continue", "Cancel takeover"} {
+					r, ok := tt.Find(label)
+					if !ok || r.H < 44 || r.Y < 64 || r.Y+r.H > 750 || r.X < 0 || r.X+r.W > float32(width) {
+						t.Fatalf("takeover cannot be finished or cancelled: %s %v", label, r)
+					}
+				}
+				saveMobileNativeSnapshot(t, tt, fmt.Sprintf("takeover-finish-%s-%d", mode, width))
+				if err := tt.Click("Cancel takeover"); err != nil {
+					t.Fatal(err)
+				}
+				if m.FormErrors[string(a.ID)] != "Not connected to desktop" || p.ActionPending {
+					t.Fatal("cancel operated a native window button or silently discarded the unanswered request")
+				}
+			})
+		}
+	}
+}
+
+func TestMobileAuthorizationInputRemainsVisibleWhenKeyboardShrinksPage(t *testing.T) {
+	m := testMobileApp()
+	th := m.State.Projects[0].Threads[0]
+	m.OpenThread(th)
+	m.ShowThread(th)
+	a := codex.Approval{ID: json.RawMessage(`"authorization-input"`), ThreadID: th.ServerID,
+		Method: "mcpServer/elicitation/request", Mode: "form",
+		Message:         strings.Repeat("Complete the official sign-in and paste the authorization code.\n", 9),
+		RequestedSchema: json.RawMessage(`{"type":"object","properties":{"code":{"type":"string","title":"Authorization code"}},"required":["code"]}`)}
+	m.State.Approvals = []codex.Approval{a}
+	tt := ui.NewTester(m.ViewRoot, 390, 844)
+	if err := tt.Click("Review and confirm"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.Click("Authorization code"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Type("test-code")
+	// UIKit progressively shortens the content viewport as its keyboard rises.
+	for _, height := range []int{700, 600, 510, 440} {
+		tt.SetSize(390, height)
+		tt.Frame()
+		field, ok := tt.Find("Authorization code")
+		footer, _ := tt.Find("Confirm")
+		if !ok || field.H < 43.99 || field.Y < 64 || field.Y+field.H > footer.Y-8 || !tt.Focused("Authorization code") {
+			t.Fatalf("keyboard left the focused authorization field under the action bar at height %d: field=%v footer=%v", height, field, footer)
+		}
+		caret, active := tt.TextCaret()
+		if !active || caret.Y < field.Y || caret.Y+caret.H > field.Y+field.H+1 {
+			t.Fatalf("authorization caret hidden: %v input=%v", caret, field)
+		}
+	}
+	tt.Type("-after-keyboard")
+	if m.FieldsFor(a)["code"] != "test-code-after-keyboard" {
+		t.Fatal("keyboard viewport changes lost the authorization input")
+	}
+	tt.SetSize(390, 844)
+	field, ok := tt.Find("Authorization code")
+	if !ok || field.H < 44 || !tt.Focused("Authorization code") {
+		t.Fatalf("dismissing the keyboard lost the input: %v", field)
+	}
+	saveMobileNativeSnapshot(t, tt, "authorization-input-keyboard")
 }
 
 func TestMobileMCPAccessActionsStayInConversation(t *testing.T) {

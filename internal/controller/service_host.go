@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"miya/internal/agent/login"
 	agentpolicy "miya/internal/agent/policy"
 	"miya/internal/appdir"
 	"miya/internal/appmodel"
@@ -53,6 +54,13 @@ func (c *Controller) ServiceRequest(req svcproto.Request) (any, error) {
 	var id int
 	var value string
 	switch req.Op {
+	case "accountLogin":
+		var r login.Request
+		if err := arg(&r); err != nil {
+			return nil, err
+		}
+		run := c.AccountLoginTarget()
+		return async.Reply(func() (any, error) { return run(r) }), nil
 	case "host":
 		var r svcproto.HostRequest
 		if err := arg(&r); err != nil {
@@ -289,6 +297,9 @@ func (c *Controller) ServiceRequest(req svcproto.Request) (any, error) {
 
 // busy reports a turn running or starting, which quitting would end.
 func (c *Controller) ServiceBusy() bool {
+	if c.logins != nil && c.logins.Busy() {
+		return true
+	}
 	if c.Collaboration != nil && c.Collaboration.Context().Err() == nil && c.Collaboration.Pending() > 0 {
 		return true
 	}
@@ -323,6 +334,9 @@ func (c *Controller) ServiceBusy() bool {
 }
 
 func (c *Controller) ServiceStop() {
+	if c.logins != nil {
+		c.logins.Close()
+	}
 	if c.Collaboration != nil {
 		c.Collaboration.Stop()
 	}

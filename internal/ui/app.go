@@ -137,6 +137,7 @@ func NewChatAppWithController(c Host) *App {
 		app.Md.LoadImage = app.loadRemoteImage
 	}
 	app.account.init(app)
+	uiruntime.OnCleanup(app.account.stopLogins)
 	app.panelWidth = 460
 	c.State().CommandsChanged = app.refreshCommandChoices
 	uiruntime.OnCleanup(app.closePanels)

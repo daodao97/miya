@@ -81,7 +81,13 @@ func TestMobileSentReturnsToLatest(t *testing.T) {
 			if list.AtEnd() {
 				t.Fatal("expected to be reading history before sending")
 			}
-			m.Draft, m.Sending = "new message", true
+			beginMobileSend(m, "new message", nil)
+			tt.Frame()
+			if !list.AtEnd() {
+				t.Fatal("local send did not immediately show the new message")
+			}
+			list.ScrollTo(10, ui.Center)
+			tt.Frame()
 			m.Sent(th.ID, sendError)
 			tt.Frame()
 			if list.AtEnd() != (sendError == "") {

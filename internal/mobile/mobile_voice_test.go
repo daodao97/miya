@@ -60,7 +60,7 @@ func TestVoiceReleaseWaitsAndInsertsAtSelectionWithoutSending(t *testing.T) {
 	}
 	m.finishVoice(v, mygo.SpeechResult{Text: "识别结果", Final: true})
 	tt.Frame()
-	if m.Draft != "开始👋识别结果" || m.voice != nil || !f.canceled || m.NewSend != nil || m.Sending || m.SendErr != "" {
+	if m.Draft != "开始👋识别结果" || m.voice != nil || !f.canceled || len(m.Outbox) != 0 || m.Sending || m.SendErr != "" {
 		t.Fatalf("unexpected final state: draft=%q", m.Draft)
 	}
 	// The dictated replacement remains one ordinary editor undo step.

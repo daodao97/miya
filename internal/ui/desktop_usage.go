@@ -65,6 +65,7 @@ func (app *App) startUsage() {
 }
 
 func (app *App) stopUsage() {
+	app.account.stopLogins()
 	d := app.Usage
 	if d == nil || d.closed {
 		return
@@ -228,9 +229,9 @@ func (app *App) showMainWindow() {
 	}
 }
 
-func (app *App) openUsageSettingsFromPanel() {
+func (app *App) openAccountSettingsFromPanel() {
 	app.closeUsagePanel()
-	app.Section, app.SettingsTab = "Settings", 3
+	app.Section, app.SettingsTab = "Settings", 1
 	app.closeMenus()
 	app.showMainWindow()
 }
@@ -239,7 +240,7 @@ func (app *App) usageTrayMenu() *mygo.Menu {
 	return mygo.NewMenu([]*mygo.MenuItem{
 		{Label: tr("Usage"), Click: func(*mygo.MenuItem, *mygo.Window) { app.toggleUsagePanel() }},
 		{Label: tr("Open Miya"), Click: func(*mygo.MenuItem, *mygo.Window) { app.closeUsagePanel(); app.showMainWindow() }},
-		{Label: tr("Usage settings"), Click: func(*mygo.MenuItem, *mygo.Window) { app.openUsageSettingsFromPanel() }},
+		{Label: tr("Account"), Click: func(*mygo.MenuItem, *mygo.Window) { app.openAccountSettingsFromPanel() }},
 		mygo.Separator(),
 		{Label: tr("Quit Miya"), Click: func(*mygo.MenuItem, *mygo.Window) { mygo.App.Quit() }},
 	})

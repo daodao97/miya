@@ -183,8 +183,8 @@ func (app *App) UsagePanelView(c *ui.Context) {
 				app.invalidateUsageViews()
 			}
 			ui.Box(c).Grow(1)
-			if usageIconButton(c, "settings", tr("Usage settings")).Clicked() {
-				app.openUsageSettingsFromPanel()
+			if usageIconButton(c, "settings", tr("Account")).Clicked() {
+				app.openAccountSettingsFromPanel()
 			}
 		})
 		r := d.reading(d.PanelAgent)

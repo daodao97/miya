@@ -38,10 +38,6 @@ func TestPhonePreviewSurvivesSendAndRelaunch(t *testing.T) {
 		t.Fatal(err)
 	}
 	source := chattext.LocalImageURI(paths[0])
-	preview, err := thumbnail.File(source)
-	if err != nil {
-		t.Fatal(err)
-	}
 	// Dispatch the asynchronous file work deterministically on this thread.
 	calls := make(chan func(), 8)
 	oldDispatch := uiruntime.RunOnMain
@@ -62,14 +58,14 @@ func TestPhonePreviewSurvivesSendAndRelaunch(t *testing.T) {
 	t.Cleanup(func() { m.FlushCache(true) })
 	th := m.State.Projects[0].Threads[0]
 	th.HistoryLoaded = true
-	th.Messages = []model.Message{{ID: 10, Role: "user", Images: []string{source}, Content: "look"}}
 	m.OpenThread(th)
+	m.ShowThread(th)
+	beginMobileSend(m, "look", []string{local})
+	m.Sent(th.ID, "")
+	th.Messages = []model.Message{{ID: 10, Role: "user", Images: []string{source}, Content: "look"}}
 	sync := phoneserver.NewThreadSync(nil)
 	delta, _ := sync.Update(th)
 	m.ReceiveThread(th.ID, delta)
-	m.Images, m.Sending = []string{local}, true
-	m.Sent(th.ID, "")
-	m.ReceiveImage(thumbnail.Image{Source: source, Data: preview})
 	next()
 	if m.MessageImage(source) == nil || len(m.Images) != 0 {
 		t.Fatal("sent photo has no preview after composer attachments were cleared")

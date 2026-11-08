@@ -2,6 +2,7 @@ package integration
 
 import (
 	"bytes"
+	"encoding/json"
 	"image/png"
 	"os"
 	"path/filepath"
@@ -40,7 +41,7 @@ func saveUsageImage(t *testing.T, tt *ui.Tester, name string) {
 
 func assertUsageControls(t *testing.T, tt *ui.Tester, height int) {
 	t.Helper()
-	for _, label := range []string{"View Codex usage", "View Claude usage", "Usage settings", "Refresh usage"} {
+	for _, label := range []string{"View Codex usage", "View Claude usage", "Account", "Refresh usage"} {
 		r, ok := tt.Find(label)
 		if !ok || r.W <= 0 || r.H <= 0 || r.X < 0 || r.Y < 0 || r.X+r.W > desktopui.UsagePanelWidth || r.Y+r.H > float32(height) {
 			t.Fatalf("panel control %q is unreachable: %v", label, r)
@@ -72,6 +73,12 @@ func TestUsagePanelProviderPreviewAndThemes(t *testing.T) {
 	tt.Key(0, ui.KeyLeft)
 	if app.Usage.PanelAgent != "codex" {
 		t.Fatal("provider tabs do not support the keyboard")
+	}
+	if err := tt.Click("Account"); err != nil {
+		t.Fatal(err)
+	}
+	if app.Section != "Settings" || app.SettingsTab != 1 {
+		t.Fatal("usage panel settings did not open the account tab")
 	}
 }
 
@@ -124,21 +131,42 @@ func TestUsagePanelResetRequiresConfirmation(t *testing.T) {
 
 func TestUsageSettingsPersistWithoutChangingConversation(t *testing.T) {
 	app, tt := testApp(t)
-	app.EnsureUsage()
-	app.Section, app.SettingsTab = "Settings", 3
+	app.Usage = usageFixture().Usage
+	app.Section, app.SettingsTab = "Settings", 1
+	tt.Frame()
+	if !tt.HasText("Local subscriptions") || !tt.HasText("17% used") || !tt.HasText("Sign in to Codex") || !tt.HasText("Sign in to Claude Code") {
+		t.Fatalf("account page is missing sign-in or usage: %q", tt.Texts())
+	}
+	if _, ok := tt.Find("Usage"); ok {
+		t.Fatal("separate usage tab remains")
+	}
+	saveUsageImage(t, tt, "account-subscriptions")
+	tt.Scroll(800, 600, 0, 1200)
 	tt.Frame()
 	if err := tt.Click("Show menu bar usage"); err != nil {
 		t.Fatal(err)
 	}
-	if err := tt.Click("Claude"); err != nil {
+	if err := tt.Click("Automatic"); err != nil {
 		t.Fatal(err)
 	}
+	tt.Key(0, ui.KeyRight)
+	tt.Key(0, ui.KeyRight)
 	if err := tt.Click("Agent"); err != nil {
 		t.Fatal(err)
 	}
 	p := desktopui.LoadUsagePreferences()
 	if !p.Hidden || p.Agent != "claude" || !p.AgentIcon || app.C.(*controller.Controller).Active() != 0 {
 		t.Fatalf("usage preferences were not saved independently: %+v", p)
+	}
+	saveUsageImage(t, tt, "account-menu-bar")
+	data := resetTestDisplay(t)
+	if err := json.Unmarshal([]byte(`{"credits":{"hasCredits":true,"balance":"12.5"}}`), data.Limits.RateLimits); err != nil {
+		t.Fatal(err)
+	}
+	app.C.(*controller.Controller).AccountState = data
+	tt.Frame()
+	if !tt.HasText("Extra credits") || !tt.HasText("12.5") || !tt.HasText("4 available") || !tt.HasText("Sign in to Claude CLI first") || tt.HasText("17% used") {
+		t.Fatalf("account details lost data or duplicated Codex quota: %q", tt.Texts())
 	}
 }
 

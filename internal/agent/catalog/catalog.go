@@ -35,7 +35,10 @@ type Descriptor struct {
 	UsageID                string
 	UsageName              string
 	UsageReset             bool
-	Aliases                []string
+	// LoginMethod exposes native account sign-in without routing in views.
+	// It uses UsageID so sign-in and quota refer to the same CLI account.
+	LoginMethod string
+	Aliases     []string
 	// Command is the CLI's executable, which Miya looks for to tell whether
 	// the agent is installed.
 	Command string
@@ -47,8 +50,8 @@ type Descriptor struct {
 var codexPNG []byte
 
 var builtins = []Descriptor{
-	{ID: Codex, ConnectionBoundSession: true, Name: "Codex", Icon: Icon{PNG: codexPNG}, Capabilities: Capabilities{Models: true, Effort: true, Quota: true, ThreadCommands: true}, UsageID: "codex", UsageName: "Codex", UsageReset: true, Command: "codex"},
-	{ID: Claude, Name: "Claude Code", Icon: Icon{SVG: "claude-code", Color: "#c46b4d"}, Capabilities: Capabilities{Models: true, Effort: true, StallHint: true}, NativeCommands: true, StallAfter: 60 * time.Second, UsageID: "claude", UsageName: "Claude", Aliases: []string{"claude", "claude code"}, Command: "claude"},
+	{ID: Codex, ConnectionBoundSession: true, Name: "Codex", Icon: Icon{PNG: codexPNG}, Capabilities: Capabilities{Models: true, Effort: true, Quota: true, ThreadCommands: true}, UsageID: "codex", UsageName: "Codex", UsageReset: true, LoginMethod: "device", Command: "codex"},
+	{ID: Claude, Name: "Claude Code", Icon: Icon{SVG: "claude-code", Color: "#c46b4d"}, Capabilities: Capabilities{Models: true, Effort: true, StallHint: true}, NativeCommands: true, StallAfter: 60 * time.Second, UsageID: "claude", UsageName: "Claude", LoginMethod: "browser", Aliases: []string{"claude", "claude code"}, Command: "claude"},
 	{ID: Pi, Name: "Pi", Icon: Icon{SVG: "pi", Color: "#3f7fbf"}, Capabilities: Capabilities{Models: true, Effort: true}, StallAfter: 90 * time.Second, Aliases: []string{"pi agent", "pi coding agent"}, Command: "pi", OptIn: true},
 }
 
@@ -93,6 +96,16 @@ func Usage() []Descriptor {
 	var out []Descriptor
 	for _, d := range builtins {
 		if d.UsageID != "" {
+			out = append(out, d)
+		}
+	}
+	return out
+}
+
+func SignIn() []Descriptor {
+	var out []Descriptor
+	for _, d := range builtins {
+		if d.LoginMethod != "" {
 			out = append(out, d)
 		}
 	}

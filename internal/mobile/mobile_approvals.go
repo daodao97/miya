@@ -98,18 +98,10 @@ func (m *App) approvalCard(c *ui.Context, a interaction.Request) {
 		m.desktopControlAction(c, a)
 		switch a.Kind() {
 		case interaction.DesktopControl:
-			if m.State.DesktopWindows {
-				break
+			if !m.State.DesktopWindows {
+				ui.Text(c, m.Viewer.approvalDetail(a)).FontSize(m.Font(13)).LineHeight(1.45)
 			}
-			ui.Text(c, m.Viewer.approvalDetail(a)).FontSize(m.Font(13)).LineHeight(1.45)
-			ui.Row(c).Gap(8).Children(func() {
-				if m.pill(c, "done", tr("Done, continue"), true).Disabled(m.ApprovalPending[id]).Clicked() {
-					m.submitApproval(a, interaction.Response{Action: interaction.Allow}, false)
-				}
-				if m.pill(c, "cancel", tr("Cancel takeover"), false).Disabled(m.ApprovalPending[id]).Clicked() {
-					m.submitApproval(a, interaction.Response{Action: interaction.Decline}, false)
-				}
-			})
+			m.takeoverRequestActions(c, a)
 		case interaction.Form:
 			if inlineMCPConfirmation(a) {
 				ui.Scroll(c).FillWidth().MaxHeight(120).Children(func() {
@@ -148,6 +140,21 @@ func (m *App) approvalCard(c *ui.Context, a interaction.Request) {
 		}
 		if message := m.FormErrors[id]; message != "" {
 			ui.Text(c, message).FontSize(m.Font(13)).TextColor(widgets.Danger)
+		}
+	})
+}
+
+// Native window buttons act on the Mac. Completing or cancelling Miya's
+// waiting request is separate and must remain possible even when the preview
+// has no native actions, is still loading, or has become stale.
+func (m *App) takeoverRequestActions(c *ui.Context, a interaction.Request) {
+	pending := m.ApprovalPending[string(a.ID)]
+	ui.Row(c.Key("takeover-request-actions")).FillWidth().Wrap().Gap(8).Children(func() {
+		if m.ApprovalButton(c, "done", tr("Done, continue"), true, pending).Grow(1).Clicked() {
+			m.submitApproval(a, interaction.Response{Action: interaction.Allow}, false)
+		}
+		if m.ApprovalButton(c, "cancel", tr("Cancel takeover"), false, pending).Grow(1).Clicked() {
+			m.submitApproval(a, interaction.Response{Action: interaction.Cancel}, false)
 		}
 	})
 }
@@ -192,8 +199,10 @@ func (m *App) approvalPage(c *ui.Context) {
 			m.desktopControlAction(c, a)
 			if a.Kind() == interaction.Questions {
 				m.questionFields(c, a)
-			} else {
+			} else if a.Kind() == interaction.Form {
 				m.elicitationFields(c, a)
+			} else if !m.State.DesktopWindows {
+				ui.Text(c, m.Viewer.approvalDetail(a)).FontSize(m.Font(13)).LineHeight(1.45)
 			}
 		})
 	})
@@ -204,7 +213,9 @@ func (m *App) approvalPage(c *ui.Context) {
 		if m.ApprovalPending[string(a.ID)] {
 			ui.Text(c, tr("Submitting…")).TextColor(p.muted).FontSize(m.Font(13))
 		}
-		if a.Kind() == interaction.Questions {
+		if a.Kind() == interaction.DesktopControl {
+			m.takeoverRequestActions(c, a)
+		} else if a.Kind() == interaction.Questions {
 			m.questionActions(c, a)
 		} else {
 			m.elicitationActions(c, a)

@@ -169,7 +169,11 @@ type App struct {
 	flushTimer        *time.Timer
 	Asked             map[string]bool
 	Sending           bool
-	NewSend           *mobileNewSend
+	Outbox            []*mobilePendingSend
+	sending           *mobilePendingSend
+	nextSendID        int
+	composerEpoch     uint64
+	pendingProjection *mobileSendProjection
 	SendErr           string
 
 	Conn       *remote.Conn
@@ -479,7 +483,7 @@ func (m *App) DisconnectDesktop(unregister bool) {
 	m.Autos.Loading = false
 	if m.Sending {
 		m.Sending, m.SendErr = false, tr("Connection lost. The message may not have been sent.")
-		m.failNewSend()
+		m.failPendingSend()
 	}
 }
 
@@ -540,7 +544,7 @@ func (m *App) Run(ctx context.Context, gen int, link string, wake <-chan struct{
 			}
 			if m.Sending {
 				m.Sending, m.SendErr = false, tr("Connection lost. The message may not have been sent.")
-				m.failNewSend()
+				m.failPendingSend()
 			}
 		})
 		timer := time.NewTimer(delay)
@@ -805,7 +809,7 @@ func (m *App) ReceiveThread(id int, d phoneproto.ThreadDelta) {
 	}
 	d.Thread.ID = id
 	m.ApplyThread(d)
-	m.receiveNewSend(m.Viewer.Current())
+	m.receivePendingSends(m.Viewer.Current())
 	// Only a live delta confirms that the phone has the completed contents;
 	// sidebar metadata combined with cached messages does not.
 	if appmodel.SameMessageOrder(m.Viewer.Current().Messages, d.Order) {
@@ -889,9 +893,9 @@ func (m *App) ApprovalsFor(serverID string) []interaction.Request {
 
 func (m *App) resetComposer() {
 	m.cancelVoice()
-	m.clearNewSend()
+	m.composerEpoch++
 	m.clearImages()
-	m.Draft, m.SendErr, m.Sending = "", "", false
+	m.Draft, m.SendErr = "", ""
 }
 
 func (m *App) OpenThread(t model.Thread) {
@@ -991,57 +995,11 @@ func (m *App) sendDraft(steer bool) {
 	if m.Open == 0 {
 		r.Project, r.Agent = m.NewProject, m.NewAgent
 	}
-	m.Sending, m.SendErr = true, ""
-	gen := m.Generation
-	paths := append([]string(nil), m.Images...)
-	if m.Open == 0 {
-		m.BeginNewSend(r.Text, paths)
-	}
-	go func() {
-		images, err := phonetransfer.ReadImages(paths)
-		if err == nil {
-			r.Images = images
-			err = conn.Send(r)
-		}
-		if err != nil {
-			m.onMain(gen, func() {
-				if m.Sending {
-					m.Sending, m.SendErr = false, tr("Failed to send: ")+err.Error()
-					m.failNewSend()
-				}
-			})
-		}
-	}()
-}
-
-// sent applies the desktop's answer to a send.
-func (m *App) Sent(id int, msg string) {
-	if !m.Sending {
+	if r.Text == "" && len(m.Images) == 0 {
 		return
 	}
-	m.Sending = false
-	if msg != "" {
-		m.SendErr = msg
-		m.failNewSend()
-		mobileFeedback(mygo.HapticError)
-		return
-	}
-	mobileFeedback(mygo.HapticLight)
-	m.Draft, m.SendErr = "", ""
-	if m.NewSend != nil && m.NewSend.thread == 0 && id != 0 {
-		m.NewSend.thread = id
-		// The preview owns these files until the desktop's messages arrive.
-		m.Images = nil
-	}
-	m.clearImages()
-	if m.Open == 0 && m.NewProject != "" && id != 0 {
-		m.Open, m.NewProject = id, ""
-		m.ShowThread(model.Thread{ID: id, Agent: m.NewAgent, Loading: true})
-		m.Subscribe(id)
-	}
-	if id != 0 {
-		m.View.ListFor(id).ScrollToEnd()
-	}
+	m.BeginSend(r, m.Images)
+	m.transmitSend(m.sending)
 }
 
 func (m *App) stop() {
@@ -1639,9 +1597,9 @@ func (m *App) threadView(c *ui.Context) {
 		m.conversationActions(c, more, proj.Path, agent)
 	})
 	ui.Column(c).Grow(1).MinHeight(0).FillWidth().Children(func() {
-		if pending, ok := m.NewSendThread(cur); ok {
+		if pending, ok := m.PendingSendThread(cur); ok {
 			m.View.MessageList(c, pending)
-			m.newSendStatus(c)
+			m.pendingSendStatus(c)
 		} else if m.Open == 0 {
 			m.newConversationView(c, proj)
 		} else {
@@ -1709,7 +1667,7 @@ func (m *App) composer(c *ui.Context, agent string, busy bool) {
 		m.InlineInput.Sync(m.Draft, func(text string) { m.Draft = text })
 	}
 	topPadding := float32(6)
-	if m.NewSend != nil || m.View.TurnStatusVisible(m.Viewer.Current()) {
+	if len(m.Outbox) > 0 || m.View.TurnStatusVisible(m.Viewer.Current()) {
 		topPadding = 0
 	}
 	ui.Column(c).FillWidth().Padding(topPadding, 12, 10, 12).Gap(6).Children(func() {
@@ -1813,7 +1771,7 @@ func (m *App) composer(c *ui.Context, agent string, busy bool) {
 				} else if canSend {
 					bg, fg = p.ink, p.Bg
 				}
-				b := m.phoneButton(c.Key("send")).Size(44, 44).Shrink(0).Padding(0).Radius(22).Background(bg).Justify(ui.Center).Label(label).Disabled(m.voice != nil)
+				b := m.phoneButton(c.Key("send")).Size(44, 44).Shrink(0).Padding(0).Radius(22).Background(bg).Justify(ui.Center).Label(label).Disabled(m.voice != nil || m.Sending)
 				b.Children(func() {
 					if m.Sending {
 						ui.Spinner(c).FontSize(m.Font(12)).TextColor(fg)

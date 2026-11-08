@@ -56,8 +56,8 @@ func (m *App) RetryImage(source string, conn *remote.Conn) {
 // cached thumbnail off the UI thread, with bounded retries when a transfer
 // fails. Image sources in messages stay unchanged.
 func (m *App) MessageImage(source string) ui.ImageSource {
-	if m.NewSend != nil {
-		for _, path := range m.NewSend.Message.Images {
+	for _, pending := range m.Outbox {
+		for _, path := range pending.Message.Images {
 			if source == path {
 				return widgets.CachedImage(path)
 			}
@@ -94,6 +94,44 @@ func (m *App) MessageImage(source string) ui.ImageSource {
 		})
 	}()
 	return nil
+}
+
+// Keep the already-visible phone photo while the desktop's authoritative
+// message replaces its local preview. Cache a bounded thumbnail off the UI
+// thread instead of downloading that same image back over the connection.
+func (m *App) keepSentImagePreviews(local, sources []string) map[string]bool {
+	if len(local) != len(sources) || len(local) == 0 {
+		return nil
+	}
+	if m.PreviewPaths == nil {
+		m.PreviewPaths = map[string]string{}
+	}
+	retained := map[string]bool{}
+	for i, source := range sources {
+		if source == "" || m.PreviewPaths[source] != "" {
+			continue
+		}
+		path, cached, gen := local[i], m.PreviewPath(source), m.Generation
+		m.PreviewPaths[source], retained[path] = path, true
+		go func() {
+			data, err := os.ReadFile(path)
+			if err != nil {
+				return
+			}
+			data, err = thumbnail.Data(data)
+			if err != nil || StorePhonePreview(cached, data) != nil {
+				return
+			}
+			m.onMain(gen, func() {
+				if m.PreviewPaths[source] == path {
+					m.PreviewPaths[source] = cached
+				}
+				go os.Remove(path)
+				uiruntime.Invalidate()
+			})
+		}()
+	}
+	return retained
 }
 
 func StorePhonePreview(path string, data []byte) error {

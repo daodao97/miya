@@ -22,6 +22,37 @@ func testConnection(t *testing.T) (*Client, net.Conn) {
 	return c, b
 }
 
+func TestNotificationWatcherPreservesControllerEvents(t *testing.T) {
+	c, server := testConnection(t)
+	frames, unwatch := c.WatchNotifications("account/login/completed")
+	defer unwatch()
+	go fmt.Fprintln(server, `{"method":"account/login/completed","params":{"loginId":"current","success":true}}`)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	for _, stream := range []<-chan Frame{frames, c.Events()} {
+		select {
+		case frame := <-stream:
+			if frame.Method != "account/login/completed" {
+				t.Fatal("wrong notification")
+			}
+		case <-ctx.Done():
+			t.Fatal("login observer consumed the controller notification")
+		}
+	}
+	unwatch()
+	go fmt.Fprintln(server, `{"method":"account/login/completed","params":{"loginId":"later","success":true}}`)
+	select {
+	case <-c.Events():
+	case <-ctx.Done():
+		t.Fatal("controller event stream stopped after unwatch")
+	}
+	select {
+	case <-frames:
+		t.Fatal("removed watcher kept receiving account notifications")
+	default:
+	}
+}
+
 func TestWithToolchainPathAddsHomebrewLocations(t *testing.T) {
 	env := withToolchainPath([]string{"HOME=/tmp", "PATH=/usr/bin:/bin"})
 	var path string

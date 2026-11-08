@@ -35,7 +35,7 @@ func TestMemoryManagementPageAndPromotionPreview(t *testing.T) {
 			list := completeMemory(t, c, "memoryList", manager.Request{}).(manager.List)
 			app.MemoryRevisionSeen = c.MemoryRevision
 			app.Section = "Settings"
-			app.SettingsTab = 4
+			app.SettingsTab = 3
 			app.Memories = desktopui.MemoryUI{Scope: "project", Project: c.Cwd, List: list, LoadedAt: time.Now()}
 			tt.Frame()
 			for _, want := range []string{"Shared memory", "Current project", "User preferences", "本周暂缓手机协议升级", "Forget", "Edit", "Promote to project file…", "Use memory tools in this project", "Include user preferences in searches", "Automatically recall relevant memories when sending", "Automatically extract memories after each turn"} {
@@ -83,7 +83,7 @@ func TestMemoryExtractorPickerSavesAgentWithoutEnablingAutomation(t *testing.T) 
 	list := completeMemory(t, c, "memoryList", manager.Request{}).(manager.List)
 	d.drain()
 	app.Section = "Settings"
-	app.SettingsTab = 4
+	app.SettingsTab = 3
 	app.MemoryRevisionSeen = c.MemoryRevision
 	app.Memories = desktopui.MemoryUI{Scope: "project", Project: c.Cwd, List: list, LoadedAt: time.Now()}
 	tt.Frame()
@@ -106,7 +106,7 @@ func TestMemoryExtractorPickerSavesAgentWithoutEnablingAutomation(t *testing.T) 
 func TestMemoryExtractionFailureReasonVisible(t *testing.T) {
 	app, tt := testApp(t)
 	attachMemory(t, app.C.(*controller.Controller))
-	app.Section, app.SettingsTab = "Settings", 4
+	app.Section, app.SettingsTab = "Settings", 3
 	app.Memories = desktopui.MemoryUI{Scope: "project", Project: app.C.(*controller.Controller).Cwd, LoadedAt: time.Now(), List: manager.List{
 		Extraction: memory.ExtractionStatus{Failed: 1, LastError: "Extraction input exceeds the limit. Skipped this turn."},
 	}}

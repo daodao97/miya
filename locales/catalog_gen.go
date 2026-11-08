@@ -18837,3 +18837,593 @@ func EndRemoteDesktop91c9f3() string { return In(i18n.Locale()).EndRemoteDesktop
 func (msgs Messages) EndRemoteDesktop91c9f3() string {
 	return Catalog.Format(msgs.locale, "endRemoteDesktop_91c9f3", nil)
 }
+
+// NativeLoginF9e23fc2f6 says "Accounts on this computer"
+// in the language the app shows.
+func NativeLoginF9e23fc2f6() string { return In(i18n.Locale()).NativeLoginF9e23fc2f6() }
+
+// NativeLoginF9e23fc2f6 says "Accounts on this computer"
+// in the language of msgs.
+func (msgs Messages) NativeLoginF9e23fc2f6() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_f9e23fc2f6", nil)
+}
+
+// NativeLoginB430972415 says "Sign in with the official CLI. Credentials are saved on this computer."
+// in the language the app shows.
+func NativeLoginB430972415() string { return In(i18n.Locale()).NativeLoginB430972415() }
+
+// NativeLoginB430972415 says "Sign in with the official CLI. Credentials are saved on this computer."
+// in the language of msgs.
+func (msgs Messages) NativeLoginB430972415() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_b430972415", nil)
+}
+
+// NativeLogin645668da10 says "Accounts on the connected server"
+// in the language the app shows.
+func NativeLogin645668da10() string { return In(i18n.Locale()).NativeLogin645668da10() }
+
+// NativeLogin645668da10 says "Accounts on the connected server"
+// in the language of msgs.
+func (msgs Messages) NativeLogin645668da10() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_645668da10", nil)
+}
+
+// NativeLogin4c849ed714 says "Authorize here to sign in on the connected server. Credentials stay on that server."
+// in the language the app shows.
+func NativeLogin4c849ed714() string { return In(i18n.Locale()).NativeLogin4c849ed714() }
+
+// NativeLogin4c849ed714 says "Authorize here to sign in on the connected server. Credentials stay on that server."
+// in the language of msgs.
+func (msgs Messages) NativeLogin4c849ed714() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_4c849ed714", nil)
+}
+
+// NativeLogin5e22005814 says "Check sign-in status"
+// in the language the app shows.
+func NativeLogin5e22005814() string { return In(i18n.Locale()).NativeLogin5e22005814() }
+
+// NativeLogin5e22005814 says "Check sign-in status"
+// in the language of msgs.
+func (msgs Messages) NativeLogin5e22005814() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_5e22005814", nil)
+}
+
+// NativeLoginD3463471f3 says "Check %s sign-in"
+// in the language the app shows.
+func NativeLoginD3463471f3() string { return In(i18n.Locale()).NativeLoginD3463471f3() }
+
+// NativeLoginD3463471f3 says "Check %s sign-in"
+// in the language of msgs.
+func (msgs Messages) NativeLoginD3463471f3() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_d3463471f3", nil)
+}
+
+// NativeLoginE76d1086ca says "Sign-in status not checked"
+// in the language the app shows.
+func NativeLoginE76d1086ca() string { return In(i18n.Locale()).NativeLoginE76d1086ca() }
+
+// NativeLoginE76d1086ca says "Sign-in status not checked"
+// in the language of msgs.
+func (msgs Messages) NativeLoginE76d1086ca() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_e76d1086ca", nil)
+}
+
+// NativeLoginE93eafd2c4 says "Checking sign-in status…"
+// in the language the app shows.
+func NativeLoginE93eafd2c4() string { return In(i18n.Locale()).NativeLoginE93eafd2c4() }
+
+// NativeLoginE93eafd2c4 says "Checking sign-in status…"
+// in the language of msgs.
+func (msgs Messages) NativeLoginE93eafd2c4() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_e93eafd2c4", nil)
+}
+
+// NativeLoginCa566c8968 says "Signed in"
+// in the language the app shows.
+func NativeLoginCa566c8968() string { return In(i18n.Locale()).NativeLoginCa566c8968() }
+
+// NativeLoginCa566c8968 says "Signed in"
+// in the language of msgs.
+func (msgs Messages) NativeLoginCa566c8968() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_ca566c8968", nil)
+}
+
+// NativeLogin13d00756c4 says "Generate authorization link"
+// in the language the app shows.
+func NativeLogin13d00756c4() string { return In(i18n.Locale()).NativeLogin13d00756c4() }
+
+// NativeLogin13d00756c4 says "Generate authorization link"
+// in the language of msgs.
+func (msgs Messages) NativeLogin13d00756c4() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_13d00756c4", nil)
+}
+
+// NativeLoginAf26cfbb7b says "Generate device code"
+// in the language the app shows.
+func NativeLoginAf26cfbb7b() string { return In(i18n.Locale()).NativeLoginAf26cfbb7b() }
+
+// NativeLoginAf26cfbb7b says "Generate device code"
+// in the language of msgs.
+func (msgs Messages) NativeLoginAf26cfbb7b() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_af26cfbb7b", nil)
+}
+
+// NativeLogin9f03f27e47 says "Sign in to %s"
+// in the language the app shows.
+func NativeLogin9f03f27e47() string { return In(i18n.Locale()).NativeLogin9f03f27e47() }
+
+// NativeLogin9f03f27e47 says "Sign in to %s"
+// in the language of msgs.
+func (msgs Messages) NativeLogin9f03f27e47() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_9f03f27e47", nil)
+}
+
+// NativeLogin99e32aea03 says "Open the official authorization page and enter this device code. Sign-in completes automatically here."
+// in the language the app shows.
+func NativeLogin99e32aea03() string { return In(i18n.Locale()).NativeLogin99e32aea03() }
+
+// NativeLogin99e32aea03 says "Open the official authorization page and enter this device code. Sign-in completes automatically here."
+// in the language of msgs.
+func (msgs Messages) NativeLogin99e32aea03() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_99e32aea03", nil)
+}
+
+// NativeLogin12cb945535 says "Open the official authorization page, then paste the complete code shown there, including #state."
+// in the language the app shows.
+func NativeLogin12cb945535() string { return In(i18n.Locale()).NativeLogin12cb945535() }
+
+// NativeLogin12cb945535 says "Open the official authorization page, then paste the complete code shown there, including #state."
+// in the language of msgs.
+func (msgs Messages) NativeLogin12cb945535() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_12cb945535", nil)
+}
+
+// NativeLoginA99dd514fa says "Open authorization page"
+// in the language the app shows.
+func NativeLoginA99dd514fa() string { return In(i18n.Locale()).NativeLoginA99dd514fa() }
+
+// NativeLoginA99dd514fa says "Open authorization page"
+// in the language of msgs.
+func (msgs Messages) NativeLoginA99dd514fa() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_a99dd514fa", nil)
+}
+
+// NativeLogin5a33068835 says "Copy device code"
+// in the language the app shows.
+func NativeLogin5a33068835() string { return In(i18n.Locale()).NativeLogin5a33068835() }
+
+// NativeLogin5a33068835 says "Copy device code"
+// in the language of msgs.
+func (msgs Messages) NativeLogin5a33068835() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_5a33068835", nil)
+}
+
+// NativeLogin5072f949a4 says "Claude authorization code"
+// in the language the app shows.
+func NativeLogin5072f949a4() string { return In(i18n.Locale()).NativeLogin5072f949a4() }
+
+// NativeLogin5072f949a4 says "Claude authorization code"
+// in the language of msgs.
+func (msgs Messages) NativeLogin5072f949a4() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_5072f949a4", nil)
+}
+
+// NativeLogin4e9d1b9e00 says "Paste authorization code#state"
+// in the language the app shows.
+func NativeLogin4e9d1b9e00() string { return In(i18n.Locale()).NativeLogin4e9d1b9e00() }
+
+// NativeLogin4e9d1b9e00 says "Paste authorization code#state"
+// in the language of msgs.
+func (msgs Messages) NativeLogin4e9d1b9e00() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_4e9d1b9e00", nil)
+}
+
+// NativeLogin833a3a4cef says "Submit code"
+// in the language the app shows.
+func NativeLogin833a3a4cef() string { return In(i18n.Locale()).NativeLogin833a3a4cef() }
+
+// NativeLogin833a3a4cef says "Submit code"
+// in the language of msgs.
+func (msgs Messages) NativeLogin833a3a4cef() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_833a3a4cef", nil)
+}
+
+// NativeLogin808197b5a0 says "Waiting for authorization…"
+// in the language the app shows.
+func NativeLogin808197b5a0() string { return In(i18n.Locale()).NativeLogin808197b5a0() }
+
+// NativeLogin808197b5a0 says "Waiting for authorization…"
+// in the language of msgs.
+func (msgs Messages) NativeLogin808197b5a0() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_808197b5a0", nil)
+}
+
+// NativeLogin6d916f2241 says "Generating sign-in link…"
+// in the language the app shows.
+func NativeLogin6d916f2241() string { return In(i18n.Locale()).NativeLogin6d916f2241() }
+
+// NativeLogin6d916f2241 says "Generating sign-in link…"
+// in the language of msgs.
+func (msgs Messages) NativeLogin6d916f2241() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_6d916f2241", nil)
+}
+
+// NativeLogin886350ec11 says "Completing native sign-in…"
+// in the language the app shows.
+func NativeLogin886350ec11() string { return In(i18n.Locale()).NativeLogin886350ec11() }
+
+// NativeLogin886350ec11 says "Completing native sign-in…"
+// in the language of msgs.
+func (msgs Messages) NativeLogin886350ec11() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_886350ec11", nil)
+}
+
+// NativeLogin9effa0b748 says "Cancel sign-in"
+// in the language the app shows.
+func NativeLogin9effa0b748() string { return In(i18n.Locale()).NativeLogin9effa0b748() }
+
+// NativeLogin9effa0b748 says "Cancel sign-in"
+// in the language of msgs.
+func (msgs Messages) NativeLogin9effa0b748() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_9effa0b748", nil)
+}
+
+// NativeLogin943f31e6b5 says "Sign-in completed and verified."
+// in the language the app shows.
+func NativeLogin943f31e6b5() string { return In(i18n.Locale()).NativeLogin943f31e6b5() }
+
+// NativeLogin943f31e6b5 says "Sign-in completed and verified."
+// in the language of msgs.
+func (msgs Messages) NativeLogin943f31e6b5() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_943f31e6b5", nil)
+}
+
+// NativeLoginD9959cfcd0 says "This agent does not support native sign-in"
+// in the language the app shows.
+func NativeLoginD9959cfcd0() string { return In(i18n.Locale()).NativeLoginD9959cfcd0() }
+
+// NativeLoginD9959cfcd0 says "This agent does not support native sign-in"
+// in the language of msgs.
+func (msgs Messages) NativeLoginD9959cfcd0() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_d9959cfcd0", nil)
+}
+
+// NativeLogin40b2a347b4 says "Sign-in service has stopped"
+// in the language the app shows.
+func NativeLogin40b2a347b4() string { return In(i18n.Locale()).NativeLogin40b2a347b4() }
+
+// NativeLogin40b2a347b4 says "Sign-in service has stopped"
+// in the language of msgs.
+func (msgs Messages) NativeLogin40b2a347b4() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_40b2a347b4", nil)
+}
+
+// NativeLogin2fc872ec9a says "Unsupported sign-in method"
+// in the language the app shows.
+func NativeLogin2fc872ec9a() string { return In(i18n.Locale()).NativeLogin2fc872ec9a() }
+
+// NativeLogin2fc872ec9a says "Unsupported sign-in method"
+// in the language of msgs.
+func (msgs Messages) NativeLogin2fc872ec9a() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_2fc872ec9a", nil)
+}
+
+// NativeLogin44c6726e43 says "Sign-in attempt expired. Generate a new link."
+// in the language the app shows.
+func NativeLogin44c6726e43() string { return In(i18n.Locale()).NativeLogin44c6726e43() }
+
+// NativeLogin44c6726e43 says "Sign-in attempt expired. Generate a new link."
+// in the language of msgs.
+func (msgs Messages) NativeLogin44c6726e43() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_44c6726e43", nil)
+}
+
+// NativeLogin840c0d5a9d says "Paste a single authorization code"
+// in the language the app shows.
+func NativeLogin840c0d5a9d() string { return In(i18n.Locale()).NativeLogin840c0d5a9d() }
+
+// NativeLogin840c0d5a9d says "Paste a single authorization code"
+// in the language of msgs.
+func (msgs Messages) NativeLogin840c0d5a9d() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_840c0d5a9d", nil)
+}
+
+// NativeLogin66d678f6fa says "This sign-in attempt is not waiting for a code"
+// in the language the app shows.
+func NativeLogin66d678f6fa() string { return In(i18n.Locale()).NativeLogin66d678f6fa() }
+
+// NativeLogin66d678f6fa says "This sign-in attempt is not waiting for a code"
+// in the language of msgs.
+func (msgs Messages) NativeLogin66d678f6fa() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_66d678f6fa", nil)
+}
+
+// NativeLogin54d4c2884f says "Unknown sign-in operation"
+// in the language the app shows.
+func NativeLogin54d4c2884f() string { return In(i18n.Locale()).NativeLogin54d4c2884f() }
+
+// NativeLogin54d4c2884f says "Unknown sign-in operation"
+// in the language of msgs.
+func (msgs Messages) NativeLogin54d4c2884f() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_54d4c2884f", nil)
+}
+
+// NativeLoginC9ac5b57a1 says "Native sign-in completed, but the CLI is not signed in. Check again."
+// in the language the app shows.
+func NativeLoginC9ac5b57a1() string { return In(i18n.Locale()).NativeLoginC9ac5b57a1() }
+
+// NativeLoginC9ac5b57a1 says "Native sign-in completed, but the CLI is not signed in. Check again."
+// in the language of msgs.
+func (msgs Messages) NativeLoginC9ac5b57a1() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_c9ac5b57a1", nil)
+}
+
+// NativeLoginFa9b83a44a says "Sign-in expired. Generate a new link."
+// in the language the app shows.
+func NativeLoginFa9b83a44a() string { return In(i18n.Locale()).NativeLoginFa9b83a44a() }
+
+// NativeLoginFa9b83a44a says "Sign-in expired. Generate a new link."
+// in the language of msgs.
+func (msgs Messages) NativeLoginFa9b83a44a() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_fa9b83a44a", nil)
+}
+
+// NativeLoginCcc081af88 says "Claude Code not found. Install the official CLI first."
+// in the language the app shows.
+func NativeLoginCcc081af88() string { return In(i18n.Locale()).NativeLoginCcc081af88() }
+
+// NativeLoginCcc081af88 says "Claude Code not found. Install the official CLI first."
+// in the language of msgs.
+func (msgs Messages) NativeLoginCcc081af88() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_ccc081af88", nil)
+}
+
+// NativeLoginB4258e9edb says "Unable to check Claude Code sign-in. Update the official CLI and try again."
+// in the language the app shows.
+func NativeLoginB4258e9edb() string { return In(i18n.Locale()).NativeLoginB4258e9edb() }
+
+// NativeLoginB4258e9edb says "Unable to check Claude Code sign-in. Update the official CLI and try again."
+// in the language of msgs.
+func (msgs Messages) NativeLoginB4258e9edb() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_b4258e9edb", nil)
+}
+
+// NativeLogin70caf345db says "Unable to check Claude Code sign-in"
+// in the language the app shows.
+func NativeLogin70caf345db() string { return In(i18n.Locale()).NativeLogin70caf345db() }
+
+// NativeLogin70caf345db says "Unable to check Claude Code sign-in"
+// in the language of msgs.
+func (msgs Messages) NativeLogin70caf345db() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_70caf345db", nil)
+}
+
+// NativeLoginD9fed136ca says "Unable to generate a native Claude sign-in link. Update the official CLI and try again."
+// in the language the app shows.
+func NativeLoginD9fed136ca() string { return In(i18n.Locale()).NativeLoginD9fed136ca() }
+
+// NativeLoginD9fed136ca says "Unable to generate a native Claude sign-in link. Update the official CLI and try again."
+// in the language of msgs.
+func (msgs Messages) NativeLoginD9fed136ca() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_d9fed136ca", nil)
+}
+
+// NativeLogin504d649873 says "Unable to start native Claude sign-in"
+// in the language the app shows.
+func NativeLogin504d649873() string { return In(i18n.Locale()).NativeLogin504d649873() }
+
+// NativeLogin504d649873 says "Unable to start native Claude sign-in"
+// in the language of msgs.
+func (msgs Messages) NativeLogin504d649873() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_504d649873", nil)
+}
+
+// NativeLogin8c4b3bc5ca says "Native Claude sign-in connection closed"
+// in the language the app shows.
+func NativeLogin8c4b3bc5ca() string { return In(i18n.Locale()).NativeLogin8c4b3bc5ca() }
+
+// NativeLogin8c4b3bc5ca says "Native Claude sign-in connection closed"
+// in the language of msgs.
+func (msgs Messages) NativeLogin8c4b3bc5ca() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_8c4b3bc5ca", nil)
+}
+
+// NativeLogin7486a05fa6 says "Native Claude sign-in failed. Generate a new link and try again."
+// in the language the app shows.
+func NativeLogin7486a05fa6() string { return In(i18n.Locale()).NativeLogin7486a05fa6() }
+
+// NativeLogin7486a05fa6 says "Native Claude sign-in failed. Generate a new link and try again."
+// in the language of msgs.
+func (msgs Messages) NativeLogin7486a05fa6() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_7486a05fa6", nil)
+}
+
+// NativeLogin3e1ffd65a3 says "Unrecognized native Claude sign-in response"
+// in the language the app shows.
+func NativeLogin3e1ffd65a3() string { return In(i18n.Locale()).NativeLogin3e1ffd65a3() }
+
+// NativeLogin3e1ffd65a3 says "Unrecognized native Claude sign-in response"
+// in the language of msgs.
+func (msgs Messages) NativeLogin3e1ffd65a3() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_3e1ffd65a3", nil)
+}
+
+// NativeLoginD47dd97404 says "Native Claude sign-in process exited"
+// in the language the app shows.
+func NativeLoginD47dd97404() string { return In(i18n.Locale()).NativeLoginD47dd97404() }
+
+// NativeLoginD47dd97404 says "Native Claude sign-in process exited"
+// in the language of msgs.
+func (msgs Messages) NativeLoginD47dd97404() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_d47dd97404", nil)
+}
+
+// NativeLogin7039230ed2 says "Paste the complete Claude authorization code, including #state, from this sign-in link"
+// in the language the app shows.
+func NativeLogin7039230ed2() string { return In(i18n.Locale()).NativeLogin7039230ed2() }
+
+// NativeLogin7039230ed2 says "Paste the complete Claude authorization code, including #state, from this sign-in link"
+// in the language of msgs.
+func (msgs Messages) NativeLogin7039230ed2() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_7039230ed2", nil)
+}
+
+// NativeLoginF5c771055b says "Codex not found. Install the official CLI first."
+// in the language the app shows.
+func NativeLoginF5c771055b() string { return In(i18n.Locale()).NativeLoginF5c771055b() }
+
+// NativeLoginF5c771055b says "Codex not found. Install the official CLI first."
+// in the language of msgs.
+func (msgs Messages) NativeLoginF5c771055b() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_f5c771055b", nil)
+}
+
+// NativeLogin62f4d5101c says "Unable to start native Codex sign-in. Update the official CLI and try again."
+// in the language the app shows.
+func NativeLogin62f4d5101c() string { return In(i18n.Locale()).NativeLogin62f4d5101c() }
+
+// NativeLogin62f4d5101c says "Unable to start native Codex sign-in. Update the official CLI and try again."
+// in the language of msgs.
+func (msgs Messages) NativeLogin62f4d5101c() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_62f4d5101c", nil)
+}
+
+// NativeLoginFe51ad965e says "Unable to check Codex sign-in"
+// in the language the app shows.
+func NativeLoginFe51ad965e() string { return In(i18n.Locale()).NativeLoginFe51ad965e() }
+
+// NativeLoginFe51ad965e says "Unable to check Codex sign-in"
+// in the language of msgs.
+func (msgs Messages) NativeLoginFe51ad965e() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_fe51ad965e", nil)
+}
+
+// NativeLogin2dbdfb15f9 says "Unable to start native Codex device sign-in. Enable device code login in ChatGPT security settings and update the off…"
+// in the language the app shows.
+func NativeLogin2dbdfb15f9() string { return In(i18n.Locale()).NativeLogin2dbdfb15f9() }
+
+// NativeLogin2dbdfb15f9 says "Unable to start native Codex device sign-in. Enable device code login in ChatGPT security settings and update the off…"
+// in the language of msgs.
+func (msgs Messages) NativeLogin2dbdfb15f9() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_2dbdfb15f9", nil)
+}
+
+// NativeLogin717630a8a7 says "Codex returned an unrecognized sign-in link"
+// in the language the app shows.
+func NativeLogin717630a8a7() string { return In(i18n.Locale()).NativeLogin717630a8a7() }
+
+// NativeLogin717630a8a7 says "Codex returned an unrecognized sign-in link"
+// in the language of msgs.
+func (msgs Messages) NativeLogin717630a8a7() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_717630a8a7", nil)
+}
+
+// NativeLoginB8e7830478 says "Codex returned no device code"
+// in the language the app shows.
+func NativeLoginB8e7830478() string { return In(i18n.Locale()).NativeLoginB8e7830478() }
+
+// NativeLoginB8e7830478 says "Codex returned no device code"
+// in the language of msgs.
+func (msgs Messages) NativeLoginB8e7830478() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_b8e7830478", nil)
+}
+
+// NativeLoginF1b0adeaf6 says "Enter the device code on the official authorization page"
+// in the language the app shows.
+func NativeLoginF1b0adeaf6() string { return In(i18n.Locale()).NativeLoginF1b0adeaf6() }
+
+// NativeLoginF1b0adeaf6 says "Enter the device code on the official authorization page"
+// in the language of msgs.
+func (msgs Messages) NativeLoginF1b0adeaf6() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_f1b0adeaf6", nil)
+}
+
+// NativeLoginD890b51570 says "Native Codex sign-in connection closed"
+// in the language the app shows.
+func NativeLoginD890b51570() string { return In(i18n.Locale()).NativeLoginD890b51570() }
+
+// NativeLoginD890b51570 says "Native Codex sign-in connection closed"
+// in the language of msgs.
+func (msgs Messages) NativeLoginD890b51570() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_d890b51570", nil)
+}
+
+// NativeLoginDb9a7a24d8 says "Native Codex sign-in failed. Generate a new link and try again."
+// in the language the app shows.
+func NativeLoginDb9a7a24d8() string { return In(i18n.Locale()).NativeLoginDb9a7a24d8() }
+
+// NativeLoginDb9a7a24d8 says "Native Codex sign-in failed. Generate a new link and try again."
+// in the language of msgs.
+func (msgs Messages) NativeLoginDb9a7a24d8() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_db9a7a24d8", nil)
+}
+
+// NativeLoginF0e7c3641a says "Codex account"
+// in the language the app shows.
+func NativeLoginF0e7c3641a() string { return In(i18n.Locale()).NativeLoginF0e7c3641a() }
+
+// NativeLoginF0e7c3641a says "Codex account"
+// in the language of msgs.
+func (msgs Messages) NativeLoginF0e7c3641a() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_f0e7c3641a", nil)
+}
+
+// NativeLogin0ff7e98427 says "Use the sign-in controls above to connect your Codex account."
+// in the language the app shows.
+func NativeLogin0ff7e98427() string { return In(i18n.Locale()).NativeLogin0ff7e98427() }
+
+// NativeLogin0ff7e98427 says "Use the sign-in controls above to connect your Codex account."
+// in the language of msgs.
+func (msgs Messages) NativeLogin0ff7e98427() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_0ff7e98427", nil)
+}
+
+// NativeLogin03ea196a73 says "Sign-in is not supported by this service. Update Miya on the target computer and reconnect."
+// in the language the app shows.
+func NativeLogin03ea196a73() string { return In(i18n.Locale()).NativeLogin03ea196a73() }
+
+// NativeLogin03ea196a73 says "Sign-in is not supported by this service. Update Miya on the target computer and reconnect."
+// in the language of msgs.
+func (msgs Messages) NativeLogin03ea196a73() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_03ea196a73", nil)
+}
+
+// NativeLoginBd6c3bd513 says "%s authorization code"
+// in the language the app shows.
+func NativeLoginBd6c3bd513() string { return In(i18n.Locale()).NativeLoginBd6c3bd513() }
+
+// NativeLoginBd6c3bd513 says "%s authorization code"
+// in the language of msgs.
+func (msgs Messages) NativeLoginBd6c3bd513() string {
+	return Catalog.Format(msgs.locale, "nativeLogin_bd6c3bd513", nil)
+}
+
+// MobileSendUploading says "Uploading images…"
+// in the language the app shows.
+func MobileSendUploading() string { return In(i18n.Locale()).MobileSendUploading() }
+
+// MobileSendUploading says "Uploading images…"
+// in the language of msgs.
+func (msgs Messages) MobileSendUploading() string {
+	return Catalog.Format(msgs.locale, "mobileSendUploading", nil)
+}
+
+// MobileSendWaiting says "Waiting for desktop…"
+// in the language the app shows.
+func MobileSendWaiting() string { return In(i18n.Locale()).MobileSendWaiting() }
+
+// MobileSendWaiting says "Waiting for desktop…"
+// in the language of msgs.
+func (msgs Messages) MobileSendWaiting() string {
+	return Catalog.Format(msgs.locale, "mobileSendWaiting", nil)
+}
+
+// MobileSendRetry says "Retry send"
+// in the language the app shows.
+func MobileSendRetry() string { return In(i18n.Locale()).MobileSendRetry() }
+
+// MobileSendRetry says "Retry send"
+// in the language of msgs.
+func (msgs Messages) MobileSendRetry() string {
+	return Catalog.Format(msgs.locale, "mobileSendRetry", nil)
+}
