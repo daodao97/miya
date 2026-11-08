@@ -10,3 +10,7 @@
 .env
 .env.*
 !.env.example
+
+# Local workspace that points github.com/egoist/mygo at ../mygo
+/go.work
+/go.work.sum

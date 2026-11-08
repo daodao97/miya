@@ -25,8 +25,8 @@ SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$SDK_DEFAULT}}"
 MYGO_ROOT=$(go list -m -f '{{.Dir}}' github.com/egoist/mygo)
 HB_ROOT="${MYGO_HB_ANDROID:-$MYGO_ROOT/third_party/hb-build/src/lib/android}"
 export CC="${MYGO_ANDROID_CC:-$SDK/ndk/$NDK_VERSION/toolchains/llvm/prebuilt/$HOST_TAG/bin/aarch64-linux-android29-clang}"
-test -x "$CC"
-test -f "$HB_ROOT/lib/libharfbuzz.a"
+test -x "$CC" || { echo "Android NDK compiler not found: $CC" >&2; exit 1; }
+test -f "$HB_ROOT/lib/libharfbuzz.a" || { echo "HarfBuzz for Android not found in $HB_ROOT; set MYGO_HB_ANDROID" >&2; exit 1; }
 export CGO_CFLAGS="${CGO_CFLAGS:-} -I$HB_ROOT/include/harfbuzz -I$HB_ROOT/include/freetype2"
 export CGO_LDFLAGS="${CGO_LDFLAGS:-} -L$HB_ROOT/lib -lharfbuzz -lfreetype -lm -llog"
 if [ -z "${JAVA_HOME:-}" ]; then
@@ -51,6 +51,12 @@ if not re.fullmatch(r'[0-9][A-Za-z0-9.+-]*', version):
 host = stage / 'host'
 shutil.copytree(framework / 'android', host, dirs_exist_ok=True,
                 ignore=shutil.ignore_patterns('build', '.gradle', '.kotlin', 'jniLibs', 'local.properties'))
+# MyGo may come from the read-only module cache; Gradle writes inside the copy.
+import os, stat
+for top, dirs, files in os.walk(host):
+    for name in [top] + [os.path.join(top, f) for f in files]:
+        if not os.path.islink(name):
+            os.chmod(name, os.stat(name).st_mode | stat.S_IWUSR)
 p = host / 'app/build.gradle'
 text = p.read_text().replace("applicationId 'org.mygo.host'", f"applicationId '{identifier}'")
 text = text.replace("versionName '1.0'", f"versionName '{version}'")
@@ -84,6 +90,8 @@ printf 'sdk.dir=%s\n' "$SDK" > "$STAGE/host/local.properties"
 mkdir -p "$STAGE/host/app/src/main/jniLibs/arm64-v8a"
 GOOS=android GOARCH=arm64 CGO_ENABLED=1 go build -trimpath -buildmode=c-shared \
     -o "$STAGE/host/app/src/main/jniLibs/arm64-v8a/libmygo.so" .
+# Module zips do not keep the executable bit.
+chmod +x "$STAGE/host/gradlew"
 "$STAGE/host/gradlew" -p "$STAGE/host" :app:assembleDebug --console=plain
 cp "$STAGE/host/app/build/outputs/apk/debug/app-debug.apk" "$OUT/Miya.apk"
 echo "Built: $OUT/Miya.apk"
