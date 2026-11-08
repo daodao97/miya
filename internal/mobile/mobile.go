@@ -235,7 +235,7 @@ func (m *App) ApplyPalette(dark bool) {
 }
 
 func NewMobileApp() *App {
-	m := &App{badgeApplied: -1, VoiceAutoSend: prefs.Load(voiceAutoSendPreference) == "on"}
+	m := &App{badgeApplied: -1, VoiceAutoSend: prefs.Load(voiceAutoSendPreference) != "off"}
 	m.Viewer = newMobileViewer()
 	m.View = conversation.NewConversationView(m.Viewer)
 	m.View.Mobile = true

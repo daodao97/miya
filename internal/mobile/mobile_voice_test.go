@@ -218,24 +218,24 @@ func TestVoiceAutoSendRejectsEmptyRecognitionAndChangedDraft(t *testing.T) {
 func TestVoiceAutoSendSwitchPersistsOnThisDevice(t *testing.T) {
 	m, tt, _, _ := voiceFixture(t)
 	m.cancelVoice()
-	if m.VoiceAutoSend {
-		t.Fatal("auto-send must default to off")
+	if !m.VoiceAutoSend {
+		t.Fatal("auto-send must default to on")
 	}
 	m.Router().Push("/settings/voice")
 	tt.Advance(time.Second)
-	saveVoiceSnapshot(t, tt, "voice-auto-send-off")
+	saveVoiceSnapshot(t, tt, "voice-auto-send-on")
 	if err := tt.Click("Enable sending after voice recognition"); err != nil {
 		t.Fatal(err)
 	}
-	if !m.VoiceAutoSend || !NewMobileApp().VoiceAutoSend || !tt.HasText("Hold the input to speak. Release to recognize and send automatically.") {
-		t.Fatalf("auto-send switch: enabled=%v saved=%v help=%v", m.VoiceAutoSend, NewMobileApp().VoiceAutoSend, tt.HasText("Hold the input to speak. Release to recognize and send automatically."))
+	if m.VoiceAutoSend || NewMobileApp().VoiceAutoSend || !tt.HasText("Hold the input to speak. Release to insert the recognized text without sending.") {
+		t.Fatalf("auto-send switch: enabled=%v saved=%v help=%v", m.VoiceAutoSend, NewMobileApp().VoiceAutoSend, tt.HasText("Hold the input to speak. Release to insert the recognized text without sending."))
 	}
 	tt.SetLocale("zh-Hans")
 	tt.Advance(200 * time.Millisecond)
-	saveVoiceSnapshot(t, tt, "voice-auto-send-on-zh")
+	saveVoiceSnapshot(t, tt, "voice-auto-send-off-zh")
 	tt.SetDark(true)
 	tt.Advance(200 * time.Millisecond)
-	saveVoiceSnapshot(t, tt, "voice-auto-send-on-dark")
+	saveVoiceSnapshot(t, tt, "voice-auto-send-off-dark")
 	tt.SetDark(false)
 	tt.SetLocale("en")
 	tt.SetSize(320, 844)
@@ -250,8 +250,8 @@ func TestVoiceAutoSendSwitchPersistsOnThisDevice(t *testing.T) {
 	if err := tt.Click("Enable sending after voice recognition"); err != nil {
 		t.Fatal(err)
 	}
-	if m.VoiceAutoSend || NewMobileApp().VoiceAutoSend || !tt.HasText("Hold the input to speak. Release to insert the recognized text without sending.") {
-		t.Fatal("turning auto-send off did not restore draft-only input")
+	if !m.VoiceAutoSend || !NewMobileApp().VoiceAutoSend || !tt.HasText("Hold the input to speak. Release to recognize and send automatically.") {
+		t.Fatal("turning auto-send back on did not restore automatic sending")
 	}
 }
 
