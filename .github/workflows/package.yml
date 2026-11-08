@@ -25,7 +25,9 @@ on:
         options: [app-store-connect, release-testing, debugging, enterprise]
         default: app-store-connect
   push:
+    branches: [main]
     tags: ['v*']
+    paths-ignore: ['**/*.md', 'docs/**']
 
 permissions:
   contents: read
