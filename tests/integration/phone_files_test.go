@@ -222,3 +222,55 @@ func TestPhoneFileProxyPreservesBrowserPathsAndSession(t *testing.T) {
 		t.Fatal("closed preview session remained accessible")
 	}
 }
+
+func TestPhoneFileProxyBootstrapsMessageSourceLinks(t *testing.T) {
+	root, handler := fileServerFixture(t)
+	names := []string{"internal/android/backend/work_queue.go", "internal/android/backend/native_requests.go", "android/app/src/main/java/org/mygo/MygoSelection.kt", "android/jni/local_time.go", "空 格 #?.txt"}
+	for _, name := range names[:4] {
+		full := filepath.Join(root, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(full), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte("SOURCE "+name), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	upstream := httptest.NewServer(handler)
+	defer upstream.Close()
+	proxy := new(phoneproxy.PhoneFileProxy)
+	if err := proxy.Start(root, func(ctx context.Context) (net.Conn, error) {
+		return (&net.Dialer{}).DialContext(ctx, "tcp", upstream.Listener.Addr().String())
+	}); err != nil {
+		t.Fatal(err)
+	}
+	defer proxy.Close()
+	for _, name := range names {
+		jar, _ := cookiejar.New(nil)
+		client := &http.Client{Jar: jar}
+		target := (&url.URL{Path: "/" + name}).EscapedPath()
+		response, err := client.Get(proxy.URL + "?path=" + url.QueryEscape(target))
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, _ := io.ReadAll(response.Body)
+		response.Body.Close()
+		want := "SOURCE " + name
+		if name == "空 格 #?.txt" {
+			want = "special"
+		}
+		if response.StatusCode != 200 || string(body) != want || response.Request.URL.Path != "/"+name || !strings.HasPrefix(response.Header.Get("Content-Type"), "text/plain") {
+			t.Fatalf("%q: %d %s %q", name, response.StatusCode, response.Request.URL, body)
+		}
+	}
+	for _, target := range []string{"//example.com/file", "/%2fexample.com/file", "/%5cexample.com/file", "/file%00.go", "https://example.com/file"} {
+		client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+		response, err := client.Get(proxy.URL + "?path=" + url.QueryEscape(target))
+		if err != nil {
+			t.Fatal(err)
+		}
+		response.Body.Close()
+		if response.Header.Get("Location") != "/" {
+			t.Fatalf("unsafe bootstrap redirect: %q -> %q", target, response.Header.Get("Location"))
+		}
+	}
+}

@@ -278,14 +278,7 @@ func mobileMain() {
 	// Write the conversations before iOS suspends the app, which may end it.
 	mygo.App.OnDidEnterBackground(func() {
 		uiruntime.RunOnMain(func() {
-			m.cancelVoice()
-			m.FlushCache(true)
-			// Android's document provider is outside our Activity. Keep only
-			// the open browser's desktop/proxy resources until it closes;
-			// background lifecycle and checkpointing still run normally.
-			if runtime.GOOS != "android" || m.FilesCancel == nil {
-				m.Disconnect()
-			}
+			m.enterBackground(runtime.GOOS == "android")
 		})
 	})
 	mygo.App.OnDidBecomeActive(func() {
@@ -417,6 +410,20 @@ func (m *App) Connect(link string) {
 }
 
 // disconnect ends the connection but keeps the paired desktop.
+func (m *App) enterBackground(preserveBrowser bool) {
+	m.cancelVoice()
+	m.FlushCache(true)
+	// Android's document provider needs the browser proxy to survive, but
+	// control of the Mac must end even when that browser is still open.
+	if preserveBrowser && m.FilesCancel != nil {
+		if m.DesktopPage != nil {
+			m.DesktopFinish(m.DesktopPage, tr("Remote control ended"))
+		}
+		return
+	}
+	m.Disconnect()
+}
+
 func (m *App) Disconnect() {
 	m.DisconnectDesktop(false)
 }
@@ -802,7 +809,7 @@ func (m *App) ReceiveThread(id int, d phoneproto.ThreadDelta) {
 	// Only a live delta confirms that the phone has the completed contents;
 	// sidebar metadata combined with cached messages does not.
 	if appmodel.SameMessageOrder(m.Viewer.Current().Messages, d.Order) {
-		m.CompletionReceived = appmodel.DesktopRead{Key: appmodel.DesktopUnreadKey(d.Thread), Version: d.Thread.CompletedAtMs}
+		m.CompletionReceived = m.completionVersion(d.Thread)
 		m.markCompletionRead()
 	}
 }
@@ -1190,12 +1197,14 @@ func (m *App) ViewRoot(c *ui.Context) {
 			m.Router().Transition = transition
 			// Leaving the remote desktop page ends its lease.
 			// Push and Back update the path at once, so this runs as the page is left.
-			if m.DesktopPage != nil && m.Router().Path() != "/desktop" {
+			// A floating session keeps its lease until closed or restored.
+			if m.DesktopPage != nil && !m.DesktopPage.Floating && m.Router().Path() != "/desktop" {
 				m.CloseDesktopPage(false)
 			}
 		}
 	})
 	m.conversationActionsSheet(c)
+	m.desktopFloatView(c)
 	// Release the conversation after navigation reaches the new-conversation page.
 	if m.Nav != nil && m.Nav.Path() == "/" && !m.Nav.Transitioning() && (m.Open != 0 || m.NewProject != "") {
 		m.leave()

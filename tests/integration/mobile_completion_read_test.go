@@ -70,3 +70,26 @@ func TestMobileCompletionReadRejectsIncompleteResults(t *testing.T) {
 		})
 	}
 }
+
+// After a desktop restart the conversation's completion time is gone, but
+// its unread mark is kept; viewing it on the phone must still clear it.
+func TestMobileCompletionReadUsesDesktopUnreadVersion(t *testing.T) {
+	m := testMobileApp()
+	m.PushDisabled = true
+	thread := model.Thread{ID: 1, ServerID: "s1", HistoryLoaded: true,
+		Messages: []model.Message{{ID: 10, Role: "assistant", Content: "完成结果"}}}
+	m.State.CompletionUnread = map[string]int64{appmodel.DesktopUnreadKey(thread): 200}
+	m.Open = thread.ID
+	delta, _ := phoneserver.NewThreadSync(nil).Update(thread)
+	m.ReceiveThread(thread.ID, delta)
+	r, _, ok := m.CompletionReadRequest()
+	if !ok || r.ReadCompletedAtMs != 200 {
+		t.Fatalf("unread conversation without a completion time was not acknowledged: %+v, %v", r, ok)
+	}
+	m.State.CompletionUnread = map[string]int64{}
+	m.CompletionReceived = appmodel.DesktopRead{}
+	m.ReceiveThread(thread.ID, delta)
+	if _, _, ok := m.CompletionReadRequest(); ok {
+		t.Fatal("a conversation without unread was acknowledged")
+	}
+}

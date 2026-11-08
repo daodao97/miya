@@ -1739,5 +1739,9 @@
   "installed_a2465e": "Installed · ",
   "notInstalled_1aab9f": "Not installed",
   "enable_f70b90": "Enable ",
-  "checkAgain_e18504": "Check again"
+  "checkAgain_e18504": "Check again",
+  "showAsFloatingWindow_e0f557": "Show as floating window",
+  "remoteDesktopFloatingWindowTapToReturn_c3d3a3": "Remote desktop floating window. Tap to return; drag to move.",
+  "controlSessionEndedTapToClose_fa9108": "Control session ended. Tap to close.",
+  "endRemoteDesktop_91c9f3": "End remote desktop"
 }

@@ -78,3 +78,22 @@ func TestPhoneCompletionReadUsesStableIdentity(t *testing.T) {
 		}
 	}
 }
+
+// The desktop's unread mark survives restarts that drop the conversation's
+// completion time; the phone's acknowledgement of that mark clears it.
+func TestPhoneCompletionReadWithoutThreadCompletionTime(t *testing.T) {
+	app, _ := testApp(t)
+	c := app.C.(*controller.Controller)
+	c.LoadDesktopUnread()
+	thread := model.Thread{ID: 1, ServerID: "session"}
+	c.SetThreads([]model.Thread{thread})
+	c.DesktopUnread[appmodel.DesktopUnreadKey(thread)] = 200
+	c.MarkPhoneCompletionRead(remote.Request{Thread: 1, ServerID: thread.ServerID, ReadCompletedAtMs: 100})
+	if !c.DesktopThreadUnread(thread) {
+		t.Fatal("an older acknowledgement cleared a newer completion")
+	}
+	c.MarkPhoneCompletionRead(remote.Request{Thread: 1, ServerID: thread.ServerID, ReadCompletedAtMs: 200})
+	if c.DesktopThreadUnread(thread) {
+		t.Fatal("the phone's acknowledgement did not clear unread")
+	}
+}

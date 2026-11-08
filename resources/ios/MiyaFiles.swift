@@ -75,7 +75,12 @@ private func miyaText(_ key: String) -> String {
     @objc func goBack() { web.goBack() }
     @objc func goForward() { web.goForward() }
     @objc func reload() { web.reload() }
-    @objc func home() { web.load(URLRequest(url: initial)) }
+    @objc func home() {
+        // A file link starts at a document; Folder must still open the project root.
+        var destination = URLComponents(url: initial, resolvingAgainstBaseURL: false)
+        if !isWebService { destination?.query = nil; destination?.fragment = nil }
+        web.load(URLRequest(url: destination?.url ?? initial))
+    }
     @objc func downloadCurrent() {
         guard let url = web.url, var parts = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return }
         parts.queryItems = (parts.queryItems ?? []).filter { $0.name != "download" } + [URLQueryItem(name: "download", value: "1")]

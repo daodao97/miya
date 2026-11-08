@@ -5,6 +5,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"miya/internal/chat/model"
+	msgfmt "miya/internal/chat/presentation"
 	"miya/internal/widgets"
 )
 
@@ -42,6 +43,15 @@ func (m *App) navigationBack(c *ui.Context, path string) {
 func (m *App) openMessageLink(link string) {
 	if _, ok := model.ParseThreadURL(link); ok {
 		m.openCollaborationThread(link)
+		return
+	}
+	if rel, ok := msgfmt.LocalFileLink(m.ComposerProject(), link); ok {
+		project, file, found := m.messageFileTarget(rel)
+		if !found {
+			m.SendErr = tr("File is outside the project directory")
+			return
+		}
+		m.openProjectFile(project, file)
 		return
 	}
 	if ui.SafeToOpen(link) {

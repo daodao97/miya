@@ -216,7 +216,8 @@ func (b Adapter) Finish(id int, run *pinative.Client, err error) {
 	}
 }
 
-// LoadHistory reads Miya's copy of the conversation.
+// LoadHistory reads Miya's copy of the conversation, or pi's session file
+// when that copy has lost its messages.
 func (b Adapter) LoadHistory(t model.Thread) {
 	c := b.host
 	if t.HistoryLoaded || t.Loading {
@@ -225,7 +226,7 @@ func (b Adapter) LoadHistory(t model.Thread) {
 	cwd := c.ThreadWorkspace(t.ID)
 	c.Update(t.ID, func(t *model.Thread) { t.Loading = true })
 	go func() {
-		rec, err := pinative.LoadRecord(t.ServerID)
+		messages, err := History(t.ServerID)
 		c.Dispatch(func() {
 			if c.ThreadWorkspace(t.ID) != cwd || c.ThreadWithID(t.ID).ServerID != t.ServerID {
 				return
@@ -236,7 +237,7 @@ func (b Adapter) LoadHistory(t model.Thread) {
 					t.Status = "Local history is unavailable. Send a message to continue this conversation."
 					return
 				}
-				t.Messages = rec.Thread.Messages
+				t.Messages = messages
 				for i := range t.Messages {
 					t.Messages[i].ID = c.NextID()
 					if t.Messages[i].Status == "inProgress" {

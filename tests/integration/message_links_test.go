@@ -107,6 +107,30 @@ func TestMobileMessageFileLinkCopiesDesktopPath(t *testing.T) {
 	}
 }
 
+func TestMobileLocalFileLinkClickReachesDesktopPreview(t *testing.T) {
+	for _, link := range []string{"docs/report.md:42", "/b/docs/report.md", "file:///b/docs/report.md", "../a/source.go"} {
+		t.Run(link, func(t *testing.T) {
+			m := testMobileApp()
+			m.Connected = false
+			th := m.State.Projects[1].Threads[0]
+			th.HistoryLoaded = true
+			th.Messages = []model.Message{{ID: 1, Role: "assistant", Content: "[Open source](" + link + ")"}}
+			m.State.Projects[1].Threads[0] = th
+			m.OpenThread(th)
+			tt := ui.NewTester(m.ViewRoot, 390, 750)
+			tt.Frame()
+			r, ok := tt.Find("Open source")
+			if !ok {
+				t.Fatal("file link missing")
+			}
+			tt.ClickAt(r.X+12, r.Y+r.H/2)
+			if m.SendErr != "Not connected to desktop" {
+				t.Fatalf("file click was ignored instead of reaching desktop preview: %q", m.SendErr)
+			}
+		})
+	}
+}
+
 func TestMessageFileLinkMenusAcrossRenderers(t *testing.T) {
 	for _, kind := range []string{"stream", "reference-paragraph", "reference-inline"} {
 		t.Run(kind, func(t *testing.T) {

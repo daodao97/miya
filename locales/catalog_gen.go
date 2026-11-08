@@ -18793,3 +18793,47 @@ func CheckAgainE18504() string { return In(i18n.Locale()).CheckAgainE18504() }
 func (msgs Messages) CheckAgainE18504() string {
 	return Catalog.Format(msgs.locale, "checkAgain_e18504", nil)
 }
+
+// ShowAsFloatingWindowE0f557 says "Show as floating window"
+// in the language the app shows.
+func ShowAsFloatingWindowE0f557() string { return In(i18n.Locale()).ShowAsFloatingWindowE0f557() }
+
+// ShowAsFloatingWindowE0f557 says "Show as floating window"
+// in the language of msgs.
+func (msgs Messages) ShowAsFloatingWindowE0f557() string {
+	return Catalog.Format(msgs.locale, "showAsFloatingWindow_e0f557", nil)
+}
+
+// RemoteDesktopFloatingWindowTapToReturnC3d3a3 says "Remote desktop floating window. Tap to return; drag to move."
+// in the language the app shows.
+func RemoteDesktopFloatingWindowTapToReturnC3d3a3() string {
+	return In(i18n.Locale()).RemoteDesktopFloatingWindowTapToReturnC3d3a3()
+}
+
+// RemoteDesktopFloatingWindowTapToReturnC3d3a3 says "Remote desktop floating window. Tap to return; drag to move."
+// in the language of msgs.
+func (msgs Messages) RemoteDesktopFloatingWindowTapToReturnC3d3a3() string {
+	return Catalog.Format(msgs.locale, "remoteDesktopFloatingWindowTapToReturn_c3d3a3", nil)
+}
+
+// ControlSessionEndedTapToCloseFa9108 says "Control session ended. Tap to close."
+// in the language the app shows.
+func ControlSessionEndedTapToCloseFa9108() string {
+	return In(i18n.Locale()).ControlSessionEndedTapToCloseFa9108()
+}
+
+// ControlSessionEndedTapToCloseFa9108 says "Control session ended. Tap to close."
+// in the language of msgs.
+func (msgs Messages) ControlSessionEndedTapToCloseFa9108() string {
+	return Catalog.Format(msgs.locale, "controlSessionEndedTapToClose_fa9108", nil)
+}
+
+// EndRemoteDesktop91c9f3 says "End remote desktop"
+// in the language the app shows.
+func EndRemoteDesktop91c9f3() string { return In(i18n.Locale()).EndRemoteDesktop91c9f3() }
+
+// EndRemoteDesktop91c9f3 says "End remote desktop"
+// in the language of msgs.
+func (msgs Messages) EndRemoteDesktop91c9f3() string {
+	return Catalog.Format(msgs.locale, "endRemoteDesktop_91c9f3", nil)
+}

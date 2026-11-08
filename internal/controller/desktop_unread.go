@@ -54,10 +54,17 @@ func (c *Controller) MarkPhoneCompletionRead(r remote.Request) {
 		return
 	}
 	target := c.PhoneThreadFor(r)
-	if !target.Found || target.Thread.CompletedAtMs != r.ReadCompletedAtMs {
+	if !target.Found {
 		return
 	}
-	c.MarkDesktopRead(appmodel.DesktopRead{Key: appmodel.DesktopUnreadKey(target.Thread), Version: r.ReadCompletedAtMs})
+	// The phone acknowledges the unread version it was shown. The thread's
+	// own completion time is not kept across restarts or list reloads, so
+	// compare against the recorded version rather than the thread.
+	key := appmodel.DesktopUnreadKey(target.Thread)
+	if c.DesktopUnread[key] != r.ReadCompletedAtMs {
+		return
+	}
+	c.MarkDesktopRead(appmodel.DesktopRead{Key: key, Version: r.ReadCompletedAtMs})
 }
 
 func (c *Controller) DesktopThreadUnread(t model.Thread) bool {

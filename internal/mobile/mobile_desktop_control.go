@@ -41,10 +41,20 @@ func (m *App) CloseResolvedDesktopControl(approvals []interaction.Request) {
 }
 
 func (m *App) openRemoteDesktop() {
+	// A floating session returns to its page rather than opening another.
+	if p := m.DesktopPage; p != nil && p.Floating && p.Phase != "ended" {
+		m.DesktopRestore(p)
+		return
+	}
 	m.openDesktopWindow(nil, desktop.Window{})
 }
 
 func (m *App) openDesktopWindow(approval *interaction.Request, window desktop.Window) {
+	// Only one lease at a time: an approval takeover replaces a floating
+	// session, and an ended floating window just goes away.
+	if p := m.DesktopPage; p != nil && p.Floating && (approval != nil || p.Phase == "ended") {
+		m.CloseDesktopPage(false)
+	}
 	if !m.Connected || m.Conn == nil || m.Open == 0 || m.desktopUIOpen() || m.DesktopRequest != "" {
 		return
 	}
@@ -331,6 +341,7 @@ func (m *App) desktopWindowPreview(c *ui.Context, a interaction.Request) {
 		return
 	}
 	blocked := !m.Connected || m.DesktopRequest != "" || m.desktopUIOpen()
+	takeoverBlocked := !m.Connected || m.DesktopRequest != "" || m.FilesCancel != nil || m.DesktopPage != nil && !m.DesktopPage.Floating
 	ui.Text(c, textutil.FirstNonEmpty(p.Dialog.Title, a.Reason, p.Window.Title)).FontSize(m.Font(17)).FontWeight(600).LineHeight(1.4).MaxLines(2)
 	if p.Dialog.Message != "" {
 		if p.expanded {
@@ -349,7 +360,7 @@ func (m *App) desktopWindowPreview(c *ui.Context, a interaction.Request) {
 		}
 	}
 	if p.Image != nil {
-		button := m.phoneButton(c.Key("window-preview")).Column().FillWidth().Padding(8).Background(m.Pal.Bg).Label(tr("Control permission window")).Disabled(blocked)
+		button := m.phoneButton(c.Key("window-preview")).Column().FillWidth().Padding(8).Background(m.Pal.Bg).Label(tr("Control permission window")).Disabled(takeoverBlocked)
 		button.Children(func() {
 			w, h := ui.ImageSize(p.Image)
 			ratio := float32(1.5)
@@ -389,7 +400,7 @@ func (m *App) desktopWindowPreview(c *ui.Context, a interaction.Request) {
 	if len(p.Dialog.Actions) > 0 {
 		ui.Row(c).FillWidth().Wrap().Justify(ui.End).Gap(8).Children(func() {
 			if needsInput {
-				if m.ApprovalButton(c, "fill-authorization", tr("Enter permission details"), true, blocked || p.ActionPending).Clicked() {
+				if m.ApprovalButton(c, "fill-authorization", tr("Enter permission details"), true, takeoverBlocked || p.ActionPending).Clicked() {
 					m.openDesktopWindow(&a, p.Window)
 				}
 			}
@@ -412,7 +423,7 @@ func (m *App) desktopWindowPreview(c *ui.Context, a interaction.Request) {
 			if m.pill(c, "retry-preview", tr("Retry preview"), false).Grow(1).Disabled(blocked || p.Loading).Clicked() {
 				m.requestWindowPreview(a)
 			}
-			if m.pill(c, "open-window", tr("Open permission window"), false).Grow(1).Disabled(blocked).Clicked() {
+			if m.pill(c, "open-window", tr("Open permission window"), false).Grow(1).Disabled(takeoverBlocked).Clicked() {
 				m.openDesktopWindow(&a, p.Window)
 			}
 		})

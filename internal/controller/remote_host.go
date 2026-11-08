@@ -17,6 +17,7 @@ import (
 	"miya/internal/agent/claude/native/transcript"
 	codex "miya/internal/agent/codex/native"
 	codexprojection "miya/internal/agent/codex/projection"
+	piagent "miya/internal/agent/pi"
 	"miya/internal/appmodel"
 	"miya/internal/async"
 	"miya/internal/chat/model"
@@ -418,7 +419,7 @@ func (c *Controller) ServePhoneConnection(ctx context.Context, conn phoneConnect
 }
 
 // readOnlyHistory reads a conversation without resuming it: thread/read for
-// Codex, the session files for Claude Code. Resuming would make this desktop
+// Codex, the session files for Claude Code, Miya's record for pi. Resuming would make this desktop
 // the conversation's writer, a change the phone must never cause.
 func readOnlyHistory(ctx context.Context, t phoneThread) ([]model.Message, string) {
 	th := t.Thread
@@ -438,6 +439,15 @@ func readOnlyHistory(ctx context.Context, t phoneThread) ([]model.Message, strin
 				messages, err = stored.Messages, nil
 			} else if err == nil {
 				err = rerr
+			}
+		}
+	} else if th.Agent == "pi" {
+		// Pi conversations are kept by Miya and pi; Codex never saw them.
+		if messages, err = piagent.History(th.ServerID); err == nil {
+			for i := range messages {
+				if messages[i].Status == "inProgress" {
+					messages[i].Status = "interrupted"
+				}
 			}
 		}
 	} else if t.client == nil || th.ServerID == "" {

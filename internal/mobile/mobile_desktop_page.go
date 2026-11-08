@@ -100,6 +100,11 @@ type MobileDesktopPage struct {
 
 	Unlock  DesktopUnlockState
 	Privacy mobileDesktopPrivacy
+
+	// Floating keeps the session in an in-app floating window while other
+	// pages show; leaving the page then does not end control.
+	Floating bool
+	float    desktopFloat
 }
 
 func (m *App) desktopPrefsFile() string {
@@ -412,6 +417,9 @@ func (m *App) ReceiveDesktopFrame(p *MobileDesktopPage, data []byte, image ui.Im
 	default:
 		delay = 1500 * time.Millisecond
 		p.Status = err.Error()
+	}
+	if p.Floating {
+		delay = max(delay, DesktopFloatPollInterval)
 	}
 	m.desktopAfter(p, delay, func() { m.DesktopPoll(p) })
 }
@@ -783,6 +791,13 @@ func (m *App) DesktopPageView(c *ui.Context) {
 						m.desktopChoose(p)
 					}
 				}
+			}
+			if p.Phase == "live" && m.circle(c, "desktop-minimize", tr("Show as floating window"), func() { widgets.Icon(c, "picture-in-picture", 20, pal.ink) }).Clicked() {
+				c.Blur()
+				m.DesktopMinimize(p)
+			}
+			if p.Phase == "picker" && !p.Busy {
+				// The refresh button above takes the trailing slot.
 			} else if (p.WindowOnly || p.Pickable) && (p.Phase == "live" || p.Phase == "error") {
 				label := tr("Switch window")
 				if !p.WindowOnly && p.DisplaysAvailable {
@@ -795,7 +810,7 @@ func (m *App) DesktopPageView(c *ui.Context) {
 						m.desktopChoose(p)
 					}
 				}
-			} else {
+			} else if p.Phase != "live" {
 				// Balance the back button so the title stays centered.
 				ui.Box(c).Size(44, 44).Shrink(0)
 			}

@@ -37,15 +37,21 @@ func LoadRecord(id string) (Record, error) {
 }
 
 // SaveRecord replaces the record atomically. A conversation's session file
-// survives saves that do not know it.
+// survives saves that do not know it, and its messages survive saves of a
+// conversation whose history is not loaded.
 func SaveRecord(t model.Thread, sessionFile string) {
 	p := HistoryPath(t.ServerID)
 	if p == "" {
 		return
 	}
-	if sessionFile == "" {
-		if old, err := LoadRecord(t.ServerID); err == nil {
+	if old, err := LoadRecord(t.ServerID); err == nil {
+		if sessionFile == "" {
 			sessionFile = old.SessionFile
+		}
+		// A conversation whose history was never loaded, such as one
+		// suspended from the list, must not erase the saved messages.
+		if !t.HistoryLoaded && len(t.Messages) == 0 {
+			t.Messages = old.Thread.Messages
 		}
 	}
 	data, err := json.Marshal(Record{SessionFile: sessionFile, Thread: t})

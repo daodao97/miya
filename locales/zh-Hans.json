@@ -1739,5 +1739,9 @@
   "installed_a2465e": "已安装 · ",
   "notInstalled_1aab9f": "未安装",
   "enable_f70b90": "启用 ",
-  "checkAgain_e18504": "重新检测"
+  "checkAgain_e18504": "重新检测",
+  "showAsFloatingWindow_e0f557": "以浮窗显示",
+  "remoteDesktopFloatingWindowTapToReturn_c3d3a3": "远程桌面浮窗。轻点返回，拖动可移动。",
+  "controlSessionEndedTapToClose_fa9108": "控制已结束，轻点关闭。",
+  "endRemoteDesktop_91c9f3": "结束远程桌面"
 }

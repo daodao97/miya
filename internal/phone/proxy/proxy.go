@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httputil"
+	"net/url"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -131,8 +132,10 @@ func (p *PhoneFileProxy) StartProxy(prefix, webOrigin string, dial func(context.
 		if r.URL.Path == bootstrapPath {
 			http.SetCookie(w, &http.Cookie{Name: cookieName, Value: token, Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode})
 			target := "/"
-			if requested := r.URL.Query().Get("path"); webOrigin != "" && strings.HasPrefix(requested, "/") && !strings.HasPrefix(requested, "//") && !strings.ContainsAny(requested, "\\\r\n") {
-				target = requested
+			if requested := r.URL.Query().Get("path"); strings.HasPrefix(requested, "/") && !strings.HasPrefix(requested, "//") && !strings.ContainsAny(requested, "\\\x00\r\n") {
+				if u, err := url.Parse(requested); err == nil && u.Scheme == "" && u.Host == "" && !strings.ContainsAny(u.Path, "\\\x00\r\n") && !strings.HasPrefix(u.Path, "//") {
+					target = requested
+				}
 			}
 			http.Redirect(w, r, target, http.StatusSeeOther)
 			return

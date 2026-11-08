@@ -272,7 +272,7 @@ type FileEntry struct {
 
 func PlainFileExtension(ext string) bool {
 	switch ext {
-	case ".go", ".md", ".markdown", ".txt", ".yaml", ".yml", ".toml", ".ini", ".log", ".sh", ".py", ".ts", ".tsx", ".jsx", ".rs", ".sql", ".csv", ".mod", ".sum":
+	case ".go", ".kt", ".kts", ".java", ".swift", ".c", ".h", ".m", ".mm", ".cc", ".cpp", ".hpp", ".md", ".markdown", ".txt", ".yaml", ".yml", ".toml", ".ini", ".log", ".sh", ".py", ".ts", ".tsx", ".jsx", ".rs", ".sql", ".csv", ".mod", ".sum":
 		return true
 	}
 	return false

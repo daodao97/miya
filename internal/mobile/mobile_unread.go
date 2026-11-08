@@ -94,16 +94,28 @@ func (m *App) markCompletionRead() {
 
 func (m *App) CompletionReadRequest() (remote.Request, appmodel.DesktopRead, bool) {
 	t := m.Viewer.Current()
-	if m.Open == 0 || t.ID != m.Open || t.Busy || t.Loading || !t.HistoryLoaded || len(t.Messages) == 0 || t.CompletedAtMs <= 0 {
+	read := m.completionVersion(t)
+	if m.Open == 0 || t.ID != m.Open || t.Busy || t.Loading || !t.HistoryLoaded || len(t.Messages) == 0 || read.Version <= 0 {
 		return remote.Request{}, appmodel.DesktopRead{}, false
 	}
-	read := appmodel.DesktopRead{Key: appmodel.DesktopUnreadKey(t), Version: t.CompletedAtMs}
 	if m.CompletionReceived != read || m.CompletionRead == read {
 		return remote.Request{}, appmodel.DesktopRead{}, false
 	}
 	r := m.ThreadRequest("read", m.Open)
 	r.ReadCompletedAtMs = read.Version
 	return r, read, true
+}
+
+// completionVersion is the completed result the phone would acknowledge for
+// t: the desktop's recorded unread version, which survives restarts that
+// drop the thread's completion time. Desktops that do not report unread
+// versions are acknowledged by the thread's completion time.
+func (m *App) completionVersion(t model.Thread) appmodel.DesktopRead {
+	key := appmodel.DesktopUnreadKey(t)
+	if m.State.CompletionUnread != nil {
+		return appmodel.DesktopRead{Key: key, Version: m.State.CompletionUnread[key]}
+	}
+	return appmodel.DesktopRead{Key: key, Version: t.CompletedAtMs}
 }
 
 func (m *App) DesiredBadge() int {

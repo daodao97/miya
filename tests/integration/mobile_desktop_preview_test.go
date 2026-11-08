@@ -61,3 +61,37 @@ func TestMobileWindowPreviewUnchangedFrameReusesVisibleImage(t *testing.T) {
 		t.Fatal("unchanged frame was replaced or successful retry kept stale state")
 	}
 }
+
+func TestMobileWindowTakeoverEnabledWhileDesktopFloats(t *testing.T) {
+	m := testMobileApp()
+	m.State.DesktopControl, m.State.DesktopWindows = true, true
+	th := m.State.Projects[0].Threads[0]
+	m.OpenThread(th)
+	m.ShowThread(th)
+	p := liveTestDesktopPage(t, m)
+	p.Floating = true
+	img, err := ui.DecodeImage(windowJPEG(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := codex.Approval{ID: json.RawMessage(`"new-window"`), ThreadID: th.ServerID, Method: "miya/desktopControl"}
+	m.State.Approvals = []codex.Approval{a}
+	m.DesktopPreviews = map[string]*mobile.MobileWindowPreview{string(a.ID): {
+		Version: phoneproto.ApprovalFingerprint(a), Image: img, Window: desktop.Window{ID: 1, PID: 2},
+		Dialog: desktop.Dialog{Actions: []desktop.Action{{ID: "allow", Label: "Allow access", Enabled: false}}},
+	}}
+	tt := ui.NewTester(m.ViewRoot, 390, 844)
+	tt.Frame()
+	for _, label := range []string{"Control permission window", "Enter permission details"} {
+		info, found := tt.Access(label)
+		if !found || info.Disabled {
+			t.Fatalf("floating session blocked %q: %+v", label, info)
+		}
+	}
+	m.FilesCancel = func() {}
+	tt.Frame()
+	info, _ := tt.Access("Control permission window")
+	if !info.Disabled {
+		t.Fatal("an open native browser must still block takeover")
+	}
+}
