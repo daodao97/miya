@@ -55,22 +55,16 @@ func (m *App) BeginSend(r remote.Request, images []string) {
 		beforeMessages: map[int]bool{}, beforeQueue: map[int]bool{},
 	}
 	cur := m.Viewer.Current()
+	p.remember(cur)
 	for _, msg := range cur.Messages {
-		p.beforeMessages[msg.ID] = true
 		if p.matches(msg) {
 			p.beforeUsers++
 		}
 	}
-	for _, q := range cur.Queue {
-		p.beforeQueue[q.ID] = true
-	}
 	m.Outbox = append(m.Outbox, p)
 	m.pendingProjection = nil
 	m.sending, m.Sending, m.SendErr = p, true, ""
-	p.stage = tr("Sending…")
-	if len(images) > 0 {
-		p.stage = tr("Uploading images…")
-	}
+	p.stage = sendStage(images)
 	m.Draft, m.Images = "", nil
 	m.View.Groups = conversation.GroupCache{}
 	id := m.Open
@@ -78,6 +72,28 @@ func (m *App) BeginSend(r remote.Request, images []string) {
 		id = -1
 	}
 	m.View.ListFor(id).ScrollToEnd()
+}
+
+func sendStage(images []string) string {
+	if len(images) > 0 {
+		return tr("Uploading images…")
+	}
+	return tr("Sending…")
+}
+
+// remember marks t's current messages and queue as not being this send.
+func (p *mobilePendingSend) remember(t model.Thread) {
+	for _, msg := range t.Messages {
+		p.beforeMessages[msg.ID] = true
+	}
+	for _, q := range t.Queue {
+		p.beforeQueue[q.ID] = true
+	}
+}
+
+// composingNewThread reports whether the composer still shows p's new conversation.
+func (m *App) composingNewThread(p *mobilePendingSend) bool {
+	return m.Open == 0 && m.NewProject == p.request.Project && m.composerEpoch == p.epoch
 }
 
 func (m *App) transmitSend(p *mobilePendingSend) {
@@ -125,10 +141,7 @@ func (m *App) retrySend(p *mobilePendingSend) {
 		p.failure = m.disconnectedSendError()
 		return
 	}
-	p.failure, p.stage = "", tr("Sending…")
-	if len(p.Message.Images) > 0 {
-		p.stage = tr("Uploading images…")
-	}
+	p.failure, p.stage = "", sendStage(p.Message.Images)
 	m.sending, m.Sending, m.SendErr = p, true, ""
 	m.transmitSend(p)
 }
@@ -148,7 +161,7 @@ func (m *App) pendingFor(p *mobilePendingSend, cur model.Thread) bool {
 		return false
 	}
 	if p.thread == 0 {
-		return m.Open == 0 && m.NewProject == p.request.Project && m.composerEpoch == p.epoch
+		return m.composingNewThread(p)
 	}
 	if p.request.ServerID != "" && cur.ServerID != "" {
 		return p.request.ServerID == cur.ServerID && (p.request.Agent == "" || p.request.Agent == model.ThreadAgent(cur))
@@ -230,14 +243,9 @@ func (m *App) receivePendingSends(t model.Thread) {
 		}
 		// An older echo must not satisfy a later identical send on the next
 		// metadata-only delta, after the earlier preview has been removed.
-		for _, msg := range t.Messages {
-			p.beforeMessages[msg.ID] = true
-		}
+		p.remember(t)
 		if !p.echoed {
 			p.beforeUsers = max(p.beforeUsers, seen)
-		}
-		for _, q := range t.Queue {
-			p.beforeQueue[q.ID] = true
 		}
 	}
 	m.prunePendingSends()
@@ -319,7 +327,7 @@ func (m *App) Sent(id int, msg string) {
 	if id != 0 {
 		p.thread = id
 	}
-	if wasNew && m.Open == 0 && m.NewProject == p.request.Project && m.composerEpoch == p.epoch && id != 0 {
+	if wasNew && id != 0 && m.composingNewThread(p) {
 		m.Open, m.NewProject = id, ""
 		m.ShowThread(model.Thread{ID: id, Agent: p.request.Agent, Loading: true})
 		m.Subscribe(id)

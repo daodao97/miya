@@ -56,15 +56,23 @@ func (s *accountView) stopLogins() {
 		}
 		state.Draft = ""
 		if state.State.Active() && s.loginCall != nil {
-			call, req := s.loginCall, login.Request{Action: "cancel", Agent: agent, SessionID: state.State.SessionID}
-			go func() { _, _ = call(req) }()
+			go cancelLogin(s.loginCall, agent, state.State.SessionID)
 		}
 	}
 	s.logins = nil
 }
 
+func cancelLogin(call func(login.Request) (login.State, error), agent, sessionID string) {
+	_, _ = call(login.Request{Action: "cancel", Agent: agent, SessionID: sessionID})
+}
+
+// targetChanged reports a connection switch since the logins were created.
+func (s *accountView) targetChanged() bool {
+	return s.app.C.State().Remote != s.loginClient || s.app.C.RemoteHost() != s.loginRemote
+}
+
 func (s *accountView) loginAction(agent, action string) {
-	if s.app.C.State().Remote != s.loginClient || s.app.C.RemoteHost() != s.loginRemote {
+	if s.targetChanged() {
 		s.stopLogins()
 		return
 	}
@@ -88,16 +96,16 @@ func (s *accountView) loginAction(agent, action string) {
 		select {
 		case <-done:
 			if result.Active() {
-				_, _ = call(login.Request{Action: "cancel", Agent: agent, SessionID: result.SessionID})
+				cancelLogin(call, agent, result.SessionID)
 			}
 			return
 		default:
 		}
 		s.app.C.Dispatch(func() {
 			// A delayed start response must not leave an abandoned native login.
-			if s.logins[agent] != state || s.app.C.State().Remote != s.loginClient || s.app.C.RemoteHost() != s.loginRemote {
+			if s.logins[agent] != state || s.targetChanged() {
 				if result.Active() {
-					go func() { _, _ = call(login.Request{Action: "cancel", Agent: agent, SessionID: result.SessionID}) }()
+					go cancelLogin(call, agent, result.SessionID)
 				}
 				return
 			}
@@ -145,7 +153,7 @@ func NativeLoginCard(c *ui.Context, agent string, s *AccountLoginUI, action func
 	st := s.State
 	widgets.SettingsCard(c).Gap(12).Children(func() {
 		ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
-			widgets.AgentIcon(c, agentmeta.UsageFor(agent).ID, 18)
+			widgets.AgentIcon(c, provider.ID, 18)
 			ui.Text(c, name).Grow(1).FontSize(14).FontWeight(600)
 			if widgets.SmallButton(c.Key("check"), tr("Check sign-in status"), s.Busy).Label(fmt.Sprintf(tr("Check %s sign-in"), name)).Clicked() {
 				action("check")
