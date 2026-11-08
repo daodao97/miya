@@ -130,20 +130,26 @@ func (app *View) MessageList(c *ui.Context, t model.Thread) {
 			c.After(0)
 		}
 	}
+	// Read AtEnd every frame, even with no messages: reading it is what
+	// asks the list for another frame when its position changes.
+	atEnd := state.AtEnd()
 	if len(groups) > 0 {
-		// Keep the row in the layout either way. Its margins do not cancel
-		// its height, so adding and removing it resized the list, which
-		// flipped AtEnd near the bottom and made the button flicker.
-		row := ui.Row(c).Justify(ui.Center).Margin(-44, 0, 8, 0)
-		if state.AtEnd() {
+		// The button floats over the bottom of the list from a row of no
+		// height, kept in the layout either way. Showing it must not resize
+		// the list: that flipped AtEnd near the bottom and made it flicker,
+		// and reserved room pushed the composer off a short phone screen.
+		row := ui.Row(c).Height(0).Justify(ui.Center)
+		if atEnd {
 			row.Invisible()
 		}
 		row.Children(func() {
-			jump := widgets.Quiet(c.Key("latest")).Background(widgets.Canvas).Border(1, widgets.Line).Radius(16).Shadow(0, 2, 8, 0, widgets.Shadow)
-			jump.Children(func() { widgets.MutedText(c, tr("↓ Latest")) })
-			if jump.Clicked() {
-				state.ScrollToEnd()
-			}
+			ui.Row(c).TranslatePercent(0, -100).Translate(0, -8).Children(func() {
+				jump := widgets.Quiet(c.Key("latest")).Background(widgets.Canvas).Border(1, widgets.Line).Radius(16).Shadow(0, 2, 8, 0, widgets.Shadow)
+				jump.Children(func() { widgets.MutedText(c, tr("↓ Latest")) })
+				if jump.Clicked() {
+					state.ScrollToEnd()
+				}
+			})
 		})
 	}
 	if status != "" || completedGroup >= 0 {
