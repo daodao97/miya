@@ -130,8 +130,15 @@ func (app *View) MessageList(c *ui.Context, t model.Thread) {
 			c.After(0)
 		}
 	}
-	if !state.AtEnd() && len(groups) > 0 {
-		ui.Row(c).Justify(ui.Center).Margin(-44, 0, 8, 0).Children(func() {
+	if len(groups) > 0 {
+		// Keep the row in the layout either way. Its margins do not cancel
+		// its height, so adding and removing it resized the list, which
+		// flipped AtEnd near the bottom and made the button flicker.
+		row := ui.Row(c).Justify(ui.Center).Margin(-44, 0, 8, 0)
+		if state.AtEnd() {
+			row.Invisible()
+		}
+		row.Children(func() {
 			jump := widgets.Quiet(c.Key("latest")).Background(widgets.Canvas).Border(1, widgets.Line).Radius(16).Shadow(0, 2, 8, 0, widgets.Shadow)
 			jump.Children(func() { widgets.MutedText(c, tr("↓ Latest")) })
 			if jump.Clicked() {
