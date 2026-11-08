@@ -5,110 +5,102 @@ import (
 	"errors"
 	"sync"
 	"time"
+
+	"github.com/egoist/mygo"
 )
 
-type Result struct {
-	Text  string
-	Final bool
-	Err   error
+// ProviderName is the mygo.Speech provider that recognizes speech through
+// WeChat's cloud service.
+const ProviderName = "wechat"
+
+// Provider captures with mygo.Microphone and streams the audio to the cloud.
+// Dir keeps the service's device identity.
+type Provider struct{ Dir string }
+
+var register struct {
+	once sync.Once
+	err  error
 }
 
-type Recording interface {
-	Stop()
-	Cancel()
+// Start begins a WeChat recognition session, registering the provider on
+// first use; dir is fixed by the first call.
+func Start(ctx context.Context, dir string) (*mygo.SpeechSession, error) {
+	register.once.Do(func() { register.err = mygo.Speech.RegisterProvider(ProviderName, Provider{Dir: dir}) })
+	if register.err != nil {
+		return nil, register.err
+	}
+	return mygo.Speech.Start(ctx, mygo.SpeechOptions{Provider: ProviderName})
 }
 
-// Session owns both capture and transcription. Stop ends capture and waits
-// for the cloud's final text; Cancel discards the recording immediately.
-type Session struct {
-	mu           sync.Mutex
-	audio        chan []byte
-	results      chan Result
-	captureError error
-	closed       bool
-	recording    Recording
-	cancel       context.CancelFunc
-	stopOnce     sync.Once
-}
-
-func (s *Session) Results() <-chan Result { return s.results }
-func (s *Session) Stop() {
-	s.stopOnce.Do(func() {
-		s.recording.Stop()
-		// Also bound finalization when release precedes the cloud handshake.
-		time.AfterFunc(20*time.Second, s.cancel)
-	})
-}
-func (s *Session) Cancel() { s.cancel(); s.recording.Cancel() }
-
-func Start(ctx context.Context, dir string) (*Session, error) {
+func (p Provider) Start(ctx context.Context, _ mygo.SpeechOptions, emit func(mygo.SpeechResult)) (mygo.SpeechRecording, error) {
+	// mygo.Speech ends capture after its MaxDuration; this bounds the cloud
+	// round trips that follow.
 	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
-	s := &Session{audio: make(chan []byte, 640), results: make(chan Result, 1), cancel: cancel}
-	r, err := startAudio(ctx, s.capture)
+	r := &recording{audio: make(chan []byte, 640), cancel: cancel}
+	mic, err := mygo.Microphone.Start(ctx, r.capture)
 	if err != nil {
 		cancel()
 		return nil, err
 	}
-	s.recording = r
-	s.mu.Lock()
-	captureError := s.captureError
-	s.mu.Unlock()
-	if captureError != nil {
-		r.Cancel()
-		cancel()
-		return nil, captureError
-	}
+	r.mic = mic
 	go func() {
 		defer cancel()
-		defer r.Cancel()
-		defer close(s.results)
-		text, err := recognizeWechat(ctx, dir, s.audio, func(text string) { s.emit(Result{Text: text}) })
-		s.mu.Lock()
-		captureError := s.captureError
-		s.mu.Unlock()
-		if captureError != nil {
+		defer mic.Cancel()
+		text, err := recognizeWechat(ctx, p.Dir, r.audio, func(text string) { emit(mygo.SpeechResult{Text: text}) })
+		if captureError := r.captureErr(); captureError != nil {
 			err = captureError
 		}
-		s.emit(Result{Text: text, Final: true, Err: err})
+		emit(mygo.SpeechResult{Text: text, Final: true, Err: err})
 	}()
-	go func() {
-		timer := time.NewTimer(60 * time.Second)
-		defer timer.Stop()
-		select {
-		case <-ctx.Done():
-			r.Cancel()
-		case <-timer.C:
-			s.Stop()
-		}
-	}()
-	return s, nil
+	return r, nil
 }
 
-func (s *Session) emit(r Result) {
-	select {
-	case <-s.results:
-	default:
-	}
-	s.results <- r
+// recording hands microphone audio to the recognizer. Stop ends capture and
+// waits for the cloud's final text; Cancel discards the recording at once.
+type recording struct {
+	mu           sync.Mutex
+	audio        chan []byte
+	captureError error
+	closed       bool
+	mic          *mygo.MicrophoneCapture
+	cancel       context.CancelFunc
+	stopOnce     sync.Once
 }
 
-func (s *Session) capture(b []byte, err error, end bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.closed {
+func (r *recording) Stop() {
+	r.stopOnce.Do(func() {
+		r.mic.Stop()
+		// Also bound finalization when release precedes the cloud handshake.
+		time.AfterFunc(20*time.Second, r.cancel)
+	})
+}
+
+func (r *recording) Cancel() { r.cancel(); r.mic.Cancel() }
+
+func (r *recording) captureErr() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.captureError
+}
+
+// capture runs on the audio thread; it never blocks.
+func (r *recording) capture(c mygo.MicrophoneChunk) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closed {
 		return
 	}
-	if len(b) > 0 {
+	err, end := c.Err, c.End
+	if len(c.PCM) > 0 {
 		select {
-		case s.audio <- b:
+		case r.audio <- c.PCM:
 		default:
-			err = errors.New("voice audio buffer full")
-			end = true
+			err, end = errors.New("voice audio buffer full"), true
 		}
 	}
 	if err != nil || end {
-		s.captureError = err
-		s.closed = true
-		close(s.audio)
+		r.captureError = err
+		r.closed = true
+		close(r.audio)
 	}
 }

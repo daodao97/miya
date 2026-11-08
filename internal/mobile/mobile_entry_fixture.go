@@ -17,7 +17,6 @@ import (
 	"miya/internal/chat/model"
 	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/uiruntime"
-	"miya/internal/voiceinput"
 )
 
 // Native input tests use the real phone page and composer, without a desktop
@@ -60,7 +59,7 @@ func MobileEntry() {
 }
 
 type inputFixtureVoice struct {
-	results chan voiceinput.Result
+	results chan mygo.SpeechResult
 	stop    chan struct{}
 	once    sync.Once
 	cancel  context.CancelFunc
@@ -69,10 +68,10 @@ type inputFixtureVoice struct {
 
 func (s *inputFixtureVoice) Stop()                             { s.once.Do(func() { close(s.stop) }) }
 func (s *inputFixtureVoice) Cancel()                           { s.cancel() }
-func (s *inputFixtureVoice) Results() <-chan voiceinput.Result { return s.results }
+func (s *inputFixtureVoice) Results() <-chan mygo.SpeechResult { return s.results }
 func newInputFixtureVoice(ctx context.Context) (mobileVoiceSession, error) {
 	ctx, cancel := context.WithCancel(ctx)
-	s := &inputFixtureVoice{results: make(chan voiceinput.Result, 1), stop: make(chan struct{}), cancel: cancel, started: time.Now()}
+	s := &inputFixtureVoice{results: make(chan mygo.SpeechResult, 1), stop: make(chan struct{}), cancel: cancel, started: time.Now()}
 	go func() {
 		defer close(s.results)
 		select {
@@ -81,7 +80,7 @@ func newInputFixtureVoice(ctx context.Context) (mobileVoiceSession, error) {
 		case <-s.stop:
 		}
 		if time.Since(s.started) < 250*time.Millisecond {
-			s.results <- voiceinput.Result{Err: errors.New("capture began after release"), Final: true}
+			s.results <- mygo.SpeechResult{Err: errors.New("capture began after release"), Final: true}
 			return
 		}
 		timer := time.NewTimer(300 * time.Millisecond)
@@ -93,7 +92,7 @@ func newInputFixtureVoice(ctx context.Context) (mobileVoiceSession, error) {
 		}
 		select {
 		case <-ctx.Done():
-		case s.results <- voiceinput.Result{Text: "voice transcription test", Final: true}:
+		case s.results <- mygo.SpeechResult{Text: "voice transcription test", Final: true}:
 		}
 	}()
 	return s, nil

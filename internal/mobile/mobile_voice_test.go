@@ -9,21 +9,21 @@ import (
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 	"miya/internal/chat/model"
 	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/uiruntime"
-	"miya/internal/voiceinput"
 )
 
 type fakeVoice struct {
 	stopped, canceled bool
-	results           chan voiceinput.Result
+	results           chan mygo.SpeechResult
 }
 
 func (f *fakeVoice) Stop()                             { f.stopped = true }
 func (f *fakeVoice) Cancel()                           { f.canceled = true }
-func (f *fakeVoice) Results() <-chan voiceinput.Result { return f.results }
+func (f *fakeVoice) Results() <-chan mygo.SpeechResult { return f.results }
 
 func voiceFixture(t *testing.T) (*App, *ui.Tester, *mobileVoice, *fakeVoice) {
 	t.Helper()
@@ -58,7 +58,7 @@ func TestVoiceReleaseWaitsAndInsertsAtSelectionWithoutSending(t *testing.T) {
 	if m.SendErr != "" || m.Sending {
 		t.Fatal("send should be ignored while recognizing")
 	}
-	m.finishVoice(v, voiceinput.Result{Text: "识别结果", Final: true})
+	m.finishVoice(v, mygo.SpeechResult{Text: "识别结果", Final: true})
 	tt.Frame()
 	if m.Draft != "开始👋识别结果" || m.voice != nil || !f.canceled || m.NewSend != nil || m.Sending || m.SendErr != "" {
 		t.Fatalf("unexpected final state: draft=%q", m.Draft)
@@ -79,7 +79,7 @@ func TestVoiceLateResultCannotEnterAnotherConversation(t *testing.T) {
 	v.autoSend, v.released = true, true
 	m.Open = 42
 	m.Draft = "other conversation"
-	m.finishVoice(v, voiceinput.Result{Text: "late result", Final: true})
+	m.finishVoice(v, mygo.SpeechResult{Text: "late result", Final: true})
 	if m.Draft != "other conversation" || !f.canceled || m.SendErr != "" {
 		t.Fatal("late result changed another conversation")
 	}
@@ -93,12 +93,12 @@ func TestVoiceCancelAndFailureKeepDraft(t *testing.T) {
 			if cancel {
 				m.cancelVoice()
 			} else {
-				m.finishVoice(v, voiceinput.Result{Final: true, Err: errors.New("offline")})
+				m.finishVoice(v, mygo.SpeechResult{Final: true, Err: errors.New("offline")})
 			}
 			if m.Draft != v.draft || m.voice != nil || !f.canceled || m.SendErr == tr("Not connected to desktop") {
 				t.Fatal("failed/canceled recognition changed draft or retained capture")
 			}
-			m.finishVoice(v, voiceinput.Result{Text: "late", Final: true})
+			m.finishVoice(v, mygo.SpeechResult{Text: "late", Final: true})
 			if m.Draft != v.draft {
 				t.Fatal("canceled result was inserted")
 			}
@@ -127,7 +127,7 @@ func TestVoiceNavigationCancelsCapture(t *testing.T) {
 func TestVoiceUsesSharedInputEvents(t *testing.T) {
 	m, _, _, _ := voiceFixture(t)
 	m.cancelVoice()
-	f := &fakeVoice{results: make(chan voiceinput.Result)}
+	f := &fakeVoice{results: make(chan mygo.SpeechResult)}
 	m.voiceStart = func(context.Context) (mobileVoiceSession, error) { return f, nil }
 	if !m.voiceInput(ui.InputEvent{Kind: ui.InputLongPress}) || m.voice == nil {
 		t.Fatal("shared long press did not start capture")
@@ -152,7 +152,7 @@ func TestVoiceCloudFinalWaitsForFingerRelease(t *testing.T) {
 	previous := uiruntime.RunOnMain
 	uiruntime.RunOnMain = func(f func()) { posts <- f }
 	t.Cleanup(func() { uiruntime.RunOnMain = previous })
-	f := &fakeVoice{results: make(chan voiceinput.Result, 2)}
+	f := &fakeVoice{results: make(chan mygo.SpeechResult, 2)}
 	m.voiceStart = func(context.Context) (mobileVoiceSession, error) { return f, nil }
 	next := func() {
 		t.Helper()
@@ -171,7 +171,7 @@ func TestVoiceCloudFinalWaitsForFingerRelease(t *testing.T) {
 	// behavior midway through the user's gesture.
 	m.VoiceAutoSend = false
 	before := m.Draft
-	f.results <- voiceinput.Result{Text: "云端定稿", Final: true}
+	f.results <- mygo.SpeechResult{Text: "云端定稿", Final: true}
 	close(f.results)
 	next()
 	if m.Draft != before || m.voice == nil || m.voice.final == nil || m.SendErr != "" {
@@ -186,12 +186,12 @@ func TestVoiceCloudFinalWaitsForFingerRelease(t *testing.T) {
 func TestVoiceAutoSendUsesNormalSendAndKeepsOfflineDraft(t *testing.T) {
 	m, _, v, f := voiceFixture(t)
 	v.autoSend, v.released = true, true
-	m.finishVoice(v, voiceinput.Result{Text: "识别结果", Final: true})
+	m.finishVoice(v, mygo.SpeechResult{Text: "识别结果", Final: true})
 	if m.SendErr != tr("Not connected to desktop") || m.Draft != "开始👋识别结果" || m.voice != nil || !f.canceled || m.Sending {
 		t.Fatalf("auto-send must use the normal offline send path and retain text: draft=%q error=%q", m.Draft, m.SendErr)
 	}
 	m.SendErr = "later status"
-	m.finishVoice(v, voiceinput.Result{Text: "duplicate", Final: true})
+	m.finishVoice(v, mygo.SpeechResult{Text: "duplicate", Final: true})
 	if m.Draft != "开始👋识别结果" || m.SendErr != "later status" {
 		t.Fatal("a duplicate final triggered a second send attempt")
 	}
@@ -207,7 +207,7 @@ func TestVoiceAutoSendRejectsEmptyRecognitionAndChangedDraft(t *testing.T) {
 				m.Draft, text = "edited draft", "识别结果"
 			}
 			before := m.Draft
-			m.finishVoice(v, voiceinput.Result{Text: text, Final: true})
+			m.finishVoice(v, mygo.SpeechResult{Text: text, Final: true})
 			if m.Draft != before || m.voice != nil || m.SendErr == "" || m.SendErr == tr("Not connected to desktop") {
 				t.Fatalf("invalid voice result attempted sending: draft=%q error=%q", m.Draft, m.SendErr)
 			}

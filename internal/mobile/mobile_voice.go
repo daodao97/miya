@@ -17,7 +17,7 @@ import (
 const voiceAutoSendPreference = "phone-voice-auto-send"
 
 type mobileVoiceSession interface {
-	Results() <-chan voiceinput.Result
+	Results() <-chan mygo.SpeechResult
 	Stop()
 	Cancel()
 }
@@ -29,7 +29,7 @@ type mobileVoice struct {
 	anchor, caret         int
 	released              bool
 	autoSend              bool
-	final                 *voiceinput.Result
+	final                 *mygo.SpeechResult
 }
 
 // Touch arbitration, the hold threshold and pointer capture belong to MyGo's
@@ -84,7 +84,7 @@ func (m *App) beginVoice() {
 		return
 	}
 	if err != nil {
-		m.finishVoice(v, voiceinput.Result{Err: err, Final: true})
+		m.finishVoice(v, mygo.SpeechResult{Err: err, Final: true})
 		return
 	}
 	if session == nil {
@@ -142,7 +142,7 @@ func (m *App) cancelVoice() {
 	}
 }
 
-func (m *App) finishVoice(v *mobileVoice, r voiceinput.Result) {
+func (m *App) finishVoice(v *mobileVoice, r mygo.SpeechResult) {
 	if m.voice != v {
 		return
 	}
