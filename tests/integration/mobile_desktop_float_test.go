@@ -3,6 +3,7 @@ package integration
 import (
 	"math"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -58,6 +59,7 @@ func TestDesktopFloatDragFollowsPointerAcrossFrames(t *testing.T) {
 	p := liveTestDesktopPage(t, m)
 	p.Floating = true
 	tt := ui.NewTester(m.ViewRoot, 390, 750)
+	tt.UsePointer(ui.PointerTouch, 1)
 	tt.Frame()
 	label := "Remote desktop floating window. Tap to return; drag to move."
 	r, ok := tt.Find(label)
@@ -66,7 +68,8 @@ func TestDesktopFloatDragFollowsPointerAcrossFrames(t *testing.T) {
 	}
 	x, y := r.X+30, r.Y+30
 	tt.Press(x, y)
-	for _, distance := range []float32{25, 60, 150} {
+	for _, distance := range []float32{25, 60, 150, 170, 50, 150} {
+		tt.Advance(16 * time.Millisecond)
 		tt.Move(x-distance, y-20)
 		tt.Frame()
 		next, found := tt.Find(label)
@@ -76,6 +79,8 @@ func TestDesktopFloatDragFollowsPointerAcrossFrames(t *testing.T) {
 	}
 	tt.Release(x-150, y-20)
 	tt.Frame()
+	tt.Advance(time.Second)
+	tt.Frame() // Refresh accessibility bounds after the paint-only spring.
 	next, _ := tt.Find(label)
 	if math.Abs(float64(next.X-12)) > 1 || !p.Floating || len(p.Queue) != 0 {
 		t.Fatalf("drag did not snap left safely: %v, floating=%v queue=%v", next, p.Floating, p.Queue)

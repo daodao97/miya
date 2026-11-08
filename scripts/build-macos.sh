@@ -1,13 +1,9 @@
 #!/bin/sh
-# ScreenCaptureKit and CGEvent are linked by internal/desktop's native bridge.
-# MyGo otherwise defaults to CGO_ENABLED=0 and would silently omit this feature.
+# All macOS native capabilities use purego; no native compiler is needed.
 set -eu
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$ROOT"
-export CGO_ENABLED=1
-export MACOSX_DEPLOYMENT_TARGET=13.0
-export CGO_CFLAGS="${CGO_CFLAGS:-} -mmacosx-version-min=13.0"
-export CGO_LDFLAGS="${CGO_LDFLAGS:-} -mmacosx-version-min=13.0"
+export CGO_ENABLED=0
 # Keep a local signing identity outside version control. Ad-hoc signatures
 # change their designated requirement on every build and invalidate TCC grants.
 SIGNING_IDENTITY=${MIYA_SIGNING_IDENTITY:-}

@@ -18,7 +18,7 @@ import (
 )
 
 const Prefix = "/.miya-desktop/v1"
-const desktopControlTTL = 10 * time.Minute
+const desktopControlIdleTimeout = 30 * time.Minute
 
 type desktopLease struct {
 	token         string
@@ -29,6 +29,7 @@ type desktopLease struct {
 	capturedAt    time.Time
 	lastInput     time.Time
 	stop          func() bool
+	idleTimer     *time.Timer
 	window        *desktop.Window // nil means explicitly requested full desktop
 	onAction      func(desktop.Window, desktop.Action, []desktop.Window)
 	actionPending bool
@@ -43,8 +44,6 @@ type desktopLease struct {
 	displayInputRequired bool
 }
 
-// One operator at a time. A lease belongs to one live phone control
-// connection and expires even if a client keeps polling forever.
 // desktopNative is what remote control needs from the operating system:
 // internal/desktop in the app, fakes in tests.
 type Native struct {
@@ -72,7 +71,15 @@ type Server struct {
 	work        sync.Mutex
 	privacyWork sync.Mutex
 	lease       *desktopLease
+	now         func() time.Time // nil uses the real clock; tests advance lease time
 	Native
+}
+
+func (d *Server) leaseTime() time.Time {
+	if d.now != nil {
+		return d.now()
+	}
+	return time.Now()
 }
 
 func (d *Server) Open(ctx context.Context) (string, error) {
@@ -89,22 +96,25 @@ func (d *Server) OpenWindow(ctx context.Context, window *desktop.Window) (string
 	if ctx.Err() != nil {
 		return "", ctx.Err()
 	}
-	if old := d.lease; old != nil && old.ctx.Err() == nil && time.Now().Before(old.expires) {
+	if old := d.lease; old != nil && old.ctx.Err() == nil && d.leaseTime().Before(old.expires) {
 		return "", errors.New("Another remote desktop view is still open. End that control session first.")
 	}
 	if old := d.lease; old != nil {
-		old.stop()
+		d.revokeLocked(old)
 	}
-	leaseCtx, cancel := context.WithTimeout(ctx, desktopControlTTL)
-	l := &desktopLease{token: hex.EncodeToString(raw[:]), ctx: leaseCtx, expires: time.Now().Add(desktopControlTTL)}
+	// The phone connection owns the lease. Reading frames (including a
+	// minimized view) keeps it alive; a fixed deadline would end live viewing.
+	leaseCtx, cancel := context.WithCancel(ctx)
+	l := &desktopLease{token: hex.EncodeToString(raw[:]), ctx: leaseCtx, expires: d.leaseTime().Add(desktopControlIdleTimeout)}
 	if window != nil {
 		copy := *window
 		l.window = &copy
 	}
 	l.stop = context.AfterFunc(leaseCtx, func() { d.Revoke(l.token) })
-	// Release the deadline timer as well as the session when manually closed.
+	l.idleTimer = time.AfterFunc(desktopControlIdleTimeout, func() { d.expireLease(l) })
+	// Release both cancellation tracking and the idle timer on manual close.
 	stop := l.stop
-	l.stop = func() bool { result := stop(); cancel(); return result }
+	l.stop = func() bool { result := stop(); l.idleTimer.Stop(); cancel(); return result }
 	d.lease = l
 	return l.token, nil
 }
@@ -141,18 +151,37 @@ func (d *Server) Revoke(token string) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.lease != nil && d.lease.token == token {
-		l := d.lease
-		d.lease = nil
-		l.stop()
-		if l.privacy != nil {
-			go l.privacy.Close()
-		}
+		d.revokeLocked(d.lease)
 	}
+}
+
+func (d *Server) revokeLocked(l *desktopLease) {
+	d.lease = nil
+	l.stop()
+	if l.privacy != nil {
+		go l.privacy.Close()
+	}
+}
+
+// Check the current deadline under the same lock as renewal. A timer already
+// firing when a frame arrives must not revoke a lease that was just extended.
+func (d *Server) expireLease(l *desktopLease) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.lease != l {
+		return
+	}
+	l.idleTimer.Stop()
+	if remaining := l.expires.Sub(d.leaseTime()); remaining > 0 && l.ctx.Err() == nil {
+		l.idleTimer = time.AfterFunc(remaining, func() { d.expireLease(l) })
+		return
+	}
+	d.revokeLocked(l)
 }
 
 func (d *Server) valid(token string) *desktopLease {
 	l := d.lease
-	if token == "" || l == nil || l.token != token || l.ctx.Err() != nil || !time.Now().Before(l.expires) {
+	if token == "" || l == nil || l.token != token || l.ctx.Err() != nil || !d.leaseTime().Before(l.expires) {
 		return nil
 	}
 	return l
@@ -164,6 +193,9 @@ func (d *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 	d.mu.Lock()
 	l := d.valid(token)
+	if l != nil && r.Context().Err() == nil {
+		l.expires = d.leaseTime().Add(desktopControlIdleTimeout)
+	}
 	d.mu.Unlock()
 	if l == nil {
 		http.Error(w, "Remote control ended or disconnected. Return to the conversation to reopen it.", http.StatusGone)

@@ -46,6 +46,9 @@ import (
 type App struct {
 	DesktopPreviews         map[string]*MobileWindowPreview
 	DesktopRequest          string
+	desktopOpening          remote.Request
+	desktopOpenTimer        *time.Timer
+	background              bool
 	DesktopApproval         MobileDesktopApproval
 	ConversationMenu        bool
 	conversationMenuProject string
@@ -53,6 +56,8 @@ type App struct {
 	filesProxy              *phoneproxy.PhoneFileProxy
 	FilesCancel             context.CancelFunc
 	DesktopPage             *MobileDesktopPage
+	desktopSend             func(*remote.Conn, remote.Request) error
+	desktopClient           func(*remote.Conn, string) *control.Client
 	// desktopClosing are leases closed on this connection whose desktop-close
 	// a reopen sends first, so the Mac revokes them before the new open.
 	DesktopClosing               []string
@@ -293,9 +298,7 @@ func mobileMain() {
 	})
 	mygo.App.OnWillEnterForeground(func() {
 		uiruntime.RunOnMain(func() {
-			if m.Link != "" && m.Cancel == nil {
-				m.Connect(m.Link)
-			}
+			m.enterForeground()
 		})
 	})
 	if err := mygo.App.Run(); err != nil {
@@ -385,7 +388,7 @@ func (m *App) Connect(link string) {
 	}
 	m.readPending = nil
 	m.ApprovalPending = nil
-	m.Disconnect()
+	m.disconnectDesktop(false, !changed && m.DesktopPage != nil && m.DesktopPage.suspended)
 	m.PreviewPaths = nil
 	m.PreviewRetries = nil
 	if changed {
@@ -413,19 +416,26 @@ func (m *App) Connect(link string) {
 	go m.Run(ctx, m.Generation, link, m.Wake)
 }
 
-// disconnect ends the connection but keeps the paired desktop.
+// Background releases live control and its sensitive state, retaining only
+// the target needed to reopen the view when the paired connection returns.
 func (m *App) enterBackground(preserveBrowser bool) {
+	m.background = true
 	m.cancelVoice()
 	m.FlushCache(true)
-	// Android's document provider needs the browser proxy to survive, but
-	// control of the Mac must end even when that browser is still open.
+	m.suspendDesktopPage()
 	if preserveBrowser && m.FilesCancel != nil {
-		if m.DesktopPage != nil {
-			m.DesktopFinish(m.DesktopPage, tr("Remote control ended"))
-		}
 		return
 	}
-	m.Disconnect()
+	m.disconnectDesktop(false, true)
+}
+
+func (m *App) enterForeground() {
+	m.background = false
+	if m.Link != "" && m.Cancel == nil {
+		m.Connect(m.Link)
+	} else {
+		m.resumeDesktopPage()
+	}
 }
 
 func (m *App) Disconnect() {
@@ -433,8 +443,14 @@ func (m *App) Disconnect() {
 }
 
 func (m *App) DisconnectDesktop(unregister bool) {
+	m.disconnectDesktop(unregister, false)
+}
+
+func (m *App) disconnectDesktop(unregister, preserveDesktop bool) {
 	m.cancelVoice()
-	m.DesktopApproval = MobileDesktopApproval{}
+	if !preserveDesktop {
+		m.DesktopApproval = MobileDesktopApproval{}
+	}
 	m.interruptAutomationRequest()
 	m.clearFileReferences()
 	m.clearWebServices()
@@ -446,7 +462,7 @@ func (m *App) DisconnectDesktop(unregister bool) {
 		m.FilesCancel()
 		m.FilesCancel = nil
 	}
-	if m.DesktopPage != nil {
+	if m.DesktopPage != nil && !preserveDesktop {
 		m.DesktopFinish(m.DesktopPage, tr("Disconnected from your Mac. Return to the conversation to reopen."))
 	}
 	if m.filesProxy != nil {
@@ -476,7 +492,7 @@ func (m *App) DisconnectDesktop(unregister bool) {
 			go conn.Close()
 		}
 	}
-	m.DesktopRequest = ""
+	m.stopDesktopOpen()
 	m.Conn, m.Connected = nil, false
 	m.DesktopClosing = nil // leases end with their connection
 	m.DesktopPreviews = nil
@@ -534,7 +550,8 @@ func (m *App) Run(ctx context.Context, gen int, link string, wake <-chan struct{
 			retryError = err.Error()
 		}
 		m.onMain(gen, func() {
-			m.DesktopRequest = ""
+			m.suspendDesktopPage()
+			m.stopDesktopOpen()
 			m.Conn, m.Connected, m.Status = nil, false, message
 			m.DesktopPreviews = nil
 			m.interruptAutomationRequest()
@@ -787,6 +804,7 @@ func (m *App) ApplyPhoneState(s phoneproto.State) {
 	}
 	m.Viewer.setApprovals(s.Approvals)
 	m.PersistState()
+	m.resumeDesktopPage()
 }
 
 func (m *App) ReceiveThread(id int, d phoneproto.ThreadDelta) {

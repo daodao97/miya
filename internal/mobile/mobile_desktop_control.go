@@ -36,7 +36,7 @@ func (m *App) CloseResolvedDesktopControl(approvals []interaction.Request) {
 		}
 	}
 	m.DesktopApproval = MobileDesktopApproval{}
-	m.DesktopRequest = ""
+	m.stopDesktopOpen()
 	m.CloseDesktopPage(true)
 }
 
@@ -62,48 +62,52 @@ func (m *App) openDesktopWindow(approval *interaction.Request, window desktop.Wi
 		m.SendErr = tr("Update Miya on your Mac running macOS 14 or later, then wait for the background service to switch versions when idle")
 		return
 	}
-	var raw [16]byte
-	if _, err := rand.Read(raw[:]); err != nil {
-		m.SendErr = err.Error()
-		return
-	}
-	id := hex.EncodeToString(raw[:])
-	m.DesktopRequest = id
 	m.DesktopApproval = MobileDesktopApproval{}
-	conn, gen := m.Conn, m.Generation
 	r := m.SubscribeRequest(m.Open)
-	r.Op, r.RequestID, r.Have = "desktop-open", id, nil
+	r.Op, r.Have = "desktop-open", nil
 	if approval != nil {
 		r.WindowOnly, r.WindowID, r.WindowPID = true, window.ID, window.PID
 		r.Approval, r.ApprovalVersion = approval.ID, phoneproto.ApprovalFingerprint(*approval)
 		m.DesktopApproval = MobileDesktopApproval{ID: approval.ID, Version: r.ApprovalVersion}
 	} else {
-		// The menu entry may choose any window or the full desktop.
 		r.WindowPick = true
+	}
+	m.sendDesktopOpen(r)
+}
+
+func (m *App) sendDesktopOpen(r remote.Request) {
+	var raw [16]byte
+	if _, err := rand.Read(raw[:]); err != nil {
+		m.desktopOpenFailed(err.Error())
+		return
+	}
+	id := hex.EncodeToString(raw[:])
+	r.RequestID = id
+	m.DesktopRequest, m.desktopOpening = id, r
+	conn, gen := m.Conn, m.Generation
+	send := m.desktopSend
+	if send == nil {
+		send = func(c *remote.Conn, r remote.Request) error { return c.Send(r) }
 	}
 	closing := m.DesktopClosing
 	m.DesktopClosing = nil
 	go func() {
 		// Requests on one connection run in order: revoke earlier leases first.
 		for _, token := range closing {
-			_ = conn.Send(remote.Request{Op: "desktop-close", DesktopToken: token})
+			_ = send(conn, remote.Request{Op: "desktop-close", DesktopToken: token})
 		}
-		if err := conn.Send(r); err != nil {
+		if err := send(conn, r); err != nil {
 			m.onMain(gen, func() {
 				if m.DesktopRequest == id {
-					m.DesktopRequest = ""
-					m.DesktopApproval = MobileDesktopApproval{}
-					m.SendErr = err.Error()
+					m.desktopOpenFailed(err.Error())
 				}
 			})
 		}
 	}()
-	time.AfterFunc(15*time.Second, func() {
+	m.desktopOpenTimer = time.AfterFunc(15*time.Second, func() {
 		m.onMain(gen, func() {
 			if m.DesktopRequest == id {
-				m.DesktopRequest = ""
-				m.DesktopApproval = MobileDesktopApproval{}
-				m.SendErr = tr("Remote desktop is not responding. Try again.")
+				m.desktopOpenFailed(tr("Remote desktop is not responding. Try again."))
 			}
 		})
 	})
@@ -114,24 +118,46 @@ func (m *App) receiveDesktopControl(conn *remote.Conn, data json.RawMessage, mes
 	if json.Unmarshal(data, &reply) != nil {
 		return
 	}
-	if m.Conn != conn || reply.RequestID != m.DesktopRequest || m.DesktopRequest == "" || m.desktopUIOpen() {
+	resuming := m.DesktopPage != nil && m.DesktopPage.suspended && m.DesktopPage.resuming
+	if m.Conn != conn || reply.RequestID != m.DesktopRequest || m.DesktopRequest == "" || (m.desktopUIOpen() && !resuming) {
 		if reply.Token != "" {
-			go conn.Send(remote.Request{Op: "desktop-close", DesktopToken: reply.Token})
+			SendDesktopClose(conn, reply.Token)
 		}
 		return
 	}
-	m.DesktopRequest = ""
+	m.stopDesktopOpen()
 	if message != "" {
-		m.DesktopApproval = MobileDesktopApproval{}
-		m.SendErr = message
+		m.desktopOpenFailed(message)
 		return
 	}
 	if len(reply.Token) != 64 {
-		m.DesktopApproval = MobileDesktopApproval{}
-		m.SendErr = tr("Invalid remote desktop connection")
+		m.desktopOpenFailed(tr("Invalid remote desktop connection"))
 		return
 	}
-	m.openDesktopPage(conn, reply.Token)
+	if resuming {
+		m.reopenDesktopPage(conn, reply.Token)
+	} else {
+		m.openDesktopPage(conn, reply.Token)
+	}
+}
+
+func (m *App) stopDesktopOpen() {
+	if m.desktopOpenTimer != nil {
+		m.desktopOpenTimer.Stop()
+		m.desktopOpenTimer = nil
+	}
+	m.DesktopRequest = ""
+}
+
+func (m *App) desktopOpenFailed(message string) {
+	m.stopDesktopOpen()
+	if p := m.DesktopPage; p != nil && p.suspended {
+		p.resuming, p.resumeBlocked = false, true
+		m.DesktopStage(p, "paused", tr("Connection incomplete"), message, false)
+	} else {
+		m.DesktopApproval = MobileDesktopApproval{}
+		m.SendErr = message
+	}
 }
 
 // Human takeover is offered for every pending confirmation, including tools

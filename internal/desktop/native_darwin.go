@@ -1,146 +1,213 @@
-//go:build darwin && !ios && cgo
+//go:build darwin && !ios
 
 package desktop
 
-/*
-#cgo LDFLAGS: -framework Cocoa -framework ApplicationServices -framework ScreenCaptureKit -framework ImageIO -framework IOKit
-#include <stdlib.h>
-int miya_desktop_available(void);
-int miya_desktop_authorize(void);
-int miya_desktop_wake(void);
-int miya_desktop_locked(void);
-int miya_desktop_capture(void **bytes, int *size, char **failure);
-int miya_desktop_windows(char **json);
-int miya_desktop_capture_window(unsigned int window, int pid, void **bytes, int *size, char **failure);
-int miya_desktop_window_input(unsigned int window, int pid, int kind, double x, double y, double tx, double ty, int dx, int dy, const unsigned short *text, int length, int key, int modifier);
-int miya_desktop_dialog(unsigned int window, int pid, char **json);
-int miya_desktop_press(unsigned int window, int pid, const char *label);
-int miya_desktop_input(int kind, double x, double y, double tx, double ty, int dx, int dy, const unsigned short *text, int length, int key, int modifier);
-int miya_desktop_display_input(unsigned int display, const char *uuid, int kind, double x, double y, double tx, double ty, int dx, int dy, const unsigned short *text, int length, int key, int modifier);
-*/
-import "C"
-
 import (
-	"encoding/json"
+	"context"
 	"errors"
-	"unicode/utf16"
-	"unsafe"
+	"time"
+
+	dc "github.com/egoist/mygo/plugins/desktopcontrol"
+	"github.com/egoist/mygo/plugins/permissionflow"
 )
 
-func Available() bool { return C.miya_desktop_available() != 0 }
+func Available() bool { return dc.Available() }
 
-func Authorize() error { return permissionError(int(C.miya_desktop_authorize())) }
-
-// ScreenLocked reports whether the console session shows the lock screen.
-func ScreenLocked() (bool, error) {
-	switch C.miya_desktop_locked() {
-	case 1:
-		return true, nil
-	case 0:
-		return false, nil
+func Authorize() error {
+	if !Available() {
+		return permissionError(3)
 	}
-	return false, errors.New("Unable to read Mac lock status")
+	for i, p := range []permissionflow.Permission{permissionflow.ScreenRecording, permissionflow.Accessibility} {
+		st, err := permissionflow.Check(p)
+		if err != nil {
+			return err
+		}
+		if st != permissionflow.Granted {
+			_, _ = permissionflow.Request(context.Background(), p)
+			return permissionError(i + 1)
+		}
+	}
+	return nil
 }
 
-// WakeDisplay declares local user activity so a sleeping display shows the
-// desktop or lock screen again before capture.
-func WakeDisplay() error { return permissionError(int(C.miya_desktop_wake())) }
+func desktopError(err error) error {
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, dc.ErrUnsupported):
+		return permissionError(3)
+	case errors.Is(err, dc.ErrScreenRecording):
+		return permissionError(1)
+	case errors.Is(err, dc.ErrAccessibility):
+		return permissionError(2)
+	case errors.Is(err, dc.ErrWindowUnavailable):
+		return ErrWindowUnavailable
+	case errors.Is(err, dc.ErrDisplayUnavailable):
+		return ErrDisplayUnavailable
+	case errors.Is(err, context.DeadlineExceeded):
+		return permissionError(8)
+	case errors.Is(err, dc.ErrShareableContent):
+		return captureError(5, err.Error())
+	case errors.Is(err, dc.ErrCapture):
+		return captureError(7, err.Error())
+	case errors.Is(err, dc.ErrEncoding):
+		return permissionError(9)
+	}
+	return err
+}
+
+func ScreenLocked() (bool, error) { return dc.Locked() }
+func WakeDisplay() error {
+	if err := dc.Wake(); err != nil {
+		return permissionError(12)
+	}
+	return nil
+}
 
 func Capture() ([]byte, error) {
-	var ptr unsafe.Pointer
-	var size C.int
-	var failure *C.char
-	code := int(C.miya_desktop_capture(&ptr, &size, &failure))
-	if failure != nil {
-		defer C.free(unsafe.Pointer(failure))
+	ds, err := dc.Displays()
+	if err != nil {
+		return nil, desktopError(err)
 	}
-	if err := captureError(code, C.GoString(failure)); err != nil {
-		return nil, err
+	for _, d := range ds {
+		if d.Main {
+			return captureTarget(d, dc.Window{})
+		}
 	}
-	defer C.free(ptr)
-	return C.GoBytes(ptr, size), nil
+	return nil, permissionError(13)
 }
 
-// Windows checks existing recording permission without opening a TCC prompt.
+func captureTarget(d dc.Display, w dc.Window) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	opts := dc.CaptureOptions{MaxDimension: 1600, Quality: 0.65}
+	var data []byte
+	var err error
+	if w.ID != 0 {
+		data, err = dc.CaptureWindow(ctx, w, opts)
+	} else {
+		data, err = dc.CaptureDisplay(ctx, d, opts)
+	}
+	if err != nil {
+		return nil, desktopError(err)
+	}
+	if len(data) > 2<<20 {
+		return nil, permissionError(10)
+	}
+	return data, nil
+}
+
 func Windows() ([]Window, error) {
-	var ptr *C.char
-	if err := permissionError(int(C.miya_desktop_windows(&ptr))); err != nil {
-		return nil, err
+	ws, err := dc.Windows()
+	if err != nil {
+		return nil, desktopError(err)
 	}
-	defer C.free(unsafe.Pointer(ptr))
-	var windows []Window
-	err := json.Unmarshal([]byte(C.GoString(ptr)), &windows)
-	return windows, err
+	out := []Window{}
+	for _, w := range ws {
+		if w.Bounds.Width < 80 || w.Bounds.Height < 40 {
+			continue
+		}
+		switch w.BundleID {
+		case "com.daodao.miya", "com.apple.dock", "com.apple.systemuiserver", "com.apple.controlcenter", "com.apple.notificationcenterui", "com.apple.WindowManager":
+			continue
+		}
+		name, title := w.App, w.Title
+		if name == "" {
+			name = "App"
+		}
+		if title == "" {
+			title = name
+		}
+		out = append(out, Window{ID: w.ID, PID: w.PID, App: name, Title: title, BundleID: w.BundleID})
+		if len(out) >= 100 {
+			break
+		}
+	}
+	return out, nil
 }
 
-func WindowDialog(window Window) (Dialog, error) {
-	var ptr *C.char
-	if err := permissionError(int(C.miya_desktop_dialog(C.uint(window.ID), C.int(window.PID), &ptr))); err != nil {
+func nativeWindow(w Window) dc.Window { return dc.Window{ID: w.ID, PID: w.PID} }
+
+func windowInfo(w Window) (dc.Window, error) {
+	if w.ID == 0 || w.PID <= 0 {
+		return dc.Window{}, ErrWindowUnavailable
+	}
+	ws, err := dc.Windows()
+	if err != nil {
+		return dc.Window{}, desktopError(err)
+	}
+	for _, v := range ws {
+		if v.ID == w.ID && v.PID == w.PID {
+			return v, nil
+		}
+	}
+	return dc.Window{}, ErrWindowUnavailable
+}
+
+func CaptureWindow(w Window) ([]byte, error) {
+	if w.ID == 0 || w.PID <= 0 {
+		return nil, ErrWindowUnavailable
+	}
+	return captureTarget(dc.Display{}, nativeWindow(w))
+}
+
+func WindowDialog(w Window) (Dialog, error) {
+	window, err := windowInfo(w)
+	if err != nil {
 		return Dialog{}, err
 	}
-	defer C.free(unsafe.Pointer(ptr))
-	var dialog Dialog
-	err := json.Unmarshal([]byte(C.GoString(ptr)), &dialog)
-	return dialog, err
+	d, err := dc.ReadDialog(window)
+	if err != nil {
+		return Dialog{}, desktopError(err)
+	}
+	out := Dialog{Title: d.Title, Message: d.Message, Actions: []Action{}}
+	for _, a := range d.Actions {
+		b := a.Bounds
+		action := Action{ID: a.Label, Label: a.Label, Enabled: a.Enabled, Cancel: a.Cancel, Default: a.Default}
+		if b.Width > 0 && b.Height > 0 && window.Bounds.Width > 0 && window.Bounds.Height > 0 {
+			action.X = (b.X - window.Bounds.X) / window.Bounds.Width
+			action.Y = (b.Y - window.Bounds.Y) / window.Bounds.Height
+			action.Width = b.Width / window.Bounds.Width
+			action.Height = b.Height / window.Bounds.Height
+		}
+		out.Actions = append(out.Actions, action)
+	}
+	return out, nil
 }
 
-func PressWindowAction(window Window, label string) error {
-	if window.ID == 0 || window.PID <= 0 || label == "" || len(label) > 512 {
-		return permissionError(4)
-	}
-	ptr := C.CString(label)
-	defer C.free(unsafe.Pointer(ptr))
-	return permissionError(int(C.miya_desktop_press(C.uint(window.ID), C.int(window.PID), ptr)))
+func PressWindowAction(w Window, label string) error {
+	return desktopError(dc.Press(nativeWindow(w), label))
 }
 
-func CaptureWindow(window Window) ([]byte, error) {
-	if window.ID == 0 || window.PID <= 0 {
-		return nil, permissionError(4)
-	}
-	var ptr unsafe.Pointer
-	var size C.int
-	var failure *C.char
-	code := int(C.miya_desktop_capture_window(C.uint(window.ID), C.int(window.PID), &ptr, &size, &failure))
-	if failure != nil {
-		defer C.free(unsafe.Pointer(failure))
-	}
-	if err := captureError(code, C.GoString(failure)); err != nil {
-		return nil, err
-	}
-	defer C.free(ptr)
-	return C.GoBytes(ptr, size), nil
+func inputAtBounds(in Input, b dc.Rect) dc.Input {
+	kinds := map[string]dc.InputKind{"click": dc.Click, "doubleClick": dc.DoubleClick, "rightClick": dc.RightClick, "drag": dc.Drag, "scroll": dc.Scroll, "text": dc.Text, "key": dc.Key, "move": dc.Move}
+	keys := map[string]uint16{"enter": 36, "tab": 48, "escape": 53, "backspace": 51, "delete": 117, "left": 123, "right": 124, "up": 126, "down": 125, "a": 0, "c": 8, "v": 9, "z": 6, "l": 37}
+	mods := map[string]dc.Modifiers{"command": dc.Command, "control": dc.Control, "shift": dc.Shift, "option": dc.Option}
+	return dc.Input{Kind: kinds[in.Kind], X: b.X + in.X*(b.Width-1), Y: b.Y + in.Y*(b.Height-1), ToX: b.X + in.ToX*(b.Width-1), ToY: b.Y + in.ToY*(b.Height-1), DeltaX: in.DeltaX, DeltaY: in.DeltaY, Text: in.Text, KeyCode: keys[in.Key], Modifiers: mods[in.Modifier]}
 }
 
-func SendInput(in Input) error {
-	return sendInput(Window{}, Display{}, in)
-}
-
-func SendWindowInput(window Window, in Input) error {
-	if window.ID == 0 || window.PID <= 0 {
-		return permissionError(4)
+func SendInput(in Input) error { return sendInput(Window{}, Display{}, in) }
+func SendWindowInput(w Window, in Input) error {
+	if w.ID == 0 || w.PID <= 0 {
+		return ErrWindowUnavailable
 	}
-	return sendInput(window, Display{}, in)
+	return sendInput(w, Display{}, in)
 }
 
-func sendInput(window Window, display Display, in Input) error {
+func sendInput(w Window, d Display, in Input) error {
 	if err := in.Validate(); err != nil {
 		return err
 	}
-	kinds := map[string]int{"click": 0, "doubleClick": 1, "rightClick": 2, "drag": 3, "scroll": 4, "text": 5, "key": 6, "move": 7}
-	keys := map[string]int{"enter": 36, "tab": 48, "escape": 53, "backspace": 51, "delete": 117, "left": 123, "right": 124, "up": 126, "down": 125, "a": 0, "c": 8, "v": 9, "z": 6, "l": 37}
-	mods := map[string]int{"command": 1, "control": 2, "shift": 3, "option": 4}
-	units := utf16.Encode([]rune(in.Text))
-	var ptr *C.ushort
-	if len(units) > 0 {
-		ptr = (*C.ushort)(unsafe.Pointer(&units[0]))
+	if w.ID != 0 {
+		window, err := windowInfo(w)
+		if err != nil {
+			return err
+		}
+		return desktopError(dc.PostToWindow(window, inputAtBounds(in, window.Bounds)))
 	}
-	if window.ID != 0 {
-		return permissionError(int(C.miya_desktop_window_input(C.uint(window.ID), C.int(window.PID), C.int(kinds[in.Kind]), C.double(in.X), C.double(in.Y), C.double(in.ToX), C.double(in.ToY), C.int(in.DeltaX), C.int(in.DeltaY), ptr, C.int(len(units)), C.int(keys[in.Key]), C.int(mods[in.Modifier]))))
+	display, err := displayInfo(d)
+	if err != nil {
+		return err
 	}
-	if display.ID != 0 {
-		uuid := C.CString(display.UUID)
-		defer C.free(unsafe.Pointer(uuid))
-		return permissionError(int(C.miya_desktop_display_input(C.uint(display.ID), uuid, C.int(kinds[in.Kind]), C.double(in.X), C.double(in.Y), C.double(in.ToX), C.double(in.ToY), C.int(in.DeltaX), C.int(in.DeltaY), ptr, C.int(len(units)), C.int(keys[in.Key]), C.int(mods[in.Modifier]))))
-	}
-	return permissionError(int(C.miya_desktop_input(C.int(kinds[in.Kind]), C.double(in.X), C.double(in.Y), C.double(in.ToX), C.double(in.ToY), C.int(in.DeltaX), C.int(in.DeltaY), ptr, C.int(len(units)), C.int(keys[in.Key]), C.int(mods[in.Modifier]))))
+	return desktopError(dc.PostToDisplay(display, inputAtBounds(in, display.Bounds)))
 }

@@ -1,24 +1,17 @@
-//go:build darwin && !ios && cgo
+//go:build darwin && !ios
 
 package desktop
 
-/*
-#cgo LDFLAGS: -framework Carbon
-#include <stdlib.h>
-void *miya_privacy_begin(void);
-int miya_privacy_tick(void *state);
-void miya_privacy_end(void *state);
-*/
-import "C"
-
 import (
-	"errors"
+	"context"
 	"fmt"
 	"os"
 	"os/signal"
 	"runtime"
 	"syscall"
 	"time"
+
+	dc "github.com/egoist/mygo/plugins/desktopcontrol"
 )
 
 // A separate process owns gamma changes. EOF, a three-second heartbeat loss,
@@ -26,14 +19,8 @@ import (
 func RunPrivacyHelper() error {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
-	state := C.miya_privacy_begin()
-	if state == nil {
-		return errors.New("Privacy mode is not supported by these displays or its recovery shortcut is unavailable")
-	}
-	defer C.miya_privacy_end(state)
-	if _, err := fmt.Fprintln(os.Stdout, "ready"); err != nil {
-		return err
-	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	input := make(chan struct{}, 1)
 	go func() {
 		defer close(input)
@@ -53,23 +40,29 @@ func RunPrivacyHelper() error {
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
 	defer signal.Stop(signals)
-	last := time.Now()
-	for {
-		select {
-		case <-signals:
-			return nil
-		case _, ok := <-input:
-			if !ok {
-				return nil
-			}
-			last = time.Now()
-		case <-tick.C:
-			if time.Since(last) > 3*time.Second {
-				return nil
-			}
-			if C.miya_privacy_tick(state) != 0 {
-				return nil
+	go func() {
+		defer cancel()
+		last := time.Now()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-signals:
+				return
+			case _, ok := <-input:
+				if !ok {
+					return
+				}
+				last = time.Now()
+			case <-tick.C:
+				if time.Since(last) > 3*time.Second {
+					return
+				}
 			}
 		}
-	}
+	}()
+	return dc.RunPrivacy(ctx, func() error {
+		_, err := fmt.Fprintln(os.Stdout, "ready")
+		return err
+	})
 }

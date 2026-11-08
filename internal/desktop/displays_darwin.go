@@ -1,53 +1,47 @@
-//go:build darwin && !ios && cgo
+//go:build darwin && !ios
 
 package desktop
 
-/*
-#include <stdlib.h>
-int miya_desktop_displays(char **json);
-int miya_desktop_capture_display(unsigned int display, const char *uuid, void **bytes, int *size, char **failure);
-*/
-import "C"
-
-import (
-	"encoding/json"
-	"unsafe"
-)
+import dc "github.com/egoist/mygo/plugins/desktopcontrol"
 
 func Displays() ([]Display, error) {
-	var ptr *C.char
-	if err := permissionError(int(C.miya_desktop_displays(&ptr))); err != nil {
-		return nil, err
+	ds, err := dc.Displays()
+	if err != nil {
+		return nil, desktopError(err)
 	}
-	defer C.free(unsafe.Pointer(ptr))
-	var displays []Display
-	err := json.Unmarshal([]byte(C.GoString(ptr)), &displays)
-	return displays, err
+	out := []Display{}
+	for _, d := range ds {
+		out = append(out, Display{ID: d.ID, UUID: d.UUID, Name: d.Name, Main: d.Main, Width: d.PixelWidth, Height: d.PixelHeight})
+	}
+	return out, nil
 }
 
-func CaptureDisplay(display Display) ([]byte, error) {
-	if display.ID == 0 || display.UUID == "" {
+func displayInfo(d Display) (dc.Display, error) {
+	ds, err := dc.Displays()
+	if err != nil {
+		return dc.Display{}, desktopError(err)
+	}
+	for _, v := range ds {
+		if d.ID == 0 && v.Main || d.ID == v.ID && d.UUID == v.UUID && d.UUID != "" {
+			return v, nil
+		}
+	}
+	if d.ID == 0 {
+		return dc.Display{}, permissionError(13)
+	}
+	return dc.Display{}, ErrDisplayUnavailable
+}
+
+func CaptureDisplay(d Display) ([]byte, error) {
+	if d.ID == 0 || d.UUID == "" {
 		return nil, ErrDisplayUnavailable
 	}
-	uuid := C.CString(display.UUID)
-	defer C.free(unsafe.Pointer(uuid))
-	var ptr unsafe.Pointer
-	var size C.int
-	var failure *C.char
-	code := int(C.miya_desktop_capture_display(C.uint(display.ID), uuid, &ptr, &size, &failure))
-	if failure != nil {
-		defer C.free(unsafe.Pointer(failure))
-	}
-	if err := captureError(code, C.GoString(failure)); err != nil {
-		return nil, err
-	}
-	defer C.free(ptr)
-	return C.GoBytes(ptr, size), nil
+	return captureTarget(dc.Display{ID: d.ID, UUID: d.UUID}, dc.Window{})
 }
 
-func SendDisplayInput(display Display, in Input) error {
-	if display.ID == 0 || display.UUID == "" {
+func SendDisplayInput(d Display, in Input) error {
+	if d.ID == 0 || d.UUID == "" {
 		return ErrDisplayUnavailable
 	}
-	return sendInput(Window{}, display, in)
+	return sendInput(Window{}, d, in)
 }

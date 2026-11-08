@@ -349,3 +349,56 @@ func TestDesktopPageSavedPasswordLivesInMoreOptions(t *testing.T) {
 	}
 	saveMobileNativeSnapshot(t, tt, "desktop-live-keyboard")
 }
+
+// Route real touchscreen events through MyGo's touch arbitration, rather than
+// calling the pointer handler as a mouse. Scrolling must happen before release.
+func TestDesktopPageTouchScrollsContinuouslyThroughViewport(t *testing.T) {
+	m := testMobileApp()
+	p := liveTestDesktopPage(t, m)
+	p.Phase, p.Trackpad = "live", false
+	tt := ui.NewTester(m.DesktopPageView, 390, 750)
+	tt.Frame()
+	tt.Frame()
+	vp, ok := tt.Find("Live Mac screen. Tap, swipe, or pinch to zoom.")
+	if !ok {
+		t.Fatal("viewport missing")
+	}
+	r, _ := p.ImageRect()
+	x, y := vp.X+r.X+r.W/2, vp.Y+r.Y+r.H/2
+	tt.UsePointer(ui.PointerTouch, 1)
+	tt.Press(x, y)
+	tt.Move(x, y-30)
+	if len(p.Queue) != 1 || p.Queue[0].Kind != "scroll" || p.Queue[0].DeltaY != -60 {
+		t.Fatalf("finger move did not scroll: %+v", p.Queue)
+	}
+	tt.Frame()
+	tt.Move(x, y-60)
+	if len(p.Queue) != 1 || p.Queue[0].DeltaY != -120 {
+		t.Fatalf("continuous scroll was lost: %+v", p.Queue)
+	}
+	tt.Release(x, y-60)
+	if len(p.Queue) != 1 || p.Queue[0].Kind != "scroll" || p.Queue[0].DeltaY != -120 {
+		t.Fatalf("release duplicated scroll or clicked: %+v", p.Queue)
+	}
+}
+
+func TestDesktopPageNativeScrollAndFractionalDeltas(t *testing.T) {
+	m := testMobileApp()
+	p := liveTestDesktopPage(t, m)
+	p.Trackpad = false
+	r, _ := p.ImageRect()
+	x, y := r.X+r.W/2, r.Y+r.H/2
+	for range 5 {
+		m.DesktopPointerInput(p, ui.InputEvent{Kind: ui.InputScroll, X: x, Y: y, DY: 0.2})
+	}
+	if len(p.Queue) != 1 || p.Queue[0].Kind != "scroll" || p.Queue[0].DeltaY != -2 {
+		t.Fatal("native scroll lost fractional deltas", p.Queue)
+	}
+	p.Queue = nil
+	p.TouchMode = 2
+	p.SetZoom(2)
+	m.DesktopPointerInput(p, ui.InputEvent{Kind: ui.InputScroll, X: x, Y: y, DY: 20})
+	if len(p.Queue) != 0 {
+		t.Fatal("move-screen mode scrolled the Mac")
+	}
+}

@@ -39,9 +39,14 @@ type MobileDesktopPage struct {
 	Cancel   context.CancelFunc
 	gen      int
 
-	Phase         string // connecting, picker, live, error, ended
-	Title, Detail string
-	Busy          bool
+	Phase                          string // connecting, picker, live, error, paused, ended
+	suspended, resuming, restoring bool
+	resumeBlocked                  bool
+	resumePicker                   bool
+	owner                          remote.Request
+	desktopLink                    string
+	Title, Detail                  string
+	Busy                           bool
 
 	WindowOnly bool
 	Window     desktop.Window
@@ -116,11 +121,21 @@ func (m *App) desktopPrefsFile() string {
 
 func (m *App) desktopUIOpen() bool { return m.FilesCancel != nil || m.DesktopPage != nil }
 
-func (m *App) openDesktopPage(conn *remote.Conn, token string) {
+func (m *App) newDesktopPage(conn *remote.Conn, token string) *MobileDesktopPage {
 	ctx, cancel := context.WithCancel(context.Background())
-	p := &MobileDesktopPage{Client: control.NewClient(conn.DialFiles, token), Conn: conn, Ctx: ctx, Cancel: cancel, gen: m.Generation,
+	client := control.NewClient(conn.DialFiles, token)
+	if m.desktopClient != nil {
+		client = m.desktopClient(conn, token)
+	}
+	p := &MobileDesktopPage{Client: client, Conn: conn, Ctx: ctx, Cancel: cancel, gen: m.Generation,
 		Zoom: 1, Cursor: DesktopPoint{.5, .5}, Trackpad: control.ReadPrefs(m.desktopPrefsFile()).PointerMode != "touch"}
 	p.Unlock.Key = DesktopUnlockKey(m.CurrentDesktopID())
+	p.owner, p.desktopLink = m.desktopOpening, m.Link
+	return p
+}
+
+func (m *App) openDesktopPage(conn *remote.Conn, token string) {
+	p := m.newDesktopPage(conn, token)
 	m.DesktopPage = p
 	m.Router().Push("/desktop")
 	m.DesktopInitialize(p)
@@ -134,6 +149,9 @@ func (m *App) CloseDesktopPage(back bool) {
 		return
 	}
 	m.DesktopPage = nil
+	if p.resuming {
+		m.stopDesktopOpen()
+	}
 	m.DesktopApproval = MobileDesktopApproval{}
 	m.desktopRelease(p)
 	if p.Phase != "ended" {
@@ -157,7 +175,7 @@ func (m *App) desktopDo(p *MobileDesktopPage, work func(ctx context.Context) fun
 			return
 		}
 		m.onMain(p.gen, func() {
-			if m.DesktopPage != p || p.Phase == "ended" {
+			if ctx.Err() != nil || m.DesktopPage != p || p.Phase == "ended" {
 				return
 			}
 			apply()
@@ -200,6 +218,7 @@ func (m *App) DesktopFinish(p *MobileDesktopPage, message string) {
 	if p.Phase == "ended" {
 		return
 	}
+	p.suspended, p.resuming, p.restoring = false, false, false
 	p.Active, p.Image, p.Queue, p.text, p.Unlock.Text = false, nil, nil, "", ""
 	m.DesktopStage(p, "ended", tr("Control session ended"), message, false)
 	p.Cancel()
@@ -221,6 +240,13 @@ func (m *App) DesktopInitialize(p *MobileDesktopPage) {
 			if err != nil {
 				return func() { m.desktopFail(p, tr("Unable to load desktops"), err) }
 			}
+		}
+		if p.restoring {
+			var windows []desktop.Window
+			if p.WindowOnly && p.Window.ID != 0 {
+				windows, err = p.Client.Windows(ctx)
+			}
+			return func() { m.initializeResumedDesktop(p, s, displays, windows, err) }
 		}
 		if s.Pick && s.WindowOnly && s.Window != nil && s.Window.ID == 0 {
 			return func() {
@@ -338,6 +364,11 @@ func (m *App) desktopStart(p *MobileDesktopPage) {
 }
 
 func (m *App) desktopRetry(p *MobileDesktopPage) {
+	if p.suspended {
+		p.resumeBlocked = false
+		m.resumeDesktopPage()
+		return
+	}
 	switch {
 	case p.Active:
 		m.DesktopPoll(p)
@@ -650,6 +681,10 @@ func (m *App) DesktopPointerInput(p *MobileDesktopPage, ev ui.InputEvent) bool {
 			m.DesktopAtCursor(p, "move")
 		} else if p.TouchMode == 2 {
 			p.PanX, p.panY = p.PanX+dx, p.panY+dy
+		} else if p.TouchMode == 0 {
+			if at, ok := p.point(g.startX, g.startY); ok {
+				m.desktopScroll(p, at, dx*2, dy*2)
+			}
 		}
 		return true
 	case ui.InputPointerUp:
@@ -686,15 +721,32 @@ func (m *App) DesktopPointerInput(p *MobileDesktopPage, ev ui.InputEvent) bool {
 				m.DesktopSend(p, desktop.Input{Kind: "drag", X: start.X, Y: start.Y, ToX: end.X, ToY: end.Y})
 			}
 		case desktopDist(dx, dy) > 10:
-			if startOK {
-				m.DesktopSend(p, desktop.Input{Kind: "scroll", X: start.X, Y: start.Y, DeltaX: desktopClampInt(int(math.Round(float64(dx * 2)))), DeltaY: desktopClampInt(int(math.Round(float64(dy * 2))))})
+			// Moves stream scrolls while the finger is down. Only a release
+			// without move events needs the full displacement as a fallback.
+			if startOK && !down.moved {
+				m.desktopScroll(p, start, dx*2, dy*2)
 			}
-		case endOK:
+		case endOK && !down.moved && !ev.Canceled:
 			m.DesktopSend(p, desktop.Input{Kind: "click", X: end.X, Y: end.Y})
 		}
 		return true
 	case ui.InputPointerCancel:
 		g.active = false
+		return true
+	case ui.InputScroll:
+		// UIKit's keyboard container and touch-scroll arbitration deliver
+		// scrolls directly, without a pointer-up. Their deltas are offsets;
+		// CGEvent takes the inverse, matching a finger dragging the content.
+		switch {
+		case p.Trackpad:
+			m.desktopScroll(p, p.Cursor, -ev.DX*2, -ev.DY*2)
+		case p.TouchMode == 0:
+			if at, ok := p.point(ev.X, ev.Y); ok {
+				m.desktopScroll(p, at, -ev.DX*2, -ev.DY*2)
+			}
+		case p.TouchMode == 2:
+			p.PanX, p.panY = p.PanX-ev.DX, p.panY-ev.DY
+		}
 		return true
 	case ui.InputZoom:
 		if ev.Scale > 0 {
@@ -703,6 +755,16 @@ func (m *App) DesktopPointerInput(p *MobileDesktopPage, ev ui.InputEvent) bool {
 		return true
 	}
 	return false
+}
+
+func (m *App) desktopScroll(p *MobileDesktopPage, at DesktopPoint, dx, dy float32) {
+	p.scrollX, p.scrollY = p.scrollX+dx, p.scrollY+dy
+	x, y := int(p.scrollX), int(p.scrollY)
+	if x == 0 && y == 0 {
+		return
+	}
+	p.scrollX, p.scrollY = p.scrollX-float32(x), p.scrollY-float32(y)
+	m.DesktopSend(p, desktop.Input{Kind: "scroll", X: at.X, Y: at.Y, DeltaX: desktopClampInt(x), DeltaY: desktopClampInt(y)})
 }
 
 func (m *App) desktopGestures(p *MobileDesktopPage, events []ui.GestureEvent) {
@@ -714,12 +776,7 @@ func (m *App) desktopGestures(p *MobileDesktopPage, events []ui.GestureEvent) {
 			}
 		case "pan":
 			if p.Trackpad && p.Active {
-				p.scrollX, p.scrollY = p.scrollX+e.DX*2, p.scrollY+e.DY*2
-				dx, dy := int(p.scrollX), int(p.scrollY)
-				if dx != 0 || dy != 0 {
-					p.scrollX, p.scrollY = p.scrollX-float32(dx), p.scrollY-float32(dy)
-					m.DesktopSend(p, desktop.Input{Kind: "scroll", X: p.Cursor.X, Y: p.Cursor.Y, DeltaX: dx, DeltaY: dy})
-				}
+				m.desktopScroll(p, p.Cursor, e.DX*2, e.DY*2)
 			} else {
 				p.PanX, p.panY = p.PanX+e.DX, p.panY+e.DY
 			}
@@ -836,12 +893,12 @@ func (m *App) desktopStateView(c *ui.Context, p *MobileDesktopPage) {
 		if p.Detail != "" {
 			ui.Text(c, p.Detail).FontSize(m.Font(15)).TextColor(pal.muted).TextAlign(ui.Center).LineHeight(1.5)
 		}
-		if p.Phase == "error" {
+		if p.Phase == "error" || p.Phase == "paused" && !p.Busy {
 			if m.pill(c, "desktop-retry", tr("Reconnect"), true).Clicked() {
 				m.desktopRetry(p)
 			}
 		}
-		if p.Phase == "error" || p.Phase == "ended" {
+		if p.Phase == "error" || p.Phase == "ended" || p.Phase == "paused" {
 			if m.pill(c, "desktop-return", tr("Back to conversation"), p.Phase == "ended").Clicked() {
 				m.Router().Back()
 			}
@@ -908,6 +965,9 @@ var desktopKeySymbols = map[string]string{"escape": "escape", "tab": "arrow.righ
 func (m *App) desktopLiveView(c *ui.Context, p *MobileDesktopPage) {
 	pal := m.Pal
 	vp := ui.Column(c.Key("desktop-viewport")).FillWidth().Grow(1).MinHeight(0).Clip().Background(pal.Bg).Label(tr("Live Mac screen. Tap, swipe, or pinch to zoom."))
+	if !p.Trackpad && p.TouchMode == 0 {
+		vp.TouchScroll()
+	}
 	if b := vp.Bounds(); b.W > 0 && b.H > 0 {
 		p.View = ui.Rect{W: b.W, H: b.H}
 	}

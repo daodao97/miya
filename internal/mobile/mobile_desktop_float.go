@@ -6,7 +6,6 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"miya/internal/textutil"
-	"miya/internal/uiruntime"
 	"miya/internal/widgets"
 )
 
@@ -14,12 +13,8 @@ import (
 // The lease stays open and the screen keeps refreshing, but no touch on the
 // floating window reaches the Mac: tapping it restores the full page.
 type desktopFloat struct {
-	handle                       ui.Handle
-	placed                       bool
-	x, y                         float32
-	pressing                     bool
-	dragged                      bool
-	startX, startY, fromX, fromY float32
+	placed bool
+	offset ui.Point
 }
 
 // DesktopFloatPollInterval slows the screen refresh while minimized.
@@ -81,10 +76,7 @@ func (m *App) desktopFloatView(c *ui.Context) {
 	minX, maxX := safe.Left+margin, root.W-safe.Right-margin-w
 	minY, maxY := safe.Top+margin, root.H-safe.Bottom-margin-h
 	if !f.placed {
-		f.x, f.y, f.placed = maxX, maxY-96, true
-	}
-	if !f.pressing {
-		f.x, f.y = desktopClamp(f.x, minX, max(minX, maxX)), desktopClamp(f.y, minY, max(minY, maxY))
+		f.offset, f.placed = ui.Point{X: maxX, Y: max(minY, maxY-96)}, true
 	}
 	ended := p.Phase == "ended"
 	ui.Overlay(c, func() {
@@ -92,102 +84,67 @@ func (m *App) desktopFloatView(c *ui.Context) {
 		if ended {
 			label = tr("Control session ended. Tap to close.")
 		}
-		card := ui.Column(c.Key("desktop-float")).Absolute().Left(f.x).Top(f.y).Width(w).Height(h).Radius(12).Clip().
-			Background(pal.surface).Border(1, pal.line).Label(label).Bind(&f.handle)
-		// A large blurred shadow repaints a wide area each frame; skip it
-		// while dragging so the move stays smooth.
-		if !f.dragged || !f.pressing {
-			card.Shadow(0, 8, 24, 0, ui.RGBA(0, 0, 0, 0.3))
-		}
-		card.HandleInput(func(ev ui.InputEvent) bool {
-			// Events are local to the card's latest layout, which moves during
-			// a drag. Convert using its actual bounds, not the pending position.
-			r := f.handle.Bounds(c)
-			ev.X, ev.Y = ev.X+r.X, ev.Y+r.Y
-			return m.desktopFloatInput(p, ev, minX, maxX, minY, maxY)
-		})
-		card.Children(func() {
-			if p.Image != nil && !ended {
-				ui.Image(c, p.Image).Fill().Fit(ui.Contain)
-				return
-			}
-			ui.Column(c).Fill().Padding(8).Gap(6).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
-				switch {
-				case ended:
-					widgets.Icon(c, "device-desktop", 22, pal.muted)
-					ui.Text(c, tr("Control session ended")).FontSize(m.Font(12)).TextColor(pal.muted).TextAlign(ui.Center).MaxLines(2)
-				case p.Phase == "error":
-					ui.Text(c, textutil.FirstNonEmpty(p.Title, tr("Connection incomplete"))).FontSize(m.Font(12)).TextColor(pal.muted).TextAlign(ui.Center).MaxLines(2)
-				default:
-					if !p.Unlock.Locked {
-						ui.Spinner(c)
-					}
-					ui.Text(c, textutil.FirstNonEmpty(p.Status, p.Title)).FontSize(m.Font(12)).TextColor(pal.muted).TextAlign(ui.Center).MaxLines(2)
+		// Draggable owns the entire touch until release, even after the window
+		// moves away from where the touch began. Its transform also moves the
+		// close button and lets the edge spring settle without rebuilding chat.
+		bounds := ui.Rect{X: minX, Y: minY, W: max(0, maxX-minX), H: max(0, maxY-minY)}
+		window := ui.Column(c.Key("desktop-float")).Absolute().Left(0).Top(0).Width(w).Height(h).
+			Label(label).Draggable(&f.offset, ui.DraggableOptions{
+			Bounds: &bounds, Rigid: true,
+			Snap: func(at ui.Point) ui.Point {
+				if at.X-minX < maxX-at.X {
+					at.X = minX
+				} else {
+					at.X = maxX
 				}
-			})
+				return at
+			},
 		})
-		// The close button sits over the corner as a sibling, so its press
-		// never starts a drag of the window.
-		close := m.phoneButton(c.Key("desktop-float-close")).Absolute().Left(f.x+w-34).Top(f.y-10).Size(44, 44).Padding(0).
-			Justify(ui.Center).AlignItems(ui.Center).ZIndex(1).Label(tr("End remote desktop"))
-		close.Children(func() {
-			ui.Row(c).Size(26, 26).Radius(13).Background(pal.ink).Justify(ui.Center).AlignItems(ui.Center).Children(func() {
-				widgets.Icon(c, "x", 16, pal.Bg)
+		window.Children(func() {
+			card := ui.Column(c.Key("desktop-float-card")).Fill().Radius(12).Clip().
+				Background(pal.surface).Border(1, pal.line)
+			if !window.Dragging() {
+				card.Shadow(0, 8, 24, 0, ui.RGBA(0, 0, 0, 0.3))
+			}
+			card.Children(func() {
+				if p.Image != nil && !ended {
+					ui.Image(c, p.Image).Fill().Fit(ui.Contain)
+					return
+				}
+				ui.Column(c).Fill().Padding(8).Gap(6).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
+					switch {
+					case ended:
+						widgets.Icon(c, "device-desktop", 22, pal.muted)
+						ui.Text(c, tr("Control session ended")).FontSize(m.Font(12)).TextColor(pal.muted).TextAlign(ui.Center).MaxLines(2)
+					case p.Phase == "error" || p.Phase == "paused" && !p.Busy:
+						ui.Text(c, textutil.FirstNonEmpty(p.Title, tr("Connection incomplete"))).FontSize(m.Font(12)).TextColor(pal.muted).TextAlign(ui.Center).MaxLines(2)
+					default:
+						if !p.Unlock.Locked {
+							ui.Spinner(c)
+						}
+						ui.Text(c, textutil.FirstNonEmpty(p.Status, p.Title)).FontSize(m.Font(12)).TextColor(pal.muted).TextAlign(ui.Center).MaxLines(2)
+					}
+				})
 			})
+			// A separate hit target keeps a close-button press from dragging. It
+			// shares the parent transform, including while the edge spring settles.
+			close := m.phoneButton(c.Key("desktop-float-close")).Absolute().Left(w-34).Top(-10).Size(44, 44).Padding(0).
+				Justify(ui.Center).AlignItems(ui.Center).ZIndex(1).Label(tr("End remote desktop"))
+			close.Children(func() {
+				ui.Row(c).Size(26, 26).Radius(13).Background(pal.ink).Justify(ui.Center).AlignItems(ui.Center).Children(func() {
+					widgets.Icon(c, "x", 16, pal.Bg)
+				})
+			})
+			if close.Clicked() {
+				m.CloseDesktopPage(false)
+			}
 		})
-		if close.Clicked() {
-			m.CloseDesktopPage(false)
+		if window.Clicked() {
+			if ended {
+				m.CloseDesktopPage(false)
+			} else {
+				m.DesktopRestore(p)
+			}
 		}
 	})
-}
-
-// desktopFloatInput drags the window, snapping to the nearer side, and
-// treats a press without a drag as a tap.
-func (m *App) desktopFloatInput(p *MobileDesktopPage, ev ui.InputEvent, minX, maxX, minY, maxY float32) bool {
-	f := &p.float
-	switch ev.Kind {
-	case ui.InputPointerDown:
-		if ev.Button != 0 {
-			return false
-		}
-		f.pressing, f.dragged = true, false
-		f.startX, f.startY, f.fromX, f.fromY = ev.X, ev.Y, f.x, f.y
-		return true
-	case ui.InputPointerMove:
-		if !f.pressing {
-			return false
-		}
-		dx, dy := ev.X-f.startX, ev.Y-f.startY
-		if !f.dragged && desktopDist(dx, dy) < 8 {
-			return true
-		}
-		f.dragged = true
-		f.x = desktopClamp(f.fromX+dx, minX, max(minX, maxX))
-		f.y = desktopClamp(f.fromY+dy, minY, max(minY, maxY))
-		uiruntime.Invalidate()
-		return true
-	case ui.InputPointerUp, ui.InputPointerCancel:
-		if !f.pressing {
-			return false
-		}
-		f.pressing = false
-		if f.dragged {
-			if f.x-minX < maxX-f.x {
-				f.x = minX
-			} else {
-				f.x = maxX
-			}
-			return true
-		}
-		if ev.Kind == ui.InputPointerCancel || ev.Canceled {
-			return true
-		}
-		if p.Phase == "ended" {
-			m.CloseDesktopPage(false)
-		} else {
-			m.DesktopRestore(p)
-		}
-		return true
-	}
-	return false
 }

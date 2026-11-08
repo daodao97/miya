@@ -1,21 +1,15 @@
-//go:build darwin && !ios && cgo
+//go:build darwin && !ios
 
 package desktop
 
-/*
-#include <stdlib.h>
-int miya_desktop_application(const char *path, int icon, char **json);
-*/
-import "C"
-
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"os/exec"
 	"sort"
 	"strings"
-	"unsafe"
+
+	dc "github.com/egoist/mygo/plugins/desktopcontrol"
 )
 
 func Applications() ([]Application, error) {
@@ -23,20 +17,11 @@ func Applications() ([]Application, error) {
 	// Icons are small PNGs; keep the entire response comfortably below 2 MiB.
 	budget := 600 << 10
 	for i, app := range apps {
-		path := C.CString(app.ID)
-		var data *C.char
-		withIcon := C.int(0)
+		size := 0
 		if budget > 0 {
-			withIcon = 1
+			size = 48
 		}
-		code := C.miya_desktop_application(path, withIcon, &data)
-		C.free(unsafe.Pointer(path))
-		if code != 0 {
-			continue
-		}
-		var detail Application
-		err := json.Unmarshal([]byte(C.GoString(data)), &detail)
-		C.free(unsafe.Pointer(data))
+		detail, err := dc.ApplicationInfo(app.ID, size)
 		if err != nil {
 			continue
 		}
@@ -44,7 +29,7 @@ func Applications() ([]Application, error) {
 			apps[i].Name = detail.Name
 		}
 		apps[i].BundleID = detail.BundleID
-		if size := (len(detail.Icon) + 2) / 3 * 4; size <= budget {
+		if size := (len(detail.Icon) + 2) / 3 * 4; size <= budget && len(detail.Icon) <= 16384 {
 			apps[i].Icon = detail.Icon
 			budget -= size
 		}
