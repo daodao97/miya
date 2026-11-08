@@ -26,6 +26,7 @@ import (
 	threadlist "miya/internal/chat/history"
 	"miya/internal/chat/model"
 	msgfmt "miya/internal/chat/presentation"
+	"miya/internal/contacts"
 	"miya/internal/desktop/control"
 	"miya/internal/mcp/access"
 	mcpconfig "miya/internal/mcp/config"
@@ -43,6 +44,8 @@ import (
 
 type Controller struct {
 	appmodel.WindowState
+	contacts        *contacts.Store
+	contactSnapshot contacts.Snapshot
 
 	desktopMu   sync.Mutex
 	Desktop     *control.Server
@@ -211,6 +214,7 @@ func newChatController() *Controller {
 	c.ProjectCache = threadlist.Load()
 	c.LoadDesktopUnread()
 	c.AssignCachedThreadIDs()
+	c.restoreContactThreads()
 	projects := projectregistry.LoadProjects(c.Cwd, integrations.Projects())
 	cachedPaths := make([]string, 0, len(c.ProjectCache))
 	for path := range c.ProjectCache {
@@ -218,6 +222,9 @@ func newChatController() *Controller {
 	}
 	sort.Strings(cachedPaths)
 	for _, path := range cachedPaths {
+		if c.isContactWorkspace(path) {
+			continue
+		}
 		found := false
 		for _, project := range projects {
 			if project.Path == path {
@@ -229,7 +236,13 @@ func newChatController() *Controller {
 			projects = append(projects, projectmodel.Project{Name: filepath.Base(path), Path: path})
 		}
 	}
-	c.SetProjects(projectregistry.RestoreProjectOrder(projects))
+	visibleProjects := projects[:0]
+	for _, p := range projects {
+		if !c.isContactWorkspace(p.Path) {
+			visibleProjects = append(visibleProjects, p)
+		}
+	}
+	c.SetProjects(projectregistry.RestoreProjectOrder(visibleProjects))
 	if cached := c.ProjectCache[c.Cwd]; len(cached) > 0 {
 		c.SetThreads(cached)
 		c.SetHistoryStatus("")
@@ -257,6 +270,9 @@ func (c *Controller) SelectedPermissionPolicy() string {
 }
 
 func (c *Controller) rememberProject(path string) {
+	if c.isContactWorkspace(path) {
+		return
+	}
 	if items, added := projectregistry.Remember(c.Projects(), path); added {
 		c.SetProjects(items)
 		integrations.RememberProject(path)
@@ -277,6 +293,7 @@ func (c *Controller) RenameProject(path, name string) {
 // project cache. The Codex archive call is intentionally separate so the UI
 // can also remove locally-created threads that have no server ID yet.
 func (c *Controller) removeThreadLocal(id int, serverID string) {
+	c.syncContact(c.ThreadWithID(id), true)
 	project := c.ThreadWorkspace(id)
 	withoutThread := func(items []model.Thread) []model.Thread {
 		filtered := make([]model.Thread, 0, len(items))
@@ -450,6 +467,9 @@ func (c *Controller) Update(id int, fn func(*model.Thread)) {
 			}
 			// Streamed text changes no metadata: reorder and write the sidebar's
 			// cache only when what it keeps changed, not for every delta.
+			if threadlist.MetaOf(items[i]) != before || old.Busy && !items[i].Busy {
+				c.syncContact(items[i], false)
+			}
 			if threadlist.MetaOf(items[i]) != before {
 				c.RefreshProjectOrder()
 				threadlist.Persist(c.ProjectCache)
@@ -495,6 +515,9 @@ func (c *Controller) Update(id int, fn func(*model.Thread)) {
 			}
 			c.ProjectCache[path] = items
 			c.RecordDesktopCompletion(old, items[i])
+			if threadlist.MetaOf(items[i]) != threadlist.MetaOf(old) || old.Busy && !items[i].Busy {
+				c.syncContact(items[i], false)
+			}
 			if threadlist.MetaOf(items[i]) != threadlist.MetaOf(old) {
 				c.RefreshProjectOrder()
 				threadlist.Persist(c.ProjectCache)
@@ -966,7 +989,8 @@ func (c *Controller) Send() { c.SendDraft(false) }
 // sendDraft submits the window's draft; in a running turn it steers the
 // turn, or waits in the queue when steer is false.
 func (c *Controller) SendDraft(steer bool) int {
-	req := model.SendRequest{Steer: steer, ThreadID: c.Current().ID, Text: c.Draft(), Attachments: append([]string(nil), c.Attachments()...), Agent: c.CurrentAgent(), Model: c.CurrentBackend().Model(), Effort: c.CurrentBackend().Effort(), Policy: c.CurrentPermissionPolicy()}
+	controls := c.CurrentAgentControls()
+	req := model.SendRequest{Steer: steer, ThreadID: c.Current().ID, Text: c.Draft(), Attachments: append([]string(nil), c.Attachments()...), Agent: c.CurrentAgent(), Model: controls.Model(), Effort: controls.Effort(), ExplicitSettings: c.Current().Contact != nil, Policy: c.CurrentPermissionPolicy()}
 	id := c.Submit(req)
 	if id != 0 {
 		c.SetActive(id)

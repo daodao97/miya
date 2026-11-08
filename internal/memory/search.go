@@ -88,7 +88,7 @@ func (s *Store) search(project Scope, query, task string, limit int) ([]Entry, e
 		return []Entry{}, nil
 	}
 	docs := []document{d}
-	if d.Settings.UseUserPreferences {
+	if d.Settings.UseUserPreferences && project.Kind != "user" {
 		user, err := s.read(UserScope())
 		if err != nil {
 			return nil, err

@@ -64,6 +64,7 @@ type SendOptions struct {
 }
 
 type Request struct {
+	Contacts json.RawMessage `json:"contacts,omitempty"`
 	// Collaboration is an additive, capability-gated user API. Older peers do
 	// not advertise delegationV1 and must never receive this operation.
 	Collaboration json.RawMessage `json:"collaboration,omitempty"`

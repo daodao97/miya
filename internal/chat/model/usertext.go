@@ -4,6 +4,7 @@ import (
 	"regexp"
 	"strings"
 
+	"miya/internal/contacts"
 	"miya/internal/memory"
 )
 
@@ -19,7 +20,7 @@ var ImagePlaceholder = regexp.MustCompile(`(?i)\[image:\s*[^\]]*\]`)
 // CleanUserText is what the user typed in a message: without the memory
 // context and the attachment notes agents add around it.
 func CleanUserText(text string) string {
-	text = memory.StripContext(text)
+	text = contacts.StripInput(memory.StripContext(text))
 	text = attachmentEnvelope.ReplaceAllString(text, "")
 	text = attachmentInstruction.ReplaceAllString(text, "")
 	text = attachmentTempPath.ReplaceAllString(text, "")

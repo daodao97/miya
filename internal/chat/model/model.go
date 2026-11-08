@@ -4,6 +4,7 @@ package model
 
 import (
 	tokenusage "miya/internal/chat/usage"
+	"miya/internal/contacts"
 )
 
 type Message struct {
@@ -33,13 +34,14 @@ type Message struct {
 }
 
 type Thread struct {
-	ExecutionID          string `json:"executionId,omitempty"`
-	LaunchModel          string `json:"launchModel,omitempty"`
-	LaunchEffort         string `json:"launchEffort,omitempty"`
-	ClaudeGeneration     uint64 `json:"-"`
-	MemoryDisabled       bool   `json:"memoryDisabled,omitempty"`
-	MemoryEpoch          uint64 `json:"memoryEpoch,omitempty"`
-	CompletionNoticeBody string `json:"completionNoticeBody,omitempty"`
+	Contact              *contacts.Session `json:"contact,omitempty"`
+	ExecutionID          string            `json:"executionId,omitempty"`
+	LaunchModel          string            `json:"launchModel,omitempty"`
+	LaunchEffort         string            `json:"launchEffort,omitempty"`
+	ClaudeGeneration     uint64            `json:"-"`
+	MemoryDisabled       bool              `json:"memoryDisabled,omitempty"`
+	MemoryEpoch          uint64            `json:"memoryEpoch,omitempty"`
+	CompletionNoticeBody string            `json:"completionNoticeBody,omitempty"`
 	Agent                string
 	Tasks                []ThreadTask `json:",omitempty"`
 	TaskPending          bool         `json:",omitempty"`

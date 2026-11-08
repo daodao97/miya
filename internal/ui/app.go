@@ -77,6 +77,7 @@ type App struct {
 	Memories           MemoryUI
 	MemoryNotes        map[string]*MemoryNoticeUI
 	MemoryRevisionSeen uint64
+	Contacts           widgets.ContactUI
 	Autos              automationsUI
 	Collaborations     widgets.CollaborationUI
 	account            accountView
@@ -223,6 +224,16 @@ func (app *App) closeMenus() {
 }
 
 func (app *App) newThread() {
+	if t := app.C.Current(); t.Contact != nil && t.Contact.Daily {
+		for _, project := range app.C.State().Projects() {
+			if err := app.C.ChangeWorkspace(project.Path); err != nil {
+				app.Notice = err.Error()
+				return
+			}
+			app.Workspace, app.ProjectPath, app.ProjectName, app.ExpandedProject = project.Path, project.Path, project.Name, project.Path
+			break
+		}
+	}
 	app.C.NewThread()
 	app.Section = ""
 	app.closeMenus()

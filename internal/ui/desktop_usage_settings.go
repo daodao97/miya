@@ -24,8 +24,9 @@ func (s *accountView) subscriptionSettings(c *ui.Context) {
 				app.refreshUsage()
 			}
 		})
-		for _, agent := range usageAgents() {
-			if agent == "codex" {
+		for _, provider := range agentmeta.Usage() {
+			agent := provider.UsageID
+			if provider.UsageReset {
 				r := d.reading(agent)
 				// Keep the richer connected-account view (including extra credits).
 				// The standalone reading remains available without a chat connection.

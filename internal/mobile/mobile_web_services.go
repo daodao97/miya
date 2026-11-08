@@ -238,7 +238,7 @@ func (m *App) runtimeServiceOwner(service webservice.Service) string {
 	if service.Owner == nil {
 		return tr("Project candidate · Conversation ownership unconfirmed")
 	}
-	for _, project := range m.State.Projects {
+	for _, project := range m.allPhoneProjects() {
 		for _, thread := range project.Threads {
 			if thread.ServerID == service.Owner.SessionID && model.ThreadAgent(thread) == service.Owner.Backend {
 				return tr("From conversation: ") + thread.Title

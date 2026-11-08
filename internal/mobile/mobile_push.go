@@ -91,7 +91,7 @@ func (m *App) openPushThread() {
 	if m.pushOpen == 0 && m.pushOpenRef.ServerID == "" {
 		return
 	}
-	for _, p := range m.State.Projects {
+	for _, p := range m.allPhoneProjects() {
 		for _, t := range p.Threads {
 			match := t.ID == m.pushOpen
 			if m.pushOpenRef.ServerID != "" {

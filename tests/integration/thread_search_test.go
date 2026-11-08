@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -51,6 +52,10 @@ func TestGlobalThreadChoicesIncludeAllProjectsAndMatches(t *testing.T) {
 func TestComposerCanChooseGlobalConversationBeyondFirstPage(t *testing.T) {
 	app, tt := testApp(t)
 	c := app.C.(*controller.Controller)
+	// Deliver the asynchronous file search on this test's rendering goroutine,
+	// as a real window does, before checking the merged reference choices.
+	callbacks := make(chan func(), 1)
+	c.Run = func(f func()) { callbacks <- f }
 	c.SetThreads([]model.Thread{{ID: 1, ServerID: "session-1", Title: "Current: ", HistoryLoaded: true}})
 	c.SetActive(1)
 	c.ProjectCache = map[string][]model.Thread{"/other": {}}
@@ -59,6 +64,12 @@ func TestComposerCanChooseGlobalConversationBeyondFirstPage(t *testing.T) {
 	}
 	tt.Frame()
 	tt.Type("参考 @跨项目")
+	select {
+	case f := <-callbacks:
+		f()
+	case <-time.After(2 * time.Second):
+		t.Fatal("file search did not dispatch its completion")
+	}
 	tt.Frame()
 	for i := 0; i < 6; i++ {
 		tt.Key(0, ui.KeyDown)

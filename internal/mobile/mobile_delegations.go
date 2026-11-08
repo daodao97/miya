@@ -134,7 +134,7 @@ func (m *App) referencedThread(ref model.ThreadRef) (model.Thread, model.Project
 	if !ref.Valid() || ref.Source != m.State.ReferenceSource {
 		return model.Thread{}, model.ProjectSnapshot{}, false
 	}
-	for _, project := range m.State.Projects {
+	for _, project := range m.allPhoneProjects() {
 		for _, thread := range project.Threads {
 			if model.ThreadAgent(thread) == ref.Backend && thread.ServerID == ref.SessionID {
 				return thread, project, true

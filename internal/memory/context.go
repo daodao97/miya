@@ -221,7 +221,7 @@ func (s *Store) ValidatePrepared(project Scope, p Prepared) bool {
 		return false
 	}
 	for _, v := range p.Entries {
-		if v.Scope.Kind == "user" && !d.Settings.UseUserPreferences {
+		if v.Scope.Kind == "user" && project.Kind != "user" && !d.Settings.UseUserPreferences {
 			if v.State == "unavailable" {
 				continue
 			}

@@ -74,6 +74,7 @@ func (m *App) ReceiveAutomationRun(data json.RawMessage, message string) {
 }
 
 func (m *App) interruptAutomationRequest() {
+	m.interruptContacts()
 	m.InterruptCollaborationRequests()
 	m.InterruptAutomationForm()
 	if m.Autos.RunRequest != "" {

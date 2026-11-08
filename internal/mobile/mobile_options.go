@@ -26,12 +26,15 @@ func (m *App) agentOptions(agent string) phoneproto.AgentOptions {
 }
 
 func (m *App) SendOptions(agent string) remote.SendOptions {
-	if o, ok := m.Options[agent]; ok {
+	if o, ok := m.Options[m.optionsKey(agent)]; ok {
 		return o
 	}
 	o := m.agentOptions(agent).Current
 	if m.Open != 0 {
 		t := m.Viewer.Current()
+		if t.Contact != nil && model.ThreadAgent(t) == agent {
+			o.Model, o.Effort = t.LaunchModel, t.LaunchEffort
+		}
 		if model.ThreadAgent(t) == agent && t.PermissionPolicy != "" {
 			o.Policy = t.PermissionPolicy
 		}
@@ -67,7 +70,7 @@ func (m *App) setOptions(agent string, o remote.SendOptions) {
 	if m.Options == nil {
 		m.Options = map[string]remote.SendOptions{}
 	}
-	m.Options[agent] = o
+	m.Options[m.optionsKey(agent)] = o
 	m.SaveOptions()
 }
 
@@ -239,4 +242,11 @@ func (m *App) permissionOptionsView(c *ui.Context) {
 			})
 		})
 	})
+}
+
+func (m *App) optionsKey(agent string) string {
+	if t := m.Viewer.Current(); m.Open != 0 && t.Contact != nil && model.ThreadAgent(t) == agent {
+		return "contact:" + t.Contact.ID
+	}
+	return agent
 }

@@ -14,6 +14,7 @@ import (
 	"miya/internal/async"
 	"miya/internal/automation"
 	"miya/internal/chat/model"
+	"miya/internal/contacts"
 	mcpproto "miya/internal/mcp/protocol"
 	"miya/internal/memory"
 	"miya/internal/memory/manager"
@@ -54,6 +55,21 @@ func (c *Controller) ServiceRequest(req svcproto.Request) (any, error) {
 	var id int
 	var value string
 	switch req.Op {
+	case "contactChoice":
+		var r struct {
+			Thread        int
+			Model, Effort string
+		}
+		if err := arg(&r); err != nil {
+			return nil, err
+		}
+		c.setContactChoice(r.Thread, r.Model, r.Effort)
+	case "contacts":
+		var r contacts.Request
+		if err := arg(&r); err != nil {
+			return nil, err
+		}
+		return c.ContactOp(r)
 	case "accountLogin":
 		var r login.Request
 		if err := arg(&r); err != nil {
@@ -359,7 +375,9 @@ func (c *Controller) SnapshotState() svcproto.State {
 	}
 	threads := make([]model.Thread, len(c.Threads()))
 	for i, t := range c.Threads() {
-		t.Messages = nil
+		draft := t.Draft
+		t = model.ListThread(t)
+		t.Draft = draft
 		threads[i] = t
 	}
 	projectThreads := make(map[string][]model.Thread, len(c.ProjectCache))
@@ -376,6 +394,7 @@ func (c *Controller) SnapshotState() svcproto.State {
 		projectThreads[path] = items
 	}
 	return svcproto.State{
+		Contacts:        c.ContactSnapshot(),
 		Collaboration:   c.CollaborationCapabilities(),
 		ReferenceSource: c.ReferenceSource,
 		MemoryRevision:  c.MemoryRevision,

@@ -54,7 +54,11 @@ func (h memoryHost) Projects() (string, []string) {
 			paths = append(paths, p.Path)
 		}
 	}
-	return h.c.Cwd, paths
+	cwd := h.c.Cwd
+	if h.c.isContactWorkspace(cwd) {
+		cwd = ""
+	}
+	return cwd, paths
 }
 
 // memoryChanged tells windows the memory library changed.

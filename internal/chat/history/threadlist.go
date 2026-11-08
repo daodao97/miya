@@ -10,6 +10,7 @@ import (
 
 	"miya/internal/appdir"
 	"miya/internal/chat/model"
+	"miya/internal/contacts"
 )
 
 type Cache struct {
@@ -20,6 +21,7 @@ func CachePath() string { return appdir.File("quickgui-thread-cache.json") }
 
 // threadMeta is what the sidebar's cache keeps of a conversation.
 type Meta struct {
+	Contact                                     *contacts.Session
 	MemoryDisabled                              bool
 	ID                                          int
 	ServerID, Title, Agent, Project, Age        string
@@ -29,7 +31,7 @@ type Meta struct {
 }
 
 func MetaOf(t model.Thread) Meta {
-	return Meta{MemoryDisabled: t.MemoryDisabled, ID: t.ID, ServerID: t.ServerID, Title: t.Title, Agent: t.Agent, Project: t.Project, Age: t.Age, LastActivityAt: t.LastActivityAt, Resumed: t.Resumed, LaunchModel: t.LaunchModel, LaunchEffort: t.LaunchEffort, PermissionPolicy: t.PermissionPolicy}
+	return Meta{Contact: t.Contact, MemoryDisabled: t.MemoryDisabled, ID: t.ID, ServerID: t.ServerID, Title: t.Title, Agent: t.Agent, Project: t.Project, Age: t.Age, LastActivityAt: t.LastActivityAt, Resumed: t.Resumed, LaunchModel: t.LaunchModel, LaunchEffort: t.LaunchEffort, PermissionPolicy: t.PermissionPolicy}
 }
 
 func Write(projects map[string][]model.Thread) {
@@ -45,6 +47,7 @@ func Write(projects map[string][]model.Thread) {
 	for project, threads := range projects {
 		for _, thread := range threads {
 			metadata[project] = append(metadata[project], model.Thread{
+				Contact:        thread.Contact,
 				MemoryDisabled: thread.MemoryDisabled,
 				ID:             thread.ID, ServerID: thread.ServerID, Title: thread.Title, Agent: thread.Agent,
 				Resumed: model.ThreadAgent(thread) != model.AgentCodex && thread.Resumed,

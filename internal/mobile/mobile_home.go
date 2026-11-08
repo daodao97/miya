@@ -58,7 +58,7 @@ func (m *App) StartConversation(project, agent string) {
 }
 
 func (m *App) SidebarActivityThreads() (running, completed []model.Thread) {
-	return msgfmt.SidebarActivityThreads(m.State.Projects, m.completionUnread)
+	return msgfmt.SidebarActivityThreads(m.allPhoneProjects(), m.completionUnread)
 }
 
 func (m *App) completionUnread(thread model.Thread) bool {

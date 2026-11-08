@@ -1,6 +1,7 @@
 package desktopui
 
 import (
+	"sort"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -29,10 +30,14 @@ func (app *App) SidebarView(c *ui.Context) {
 				if app.nav(c.Key("nav-new"), "edit", tr("New thread")).Clicked() {
 					app.newThread()
 				}
+				if app.nav(c.Key("nav-contacts"), "message-circle", tr("Contacts")).Clicked() {
+					app.ShowContacts()
+				}
 				if app.nav(c.Key("nav-automations"), "clock", tr("Automations")).Clicked() {
 					app.ShowAutomations()
 				}
 			})
+			app.contactSidebar(c.Key("contacts"))
 			app.sidebarActivity(c.Key("activity"))
 			ui.Row(c).AlignItems(ui.Center).Margin(28, 0, 4, 0).Padding(0, 12, 0, 20).Children(func() {
 				ui.Text(c, tr("Projects")).FontSize(11).TextColor(widgets.Faint).Grow(1)
@@ -70,16 +75,49 @@ func (app *App) sidebarActivity(c *ui.Context) {
 func (app *App) SidebarActivityThreads() (running, completed []model.Thread) {
 	s := app.C.State()
 	projects := make([]model.ProjectSnapshot, 0, len(s.Projects())+1)
-	current := false
+	seen := map[string]bool{}
 	for _, project := range s.Projects() {
 		threads := s.ProjectCache[project.Path]
 		if project.Path == s.Cwd {
-			threads, current = s.Threads(), true
+			threads = s.Threads()
 		}
 		projects = append(projects, model.ProjectSnapshot{Threads: threads})
+		seen[project.Path] = true
 	}
-	if !current {
-		projects = append([]model.ProjectSnapshot{{Threads: s.Threads()}}, projects...)
+	// Keep equal-time activity in project order, independent of selection.
+	// Daily chats have no project row, so append their paths in stable order.
+	paths := []string{}
+	for path := range s.ProjectCache {
+		if !seen[path] {
+			paths = append(paths, path)
+		}
+	}
+	if !seen[s.Cwd] {
+		found := false
+		for _, p := range paths {
+			found = found || p == s.Cwd
+		}
+		if !found {
+			paths = append(paths, s.Cwd)
+		}
+	}
+	sort.Strings(paths)
+	for _, path := range paths {
+		threads := s.ProjectCache[path]
+		if path == s.Cwd {
+			threads = s.Threads()
+		}
+		daily := []model.Thread{}
+		for _, thread := range threads {
+			if thread.Contact != nil && thread.Contact.Daily {
+				daily = append(daily, thread)
+			}
+		}
+		if len(daily) > 0 {
+			projects = append(projects, model.ProjectSnapshot{Threads: daily})
+		} else if path == s.Cwd {
+			projects = append([]model.ProjectSnapshot{{Threads: threads}}, projects...)
+		}
 	}
 	return msgfmt.SidebarActivityThreads(projects, app.C.DesktopThreadUnread)
 }
@@ -261,6 +299,12 @@ func (app *App) header(c *ui.Context) {
 			}
 		}
 		title := strings.Join(strings.Fields(app.C.Current().Title), " ")
+		if t := app.C.Current(); t.Contact != nil {
+			title = t.Contact.Name
+			if profile, ok := app.C.ContactSnapshot().Find(t.Contact.BotID); ok {
+				title = profile.Name
+			}
+		}
 		if app.Section != "" {
 			title = tr(app.Section)
 		}
@@ -290,10 +334,12 @@ func (app *App) sectionView(c *ui.Context) {
 	}
 	ui.Scroll(c.Key("section:" + app.Section)).Grow(1).MinHeight(0).Children(func() {
 		ui.Column(c).Padding(pad).Gap(20).Children(func() {
-			if app.Section != "Settings" && app.Section != "Automations" {
+			if app.Section != "Settings" && app.Section != "Automations" && app.Section != "Contacts" {
 				ui.Text(c, tr(app.Section)).FontSize(26).FontWeight(600).SingleLine().Ellipsis("…")
 			}
 			switch app.Section {
+			case "Contacts":
+				app.contactsView(c)
 			case "Automations":
 				app.automationsView(c)
 			case "Skills":

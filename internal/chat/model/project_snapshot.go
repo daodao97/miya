@@ -12,6 +12,11 @@ type ProjectSnapshot struct {
 // ListThread is a conversation as the list shows it: no messages, and never
 // the desktop's unsent draft.
 func ListThread(t Thread) Thread {
+	if t.Contact != nil {
+		role := *t.Contact
+		role.Persona = ""
+		t.Contact = &role
+	}
 	t.Messages = nil
 	t.Draft = ""
 	return t

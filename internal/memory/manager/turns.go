@@ -72,6 +72,9 @@ func (mg *Manager) CompletedTurn(id int, backendTurn string) {
 		return
 	}
 	scope, err := memory.ProjectScope(mg.Host.Workspace(id))
+	if t.Contact != nil && t.Contact.Daily {
+		scope, err = memory.UserScope(), nil
+	}
 	if err != nil {
 		return
 	}

@@ -18,7 +18,7 @@ func (m *App) handoffToNewThread() {
 		return
 	}
 	project := ""
-	for _, p := range m.State.Projects {
+	for _, p := range m.allPhoneProjects() {
 		for _, t := range p.Threads {
 			if t.ServerID == ref.SessionID && model.ThreadAgent(t) == ref.Backend {
 				project = p.Path

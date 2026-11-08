@@ -19427,3 +19427,463 @@ func MobileSendRetry() string { return In(i18n.Locale()).MobileSendRetry() }
 func (msgs Messages) MobileSendRetry() string {
 	return Catalog.Format(msgs.locale, "mobileSendRetry", nil)
 }
+
+// BotContacts03fbbceb8a says "All contacts"
+// in the language the app shows.
+func BotContacts03fbbceb8a() string { return In(i18n.Locale()).BotContacts03fbbceb8a() }
+
+// BotContacts03fbbceb8a says "All contacts"
+// in the language of msgs.
+func (msgs Messages) BotContacts03fbbceb8a() string {
+	return Catalog.Format(msgs.locale, "botContacts_03fbbceb8a", nil)
+}
+
+// BotContacts7d6035daff says "Archive contact"
+// in the language the app shows.
+func BotContacts7d6035daff() string { return In(i18n.Locale()).BotContacts7d6035daff() }
+
+// BotContacts7d6035daff says "Archive contact"
+// in the language of msgs.
+func (msgs Messages) BotContacts7d6035daff() string {
+	return Catalog.Format(msgs.locale, "botContacts_7d6035daff", nil)
+}
+
+// BotContacts30e6c3aead says "Archived contacts"
+// in the language the app shows.
+func BotContacts30e6c3aead() string { return In(i18n.Locale()).BotContacts30e6c3aead() }
+
+// BotContacts30e6c3aead says "Archived contacts"
+// in the language of msgs.
+func (msgs Messages) BotContacts30e6c3aead() string {
+	return Catalog.Format(msgs.locale, "botContacts_30e6c3aead", nil)
+}
+
+// BotContacts10b0887999 says "Chat with "
+// in the language the app shows.
+func BotContacts10b0887999() string { return In(i18n.Locale()).BotContacts10b0887999() }
+
+// BotContacts10b0887999 says "Chat with "
+// in the language of msgs.
+func (msgs Messages) BotContacts10b0887999() string {
+	return Catalog.Format(msgs.locale, "botContacts_10b0887999", nil)
+}
+
+// BotContactsF6e05dcfcf says "Choose model"
+// in the language the app shows.
+func BotContactsF6e05dcfcf() string { return In(i18n.Locale()).BotContactsF6e05dcfcf() }
+
+// BotContactsF6e05dcfcf says "Choose model"
+// in the language of msgs.
+func (msgs Messages) BotContactsF6e05dcfcf() string {
+	return Catalog.Format(msgs.locale, "botContacts_f6e05dcfcf", nil)
+}
+
+// BotContacts9c5bb7ae0e says "Choose photo"
+// in the language the app shows.
+func BotContacts9c5bb7ae0e() string { return In(i18n.Locale()).BotContacts9c5bb7ae0e() }
+
+// BotContacts9c5bb7ae0e says "Choose photo"
+// in the language of msgs.
+func (msgs Messages) BotContacts9c5bb7ae0e() string {
+	return Catalog.Format(msgs.locale, "botContacts_9c5bb7ae0e", nil)
+}
+
+// BotContacts9681395de4 says "Contact details"
+// in the language the app shows.
+func BotContacts9681395de4() string { return In(i18n.Locale()).BotContacts9681395de4() }
+
+// BotContacts9681395de4 says "Contact details"
+// in the language of msgs.
+func (msgs Messages) BotContacts9681395de4() string {
+	return Catalog.Format(msgs.locale, "botContacts_9681395de4", nil)
+}
+
+// BotContactsB450645deb says "Contacts"
+// in the language the app shows.
+func BotContactsB450645deb() string { return In(i18n.Locale()).BotContactsB450645deb() }
+
+// BotContactsB450645deb says "Contacts"
+// in the language of msgs.
+func (msgs Messages) BotContactsB450645deb() string {
+	return Catalog.Format(msgs.locale, "botContacts_b450645deb", nil)
+}
+
+// BotContactsD3d17ea8ec says "Continue conversation"
+// in the language the app shows.
+func BotContactsD3d17ea8ec() string { return In(i18n.Locale()).BotContactsD3d17ea8ec() }
+
+// BotContactsD3d17ea8ec says "Continue conversation"
+// in the language of msgs.
+func (msgs Messages) BotContactsD3d17ea8ec() string {
+	return Catalog.Format(msgs.locale, "botContacts_d3d17ea8ec", nil)
+}
+
+// BotContacts06776d63ec says "Conversation context"
+// in the language the app shows.
+func BotContacts06776d63ec() string { return In(i18n.Locale()).BotContacts06776d63ec() }
+
+// BotContacts06776d63ec says "Conversation context"
+// in the language of msgs.
+func (msgs Messages) BotContacts06776d63ec() string {
+	return Catalog.Format(msgs.locale, "botContacts_06776d63ec", nil)
+}
+
+// BotContacts3e935ae3ab says "Daily chat"
+// in the language the app shows.
+func BotContacts3e935ae3ab() string { return In(i18n.Locale()).BotContacts3e935ae3ab() }
+
+// BotContacts3e935ae3ab says "Daily chat"
+// in the language of msgs.
+func (msgs Messages) BotContacts3e935ae3ab() string {
+	return Catalog.Format(msgs.locale, "botContacts_3e935ae3ab", nil)
+}
+
+// BotContacts4f428c740f says "Describe their voice, strengths, and working habits."
+// in the language the app shows.
+func BotContacts4f428c740f() string { return In(i18n.Locale()).BotContacts4f428c740f() }
+
+// BotContacts4f428c740f says "Describe their voice, strengths, and working habits."
+// in the language of msgs.
+func (msgs Messages) BotContacts4f428c740f() string {
+	return Catalog.Format(msgs.locale, "botContacts_4f428c740f", nil)
+}
+
+// BotContacts526e0087cc says "Description"
+// in the language the app shows.
+func BotContacts526e0087cc() string { return In(i18n.Locale()).BotContacts526e0087cc() }
+
+// BotContacts526e0087cc says "Description"
+// in the language of msgs.
+func (msgs Messages) BotContacts526e0087cc() string {
+	return Catalog.Format(msgs.locale, "botContacts_526e0087cc", nil)
+}
+
+// BotContacts387b79879b says "Disconnected. Your edits are kept on this device."
+// in the language the app shows.
+func BotContacts387b79879b() string { return In(i18n.Locale()).BotContacts387b79879b() }
+
+// BotContacts387b79879b says "Disconnected. Your edits are kept on this device."
+// in the language of msgs.
+func (msgs Messages) BotContacts387b79879b() string {
+	return Catalog.Format(msgs.locale, "botContacts_387b79879b", nil)
+}
+
+// BotContacts81cd065a45 says "Edit contact"
+// in the language the app shows.
+func BotContacts81cd065a45() string { return In(i18n.Locale()).BotContacts81cd065a45() }
+
+// BotContacts81cd065a45 says "Edit contact"
+// in the language of msgs.
+func (msgs Messages) BotContacts81cd065a45() string {
+	return Catalog.Format(msgs.locale, "botContacts_81cd065a45", nil)
+}
+
+// BotContactsDa96ed44c9 says "Execution engine"
+// in the language the app shows.
+func BotContactsDa96ed44c9() string { return In(i18n.Locale()).BotContactsDa96ed44c9() }
+
+// BotContactsDa96ed44c9 says "Execution engine"
+// in the language of msgs.
+func (msgs Messages) BotContactsDa96ed44c9() string {
+	return Catalog.Format(msgs.locale, "botContacts_da96ed44c9", nil)
+}
+
+// BotContacts48a930dd9e says "New contact"
+// in the language the app shows.
+func BotContacts48a930dd9e() string { return In(i18n.Locale()).BotContacts48a930dd9e() }
+
+// BotContacts48a930dd9e says "New contact"
+// in the language of msgs.
+func (msgs Messages) BotContacts48a930dd9e() string {
+	return Catalog.Format(msgs.locale, "botContacts_48a930dd9e", nil)
+}
+
+// BotContactsFc960fb99d says "New daily chat"
+// in the language the app shows.
+func BotContactsFc960fb99d() string { return In(i18n.Locale()).BotContactsFc960fb99d() }
+
+// BotContactsFc960fb99d says "New daily chat"
+// in the language of msgs.
+func (msgs Messages) BotContactsFc960fb99d() string {
+	return Catalog.Format(msgs.locale, "botContacts_fc960fb99d", nil)
+}
+
+// BotContactsCcb126bc14 says "No contacts here yet"
+// in the language the app shows.
+func BotContactsCcb126bc14() string { return In(i18n.Locale()).BotContactsCcb126bc14() }
+
+// BotContactsCcb126bc14 says "No contacts here yet"
+// in the language of msgs.
+func (msgs Messages) BotContactsCcb126bc14() string {
+	return Catalog.Format(msgs.locale, "botContacts_ccb126bc14", nil)
+}
+
+// BotContacts31bdeef94e says "Persona"
+// in the language the app shows.
+func BotContacts31bdeef94e() string { return In(i18n.Locale()).BotContacts31bdeef94e() }
+
+// BotContacts31bdeef94e says "Persona"
+// in the language of msgs.
+func (msgs Messages) BotContacts31bdeef94e() string {
+	return Catalog.Format(msgs.locale, "botContacts_31bdeef94e", nil)
+}
+
+// BotContacts6006ada2b2 says "Persona and execution defaults apply to new conversations. Existing conversations keep their settings."
+// in the language the app shows.
+func BotContacts6006ada2b2() string { return In(i18n.Locale()).BotContacts6006ada2b2() }
+
+// BotContacts6006ada2b2 says "Persona and execution defaults apply to new conversations. Existing conversations keep their settings."
+// in the language of msgs.
+func (msgs Messages) BotContacts6006ada2b2() string {
+	return Catalog.Format(msgs.locale, "botContacts_6006ada2b2", nil)
+}
+
+// BotContacts644cfd12d5 says "Pin contact"
+// in the language the app shows.
+func BotContacts644cfd12d5() string { return In(i18n.Locale()).BotContacts644cfd12d5() }
+
+// BotContacts644cfd12d5 says "Pin contact"
+// in the language of msgs.
+func (msgs Messages) BotContacts644cfd12d5() string {
+	return Catalog.Format(msgs.locale, "botContacts_644cfd12d5", nil)
+}
+
+// BotContactsB6316401a8 says "Reload saved contact"
+// in the language the app shows.
+func BotContactsB6316401a8() string { return In(i18n.Locale()).BotContactsB6316401a8() }
+
+// BotContactsB6316401a8 says "Reload saved contact"
+// in the language of msgs.
+func (msgs Messages) BotContactsB6316401a8() string {
+	return Catalog.Format(msgs.locale, "botContacts_b6316401a8", nil)
+}
+
+// BotContacts639be1349f says "Restore contact"
+// in the language the app shows.
+func BotContacts639be1349f() string { return In(i18n.Locale()).BotContacts639be1349f() }
+
+// BotContacts639be1349f says "Restore contact"
+// in the language of msgs.
+func (msgs Messages) BotContacts639be1349f() string {
+	return Catalog.Format(msgs.locale, "botContacts_639be1349f", nil)
+}
+
+// BotContactsD24f121f4a says "Save contact"
+// in the language the app shows.
+func BotContactsD24f121f4a() string { return In(i18n.Locale()).BotContactsD24f121f4a() }
+
+// BotContactsD24f121f4a says "Save contact"
+// in the language of msgs.
+func (msgs Messages) BotContactsD24f121f4a() string {
+	return Catalog.Format(msgs.locale, "botContacts_d24f121f4a", nil)
+}
+
+// BotContactsBbcfc42b8d says "Search by name or description"
+// in the language the app shows.
+func BotContactsBbcfc42b8d() string { return In(i18n.Locale()).BotContactsBbcfc42b8d() }
+
+// BotContactsBbcfc42b8d says "Search by name or description"
+// in the language of msgs.
+func (msgs Messages) BotContactsBbcfc42b8d() string {
+	return Catalog.Format(msgs.locale, "botContacts_bbcfc42b8d", nil)
+}
+
+// BotContactsF863aac249 says "Search contacts"
+// in the language the app shows.
+func BotContactsF863aac249() string { return In(i18n.Locale()).BotContactsF863aac249() }
+
+// BotContactsF863aac249 says "Search contacts"
+// in the language of msgs.
+func (msgs Messages) BotContactsF863aac249() string {
+	return Catalog.Format(msgs.locale, "botContacts_f863aac249", nil)
+}
+
+// BotContacts258150cb3e says "Start a conversation"
+// in the language the app shows.
+func BotContacts258150cb3e() string { return In(i18n.Locale()).BotContacts258150cb3e() }
+
+// BotContacts258150cb3e says "Start a conversation"
+// in the language of msgs.
+func (msgs Messages) BotContacts258150cb3e() string {
+	return Catalog.Format(msgs.locale, "botContacts_258150cb3e", nil)
+}
+
+// BotContactsE04b1892dd says "Start with a role, then make it your own."
+// in the language the app shows.
+func BotContactsE04b1892dd() string { return In(i18n.Locale()).BotContactsE04b1892dd() }
+
+// BotContactsE04b1892dd says "Start with a role, then make it your own."
+// in the language of msgs.
+func (msgs Messages) BotContactsE04b1892dd() string {
+	return Catalog.Format(msgs.locale, "botContacts_e04b1892dd", nil)
+}
+
+// BotContacts5badfbd624 says "Unpin contact"
+// in the language the app shows.
+func BotContacts5badfbd624() string { return In(i18n.Locale()).BotContacts5badfbd624() }
+
+// BotContacts5badfbd624 says "Unpin contact"
+// in the language of msgs.
+func (msgs Messages) BotContacts5badfbd624() string {
+	return Catalog.Format(msgs.locale, "botContacts_5badfbd624", nil)
+}
+
+// BotContacts5b1aa0642d says "Unread messages"
+// in the language the app shows.
+func BotContacts5b1aa0642d() string { return In(i18n.Locale()).BotContacts5b1aa0642d() }
+
+// BotContacts5b1aa0642d says "Unread messages"
+// in the language of msgs.
+func (msgs Messages) BotContacts5b1aa0642d() string {
+	return Catalog.Format(msgs.locale, "botContacts_5b1aa0642d", nil)
+}
+
+// BotContacts3cc8790e13 says "Update the Miya background service to use contacts"
+// in the language the app shows.
+func BotContacts3cc8790e13() string { return In(i18n.Locale()).BotContacts3cc8790e13() }
+
+// BotContacts3cc8790e13 says "Update the Miya background service to use contacts"
+// in the language of msgs.
+func (msgs Messages) BotContacts3cc8790e13() string {
+	return Catalog.Format(msgs.locale, "botContacts_3cc8790e13", nil)
+}
+
+// BotContacts54e9bb759d says "Uses your configured engine account. User memories may be shared across contacts; project memories stay in their proj…"
+// in the language the app shows.
+func BotContacts54e9bb759d() string { return In(i18n.Locale()).BotContacts54e9bb759d() }
+
+// BotContacts54e9bb759d says "Uses your configured engine account. User memories may be shared across contacts; project memories stay in their proj…"
+// in the language of msgs.
+func (msgs Messages) BotContacts54e9bb759d() string {
+	return Catalog.Format(msgs.locale, "botContacts_54e9bb759d", nil)
+}
+
+// BotContactsA7394792a3 says "Using an earlier persona"
+// in the language the app shows.
+func BotContactsA7394792a3() string { return In(i18n.Locale()).BotContactsA7394792a3() }
+
+// BotContactsA7394792a3 says "Using an earlier persona"
+// in the language of msgs.
+func (msgs Messages) BotContactsA7394792a3() string {
+	return Catalog.Format(msgs.locale, "botContacts_a7394792a3", nil)
+}
+
+// BotContactsC027244224 says "Work in "
+// in the language the app shows.
+func BotContactsC027244224() string { return In(i18n.Locale()).BotContactsC027244224() }
+
+// BotContactsC027244224 says "Work in "
+// in the language of msgs.
+func (msgs Messages) BotContactsC027244224() string {
+	return Catalog.Format(msgs.locale, "botContacts_c027244224", nil)
+}
+
+// BotContactsDec0d13d7e says "Contact "
+// in the language the app shows.
+func BotContactsDec0d13d7e() string { return In(i18n.Locale()).BotContactsDec0d13d7e() }
+
+// BotContactsDec0d13d7e says "Contact "
+// in the language of msgs.
+func (msgs Messages) BotContactsDec0d13d7e() string {
+	return Catalog.Format(msgs.locale, "botContacts_dec0d13d7e", nil)
+}
+
+// BotContacts1dadb3284b says "Companion"
+// in the language the app shows.
+func BotContacts1dadb3284b() string { return In(i18n.Locale()).BotContacts1dadb3284b() }
+
+// BotContacts1dadb3284b says "Companion"
+// in the language of msgs.
+func (msgs Messages) BotContacts1dadb3284b() string {
+	return Catalog.Format(msgs.locale, "botContacts_1dadb3284b", nil)
+}
+
+// BotContacts844a6579ac says "Everyday conversation, clear thinking, and a next step"
+// in the language the app shows.
+func BotContacts844a6579ac() string { return In(i18n.Locale()).BotContacts844a6579ac() }
+
+// BotContacts844a6579ac says "Everyday conversation, clear thinking, and a next step"
+// in the language of msgs.
+func (msgs Messages) BotContacts844a6579ac() string {
+	return Catalog.Format(msgs.locale, "botContacts_844a6579ac", nil)
+}
+
+// BotContactsFc8ac2a656 says "You are a warm, candid companion. Listen carefully, speak naturally in the user's preferred language, offer concrete …"
+// in the language the app shows.
+func BotContactsFc8ac2a656() string { return In(i18n.Locale()).BotContactsFc8ac2a656() }
+
+// BotContactsFc8ac2a656 says "You are a warm, candid companion. Listen carefully, speak naturally in the user's preferred language, offer concrete …"
+// in the language of msgs.
+func (msgs Messages) BotContactsFc8ac2a656() string {
+	return Catalog.Format(msgs.locale, "botContacts_fc8ac2a656", nil)
+}
+
+// BotContacts918fcd73c3 says "Researcher"
+// in the language the app shows.
+func BotContacts918fcd73c3() string { return In(i18n.Locale()).BotContacts918fcd73c3() }
+
+// BotContacts918fcd73c3 says "Researcher"
+// in the language of msgs.
+func (msgs Messages) BotContacts918fcd73c3() string {
+	return Catalog.Format(msgs.locale, "botContacts_918fcd73c3", nil)
+}
+
+// BotContacts1a08a0ff80 says "Check sources and separate facts from uncertainty"
+// in the language the app shows.
+func BotContacts1a08a0ff80() string { return In(i18n.Locale()).BotContacts1a08a0ff80() }
+
+// BotContacts1a08a0ff80 says "Check sources and separate facts from uncertainty"
+// in the language of msgs.
+func (msgs Messages) BotContacts1a08a0ff80() string {
+	return Catalog.Format(msgs.locale, "botContacts_1a08a0ff80", nil)
+}
+
+// BotContactsA67613d5ee says "You are a careful researcher. Distinguish facts, inferences, and unknowns, verify important sources, provide traceabl…"
+// in the language the app shows.
+func BotContactsA67613d5ee() string { return In(i18n.Locale()).BotContactsA67613d5ee() }
+
+// BotContactsA67613d5ee says "You are a careful researcher. Distinguish facts, inferences, and unknowns, verify important sources, provide traceabl…"
+// in the language of msgs.
+func (msgs Messages) BotContactsA67613d5ee() string {
+	return Catalog.Format(msgs.locale, "botContacts_a67613d5ee", nil)
+}
+
+// BotContactsD93352a703 says "Engineer"
+// in the language the app shows.
+func BotContactsD93352a703() string { return In(i18n.Locale()).BotContactsD93352a703() }
+
+// BotContactsD93352a703 says "Engineer"
+// in the language of msgs.
+func (msgs Messages) BotContactsD93352a703() string {
+	return Catalog.Format(msgs.locale, "botContacts_d93352a703", nil)
+}
+
+// BotContactsFfe2a2d530 says "Understand projects, write code, and verify results"
+// in the language the app shows.
+func BotContactsFfe2a2d530() string { return In(i18n.Locale()).BotContactsFfe2a2d530() }
+
+// BotContactsFfe2a2d530 says "Understand projects, write code, and verify results"
+// in the language of msgs.
+func (msgs Messages) BotContactsFfe2a2d530() string {
+	return Catalog.Format(msgs.locale, "botContacts_ffe2a2d530", nil)
+}
+
+// BotContactsD6dcd173da says "You are a practical engineer. Understand the existing code and conventions, choose clear and maintainable implementat…"
+// in the language the app shows.
+func BotContactsD6dcd173da() string { return In(i18n.Locale()).BotContactsD6dcd173da() }
+
+// BotContactsD6dcd173da says "You are a practical engineer. Understand the existing code and conventions, choose clear and maintainable implementat…"
+// in the language of msgs.
+func (msgs Messages) BotContactsD6dcd173da() string {
+	return Catalog.Format(msgs.locale, "botContacts_d6dcd173da", nil)
+}
+
+// BotContacts1f397413e4 says "Initial"
+// in the language the app shows.
+func BotContacts1f397413e4() string { return In(i18n.Locale()).BotContacts1f397413e4() }
+
+// BotContacts1f397413e4 says "Initial"
+// in the language of msgs.
+func (msgs Messages) BotContacts1f397413e4() string {
+	return Catalog.Format(msgs.locale, "botContacts_1f397413e4", nil)
+}

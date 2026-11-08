@@ -46,6 +46,7 @@ func (c *Controller) PhoneSnapshot() phoneproto.State {
 	for key, version := range c.DesktopUnread {
 		s.CompletionUnread[key] = version
 	}
+	s.Contacts = c.ContactSnapshot()
 	s.Collaboration = c.CollaborationCapabilities()
 	s.DesktopWindows = s.DesktopControl
 	s.AutomationRun = c.Auto != nil
@@ -70,6 +71,9 @@ func (c *Controller) PhoneSnapshot() phoneproto.State {
 		projects = append([]projectmodel.Project{{Name: filepath.Base(c.Cwd), Path: c.Cwd}}, projects...)
 	}
 	for _, p := range projects {
+		if c.isContactWorkspace(p.Path) {
+			continue
+		}
 		threads := c.ProjectCache[p.Path]
 		if p.Path == c.Cwd {
 			threads = c.Threads()
@@ -80,6 +84,20 @@ func (c *Controller) PhoneSnapshot() phoneproto.State {
 		}
 		pp.Threads = msgfmt.DisplayedThreads(pp.Threads, true)
 		s.Projects = append(s.Projects, pp)
+	}
+
+	for path, threads := range c.ProjectCache {
+		if !c.isContactWorkspace(path) {
+			continue
+		}
+		if path == c.Cwd {
+			threads = c.Threads()
+		}
+		pp := model.ProjectSnapshot{Name: "Daily chat", Path: path}
+		for _, t := range threads {
+			pp.Threads = append(pp.Threads, model.ListThread(t))
+		}
+		s.ContactThreads = append(s.ContactThreads, pp)
 	}
 	return s
 }

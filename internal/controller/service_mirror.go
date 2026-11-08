@@ -230,21 +230,69 @@ func (c *Controller) watchService(cl *svcclient.Client) {
 
 func (c *Controller) ApplyState(s svcproto.State) {
 	active := c.Active()
-	hadActive := c.ThreadWithID(active).ID != 0
+	previousThread := c.ThreadWithID(active)
+	hadActive := previousThread.ID != 0
+	// The service may switch its working list for another window or phone.
+	// Keep this window's selected conversation and workspace together.
+	windowCwd := c.Cwd
+	projects := make(map[string][]model.Thread, len(s.ProjectThreads)+1)
+	for path, threads := range s.ProjectThreads {
+		projects[path] = threads
+	}
+	projects[s.Cwd] = s.Threads
+	previous := c.AllThreads()
+	var incoming []model.Thread
+	for _, threads := range projects {
+		incoming = append(incoming, threads...)
+	}
+	c.Mirror.RemapContacts(previous, incoming, c.ReferenceSource == s.ReferenceSource)
+	selectionChanged := false
+	if previousThread.Contact != nil {
+		resolved := 0
+		if c.ReferenceSource == s.ReferenceSource {
+			for _, threads := range projects {
+				for _, t := range threads {
+					if t.Contact != nil && t.Contact.ID == previousThread.Contact.ID {
+						resolved = t.ID
+					}
+				}
+			}
+		}
+		if resolved != active {
+			active, selectionChanged = resolved, true
+		}
+	}
+	known := false
+	for _, p := range s.Projects {
+		known = known || p.Path == windowCwd
+	}
+	for path, threads := range projects {
+		known = known || path == windowCwd
+		for _, t := range threads {
+			if active != 0 && t.ID == active {
+				windowCwd = path
+				known = true
+			}
+		}
+	}
+	if !known {
+		windowCwd = s.Cwd
+	}
 	c.CollaborationRemote = s.Collaboration
 	c.ReferenceSource = s.ReferenceSource
 	c.MemoryRevision = s.MemoryRevision
 	c.fastMode = s.FastMode
-	c.Cwd = s.Cwd
-	c.ProjectCache = s.ProjectThreads
+	c.Cwd = windowCwd
+	c.ProjectCache = projects
 	c.DesktopUnread = s.DesktopUnread
 	for key, version := range c.DesktopReadPending {
 		if s.DesktopUnread[key] != version {
 			delete(c.DesktopReadPending, key)
 		}
 	}
+	c.contactSnapshot = s.Contacts
 	c.Mirror.ProjectBusy = s.ProjectBusy
-	threads := append([]model.Thread(nil), s.Threads...)
+	threads := append([]model.Thread(nil), projects[windowCwd]...)
 	for i := range threads {
 		if draft, ok := c.Mirror.Drafts[threads[i].ID]; ok {
 			threads[i].Draft = draft
@@ -258,6 +306,9 @@ func (c *Controller) ApplyState(s svcproto.State) {
 	}
 	c.SetProjects(s.Projects)
 	c.SetThreads(threads)
+	if selectionChanged {
+		c.SetActive(active)
+	}
 	c.SetApprovals(s.Approvals)
 	c.SetStatus(s.Status)
 	c.SetHistoryStatus(s.HistoryStatus)

@@ -50,7 +50,7 @@ func (m *App) threadMenu(c *ui.Context, project string) {
 	}
 	var shown []appmodel.ThreadReference
 	if m.State.ReferenceSource != "" {
-		shown = appmodel.MatchingThreadRefs(m.State.Projects, m.Open, token.Query)
+		shown = appmodel.MatchingThreadRefs(m.allPhoneProjects(), m.Open, token.Query)
 	}
 	files := m.SearchFileReferences(project, token.Query)
 	p := m.Pal

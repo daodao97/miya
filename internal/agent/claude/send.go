@@ -37,6 +37,11 @@ func (b Adapter) Send(req model.SendRequest) int {
 		t = model.Thread{ID: c.NextID(), Agent: agentmeta.Claude, PermissionPolicy: policy, ServerID: claude.NewSessionID(), Title: msgfmt.ConversationTitle("", chattext.PromptTitle(text), ""), Project: filepath.Base(cwd), Loaded: true, HistoryLoaded: true}
 		c.AddThread(cwd, t)
 	}
+	if t.ServerID == "" {
+		t.ServerID = claude.NewSessionID()
+		sid := t.ServerID
+		c.Update(t.ID, func(t *model.Thread) { t.ServerID = sid })
+	}
 	id := t.ID
 	if c.Run(id) == nil {
 		t.MemoryEpoch++

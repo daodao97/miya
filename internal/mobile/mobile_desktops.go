@@ -21,6 +21,7 @@ import (
 	"miya/internal/remote"
 	"miya/internal/service/workspaces"
 	"miya/internal/uiruntime"
+	"miya/internal/widgets"
 )
 
 type MobileDesktops struct {
@@ -246,6 +247,8 @@ func (m *App) ResetDesktopState() {
 	m.ConversationMenu = false
 	m.Home()
 	m.State, m.Host, m.Selected = phoneproto.State{}, "", ""
+	m.Contacts = widgets.ContactUI{}
+	m.contactCalls = nil
 	m.Autos = mobileAutomations{}
 	m.Memories = MobileMemory{}
 	m.Options, m.optionsAgent, m.NewAgent = nil, "", ""
@@ -297,7 +300,7 @@ func (m *App) restoreDesktopSession(id string) {
 	m.ExpandedProject, m.projectsExpanded, m.ThreadListExpanded = session.ExpandedProject, session.ProjectsExpanded, session.ThreadListExpanded
 	thread := session.Thread
 	if thread.ID != 0 && thread.ServerID != "" {
-		for _, project := range m.State.Projects {
+		for _, project := range m.allPhoneProjects() {
 			for _, saved := range project.Threads {
 				if saved.ServerID == thread.ServerID && model.ThreadAgent(saved) == model.ThreadAgent(thread) {
 					thread = saved

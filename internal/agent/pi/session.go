@@ -8,6 +8,8 @@ import (
 
 	pinative "miya/internal/agent/pi/native"
 	"miya/internal/chat/model"
+	"miya/internal/contacts"
+	"miya/internal/memory"
 	"miya/internal/textutil"
 )
 
@@ -77,7 +79,7 @@ func SessionMessages(path string) ([]model.Message, error) {
 		at := m.Timestamp
 		switch m.Role {
 		case "user":
-			if text := pinative.Text(m.Blocks()); text != "" {
+			if text := contacts.StripInput(memory.StripContext(pinative.Text(m.Blocks()))); text != "" {
 				out = append(out, model.Message{Role: "user", Content: text, SentAtMs: at, Parts: model.MessageParts(text)})
 			}
 		case "assistant":

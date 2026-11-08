@@ -10,6 +10,7 @@ import (
 	"miya/internal/automation"
 	"miya/internal/chat/model"
 	conversation "miya/internal/chat/view"
+	"miya/internal/contacts"
 	"miya/internal/interaction"
 	"miya/internal/memory/manager"
 	projectaccess "miya/internal/project/access"
@@ -20,6 +21,10 @@ import (
 
 // Host is the controller contract for one desktop workspace. UI state stays in App.
 type Host interface {
+	ContactSnapshot() contacts.Snapshot
+	ContactOp(contacts.Request) (appmodel.ContactResult, error)
+	AdoptContactResult(appmodel.ContactResult)
+	AgentModels(string) []agent.ModelOption
 	conversation.Host
 	State() *appmodel.WindowState
 	AddAttachments(paths []string)
