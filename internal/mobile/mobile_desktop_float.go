@@ -6,6 +6,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"miya/internal/textutil"
+	"miya/internal/uiruntime"
 	"miya/internal/widgets"
 )
 
@@ -92,7 +93,12 @@ func (m *App) desktopFloatView(c *ui.Context) {
 			label = tr("Control session ended. Tap to close.")
 		}
 		card := ui.Column(c.Key("desktop-float")).Absolute().Left(f.x).Top(f.y).Width(w).Height(h).Radius(12).Clip().
-			Background(pal.surface).Border(1, pal.line).Shadow(0, 8, 24, 0, ui.RGBA(0, 0, 0, 0.3)).Label(label).Bind(&f.handle)
+			Background(pal.surface).Border(1, pal.line).Label(label).Bind(&f.handle)
+		// A large blurred shadow repaints a wide area each frame; skip it
+		// while dragging so the move stays smooth.
+		if !f.dragged || !f.pressing {
+			card.Shadow(0, 8, 24, 0, ui.RGBA(0, 0, 0, 0.3))
+		}
 		card.HandleInput(func(ev ui.InputEvent) bool {
 			// Events are local to the card's latest layout, which moves during
 			// a drag. Convert using its actual bounds, not the pending position.
@@ -158,6 +164,7 @@ func (m *App) desktopFloatInput(p *MobileDesktopPage, ev ui.InputEvent, minX, ma
 		f.dragged = true
 		f.x = desktopClamp(f.fromX+dx, minX, max(minX, maxX))
 		f.y = desktopClamp(f.fromY+dy, minY, max(minY, maxY))
+		uiruntime.Invalidate()
 		return true
 	case ui.InputPointerUp, ui.InputPointerCancel:
 		if !f.pressing {
