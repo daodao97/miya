@@ -626,7 +626,9 @@ func (app *View) ThreadInput(c *ui.Context, state *InlineThreadInput, raw, owner
 		OnCopy:   func(cut bool) bool { copySelection(cut); return true },
 		TagStyle: func(_ string, span *ui.Span) { span.ObjectDescent = size * 0.25 },
 	}).FillWidth().MinWidth(0).FocusRing(false).InputOptions(ui.InputOptions{Dismiss: ui.KeyboardDismissInteractive})
-	if state.InputHook != nil {
+	// Reserve holds only before editing. Once focused, the native text proxy
+	// owns touches so caret placement, selection and the paste menu keep working.
+	if state.InputHook != nil && !in.Focused() {
 		in.TouchSelection()
 	}
 	state.EditMenu = contextMenu

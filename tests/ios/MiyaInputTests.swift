@@ -1,7 +1,7 @@
 import XCTest
 
 final class MiyaInputTests: XCTestCase {
-    private func openComposer(_ sample: String, voice: Bool = false) -> (XCUIApplication, XCUIElement) {
+    private func openComposer(_ sample: String, voice: Bool = false, focus: Bool = true) -> (XCUIApplication, XCUIElement) {
         continueAfterFailure = false
         let app = XCUIApplication(bundleIdentifier: "com.daodao.miya.inputtest")
         app.terminate()
@@ -10,10 +10,12 @@ final class MiyaInputTests: XCTestCase {
         app.launch()
         let field = app.descendants(matching: .any).matching(NSPredicate(format: "label IN %@", ["Message", "消息"])).firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 10), app.debugDescription)
-        // Tap text rather than the center, which can be a conversation tag.
-        field.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.5)).withOffset(CGVector(dx: 1, dy: 0)).tap()
-        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
-        XCTAssertEqual(field.elementType, .textView, "The real rich composer must expose a native editing proxy")
+        if focus {
+            // Tap text rather than the center, which can be a conversation tag.
+            field.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.5)).withOffset(CGVector(dx: 1, dy: 0)).tap()
+            XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+            XCTAssertEqual(field.elementType, .textView, "The real rich composer must expose a native editing proxy")
+        }
         return (app, field)
     }
 
@@ -96,13 +98,28 @@ final class MiyaInputTests: XCTestCase {
     }
 
     func testActualComposerHoldInsertsVoiceAfterRelease() {
-        let (app, field) = openComposer("draft", voice: true)
+        let (app, field) = openComposer("draft", voice: true, focus: false)
         field.coordinate(withNormalizedOffset: CGVector(dx: 0.7, dy: 0.5)).press(forDuration: 1)
         let result = NSPredicate(format: "value CONTAINS %@", "voice transcription test")
         expectation(for: result, evaluatedWith: field)
         waitForExpectations(timeout: 8)
         XCTAssertTrue((field.value as? String ?? "").contains("draft"), "Voice input must retain the existing draft")
         XCTAssertFalse(action("Cancel voice input", "取消语音输入", in: app).exists)
+    }
+
+    func testActualComposerFocusedHoldKeepsNativePaste() {
+        let (app, field) = openComposer("description", voice: true)
+        tapAction("Edit text", "编辑文字", in: app)
+        tapAction("Select all", "全选", in: app)
+        tapAction("Copy", "复制", in: app)
+        app.typeText("draft")
+        field.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.5)).withOffset(CGVector(dx: 10, dy: 0)).press(forDuration: 1)
+        XCTAssertEqual(field.value as? String, "draft", "Holding a focused editor must not start voice input")
+        XCTAssertFalse(action("Cancel voice input", "取消语音输入", in: app).exists)
+        let paste = action("Paste", "粘贴", in: app)
+        XCTAssertTrue(paste.waitForExistence(timeout: 5), app.debugDescription)
+        paste.tap()
+        XCTAssertTrue((field.value as? String ?? "").contains("description"), "Native paste must insert the copied text")
     }
 
 }
