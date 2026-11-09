@@ -54,6 +54,27 @@ func StripContext(raw string) string {
 	return raw
 }
 
+// StripContextPreview also handles native previews that flatten whitespace or
+// truncate the injected block. Keep this lossy cleanup out of message history.
+func StripContextPreview(raw string) string {
+	clean := StripContext(raw)
+	if clean != raw {
+		return clean
+	}
+	flat := strings.Join(strings.Fields(raw), " ")
+	header := strings.Join(strings.Fields(contextPrefix), " ")
+	if i := strings.Index(flat, header); i >= 0 {
+		return strings.TrimSpace(flat[:i])
+	}
+	if i := strings.LastIndex(flat, "<miya-memory> "); i >= 0 {
+		tail := strings.TrimSuffix(flat[i:], "…")
+		if len(tail) > len("<miya-memory> ") && strings.HasPrefix(header, tail) {
+			return strings.TrimSpace(flat[:i])
+		}
+	}
+	return raw
+}
+
 func stampKey(v Stamp) string { return v.Scope.Kind + ":" + v.ID }
 func stampOf(e Entry) Stamp   { return Stamp{e.Scope, e.ID, e.Version, e.State} }
 

@@ -13,6 +13,8 @@ import (
 	codex "miya/internal/agent/codex/native"
 	codexprojection "miya/internal/agent/codex/projection"
 	"miya/internal/chat/model"
+	msgfmt "miya/internal/chat/presentation"
+	chattext "miya/internal/chat/text"
 	"miya/internal/memory"
 )
 
@@ -50,6 +52,24 @@ func TestMemoryInjectedIntoCodexWithoutChangingUserTextOrHistory(t *testing.T) {
 	}
 	if !strings.HasPrefix(augmented, query) || !strings.Contains(augmented, saved.Content) {
 		t.Fatalf("backend input omitted recall: %q", augmented)
+	}
+	for _, tc := range []struct{ name, preview, existing string }{
+		{"full input", augmented, "old title"},
+		{"flattened preview", strings.Join(strings.Fields(augmented), " "), "old title"},
+		{"truncated preview", strings.Split(augmented, "permissions.")[0], "old title"},
+		{"cached title", "", chattext.ClippedTitle(augmented)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := msgfmt.ConversationTitle("", tc.preview, tc.existing); got != query {
+				t.Fatalf("injected memory leaked into title: %q", got)
+			}
+			if got := msgfmt.ConversationTitle("Named task", tc.preview, tc.existing); got != "Named task" {
+				t.Fatalf("named title lost precedence: %q", got)
+			}
+		})
+	}
+	if got := chattext.PromptTitle(augmented); got != query {
+		t.Fatalf("injected memory leaked into prompt title: %q", got)
 	}
 	if texts := userTexts(c.ThreadWithID(1)); len(texts) == 0 || texts[len(texts)-1] != query || strings.Contains(strings.Join(texts, "\n"), "miya-memory") {
 		t.Fatalf("user bubble changed: %q", texts)

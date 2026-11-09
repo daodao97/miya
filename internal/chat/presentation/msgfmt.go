@@ -18,6 +18,7 @@ import (
 
 	"miya/internal/chat/model"
 	chattext "miya/internal/chat/text"
+	"miya/internal/memory"
 	"miya/internal/textutil"
 	"miya/locales"
 )
@@ -446,7 +447,12 @@ func ThreadTokenRateLabel(t model.Thread, elapsedMs int64) string {
 // Named agent titles take precedence over a first-request preview. Retain the
 // existing title when a partial server response has neither.
 func ConversationTitle(name, preview, existing string) string {
-	return chattext.ClippedTitle(textutil.FirstNonEmpty(chattext.ClippedTitle(name), chattext.ClippedTitle(preview), chattext.ClippedTitle(existing), "Untitled thread"))
+	return chattext.ClippedTitle(textutil.FirstNonEmpty(
+		chattext.ClippedTitle(name),
+		chattext.ClippedTitle(memory.StripContextPreview(preview)),
+		chattext.ClippedTitle(memory.StripContextPreview(existing)),
+		"Untitled thread",
+	))
 }
 
 // activityIcon is a Claude tool's own icon, else its kind's.
