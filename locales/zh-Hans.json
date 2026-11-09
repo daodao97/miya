@@ -120,6 +120,7 @@
   "allowMiyaInSystemSettingsPrivacySecurity_6d62ff": "请在 Mac 的「系统设置 → 隐私与安全性 → 辅助功能」中允许 Miya，然后重试",
   "allowMiyaInSystemSettingsPrivacySecurity_858e07": "请在 Mac 的「系统设置 → 隐私与安全性 → 屏幕录制」中允许 Miya，然后重试；系统可能要求重开应用",
   "allowMiyaNotificationsInSettings_d1e9e9": "请在系统设置中允许 Miya 通知",
+  "receivingNotificationsFromYourMac_723807": "正在接收电脑通知",
   "allowMiyaToUseTheCameraIn_2a48c3": "请在系统设置中允许 Miya 使用相机，或粘贴连接码",
   "allowAgentsToQuerySaveCorrectAnd_60bdc3": "项目总开关：允许 Agent 查询、保存、纠正和忘记记忆，并使用下方自动功能。关闭后保留已有记忆，仍可在此管理。",
   "allowExecutionOf_dc6dfa": "是否允许执行 ",

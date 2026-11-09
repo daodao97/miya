@@ -82,17 +82,22 @@ type App struct {
 	pushOpenRef                  remote.Request
 	pushID, pushToken, pushError string
 	PushDisabled, pushRequesting bool
-	pushOpen                     int
-	win                          *mygo.Window
-	DesktopAuthenticate          func(context.Context) error
-	Store                        phonecache.SecretStore
-	Desktops                     MobileDesktops
-	desktopSessions              map[string]phonecache.Session
-	DesktopWrites                desktopPersistence
-	desktopError                 string
-	DesktopNotice                string
-	desktopLoadFailed            bool
-	DialDesktop                  func(context.Context, string) (*remote.Conn, error)
+	// pushLive: Android receives notifications over the paired connection,
+	// kept open in the background by keepRunning (mygo.Power.KeepRunning).
+	pushLive            bool
+	keepRunning         func()
+	liveShown           map[string]*mygo.Notification
+	pushOpen            int
+	win                 *mygo.Window
+	DesktopAuthenticate func(context.Context) error
+	Store               phonecache.SecretStore
+	Desktops            MobileDesktops
+	desktopSessions     map[string]phonecache.Session
+	DesktopWrites       desktopPersistence
+	desktopError        string
+	DesktopNotice       string
+	desktopLoadFailed   bool
+	DialDesktop         func(context.Context, string) (*remote.Conn, error)
 	// view renders a conversation with the desktop's own message views, over
 	// a controller that only holds what the desktop sent.
 	View       *conversation.View
@@ -423,7 +428,9 @@ func (m *App) enterBackground(preserveBrowser bool) {
 	m.cancelVoice()
 	m.FlushCache(true)
 	m.suspendDesktopPage()
-	if preserveBrowser && m.FilesCancel != nil {
+	// Android keeps the connection while a foreground service keeps the
+	// process running: notifications arrive over it.
+	if preserveBrowser && (m.FilesCancel != nil || m.keepRunning != nil) {
 		return
 	}
 	m.disconnectDesktop(false, true)
@@ -431,6 +438,7 @@ func (m *App) enterBackground(preserveBrowser bool) {
 
 func (m *App) enterForeground() {
 	m.background = false
+	m.updateKeepRunning()
 	if m.Link != "" && m.Cancel == nil {
 		m.Connect(m.Link)
 	} else {
@@ -447,6 +455,7 @@ func (m *App) DisconnectDesktop(unregister bool) {
 }
 
 func (m *App) disconnectDesktop(unregister, preserveDesktop bool) {
+	defer m.updateKeepRunning()
 	m.cancelVoice()
 	if !preserveDesktop {
 		m.DesktopApproval = MobileDesktopApproval{}
@@ -675,6 +684,11 @@ func (m *App) read(gen int, conn *remote.Conn) (greeted bool, err error) {
 			var n notification.PhoneState
 			if json.Unmarshal(f.Data, &n) == nil {
 				m.onMain(gen, func() { m.ApplyNotifications(n) })
+			}
+		case "notice":
+			var n notification.LiveMessage
+			if json.Unmarshal(f.Data, &n) == nil {
+				m.onMain(gen, func() { m.showLiveNotice(n) })
 			}
 		case "push":
 			message := f.Error

@@ -310,8 +310,15 @@ func (ps *phoneSession) onPush(r remote.Request) bool {
 		message = result
 		if message == "" {
 			ps.deviceID = registration.ID
+			if registration.Live && !registration.Disabled {
+				// Android: notifications come over this connection while it lasts.
+				send := ps.send
+				ps.c.Push.AttachLive(registration.ID, ps.ctx, func(b []byte) bool {
+					return send(remote.Frame{Type: "notice", Data: b})
+				})
+			}
 		}
-		if message == "" && !registration.Disabled {
+		if message == "" && !registration.Disabled && !registration.Live {
 			if _, err := apns.OpenProvider(appdir.Dir()); err != nil {
 				message = "Phone registered. APNs is not configured on the desktop; run mygo push setup."
 			}

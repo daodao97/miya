@@ -120,6 +120,7 @@
   "allowMiyaInSystemSettingsPrivacySecurity_6d62ff": "Allow Miya in System Settings → Privacy & Security → Accessibility on your Mac, then retry.",
   "allowMiyaInSystemSettingsPrivacySecurity_858e07": "Allow Miya in System Settings → Privacy & Security → Screen Recording on your Mac, then retry. macOS may require reopening the app.",
   "allowMiyaNotificationsInSettings_d1e9e9": "Allow Miya notifications in Settings",
+  "receivingNotificationsFromYourMac_723807": "Receiving notifications from your Mac",
   "allowMiyaToUseTheCameraIn_2a48c3": "Allow Miya to use the camera in Settings, or paste a connection code",
   "allowAgentsToQuerySaveCorrectAnd_60bdc3": "Allow agents to query, save, correct, and forget memories and use the automatic features below. Disabling this preserves existing memories, which you can still manage here.",
   "allowExecutionOf_dc6dfa": "Allow execution of ",

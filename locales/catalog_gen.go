@@ -1292,6 +1292,18 @@ func (msgs Messages) AllowMiyaNotificationsInSettingsD1e9e9() string {
 	return Catalog.Format(msgs.locale, "allowMiyaNotificationsInSettings_d1e9e9", nil)
 }
 
+// ReceivingNotificationsFromYourMac723807 says "Receiving notifications from your Mac"
+// in the language the app shows.
+func ReceivingNotificationsFromYourMac723807() string {
+	return In(i18n.Locale()).ReceivingNotificationsFromYourMac723807()
+}
+
+// ReceivingNotificationsFromYourMac723807 says "Receiving notifications from your Mac"
+// in the language of msgs.
+func (msgs Messages) ReceivingNotificationsFromYourMac723807() string {
+	return Catalog.Format(msgs.locale, "receivingNotificationsFromYourMac_723807", nil)
+}
+
 // AllowMiyaToUseTheCameraIn2a48c3 says "Allow Miya to use the camera in Settings, or paste a connection code"
 // in the language the app shows.
 func AllowMiyaToUseTheCameraIn2a48c3() string {

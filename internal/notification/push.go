@@ -20,7 +20,10 @@ type Registration struct {
 	Disabled bool   `json:"disabled"`
 	// Desktop is the phone's opaque ID for this desktop. Notifications echo
 	// it so a phone paired with several desktops opens the right one.
-	Desktop string    `json:"desktop,omitempty"`
+	Desktop string `json:"desktop,omitempty"`
+	// Live is an Android phone that receives notifications over its paired
+	// connection while that is open (see AttachLive); it has no token.
+	Live    bool      `json:"live,omitempty"`
 	Updated time.Time `json:"updated"`
 }
 type pushDelivery struct {
@@ -38,6 +41,7 @@ type Hub struct {
 	devices      map[string]Registration
 	queue        chan pushDelivery
 	lastError    string
+	live         map[string]liveSender
 }
 
 func NewHub() *Hub {
@@ -61,7 +65,10 @@ func (h *Hub) Register(r Registration) error {
 	if _, e := hex.DecodeString(r.ID); e != nil {
 		return errors.New("invalid device ID")
 	}
-	if !r.Disabled {
+	if r.Live && r.Token != "" {
+		return errors.New("invalid live registration")
+	}
+	if !r.Disabled && !r.Live {
 		if len(r.Token) < 32 || len(r.Token) > 512 || len(r.Token)%2 != 0 {
 			return errors.New("invalid APNs token")
 		}
@@ -83,7 +90,7 @@ func (h *Hub) Register(r Registration) error {
 		// with the APNs token it had: its old registration would deliver
 		// every notification twice and keep a badge of its own.
 		for id, old := range h.devices {
-			if id != r.ID && old.Token == r.Token {
+			if id != r.ID && r.Token != "" && old.Token == r.Token {
 				delete(h.devices, id)
 				if _, ok := h.unread[id]; ok {
 					delete(h.unread, id)
@@ -150,6 +157,10 @@ func (h *Hub) run() {
 	for d := range h.queue {
 		notice, ok := h.notificationFor(d)
 		if !ok {
+			continue
+		}
+		if d.Registration.Live {
+			h.deliverLive(d.Registration.ID, notice)
 			continue
 		}
 		p, e := apns.OpenProvider(appdir.Dir())

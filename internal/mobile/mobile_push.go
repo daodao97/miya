@@ -3,6 +3,7 @@ package mobile
 import (
 	"encoding/json"
 	"log"
+	"runtime"
 
 	"github.com/egoist/mygo"
 
@@ -78,7 +79,10 @@ func (m *App) requestPush() {
 				uiruntime.Invalidate()
 				return
 			}
-			if e := mygo.App.RegisterPushNotifications(); e != nil {
+			if runtime.GOOS == "android" {
+				// The paired connection delivers notifications itself.
+				m.pushLive, m.pushError = true, ""
+			} else if e := mygo.App.RegisterPushNotifications(); e != nil {
 				m.pushError = tr("Unable to register notifications: ") + e.Error()
 			}
 			m.syncPush()
@@ -87,10 +91,11 @@ func (m *App) requestPush() {
 }
 
 func (m *App) syncPush() {
-	if m.Conn == nil || m.pushID == "" || (!m.PushDisabled && m.pushToken == "") {
+	m.updateKeepRunning()
+	if m.Conn == nil || m.pushID == "" || (!m.PushDisabled && m.pushToken == "" && !m.pushLive) {
 		return
 	}
-	b, _ := json.Marshal(notification.Registration{ID: m.pushID, Token: m.pushToken, Disabled: m.PushDisabled, Desktop: m.CurrentDesktopID()})
+	b, _ := json.Marshal(notification.Registration{ID: m.pushID, Token: m.pushToken, Disabled: m.PushDisabled, Desktop: m.CurrentDesktopID(), Live: m.pushLive})
 	conn := m.Conn
 	go conn.Send(remote.Request{Op: "push", Push: b})
 }
@@ -108,9 +113,65 @@ func (m *App) openPushThread() {
 			if match {
 				m.pushOpen = 0
 				m.pushOpenRef = remote.Request{}
+				log.Printf("miya: notification opens conversation %d", t.ID)
 				m.OpenThread(t)
 				return
 			}
 		}
 	}
+	log.Printf("miya: notification conversation %d (server %q) not in the list yet", m.pushOpen, m.pushOpenRef.ServerID)
+}
+
+// updateKeepRunning holds mygo.Power.KeepRunning while Android receives
+// notifications over the paired connection. Android starts the foreground
+// service only for an app on screen, so it is acquired in the foreground and
+// kept through the background. A process the system ends anyway stays ended.
+func (m *App) updateKeepRunning() {
+	want := m.pushLive && !m.PushDisabled && m.Link != ""
+	if want && m.keepRunning == nil && !m.background {
+		m.keepRunning = mygo.Power.KeepRunning(tr("Receiving notifications from your Mac"))
+	} else if !want && m.keepRunning != nil {
+		m.keepRunning()
+		m.keepRunning = nil
+	}
+}
+
+// showLiveNotice shows a notification the desktop sent over the paired
+// connection (Android), unless it names the conversation on screen.
+func (m *App) showLiveNotice(n notification.LiveMessage) {
+	if m.PushDisabled {
+		return
+	}
+	if n.Silent {
+		// Everything was read: take back what is shown.
+		if n.Badge != nil && *n.Badge == 0 {
+			for id, shown := range m.liveShown {
+				shown.Close()
+				delete(m.liveShown, id)
+			}
+		}
+		return
+	}
+	if !m.ShouldPresentNotification(n.Data) {
+		return
+	}
+	if m.liveShown == nil {
+		m.liveShown = map[string]*mygo.Notification{}
+	}
+	if old := m.liveShown[n.ID]; old != nil {
+		old.Close()
+	}
+	id, data := n.ID, n.Data
+	shown := mygo.NewNotification(mygo.NotificationOptions{ID: id, Title: tr(n.Title), Body: n.Body, Group: n.Group, Data: data})
+	shown.OnClick(func() {
+		log.Printf("miya: notification %s clicked: thread=%s server=%q", id, data["thread"], data["serverId"])
+		delete(m.liveShown, id)
+		m.OpenNotification(data)
+	})
+	if err := shown.Show(); err != nil {
+		log.Printf("miya: notification: %v", err)
+		shown.Close()
+		return
+	}
+	m.liveShown[id] = shown
 }

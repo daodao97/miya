@@ -92,7 +92,7 @@ func (h *Hub) MarkRead(id, key string, version uint64) PhoneState {
 		delete(d.Threads, key)
 		d.Revision++
 		h.persistUnreadLocked()
-		if r, ok := h.devices[id]; ok && !r.Disabled && r.Token != "" {
+		if r, ok := h.devices[id]; ok && !r.Disabled && (r.Token != "" || r.Live) {
 			select {
 			case h.queue <- pushDelivery{Registration: r, BadgeOnly: true}:
 			default:
@@ -109,7 +109,7 @@ func (h *Hub) notificationFor(d pushDelivery) (apns.Notification, bool) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	r, ok := h.devices[d.Registration.ID]
-	if !ok || r.Disabled || r.Token != d.Registration.Token {
+	if !ok || r.Disabled || r.Token != d.Registration.Token || r.Live != d.Registration.Live {
 		return apns.Notification{}, false
 	}
 	state := h.unreadDeviceLocked(r.ID)
@@ -145,7 +145,7 @@ func (h *Hub) MarkAllRead(id string, version uint64) PhoneState {
 	if changed {
 		d.Revision++
 		h.persistUnreadLocked()
-		if r, ok := h.devices[id]; ok && !r.Disabled && r.Token != "" {
+		if r, ok := h.devices[id]; ok && !r.Disabled && (r.Token != "" || r.Live) {
 			select {
 			case h.queue <- pushDelivery{Registration: r, BadgeOnly: true}:
 			default:
