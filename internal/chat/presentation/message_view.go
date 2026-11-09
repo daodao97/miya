@@ -7,6 +7,7 @@ import (
 	"miya/internal/chat/model"
 	chattext "miya/internal/chat/text"
 	"miya/internal/textutil"
+	"miya/locales"
 )
 
 // Message is the adapter projection for stored and live messages. New
@@ -14,14 +15,21 @@ import (
 // here so neither desktop nor phone imports a provider implementation.
 func Message(m model.Message) model.MessagePresentation {
 	if m.Presentation != nil {
-		return *m.Presentation
+		out := *m.Presentation
+		if strings.EqualFold(m.Kind, "reasoning") {
+			out.Content = ReasoningContent(out.Content)
+		}
+		return out
 	}
 	out := model.MessagePresentation{Content: m.Content, Title: legacyActivityTitle(m), Icon: ActivityIcon(m), Format: "text"}
 	if m.Role == "user" {
 		out.Content = chattext.CommandText(m.Content)
 	}
 	switch strings.ToLower(m.Kind) {
-	case "reasoning", "plan":
+	case "reasoning":
+		out.Content = ReasoningContent(out.Content)
+		out.Format = "markdown"
+	case "plan":
 		out.Format = "markdown"
 	case "diff":
 		out.Format = "diff"
@@ -37,6 +45,17 @@ func Message(m model.Message) model.MessagePresentation {
 		out.Plan = append(out.Plan, model.PresentedPlanStep{Step: step.Step, Status: step.Status})
 	}
 	return out
+}
+
+// ReasoningContent removes old status placeholders from summary bodies,
+// including messages retained by older services and phone caches.
+func ReasoningContent(content string) string {
+	switch strings.TrimSpace(strings.ReplaceAll(content, "...", "…")) {
+	case "", "Thinking…", locales.TextIn("zh-Hans", "Thinking…"):
+		return ""
+	default:
+		return content
+	}
 }
 
 func legacyActivityTitle(m model.Message) string {

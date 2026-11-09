@@ -25,19 +25,7 @@ func (m *App) setupPush() {
 		uiruntime.Invalidate()
 	})
 	mygo.App.SetNotificationPresentationHandler(func(e mygo.NotificationEvent) mygo.NotificationPresentation {
-		if m.PushDisabled {
-			return 0
-		}
-		if len(m.Desktops.Items) > 1 {
-			return mygo.PresentNotificationDefault
-		}
-		target := notificationTarget(e.Data)
-		current := m.Viewer.Current()
-		viewing := target.Thread != 0 && target.Thread == m.Open
-		if target.ServerID != "" {
-			viewing = m.Open != 0 && current.ServerID == target.ServerID && (target.Agent == "" || target.Agent == model.ThreadAgent(current))
-		}
-		if viewing {
+		if !m.ShouldPresentNotification(e.Data) {
 			return 0
 		}
 		return mygo.PresentNotificationDefault
@@ -47,6 +35,26 @@ func (m *App) setupPush() {
 			m.OpenNotification(e.Data)
 		}
 	})
+}
+
+// ShouldPresentNotification reports whether a notification arriving while
+// the app is in the foreground should be shown: not for the conversation
+// already on screen. With several desktops, only a notification naming the
+// connected desktop can be matched against the open conversation.
+func (m *App) ShouldPresentNotification(data map[string]string) bool {
+	if m.PushDisabled {
+		return false
+	}
+	if len(m.Desktops.Items) > 1 && (data["desktop"] == "" || data["desktop"] != m.CurrentDesktopID()) {
+		return true
+	}
+	target := notificationTarget(data)
+	current := m.Viewer.Current()
+	viewing := target.Thread != 0 && target.Thread == m.Open
+	if target.ServerID != "" {
+		viewing = m.Open != 0 && current.ServerID == target.ServerID && (target.Agent == "" || target.Agent == model.ThreadAgent(current))
+	}
+	return !viewing
 }
 
 func (m *App) requestPush() {

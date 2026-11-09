@@ -399,6 +399,31 @@ func TestMobileNotificationOpensTheDesktopItNames(t *testing.T) {
 	}
 }
 
+func TestMobileForegroundNotificationStaysQuietForTheOpenConversation(t *testing.T) {
+	m := multiDesktopApp(t)
+	a, b := testDesktopLink(), testDesktopLink()
+	m.Connect(a)
+	aID := m.CurrentDesktopID()
+	m.Connect(b)
+	bID := m.CurrentDesktopID()
+	m.ApplyPhoneState(phoneproto.State{Projects: []model.ProjectSnapshot{{Path: "/b", Threads: []model.Thread{{ID: 3, ServerID: "open-on-b", Title: "B"}}}}})
+	m.OpenNotification(map[string]string{"thread": "3", "serverId": "open-on-b", "desktop": bID})
+	if m.Viewer.Current().ServerID != "open-on-b" {
+		t.Fatal("setup did not open the conversation")
+	}
+	data := map[string]string{"thread": "3", "serverId": "open-on-b", "agent": appmodel.AgentCodex, "desktop": bID}
+	if m.ShouldPresentNotification(data) {
+		t.Fatal("showed a notification for the conversation on screen")
+	}
+	data["desktop"] = aID
+	if !m.ShouldPresentNotification(data) {
+		t.Fatal("hid another desktop's notification for an equal conversation ID")
+	}
+	if !m.ShouldPresentNotification(map[string]string{"thread": "4", "serverId": "other-on-b", "desktop": bID}) {
+		t.Fatal("hid a notification for another conversation")
+	}
+}
+
 func TestMobileDesktopManagerSharesDrawerBackBehavior(t *testing.T) {
 	m := multiDesktopApp(t)
 	m.Connect(testDesktopLink())

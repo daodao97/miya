@@ -99,8 +99,8 @@ func (b Adapter) Handle(f codex.Frame) {
 
 			for i := range t.Messages {
 				if t.Messages[i].ItemID == e.ItemID && t.Messages[i].TurnID == e.TurnID {
-					if t.Messages[i].Content == "Thinking…" {
-						t.Messages[i].Content = ""
+					if kind == "reasoning" {
+						t.Messages[i].Content = msgfmt.ReasoningContent(t.Messages[i].Content)
 					}
 					t.Messages[i].Content += e.Delta
 					if role == "tool" {
@@ -150,6 +150,10 @@ func (b Adapter) Handle(f codex.Frame) {
 			for i := range t.Messages {
 				if t.Messages[i].ItemID == m.ItemID && t.Messages[i].TurnID == m.TurnID {
 					if f.Method == "item/completed" || t.Messages[i].Content == "" {
+						// Completion may omit a summary that already arrived in deltas.
+						if strings.EqualFold(m.Kind, "reasoning") && strings.TrimSpace(m.Content) == "" {
+							m.Content = msgfmt.ReasoningContent(t.Messages[i].Content)
+						}
 						m.ID = t.Messages[i].ID
 						t.Messages[i] = m
 					}

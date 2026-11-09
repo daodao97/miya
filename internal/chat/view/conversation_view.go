@@ -418,13 +418,20 @@ func (app *View) MessageView(c *ui.Context, m model.Message, streaming bool) {
 		app.markdown(c, m, streaming && m.Status != "completed")
 		return
 	}
-	expanded := app.Open[m.ID]
+	hasDetails := strings.TrimSpace(m.Content) != "" || len(presented.Plan) > 0 || len(presented.Changes) > 0 || len(m.Agents) > 0
+	expanded := hasDetails && app.Open[m.ID]
 	ui.Column(c).FillWidth().Gap(6).Children(func() {
 		title := msgfmt.NativeText(ActivityTitle(m))
 		if s := subagent.Summary(m.Agents); s != "" {
 			title += " · " + msgfmt.NativeText(s)
 		}
-		header := widgets.Quiet(c.Key("header")).FillWidth().Height(28).PaddingX(0).Label(title)
+		var header ui.Element
+		if hasDetails {
+			header = widgets.Quiet(c.Key("header"))
+		} else {
+			header = ui.Row(c.Key("header")).AlignItems(ui.Center).Gap(8)
+		}
+		header.FillWidth().Height(28).PaddingX(0).Label(title)
 		header.Children(func() {
 			widgets.Icon(c, msgfmt.Message(m).Icon, 14, widgets.Muted)
 			color := widgets.Muted
@@ -435,9 +442,11 @@ func (app *View) MessageView(c *ui.Context, m model.Message, streaming bool) {
 				ui.Spinner(c).FontSize(12)
 			}
 			ui.Text(c, title).Grow(1).MinWidth(0).SingleLine().Ellipsis("…").FontSize(12).TextColor(color)
-			app.Chevron(c, expanded)
+			if hasDetails {
+				app.Chevron(c, expanded)
+			}
 		})
-		if header.Clicked() {
+		if hasDetails && header.Clicked() {
 			app.Open[m.ID] = !expanded
 		}
 		if expanded {
