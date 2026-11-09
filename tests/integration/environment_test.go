@@ -1,14 +1,31 @@
 package integration
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
 
 	"miya/internal/agent/integrations"
 	"miya/internal/controller"
+	svcclient "miya/internal/service/client"
+	svcproto "miya/internal/service/protocol"
 	desktopui "miya/internal/ui"
 )
+
+// isolated refuses the installed app's background service. Without a data
+// directory of its own, a window factory would connect to it, and from a test
+// binary it would replace that service or ask it to quit once idle.
+func isolated() error {
+	if os.Getenv("MIYA_DIR") != "" || os.Getenv("MIYA_ISOLATED_DIR") != "" {
+		return nil
+	}
+	return errors.New("integration test reached the installed Miya background service; set MIYA_DIR")
+}
+
+func refusedWindow(err error) desktopui.Host {
+	return controller.NewServiceWindow("", func() (*svcclient.Client, svcproto.State, error) { return nil, svcproto.State{}, err })
+}
 
 // Keep fixture paths rooted in the checkout even for a separately launched QA binary.
 func init() {
@@ -42,10 +59,25 @@ func init() {
 		}
 	}
 	desktopui.ConfigureEnvironment(desktopui.Environment{
-		Quotas:          integrations.Quotas,
-		NewWindow:       func() desktopui.Host { return controller.NewWindowController() },
-		NewLocal:        func() desktopui.Host { return controller.NewLocalWindowController() },
-		NewMirror:       func() desktopui.Host { return controller.NewMirrorController() },
-		LocalConnection: controller.LocalWindowConnection,
+		Quotas: integrations.Quotas,
+		NewWindow: func() desktopui.Host {
+			if err := isolated(); err != nil {
+				return refusedWindow(err)
+			}
+			return controller.NewWindowController()
+		},
+		NewLocal: func() desktopui.Host {
+			if err := isolated(); err != nil {
+				return refusedWindow(err)
+			}
+			return controller.NewLocalWindowController()
+		},
+		NewMirror: func() desktopui.Host { return controller.NewMirrorController() },
+		LocalConnection: func() (*svcclient.Client, svcproto.State, error) {
+			if err := isolated(); err != nil {
+				return nil, svcproto.State{}, err
+			}
+			return controller.LocalWindowConnection()
+		},
 	})
 }

@@ -207,6 +207,12 @@ func newChatController() *Controller {
 		c.Cwd, _ = os.Getwd()
 	}
 	c.Cwd, _ = filepath.Abs(c.Cwd)
+	c.Cwd = defaultWorkspace(c.Cwd)
+	// The service is started for a workspace; a bare controller (tests,
+	// standalone runs) must not overwrite the remembered project.
+	if os.Getenv("QUICKGUI_WORKSPACE") != "" && c.Cwd != "/" {
+		prefs.Save(lastWorkspaceKey, c.Cwd)
+	}
 	c.ProjectCache = threadlist.Load()
 	c.LoadDesktopUnread()
 	c.AssignCachedThreadIDs()
@@ -836,6 +842,7 @@ func (c *Controller) ChangeWorkspace(path string) error {
 	}
 	c.ProjectCache[c.Cwd] = cached
 	c.Cwd = abs
+	prefs.Save(lastWorkspaceKey, abs)
 	c.rememberProject(abs)
 	cachedThreads := append([]model.Thread(nil), c.ProjectCache[abs]...)
 	c.SetThreads(cachedThreads)

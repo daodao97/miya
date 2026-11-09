@@ -52,7 +52,32 @@ func localWindowWorkspace() (workspace, explicit string) {
 		workspace, _ = os.Getwd()
 	}
 	workspace, _ = filepath.Abs(workspace)
+	if explicit == "" {
+		workspace = defaultWorkspace(workspace)
+	}
 	return
+}
+
+// lastWorkspaceKey remembers the project last made current.
+const lastWorkspaceKey = "last-workspace"
+
+// defaultWorkspace replaces the filesystem root, the working directory of an
+// app opened from the Dock or Finder, with the project last made current,
+// else the home directory. A window that starts the background service passes
+// its workspace on, so the root would become the service's current project.
+func defaultWorkspace(path string) string {
+	if path != "/" && path != "" {
+		return path
+	}
+	if last := prefs.Load(lastWorkspaceKey); last != "" && last != "/" {
+		if st, err := os.Stat(last); err == nil && st.IsDir() {
+			return last
+		}
+	}
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		return home
+	}
+	return path
 }
 
 func LocalWindowConnection() (*svcclient.Client, svcproto.State, error) {
