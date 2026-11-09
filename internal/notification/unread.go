@@ -125,6 +125,9 @@ func (h *Hub) notificationFor(d pushDelivery) (apns.Notification, bool) {
 	n.CollapseID = d.Notice.ID
 	n.Payload.ID, n.Payload.Title, n.Payload.Body, n.Payload.Group = d.Notice.ID, d.Notice.Title, d.Notice.Body, "miya-tasks"
 	n.Payload.Data = map[string]string{"thread": d.Notice.Thread, "serverId": d.Notice.ServerID, "agent": d.Notice.Agent, "project": d.Notice.Project, "revision": strconv.FormatUint(state.Revision, 10)}
+	if r.Desktop != "" {
+		n.Payload.Data["desktop"] = r.Desktop
+	}
 	return n, true
 }
 

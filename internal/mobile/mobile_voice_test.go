@@ -6,6 +6,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -142,6 +143,57 @@ func TestVoiceUsesSharedInputEvents(t *testing.T) {
 		t.Fatal("shared cancellation did not release capture")
 	}
 	close(f.results)
+}
+
+func TestVoiceHoldOnlyBeforeComposerFocus(t *testing.T) {
+	m, tt, _, _ := voiceFixture(t)
+	m.cancelVoice()
+	f := &fakeVoice{results: make(chan mygo.SpeechResult)}
+	defer close(f.results)
+	starts := 0
+	m.voiceStart = func(context.Context) (mobileVoiceSession, error) {
+		starts++
+		return f, nil
+	}
+	tt.UsePointer(ui.PointerTouch, 1)
+	hold := func() {
+		t.Helper()
+		bounds, ok := tt.Find("Message")
+		if !ok {
+			t.Fatal("missing composer")
+		}
+		x, y := bounds.X+bounds.W/2, bounds.Y+bounds.H/2
+		tt.Press(x, y)
+		tt.Advance(time.Second)
+		tt.Release(x, y)
+	}
+	hold()
+	if starts != 1 || m.voice == nil || !f.stopped || tt.Focused("Message") {
+		t.Fatal("an unfocused hold must capture voice without opening the editor")
+	}
+	m.cancelVoice()
+	if err := tt.Click("Message"); err != nil {
+		t.Fatal(err)
+	}
+	if !tt.Focused("Message") {
+		t.Fatal("a light tap must focus the editor")
+	}
+	hold()
+	if starts != 1 || m.voice != nil || !tt.Focused("Message") {
+		t.Fatal("holding the focused editor must preserve text editing without recording")
+	}
+	tt.Type(" typed")
+	if !strings.Contains(m.Draft, " typed") {
+		t.Fatal("focused editor no longer accepts text")
+	}
+	tt.ClickAt(195, 200)
+	if tt.Focused("Message") {
+		t.Fatal("tapping outside must leave editing")
+	}
+	hold()
+	if starts != 2 || m.voice == nil {
+		t.Fatal("voice hold must be available again after the editor loses focus")
+	}
 }
 
 func TestVoiceCloudFinalWaitsForFingerRelease(t *testing.T) {

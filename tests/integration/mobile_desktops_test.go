@@ -20,6 +20,7 @@ import (
 	"miya/internal/chat/model"
 	"miya/internal/mobile"
 	phonecache "miya/internal/phone/cache"
+	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/remote"
 	"miya/internal/service/workspaces"
 )
@@ -378,6 +379,48 @@ func TestMobileNotificationsSelectTheCorrectDesktop(t *testing.T) {
 	m.OpenNotification(map[string]string{"thread": "7"})
 	if m.Router().Path() != "/desktops" || m.DesktopNotice == "" {
 		t.Fatal("an ambiguous legacy notification should ask the user to choose a desktop")
+	}
+}
+
+func TestMobileNotificationOpensTheDesktopItNames(t *testing.T) {
+	m := multiDesktopApp(t)
+	a, b := testDesktopLink(), testDesktopLink()
+	m.Connect(a)
+	aID := m.CurrentDesktopID()
+	m.Connect(b)
+	// Desktop A's cache has not seen this conversation yet.
+	m.OpenNotification(map[string]string{"thread": "9", "serverId": "new-on-a", "agent": appmodel.AgentCodex, "desktop": aID})
+	if m.CurrentDesktopID() != aID || m.Router().Path() == "/desktops" {
+		t.Fatal("notification naming its desktop fell back to the desktop list")
+	}
+	m.ApplyPhoneState(phoneproto.State{Projects: []model.ProjectSnapshot{{Path: "/a", Threads: []model.Thread{{ID: 9, ServerID: "new-on-a", Title: "A"}}}}})
+	if m.Viewer.Current().ServerID != "new-on-a" {
+		t.Fatal("conversation did not open once the desktop state arrived")
+	}
+}
+
+func TestMobileForegroundNotificationStaysQuietForTheOpenConversation(t *testing.T) {
+	m := multiDesktopApp(t)
+	a, b := testDesktopLink(), testDesktopLink()
+	m.Connect(a)
+	aID := m.CurrentDesktopID()
+	m.Connect(b)
+	bID := m.CurrentDesktopID()
+	m.ApplyPhoneState(phoneproto.State{Projects: []model.ProjectSnapshot{{Path: "/b", Threads: []model.Thread{{ID: 3, ServerID: "open-on-b", Title: "B"}}}}})
+	m.OpenNotification(map[string]string{"thread": "3", "serverId": "open-on-b", "desktop": bID})
+	if m.Viewer.Current().ServerID != "open-on-b" {
+		t.Fatal("setup did not open the conversation")
+	}
+	data := map[string]string{"thread": "3", "serverId": "open-on-b", "agent": appmodel.AgentCodex, "desktop": bID}
+	if m.ShouldPresentNotification(data) {
+		t.Fatal("showed a notification for the conversation on screen")
+	}
+	data["desktop"] = aID
+	if !m.ShouldPresentNotification(data) {
+		t.Fatal("hid another desktop's notification for an equal conversation ID")
+	}
+	if !m.ShouldPresentNotification(map[string]string{"thread": "4", "serverId": "other-on-b", "desktop": bID}) {
+		t.Fatal("hid a notification for another conversation")
 	}
 }
 

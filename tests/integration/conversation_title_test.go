@@ -62,6 +62,8 @@ func TestConversationTitlePriority(t *testing.T) {
 		{"", "first\nrequest", "old", "first request"},
 		{"", "", "old", "old"},
 		{" ", "\n", "", "Untitled thread"},
+		{"", "解释 <miya-memory> 标签", "", "解释 <miya-memory> 标签"},
+		{"", "<miya-memory>example</miya-memory>", "", "<miya-memory>example</miya-memory>"},
 	} {
 		if got := msgfmt.ConversationTitle(tc.name, tc.preview, tc.existing); got != tc.want {
 			t.Fatalf("%+v: %q", tc, got)

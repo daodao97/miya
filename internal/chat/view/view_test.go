@@ -137,3 +137,42 @@ func TestReasoningVisibleAndExpandable(t *testing.T) {
 		})
 	}
 }
+
+func TestReasoningWithoutSummaryHasNoExpandablePlaceholder(t *testing.T) {
+	for _, mobile := range []bool{false, true} {
+		for _, content := range []string{"", "Thinking…", "Thinking...", "思考中…"} {
+			m := model.Message{ID: 1, Role: "activity", Kind: "reasoning", Status: "inProgress", Content: content}
+			v := NewConversationView(&snapshotHost{thread: model.Thread{ID: 1}})
+			v.Mobile = mobile
+			// An old view may already have this placeholder expanded.
+			v.Open[m.ID] = true
+			tt := ui.NewTester(func(c *ui.Context) { v.MessageView(c, m, false) }, 390, 600)
+			if !tt.HasText("Thinking…") || tt.HasText("Thinking...") || tt.HasText("思考中…") {
+				t.Fatalf("empty live reasoning lost its status or showed a body: %v", tt.Texts())
+			}
+			m.Status = "completed"
+			tt.Frame()
+			if !tt.HasText("Thought") || tt.HasText("Thinking") || tt.HasText("思考中") {
+				t.Fatalf("completed reasoning retained placeholder: %v", tt.Texts())
+			}
+			v.Open[m.ID] = false
+			r, ok := tt.Find("Thought")
+			if !ok {
+				t.Fatal("completed status disappeared")
+			}
+			tt.ClickAt(r.X+r.W/2, r.Y+r.H/2)
+			if v.Open[m.ID] {
+				t.Fatal("empty reasoning offered expansion")
+			}
+			// A summary received later restores the normal disclosure control.
+			m.Content = "Checked the macOS build flags."
+			tt.Frame()
+			if err := tt.Click("Thought"); err != nil {
+				t.Fatal(err)
+			}
+			if !tt.HasText(m.Content) {
+				t.Fatal("real summary did not expand")
+			}
+		}
+	}
+}

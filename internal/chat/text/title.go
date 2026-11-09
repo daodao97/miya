@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"miya/internal/chat/model"
+	"miya/internal/memory"
 	"miya/internal/textutil"
 )
 
@@ -13,7 +14,7 @@ var commandTitleParts = regexp.MustCompile(`(?s)<command-(message|name|args)>(.*
 // Claude's native transcript wraps slash commands in protocol tags. Use the
 // invocation as the title, without changing the stored prompt.
 func PromptTitle(text string) string {
-	return ClippedTitle(CommandText(ReferenceTitle(text)))
+	return ClippedTitle(CommandText(ReferenceTitle(memory.StripContextPreview(text))))
 }
 
 // Normalize only a leading native command envelope. Literal XML examples in

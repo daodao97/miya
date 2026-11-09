@@ -54,6 +54,47 @@ func TestStreamReconciliationAndRouting(t *testing.T) {
 	}
 }
 
+func TestCodexReasoningWithoutSummaryKeepsOnlyStatus(t *testing.T) {
+	c := testController()
+	params := `{"threadId":"t1","turnId":"turn1","item":{"id":"r","type":"reasoning","summary":[],"content":["private detail"]}}`
+	for _, method := range []string{"item/started", "item/completed"} {
+		c.Handle(event(method, params))
+		messages := c.Threads()[0].Messages
+		if len(messages) != 1 || messages[0].Content != "" {
+			t.Fatalf("empty reasoning gained placeholder content after %s: %+v", method, messages)
+		}
+	}
+	messages := codexprojection.HistoryMessages(codex.Thread{Turns: []codex.Turn{{ID: "turn1", Status: "completed",
+		Items: []codex.Item{{ID: "r", Type: "reasoning"}}}}})
+	if len(messages) != 1 || messages[0].Content != "" || messages[0].Status != "completed" {
+		t.Fatal("history reintroduced a placeholder", messages)
+	}
+}
+
+func TestCodexReasoningCompletionPreservesStreamedSummary(t *testing.T) {
+	for _, legacy := range []string{"", "Thinking…", "Thinking...", "思考中…"} {
+		c := testController()
+		c.Handle(event("item/started", `{"threadId":"t1","turnId":"turn1","item":{"id":"r","type":"reasoning"}}`))
+		c.Update(1, func(th *model.Thread) { th.Messages[0].Content = legacy })
+		c.Handle(event("item/reasoning/summaryTextDelta", `{"threadId":"t1","turnId":"turn1","itemId":"r","delta":"Checking build flags."}`))
+		c.Handle(event("item/reasoning/summaryPartAdded", `{"threadId":"t1","turnId":"turn1","itemId":"r"}`))
+		c.Handle(event("item/reasoning/summaryTextDelta", `{"threadId":"t1","turnId":"turn1","itemId":"r","delta":"Verified CGO_ENABLED=0."}`))
+		c.Handle(event("item/completed", `{"threadId":"t1","turnId":"turn1","item":{"id":"r","type":"reasoning","summary":[]}}`))
+		messages := c.Threads()[0].Messages
+		if len(messages) != 1 || messages[0].Content != "Checking build flags.\nVerified CGO_ENABLED=0." || messages[0].Status != "completed" {
+			t.Fatalf("completion lost the streamed summary for legacy %q: %+v", legacy, messages)
+		}
+		c.Handle(event("item/completed", `{"threadId":"t1","turnId":"turn1","item":{"id":"r","type":"reasoning","summary":["Thinking..."]}}`))
+		if got := c.Threads()[0].Messages[0].Content; got != "Checking build flags.\nVerified CGO_ENABLED=0." {
+			t.Fatal("placeholder completion replaced the streamed summary", got)
+		}
+		c.Handle(event("item/completed", `{"threadId":"t1","turnId":"turn1","item":{"id":"r","type":"reasoning","summary":["Final summary."]}}`))
+		if got := c.Threads()[0].Messages[0].Content; got != "Final summary." {
+			t.Fatal("authoritative completion summary did not replace deltas", got)
+		}
+	}
+}
+
 func TestThreadTitleUsesServerName(t *testing.T) {
 	c := testController()
 	c.Handle(event("thread/name/updated", `{"threadId":"t1","name":"按 service 分组统计"}`))

@@ -89,7 +89,17 @@ func (app *App) suggestion(c *ui.Context, symbol, text, prompt string) {
 func (app *App) composerBox(c *ui.Context) {
 	cc := app.C
 	cur := cc.Current()
-	ui.Column(c).Background(widgets.Panel).Border(1, widgets.Line).Radius(16).Padding(12).Gap(10).Children(func() {
+	box := ui.Column(c).Background(widgets.Panel).Border(1, widgets.Line).Radius(16).Padding(12).Gap(10)
+	if !cur.ReadOnly && !cur.Loading {
+		if box.FileDragOver() {
+			box.Border(1, widgets.LinkInk).Background(widgets.Subtle)
+		}
+		if paths := box.DroppedFiles(); len(paths) > 0 {
+			cc.AddAttachments(paths)
+			app.focusComposer = true
+		}
+	}
+	box.Children(func() {
 		if paths := cc.State().Attachments(); len(paths) > 0 {
 			ui.Row(c).Wrap().Gap(8).FillWidth().MinWidth(0).Children(func() {
 				for _, p := range paths {

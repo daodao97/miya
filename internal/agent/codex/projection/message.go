@@ -75,10 +75,7 @@ func ItemMessage(item codex.Item) (model.Message, bool) {
 		}
 	case "reasoning":
 		m.Role = "activity"
-		m.Content = strings.Join(item.Summary, "\n")
-		if m.Content == "" {
-			m.Content = tr("Thinking…")
-		}
+		m.Content = msgfmt.ReasoningContent(strings.Join(item.Summary, "\n"))
 	case "plan":
 		m.Role = "activity"
 		m.Content = item.Text
