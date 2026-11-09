@@ -1,7 +1,7 @@
 name: Package
 
 # Packages Miya for macOS (DMG), iOS and Android with the MyGo toolchain.
-# go.mod pins the daodao97/mygo fork (replace github.com/egoist/mygo => a
+# go.mod pins the daodao97/mygo-mobile fork (replace github.com/egoist/mygo => a
 # pseudo-version), so the jobs need only this repository; a local go.work
 # that points at ../mygo is for development and is not committed.
 #
