@@ -82,7 +82,7 @@ func (m *App) syncPush() {
 	if m.Conn == nil || m.pushID == "" || (!m.PushDisabled && m.pushToken == "") {
 		return
 	}
-	b, _ := json.Marshal(notification.Registration{ID: m.pushID, Token: m.pushToken, Disabled: m.PushDisabled})
+	b, _ := json.Marshal(notification.Registration{ID: m.pushID, Token: m.pushToken, Disabled: m.PushDisabled, Desktop: m.CurrentDesktopID()})
 	conn := m.Conn
 	go conn.Send(remote.Request{Op: "push", Push: b})
 }

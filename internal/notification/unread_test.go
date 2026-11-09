@@ -104,3 +104,19 @@ func TestMarkAllReadPreservesLaterNotifications(t *testing.T) {
 		t.Fatalf("mark all read erased a later notification: %+v", s)
 	}
 }
+
+func TestNotificationEchoesRegisteredDesktop(t *testing.T) {
+	desktop := strings.Repeat("c", 24)
+	h := NewQueueHub(t.TempDir())
+	if err := h.Register(Registration{ID: strings.Repeat("a", 32), Token: strings.Repeat("b", 64), Desktop: desktop}); err != nil {
+		t.Fatal(err)
+	}
+	h.Publish(Notice{ID: "done-1", Thread: "1", ServerID: "s1", Agent: model.AgentCodex, Project: "/a", Title: "Done"})
+	n, ok := h.NextDelivery()
+	if !ok || n.Payload.Data["desktop"] != desktop {
+		t.Fatal("notification does not identify the desktop that sent it")
+	}
+	if err := h.Register(Registration{ID: strings.Repeat("a", 32), Token: strings.Repeat("b", 64), Desktop: "../x"}); err == nil {
+		t.Fatal("accepted an invalid desktop ID")
+	}
+}

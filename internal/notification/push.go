@@ -15,10 +15,13 @@ import (
 )
 
 type Registration struct {
-	ID       string    `json:"id"`
-	Token    string    `json:"token"`
-	Disabled bool      `json:"disabled"`
-	Updated  time.Time `json:"updated"`
+	ID       string `json:"id"`
+	Token    string `json:"token"`
+	Disabled bool   `json:"disabled"`
+	// Desktop is the phone's opaque ID for this desktop. Notifications echo
+	// it so a phone paired with several desktops opens the right one.
+	Desktop string    `json:"desktop,omitempty"`
+	Updated time.Time `json:"updated"`
 }
 type pushDelivery struct {
 	Version      uint64
@@ -65,6 +68,12 @@ func (h *Hub) Register(r Registration) error {
 		if _, e := hex.DecodeString(r.Token); e != nil {
 			return errors.New("invalid APNs token")
 		}
+	}
+	if len(r.Desktop) > 64 {
+		return errors.New("invalid desktop ID")
+	}
+	if _, e := hex.DecodeString(r.Desktop); e != nil {
+		return errors.New("invalid desktop ID")
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()

@@ -349,7 +349,12 @@ func (m *App) desktopForNotification(target remote.Request) string {
 
 func (m *App) OpenNotification(data map[string]string) {
 	target := notificationTarget(data)
-	id := m.desktopForNotification(target)
+	id := ""
+	if _, ok := m.Desktops.find(data["desktop"]); ok {
+		id = data["desktop"]
+	} else {
+		id = m.desktopForNotification(target)
+	}
 	if len(m.Desktops.Items) > 1 && id == "" {
 		m.DesktopNotice = tr("Select the desktop for this notification")
 		m.openDesktopManager()
