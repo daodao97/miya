@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -355,12 +356,66 @@ func Start(parent context.Context, o Options, onFrame func(Frame), onDone func(e
 		idleTimer := time.AfterFunc(time.Hour, func() { c.closeIdleInput() })
 		idleTimer.Stop()
 		defer idleTimer.Stop()
-		for scanner.Scan() {
+		// A resumed CLI can finish restored background work before it starts
+		// the submitted prompt. Keep an initial empty result provisional until
+		// that prompt starts, the process exits, or the grace period expires.
+		type scannedFrame struct {
+			frame Frame
+			err   error
+		}
+		frames := make(chan scannedFrame)
+		go func() {
+			defer close(frames)
+			for scanner.Scan() {
+				var f Frame
+				err := json.Unmarshal(scanner.Bytes(), &f)
+				if err != nil {
+					err = fmt.Errorf("Failed to parse Claude Code protocol: %w", err)
+				}
+				select {
+				case frames <- scannedFrame{f, err}:
+				case <-ctx.Done():
+					return
+				}
+				if err != nil {
+					return
+				}
+			}
+			if err := scanner.Err(); err != nil {
+				select {
+				case frames <- scannedFrame{err: err}:
+				case <-ctx.Done():
+				}
+			}
+		}()
+		awaitingResumeTurn := o.Resume
+		var pendingResult *Frame
+		resumeTimer := time.NewTimer(time.Hour)
+		resumeTimer.Stop()
+		defer resumeTimer.Stop()
+		var resumeDeadline <-chan time.Time
+	readFrames:
+		for {
 			var f Frame
-			if e := json.Unmarshal(scanner.Bytes(), &f); e != nil {
-				runErr = fmt.Errorf("Failed to parse Claude Code protocol: %w", e)
-				cancel()
-				break
+			finalizingEmptyResult := false
+			select {
+			case next, ok := <-frames:
+				if !ok {
+					if pendingResult == nil {
+						break readFrames
+					}
+					f, finalizingEmptyResult = *pendingResult, true
+					pendingResult, resumeDeadline = nil, nil
+				} else if next.err != nil {
+					runErr = next.err
+					cancel()
+					break readFrames
+				} else {
+					f = next.frame
+				}
+			case <-resumeDeadline:
+				f, finalizingEmptyResult = *pendingResult, true
+				pendingResult, resumeDeadline = nil, nil
 			}
 			if f.Type == "control_response" && f.Response.RequestID != "initialize" {
 				c.mu.Lock()
@@ -418,6 +473,12 @@ func Start(parent context.Context, o Options, onFrame func(Frame), onDone func(e
 			}
 			c.mu.Unlock()
 			if f.ParentToolUseID == "" && (f.Type == "command_lifecycle" && f.CommandState == "started" || f.Type == "assistant" || f.Type == "stream_event") {
+				awaitingResumeTurn = false
+				pendingResult, resumeDeadline = nil, nil
+				resumeTimer.Stop()
+				if initialized {
+					timer.Stop()
+				}
 				finished = false
 				idleTimer.Stop()
 				c.mu.Lock()
@@ -425,9 +486,23 @@ func Start(parent context.Context, o Options, onFrame func(Frame), onDone func(e
 				c.mu.Unlock()
 			}
 			if f.Type == "result" && f.ParentToolUseID == "" {
-				finished = true
+				if !initialized {
+					continue
+				}
 				c.mu.Lock()
 				keep := (schedules.active() || agents.active() || background.active()) && !c.stopping && (!f.IsError || background.active())
+				deferEmpty := awaitingResumeTurn && !keep && !c.stopping && !f.IsError && strings.TrimSpace(f.Result) == "" && !finalizingEmptyResult
+				c.mu.Unlock()
+				if deferEmpty {
+					pendingResult = &f
+					resumeTimer.Reset(5 * time.Second)
+					resumeDeadline = resumeTimer.C
+					continue
+				}
+				pendingResult, resumeDeadline = nil, nil
+				resumeTimer.Stop()
+				finished = true
+				c.mu.Lock()
 				f.KeepingAlive = keep
 				c.open, c.idle = false, keep
 				c.mu.Unlock()
@@ -444,10 +519,6 @@ func Start(parent context.Context, o Options, onFrame func(Frame), onDone func(e
 				idleTimer.Reset(5 * time.Second)
 			}
 		}
-		if e := scanner.Err(); e != nil && runErr == nil {
-			runErr = e
-		}
-
 		e := cmd.Wait()
 		if runErr == nil && (!finished || agents.active() || background.active()) {
 			if !initialized {
