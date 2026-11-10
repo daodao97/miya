@@ -312,7 +312,7 @@ func (app *App) header(c *ui.Context) {
 func (app *App) sectionView(c *ui.Context) {
 	pad := float32(40)
 	if app.Section == "Settings" {
-		pad = 24
+		pad = 28
 	}
 	ui.Scroll(c.Key("section:" + app.Section)).Grow(1).MinHeight(0).Children(func() {
 		ui.Column(c).Padding(pad).Gap(20).Children(func() {
@@ -327,7 +327,7 @@ func (app *App) sectionView(c *ui.Context) {
 			case "Settings":
 				app.settingsView(c)
 			}
-			if app.Section != "Automations" && widgets.Quiet(c.Key("back")).AlignSelf(ui.Start).Children(func() { ui.Text(c, tr("Back to chat")) }).Clicked() {
+			if app.Section != "Automations" && app.Section != "Settings" && widgets.Quiet(c.Key("back")).AlignSelf(ui.Start).Children(func() { ui.Text(c, tr("Back to chat")) }).Clicked() {
 				app.Section = ""
 			}
 		})

@@ -18,34 +18,113 @@ import (
 	"miya/internal/widgets"
 )
 
-func (app *App) settingsView(c *ui.Context) {
-	cc := app.C
-	tabs := []string{tr("General"), tr("Account"), tr("Phone"), tr("Memory")}
+// settingsPane is one page of Settings, chosen from the toolbar.
+type settingsPane struct{ title, icon string }
 
-	ui.Column(c).FillWidth().MaxWidth(760).Gap(20).Children(func() {
-		ui.Tabs(c.Key("settings-tabs"), &app.SettingsTab, tabs...).AlignSelf(ui.Start)
-		if app.SettingsTab == 0 {
-			ui.Column(c).FillWidth().Gap(28).Children(func() {
-				widgets.SettingsGroup(c, tr("General"), "",
-					func() { widgets.LanguageSettings(c) },
-					func() { app.appearanceSettings(c) })
-				widgets.NotificationSettings(c, false)
-				widgets.SettingsGroup(c, tr("Permissions"), "", func() {
-					widgets.SettingLabel(c, tr("Default permissions for new conversations"),
-						tr("Change them for the current conversation from the composer."))
-					permissionOptions(c.Key("default-permissions"), cc.SelectedPermissionPolicy(), cc.State().SetPermissionPolicy)
-				})
-				app.agentSettings(c)
-				app.ServiceSettings(c)
+func settingsPanes() []settingsPane {
+	return []settingsPane{
+		{tr("General"), "settings"},
+		{tr("Account"), "user-circle"},
+		{tr("Phone"), "device-mobile"},
+		{tr("Memory"), "bulb"},
+	}
+}
+
+// settingsView lays Settings out like a macOS settings window: a centered
+// toolbar of panes over one centered column of grouped settings.
+func (app *App) settingsView(c *ui.Context) {
+	ui.Column(c).FillWidth().AlignItems(ui.Center).Gap(28).Children(func() {
+		app.settingsToolbar(c.Key("settings-tabs"))
+		ui.Column(c).FillWidth().MaxWidth(680).MinWidth(0).Gap(28).Children(func() {
+			switch app.SettingsTab {
+			case 1:
+				app.account.view(c)
+			case 2:
+				app.phoneSettings(c)
+			case 3:
+				app.memoryView(c)
+			default:
+				app.generalSettings(c)
+			}
+		})
+	})
+}
+
+// settingsToolbar is the row of panes: an icon over its name, the chosen
+// one on a soft fill, as in Safari's and Mail's settings.
+func (app *App) settingsToolbar(c *ui.Context) {
+	ui.Row(c).Gap(2).Padding(3).Role(ui.RoleTabList).Children(func() {
+		for i, pane := range settingsPanes() {
+			i, pane := i, pane
+			chosen := app.SettingsTab == i
+			b := ui.ButtonBase(c.Key(pane.icon)).Column().AlignItems(ui.Center).Justify(ui.Center).Gap(3).
+				MinWidth(76).Height(54).PaddingX(10).Radius(8).Cursor(ui.CursorPointer).Label(pane.title)
+			color, weight := widgets.Muted, 400
+			switch {
+			case chosen:
+				b.Background(widgets.Chosen)
+				color, weight = widgets.Ink, 500
+			case b.Hovered():
+				b.Background(widgets.Hover)
+				color = widgets.Ink
+			}
+			b.Children(func() {
+				widgets.Icon(c, pane.icon, 22, color)
+				ui.Text(c, pane.title).FontSize(11).FontWeight(weight).TextColor(color).SingleLine()
 			})
-		} else if app.SettingsTab == 1 {
-			app.account.view(c)
-		} else if app.SettingsTab == 3 {
-			app.memoryView(c)
-		} else {
-			app.phoneSettings(c)
+			if b.Clicked() {
+				app.SettingsTab = i
+			}
 		}
 	})
+}
+
+func (app *App) generalSettings(c *ui.Context) {
+	cc := app.C
+	widgets.SettingsGroup(c, tr("General"), "",
+		func() { widgets.LanguageSettings(c) },
+		func() { app.appearanceSettings(c) })
+	widgets.NotificationSettings(c, false)
+	permissionList(c.Key("default-permissions"), tr("Default permissions for new conversations"),
+		tr("Change them for the current conversation from the composer."),
+		cc.SelectedPermissionPolicy(), cc.State().SetPermissionPolicy)
+	app.agentSettings(c)
+	app.ServiceSettings(c)
+}
+
+// permissionList offers the permission policies as a single-choice list,
+// the chosen one marked with a check at the trailing edge.
+func permissionList(c *ui.Context, title, footnote, selected string, pick func(string)) {
+	choices := permissionChoices()
+	rows := make([]func(), 0, len(choices))
+	for _, choice := range choices {
+		choice := choice
+		rows = append(rows, func() {
+			b := ui.ButtonBase(c.Key(choice.value)).Row().FillWidth().MinWidth(0).MinHeight(52).AlignItems(ui.Center).
+				Gap(12).Padding(9, 14).Cursor(ui.CursorPointer).Label(choice.title)
+			if b.Hovered() {
+				b.Background(widgets.Hover)
+			}
+			titleColor := widgets.Ink
+			if choice.value == "never" {
+				titleColor = choice.color
+			}
+			b.Children(func() {
+				widgets.Icon(c, choice.icon, 20, choice.color)
+				ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
+					ui.Text(c, choice.title).FontSize(13).TextColor(titleColor)
+					ui.Text(c, choice.detail).FontSize(11).TextColor(widgets.Muted)
+				})
+				if choice.value == selected {
+					widgets.Icon(c, "check", 16, widgets.Ink)
+				}
+			})
+			if b.Clicked() {
+				pick(choice.value)
+			}
+		})
+	}
+	widgets.SettingsList(c, title, footnote, rows...)
 }
 
 // accountView shows the account the controller reads, from when the tab
@@ -356,42 +435,48 @@ func (app *App) agentSettings(c *ui.Context) {
 	if app.settingDrafts == nil {
 		app.settingDrafts = map[string]string{}
 	}
-	rows := []func(){func() { app.agentSwitches(c) }}
-	for _, s := range app.C.AgentSettings() {
+	app.agentSwitches(c.Key("agent-switches"))
+	settings := app.C.AgentSettings()
+	if len(settings) == 0 {
+		return
+	}
+	rows := make([]func(), 0, len(settings))
+	for _, s := range settings {
 		s := s
 		rows = append(rows, func() { app.agentSetting(c, s) })
 	}
-
-	widgets.SettingsGroup(c, tr("Agents"), "", rows...)
+	widgets.SettingsGroup(c.Key("agent-settings"), "", "", rows...)
 }
 
-// agentSwitches lists every agent with whether its CLI is installed and a
-// switch for offering it to new conversations.
+// agentSwitches lists every agent, one row each, with whether its CLI is
+// installed and a switch for offering it to new conversations.
 func (app *App) agentSwitches(c *ui.Context) {
 	app.C.EnsureAgentUpdates()
 	updates := app.C.AgentUpdates()
 	updating := app.C.AgentUpdateBusy()
-	ui.Column(c.Key("agent-switches")).FillWidth().Gap(10).Children(func() {
-		widgets.SettingLabel(c, tr("Available agents"), tr("Turn agents on or off for new conversations. Existing conversations keep their agent."))
-		agents := app.C.Agents()
-		enabled := 0
-		for _, a := range agents {
-			if a.Enabled {
-				enabled++
-			}
+	agents := app.C.Agents()
+	enabled := 0
+	for _, a := range agents {
+		if a.Enabled {
+			enabled++
 		}
-		for _, a := range agents {
-			a := a
-			ui.Row(c.Key("agent:" + a.ID)).FillWidth().Gap(10).AlignItems(ui.Center).Children(func() {
-				widgets.AgentIcon(c, a.ID, 18)
+	}
+	rows := make([]func(), 0, len(agents))
+	for _, a := range agents {
+		a := a
+		rows = append(rows, func() {
+			ui.Row(c.Key("agent:" + a.ID)).FillWidth().MinWidth(0).Gap(12).AlignItems(ui.Center).Children(func() {
+				ui.Box(c).Size(30, 30).Shrink(0).Radius(7).Background(widgets.Bubble).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
+					widgets.AgentIcon(c, a.ID, 18)
+				})
 				ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
-					ui.Text(c, a.Name).FontWeight(600)
-					app.agentUpdateStatus(c, updates[a.ID])
+					ui.Text(c, a.Name).FontSize(13).TextColor(widgets.Ink)
 					if a.Installed() {
-						ui.Text(c, tr("Installed · ")+a.Path).TextColor(widgets.Muted).FontSize(11).Font(widgets.MonoFont).SingleLine().Selectable()
+						ui.Text(c, a.Path).TextColor(widgets.Muted).FontSize(11).Font(widgets.MonoFont).SingleLine().Ellipsis("…").Selectable()
 					} else {
 						ui.Text(c, textutil.FirstNonEmpty(a.Problem, tr("Not installed"))).TextColor(widgets.Danger).FontSize(11).Selectable()
 					}
+					app.agentUpdateStatus(c, updates[a.ID])
 				})
 				info := updates[a.ID]
 				if info.Update || info.Updating {
@@ -409,11 +494,15 @@ func (app *App) agentSwitches(c *ui.Context) {
 					app.C.SetAgentEnabled(a.ID, on)
 				}
 			})
-		}
-		if ui.Button(c.Key("recheck"), tr("Check again")).Disabled(updating).AlignSelf(ui.Start).Clicked() {
-			app.C.RecheckAgents()
-		}
-	})
+		})
+	}
+	widgets.SettingsGroupActions(c, tr("Agents"),
+		tr("Turn agents on or off for new conversations. Existing conversations keep their agent."),
+		func() {
+			if widgets.SmallButton(c.Key("recheck"), tr("Check again"), updating).Clicked() {
+				app.C.RecheckAgents()
+			}
+		}, rows...)
 }
 
 // agentSetting is one agent-declared setting: an input saved on demand.
@@ -440,7 +529,17 @@ func (app *App) agentSetting(c *ui.Context, s agent.Setting) {
 		if s.Status == nil {
 			return
 		}
-		if msg, bad := s.Status(); bad {
+		msg, bad := s.Status()
+		// A command that resolves to nothing yet reads as a bare arrow.
+		lines := strings.Split(msg, "\n")
+		kept := lines[:0]
+		for _, line := range lines {
+			if t := strings.TrimSpace(line); t != "" && t != "→" {
+				kept = append(kept, line)
+			}
+		}
+		msg = strings.Join(kept, "\n")
+		if bad {
 			ui.Text(c, msg).TextColor(widgets.Danger).FontSize(11)
 		} else if msg != "" {
 			ui.Text(c, msg).TextColor(widgets.Muted).FontSize(11).Font(widgets.MonoFont).Selectable()

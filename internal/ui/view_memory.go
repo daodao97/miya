@@ -155,14 +155,14 @@ func (app *App) memoryView(c *ui.Context) {
 			app.memorySettings(c)
 		}
 		if m.Err != "" {
-			ui.Text(c, m.Err).FontSize(12).TextColor(widgets.Danger).Selectable()
+			ui.Text(c, m.Err).FontSize(12).TextColor(widgets.Danger).PaddingX(2).Selectable()
 		}
 		if m.editing {
 			app.memoryForm(c)
 			return
 		}
 		ui.Column(c).FillWidth().Gap(8).Children(func() {
-			ui.Text(c, tr("Memories")).FontSize(12).FontWeight(600).TextColor(widgets.Muted).PaddingX(4)
+			ui.Text(c, tr("Memories")).FontSize(13).FontWeight(600).TextColor(widgets.Ink).PaddingX(2)
 			ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(8).Children(func() {
 				ui.TextInput(c.Key("filter"), &m.filter).Placeholder(tr("Filter content, type, or status")).Label(tr("Filter memories")).Grow(1)
 				if ui.PrimaryButton(c.Key("new"), tr("Add memory")).Disabled(m.Busy).Clicked() {

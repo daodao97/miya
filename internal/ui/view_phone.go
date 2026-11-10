@@ -16,6 +16,15 @@ import (
 func (app *App) phoneSettings(c *ui.Context) {
 	st, act, ok := app.C.PhoneControls()
 	if !ok {
+		// Phones talk to the background service; without it, say so rather
+		// than leave the page blank.
+		ui.Column(c).FillWidth().Gap(16).Children(func() {
+			widgets.SettingsHeader(c, tr("Mobile connections"), "", nil)
+			widgets.SettingsCard(c).AlignItems(ui.Center).Padding(32, 20).Gap(10).Children(func() {
+				widgets.Icon(c, "device-mobile", 28, widgets.Faint)
+				ui.Text(c, tr("Miya background service is not running. Open Miya first.")).FontSize(12).TextColor(widgets.Muted)
+			})
+		})
 		return
 	}
 	ui.Column(c).FillWidth().Gap(16).Children(func() {

@@ -31,7 +31,7 @@ func (s *accountView) subscriptionSettings(c *ui.Context) {
 				// Keep the richer connected-account view (including extra credits).
 				// The standalone reading remains available without a chat connection.
 				if data.Identity != nil || len(r.Windows) == 0 && r.Resets == nil {
-					ui.Text(c, tr("Codex account")).FontSize(14).FontWeight(600)
+					ui.Text(c, tr("Codex account")).FontSize(13).FontWeight(600).PaddingX(2)
 					AccountDetails(c.Key("codex-details"), data)
 					if data.Identity != nil && data.Identity.Type == "chatgpt" {
 						ResetCreditCard(c.Key("codex-reset"), data, action, cc.State().Ready(), cc.AskAccountReset, cc.CancelAccountReset, cc.ConfirmAccountReset)
