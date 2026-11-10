@@ -92,4 +92,10 @@ type AutomationArgs struct {
 	Agent        string `json:"agent,omitempty"`
 	Enabled      *bool  `json:"enabled,omitempty"`
 	Worktree     *bool  `json:"worktree,omitempty"`
+	// Triggers and Policy are automation.Trigger and automation.WakePolicy
+	// values, decoded where the automations are.
+	Triggers json.RawMessage `json:"triggers,omitempty"`
+	Policy   json.RawMessage `json:"policy,omitempty"`
+	// Data comes with a wake_automation call.
+	Data string `json:"data,omitempty"`
 }

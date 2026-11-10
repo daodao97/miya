@@ -63,7 +63,14 @@ type Runner struct {
 	Background func(work func() func())
 	// WorktreeRoot is where runs of Worktree automations get theirs.
 	WorktreeRoot string
-	host         Host
+	// Probe probes a condition off the host's thread; replaced in tests.
+	Probe func(c Condition, dir string) ProbeResult
+	host  Host
+	wake  *wakeState
+	// hook is the local HTTP wake endpoint; listen lets a scheduling
+	// runner open it.
+	hook   *webhook
+	listen bool
 }
 
 // ActiveRun is a run in progress: its conversation and round.
@@ -81,6 +88,8 @@ type ActiveRun struct {
 	// the run works, "" for the automation's project.
 	preparing bool
 	dir       string
+	// ev is what woke the run.
+	ev WakeEvent
 }
 
 // TickInterval is how often the scheduler looks for due automations and
@@ -90,7 +99,7 @@ const TickInterval = 15 * time.Second
 // NewRunner loads the automations stored at path.
 func NewRunner(host Host, path string) *Runner {
 	rn := &Runner{Path: path, Store: Load(path), Active: map[string]*ActiveRun{},
-		Now: time.Now, Submit: host.Submit, Check: runCheck, WorktreeRoot: WorktreeRoot(), host: host}
+		Now: time.Now, Submit: host.Submit, Check: runCheck, WorktreeRoot: WorktreeRoot(), Probe: runProbe, host: host}
 	rn.Background = func(work func() func()) {
 		go func() {
 			done := work()
@@ -124,6 +133,8 @@ func (rn *Runner) Start(done <-chan struct{}, schedule bool) {
 	if !schedule {
 		return
 	}
+	rn.listen = true
+	rn.syncWebhook()
 	go func() {
 		rn.host.Dispatch(rn.Tick)
 		t := time.NewTicker(TickInterval)
@@ -131,6 +142,7 @@ func (rn *Runner) Start(done <-chan struct{}, schedule bool) {
 		for {
 			select {
 			case <-done:
+				rn.host.Dispatch(rn.stopWebhook)
 				return
 			case <-t.C:
 				rn.host.Dispatch(rn.Tick)
@@ -194,20 +206,24 @@ func (rn *Runner) Tick() {
 		}
 		rn.Store.Automations[i].Due = d
 		changed = true
-		if _, running := rn.Active[a.ID]; running {
-			rn.Store.AddRun(a.ID, Run{Started: now, Finished: now, Result: Skipped, Summary: "The previous run has not finished"})
-			continue
-		}
-		_ = rn.StartRun(a.ID, now.Sub(d) > 2*time.Minute)
+		_, _ = rn.deliver(rn.Store.Automations[i], WakeEvent{Automation: a.ID, Source: SourceSchedule, At: now,
+			CatchUp: now.Sub(d) > 2*time.Minute, Reason: "Scheduled for " + FormatTime(d)}, false)
 	}
 	if changed {
 		rn.Persist()
 	}
+	rn.tickWakes(now)
 }
 
 // StartRun starts a run now: a new conversation in the automation's
 // project, sent its instructions.
 func (rn *Runner) StartRun(id string, catchUp bool) error {
+	return rn.startRun(id, WakeEvent{Automation: id, CatchUp: catchUp})
+}
+
+// startRun starts a run for what woke it.
+func (rn *Runner) startRun(id string, ev WakeEvent) error {
+	catchUp := ev.CatchUp
 	i, ok := rn.Store.Find(id)
 	if !ok {
 		return errors.New("Automation not found")
@@ -221,19 +237,20 @@ func (rn *Runner) StartRun(id string, catchUp bool) error {
 	if last, ok := rn.Store.LastReport(id); ok && !a.NoCarryOver {
 		prev = &last
 	}
-	run := Run{Started: now, Round: 1, Rounds: a.Rounds, Result: Running, CatchUp: catchUp}
+	run := Run{Started: now, Round: 1, Rounds: a.Rounds, Result: Running, CatchUp: catchUp,
+		WakeSource: ev.Source, WakeTrigger: ev.Trigger, WakeReason: ev.Reason}
 	thread := 0
 	if info, err := os.Stat(a.Project); err != nil || !info.IsDir() {
 		run.Result, run.Summary, run.Finished = Failed, "Project directory does not exist: "+a.Project, now
 	} else if a.Worktree {
-		rn.startInWorktree(a, run, prev)
+		rn.startInWorktree(a, run, prev, ev)
 		return nil
-	} else if thread = rn.Submit(model.SendRequest{Agent: a.Agent, Project: a.Project, Text: RunMessage(a, prev), MemoryControl: true}); thread == 0 {
+	} else if thread = rn.Submit(model.SendRequest{Agent: a.Agent, Project: a.Project, Text: RunMessage(a, prev, ev), MemoryControl: true}); thread == 0 {
 		run.Result, run.Summary, run.Finished = Failed, model.AgentName(a.Agent)+" is not ready", now
 	}
 	rn.Store.AddRun(id, run)
 	if thread != 0 {
-		r := &ActiveRun{round: 1, started: now, allowPaused: !a.Enabled}
+		r := &ActiveRun{round: 1, started: now, allowPaused: !a.Enabled, ev: ev}
 		rn.Active[id] = r
 		rn.attach(id, a, r, thread)
 	}
@@ -367,6 +384,10 @@ func (rn *Runner) finish(id, result, summary string) {
 		run = *x
 	})
 	rn.Persist()
+	rn.reprobe(id, run)
+	if i, ok := rn.Store.Find(id); ok {
+		defer rn.afterRun(rn.Store.Automations[i], run)
+	}
 	if run.Worktree != nil {
 		// The notification says what the run left in its worktree.
 		rn.settle(id, run.Started, true)

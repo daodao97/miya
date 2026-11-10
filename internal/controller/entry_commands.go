@@ -51,6 +51,13 @@ func RunCommands() bool {
 		}
 		return true
 	}
+	if len(os.Args) > 1 && os.Args[1] == "-wake" {
+		if err := wakeCommand(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "miya:", err)
+			os.Exit(1)
+		}
+		return true
+	}
 	if len(os.Args) > 1 && os.Args[1] == "-connect" {
 		if len(os.Args) != 3 {
 			log.Fatal("usage: miya -connect <miya://connect link>")

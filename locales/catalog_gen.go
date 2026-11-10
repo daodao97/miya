@@ -19579,3 +19579,289 @@ func AgentUpdatedNextLaunch() string { return In(i18n.Locale()).AgentUpdatedNext
 func (msgs Messages) AgentUpdatedNextLaunch() string {
 	return Catalog.Format(msgs.locale, "agentUpdatedNextLaunch", nil)
 }
+
+// SFreeOnS5d8b98 says "%s free on %s"
+// in the language the app shows.
+func SFreeOnS5d8b98() string { return In(i18n.Locale()).SFreeOnS5d8b98() }
+
+// SFreeOnS5d8b98 says "%s free on %s"
+// in the language of msgs.
+func (msgs Messages) SFreeOnS5d8b98() string {
+	return Catalog.Format(msgs.locale, "sFreeOnS_5d8b98", nil)
+}
+
+// SOfMemoryAvailable43e2fc says "%s of memory available"
+// in the language the app shows.
+func SOfMemoryAvailable43e2fc() string { return In(i18n.Locale()).SOfMemoryAvailable43e2fc() }
+
+// SOfMemoryAvailable43e2fc says "%s of memory available"
+// in the language of msgs.
+func (msgs Messages) SOfMemoryAvailable43e2fc() string {
+	return Catalog.Format(msgs.locale, "sOfMemoryAvailable_43e2fc", nil)
+}
+
+// AfterSFinishes2953ec says "After \"%s\" finishes"
+// in the language the app shows.
+func AfterSFinishes2953ec() string { return In(i18n.Locale()).AfterSFinishes2953ec() }
+
+// AfterSFinishes2953ec says "After \"%s\" finishes"
+// in the language of msgs.
+func (msgs Messages) AfterSFinishes2953ec() string {
+	return Catalog.Format(msgs.locale, "afterSFinishes_2953ec", nil)
+}
+
+// AfterAnotherAutomation1afd1e says "After another automation"
+// in the language the app shows.
+func AfterAnotherAutomation1afd1e() string { return In(i18n.Locale()).AfterAnotherAutomation1afd1e() }
+
+// AfterAnotherAutomation1afd1e says "After another automation"
+// in the language of msgs.
+func (msgs Messages) AfterAnotherAutomation1afd1e() string {
+	return Catalog.Format(msgs.locale, "afterAnotherAutomation_1afd1e", nil)
+}
+
+// CanBeWokenFromOutsideMiyaWhat249818 says "Can be woken from outside Miya; what comes with a wake reaches the agent as data. Consider running it in a separate w…"
+// in the language the app shows.
+func CanBeWokenFromOutsideMiyaWhat249818() string {
+	return In(i18n.Locale()).CanBeWokenFromOutsideMiyaWhat249818()
+}
+
+// CanBeWokenFromOutsideMiyaWhat249818 says "Can be woken from outside Miya; what comes with a wake reaches the agent as data. Consider running it in a separate w…"
+// in the language of msgs.
+func (msgs Messages) CanBeWokenFromOutsideMiyaWhat249818() string {
+	return Catalog.Format(msgs.locale, "canBeWokenFromOutsideMiyaWhat_249818", nil)
+}
+
+// ConditionCheckFailing7c5993 says "Condition check failing"
+// in the language the app shows.
+func ConditionCheckFailing7c5993() string { return In(i18n.Locale()).ConditionCheckFailing7c5993() }
+
+// ConditionCheckFailing7c5993 says "Condition check failing"
+// in the language of msgs.
+func (msgs Messages) ConditionCheckFailing7c5993() string {
+	return Catalog.Format(msgs.locale, "conditionCheckFailing_7c5993", nil)
+}
+
+// Condition2f4979 says "Condition"
+// in the language the app shows.
+func Condition2f4979() string { return In(i18n.Locale()).Condition2f4979() }
+
+// Condition2f4979 says "Condition"
+// in the language of msgs.
+func (msgs Messages) Condition2f4979() string {
+	return Catalog.Format(msgs.locale, "condition_2f4979", nil)
+}
+
+// Dropped8cf622 says "Dropped"
+// in the language the app shows.
+func Dropped8cf622() string { return In(i18n.Locale()).Dropped8cf622() }
+
+// Dropped8cf622 says "Dropped"
+// in the language of msgs.
+func (msgs Messages) Dropped8cf622() string {
+	return Catalog.Format(msgs.locale, "dropped_8cf622", nil)
+}
+
+// External8d10c6 says "External"
+// in the language the app shows.
+func External8d10c6() string { return In(i18n.Locale()).External8d10c6() }
+
+// External8d10c6 says "External"
+// in the language of msgs.
+func (msgs Messages) External8d10c6() string {
+	return Catalog.Format(msgs.locale, "external_8d10c6", nil)
+}
+
+// FileChangeD938ed says "File change"
+// in the language the app shows.
+func FileChangeD938ed() string { return In(i18n.Locale()).FileChangeD938ed() }
+
+// FileChangeD938ed says "File change"
+// in the language of msgs.
+func (msgs Messages) FileChangeD938ed() string {
+	return Catalog.Format(msgs.locale, "fileChange_d938ed", nil)
+}
+
+// HeldBack173ea9 says "Held back"
+// in the language the app shows.
+func HeldBack173ea9() string { return In(i18n.Locale()).HeldBack173ea9() }
+
+// HeldBack173ea9 says "Held back"
+// in the language of msgs.
+func (msgs Messages) HeldBack173ea9() string {
+	return Catalog.Format(msgs.locale, "heldBack_173ea9", nil)
+}
+
+// ManualOnlyAaf64b says "Manual only"
+// in the language the app shows.
+func ManualOnlyAaf64b() string { return In(i18n.Locale()).ManualOnlyAaf64b() }
+
+// ManualOnlyAaf64b says "Manual only"
+// in the language of msgs.
+func (msgs Messages) ManualOnlyAaf64b() string {
+	return Catalog.Format(msgs.locale, "manualOnly_aaf64b", nil)
+}
+
+// NotCheckedYet82bd72 says "Not checked yet"
+// in the language the app shows.
+func NotCheckedYet82bd72() string { return In(i18n.Locale()).NotCheckedYet82bd72() }
+
+// NotCheckedYet82bd72 says "Not checked yet"
+// in the language of msgs.
+func (msgs Messages) NotCheckedYet82bd72() string {
+	return Catalog.Format(msgs.locale, "notCheckedYet_82bd72", nil)
+}
+
+// RecentWakes2ea48d says "Recent wakes"
+// in the language the app shows.
+func RecentWakes2ea48d() string { return In(i18n.Locale()).RecentWakes2ea48d() }
+
+// RecentWakes2ea48d says "Recent wakes"
+// in the language of msgs.
+func (msgs Messages) RecentWakes2ea48d() string {
+	return Catalog.Format(msgs.locale, "recentWakes_2ea48d", nil)
+}
+
+// RunsOnlyCb2abc says "Runs only "
+// in the language the app shows.
+func RunsOnlyCb2abc() string { return In(i18n.Locale()).RunsOnlyCb2abc() }
+
+// RunsOnlyCb2abc says "Runs only "
+// in the language of msgs.
+func (msgs Messages) RunsOnlyCb2abc() string {
+	return Catalog.Format(msgs.locale, "runsOnly_cb2abc", nil)
+}
+
+// StartedARun650858 says "Started a run"
+// in the language the app shows.
+func StartedARun650858() string { return In(i18n.Locale()).StartedARun650858() }
+
+// StartedARun650858 says "Started a run"
+// in the language of msgs.
+func (msgs Messages) StartedARun650858() string {
+	return Catalog.Format(msgs.locale, "startedARun_650858", nil)
+}
+
+// Triggers047708 says "Triggers"
+// in the language the app shows.
+func Triggers047708() string { return In(i18n.Locale()).Triggers047708() }
+
+// Triggers047708 says "Triggers"
+// in the language of msgs.
+func (msgs Messages) Triggers047708() string {
+	return Catalog.Format(msgs.locale, "triggers_047708", nil)
+}
+
+// WaitingForATrigger3697cc says "Waiting for a trigger"
+// in the language the app shows.
+func WaitingForATrigger3697cc() string { return In(i18n.Locale()).WaitingForATrigger3697cc() }
+
+// WaitingForATrigger3697cc says "Waiting for a trigger"
+// in the language of msgs.
+func (msgs Messages) WaitingForATrigger3697cc() string {
+	return Catalog.Format(msgs.locale, "waitingForATrigger_3697cc", nil)
+}
+
+// Wakes288837 says "Wakes"
+// in the language the app shows.
+func Wakes288837() string { return In(i18n.Locale()).Wakes288837() }
+
+// Wakes288837 says "Wakes"
+// in the language of msgs.
+func (msgs Messages) Wakes288837() string {
+	return Catalog.Format(msgs.locale, "wakes_288837", nil)
+}
+
+// Wakes2bdc87 says "Wakes: "
+// in the language the app shows.
+func Wakes2bdc87() string { return In(i18n.Locale()).Wakes2bdc87() }
+
+// Wakes2bdc87 says "Wakes: "
+// in the language of msgs.
+func (msgs Messages) Wakes2bdc87() string {
+	return Catalog.Format(msgs.locale, "wakes_2bdc87", nil)
+}
+
+// Watching96d9e0 says "Watching"
+// in the language the app shows.
+func Watching96d9e0() string { return In(i18n.Locale()).Watching96d9e0() }
+
+// Watching96d9e0 says "Watching"
+// in the language of msgs.
+func (msgs Messages) Watching96d9e0() string {
+	return Catalog.Format(msgs.locale, "watching_96d9e0", nil)
+}
+
+// WhenSChanges787586 says "When %s changes"
+// in the language the app shows.
+func WhenSChanges787586() string { return In(i18n.Locale()).WhenSChanges787586() }
+
+// WhenSChanges787586 says "When %s changes"
+// in the language of msgs.
+func (msgs Messages) WhenSChanges787586() string {
+	return Catalog.Format(msgs.locale, "whenSChanges_787586", nil)
+}
+
+// WhenSSucceeds12ae90 says "When `%s` succeeds"
+// in the language the app shows.
+func WhenSSucceeds12ae90() string { return In(i18n.Locale()).WhenSSucceeds12ae90() }
+
+// WhenSSucceeds12ae90 says "When `%s` succeeds"
+// in the language of msgs.
+func (msgs Messages) WhenSSucceeds12ae90() string {
+	return Catalog.Format(msgs.locale, "whenSSucceeds_12ae90", nil)
+}
+
+// WhenFreeMemoryIsBelowSD71e9e says "When free memory is below %s"
+// in the language the app shows.
+func WhenFreeMemoryIsBelowSD71e9e() string { return In(i18n.Locale()).WhenFreeMemoryIsBelowSD71e9e() }
+
+// WhenFreeMemoryIsBelowSD71e9e says "When free memory is below %s"
+// in the language of msgs.
+func (msgs Messages) WhenFreeMemoryIsBelowSD71e9e() string {
+	return Catalog.Format(msgs.locale, "whenFreeMemoryIsBelowS_d71e9e", nil)
+}
+
+// WhenFreeSpaceOnSIsBelowC6142a says "When free space on %s is below %s"
+// in the language the app shows.
+func WhenFreeSpaceOnSIsBelowC6142a() string { return In(i18n.Locale()).WhenFreeSpaceOnSIsBelowC6142a() }
+
+// WhenFreeSpaceOnSIsBelowC6142a says "When free space on %s is below %s"
+// in the language of msgs.
+func (msgs Messages) WhenFreeSpaceOnSIsBelowC6142a() string {
+	return Catalog.Format(msgs.locale, "whenFreeSpaceOnSIsBelow_c6142a", nil)
+}
+
+// WhenTheComputerWakesFromSleep9feec0 says "When the computer wakes from sleep"
+// in the language the app shows.
+func WhenTheComputerWakesFromSleep9feec0() string {
+	return In(i18n.Locale()).WhenTheComputerWakesFromSleep9feec0()
+}
+
+// WhenTheComputerWakesFromSleep9feec0 says "When the computer wakes from sleep"
+// in the language of msgs.
+func (msgs Messages) WhenTheComputerWakesFromSleep9feec0() string {
+	return Catalog.Format(msgs.locale, "whenTheComputerWakesFromSleep_9feec0", nil)
+}
+
+// WhenWokenFromOutsideMiya93e0e8 says "When woken from outside Miya"
+// in the language the app shows.
+func WhenWokenFromOutsideMiya93e0e8() string {
+	return In(i18n.Locale()).WhenWokenFromOutsideMiya93e0e8()
+}
+
+// WhenWokenFromOutsideMiya93e0e8 says "When woken from outside Miya"
+// in the language of msgs.
+func (msgs Messages) WhenWokenFromOutsideMiya93e0e8() string {
+	return Catalog.Format(msgs.locale, "whenWokenFromOutsideMiya_93e0e8", nil)
+}
+
+// WokeItWaitsToRecoverC85a7b says "Woke it; waits to recover"
+// in the language the app shows.
+func WokeItWaitsToRecoverC85a7b() string { return In(i18n.Locale()).WokeItWaitsToRecoverC85a7b() }
+
+// WokeItWaitsToRecoverC85a7b says "Woke it; waits to recover"
+// in the language of msgs.
+func (msgs Messages) WokeItWaitsToRecoverC85a7b() string {
+	return Catalog.Format(msgs.locale, "wokeItWaitsToRecover_c85a7b", nil)
+}

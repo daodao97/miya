@@ -10,8 +10,28 @@ import (
 )
 
 var automationToolProps = map[string]any{
-	"name":         map[string]any{"type": "string", "description": "Short name, in the user's language"},
-	"schedule":     map[string]any{"type": "string", "description": "5-field cron in local time, e.g. 0 9 * * 1-5"},
+	"name":     map[string]any{"type": "string", "description": "Short name, in the user's language"},
+	"schedule": map[string]any{"type": "string", "description": "5-field cron in local time, e.g. 0 9 * * 1-5. Leave empty when only triggers wake it"},
+	"triggers": map[string]any{"type": "array", "description": "Other ways it wakes, any of which starts a run. " +
+		"condition: when a probe of the computer turns true, e.g. {kind:condition, condition:{probe:disk_free, path:/, belowGB:5}} for free disk space under 5 GB, probe memory_free with belowGB, or probe command with a shell command whose exit 0 means met; everyMinutes (default 5) and repeatHours (default 24, wake again while still met). " +
+		"ingress: woken from outside by `miya -wake <id>` or a local HTTP request with a token. file: when a file or a directory's entries change (path). " +
+		"after: when another automation's run finishes (after: its id; results: passed/failed/interrupted). system: event wake, when the computer wakes from sleep.",
+		"items": map[string]any{"type": "object", "required": []string{"kind"}, "properties": map[string]any{
+			"kind": map[string]any{"type": "string", "enum": []string{"condition", "ingress", "file", "after", "system"}},
+			"condition": map[string]any{"type": "object", "properties": map[string]any{
+				"probe":        map[string]any{"type": "string", "enum": []string{"disk_free", "memory_free", "command"}},
+				"path":         map[string]any{"type": "string"},
+				"belowGB":      map[string]any{"type": "number"},
+				"command":      map[string]any{"type": "string"},
+				"everyMinutes": map[string]any{"type": "integer"},
+				"repeatHours":  map[string]any{"type": "integer"}}},
+			"path":    map[string]any{"type": "string"},
+			"after":   map[string]any{"type": "string"},
+			"results": map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+			"event":   map[string]any{"type": "string", "enum": []string{"wake"}}}}},
+	"policy": map[string]any{"type": "object", "description": "Holds back triggered wakes: queue (keep one wake that comes while running), debounceSeconds, cooldownMinutes, maxPerDay (default 24), gate (a condition checked on every wake; the run starts only when met)",
+		"properties": map[string]any{"queue": map[string]any{"type": "boolean"}, "debounceSeconds": map[string]any{"type": "integer"},
+			"cooldownMinutes": map[string]any{"type": "integer"}, "maxPerDay": map[string]any{"type": "integer"}, "gate": map[string]any{"type": "object"}}},
 	"instructions": map[string]any{"type": "string", "description": "First message each run sends to a coding agent: what to do, when it is done, and to reply that there is nothing to report when so"},
 	"check":        map[string]any{"type": "string", "description": "Optional shell command run in the project after each round; exit 0 passes, otherwise its output starts another round"},
 	"rounds":       map[string]any{"type": "integer", "minimum": 1, "maximum": 5, "description": "Most rounds when check fails (default 3; 1 without check)"},
@@ -28,9 +48,15 @@ func init() {
 	Register(automationTool, false,
 		mcpproto.Tool{Name: "list_automations", Description: "List the scheduled automations in Miya: id, name, project, schedule, whether on, and the last run.",
 			InputSchema: map[string]any{"type": "object", "properties": map[string]any{}}, Annotations: mcpproto.ReadOnly},
-		mcpproto.Tool{Name: "create_automation", Description: "Create a scheduled automation in this project: on its schedule Miya starts a new conversation with the instructions. " +
-			"Miya asks the user to confirm in this conversation and creates it only if they accept.",
-			InputSchema: map[string]any{"type": "object", "properties": automationToolProps, "required": []string{"name", "schedule", "instructions"}},
+		mcpproto.Tool{Name: "create_automation", Description: "Create an automation in this project: on its schedule, or when one of its triggers fires (a condition such as low disk space, an external wake, a file change, another automation finishing, the computer waking), Miya starts a new conversation with the instructions. " +
+			"Give a schedule, triggers, or both. Miya asks the user to confirm in this conversation and creates it only if they accept.",
+			InputSchema: map[string]any{"type": "object", "properties": automationToolProps, "required": []string{"name", "instructions"}},
+			Annotations: map[string]any{"readOnlyHint": false, "openWorldHint": false}},
+		mcpproto.Tool{Name: "wake_automation", Description: "Start a run of an automation now, as if one of its triggers fired; data goes to its agent as untrusted context. " +
+			"Use it to chain work into an existing automation. Miya asks the user to confirm in this conversation first.",
+			InputSchema: map[string]any{"type": "object", "required": []string{"id"}, "properties": map[string]any{
+				"id":   map[string]any{"type": "string", "description": "Automation id or name from list_automations"},
+				"data": map[string]any{"type": "string", "description": "Optional context for the run, up to 4000 characters"}}},
 			Annotations: map[string]any{"readOnlyHint": false, "openWorldHint": false}},
 		mcpproto.Tool{Name: "update_automation", Description: "Change an automation. Turning it on or off applies at once; other changes need the user's confirmation.",
 			InputSchema: map[string]any{"type": "object", "properties": update, "required": []string{"id"}},
@@ -45,7 +71,7 @@ func automationTool(s *Server, name string, raw json.RawMessage) (string, error)
 	if len(raw) > 0 && string(raw) != "null" && json.Unmarshal(raw, &args) != nil {
 		return "", errors.New("Invalid arguments")
 	}
-	op := map[string]string{"list_automations": "mcpAutomationList", "create_automation": "mcpAutomationCreate", "update_automation": "mcpAutomationUpdate"}[name]
+	op := map[string]string{"list_automations": "mcpAutomationList", "create_automation": "mcpAutomationCreate", "update_automation": "mcpAutomationUpdate", "wake_automation": "mcpAutomationWake"}[name]
 	if op == "" {
 		return "", fmt.Errorf("Unknown tool %s", name)
 	}

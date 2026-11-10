@@ -19,7 +19,7 @@ import (
 )
 
 var automationOps = map[string]bool{"automationList": true, "automationDraft": true, "automationSave": true,
-	"automationToggle": true, "automationDelete": true, "automationRunNow": true, "automationWorktree": true}
+	"automationToggle": true, "automationDelete": true, "automationRunNow": true, "automationWorktree": true, "automationWake": true}
 
 // automationCall runs an operation where the automations are, decoding its
 // reply into out. A window's call waits for the service: make it off the
@@ -59,8 +59,7 @@ func (c *Controller) AutomationOp(op string, r automation.Request) (any, error) 
 	case "automationList":
 		views := []automation.View{}
 		for _, a := range s.Store.Automations {
-			_, running := s.Active[a.ID]
-			views = append(views, automation.ViewOf(a, append([]automation.Run(nil), s.Store.Runs[a.ID]...), running, now))
+			views = append(views, s.View(a, now))
 		}
 		return views, nil
 	case "automationDraft":
@@ -73,7 +72,7 @@ func (c *Controller) AutomationOp(op string, r automation.Request) (any, error) 
 		if err != nil {
 			return nil, err
 		}
-		return automation.ViewOf(a, s.Store.Runs[a.ID], false, now), nil
+		return s.View(a, now), nil
 	case "automationToggle":
 		i, ok := s.Store.Find(r.ID)
 		if !ok {
@@ -88,18 +87,13 @@ func (c *Controller) AutomationOp(op string, r automation.Request) (any, error) 
 		c.Auto.Changed()
 		return nil, nil
 	case "automationDelete":
-		i, ok := s.Store.Find(r.ID)
-		if !ok {
-			return nil, nil
-		}
-		s.Store.Automations = append(s.Store.Automations[:i], s.Store.Automations[i+1:]...)
-		delete(s.Store.Runs, r.ID)
-		// A run in progress goes on as an ordinary conversation.
-		delete(s.Active, r.ID)
-		c.Auto.Changed()
+		s.Delete(r.ID)
 		return nil, nil
 	case "automationRunNow":
-		return nil, c.Auto.StartRun(r.ID, false)
+		_, err := c.Auto.Wake(automation.WakeEvent{Automation: r.ID, Source: automation.SourceManual})
+		return nil, err
+	case "automationWake":
+		return c.Auto.Ingress(r.ID, r.Trigger, "", false, r.Data, r.Dedupe)
 	case "automationWorktree":
 		return nil, c.Auto.WorktreeAction(r.ID, r.Started, r.Action)
 	}

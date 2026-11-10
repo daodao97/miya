@@ -52,8 +52,8 @@ func worktreeNote(w worktree.Worktree) string {
 
 // startInWorktree starts run once its worktree exists. Making it runs
 // off the host's thread; the run counts as in progress meanwhile.
-func (rn *Runner) startInWorktree(a Automation, run Run, prev *Run) {
-	r := &ActiveRun{round: 1, started: run.Started, preparing: true, allowPaused: !a.Enabled}
+func (rn *Runner) startInWorktree(a Automation, run Run, prev *Run, ev WakeEvent) {
+	r := &ActiveRun{round: 1, started: run.Started, preparing: true, allowPaused: !a.Enabled, ev: ev}
 	rn.Active[a.ID] = r
 	rn.Store.AddRun(a.ID, run)
 	rn.Persist()
@@ -84,7 +84,7 @@ func (rn *Runner) worktreeReady(id string, r *ActiveRun, w worktree.Worktree, er
 	rn.Store.UpdateRun(id, r.started, func(run *Run) { run.Worktree, run.WorktreeState = &w, WorktreeActive })
 	rn.host.AddWorkspace(w.Dir)
 	a := rn.Store.Automations[i]
-	thread := rn.Submit(model.SendRequest{Agent: a.Agent, Project: w.Dir, Text: RunMessage(a, prev) + worktreeNote(w), MemoryControl: true})
+	thread := rn.Submit(model.SendRequest{Agent: a.Agent, Project: w.Dir, Text: RunMessage(a, prev, r.ev) + worktreeNote(w), MemoryControl: true})
 	if thread == 0 {
 		rn.finish(id, Failed, model.AgentName(a.Agent)+" is not ready")
 		return

@@ -192,7 +192,12 @@ func (m *App) automationCreatePage(c *ui.Context) {
 				m.automationCreateField(c, "name", tr("Name"), &f.Draft.Name, false, locked)
 				m.automationCreateField(c, "schedule", tr("Schedule"), &f.Draft.Schedule, false, locked)
 				ui.Text(c, tr("Format: minute hour day month weekday. For example, 0 9 * * 1-5 runs at 9 AM on weekdays.")).FontSize(m.Font(12)).TextColor(p.muted).LineHeight(1.5)
-				ui.Text(c, automation.DescribeCron(f.Draft.Schedule)+tr(" · Desktop local time")).FontSize(m.Font(13)).TextColor(p.muted)
+				if len(f.Draft.Triggers) > 0 || f.Draft.Policy.Gate != nil {
+					ui.Text(c, tr("Wakes: ")+automation.WakeText(f.Draft.Automation, nil)+" · "+automation.PolicyText(f.Draft.Policy)).FontSize(m.Font(13)).TextColor(p.muted).LineHeight(1.5)
+				}
+				if f.Draft.Schedule != "" {
+					ui.Text(c, automation.DescribeCron(f.Draft.Schedule)+tr(" · Desktop local time")).FontSize(m.Font(13)).TextColor(p.muted)
+				}
 				m.automationCreateField(c, "instructions", tr("Task instructions"), &f.Draft.Instructions, true, locked)
 				m.automationCreateField(c, "check", tr("Check command (optional)"), &f.Draft.Check, false, locked)
 				ui.Text(c, tr("Maximum turns")).FontSize(m.Font(13)).TextColor(p.muted)

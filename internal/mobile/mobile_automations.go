@@ -228,7 +228,7 @@ func (m *App) automationPhoneRow(c *ui.Context, v automation.View) {
 		ui.Column(c).Grow(1).MinWidth(0).Gap(5).Children(func() {
 			ui.Text(c, v.Name).FontSize(m.Font(17)).FontWeight(600).MaxLines(2)
 			ui.Text(c, m.automationPhoneProject(v)+" · "+appmodel.AgentName(v.Agent)).FontSize(m.Font(12)).TextColor(p.muted).MaxLines(2)
-			ui.Text(c, automation.DescribeCron(v.Schedule)).FontSize(m.Font(13)).TextColor(p.muted)
+			ui.Text(c, automationPhoneWhen(v)).FontSize(m.Font(13)).TextColor(p.muted)
 			ui.Row(c).FillWidth().Wrap().Gap(8).AlignItems(ui.Center).Children(func() {
 				if v.Enabled {
 					ui.Text(c, automationPhoneNext(v)).FontSize(m.Font(13)).TextColor(p.muted)
@@ -257,6 +257,9 @@ func (m *App) automationPhoneRow(c *ui.Context, v automation.View) {
 func automationPhoneNext(v automation.View) string {
 	if !v.Enabled {
 		return tr("Paused")
+	}
+	if v.Next.IsZero() && v.Schedule == "" && len(v.Triggers) > 0 {
+		return tr("Waiting for a trigger")
 	}
 	if v.Next.IsZero() {
 		return tr("Next run not scheduled")
@@ -303,7 +306,7 @@ func (m *App) automationPhoneDetail(c *ui.Context, v automation.View) {
 		}
 		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 			widgets.Icon(c, "clock", 14, p.muted)
-			ui.Text(c, automation.DescribeCron(v.Schedule)).FontSize(m.Font(14)).TextColor(p.muted)
+			ui.Text(c, automationPhoneWhen(v)).FontSize(m.Font(14)).TextColor(p.muted)
 		})
 		label := tr("Run now")
 		if v.Running {
@@ -495,4 +498,13 @@ func (m *App) AutomationRunThread(v automation.View, r automation.Run) (model.Th
 		}
 	}
 	return model.Thread{}, false
+}
+
+// automationPhoneWhen says when an automation wakes: its schedule and
+// triggers, as the desktop service describes them.
+func automationPhoneWhen(v automation.View) string {
+	if v.ScheduleText != "" {
+		return v.ScheduleText
+	}
+	return automation.DescribeCron(v.Schedule)
 }

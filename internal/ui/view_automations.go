@@ -249,10 +249,10 @@ func (app *App) automationRow(c *ui.Context, v automation.View) {
 			a.Page, a.Detail, a.confirmDelete = "detail", v.ID, ""
 		}
 		ui.Column(c).Width(150).Shrink(0).Gap(1).Children(func() {
-			ui.Text(c, automation.DescribeCron(v.Schedule)).FontWeight(500).SingleLine().Ellipsis("…")
-			next := tr("Paused")
-			if v.Enabled {
-				next = tr("Next ") + automation.FormatTime(v.Next)
+			ui.Text(c, v.ScheduleText).FontWeight(500).SingleLine().Ellipsis("…")
+			next := nextRunText(v)
+			if v.Enabled && v.Schedule != "" {
+				next = tr("Next ") + next
 			}
 			ui.Text(c, next).FontSize(12).TextColor(widgets.Muted).SingleLine()
 		})
@@ -348,7 +348,7 @@ func (app *App) automationDetail(c *ui.Context) {
 		autoTile(c, v.Agent, 48)
 		ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
 			ui.Text(c, v.Name).FontSize(24).FontWeight(600).SingleLine().Ellipsis("…")
-			ui.Text(c, filepath.Base(v.Project)+" · "+model.AgentName(v.Agent)+" · "+automation.DescribeCron(v.Schedule)).TextColor(widgets.Muted).SingleLine().Ellipsis("…")
+			ui.Text(c, filepath.Base(v.Project)+" · "+model.AgentName(v.Agent)+" · "+v.ScheduleText).TextColor(widgets.Muted).SingleLine().Ellipsis("…")
 		})
 		on := v.Enabled
 		if ui.Switch(c.Key("on"), &on).Shrink(0).Changed() {
@@ -380,11 +380,7 @@ func (app *App) automationDetail(c *ui.Context) {
 		}
 	}
 	ui.Row(c).FillWidth().Gap(10).Children(func() {
-		next := tr("Paused")
-		if v.Enabled {
-			next = automation.FormatTime(v.Next)
-		}
-		stat(c, tr("Next run"), next)
+		stat(c, tr("Next run"), nextRunText(v))
 		if total > 0 {
 			stat(c, fmt.Sprintf(tr("Last %d runs"), total), fmt.Sprintf(tr("%d passed"), passed))
 			stat(c, tr("Average"), fmt.Sprintf(tr("%.1f turns"), float64(rounds)/float64(total)))
@@ -396,7 +392,9 @@ func (app *App) automationDetail(c *ui.Context) {
 		ui.Text(c, tr("Instructions")).FontSize(12).TextColor(widgets.Muted)
 		ui.Text(c, v.Instructions).FontSize(14).LineHeight(1.7).Selectable()
 		ui.Row(c).Gap(8).Children(func() {
-			settingChip(c, "clock", v.Schedule)
+			if v.Schedule != "" {
+				settingChip(c, "clock", v.Schedule)
+			}
 			if v.Check != "" {
 				settingChip(c, "terminal-2", v.Check)
 				settingChip(c, "refresh", fmt.Sprintf(tr("Up to %d turns"), v.Rounds))
@@ -408,6 +406,7 @@ func (app *App) automationDetail(c *ui.Context) {
 			ui.Text(c, tr("Original request: ")+v.Request).FontSize(12).TextColor(widgets.Muted).LineHeight(1.5)
 		}
 	})
+	app.triggersView(c, v)
 	ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
 		carry := !v.NoCarryOver
 		if ui.Switch(c.Key("carry"), &carry).Label(tr("Include previous result")).Shrink(0).Changed() {
@@ -778,27 +777,12 @@ func (app *App) draftPreview(c *ui.Context, d *automation.View) {
 		app.draftRow(c, "name", "edit", tr("Name"), d.Name, false, func() {
 			ui.Text(c, d.Name).Grow(1).MinWidth(0)
 		})
-		app.draftRow(c, "schedule", "clock", tr("Schedule"), d.Schedule, d.TimeMissing, func() {
-			ui.Column(c).Grow(1).MinWidth(0).Gap(6).Children(func() {
-				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-					if d.TimeMissing {
-						ui.Text(c, tr("No time specified. Using ")+automation.DescribeCron(d.Schedule)).TextColor(autoWarn)
-					} else {
-						ui.Text(c, automation.DescribeCron(d.Schedule)).FontWeight(500)
-					}
-					codeChip(c, d.Schedule)
-				})
-				ui.Row(c).Gap(6).Children(func() {
-					for i, t := range d.Upcoming {
-						chip := ui.Text(c.Key(i), fmt.Sprintf(tr("%d/%d %s %s"), t.Month(), t.Day(), tr(automation.WeekdayNames[t.Weekday()]), t.Format("15:04"))).
-							FontSize(12).Padding(1, 8, 1, 8).Radius(6).Background(widgets.Subtle).TextColor(widgets.Muted)
-						if i == 0 {
-							chip.TextColor(widgets.Ink)
-						}
-					}
-				})
-			})
-		})
+		if len(d.Triggers) > 0 || d.Policy.Gate != nil {
+			draftTriggersRow(c.Key("triggers"), d)
+		}
+		if d.Schedule != "" || len(d.Triggers) == 0 {
+			app.draftScheduleRow(c, d)
+		}
 		app.draftRow(c, "check", "terminal-2", tr("Completion check"), d.Check, false, func() {
 			if d.Check == "" {
 				ui.Text(c, tr("No check; finish after one turn")).TextColor(widgets.Muted).Grow(1)

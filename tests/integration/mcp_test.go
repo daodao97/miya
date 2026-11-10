@@ -75,7 +75,7 @@ func TestMCPServerHandshakeAndTools(t *testing.T) {
 	for _, tool := range res["2"]["result"].(map[string]any)["tools"].([]any) {
 		names = append(names, tool.(map[string]any)["name"].(string))
 	}
-	if strings.Join(names, ",") != "request_desktop_control,runtime_info,list_threads,read_thread,thread_status,delegate,list_automations,create_automation,update_automation,report_result,list_agents,start_task,read_task,wait_task,send_thread,cancel_task,resolve_task,watch_task,unwatch_task,list_tasks,search_memory,remember,forget_memory" {
+	if strings.Join(names, ",") != "request_desktop_control,runtime_info,list_threads,read_thread,thread_status,delegate,list_automations,create_automation,wake_automation,update_automation,report_result,list_agents,start_task,read_task,wait_task,send_thread,cancel_task,resolve_task,watch_task,unwatch_task,list_tasks,search_memory,remember,forget_memory" {
 		t.Fatalf("bad tools: %v", names)
 	}
 	if res[`"p"`]["result"] == nil || res["3"]["error"].(map[string]any)["code"] != float64(-32601) || res["null"]["error"] == nil {

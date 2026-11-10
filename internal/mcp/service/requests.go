@@ -78,7 +78,7 @@ func (api *Service) Handle(op string, r mcpproto.Request) (any, error) {
 		return api.Delegate(r)
 	case "mcpReportResult":
 		return api.reportResult(r)
-	case "mcpAutomationList", "mcpAutomationCreate", "mcpAutomationUpdate":
+	case "mcpAutomationList", "mcpAutomationCreate", "mcpAutomationUpdate", "mcpAutomationWake":
 		return api.automation(op, r)
 	}
 	return nil, fmt.Errorf("unknown miya call %s", op)

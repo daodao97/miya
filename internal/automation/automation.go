@@ -34,7 +34,13 @@ type Automation struct {
 	// Request is what the person wrote; the agent made the rest of it.
 	Request      string `json:"request,omitempty"`
 	Instructions string `json:"instructions"`
-	Schedule     string `json:"schedule"`
+	// Schedule is a cron for when it runs; empty when only its Triggers
+	// wake it.
+	Schedule string `json:"schedule"`
+	// Triggers are the other ways it wakes (trigger.go), and Policy what
+	// holds their wakes back.
+	Triggers []Trigger  `json:"triggers,omitempty"`
+	Policy   WakePolicy `json:"policy,omitzero"`
 	// Check runs in the project after each round; exit status 0 passes.
 	Check   string    `json:"check,omitempty"`
 	Rounds  int       `json:"rounds"`
@@ -63,6 +69,12 @@ type Run struct {
 	Summary string `json:"summary,omitempty"`
 	// CatchUp marks a run started for a time missed while asleep.
 	CatchUp bool `json:"catchUp,omitempty"`
+	// WakeSource and WakeReason are what woke the run, and WakeAfter what
+	// its condition probed once it ended.
+	WakeSource  string `json:"wakeSource,omitempty"`
+	WakeTrigger string `json:"wakeTrigger,omitempty"`
+	WakeReason  string `json:"wakeReason,omitempty"`
+	WakeAfter   string `json:"wakeAfter,omitempty"`
 	// Report is the run\'s structured result.
 	Report *Report `json:"report,omitempty"`
 	// Worktree is where a run of a Worktree automation worked, and
@@ -122,8 +134,16 @@ func (a *Automation) Normalize() error {
 	case a.Instructions == "":
 		return errors.New("Instructions are required")
 	}
-	if _, err := ParseCron(a.Schedule); err != nil {
-		return fmt.Errorf("Invalid schedule %q: %v", a.Schedule, err)
+	if a.Schedule != "" || len(a.Triggers) == 0 {
+		if _, err := ParseCron(a.Schedule); err != nil {
+			return fmt.Errorf("Invalid schedule %q: %v", a.Schedule, err)
+		}
+	}
+	if a.ID == "" {
+		a.ID = NewID()
+	}
+	if err := a.normalizeTriggers(); err != nil {
+		return err
 	}
 	if a.Check == "" {
 		a.Rounds = 1
@@ -156,6 +176,56 @@ func (a Automation) Next(after time.Time) time.Time {
 type Store struct {
 	Automations []Automation     `json:"automations"`
 	Runs        map[string][]Run `json:"runs,omitempty"`
+	// Triggers is what each trigger has seen, by TriggerKey, so that a
+	// restart neither wakes again for what it already woke for nor misses
+	// what changed meanwhile.
+	Triggers map[string]TriggerState `json:"triggers,omitempty"`
+	// Wakes is what became of each automation's latest wakes.
+	Wakes map[string][]Wake `json:"wakes,omitempty"`
+}
+
+// TriggerState is what a trigger has seen.
+type TriggerState struct {
+	// Fired marks a condition that woke the automation and has not
+	// recovered since; LastFired is when it last woke it.
+	Fired     bool      `json:"fired,omitempty"`
+	LastFired time.Time `json:"lastFired,omitzero"`
+	// LastProbe is when the condition was last probed, Met and Value what
+	// it found, Error why it could not, and Errors how many probes in a
+	// row could not.
+	LastProbe time.Time `json:"lastProbe,omitzero"`
+	Met       bool      `json:"met,omitempty"`
+	Value     string    `json:"value,omitempty"`
+	Error     string    `json:"error,omitempty"`
+	Errors    int       `json:"errors,omitempty"`
+	// Fingerprint identifies what a file trigger last saw.
+	Fingerprint string `json:"fingerprint,omitempty"`
+}
+
+// TriggerKey is where a trigger's state is kept.
+func TriggerKey(automation, trigger string) string { return automation + "/" + trigger }
+
+// AddWake records a wake, keeping the latest WakeHistory.
+func (s *Store) AddWake(id string, w Wake) {
+	if s.Wakes == nil {
+		s.Wakes = map[string][]Wake{}
+	}
+	wakes := append(s.Wakes[id], w)
+	if len(wakes) > WakeHistory {
+		wakes = wakes[len(wakes)-WakeHistory:]
+	}
+	s.Wakes[id] = wakes
+}
+
+// Forget drops what an automation's triggers and wakes recorded.
+func (s *Store) Forget(id string) {
+	delete(s.Runs, id)
+	delete(s.Wakes, id)
+	for k := range s.Triggers {
+		if strings.HasPrefix(k, id+"/") {
+			delete(s.Triggers, k)
+		}
+	}
 }
 
 func Path() string { return filepath.Join(appdir.Dir(), "automations.json") }
@@ -176,6 +246,9 @@ func Load(path string) Store {
 	s.Automations = valid
 	if s.Runs == nil {
 		s.Runs = map[string][]Run{}
+	}
+	if s.Triggers == nil {
+		s.Triggers = map[string]TriggerState{}
 	}
 	return s
 }

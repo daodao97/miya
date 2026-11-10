@@ -37,6 +37,9 @@ func (api *Service) automation(op string, r mcpproto.Request) (any, error) {
 		if args.Worktree != nil {
 			a.Worktree = *args.Worktree
 		}
+		if err := applyWakeArgs(&a, nil, args); err != nil {
+			return nil, err
+		}
 		if err := a.Normalize(); err != nil {
 			return nil, err
 		}
@@ -57,10 +60,15 @@ func (api *Service) automation(op string, r mcpproto.Request) (any, error) {
 				return nil, err
 			}
 			view := v.(automation.View)
+			if view.Schedule == "" {
+				return fmt.Sprintf("Created automation %q (ID %s). It wakes: %s.", view.Name, view.ID, view.ScheduleText), nil
+			}
 			return fmt.Sprintf("Created automation %q (ID %s), %s. Next run: %s.", view.Name, view.ID, view.ScheduleText, automation.FormatTime(view.Next)), nil
 		}), nil
 	case "mcpAutomationUpdate":
 		return api.updateAutomation(r, args)
+	case "mcpAutomationWake":
+		return api.wakeAutomation(r, args)
 	}
 	return nil, fmt.Errorf("unknown miya call %s", op)
 }
@@ -105,6 +113,9 @@ func (api *Service) updateAutomation(r mcpproto.Request, args mcpproto.Automatio
 	if args.Worktree != nil {
 		next.Worktree = *args.Worktree
 	}
+	if err := applyWakeArgs(&next, &old, args); err != nil {
+		return nil, err
+	}
 	if err := next.Normalize(); err != nil {
 		return nil, err
 	}
@@ -134,7 +145,7 @@ func (api *Service) updateAutomation(r mcpproto.Request, args mcpproto.Automatio
 		if _, err := c.OnMain(func() (any, error) { return c.Automations().Save(next) }); err != nil {
 			return nil, err
 		}
-		return "Updated \"" + next.Name + "\", " + automation.DescribeCron(next.Schedule) + ".", nil
+		return "Updated \"" + next.Name + "\", " + automation.WakeText(next, nil) + ".", nil
 	}), nil
 }
 

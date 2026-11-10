@@ -19,6 +19,17 @@ type View struct {
 	Runs         []Run       `json:"runs,omitempty"`
 	// TimeMissing marks a draft whose sentence named no time.
 	TimeMissing bool `json:"timeMissing,omitempty"`
+	// TriggerTexts say when each trigger wakes it, by trigger ID, and
+	// TriggerStates what each has seen.
+	TriggerTexts  map[string]string       `json:"triggerTexts,omitempty"`
+	TriggerStates map[string]TriggerState `json:"triggerStates,omitempty"`
+	// Wakes are its latest wakes, newest last.
+	Wakes []Wake `json:"wakes,omitempty"`
+	// WakeCommand wakes it from a terminal when it has an ingress trigger.
+	WakeCommand string `json:"wakeCommand,omitempty"`
+	// WakeURLs are where its ingress triggers are woken over HTTP, by
+	// trigger ID, while the local wake endpoint listens.
+	WakeURLs map[string]string `json:"wakeURLs,omitempty"`
 }
 
 type Request struct {
@@ -32,10 +43,21 @@ type Request struct {
 	// Started and Action pick a run and merge or discard its worktree.
 	Started time.Time `json:"started,omitzero"`
 	Action  string    `json:"action,omitempty"`
+	// Trigger, Data and Dedupe wake an automation from outside Miya;
+	// ID may then be its name.
+	Trigger string `json:"trigger,omitempty"`
+	Data    string `json:"data,omitempty"`
+	Dedupe  string `json:"dedupe,omitempty"`
 }
 
 func ViewOf(a Automation, runs []Run, running bool, now time.Time) View {
-	v := View{Automation: a, ScheduleText: DescribeCron(a.Schedule), Running: running, Runs: runs}
+	v := View{Automation: a, ScheduleText: WakeText(a, nil), Running: running, Runs: runs}
+	for _, t := range a.Triggers {
+		if v.TriggerTexts == nil {
+			v.TriggerTexts = map[string]string{}
+		}
+		v.TriggerTexts[t.ID] = DescribeTrigger(t, nil)
+	}
 	next := now
 	for i := 0; i < 3; i++ {
 		if next = a.Next(next); next.IsZero() {
@@ -66,14 +88,24 @@ func WhereText(a Automation) string {
 
 // CardDetail is what the confirmation card shows of a new one.
 func (rn *Runner) CardDetail(a Automation, now time.Time) string {
-	return strings.Join([]string{
-		fmt.Sprintf("Schedule: %s (%s); next run: %s", DescribeCron(a.Schedule), a.Schedule, FormatTime(a.Next(now))),
-		"Project: " + a.Project,
-		"Agent: " + model.AgentName(a.Agent),
-		"Completion check: " + CheckText(a),
-		"Runs in: " + WhereText(a),
-		"Instructions: " + a.Instructions,
-	}, "\n")
+	when := "Wakes: " + WakeText(a, rn.name)
+	if a.Schedule != "" {
+		when += fmt.Sprintf(" (%s); next scheduled run: %s", a.Schedule, FormatTime(a.Next(now)))
+	}
+	lines := []string{when}
+	if a.HasTrigger(TriggerIngress) || a.HasTrigger(TriggerFile) {
+		lines = append(lines, "Can be woken from outside Miya; what comes with a wake reaches the agent as data")
+	}
+	if a.Policy.Gate != nil {
+		lines = append(lines, "Runs only if met: "+DescribeTrigger(Trigger{Kind: TriggerCondition, Condition: a.Policy.Gate}, nil))
+	}
+	return strings.Join(append(lines,
+		"Project: "+a.Project,
+		"Agent: "+model.AgentName(a.Agent),
+		"Completion check: "+CheckText(a),
+		"Runs in: "+WhereText(a),
+		"Instructions: "+a.Instructions,
+	), "\n")
 }
 
 // Diff lists what a change changes, besides turning it on or off.
@@ -85,7 +117,9 @@ func (rn *Runner) Diff(old, next Automation) string {
 		}
 	}
 	add("Name", old.Name, next.Name)
-	add("Schedule", DescribeCron(old.Schedule), DescribeCron(next.Schedule))
+	add("Schedule", textOr(DescribeCron(old.Schedule), "none"), textOr(DescribeCron(next.Schedule), "none"))
+	add("Triggers", rn.triggersText(old), rn.triggersText(next))
+	add("Wake policy", PolicyText(old.Policy), PolicyText(next.Policy))
 	add("Agent", model.AgentName(old.Agent), model.AgentName(next.Agent))
 	add("Completion check", CheckText(old), CheckText(next))
 	add("Runs in", WhereText(old), WhereText(next))
@@ -115,6 +149,7 @@ func (rn *Runner) SaveWithID(a Automation, createID string) (Automation, error) 
 		if a.Schedule != old.Schedule || a.Enabled && !old.Enabled {
 			a.Due = now
 		}
+		rn.keepTriggerStates(old, a)
 		rn.Store.Automations[i] = a
 	} else {
 		rn.Store.Automations = append(rn.Store.Automations, a)
@@ -127,6 +162,7 @@ func (rn *Runner) SaveWithID(a Automation, createID string) (Automation, error) 
 // whether one is on.
 func (rn *Runner) Changed() {
 	rn.Persist()
+	rn.syncWebhook()
 	rn.host.SyncLoginItem(rn.Store.AnyEnabled())
 	rn.host.Changed()
 }
@@ -139,9 +175,12 @@ func (rn *Runner) ListText() string {
 	for _, a := range rn.Store.Automations {
 		state := "Paused"
 		if a.Enabled {
-			state = "Enabled; next run: " + FormatTime(a.Next(rn.Now()))
+			state = "Enabled"
+			if a.Schedule != "" {
+				state += "; next scheduled run: " + FormatTime(a.Next(rn.Now()))
+			}
 		}
-		fmt.Fprintf(&b, "%s\"%s\"· %s · %s · %s", a.ID, a.Name, filepath.Base(a.Project), DescribeCron(a.Schedule), state)
+		fmt.Fprintf(&b, "%s\"%s\"· %s · %s · %s", a.ID, a.Name, filepath.Base(a.Project), WakeText(a, rn.name), state)
 		if r, ok := rn.Store.LastRun(a.ID); ok {
 			fmt.Fprintf(&b, " · Last run: %s", ResultLabel(r.Result))
 		}
