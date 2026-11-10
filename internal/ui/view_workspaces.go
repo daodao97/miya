@@ -41,9 +41,16 @@ func (app *App) workspaceSelector(c *ui.Context) {
 			m.CancelConnection()
 			m.Open, m.name, m.link, m.editID, m.Err = true, "", "", "", ""
 		}
-		if current.ID != workspaces.Local && menu.Item(tr("Rename workspace…")).Chosen() {
-			m.CancelConnection()
-			m.Open, m.name, m.editID, m.Err = true, current.Name, current.ID, ""
+		// Any saved remote workspace can be renamed without switching to it.
+		if len(m.Store.Items) > 1 {
+			menu.Submenu(tr("Rename workspace"), func(sub *ui.Menu) {
+				for _, item := range m.Store.Items {
+					if item.ID != workspaces.Local && sub.Item(item.Name).Chosen() {
+						m.CancelConnection()
+						m.Open, m.name, m.editID, m.Err = true, item.Name, item.ID, ""
+					}
+				}
+			})
 		}
 	})
 }
@@ -106,7 +113,7 @@ func (m *DesktopWorkspaces) dialog(c *ui.Context) {
 			}
 			if m.editID != "" {
 				if ui.PrimaryButton(c.Key("workspace-rename"), tr("Save")).Disabled(strings.TrimSpace(m.name) == "").Clicked() {
-					m.renameCurrent()
+					m.renameWorkspace()
 				}
 			} else {
 				label := tr("Add and connect")
@@ -130,7 +137,7 @@ func (m *DesktopWorkspaces) dialog(c *ui.Context) {
 	}
 }
 
-func (m *DesktopWorkspaces) renameCurrent() {
+func (m *DesktopWorkspaces) renameWorkspace() {
 	next := m.Store.Clone()
 	for i := range next.Items {
 		if next.Items[i].ID == m.editID {

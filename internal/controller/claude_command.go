@@ -2,6 +2,7 @@ package controller
 
 import (
 	"strings"
+	"time"
 
 	claude "miya/internal/agent/claude/native"
 	"miya/internal/agent/claude/native/transcript"
@@ -11,6 +12,7 @@ import (
 
 // applyClaudeCommand resolves a command for the runs that start after it.
 func (c *Controller) applyClaudeCommand(line string) {
+	c.agentUpdatesAt = time.Time{}
 	c.ClaudeCommand = strings.TrimSpace(line)
 	cmd, err := claude.ParseCommand(c.ClaudeCommand)
 	c.ClaudeBinary, c.ClaudeArgs, c.ClaudeEnv, c.ClaudeError = cmd.Path, cmd.Args, cmd.Env, ""

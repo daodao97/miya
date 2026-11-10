@@ -10598,6 +10598,26 @@ func (msgs Messages) RemoveDesktop5ed19d() string {
 	return Catalog.Format(msgs.locale, "removeDesktop_5ed19d", nil)
 }
 
+// RenameDesktop93139e says "Rename desktop"
+// in the language the app shows.
+func RenameDesktop93139e() string { return In(i18n.Locale()).RenameDesktop93139e() }
+
+// RenameDesktop93139e says "Rename desktop"
+// in the language of msgs.
+func (msgs Messages) RenameDesktop93139e() string {
+	return Catalog.Format(msgs.locale, "renameDesktop_93139e", nil)
+}
+
+// DesktopName944a0e says "Desktop name"
+// in the language the app shows.
+func DesktopName944a0e() string { return In(i18n.Locale()).DesktopName944a0e() }
+
+// DesktopName944a0e says "Desktop name"
+// in the language of msgs.
+func (msgs Messages) DesktopName944a0e() string {
+	return Catalog.Format(msgs.locale, "desktopName_944a0e", nil)
+}
+
 // RemoveImage5f94b0 says "Remove image"
 // in the language the app shows.
 func RemoveImage5f94b0() string { return In(i18n.Locale()).RemoveImage5f94b0() }
@@ -19438,4 +19458,124 @@ func MobileSendRetry() string { return In(i18n.Locale()).MobileSendRetry() }
 // in the language of msgs.
 func (msgs Messages) MobileSendRetry() string {
 	return Catalog.Format(msgs.locale, "mobileSendRetry", nil)
+}
+
+// AgentUpdateToVersion says "Update to %s"
+// in the language the app shows.
+func AgentUpdateToVersion() string { return In(i18n.Locale()).AgentUpdateToVersion() }
+
+// AgentUpdateToVersion says "Update to %s"
+// in the language of msgs.
+func (msgs Messages) AgentUpdateToVersion() string {
+	return Catalog.Format(msgs.locale, "agentUpdateToVersion", nil)
+}
+
+// AgentCheckingUpdates says "Checking for updates…"
+// in the language the app shows.
+func AgentCheckingUpdates() string { return In(i18n.Locale()).AgentCheckingUpdates() }
+
+// AgentCheckingUpdates says "Checking for updates…"
+// in the language of msgs.
+func (msgs Messages) AgentCheckingUpdates() string {
+	return Catalog.Format(msgs.locale, "agentCheckingUpdates", nil)
+}
+
+// AgentOriginalInstaller says "Update this CLI using its original installer."
+// in the language the app shows.
+func AgentOriginalInstaller() string { return In(i18n.Locale()).AgentOriginalInstaller() }
+
+// AgentOriginalInstaller says "Update this CLI using its original installer."
+// in the language of msgs.
+func (msgs Messages) AgentOriginalInstaller() string {
+	return Catalog.Format(msgs.locale, "agentOriginalInstaller", nil)
+}
+
+// AgentUpToDate says "Up to date"
+// in the language the app shows.
+func AgentUpToDate() string { return In(i18n.Locale()).AgentUpToDate() }
+
+// AgentUpToDate says "Up to date"
+// in the language of msgs.
+func (msgs Messages) AgentUpToDate() string {
+	return Catalog.Format(msgs.locale, "agentUpToDate", nil)
+}
+
+// AgentUpdateCommand says "Update command: %s"
+// in the language the app shows.
+func AgentUpdateCommand() string { return In(i18n.Locale()).AgentUpdateCommand() }
+
+// AgentUpdateCommand says "Update command: %s"
+// in the language of msgs.
+func (msgs Messages) AgentUpdateCommand() string {
+	return Catalog.Format(msgs.locale, "agentUpdateCommand", nil)
+}
+
+// AgentNoVersion says "CLI did not report a version"
+// in the language the app shows.
+func AgentNoVersion() string { return In(i18n.Locale()).AgentNoVersion() }
+
+// AgentNoVersion says "CLI did not report a version"
+// in the language of msgs.
+func (msgs Messages) AgentNoVersion() string {
+	return Catalog.Format(msgs.locale, "agentNoVersion", nil)
+}
+
+// AgentNoBrewVersion says "No Homebrew version found"
+// in the language the app shows.
+func AgentNoBrewVersion() string { return In(i18n.Locale()).AgentNoBrewVersion() }
+
+// AgentNoBrewVersion says "No Homebrew version found"
+// in the language of msgs.
+func (msgs Messages) AgentNoBrewVersion() string {
+	return Catalog.Format(msgs.locale, "agentNoBrewVersion", nil)
+}
+
+// AgentNoReleaseVersion says "No release version found"
+// in the language the app shows.
+func AgentNoReleaseVersion() string { return In(i18n.Locale()).AgentNoReleaseVersion() }
+
+// AgentNoReleaseVersion says "No release version found"
+// in the language of msgs.
+func (msgs Messages) AgentNoReleaseVersion() string {
+	return Catalog.Format(msgs.locale, "agentNoReleaseVersion", nil)
+}
+
+// AgentNoSupportedUpdate says "No supported update is available"
+// in the language the app shows.
+func AgentNoSupportedUpdate() string { return In(i18n.Locale()).AgentNoSupportedUpdate() }
+
+// AgentNoSupportedUpdate says "No supported update is available"
+// in the language of msgs.
+func (msgs Messages) AgentNoSupportedUpdate() string {
+	return Catalog.Format(msgs.locale, "agentNoSupportedUpdate", nil)
+}
+
+// AgentInstallationChanged says "Installation changed; check again"
+// in the language the app shows.
+func AgentInstallationChanged() string { return In(i18n.Locale()).AgentInstallationChanged() }
+
+// AgentInstallationChanged says "Installation changed; check again"
+// in the language of msgs.
+func (msgs Messages) AgentInstallationChanged() string {
+	return Catalog.Format(msgs.locale, "agentInstallationChanged", nil)
+}
+
+// AgentUpdateUnverified says "The updater finished, but a newer installed version could not be verified"
+// in the language the app shows.
+func AgentUpdateUnverified() string { return In(i18n.Locale()).AgentUpdateUnverified() }
+
+// AgentUpdateUnverified says "The updater finished, but a newer installed version could not be verified"
+// in the language of msgs.
+func (msgs Messages) AgentUpdateUnverified() string {
+	return Catalog.Format(msgs.locale, "agentUpdateUnverified", nil)
+}
+
+// AgentUpdatedNextLaunch says "New agent processes will use the updated CLI. Existing sessions keep running."
+// in the language the app shows.
+func AgentUpdatedNextLaunch() string { return In(i18n.Locale()).AgentUpdatedNextLaunch() }
+
+// AgentUpdatedNextLaunch says "New agent processes will use the updated CLI. Existing sessions keep running."
+// in the language of msgs.
+func (msgs Messages) AgentUpdatedNextLaunch() string {
+	return Catalog.Format(msgs.locale, "agentUpdatedNextLaunch", nil)
 }

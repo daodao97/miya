@@ -19,6 +19,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"miya/internal/processenv"
 )
 
 // ProviderName is the provider Miya's extension registers.
@@ -199,7 +201,7 @@ func Start(parent context.Context, o Options, onEvent func(Event), onDone func(e
 	args, env := launch(o)
 	cmd := exec.CommandContext(ctx, o.Binary, args...)
 	cmd.Dir = o.Cwd
-	cmd.Env = append(append(os.Environ(), launcherPath(o.Binary, env)...), env...)
+	cmd.Env = processenv.Environ(o.Binary, env...)
 	configureProcess(cmd)
 	cmd.WaitDelay = 2 * time.Second
 	in, err := cmd.StdinPipe()
@@ -275,22 +277,6 @@ func launch(o Options) (args, env []string) {
 		args = append(args, "--session", o.SessionFile)
 	}
 	return args, env
-}
-
-// launcherPath puts the executable's directory first on PATH: pi is a
-// `#!/usr/bin/env node` script, and an app opened from the Finder has a PATH
-// without the directory node was installed in, usually pi's own.
-func launcherPath(binary string, env []string) []string {
-	for _, kv := range env {
-		if strings.HasPrefix(kv, "PATH=") {
-			return nil
-		}
-	}
-	dir := filepath.Dir(binary)
-	if !filepath.IsAbs(dir) {
-		return nil
-	}
-	return []string{"PATH=" + dir + string(os.PathListSeparator) + os.Getenv("PATH")}
 }
 
 func (c *Client) receive(line []byte, onEvent func(Event)) {

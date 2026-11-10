@@ -41,7 +41,7 @@ func (p Provider) client(ctx context.Context) (*native.Client, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	cl, err := native.StartWithEnv(ctx, binary, dir, cli.CommandEnv("codex", home))
+	cl, err := native.StartWithEnv(ctx, binary, dir, cli.CommandEnv("codex", home, binary))
 	if err != nil {
 		os.RemoveAll(dir)
 		return nil, "", errors.New("Unable to start native Codex sign-in. Update the official CLI and try again.")

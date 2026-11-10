@@ -982,6 +982,8 @@
   "removeAttachment_0fcc65": "Remove attachment",
   "removeAttachment_a73642": "Remove attachment ",
   "removeDesktop_5ed19d": "Remove desktop",
+  "renameDesktop_93139e": "Rename desktop",
+  "desktopName_944a0e": "Desktop name",
   "removeImage_5f94b0": "Remove image",
   "renameWorkspace_6d7e95": "Rename workspace",
   "renameWorkspace_8f71e8": "Rename workspace…",
@@ -1803,5 +1805,17 @@
   "nativeLogin_bd6c3bd513": "%s authorization code",
   "mobileSendUploading": "Uploading images…",
   "mobileSendWaiting": "Waiting for desktop…",
-  "mobileSendRetry": "Retry send"
+  "mobileSendRetry": "Retry send",
+  "agentUpdateToVersion": "Update to %s",
+  "agentCheckingUpdates": "Checking for updates…",
+  "agentOriginalInstaller": "Update this CLI using its original installer.",
+  "agentUpToDate": "Up to date",
+  "agentUpdateCommand": "Update command: %s",
+  "agentNoVersion": "CLI did not report a version",
+  "agentNoBrewVersion": "No Homebrew version found",
+  "agentNoReleaseVersion": "No release version found",
+  "agentNoSupportedUpdate": "No supported update is available",
+  "agentInstallationChanged": "Installation changed; check again",
+  "agentUpdateUnverified": "The updater finished, but a newer installed version could not be verified",
+  "agentUpdatedNextLaunch": "New agent processes will use the updated CLI. Existing sessions keep running."
 }

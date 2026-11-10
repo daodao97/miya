@@ -41,7 +41,7 @@ func (d *MobileDesktops) Remember(raw, name string) (phonecache.Desktop, error) 
 	}
 	for i := range d.Items {
 		if d.Items[i].ID == id {
-			if strings.TrimSpace(name) != "" {
+			if strings.TrimSpace(name) != "" && !d.Items[i].Renamed {
 				d.Items[i].Name = strings.TrimSpace(name)
 			}
 			return d.Items[i], nil
@@ -54,6 +54,31 @@ func (d *MobileDesktops) Remember(raw, name string) (phonecache.Desktop, error) 
 	d.Version = 1
 	d.Items = append(d.Items, item)
 	return item, nil
+}
+
+// restore re-adds a saved entry, keeping a name the person chose.
+func (d *MobileDesktops) restore(item phonecache.Desktop) error {
+	saved, err := d.Remember(item.Link, item.Name)
+	if err == nil && item.Renamed {
+		d.Rename(saved.ID, item.Name)
+	}
+	return err
+}
+
+// Rename sets a person-chosen name. An empty name hands the entry back to the
+// host name the desktop reports on its next connection.
+func (d *MobileDesktops) Rename(id, name string) bool {
+	name = strings.TrimSpace(name)
+	for i := range d.Items {
+		if d.Items[i].ID == id {
+			d.Items[i].Renamed = name != ""
+			if name != "" {
+				d.Items[i].Name = name
+			}
+			return true
+		}
+	}
+	return false
 }
 
 func (d MobileDesktops) find(id string) (phonecache.Desktop, bool) {
@@ -80,7 +105,7 @@ func ReadMobileDesktops(store phonecache.SecretStore) (MobileDesktops, bool, err
 			return d, false, errors.New(tr("Unable to read saved desktops"))
 		}
 		for _, item := range saved.Items {
-			if _, err := d.Remember(item.Link, item.Name); err != nil {
+			if err := d.restore(item); err != nil {
 				return MobileDesktops{Version: 1}, false, errors.New(tr("Invalid saved desktop connection"))
 			}
 		}
@@ -150,7 +175,7 @@ func (m *App) SaveDesktops() {
 func (m *App) restoreDesktops(saved MobileDesktops) {
 	for _, item := range m.Desktops.Items {
 		if _, exists := saved.find(item.ID); !exists {
-			_, _ = saved.Remember(item.Link, item.Name)
+			_ = saved.restore(item)
 		}
 	}
 	if m.Link != "" {
@@ -166,6 +191,30 @@ func (m *App) restoreDesktops(saved MobileDesktops) {
 		}
 	}
 	m.Desktops = saved
+}
+
+// DesktopName is the current desktop's saved name, which the person may have
+// chosen, falling back to the host name it reported.
+func (m *App) DesktopName() string {
+	for _, item := range m.Desktops.Items {
+		if item.Link == m.Link && item.Name != "" {
+			return item.Name
+		}
+	}
+	return m.Host
+}
+
+// RenameDesktop saves a person-chosen name; an empty one restores the host
+// name, at once for the connected desktop.
+func (m *App) RenameDesktop(id, name string) {
+	item, ok := m.Desktops.find(id)
+	if !ok || !m.Desktops.Rename(id, name) {
+		return
+	}
+	if strings.TrimSpace(name) == "" && item.Link == m.Link && m.Connected && m.Host != "" {
+		_, _ = m.Desktops.Remember(item.Link, m.Host)
+	}
+	m.SaveDesktops()
 }
 
 func (m *App) CurrentDesktopID() string {
@@ -186,6 +235,9 @@ func (m *App) SwitchDesktop(id string) {
 func (m *App) RemoveDesktop(id string) {
 	item, found := m.Desktops.find(id)
 	current := found && item.Link == m.Link || id == m.CurrentDesktopID()
+	if m.renamingDesktop == id {
+		m.renamingDesktop = ""
+	}
 	if !found && !current {
 		return
 	}

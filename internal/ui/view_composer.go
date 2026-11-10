@@ -556,19 +556,27 @@ func (app *App) agentPicker(c *ui.Context) {
 	}
 	ui.PopoverBase(c, b, &app.agentOpen, func(p ui.Element) {
 		p.AttachTo(b, ui.AnchorTopLeft, ui.AnchorBottomLeft).Margin(0, 0, 8, 0).
-			Width(220).Padding(6).Background(widgets.Canvas).Border(1, widgets.Line).Radius(10).Shadow(0, 8, 24, 0, widgets.Shadow)
-		for _, agent := range cc.EnabledAgents() {
-			choice := struct{ id, name string }{agent, model.AgentName(agent)}
-			item := widgets.Quiet(c.Key(choice.id)).FillWidth()
-			if choice.id == agent {
-				item.Background(widgets.Chosen)
+			Width(200).Padding(5).Gap(1).Background(widgets.Canvas).Border(1, widgets.Border).Radius(12).Shadow(0, 8, 24, 0, widgets.Shadow)
+		ui.Text(c, tr("Agents")).FontSize(11).FontWeight(600).TextColor(widgets.Muted).Padding(5).PaddingX(9)
+		for _, id := range cc.EnabledAgents() {
+			id := id
+			selected := id == agent
+			item := widgets.Quiet(c.Key(id)).FillWidth().Height(34).Gap(10)
+			if selected {
+				item.Background(widgets.SelectedBg)
 			}
 			item.Children(func() {
-				widgets.AgentIcon(c, choice.id, 18)
-				ui.Text(c, choice.name)
+				widgets.AgentIcon(c, id, 16)
+				ui.Text(c, model.AgentName(id)).FontSize(13).Grow(1).MinWidth(0)
+				if speed := cc.AgentSpeedBadge(id); speed != "" {
+					ui.Text(c, speed).FontSize(10).FontWeight(600).TextColor(widgets.Muted)
+				}
+				if selected {
+					ui.Text(c, "✓").FontSize(13).TextColor(widgets.Muted)
+				}
 			})
 			if item.Clicked() {
-				cc.State().SetAgent(choice.id)
+				cc.State().SetAgent(id)
 				app.agentOpen = false
 			}
 		}

@@ -53,29 +53,6 @@ func TestNotificationWatcherPreservesControllerEvents(t *testing.T) {
 	}
 }
 
-func TestWithToolchainPathAddsHomebrewLocations(t *testing.T) {
-	env := withToolchainPath([]string{"HOME=/tmp", "PATH=/usr/bin:/bin"})
-	var path string
-	for _, item := range env {
-		if strings.HasPrefix(item, "PATH=") {
-			path = strings.TrimPrefix(item, "PATH=")
-		}
-	}
-	if !strings.HasPrefix(path, "/usr/local/sbin:/usr/local/bin:/opt/homebrew/sbin:/opt/homebrew/bin:") {
-		t.Fatalf("toolchain paths were not prepended: %s", path)
-	}
-	updated := withToolchainPath(env)
-	var updatedPath string
-	for _, item := range updated {
-		if strings.HasPrefix(item, "PATH=") {
-			updatedPath = strings.TrimPrefix(item, "PATH=")
-		}
-	}
-	if strings.Count(updatedPath, "/opt/homebrew/bin") > 1 {
-		t.Fatal("toolchain path was duplicated")
-	}
-}
-
 func TestMultiplexAndServerRequest(t *testing.T) {
 	c, server := testConnection(t)
 	go func() {

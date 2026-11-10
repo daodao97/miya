@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 
 	codex "miya/internal/agent/codex/native"
+	"miya/internal/processenv"
 	"miya/internal/textutil"
 )
 
@@ -28,6 +29,7 @@ func Automation(ctx context.Context, project, prompt, schemaJSON string) ([]byte
 	}
 	cmd := exec.CommandContext(ctx, bin, "exec", "--skip-git-repo-check", "--ephemeral", "--sandbox", "read-only", "--output-schema", schema, "-o", last, prompt)
 	cmd.Dir = project
+	cmd.Env = processenv.Environ(bin)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {

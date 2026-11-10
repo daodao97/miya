@@ -50,7 +50,7 @@ func withCodex(ctx context.Context, binary, home string, run func(*codexRPC) err
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, binary, "app-server", "--listen", "stdio://")
-	cmd.Env, cmd.Dir, cmd.Stderr = cli.CommandEnv("codex", home), os.TempDir(), io.Discard
+	cmd.Env, cmd.Dir, cmd.Stderr = cli.CommandEnv("codex", home, binary), os.TempDir(), io.Discard
 	cmd.WaitDelay = time.Second
 	cli.IsolateReader(cmd)
 	in, err := cmd.StdinPipe()

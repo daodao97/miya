@@ -276,6 +276,11 @@ func (c *Controller) ServiceRequest(req svcproto.Request) (any, error) {
 		}
 		_ = arg(&a)
 		c.SetAgentEnabled(a.ID, a.Enabled)
+	case "checkAgentUpdates":
+		c.CheckAgentUpdates()
+	case "upgradeAgent":
+		_ = arg(&value)
+		c.UpgradeAgent(value)
 	case "recheckAgents":
 		c.RecheckAgents()
 	case "claudeEffort":
@@ -297,6 +302,9 @@ func (c *Controller) ServiceRequest(req svcproto.Request) (any, error) {
 
 // busy reports a turn running or starting, which quitting would end.
 func (c *Controller) ServiceBusy() bool {
+	if c.AgentUpdateBusy() {
+		return true
+	}
 	if c.logins != nil && c.logins.Busy() {
 		return true
 	}
@@ -389,7 +397,7 @@ func (c *Controller) SnapshotState() svcproto.State {
 		Status: c.Status(), HistoryStatus: c.HistoryStatus(), Ready: c.Ready(),
 		Models: snapshotModels(c.Models()), Model: c.Model(), Effort: c.Effort(), PermissionPolicy: c.PermissionPolicy(), Locale: c.Locale(),
 		ClaudeCommand: c.ClaudeCommand, ClaudeError: c.ClaudeError, ClaudeBinary: c.ClaudeBinary, ClaudeArgs: c.ClaudeArgs, ClaudeEnv: c.ClaudeEnv, ClaudeModel: c.ClaudeModel, ClaudeEffort: c.ClaudeEffort, ClaudeDefaultModel: c.claudeDefaultModel,
-		PiCommand: c.Pi.Command, PiError: c.Pi.Error, PiBinary: c.Pi.Binary, PiArgs: c.Pi.Args, PiEnv: c.Pi.Env, PiModel: c.Pi.Model, PiEffort: c.Pi.Effort, AgentEnabled: c.AgentSwitches(),
+		PiCommand: c.Pi.Command, PiError: c.Pi.Error, PiBinary: c.Pi.Binary, PiArgs: c.Pi.Args, PiEnv: c.Pi.Env, PiModel: c.Pi.Model, PiEffort: c.Pi.Effort, AgentEnabled: c.AgentSwitches(), AgentUpdates: c.AgentUpdates(),
 		Account: c.AccountState, AccountReset: c.AccountReset, QuotaLimits: c.QuotaLimits, QuotaStatus: c.quotaStatus,
 		Phone: DesktopPhone.Status(),
 	}

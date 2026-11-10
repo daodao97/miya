@@ -112,7 +112,7 @@ func (m *App) settingsView(c *ui.Context) {
 			}
 		})
 		m.settingsGroup(c.Key("desktops"), tr("Desktop connections"), m.ConnectionLine(), func() {
-			if m.settingsNavigation(c.Key("manage-desktops"), tr("Manage desktops"), textutil.FirstNonEmpty(m.Host, tr("Desktop"))).Clicked() {
+			if m.settingsNavigation(c.Key("manage-desktops"), tr("Manage desktops"), textutil.FirstNonEmpty(m.DesktopName(), tr("Desktop"))).Clicked() {
 				m.openDesktopManager()
 			}
 			m.settingsSeparator(c)

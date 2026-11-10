@@ -8,23 +8,17 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
+
+	"miya/internal/processenv"
 )
 
 func Binary() (string, error) {
-	if p, err := exec.LookPath("claude"); err == nil {
+	if p, err := processenv.LookPath("claude"); err == nil {
 		return p, nil
-	}
-	home, _ := os.UserHomeDir()
-	for _, p := range []string{filepath.Join(home, ".local/bin/claude"), "/opt/homebrew/bin/claude", "/usr/local/bin/claude"} {
-		if st, err := os.Stat(p); err == nil && !st.IsDir() && st.Mode()&0111 != 0 {
-			return p, nil
-		}
 	}
 	return "", errors.New("Claude Code not found. Install and sign in to the Claude Code CLI first.")
 }
@@ -314,9 +308,7 @@ func Start(parent context.Context, o Options, onFrame func(Frame), onDone func(e
 	}
 	cmd := exec.CommandContext(ctx, binary, args...)
 	cmd.Dir = o.Cwd
-	if len(o.Env) > 0 {
-		cmd.Env = append(os.Environ(), o.Env...)
-	}
+	cmd.Env = processenv.Environ(binary, o.Env...)
 	configureProcess(cmd)
 	cmd.WaitDelay = 2 * time.Second
 	in, err := cmd.StdinPipe()

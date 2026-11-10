@@ -15,6 +15,7 @@ import (
 
 	"miya/internal/agent/account"
 	claude "miya/internal/agent/claude/native"
+	"miya/internal/agent/cliupdate"
 	codex "miya/internal/agent/codex/native"
 	codexprojection "miya/internal/agent/codex/projection"
 	integrations "miya/internal/agent/integrations"
@@ -85,8 +86,10 @@ type Controller struct {
 	Pi piState
 	// agents records which agents the user turned on or off, and installs
 	// caches whether their CLIs are installed.
-	agents   agentSwitches
-	installs map[string]agentInstall
+	agents         agentSwitches
+	installs       map[string]agentInstall
+	agentUpdates   map[string]cliupdate.Info
+	agentUpdatesAt time.Time
 	// claudeCmdCache keeps Claude Code\'s slash commands, by project.
 	ClaudeCmdCache    map[string]ClaudeCommandList
 	claudeCmdLoading  map[string]bool

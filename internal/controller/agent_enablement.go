@@ -8,6 +8,7 @@ import (
 	"miya/internal/agent"
 	agentmeta "miya/internal/agent/catalog"
 	claude "miya/internal/agent/claude/native"
+	codex "miya/internal/agent/codex/native"
 	"miya/internal/prefs"
 	"miya/internal/uiruntime"
 )
@@ -55,7 +56,24 @@ type agentInstall struct {
 // one for it, otherwise by its executable on PATH or in the usual install
 // directories.
 func (c *Controller) AgentInstall(id string) (path, problem string) {
+	if c.Remote != nil {
+		if info, ok := c.agentUpdates[id]; ok {
+			return info.Path, ""
+		}
+		if id == agentmeta.Codex {
+			if c.Ready != nil && c.Ready() {
+				return "codex", ""
+			}
+			return "", ""
+		}
+	}
 	switch id {
+	case agentmeta.Codex:
+		path, err := codex.Binary()
+		if err != nil {
+			return "", err.Error()
+		}
+		return path, ""
 	case agentmeta.Claude:
 		return c.ClaudeBinary, c.ClaudeError
 	case agentmeta.Pi:
@@ -73,10 +91,6 @@ func (c *Controller) AgentInstall(id string) (path, problem string) {
 	if err != nil {
 		got.Problem = err.Error()
 	}
-	// Codex may run from a binary Miya was given rather than one on PATH.
-	if got.Path == "" && id == agentmeta.Codex && c.Ready != nil && c.Ready() {
-		got.Path, got.Problem = "codex", ""
-	}
 	if c.installs == nil {
 		c.installs = map[string]agentInstall{}
 	}
@@ -93,8 +107,10 @@ func (c *Controller) RecheckAgents() {
 	if c.Remote == nil {
 		c.applyPiCommand(c.Pi.Command)
 		c.applyClaudeCommand(c.ClaudeCommand)
+		c.CheckAgentUpdates()
 	} else {
 		c.forward("recheckAgents", nil)
+		c.agentUpdatesAt = time.Now()
 	}
 	uiruntime.Invalidate()
 }

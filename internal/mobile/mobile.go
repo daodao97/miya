@@ -96,6 +96,8 @@ type App struct {
 	desktopSessions     map[string]phonecache.Session
 	DesktopWrites       desktopPersistence
 	desktopError        string
+	renamingDesktop     string
+	desktopNameDraft    string
 	DesktopNotice       string
 	desktopLoadFailed   bool
 	DialDesktop         func(context.Context, string) (*remote.Conn, error)
@@ -1299,7 +1301,7 @@ func (m *App) listView(c *ui.Context) {
 			ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 				dot, label := p.muted, m.ConnectionLine()
 				if label == "" {
-					dot, label = p.ok, m.Host
+					dot, label = p.ok, m.DesktopName()
 					if label == "" {
 						label = tr("Connected")
 					}

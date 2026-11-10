@@ -3,6 +3,7 @@ package mobile
 import (
 	"github.com/egoist/mygo/ui"
 
+	phonecache "miya/internal/phone/cache"
 	"miya/internal/textutil"
 	"miya/internal/widgets"
 )
@@ -24,7 +25,7 @@ func (m *App) drawerDesktopSwitcher(c *ui.Context) {
 		ui.Row(c).FillWidth().Gap(6).AlignItems(ui.Center).Children(func() {
 			label := m.ConnectionLine()
 			if label == "" {
-				label = textutil.FirstNonEmpty(m.Host, tr("Connected"))
+				label = textutil.FirstNonEmpty(m.DesktopName(), tr("Connected"))
 			}
 			ui.Text(c, label).FontSize(m.Font(12)).TextColor(p.muted).MinWidth(0).Shrink(1).SingleLine().Ellipsis("…")
 			widgets.Icon(c, "chevron-down", 11, p.muted)
@@ -61,6 +62,10 @@ func (m *App) desktopsView(c *ui.Context) {
 				}
 			}
 			for _, desktop := range m.Desktops.Items {
+				if m.renamingDesktop == desktop.ID {
+					m.desktopRenameRow(c, desktop)
+					continue
+				}
 				ui.Row(c.Key(desktop.ID)).FillWidth().Padding(8).Gap(4).AlignItems(ui.Center).Background(p.surface).Radius(16).Children(func() {
 					current := desktop.Link == m.Link
 					row := m.phoneButton(c.Key("switch")).Grow(1).MinWidth(0).MinHeight(60).Padding(6, 8).Gap(12).Label(tr("Connect to desktop ") + desktop.Name)
@@ -83,6 +88,9 @@ func (m *App) desktopsView(c *ui.Context) {
 					}
 					more := m.homeAction(c, "more", tr("Desktop actions ")+desktop.Name, "dots")
 					more.PopoverMenuButton(func(menu *ui.Menu) {
+						if menu.Item(tr("Rename desktop")).Chosen() {
+							m.renamingDesktop, m.desktopNameDraft = desktop.ID, desktop.Name
+						}
 						if menu.Item(tr("Remove desktop")).Chosen() {
 							m.RemoveDesktop(desktop.ID)
 						}
@@ -96,6 +104,24 @@ func (m *App) desktopsView(c *ui.Context) {
 				m.addDesktop()
 			}
 		})
+	})
+}
+
+// An empty name returns the desktop to the host name it reports.
+func (m *App) desktopRenameRow(c *ui.Context, desktop phonecache.Desktop) {
+	p := m.Pal
+	ui.Row(c.Key("rename:"+desktop.ID)).FillWidth().MinHeight(76).Padding(8, 8, 8, 14).Gap(6).AlignItems(ui.Center).Background(p.surface).Radius(16).Children(func() {
+		input := ui.TextInput(c.Key("name"), &m.desktopNameDraft).Label(tr("Desktop name")).Placeholder(desktop.Name).Grow(1).MinWidth(0).MinHeight(44).
+			FontSize(m.Font(16)).Background(p.surface).Border(0, p.surface).AutoFocus().ReturnKey(ui.ReturnDone)
+		if m.pill(c, "cancel-rename", tr("Cancel"), false).Background(p.Bg).Clicked() {
+			m.renamingDesktop = ""
+			c.Blur()
+		}
+		if m.pill(c, "save-rename", tr("Save"), true).Clicked() || input.Submitted() {
+			m.RenameDesktop(desktop.ID, m.desktopNameDraft)
+			m.renamingDesktop = ""
+			c.Blur()
+		}
 	})
 }
 

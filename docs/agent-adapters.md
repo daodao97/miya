@@ -26,6 +26,8 @@ flowchart TD
 
 ## 命令和模型
 
+所有 Agent 进程及其命令发现、登录、用量查询、自动化生成和记忆提取共用 `internal/processenv` 的工具路径规则。启动环境先应用显式变量覆盖，保留已有 PATH 的优先顺序，再追加可执行文件目录和缺失的常见工具目录（Homebrew、`~/.local/bin`、npm、Bun、Volta、Cargo、`~/go/bin`）。命令查找也使用同一组目录，避免 CLI 能启动但它调用的工具找不到。该机制不依赖 Agent ID，不执行 shell 初始化文件，也不修改后台进程的全局环境；隔离任务继续只传入原有的变量集合。已有进程在下次启动时获得新环境。
+
 Pi 启动时默认通过 `--system-prompt <文件路径>` 加载内置的 `internal/agent/pi/native/assets/miya-system.md`。运行时文件保存在 Miya 状态目录的 `pi/miya-system.md`，随内置内容更新；要自定义提示词，在设置的「Pi 启动命令」中显式指定 `pi --system-prompt /绝对路径/custom-system.md`。这会替换基础提示词，并保留 pi 加载的项目指令、技能和附加提示词。新的提示词在下次启动 pi 进程时生效，已有常驻进程继续使用启动时的配置。
 
 `Commands(project, load)` 返回 `CommandCatalog`。`load=false` 只读缓存，供草稿样式计算；`load=true` 可以启动原生命令发现。`Known` 区分“目录为空”和“目录尚未加载”，`Native` 表示除 Miya 自己的控制命令外，其他斜杠命令交给 Agent。合并目录时 Miya 控制命令优先，名称忽略大小写去重。
@@ -33,6 +35,12 @@ Pi 启动时默认通过 `--system-prompt <文件路径>` 加载内置的 `inter
 桌面根据目录过滤和路由命令，不判断具体 Agent。手机读取服务端下发的 `AgentOptions` 和目录，命令请求、响应及缓存都包含 Agent ID；同一项目的不同 Agent 不会共用命令缓存。旧版未带 ID 的命令响应仍按原有 Claude 原生命令目录解释，这个兼容规则集中在声明层。
 
 `ModelOptions()` 由各 Adapter 生成模型标签、可用推理档位和默认档位。手机协议层只转换和校验公共选项，不再读取 Codex 模型结构或对 Claude 做特判。
+
+## CLI 版本与升级
+
+设置中的智能体列表通过 `internal/agent/cliupdate` 异步读取当前版本和可升级版本，参考 magpie 按原安装来源升级的做法。Codex、Claude Code 和 Pi 支持识别 Homebrew、npm、Bun、pnpm 及适用的官方独立安装器；npm 保留原安装前缀，并优先使用该安装器对应的 Node。无法确定来源的 CLI 只展示版本并提示使用原安装方式升级。
+
+检查和升级由后台 Controller 执行，窗口通过可选的 `AgentUpdates` 状态同步进度、错误和升级前后版本。包管理器升级串行执行，升级期间后台保持忙碌；命令退出成功后还要重新读取实际版本。已有智能体进程继续运行，新版本在后续进程启动时生效，不主动重启共享 Codex app-server。新增 Agent 时，需要在升级包中声明发行包和能够证明安装来源的识别规则。
 
 ## 消息和交互
 

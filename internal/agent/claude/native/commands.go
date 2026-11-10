@@ -6,9 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"os"
 	"os/exec"
 	"time"
+
+	"miya/internal/processenv"
 )
 
 // SlashCommand is a slash command Claude Code offers: built in, the user's or the
@@ -34,9 +35,7 @@ func ListCommands(ctx context.Context, binary string, args, env []string, cwd st
 	a := append(append([]string(nil), args...), "--print", "--verbose", "--input-format", "stream-json", "--output-format", "stream-json", "--permission-mode", "default")
 	cmd := exec.CommandContext(ctx, binary, a...)
 	cmd.Dir = cwd
-	if len(env) > 0 {
-		cmd.Env = append(os.Environ(), env...)
-	}
+	cmd.Env = processenv.Environ(binary, env...)
 	configureProcess(cmd)
 	cmd.WaitDelay = 2 * time.Second
 	in, err := cmd.StdinPipe()

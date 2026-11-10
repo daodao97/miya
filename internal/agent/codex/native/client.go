@@ -12,9 +12,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
+
+	"miya/internal/processenv"
 )
 
 type RPCError struct {
@@ -74,64 +75,22 @@ func (c *Client) WatchNotifications(method string) (<-chan Frame, func()) {
 
 func Binary() (string, error) {
 	if p := os.Getenv("CODEX_BINARY"); p != "" {
-		return exec.LookPath(p)
+		return processenv.LookPath(p)
 	}
-	if p, err := exec.LookPath("codex"); err == nil {
+	if p, err := processenv.LookPath("codex"); err == nil {
 		return p, nil
 	}
-	for _, p := range []string{"/opt/homebrew/bin/codex", "/usr/local/bin/codex", "/Applications/Codex.app/Contents/Resources/codex"} {
-		if info, err := os.Stat(p); err == nil && !info.IsDir() {
-			return p, nil
-		}
+	const appBinary = "/Applications/Codex.app/Contents/Resources/codex"
+	if info, err := os.Stat(appBinary); err == nil && !info.IsDir() {
+		return appBinary, nil
 	}
 	return "", errors.New("Codex executable not found; install Codex CLI or set CODEX_BINARY")
 }
 
-// Packaged macOS apps inherit a minimal Finder PATH. The Homebrew Codex entry
-// point is a Node script, so make the common Node/Homebrew locations visible to
-// the child process even when the app was launched by Finder rather than a
-// shell.
-func withToolchainPath(env []string) []string {
-	const pathKey = "PATH="
-	var current string
-	for _, item := range env {
-		if strings.HasPrefix(item, pathKey) {
-			current = strings.TrimPrefix(item, pathKey)
-			break
-		}
-	}
-	parts := strings.Split(current, string(os.PathListSeparator))
-	seen := make(map[string]bool, len(parts)+4)
-	for _, part := range parts {
-		if part != "" {
-			seen[part] = true
-		}
-	}
-	for _, dir := range []string{"/opt/homebrew/bin", "/opt/homebrew/sbin", "/usr/local/bin", "/usr/local/sbin"} {
-		if !seen[dir] {
-			parts = append([]string{dir}, parts...)
-			seen[dir] = true
-		}
-	}
-	value := pathKey + strings.Join(parts, string(os.PathListSeparator))
-	for i, item := range env {
-		if strings.HasPrefix(item, pathKey) {
-			out := append([]string(nil), env...)
-			out[i] = value
-			return out
-		}
-	}
-	return append(append([]string(nil), env...), value)
-}
-
-// CommandEnv is the CLI environment used by the app-server and isolated jobs.
-// Packaged apps need the toolchain paths even when Finder supplied a short PATH.
-func CommandEnv() []string { return withToolchainPath(os.Environ()) }
-
 // Start runs the app-server for cwd; args follow app-server, such as -c
 // config overrides.
 func Start(ctx context.Context, binary, cwd string, args ...string) (*Client, error) {
-	return StartWithEnv(ctx, binary, cwd, CommandEnv(), args...)
+	return StartWithEnv(ctx, binary, cwd, os.Environ(), args...)
 }
 
 // StartWithEnv starts an isolated native operation with the CLI's account
@@ -157,7 +116,7 @@ func StartWithEnv(ctx context.Context, binary, cwd string, env []string, args ..
 	configureProcess(cmd)
 	cmd.Dir = cwd
 	// Authentication and provider configuration remain owned by Codex.
-	cmd.Env = env
+	cmd.Env = processenv.WithPath(env, binary)
 	input, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, err

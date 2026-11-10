@@ -175,6 +175,7 @@ func (c *Controller) forward(op string, args any) { c.Remote.Notify(op, args) }
 // attachService starts mirroring a connected service.
 func (c *Controller) AttachService(cl *svcclient.Client, st svcproto.State) {
 	c.Remote = cl
+	c.agentUpdatesAt = time.Time{}
 	c.DesktopReadPending = nil
 	c.Mirror.Messages = map[int][]model.Message{}
 	c.ApplyState(st)
@@ -330,6 +331,7 @@ func (c *Controller) ApplyState(s svcproto.State) {
 	}
 	c.Pi.Command, c.Pi.Error, c.Pi.Binary, c.Pi.Args, c.Pi.Env = s.PiCommand, s.PiError, s.PiBinary, s.PiArgs, s.PiEnv
 	c.Pi.Model, c.Pi.Effort = s.PiModel, s.PiEffort
+	c.agentUpdates = s.AgentUpdates
 	c.agents = agentSwitches{}
 	for id, on := range s.AgentEnabled {
 		c.agents[id] = on

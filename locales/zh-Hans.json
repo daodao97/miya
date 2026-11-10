@@ -982,6 +982,8 @@
   "removeAttachment_0fcc65": "删除附件",
   "removeAttachment_a73642": "删除附件 ",
   "removeDesktop_5ed19d": "移除桌面",
+  "renameDesktop_93139e": "重命名桌面",
+  "desktopName_944a0e": "桌面名称",
   "removeImage_5f94b0": "移除图片",
   "renameWorkspace_6d7e95": "重命名工作空间",
   "renameWorkspace_8f71e8": "重命名工作空间…",
@@ -1803,5 +1805,17 @@
   "nativeLogin_bd6c3bd513": "%s 授权码",
   "mobileSendUploading": "正在上传图片…",
   "mobileSendWaiting": "等待桌面确认…",
-  "mobileSendRetry": "重新发送"
+  "mobileSendRetry": "重新发送",
+  "agentUpdateToVersion": "升级到 %s",
+  "agentCheckingUpdates": "正在检查更新…",
+  "agentOriginalInstaller": "请使用原安装方式升级此 CLI。",
+  "agentUpToDate": "已是最新版本",
+  "agentUpdateCommand": "升级命令：%s",
+  "agentNoVersion": "CLI 未返回版本号",
+  "agentNoBrewVersion": "未找到 Homebrew 版本信息",
+  "agentNoReleaseVersion": "未找到新版本信息",
+  "agentNoSupportedUpdate": "暂无可用的升级方式或新版本",
+  "agentInstallationChanged": "安装位置或方式已变化，请重新检查",
+  "agentUpdateUnverified": "升级程序已结束，但未能核验到更新后的版本",
+  "agentUpdatedNextLaunch": "新启动的智能体进程将使用升级后的 CLI，现有会话继续运行。"
 }

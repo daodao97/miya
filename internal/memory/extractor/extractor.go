@@ -17,6 +17,7 @@ import (
 	claude "miya/internal/agent/claude/native"
 	"miya/internal/chat/model"
 	"miya/internal/memory"
+	"miya/internal/processenv"
 )
 
 const memoryExtractionSchema = `{"type":"object","additionalProperties":false,"required":["candidates"],"properties":{"candidates":{"type":"array","maxItems":3,"items":{"type":"object","additionalProperties":false,"required":["action","id","version","kind","retention","content","task_key","evidence_id","quote","valid_until"],"properties":{"action":{"enum":["add","supersede","forget","conflict"]},"id":{"type":"string"},"version":{"type":"integer"},"kind":{"enum":["preference","fact","progress"]},"retention":{"enum":["","preference","decision","lesson"]},"content":{"type":"string"},"task_key":{"type":"string"},"evidence_id":{"type":"string"},"quote":{"type":"string"},"valid_until":{"type":"string"}}}}}}`
@@ -50,7 +51,7 @@ func WithClaude(ctx context.Context, cfg claude.CLI, job memory.ExtractionJob) (
 	cmd := exec.CommandContext(ctx, bin, memoryExtractorArgs()...)
 	cmd.WaitDelay = time.Second
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), cfg.Env...)
+	cmd.Env = processenv.Environ(bin, cfg.Env...)
 	cmd.Stdin = strings.NewReader(string(input))
 	// Never return stdout/stderr in routine errors: either can contain evidence.
 	var output extractionOutput

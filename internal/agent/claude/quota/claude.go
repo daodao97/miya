@@ -28,7 +28,7 @@ func readClaude(ctx context.Context, binary, home string) ([]quota.Window, error
 	}
 	defer os.RemoveAll(dir)
 	cmd := exec.CommandContext(ctx, binary, claudeArgs...)
-	cmd.Dir, cmd.Env, cmd.Stderr = dir, cli.CommandEnv("claude", home), io.Discard
+	cmd.Dir, cmd.Env, cmd.Stderr = dir, cli.CommandEnv("claude", home, binary), io.Discard
 	cmd.WaitDelay = time.Second
 	cli.IsolateReader(cmd)
 	var out limitedBuffer

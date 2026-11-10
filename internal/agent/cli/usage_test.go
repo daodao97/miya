@@ -28,7 +28,7 @@ func TestDesktopPathSupportsEnvShebangLaunchers(t *testing.T) {
 		t.Fatal(err)
 	}
 	cmd := exec.Command(binary)
-	cmd.Env = CommandEnv("codex", root)
+	cmd.Env = CommandEnv("codex", root, binary)
 	out, err := cmd.Output()
 	if err != nil || string(out) != "runtime found" {
 		t.Fatalf("GUI launcher lost runtime: %q %v", out, err)

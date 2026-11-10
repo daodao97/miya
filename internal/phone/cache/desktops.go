@@ -29,6 +29,9 @@ type Desktop struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 	Link string `json:"link"`
+	// Renamed marks a name the person chose; the host name the desktop
+	// reports no longer replaces it.
+	Renamed bool `json:"renamed,omitempty"`
 }
 
 // Retain the phone's in-progress composer when switching workspaces, keeping

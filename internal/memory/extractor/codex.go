@@ -16,6 +16,7 @@ import (
 
 	codex "miya/internal/agent/codex/native"
 	"miya/internal/memory"
+	"miya/internal/processenv"
 )
 
 // Query the installed CLI rather than assuming its feature registry. All known
@@ -25,7 +26,7 @@ func codexExtractionOverrides(ctx context.Context, bin, directory string) ([]str
 	if err != nil {
 		return nil, fmt.Errorf("Unable to verify Codex extraction isolation settings: %w", err)
 	}
-	servers, err := codexExtractionCommandEnv(ctx, codexOfflineEnv(codex.CommandEnv()), bin, directory, "mcp", "list", "--json")
+	servers, err := codexExtractionCommandEnv(ctx, codexOfflineEnv(processenv.Environ(bin)), bin, directory, "mcp", "list", "--json")
 	if err != nil {
 		return nil, fmt.Errorf("Unable to verify Codex MCP isolation settings: %w", err)
 	}
@@ -110,12 +111,12 @@ func codexOfflineEnv(env []string) []string {
 }
 
 func codexExtractionCommand(ctx context.Context, bin, directory string, args ...string) ([]byte, error) {
-	return codexExtractionCommandEnv(ctx, codex.CommandEnv(), bin, directory, args...)
+	return codexExtractionCommandEnv(ctx, processenv.Environ(bin), bin, directory, args...)
 }
 
 func codexExtractionCommandEnv(ctx context.Context, env []string, bin, directory string, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, bin, args...)
-	cmd.Env = env
+	cmd.Env = processenv.WithPath(env, bin)
 	cmd.WaitDelay = time.Second
 	cmd.Dir = directory
 	var out, stderr extractionOutput
@@ -182,7 +183,7 @@ func WithCodex(ctx context.Context, job memory.ExtractionJob) ([]memory.Candidat
 		return nil, err
 	}
 	cmd := exec.CommandContext(ctx, bin, codexExtractionArgs(dir, overrides)...)
-	cmd.Env = codex.CommandEnv()
+	cmd.Env = processenv.Environ(bin)
 	cmd.Dir = dir
 	cmd.WaitDelay = time.Second
 	cmd.Stdin = strings.NewReader(string(input))

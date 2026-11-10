@@ -36,7 +36,7 @@ func (p Provider) command(ctx context.Context, args ...string) (*exec.Cmd, error
 		return nil, err
 	}
 	cmd := exec.CommandContext(ctx, binary, args...)
-	cmd.Env, cmd.Dir, cmd.Stderr = cli.CommandEnv("claude", home), os.TempDir(), io.Discard
+	cmd.Env, cmd.Dir, cmd.Stderr = cli.CommandEnv("claude", home, binary), os.TempDir(), io.Discard
 	cmd.WaitDelay = time.Second
 	cli.IsolateReader(cmd)
 	return cmd, nil

@@ -368,6 +368,9 @@ func (app *App) agentSettings(c *ui.Context) {
 // agentSwitches lists every agent with whether its CLI is installed and a
 // switch for offering it to new conversations.
 func (app *App) agentSwitches(c *ui.Context) {
+	app.C.EnsureAgentUpdates()
+	updates := app.C.AgentUpdates()
+	updating := app.C.AgentUpdateBusy()
 	ui.Column(c.Key("agent-switches")).FillWidth().Gap(10).Children(func() {
 		widgets.SettingLabel(c, tr("Available agents"), tr("Turn agents on or off for new conversations. Existing conversations keep their agent."))
 		agents := app.C.Agents()
@@ -381,14 +384,25 @@ func (app *App) agentSwitches(c *ui.Context) {
 			a := a
 			ui.Row(c.Key("agent:" + a.ID)).FillWidth().Gap(10).AlignItems(ui.Center).Children(func() {
 				widgets.AgentIcon(c, a.ID, 18)
-				ui.Column(c).Grow(1).Gap(2).Children(func() {
+				ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
 					ui.Text(c, a.Name).FontWeight(600)
+					app.agentUpdateStatus(c, updates[a.ID])
 					if a.Installed() {
 						ui.Text(c, tr("Installed · ")+a.Path).TextColor(widgets.Muted).FontSize(11).Font(widgets.MonoFont).SingleLine().Selectable()
 					} else {
 						ui.Text(c, textutil.FirstNonEmpty(a.Problem, tr("Not installed"))).TextColor(widgets.Danger).FontSize(11).Selectable()
 					}
 				})
+				info := updates[a.ID]
+				if info.Update || info.Updating {
+					label := fmt.Sprintf(tr("Update to %s"), info.Latest)
+					if info.Updating {
+						label = tr("Updating…")
+					}
+					if widgets.SmallButton(c.Key("upgrade"), label, updating || info.Checking).Clicked() {
+						app.C.UpgradeAgent(a.ID)
+					}
+				}
 				on := a.Enabled
 				// The last enabled agent stays on, so a conversation can start.
 				if ui.Switch(c.Key("on"), &on).Label(tr("Enable ") + a.Name).Disabled(a.Enabled && enabled <= 1).Shrink(0).Changed() {
@@ -396,7 +410,7 @@ func (app *App) agentSwitches(c *ui.Context) {
 				}
 			})
 		}
-		if ui.Button(c.Key("recheck"), tr("Check again")).AlignSelf(ui.Start).Clicked() {
+		if ui.Button(c.Key("recheck"), tr("Check again")).Disabled(updating).AlignSelf(ui.Start).Clicked() {
 			app.C.RecheckAgents()
 		}
 	})

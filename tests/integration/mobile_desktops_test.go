@@ -438,3 +438,30 @@ func TestMobileDesktopManagerSharesDrawerBackBehavior(t *testing.T) {
 		t.Fatal("desktop manager should return to the drawer")
 	}
 }
+
+func TestMobileDesktopRenameSurvivesHostNameAndRelaunch(t *testing.T) {
+	store := newDesktopTestStore()
+	m := multiDesktopApp(t)
+	m.Store = store
+	link := testDesktopLink()
+	item, _ := m.Desktops.Remember(link, "Mac Studio")
+	m.RenameDesktop(item.ID, "  Studio  ")
+	// Each hello reports the desktop's host name again.
+	if got, _ := m.Desktops.Remember(link, "Mac Studio"); got.Name != "Studio" || !got.Renamed {
+		t.Fatalf("the reported host name replaced the chosen name: %+v", got)
+	}
+	waitDesktopSave(t, m, store)
+	restored, _, err := mobile.ReadMobileDesktops(store)
+	if err != nil || len(restored.Items) != 1 {
+		t.Fatal("saved desktops did not survive a relaunch")
+	}
+	if got, _ := restored.Remember(link, "Mac Studio"); got.Name != "Studio" || !got.Renamed {
+		t.Fatalf("the chosen name was lost after a relaunch: %+v", got)
+	}
+	m.RenameDesktop(item.ID, " ")
+	if got, _ := m.Desktops.Remember(link, "Mac Studio"); got.Name != "Mac Studio" || got.Renamed {
+		t.Fatalf("clearing the name did not restore the host name: %+v", got)
+	}
+	m.SaveDesktops()
+	waitDesktopSave(t, m, store)
+}

@@ -5,11 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"miya/internal/appdir"
+	"miya/internal/processenv"
 )
 
 // Command is how Claude Code starts: its executable, the options put before
@@ -138,14 +138,8 @@ func resolve(name string) (string, error) {
 		}
 		return "", fmt.Errorf("Executable %s not found", name)
 	}
-	if p, err := exec.LookPath(name); err == nil {
+	if p, err := processenv.LookPath(name); err == nil {
 		return p, nil
-	}
-	home, _ := os.UserHomeDir()
-	for _, dir := range []string{filepath.Join(home, ".local/bin"), "/opt/homebrew/bin", "/usr/local/bin", filepath.Join(home, ".npm-global/bin"), filepath.Join(home, ".bun/bin"), filepath.Join(home, ".volta/bin")} {
-		if p := filepath.Join(dir, name); executable(p) {
-			return p, nil
-		}
 	}
 	if name == "claude" {
 		return "", errors.New("Claude Code not found. Install and sign in to the Claude Code CLI first.")

@@ -71,6 +71,7 @@ func (c *Controller) piProvider() pinative.Provider {
 
 // applyPiCommand resolves pi's command for the processes started after it.
 func (c *Controller) applyPiCommand(line string) {
+	c.agentUpdatesAt = time.Time{}
 	c.Pi.Command = strings.TrimSpace(line)
 	cmd, err := claude.ParseCommandFor(c.Pi.Command, "pi")
 	c.Pi.Binary, c.Pi.Args, c.Pi.Env, c.Pi.Error = cmd.Path, cmd.Args, cmd.Env, ""

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"miya/internal/agent"
+	"miya/internal/agent/cliupdate"
 	"miya/internal/agent/login"
 	"miya/internal/agent/quota"
 	"miya/internal/appmodel"
@@ -29,6 +30,10 @@ type Host interface {
 	EnabledAgents() []string
 	SetAgentEnabled(id string, on bool)
 	RecheckAgents()
+	EnsureAgentUpdates()
+	AgentUpdates() map[string]cliupdate.Info
+	AgentUpdateBusy() bool
+	UpgradeAgent(string)
 	AgentSpeedBadge(agent string) string
 	AllThreads() []model.Thread
 	ApprovalDetail(a interaction.Request) string
