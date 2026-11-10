@@ -71,6 +71,9 @@ type MobileDesktopPage struct {
 	moreKeys bool
 	// keyboard shows the text field and keys; otherwise the screen gets the room.
 	keyboard bool
+	// textFocused records last frame's text field focus: while the system
+	// keyboard is up the floating controls hide so the smaller screen stays clear.
+	textFocused bool
 	// focusText raises the system keyboard once; more opens the options panel.
 	focusText, More bool
 	// overlays are the floating controls over the screen, in viewport DIPs;
@@ -1021,6 +1024,9 @@ func (m *App) desktopLiveView(c *ui.Context, p *MobileDesktopPage) {
 	hasActions := p.WindowOnly && !p.actionsUnsupported && len(p.actions.Actions) > 0
 	unlock := p.canUnlock() && (p.Unlock.Locked || p.Unlock.Status != "")
 	typing := !p.Unlock.Locked && p.keyboard
+	if !typing {
+		p.textFocused = false
+	}
 	if !hasActions && !unlock && !typing && p.actionStatus == "" {
 		return // the screen keeps the whole page
 	}
@@ -1049,6 +1055,11 @@ func (m *App) desktopLiveView(c *ui.Context, p *MobileDesktopPage) {
 // remote desktop apps do; the options panel opens above it.
 func (m *App) desktopControls(c *ui.Context, p *MobileDesktopPage) {
 	if p.View.W == 0 {
+		return
+	}
+	// The system keyboard leaves little screen; its bar has the hide key.
+	if p.keyboard && p.textFocused {
+		p.More = false
 		return
 	}
 	pal := m.Pal
@@ -1181,6 +1192,11 @@ func (m *App) desktopInputBar(c *ui.Context, p *MobileDesktopPage) {
 			field.Label(tr("Text to send to Mac")).Placeholder(tr("Enter text to send"))
 		}
 		focused = field.Focused()
+		if focused != p.textFocused {
+			// The controls draw before this bar; redraw so they follow the focus.
+			p.textFocused = focused
+			uiruntime.Invalidate()
+		}
 		if p.focusText {
 			field.Focus()
 			p.focusText = false
