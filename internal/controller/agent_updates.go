@@ -62,11 +62,16 @@ func (c *Controller) CheckAgentUpdates() {
 		go func() {
 			ctx, cancel := context.WithTimeout(parent, 25*time.Second)
 			defer cancel()
-			info := cliupdate.Check(ctx, id, bin, env)
+			info := c.checkAgentCLI()(ctx, id, bin, env)
 			if parent.Err() != nil {
 				return
 			}
 			c.Dispatch(func() {
+				// The controller may have closed while this waited for the
+				// main thread: its state is no longer anyone's.
+				if parent.Err() != nil {
+					return
+				}
 				// A changed custom launch command invalidates this discovery result.
 				if path, _ := c.AgentInstall(id); path != bin || !slices.Equal(env, c.agentUpdateEnv(id)) {
 					delete(c.agentUpdates, id)
@@ -130,11 +135,14 @@ func (c *Controller) UpgradeAgent(id string) {
 	go func() {
 		ctx, cancel := context.WithTimeout(parent, 5*time.Minute)
 		defer cancel()
-		result := cliupdate.Upgrade(ctx, id, bin, env)
+		result := c.upgradeAgentCLI()(ctx, id, bin, env)
 		if parent.Err() != nil {
 			return
 		}
 		c.Dispatch(func() {
+			if parent.Err() != nil {
+				return
+			}
 			if path, _ := c.AgentInstall(id); path != bin || !slices.Equal(env, c.agentUpdateEnv(id)) {
 				delete(c.agentUpdates, id)
 				c.agentUpdatesAt = time.Time{}
@@ -147,4 +155,18 @@ func (c *Controller) UpgradeAgent(id string) {
 			uiruntime.Invalidate()
 		})
 	}()
+}
+
+func (c *Controller) checkAgentCLI() func(context.Context, string, string, []string) cliupdate.Info {
+	if c.CheckAgentCLI != nil {
+		return c.CheckAgentCLI
+	}
+	return cliupdate.Check
+}
+
+func (c *Controller) upgradeAgentCLI() func(context.Context, string, string, []string) cliupdate.Info {
+	if c.UpgradeAgentCLI != nil {
+		return c.UpgradeAgentCLI
+	}
+	return cliupdate.Upgrade
 }

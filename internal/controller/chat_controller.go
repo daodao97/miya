@@ -44,12 +44,17 @@ import (
 
 type Controller struct {
 	appmodel.WindowState
-	desktopMu   sync.Mutex
-	Desktop     *control.Server
-	runtimeMu   sync.Mutex
-	runtimePath string
-	runtime     *tracker.Manager
-	mem         manager.Manager // memory state; reach it through memories
+	// CheckAgentCLI and UpgradeAgentCLI read and update an agent CLI's
+	// version, off the main thread: cliupdate.Check and cliupdate.Upgrade
+	// when nil. Tests replace them so that no package manager runs.
+	CheckAgentCLI   func(ctx context.Context, id, bin string, env []string) cliupdate.Info
+	UpgradeAgentCLI func(ctx context.Context, id, bin string, env []string) cliupdate.Info
+	desktopMu       sync.Mutex
+	Desktop         *control.Server
+	runtimeMu       sync.Mutex
+	runtimePath     string
+	runtime         *tracker.Manager
+	mem             manager.Manager // memory state; reach it through memories
 
 	// auto is the automations, in the controller that runs them.
 	Auto *automation.Runner

@@ -91,3 +91,61 @@ func TestAgentUpgradeSerializesAndKeepsServiceAlive(t *testing.T) {
 		t.Fatal("duplicate upgrade scheduled")
 	}
 }
+
+// A check whose result waits for the main thread while the controller
+// closes must not write the closed controller's state.
+func TestAgentUpdateResultAfterCloseIsDropped(t *testing.T) {
+	c, q, _ := updateTestController(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	c.Ctx = ctx
+	c.CheckAgentCLI = func(context.Context, string, string, []string) cliupdate.Info {
+		return cliupdate.Info{Version: "9.9.9"}
+	}
+	c.CheckAgentUpdates()
+	var results []func()
+	for range catalog.IDs() {
+		select {
+		case f := <-q:
+			results = append(results, f)
+		case <-time.After(3 * time.Second):
+			t.Fatal("agent check did not finish")
+		}
+	}
+	cancel()
+	for _, f := range results {
+		f()
+	}
+	for id, info := range c.AgentUpdates() {
+		if info.Version == "9.9.9" {
+			t.Fatalf("%s: a result after close was written: %+v", id, info)
+		}
+	}
+}
+
+// A check still running as the controller closes dispatches nothing.
+func TestAgentUpdateCheckRunningAtCloseDispatchesNothing(t *testing.T) {
+	c, q, _ := updateTestController(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	c.Ctx = ctx
+	started, returned := make(chan struct{}, 10), make(chan struct{}, 10)
+	c.CheckAgentCLI = func(ctx context.Context, _, _ string, _ []string) cliupdate.Info {
+		started <- struct{}{}
+		<-ctx.Done()
+		defer func() { returned <- struct{}{} }()
+		return cliupdate.Info{Version: "9.9.9"}
+	}
+	c.CheckAgentUpdates()
+	for range catalog.IDs() {
+		<-started
+	}
+	cancel()
+	for range catalog.IDs() {
+		<-returned
+	}
+	// Each goroutine reads parent.Err() right after its check returns; give
+	// them the chance to (wrongly) dispatch before looking.
+	time.Sleep(50 * time.Millisecond)
+	if len(q) != 0 {
+		t.Fatal("a check canceled by close was dispatched")
+	}
+}

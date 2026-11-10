@@ -3,6 +3,7 @@ package integration
 import (
 	"context"
 	"encoding/json"
+	"miya/internal/agent/cliupdate"
 	"strings"
 	"testing"
 	"time"
@@ -30,6 +31,13 @@ func testApp(t *testing.T) (*desktopui.App, *ui.Tester) {
 	c := &controller.Controller{WindowState: appmodel.WindowState{Cwd: cwd, ReferenceSource: testReferenceSource}}
 	c.Ctx, c.Cancel = context.WithCancel(context.Background())
 	t.Cleanup(c.Cancel)
+	// Opening Settings checks the agent CLIs' versions: no test runs a
+	// package manager, and no check returns before its test ends.
+	idle := func(ctx context.Context, _, _ string, _ []string) cliupdate.Info {
+		<-ctx.Done()
+		return cliupdate.Info{}
+	}
+	c.CheckAgentCLI, c.UpgradeAgentCLI = idle, idle
 	c.Agent, c.SetAgent = uiruntime.CreateSignal("codex")
 	c.DraftPermission, c.SetDraftPermission = uiruntime.CreateSignal("")
 	c.Projects, c.SetProjects = uiruntime.CreateSignal([]projectmodel.Project{{Name: "demo", Path: cwd}})
