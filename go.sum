@@ -64,8 +64,8 @@ github.com/creachadair/taskgroup v0.14.4 h1:ttR8StLWmYA1O6x96YlTpQLXjKyRpO4RBo+O
 github.com/creachadair/taskgroup v0.14.4/go.mod h1:uhCtIEsa7zpeMAFixddhCYjbJi7e4JMyU7OXUygkSsg=
 github.com/creack/pty v1.1.24 h1:bJrF4RRfyJnbTJqzRLHzcGaZK1NeM5kTC9jGgovnR1s=
 github.com/creack/pty v1.1.24/go.mod h1:08sCNb52WyoAwi2QDyzUCTgcvVFhUzewun7wtTfvcwE=
-github.com/daodao97/mygo-mobile v0.0.0-20261109145105-d9b63c644f35 h1:8M9iPKnuqO6pjhPu/D20t1+wB5SFajjpYgw9VwGK+aA=
-github.com/daodao97/mygo-mobile v0.0.0-20261109145105-d9b63c644f35/go.mod h1:nrjtCewr1R85ZVxPBlatLMK30hEEXO9aQKoGAv1EDfw=
+github.com/daodao97/mygo-mobile v0.0.0-20261110091232-5fbf49f33ace h1:OASyrHkydyhGCZpr6t3dKtxy0UTlddppoS8qkv6rpg4=
+github.com/daodao97/mygo-mobile v0.0.0-20261110091232-5fbf49f33ace/go.mod h1:nrjtCewr1R85ZVxPBlatLMK30hEEXO9aQKoGAv1EDfw=
 github.com/dblohm7/wingoes v0.0.0-20260526185140-fb298caac7ca h1:h1Awca4lQOspNR/2eeo04Ricn5NixDX9mb17WSAgLhQ=
 github.com/dblohm7/wingoes v0.0.0-20260526185140-fb298caac7ca/go.mod h1:2TGl1jRJrRpbzykmg7asHm3h08TqutUgQqY5v9k/g3c=
 github.com/dgryski/go-metro v0.0.0-20250106013310-edb8663e5e33 h1:ucRHb6/lvW/+mTEIGbvhcYU3S8+uSNkuMjx/qZFfhtM=

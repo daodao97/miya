@@ -693,6 +693,11 @@ func (m *App) DesktopPointerInput(p *MobileDesktopPage, ev ui.InputEvent) bool {
 		}
 		down := *g
 		g.active = false
+		if ev.Canceled {
+			// The system or a touch gesture took the press: nothing it did
+			// is sent to the desktop.
+			return true
+		}
 		if p.Trackpad {
 			if down.drag {
 				if down.moved {
@@ -726,12 +731,9 @@ func (m *App) DesktopPointerInput(p *MobileDesktopPage, ev ui.InputEvent) bool {
 			if startOK && !down.moved {
 				m.desktopScroll(p, start, dx*2, dy*2)
 			}
-		case endOK && !down.moved && !ev.Canceled:
+		case endOK && !down.moved:
 			m.DesktopSend(p, desktop.Input{Kind: "click", X: end.X, Y: end.Y})
 		}
-		return true
-	case ui.InputPointerCancel:
-		g.active = false
 		return true
 	case ui.InputScroll:
 		// UIKit's keyboard container and touch-scroll arbitration deliver
@@ -1175,7 +1177,7 @@ func (m *App) desktopInputBar(c *ui.Context, p *MobileDesktopPage) {
 			p.Secret = !p.Secret
 		}
 		field := ui.TextInput(c.Key("desktop-text"), &p.text).Grow(1).MinWidth(0).MinHeight(44).Padding(10, 4).Background(pal.surface).Border(1, pal.surface).
-			InputOptions(ui.InputOptions{Correction: ui.CorrectionOff, Capitalization: ui.CapitalizeNone, Return: ui.ReturnGo})
+			Autocorrect(false).Capitalize(ui.CapitalizeNone).ReturnKey(ui.ReturnGo)
 		if p.Secret {
 			field.Password().Label(tr("Password to send to Mac")).Placeholder(tr("Enter password"))
 		} else {

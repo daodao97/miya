@@ -13,7 +13,7 @@ func (m *App) conversationActionsSheet(c *ui.Context) {
 	}
 	shown := c.Root().AnimateTo("conversation-actions", target, ui.Animation{Duration: 220 * time.Millisecond, Ease: ui.EaseOut})
 	visible := m.ConversationMenu || shown > 0.001
-	p, safe := m.Pal, c.SafeArea()
+	p, safe := m.Pal, safeAreaOf(c)
 	height := max(float32(0), c.Root().Bounds().H-safe.Top-safe.Bottom-20)
 	ui.DialogBase(c.Key("conversation-actions"), &visible, func(backdrop, panel ui.Element) {
 		backdrop.Background(ui.RGBA(0, 0, 0, 0.35*shown)).AlignItems(ui.Center).Justify(ui.End).

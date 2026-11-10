@@ -177,7 +177,7 @@ func TestMobileDrawerActivityFitsAccessibleLayouts(t *testing.T) {
 					m.State.CompletionUnread = map[string]int64{appmodel.DesktopUnreadKey(done): 100}
 					tt := ui.NewTester(m.ViewRoot, width, 852)
 					tt.SetDark(dark)
-					tt.SetSafeArea(ui.SafeArea{Top: 59, Bottom: 34})
+					setSafeInsets(tt, safeInsets{Top: 59, Bottom: 34})
 					tt.SetPreferences(ui.Preferences{TextScale: scale})
 					openMobileDrawer(t, tt)
 					for _, title := range []string{first.Title, done.Title} {

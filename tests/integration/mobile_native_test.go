@@ -78,7 +78,7 @@ func TestMobileComposerCentersCaretWithTools(t *testing.T) {
 				m.OpenThread(m.State.Projects[0].Threads[0])
 				m.Draft = draft
 				tt := ui.NewTester(m.ViewRoot, width, 750)
-				tt.SetSafeArea(ui.SafeArea{Top: 59, Bottom: 34})
+				setSafeInsets(tt, safeInsets{Top: 59, Bottom: 34})
 				if err := tt.Click("Message"); err != nil {
 					t.Fatal(err)
 				}
@@ -135,7 +135,7 @@ func TestMobileDrawerPagesUseTheSameSlideTransition(t *testing.T) {
 					m.OpenThread(m.State.Projects[0].Threads[0])
 				}
 				tt := ui.NewTester(m.ViewRoot, 390, 844)
-				tt.SetSafeArea(ui.SafeArea{Top: 59, Bottom: 34})
+				setSafeInsets(tt, safeInsets{Top: 59, Bottom: 34})
 				tt.Frame()
 				openMobileDrawer(t, tt)
 				if err := tt.Click(destination.label); err != nil {
@@ -169,7 +169,7 @@ func TestMobileConversationEdgeOpensDrawer(t *testing.T) {
 			m.OpenThread(m.State.Projects[0].Threads[0])
 			m.Draft = "保留草稿"
 			tt := ui.NewTester(m.ViewRoot, width, 750)
-			tt.SetSafeArea(ui.SafeArea{Top: 59, Bottom: 34})
+			setSafeInsets(tt, safeInsets{Top: 59, Bottom: 34})
 			tt.Frame()
 			if m.Router().InteractiveBack {
 				t.Fatal("native swipe back would steal the conversation drawer gesture")
@@ -194,7 +194,7 @@ func TestMobileNavigationKeepsHomeGeometryStable(t *testing.T) {
 	m := testMobileApp()
 	m.Nav = nil
 	tt := ui.NewTester(m.ViewRoot, 390, 844)
-	tt.SetSafeArea(ui.SafeArea{Top: 59, Bottom: 34})
+	setSafeInsets(tt, safeInsets{Top: 59, Bottom: 34})
 	header, _ := tt.Find("Miya")
 	intro, _ := tt.Find("Let’s build")
 	composer, _ := tt.Find("Message")

@@ -4,7 +4,6 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -63,8 +62,8 @@ func (m *App) ApprovalButton(c *ui.Context, key, label string, primary, disabled
 	return b
 }
 
-func mobileFeedback(kind mygo.HapticFeedback) {
+func mobileFeedback(play func()) {
 	if runtime.GOOS == "ios" {
-		_ = mygo.Haptics.Play(kind)
+		play()
 	}
 }

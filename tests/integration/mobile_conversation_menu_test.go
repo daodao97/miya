@@ -17,7 +17,7 @@ func TestMobileConversationActionsSheet(t *testing.T) {
 				m.Draft = "保留草稿"
 				tt := ui.NewTester(m.ViewRoot, width, 844)
 				tt.SetDark(dark)
-				tt.SetSafeArea(ui.SafeArea{Top: 59, Bottom: 34})
+				setSafeInsets(tt, safeInsets{Top: 59, Bottom: 34})
 				tt.SetPreferences(ui.Preferences{TextScale: 1.8})
 				tt.Frame()
 				open := func() {

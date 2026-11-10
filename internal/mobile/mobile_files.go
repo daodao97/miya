@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/plugins/browser"
 
 	phoneproxy "miya/internal/phone/proxy"
 )
@@ -71,7 +72,7 @@ func (m *App) openFileBrowser(proxy *phoneproxy.PhoneFileProxy, errorTitle strin
 	m.filesProxy, m.FilesCancel = proxy, cancel
 	gen := m.Generation
 	go func() {
-		err := mygo.OpenInAppBrowser(ctx, proxy.URL)
+		err := browser.Open(ctx, proxy.URL)
 		proxy.Close()
 		m.onMain(gen, func() {
 			m.filesProxy, m.FilesCancel = nil, nil

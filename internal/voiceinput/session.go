@@ -6,14 +6,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/plugins/microphone"
+	"github.com/egoist/mygo/plugins/speech"
 )
 
-// ProviderName is the mygo.Speech provider that recognizes speech through
+// ProviderName is the speech (plugins/speech) provider that recognizes speech through
 // WeChat's cloud service.
 const ProviderName = "wechat"
 
-// Provider captures with mygo.Microphone and streams the audio to the cloud.
+// Provider captures with plugins/microphone and streams the audio to the cloud.
 // Dir keeps the service's device identity.
 type Provider struct{ Dir string }
 
@@ -24,20 +25,20 @@ var register struct {
 
 // Start begins a WeChat recognition session, registering the provider on
 // first use; dir is fixed by the first call.
-func Start(ctx context.Context, dir string) (*mygo.SpeechSession, error) {
-	register.once.Do(func() { register.err = mygo.Speech.RegisterProvider(ProviderName, Provider{Dir: dir}) })
+func Start(ctx context.Context, dir string) (*speech.Session, error) {
+	register.once.Do(func() { register.err = speech.RegisterProvider(ProviderName, Provider{Dir: dir}) })
 	if register.err != nil {
 		return nil, register.err
 	}
-	return mygo.Speech.Start(ctx, mygo.SpeechOptions{Provider: ProviderName})
+	return speech.Start(ctx, speech.Options{Provider: ProviderName})
 }
 
-func (p Provider) Start(ctx context.Context, _ mygo.SpeechOptions, emit func(mygo.SpeechResult)) (mygo.SpeechRecording, error) {
-	// mygo.Speech ends capture after its MaxDuration; this bounds the cloud
+func (p Provider) Start(ctx context.Context, _ speech.Options, emit func(speech.Result)) (speech.Recording, error) {
+	// speech.Start ends capture after its MaxDuration; this bounds the cloud
 	// round trips that follow.
 	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	r := &recording{audio: make(chan []byte, 640), cancel: cancel}
-	mic, err := mygo.Microphone.Start(ctx, r.capture)
+	mic, err := microphone.Start(ctx, r.capture)
 	if err != nil {
 		cancel()
 		return nil, err
@@ -46,11 +47,11 @@ func (p Provider) Start(ctx context.Context, _ mygo.SpeechOptions, emit func(myg
 	go func() {
 		defer cancel()
 		defer mic.Cancel()
-		text, err := recognizeWechat(ctx, p.Dir, r.audio, func(text string) { emit(mygo.SpeechResult{Text: text}) })
+		text, err := recognizeWechat(ctx, p.Dir, r.audio, func(text string) { emit(speech.Result{Text: text}) })
 		if captureError := r.captureErr(); captureError != nil {
 			err = captureError
 		}
-		emit(mygo.SpeechResult{Text: text, Final: true, Err: err})
+		emit(speech.Result{Text: text, Final: true, Err: err})
 	}()
 	return r, nil
 }
@@ -62,7 +63,7 @@ type recording struct {
 	audio        chan []byte
 	captureError error
 	closed       bool
-	mic          *mygo.MicrophoneCapture
+	mic          *microphone.Capture
 	cancel       context.CancelFunc
 	stopOnce     sync.Once
 }
@@ -84,7 +85,7 @@ func (r *recording) captureErr() error {
 }
 
 // capture runs on the audio thread; it never blocks.
-func (r *recording) capture(c mygo.MicrophoneChunk) {
+func (r *recording) capture(c microphone.Chunk) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.closed {

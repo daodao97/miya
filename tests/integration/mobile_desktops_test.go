@@ -263,7 +263,7 @@ func TestMobileDesktopManagerNavigationAndSwitch(t *testing.T) {
 	m.Host = "Mac Studio"
 	other, _ := m.Desktops.Remember(b, "MacBook Pro")
 	tt := ui.NewTester(m.ViewRoot, 390, 844)
-	tt.SetSafeArea(ui.SafeArea{Top: 59, Bottom: 34})
+	setSafeInsets(tt, safeInsets{Top: 59, Bottom: 34})
 	tt.Frame()
 	openMobileDrawer(t, tt)
 	if err := tt.Click("Switch desktop"); err != nil {

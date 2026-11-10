@@ -23,7 +23,7 @@ func TestMobileUserMessageBlankSpaceKeepsVerticalScroll(t *testing.T) {
 			m.ShowThread(th)
 			m.Draft = "保留草稿"
 			tt := ui.NewTester(m.ViewRoot, width, 750)
-			tt.SetSafeArea(ui.SafeArea{Top: 59, Bottom: 34})
+			setSafeInsets(tt, safeInsets{Top: 59, Bottom: 34})
 			tt.Frame()
 			list := m.View.ListFor(th.ID)
 			list.ScrollTo(20, ui.Center)

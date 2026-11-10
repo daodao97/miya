@@ -14,15 +14,15 @@ func TestMobileDrawerBackgroundCoversSafeArea(t *testing.T) {
 		for _, landscape := range []bool{false, true} {
 			t.Run(fmt.Sprintf("dark=%v/landscape=%v", dark, landscape), func(t *testing.T) {
 				width, height := 390, 844
-				safe := ui.SafeArea{Top: 59, Bottom: 34}
+				safe := safeInsets{Top: 59, Bottom: 34}
 				if landscape {
 					width, height = 844, 390
-					safe = ui.SafeArea{Left: 59, Right: 59, Bottom: 21}
+					safe = safeInsets{Left: 59, Right: 59, Bottom: 21}
 				}
 				m := mobileHomeFixture()
 				tt := ui.NewTester(m.ViewRoot, width, height)
 				tt.SetDark(dark)
-				tt.SetSafeArea(safe)
+				setSafeInsets(tt, safe)
 				tt.Frame()
 				home := m.HomeBackground()
 				wantHome := color.RGBA{R: home.R, G: home.G, B: home.B, A: 255}
@@ -92,7 +92,7 @@ func TestMobileDrawerClosingFramesMatchRestingPage(t *testing.T) {
 					m.Draft = "保留草稿"
 					tt := ui.NewTester(m.ViewRoot, 390, 844)
 					tt.SetDark(dark)
-					tt.SetSafeArea(ui.SafeArea{Top: 59, Bottom: 34})
+					setSafeInsets(tt, safeInsets{Top: 59, Bottom: 34})
 					tt.Frame()
 					points := [][2]int{{5, 5}, {374, 422}}
 					want := make([]color.RGBA, len(points))

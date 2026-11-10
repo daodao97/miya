@@ -6,7 +6,7 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/plugins/network"
 )
 
 // Connect opens a tunnel to the desktop in raw, a miya:// link or bare
@@ -27,7 +27,7 @@ func connectPort(ctx context.Context, raw string, port uint16) (*Conn, error) {
 	}
 	// iOS establishes the app's network access through Foundation before Go
 	// opens raw sockets; MyGo returns at once on desktops.
-	if err := mygo.Network.Prepare(ctx, RelayURL(raw)); err != nil {
+	if err := network.Prepare(ctx, RelayURL(raw)); err != nil {
 		return nil, networkError(err)
 	}
 	server := addr
@@ -52,7 +52,7 @@ func connectPort(ctx context.Context, raw string, port uint16) (*Conn, error) {
 }
 
 func networkError(err error) error {
-	var failure *mygo.NetworkError
+	var failure *network.Error
 	if !errors.As(err, &failure) {
 		return err
 	}

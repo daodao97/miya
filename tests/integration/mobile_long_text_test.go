@@ -22,7 +22,7 @@ func TestMobileLongUserMessageFitsScreen(t *testing.T) {
 			m.OpenThread(th)
 			m.ShowThread(th)
 			tt := ui.NewTester(m.ViewRoot, width, 844)
-			tt.SetSafeArea(ui.SafeArea{Top: 59, Bottom: 34})
+			setSafeInsets(tt, safeInsets{Top: 59, Bottom: 34})
 			tt.Frame()
 			var labels []string
 			for _, text := range tt.Texts() {
@@ -53,7 +53,7 @@ func TestMobileLongDraftPaintStaysInsideEditor(t *testing.T) {
 	m.Draft = strings.Repeat(mobileLongPrompt+"\n", 3)
 	tt := ui.NewTester(m.ViewRoot, 390, 510) // The viewport above the keyboard.
 	tt.SetDark(true)
-	tt.SetSafeArea(ui.SafeArea{Top: 59})
+	setSafeInsets(tt, safeInsets{Top: 59})
 	tt.Frame()
 	if err := tt.Click("Message"); err != nil {
 		t.Fatal(err)

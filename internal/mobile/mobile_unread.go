@@ -9,7 +9,6 @@ import (
 	"miya/internal/chat/model"
 	"miya/internal/notification"
 	"miya/internal/remote"
-	"miya/internal/uiruntime"
 )
 
 func (m *App) unreadFor(t model.Thread) (notification.Unread, bool) {
@@ -127,22 +126,11 @@ func (m *App) DesiredBadge() int {
 
 func (m *App) updateBadge() {
 	count := m.DesiredBadge()
-	if m.win == nil || m.badgeUpdating || m.badgeApplied == count {
+	if m.win == nil || m.badgeApplied == count {
 		return
 	}
-	m.badgeUpdating = true
-	go func() {
-		err := mygo.App.SetNotificationBadge(count)
-		uiruntime.RunOnMain(func() {
-			m.badgeUpdating = false
-			if err == nil {
-				m.badgeApplied = count
-				if m.DesiredBadge() != count {
-					m.updateBadge()
-				}
-			}
-		})
-	}()
+	m.badgeApplied = count
+	mygo.App.SetBadgeCount(count)
 }
 
 func notificationTarget(data map[string]string) remote.Request {

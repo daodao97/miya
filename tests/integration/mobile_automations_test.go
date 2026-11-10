@@ -94,7 +94,7 @@ func TestMobileAutomationCreateCompatibilityAndSmallScreens(t *testing.T) {
 		m.Autos.Form.Request = "每天 18 点总结仓库变化"
 		for _, dark := range []bool{false, true} {
 			tt.SetDark(dark)
-			tt.SetSafeArea(ui.SafeArea{Top: 59, Bottom: 34})
+			setSafeInsets(tt, safeInsets{Top: 59, Bottom: 34})
 			tt.SetPreferences(ui.Preferences{TextScale: 1.6})
 			tt.Frame()
 			for _, label := range []string{"Back", "Automation project", "What to do", "Create"} {
@@ -306,7 +306,7 @@ func TestMobileAutomationRunFeedbackAndCompatibility(t *testing.T) {
 func TestMobileAutomationsDrawerLayout(t *testing.T) {
 	m := mobileHomeFixture()
 	tt := ui.NewTester(m.ViewRoot, 844, 390)
-	tt.SetSafeArea(ui.SafeArea{Left: 59, Right: 59, Bottom: 21})
+	setSafeInsets(tt, safeInsets{Left: 59, Right: 59, Bottom: 21})
 	tt.Frame()
 	m.Menu = true
 	tt.Frame()
@@ -335,7 +335,7 @@ func TestMobileAutomationsLongContentAndTextScaling(t *testing.T) {
 			m.Router().Push("/automations")
 			tt := ui.NewTester(m.ViewRoot, width, 844)
 			tt.SetDark(dark)
-			tt.SetSafeArea(ui.SafeArea{Top: 59, Bottom: 34})
+			setSafeInsets(tt, safeInsets{Top: 59, Bottom: 34})
 			tt.Frame()
 			name := fmt.Sprintf("mobile-automation-list-%d-dark-%v", width, dark)
 			automationSnapshot(t, tt, name)

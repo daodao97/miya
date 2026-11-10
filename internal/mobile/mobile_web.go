@@ -66,7 +66,7 @@ func (m *App) webPage(c *ui.Context) {
 			}
 			ui.Text(c, tr("Enter the port of an HTTP service running on your computer, such as 3000, 5173, or 8080.")).FontSize(m.Font(15)).TextColor(p.muted).LineHeight(1.5)
 			ui.TextInput(c.Key("port"), &m.WebPort).Label(tr("Web port")).Placeholder(tr("For example, 3000")).FillWidth().MinHeight(52).Padding(14).Background(p.surface).Radius(14).
-				InputOptions(ui.InputOptions{Keyboard: ui.KeyboardNumber, Correction: ui.CorrectionOff, Return: ui.ReturnGo})
+				Keyboard(ui.KeyboardNumber).Autocorrect(false).ReturnKey(ui.ReturnGo)
 			port, err := webservice.ParsePort(strings.TrimSpace(m.WebPort))
 			if m.WebPort != "" && err != nil {
 				ui.Text(c, err.Error()).FontSize(m.Font(14)).TextColor(widgets.Danger)

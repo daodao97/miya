@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/plugins/biometrics"
 	"github.com/egoist/mygo/ui"
 
 	"miya/internal/desktop/control"
@@ -127,34 +128,26 @@ func (m *App) authenticateDesktopUnlock(ctx context.Context) error {
 	if m.DesktopAuthenticate != nil {
 		return m.DesktopAuthenticate(ctx)
 	}
-	return mygo.Biometrics.Authenticate(ctx, mygo.AuthenticationOptions{
-		Reason: tr("Verify your identity to save or use your Mac login password"), AllowDevicePasscode: true,
-	})
+	return biometrics.Authenticate(ctx, tr("Verify your identity to save or use your Mac login password"))
 }
 
 // Keep native failure details out of the UI, but distinguish packaging errors,
 // device setup, and cancellation so the person can take the right next step.
 func desktopUnlockAuthenticationError(err error) error {
 	message := "Identity verification incomplete. Unlock manually or retry the saved password."
-	var auth *mygo.AuthenticationError
 	switch {
-	case errors.Is(err, mygo.ErrUnsupported):
+	case errors.Is(err, mygo.ErrUnsupported), errors.Is(err, biometrics.ErrMissingPurpose):
 		message = "Identity verification is unavailable in this app build. Update Miya, or disable password saving to unlock manually."
 	case errors.Is(err, context.DeadlineExceeded):
 		message = "Identity verification timed out. Try again."
-	case errors.As(err, &auth):
-		switch auth.Code {
-		case mygo.AuthenticationMissingPurpose:
-			message = "Identity verification is unavailable in this app build. Update Miya, or disable password saving to unlock manually."
-		case mygo.AuthenticationPasscodeNotSet:
-			message = "Set a device passcode in system settings to save or use your Mac password."
-		case mygo.AuthenticationInactive, mygo.AuthenticationBusy:
-			message = "Return to Miya and close any system dialog, then retry identity verification."
-		case mygo.AuthenticationFailed:
-			message = "Identity verification failed. Try biometrics or your device passcode again."
-		case mygo.AuthenticationUnavailable, mygo.AuthenticationNotEnrolled, mygo.AuthenticationLockedOut:
-			message = "Device authentication is unavailable. Check biometrics and your device passcode in system settings, or unlock manually without saving."
-		}
+	case errors.Is(err, biometrics.ErrPasscodeNotSet):
+		message = "Set a device passcode in system settings to save or use your Mac password."
+	case errors.Is(err, biometrics.ErrInactive), errors.Is(err, biometrics.ErrBusy):
+		message = "Return to Miya and close any system dialog, then retry identity verification."
+	case errors.Is(err, biometrics.ErrFailed):
+		message = "Identity verification failed. Try biometrics or your device passcode again."
+	case errors.Is(err, biometrics.ErrUnavailable), errors.Is(err, biometrics.ErrNotEnrolled), errors.Is(err, biometrics.ErrLockedOut):
+		message = "Device authentication is unavailable. Check biometrics and your device passcode in system settings, or unlock manually without saving."
 	}
 	return errors.New(tr(message))
 }
@@ -256,7 +249,7 @@ func (m *App) desktopUnlockView(c *ui.Context, p *MobileDesktopPage) {
 			})
 			ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
 				field := ui.TextInput(c.Key("desktop-unlock-text"), &p.Unlock.Text).Grow(1).MinWidth(0).MinHeight(44).Padding(10, 16).Background(pal.Bg).Radius(22).
-					InputOptions(ui.InputOptions{Correction: ui.CorrectionOff, Capitalization: ui.CapitalizeNone, Return: ui.ReturnGo})
+					Autocorrect(false).Capitalize(ui.CapitalizeNone).ReturnKey(ui.ReturnGo)
 				field.Password().Label(tr("Mac login password")).Placeholder(tr("Enter Mac login password")).Disabled(p.Unlock.Busy)
 				if m.pill(c, "desktop-unlock", tr("Unlock"), true).Disabled(p.Unlock.Busy || !control.ValidUnlockPassword(p.Unlock.Text)).Clicked() {
 					m.DesktopUnlock(p)

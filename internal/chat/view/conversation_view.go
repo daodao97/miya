@@ -622,10 +622,10 @@ func (app *View) ThreadInput(c *ui.Context, state *InlineThreadInput, raw, owner
 	in = richtext.EditorBase(c, state.Doc, richtext.EditorOptions{
 		OnInput: state.InputHook,
 		Label:   label, Placeholder: placeholder, NoMarkdown: true, Font: state.Style.Font,
-		OnPaste: func() bool { paste(); return true }, ContextMenu: contextMenu,
+		OnPaste: func() bool { paste(); return true }, Menu: contextMenu,
 		OnCopy:   func(cut bool) bool { copySelection(cut); return true },
 		TagStyle: func(_ string, span *ui.Span) { span.ObjectDescent = size * 0.25 },
-	}).FillWidth().MinWidth(0).FocusRing(false).InputOptions(ui.InputOptions{Dismiss: ui.KeyboardDismissInteractive})
+	}).FillWidth().MinWidth(0).FocusRing(false).KeyboardDismiss(ui.KeyboardDismissInteractive)
 	// Reserve holds only before editing. Once focused, the native text proxy
 	// owns touches so caret placement, selection and the paste menu keep working.
 	if state.InputHook != nil && !in.Focused() {

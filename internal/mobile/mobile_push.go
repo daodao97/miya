@@ -1,11 +1,17 @@
 package mobile
 
 import (
+	"context"
 	"encoding/json"
 	"log"
+	"net/url"
 	"runtime"
+	"strings"
+	"time"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/plugins/permissionflow"
+	"github.com/egoist/mygo/plugins/push"
 
 	"miya/internal/chat/model"
 	"miya/internal/notification"
@@ -14,28 +20,62 @@ import (
 )
 
 func (m *App) setupPush() {
-	mygo.App.OnPushToken(func(token string) {
+	push.OnToken(func(token string) {
 		log.Print("miya: APNs device registration succeeded")
 		m.pushToken = token
 		m.pushError = ""
 		m.syncPush()
 	})
-	mygo.App.OnPushRegistrationError(func(err error) {
-		log.Printf("miya: APNs registration failed: %v", err)
-		m.pushError = tr("Unable to register for notifications. Check system notification settings.")
-		uiruntime.Invalidate()
-	})
-	mygo.App.SetNotificationPresentationHandler(func(e mygo.NotificationEvent) mygo.NotificationPresentation {
-		if !m.ShouldPresentNotification(e.Data) {
-			return 0
+	push.SetPresentation(func(data []byte) bool { return m.ShouldPresentNotification(notificationData(data)) })
+	// A tapped push (APNs), also the one that launched the app.
+	push.OnOpened(func(data []byte) { m.OpenNotification(notificationData(data)) })
+	// A tapped notification of Miya's own, also of an earlier run: its ID
+	// carries what it opens (notificationID).
+	mygo.App.OnNotificationClick(func(id string) {
+		key, data, ok := parseNotificationID(id)
+		if !ok {
+			return
 		}
-		return mygo.PresentNotificationDefault
+		log.Printf("miya: notification %s clicked: thread=%s server=%q", key, data["thread"], data["serverId"])
+		delete(m.liveShown, key)
+		m.OpenNotification(data)
 	})
-	mygo.App.OnNotification(func(e mygo.NotificationEvent) {
-		if e.Clicked {
-			m.OpenNotification(e.Data)
-		}
-	})
+}
+
+// notificationData decodes what a push carries, as JSON.
+func notificationData(data []byte) map[string]string {
+	var d map[string]string
+	_ = json.Unmarshal(data, &d)
+	return d
+}
+
+// notificationID is the ID of a notification Miya shows, key, which carries
+// data, what a tap opens: mygo.App.OnNotificationClick is told only the ID,
+// also after the process was ended.
+func notificationID(key string, data map[string]string) string {
+	q := url.Values{}
+	for k, v := range data {
+		q.Set(k, v)
+	}
+	return key + "#" + q.Encode()
+}
+
+// parseNotificationID returns the key and data of a notificationID, and
+// false for an ID of another kind, as a push's.
+func parseNotificationID(id string) (key string, data map[string]string, ok bool) {
+	key, query, ok := strings.Cut(id, "#")
+	if !ok {
+		return "", nil, false
+	}
+	q, err := url.ParseQuery(query)
+	if err != nil {
+		return "", nil, false
+	}
+	data = map[string]string{}
+	for k := range q {
+		data[k] = q.Get(k)
+	}
+	return key, data, true
 }
 
 // ShouldPresentNotification reports whether a notification arriving while
@@ -65,16 +105,16 @@ func (m *App) requestPush() {
 	m.pushRequesting = true
 	go func() {
 
-		status, e := mygo.Permissions.Query(mygo.PermissionNotifications)
+		status, e := permissionflow.Check(permissionflow.Notifications)
 		// Returning from a denied system prompt activates the app again. Only
 		// the first request should prompt; later denials belong in Settings.
-		if e == nil && status == mygo.PermissionNotDetermined {
-			status, e = mygo.Permissions.Request(mygo.PermissionNotifications)
+		if e == nil && status == permissionflow.NotDetermined {
+			status, e = permissionflow.Request(context.Background(), permissionflow.Notifications)
 		}
 		log.Printf("miya: notification permission: %v, error: %v", status, e)
 		uiruntime.RunOnMain(func() {
 			m.pushRequesting = false
-			if e != nil || status == mygo.PermissionDenied {
+			if e != nil || status == permissionflow.Denied {
 				m.pushError = tr("Allow Miya notifications in Settings")
 				uiruntime.Invalidate()
 				return
@@ -82,8 +122,8 @@ func (m *App) requestPush() {
 			if runtime.GOOS == "android" {
 				// The paired connection delivers notifications itself.
 				m.pushLive, m.pushError = true, ""
-			} else if e := mygo.App.RegisterPushNotifications(); e != nil {
-				m.pushError = tr("Unable to register notifications: ") + e.Error()
+			} else {
+				go m.registerPush()
 			}
 			m.syncPush()
 		})
@@ -162,16 +202,27 @@ func (m *App) showLiveNotice(n notification.LiveMessage) {
 		old.Close()
 	}
 	id, data := n.ID, n.Data
-	shown := mygo.NewNotification(mygo.NotificationOptions{ID: id, Title: tr(n.Title), Body: n.Body, Group: n.Group, Data: data})
-	shown.OnClick(func() {
-		log.Printf("miya: notification %s clicked: thread=%s server=%q", id, data["thread"], data["serverId"])
-		delete(m.liveShown, id)
-		m.OpenNotification(data)
-	})
+	// Taps reach OnNotificationClick (setupPush), which the ID tells what to
+	// open.
+	shown := mygo.NewNotification(mygo.NotificationOptions{ID: notificationID(id, data), Title: tr(n.Title), Body: n.Body, Group: n.Group, Data: data})
 	if err := shown.Show(); err != nil {
 		log.Printf("miya: notification: %v", err)
 		shown.Close()
 		return
 	}
 	m.liveShown[id] = shown
+}
+
+// registerPush asks APNs for the token pushes are sent to, which also
+// reaches push.OnToken. Off the main goroutine: it waits for the system.
+func (m *App) registerPush() {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	if _, err := push.Register(ctx); err != nil {
+		log.Printf("miya: APNs registration failed: %v", err)
+		uiruntime.RunOnMain(func() {
+			m.pushError = tr("Unable to register for notifications. Check system notification settings.")
+			uiruntime.Invalidate()
+		})
+	}
 }

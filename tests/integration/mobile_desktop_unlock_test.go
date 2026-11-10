@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/plugins/biometrics"
 	"github.com/egoist/mygo/ui"
 
 	"miya/internal/desktop"
@@ -401,14 +402,14 @@ func TestDesktopUnlockAuthenticationFailureIsActionable(t *testing.T) {
 		want string
 	}{
 		{"unsupported", mygo.ErrUnsupported, "app build"},
-		{"purpose", &mygo.AuthenticationError{Code: mygo.AuthenticationMissingPurpose}, "app build"},
-		{"passcode", &mygo.AuthenticationError{Code: mygo.AuthenticationPasscodeNotSet}, "device passcode"},
-		{"inactive", &mygo.AuthenticationError{Code: mygo.AuthenticationInactive}, "Return to Miya"},
-		{"busy", &mygo.AuthenticationError{Code: mygo.AuthenticationBusy}, "Return to Miya"},
-		{"failed", &mygo.AuthenticationError{Code: mygo.AuthenticationFailed}, "verification failed"},
-		{"lockedout", &mygo.AuthenticationError{Code: mygo.AuthenticationLockedOut}, "system settings"},
+		{"purpose", biometrics.ErrMissingPurpose, "app build"},
+		{"passcode", biometrics.ErrPasscodeNotSet, "device passcode"},
+		{"inactive", biometrics.ErrInactive, "Return to Miya"},
+		{"busy", biometrics.ErrBusy, "Return to Miya"},
+		{"failed", biometrics.ErrFailed, "verification failed"},
+		{"lockedout", biometrics.ErrLockedOut, "system settings"},
 		{"timeout", context.DeadlineExceeded, "timed out"},
-		{"canceled", &mygo.AuthenticationError{Code: mygo.AuthenticationCanceled}, "incomplete"},
+		{"canceled", biometrics.ErrCanceled, "incomplete"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

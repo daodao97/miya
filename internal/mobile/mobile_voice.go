@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/plugins/permissionflow"
+	"github.com/egoist/mygo/plugins/speech"
 	"github.com/egoist/mygo/ui"
 
 	"miya/internal/prefs"
@@ -17,7 +19,7 @@ import (
 const voiceAutoSendPreference = "phone-voice-auto-send"
 
 type mobileVoiceSession interface {
-	Results() <-chan mygo.SpeechResult
+	Results() <-chan speech.Result
 	Stop()
 	Cancel()
 }
@@ -29,7 +31,7 @@ type mobileVoice struct {
 	anchor, caret         int
 	released              bool
 	autoSend              bool
-	final                 *mygo.SpeechResult
+	final                 *speech.Result
 }
 
 // Touch arbitration, the hold threshold and pointer capture belong to MyGo's
@@ -41,12 +43,11 @@ func (m *App) voiceInput(ev ui.InputEvent) bool {
 		return true
 	case ui.InputPointerUp:
 		if m.voice != nil {
-			m.endVoice()
-			return true
-		}
-	case ui.InputPointerCancel:
-		if m.voice != nil {
-			m.cancelVoice()
+			if ev.Canceled {
+				m.cancelVoice()
+			} else {
+				m.endVoice()
+			}
 			return true
 		}
 	}
@@ -84,7 +85,7 @@ func (m *App) beginVoice() {
 		return
 	}
 	if err != nil {
-		m.finishVoice(v, mygo.SpeechResult{Err: err, Final: true})
+		m.finishVoice(v, speech.Result{Err: err, Final: true})
 		return
 	}
 	if session == nil {
@@ -92,7 +93,7 @@ func (m *App) beginVoice() {
 		return
 	}
 	v.session = session
-	mobileFeedback(mygo.HapticLight)
+	mobileFeedback(mygo.Haptics.Light)
 	go func() {
 		for r := range session.Results() {
 			uiruntime.RunOnMain(func() {
@@ -128,7 +129,7 @@ func (m *App) endVoice() {
 			return
 		}
 		v.session.Stop()
-		mobileFeedback(mygo.HapticLight)
+		mobileFeedback(mygo.Haptics.Light)
 	}
 }
 
@@ -142,7 +143,7 @@ func (m *App) cancelVoice() {
 	}
 }
 
-func (m *App) finishVoice(v *mobileVoice, r mygo.SpeechResult) {
+func (m *App) finishVoice(v *mobileVoice, r speech.Result) {
 	if m.voice != v {
 		return
 	}
@@ -173,7 +174,7 @@ func (m *App) finishVoice(v *mobileVoice, r mygo.SpeechResult) {
 	} else {
 		m.Draft += text
 	}
-	mobileFeedback(mygo.HapticSuccess)
+	mobileFeedback(mygo.Haptics.Success)
 	if v.autoSend && v.released {
 		m.Send()
 	}
@@ -223,9 +224,9 @@ func (m *App) voiceSettings(c *ui.Context) {
 		m.settingsSeparator(c)
 		if m.settingsAction(c.Key("voice-authorize"), tr("Allow microphone")).Clicked() {
 			go func() {
-				status, err := mygo.Permissions.Request(mygo.PermissionMicrophone)
+				status, err := permissionflow.Request(context.Background(), permissionflow.Microphone)
 				uiruntime.RunOnMain(func() {
-					if err != nil || status != mygo.PermissionGranted {
+					if err != nil || status != permissionflow.Granted {
 						m.voicePermission = tr("Allow microphone access in system settings to use voice input.")
 					} else {
 						m.voicePermission = tr("Microphone access allowed")

@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/plugins/imagepicker"
+	"github.com/egoist/mygo/plugins/scanner"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/markdown"
 
@@ -78,7 +80,6 @@ type App struct {
 	CompletionReceived           appmodel.DesktopRead
 	BadgeRevision                uint64
 	badgeApplied                 int
-	badgeUpdating                bool
 	pushOpenRef                  remote.Request
 	pushID, pushToken, pushError string
 	PushDisabled, pushRequesting bool
@@ -1047,7 +1048,7 @@ func (m *App) scan() {
 	}
 	m.scanning, m.err = true, ""
 	go func() {
-		raw, err := mygo.Scanner.ScanCode(context.Background(), mygo.ScanOptions{Prompt: tr("Scan the QR code in Miya on your desktop"), CancelLabel: tr("Cancel")})
+		raw, err := scanner.Scan(context.Background(), scanner.Options{Prompt: tr("Scan the QR code in Miya on your desktop"), CancelLabel: tr("Cancel")})
 		uiruntime.RunOnMain(func() {
 			m.scanning = false
 			if err != nil {
@@ -1071,13 +1072,13 @@ func (m *App) pair(raw string) {
 // scanError explains a failed scan; closing the scanner is not a failure.
 func scanError(err error) string {
 	switch {
-	case errors.Is(err, mygo.ErrScanCanceled):
+	case errors.Is(err, scanner.ErrCanceled):
 		return ""
 	case errors.Is(err, mygo.ErrUnsupported):
 		return tr("Scan on your phone, or paste a desktop connection code")
-	case errors.Is(err, mygo.ErrCameraDenied):
+	case errors.Is(err, scanner.ErrCameraDenied):
 		return tr("Allow Miya to use the camera in Settings, or paste a connection code")
-	case errors.Is(err, mygo.ErrCameraUnavailable):
+	case errors.Is(err, scanner.ErrCameraUnavailable):
 		return tr("Camera unavailable. Paste a desktop connection code.")
 	}
 	return tr("Unable to open the camera")
@@ -1111,7 +1112,7 @@ func (m *App) ViewRoot(c *ui.Context) {
 	c.SetTheme(m.View.Theme)
 	p := m.Pal
 	// Honor any safe-area padding supplied by the host.
-	safe := c.SafeArea()
+	safe := safeAreaOf(c)
 	pageColor := p.Bg
 	contentSafe := safe
 	if m.Loaded && m.Link != "" {
@@ -1123,7 +1124,7 @@ func (m *App) ViewRoot(c *ui.Context) {
 		// Keep the router's bounds fixed throughout navigation. Each page
 		// owns its safe-area padding, including the outgoing page, so a
 		// history change cannot resize or vertically shift the list.
-		contentSafe = ui.SafeArea{}
+		contentSafe = safeArea{}
 	}
 	// MyGo uses the opaque root fill for the surrounding iOS safe area,
 	// including the status bar and home indicator.
@@ -1267,7 +1268,7 @@ func (m *App) pairView(c *ui.Context) {
 		}
 		ui.Row(c).FillWidth().MinHeight(52).Padding(0, 6, 0, 16).Gap(8).AlignItems(ui.Center).Background(p.surface).Radius(16).Children(func() {
 			input := ui.TextInput(c.Key("paste"), &m.Paste).Label(tr("Desktop connection code")).Placeholder(tr("Or paste a connection code")).Grow(1).MinWidth(0).Background(p.surface).Border(0, p.surface).
-				InputOptions(ui.InputOptions{Keyboard: ui.KeyboardASCII, Correction: ui.CorrectionOff, Capitalization: ui.CapitalizeNone, Return: ui.ReturnGo})
+				Keyboard(ui.KeyboardASCII).Autocorrect(false).Capitalize(ui.CapitalizeNone).ReturnKey(ui.ReturnGo)
 			m.pairInput.restore(input)
 			if m.pill(c, "paste-code", tr("Paste"), false).KeepFocus().Clicked() {
 				m.pairInput.paste(c, input, &m.Paste, false)
@@ -1347,7 +1348,7 @@ func (m *App) selectedProject() model.ProjectSnapshot {
 // drags through, as the drawer's empty space does.
 func (m *App) listPage(c *ui.Context, path string) {
 	p := m.Pal
-	safe := c.SafeArea()
+	safe := safeAreaOf(c)
 	screen := c.Root().Bounds().W
 	w := min(float32(320), screen*0.84)
 	m.DrawerW = w
@@ -1459,7 +1460,7 @@ func (m *App) listPage(c *ui.Context, path string) {
 	// release. Give feedback now, without waiting for the slide to finish.
 	if !m.DrawerDragging && m.drawerFeedbackOpen != m.Menu {
 		m.drawerFeedbackOpen = m.Menu
-		mobileFeedback(mygo.HapticSoft)
+		mobileFeedback(mygo.Haptics.Light)
 	}
 }
 
@@ -1481,7 +1482,7 @@ func (m *App) drawerContent(c *ui.Context) {
 	if m.DrawerSearch {
 		search := ui.TextInput(c.Key("drawer-query"), &m.DrawerQuery).FillWidth().MinHeight(44).Padding(10, 12).Radius(12).
 			Background(p.surface).Border(0, p.surface).FontSize(m.Font(16)).Label(tr("Search conversations")).Placeholder(tr("Search conversation titles")).AutoFocus().
-			InputOptions(ui.InputOptions{Return: ui.ReturnSearch, Capitalization: ui.CapitalizeNone, Dismiss: ui.KeyboardDismissInteractive})
+			ReturnKey(ui.ReturnSearch).Capitalize(ui.CapitalizeNone).KeyboardDismiss(ui.KeyboardDismissInteractive)
 		if search.Submitted() {
 			c.Blur()
 		}
@@ -1730,7 +1731,7 @@ func (m *App) composer(c *ui.Context, agent string, busy bool) {
 				w, _ := c.MeasureText(0, ui.Span{Text: effort, Size: m.Font(12)})
 				right += max(44, w) + 8
 			}
-			safe := c.SafeArea()
+			safe := safeAreaOf(c)
 			width := c.Root().Bounds().W - safe.Left - safe.Right - 24 - 16 - 90 - right
 			style := conversation.MentionStyle(c, m.Font(16))
 			m.InlineInput.Style, m.InlineInput.Title = style, m.View.ReferenceTitle
@@ -1830,9 +1831,8 @@ func (m *App) addPhotos() {
 		m.SendErr = fmt.Sprintf(tr("Send up to %d images at a time"), phonetransfer.MaxImages)
 		return
 	}
-	win := m.win
 	go func() {
-		paths, err := mygo.Dialog.Photos(mygo.PhotoDialogOptions{Parent: win, Multiple: true})
+		paths, err := imagepicker.Pick(context.Background(), imagepicker.Options{Limit: -1})
 		uiruntime.RunOnMain(func() {
 			switch {
 			case errors.Is(err, mygo.ErrUnsupported):

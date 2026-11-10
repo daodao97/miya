@@ -11,10 +11,10 @@ import (
 func TestMobileActionsKeepCancelVisibleAndScroll(t *testing.T) {
 	for _, size := range []struct {
 		width, height int
-		safe          ui.SafeArea
+		safe          safeInsets
 	}{
-		{852, 393, ui.SafeArea{Left: 59, Right: 59, Bottom: 21}},
-		{320, 750, ui.SafeArea{Top: 59, Bottom: 34}},
+		{852, 393, safeInsets{Left: 59, Right: 59, Bottom: 21}},
+		{320, 750, safeInsets{Top: 59, Bottom: 34}},
 	} {
 		for _, scale := range []float32{1, 3} {
 			t.Run(fmt.Sprintf("%dx%d/%v", size.width, size.height, scale), func(t *testing.T) {
@@ -22,7 +22,7 @@ func TestMobileActionsKeepCancelVisibleAndScroll(t *testing.T) {
 				m.OpenThread(m.State.Projects[0].Threads[0])
 				m.Draft = "keep draft"
 				tt := ui.NewTester(m.ViewRoot, size.width, size.height)
-				tt.SetSafeArea(size.safe)
+				setSafeInsets(tt, size.safe)
 				tt.SetPreferences(ui.Preferences{TextScale: scale})
 				if err := tt.Click("More"); err != nil {
 					t.Fatal(err)
@@ -63,7 +63,7 @@ func TestMobileLanguageChoicesFitLargeText(t *testing.T) {
 		m := testMobileApp()
 		m.OpenDrawerPage("/settings")
 		tt := ui.NewTester(m.ViewRoot, width, 852)
-		tt.SetSafeArea(ui.SafeArea{Top: 59, Bottom: 34})
+		setSafeInsets(tt, safeInsets{Top: 59, Bottom: 34})
 		tt.SetPreferences(ui.Preferences{TextScale: 3})
 		tt.Frame()
 		value, ok := tt.Find("Follow system")
@@ -150,7 +150,7 @@ func TestMobileDrawerLargeTextWrapsConversationTitles(t *testing.T) {
 	title := "A conversation title that stays distinguishable when accessibility text is enlarged"
 	m.State.Projects[0].Threads[0].Title = title
 	tt := ui.NewTester(m.ViewRoot, 393, 852)
-	tt.SetSafeArea(ui.SafeArea{Top: 59, Bottom: 34})
+	setSafeInsets(tt, safeInsets{Top: 59, Bottom: 34})
 	tt.SetPreferences(ui.Preferences{TextScale: 2})
 	tt.Frame()
 	openMobileDrawer(t, tt)

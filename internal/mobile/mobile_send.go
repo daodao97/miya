@@ -317,10 +317,10 @@ func (m *App) Sent(id int, msg string) {
 	if msg != "" {
 		m.SendErr = msg
 		m.failPendingSend()
-		mobileFeedback(mygo.HapticError)
+		mobileFeedback(mygo.Haptics.Error)
 		return
 	}
-	mobileFeedback(mygo.HapticLight)
+	mobileFeedback(mygo.Haptics.Light)
 	m.sending, m.Sending, m.SendErr = nil, false, ""
 	p.acknowledged = true
 	wasNew := p.thread == 0

@@ -195,9 +195,10 @@ func (p *CollaborationPanel) DrawToggle(c *ui.Context, v CollaborationPanelView)
 	ui.PopoverBase(c.Key("task-popover"), b, &p.Open, func(panel ui.Element) {
 		// Bound the whole panel, including task actions, to the space above
 		// the status row. Long lists and details scroll inside the overlay.
-		safe, root := c.SafeArea(), c.Root().Bounds()
-		width := min(float32(560), root.W-safe.Left-safe.Right-24)
-		height := min(float32(480), b.Bounds().Y-safe.Top-20)
+		top, right, _, left := c.SafeArea()
+		root := c.Root().Bounds()
+		width := min(float32(560), root.W-left-right-24)
+		height := min(float32(480), b.Bounds().Y-top-20)
 		panel.AttachTo(b, ui.AnchorTopRight, ui.AnchorBottomRight).Margin(0, 0, 8, 0).
 			Width(width).Padding(10).Background(pals.Surface).Border(1, pals.Border).Radius(12).
 			Shadow(0, 4, 16, 0, ui.RGBA(0, 0, 0, 0.16)).Label(tr("Agent tasks"))

@@ -66,7 +66,7 @@ func (m *App) desktopFloatView(c *ui.Context) {
 	if p == nil || !p.Floating || m.Router().Path() == "/desktop" {
 		return
 	}
-	root, safe, pal := c.Root().Bounds(), c.SafeArea(), m.Pal
+	root, safe, pal := c.Root().Bounds(), safeAreaOf(c), m.Pal
 	if root.W <= 0 || root.H <= 0 {
 		return
 	}

@@ -23,7 +23,7 @@ func TestMobileWebServiceNavigation(t *testing.T) {
 				m.Draft = "保留草稿"
 				originalPath, originalThread := m.Router().Path(), m.Open
 				tt := ui.NewTester(m.ViewRoot, width, 844)
-				tt.SetSafeArea(ui.SafeArea{Top: 59, Bottom: 34})
+				setSafeInsets(tt, safeInsets{Top: 59, Bottom: 34})
 				tt.SetPreferences(ui.Preferences{TextScale: 1.8})
 				tt.Frame()
 				if err := tt.Click("More"); err != nil {
@@ -87,7 +87,7 @@ func TestMobileWebServicesListKeepsConversationProject(t *testing.T) {
 			m.OpenThread(m.State.Projects[1].Threads[0])
 			m.Draft = "保留草稿"
 			tt := ui.NewTester(m.ViewRoot, width, 844)
-			tt.SetSafeArea(ui.SafeArea{Top: 59, Bottom: 34})
+			setSafeInsets(tt, safeInsets{Top: 59, Bottom: 34})
 			tt.SetPreferences(ui.Preferences{TextScale: 1.8})
 			tt.Frame()
 			if err := tt.Click("More"); err != nil {

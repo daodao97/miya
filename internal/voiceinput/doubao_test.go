@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/plugins/microphone"
 )
 
 func TestTranscriptRevisesSentencesAndHandlesCumulativeBackend(t *testing.T) {
@@ -48,12 +48,12 @@ func TestParseResponseRejectsTruncationAndKeepsUnknownFields(t *testing.T) {
 
 func TestCaptureOverflowClosesBoundedBuffer(t *testing.T) {
 	s := &recording{audio: make(chan []byte, 1)}
-	s.capture(mygo.MicrophoneChunk{PCM: []byte{1, 2}})
-	s.capture(mygo.MicrophoneChunk{PCM: []byte{3, 4}})
+	s.capture(microphone.Chunk{PCM: []byte{1, 2}})
+	s.capture(microphone.Chunk{PCM: []byte{3, 4}})
 	if !s.closed || s.captureError == nil {
 		t.Fatal("overflow did not end capture")
 	}
-	s.capture(mygo.MicrophoneChunk{PCM: []byte{5, 6}})
+	s.capture(microphone.Chunk{PCM: []byte{5, 6}})
 	if b := <-s.audio; len(b) != 2 || b[0] != 1 {
 		t.Fatal("capture corrupted buffered audio")
 	}

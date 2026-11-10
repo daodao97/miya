@@ -211,7 +211,7 @@ func TestMobileDrawerFooterAtLargeTextSize(t *testing.T) {
 	for _, width := range []int{320, 390} {
 		m := mobileHomeFixture()
 		tt := ui.NewTester(m.ViewRoot, width, 844)
-		tt.SetSafeArea(ui.SafeArea{Top: 59, Bottom: 34})
+		setSafeInsets(tt, safeInsets{Top: 59, Bottom: 34})
 		tt.SetPreferences(ui.Preferences{TextScale: 1.8})
 		openMobileDrawer(t, tt)
 		newThread, newOK := tt.Find("New thread")
@@ -233,7 +233,7 @@ func TestMobileHomeSnapshot(t *testing.T) {
 		m := mobileHomeFixture()
 		tt := ui.NewTester(m.ViewRoot, 390, 844)
 		tt.SetDark(dark)
-		tt.SetSafeArea(ui.SafeArea{Top: 59, Bottom: 34})
+		setSafeInsets(tt, safeInsets{Top: 59, Bottom: 34})
 		tt.Frame()
 		name := "mobile-home-light"
 		if dark {
