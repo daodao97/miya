@@ -23,7 +23,11 @@ func (app *App) workspaceSelector(c *ui.Context) {
 			symbol = "server"
 		}
 		widgets.Icon(c, symbol, 15, widgets.Muted)
-		ui.Text(c, name).Grow(1).MinWidth(0).FontSize(12).SingleLine().Ellipsis("…")
+		// The local workspace is identified by its icon alone; the menu and
+		// tooltip still name it.
+		if current.ID != workspaces.Local {
+			ui.Text(c, name).Grow(1).MinWidth(0).FontSize(12).SingleLine().Ellipsis("…")
+		}
 		widgets.Icon(c, "chevron-down", 11, widgets.Faint)
 	})
 	button.PopoverMenuButton(func(menu *ui.Menu) {
