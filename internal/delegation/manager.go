@@ -89,7 +89,7 @@ func (m *Manager) PendingReceivers() []string {
 	seen := map[string]bool{}
 	var refs []string
 	for _, d := range m.view.Load().Deliveries {
-		if d.State == "pending" && d.Resolution == "" && !seen[d.Notify] {
+		if d.State == NotifyPending && d.Resolution == "" && !seen[d.Notify] {
 			refs = append(refs, d.Notify)
 			seen[d.Notify] = true
 		}
@@ -251,17 +251,17 @@ func validateSnapshot(s Snapshot) error {
 		if !hashPattern.MatchString(t.RequestHash) || !backendPattern.MatchString(t.Agent) || !filepath.IsAbs(t.Workspace) || t.Depth < 1 || t.Depth > 2 || t.CreatedAt.IsZero() {
 			return fmt.Errorf("invalid task metadata")
 		}
-		if t.Resolution != "" && t.Resolution != "abandoned" {
+		if t.Resolution != "" && t.Resolution != ResolutionAbandoned {
 			return fmt.Errorf("invalid task resolution")
 		}
-		if t.SubmissionPhase != "" && t.SubmissionPhase != "prepared" && t.SubmissionPhase != "submitting" {
+		if !t.SubmissionPhase.valid() {
 			return fmt.Errorf("invalid task submission phase")
 		}
 		if Terminal(t.State) {
-			if t.FinishedAt.IsZero() || (t.Result.Availability != "available" && t.Result.Availability != "unavailable" && t.Result.Availability != "expired") {
+			if t.FinishedAt.IsZero() || (t.Result.Availability != ResultAvailable && t.Result.Availability != ResultUnavailable && t.Result.Availability != ResultExpired) {
 				return fmt.Errorf("invalid terminal result")
 			}
-		} else if !t.FinishedAt.IsZero() || t.Result.Availability != "pending" {
+		} else if !t.FinishedAt.IsZero() || t.Result.Availability != ResultPending {
 			return fmt.Errorf("invalid active task result")
 		}
 		source, ok := referenceSource(t.From)
@@ -311,20 +311,17 @@ func validateSnapshot(s Snapshot) error {
 			return err
 		}
 	}
-	validNotificationState := func(state string) bool {
-		return state == "pending" || state == "submitting" || state == "delivered" || state == "cancelled" || state == "expired" || state == "needsAttention"
-	}
 	for key, w := range s.Watches {
 		t, ok := s.Tasks[w.TaskID]
-		if !ok || key != watchKey(w.TaskID, w.Notify) || !canAccess(s, w.Notify, t) || (w.State != "watching" && !validNotificationState(w.State)) {
+		if !ok || key != watchKey(w.TaskID, w.Notify) || !canAccess(s, w.Notify, t) || !w.State.validWatch() {
 			return fmt.Errorf("invalid task watch")
 		}
 	}
 	for id, d := range s.Deliveries {
-		if d.SubmissionPhase != "" && d.SubmissionPhase != "prepared" && d.SubmissionPhase != "submitting" || d.Resolution != "" && d.Resolution != "abandoned" {
+		if !d.SubmissionPhase.valid() || d.Resolution != "" && d.Resolution != ResolutionAbandoned {
 			return fmt.Errorf("invalid delivery submission phase or resolution")
 		}
-		if id != d.ID || !deliveryIDPattern.MatchString(id) || !validNotificationState(d.State) || d.CreatedAt.IsZero() || d.Attempts < 0 {
+		if id != d.ID || !deliveryIDPattern.MatchString(id) || !d.State.validDelivery() || d.CreatedAt.IsZero() || d.Attempts < 0 {
 			return fmt.Errorf("invalid delivery identity")
 		}
 		seen := map[string]bool{}
@@ -535,10 +532,10 @@ func (m *Manager) Create(in StartInput) (Task, error) {
 		if len(runes) > 120 {
 			title = string(runes[:120])
 		}
-		t := Task{ID: id, RequestID: in.RequestID, RequestHash: hash, From: in.From, Target: in.Target, NewSession: in.Target == "", ParentTaskID: in.ParentTaskID, PreviousTaskID: in.PreviousTaskID, Depth: depth, Agent: in.Agent, Workspace: in.Workspace, Title: title, Prompt: in.Prompt, Snapshot: in.Snapshot, Config: in.Effective, Requested: in.Requested, State: state, SubmissionPhase: "prepared", Result: Result{Availability: "pending"}, CreatedAt: m.now()}
+		t := Task{ID: id, RequestID: in.RequestID, RequestHash: hash, From: in.From, Target: in.Target, NewSession: in.Target == "", ParentTaskID: in.ParentTaskID, PreviousTaskID: in.PreviousTaskID, Depth: depth, Agent: in.Agent, Workspace: in.Workspace, Title: title, Prompt: in.Prompt, Snapshot: in.Snapshot, Config: in.Effective, Requested: in.Requested, State: state, SubmissionPhase: PhasePrepared, Result: Result{Availability: ResultPending}, CreatedAt: m.now()}
 		s.Tasks[id] = t
 		if in.Notify {
-			s.Watches[watchKey(id, in.From)] = Watch{id, in.From, "watching"}
+			s.Watches[watchKey(id, in.From)] = Watch{id, in.From, NotifyWatching}
 		}
 		return nil
 	})

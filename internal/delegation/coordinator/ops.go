@@ -304,8 +304,8 @@ func applyTaskNotification(v map[string]any, w dg.Watch, d dg.Delivery, paused b
 	}
 	v["delivery_id"], v["delivery_state"] = d.ID, d.State
 	v["delivery_resolution"], v["delivery_reason"] = d.Resolution, d.Reason
-	if d.Resolution == "abandoned" {
-		v["notification"], v["delivery_reason"] = "abandoned", d.ResolutionReason
+	if d.Resolution == dg.ResolutionAbandoned {
+		v["notification"], v["delivery_reason"] = dg.ResolutionAbandoned, d.ResolutionReason
 	}
 }
 

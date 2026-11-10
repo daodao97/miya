@@ -109,16 +109,16 @@ func validateDocument(d document) error {
 		}
 		seen[e.ID] = e.Version
 		switch e.State {
-		case "active", "superseded", "forgotten", "promoted", "conflicted":
+		case EntryActive, EntrySuperseded, EntryForgotten, EntryPromoted, EntryConflicted:
 		default:
 			return errors.New("Unknown memory status")
 		}
-		if e.State != "forgotten" {
+		if e.State != EntryForgotten {
 			if err := validate(Mutation{ID: e.ID, Version: e.Version, Kind: e.Kind, Content: e.Content, TaskKey: e.TaskKey, Sources: e.Sources, ObservedAt: e.ObservedAt, ValidUntil: e.ValidUntil}, d.Scope); err != nil {
 				return err
 			}
 		}
-		if e.State == "forgotten" && (e.Content != "" || len(e.Sources) != 0) {
+		if e.State == EntryForgotten && (e.Content != "" || len(e.Sources) != 0) {
 			return errors.New("Forgotten entry still contains content")
 		}
 	}
@@ -127,7 +127,7 @@ func validateDocument(d document) error {
 			return errors.New("Invalid extraction task identity or retry count")
 		}
 		switch j.State {
-		case "pending", "running":
+		case JobPending, JobRunning:
 			if len(j.Evidence) == 0 {
 				return errors.New("Extraction task is missing source evidence")
 			}
@@ -136,7 +136,7 @@ func validateDocument(d document) error {
 					return errors.New("Invalid extraction source")
 				}
 			}
-		case "completed", "failed", "canceled", "stale":
+		case JobCompleted, JobFailed, JobCanceled, JobStale:
 			if len(j.Evidence) > 0 || len(j.Candidates) > 0 {
 				return errors.New("Completed extraction task still contains evidence content")
 			}
@@ -219,7 +219,7 @@ func target(d document, id string, version uint64) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	if d.Entries[i].State != "active" && d.Entries[i].State != "conflicted" {
+	if d.Entries[i].State != EntryActive && d.Entries[i].State != EntryConflicted {
 		return 0, fmt.Errorf("Memory is %s and cannot be modified", d.Entries[i].State)
 	}
 	return i, nil
@@ -262,8 +262,8 @@ func (s *Store) Configure(scope Scope, settings Settings) error {
 	d.Settings = settings
 	if settings.Disabled || !settings.AutoExtract {
 		for i := range d.Jobs {
-			if d.Jobs[i].State == "pending" || d.Jobs[i].State == "running" {
-				finishJob(&d.Jobs[i], "canceled", "Automatic extraction is disabled for this project", s.now())
+			if d.Jobs[i].State.Open() {
+				finishJob(&d.Jobs[i], JobCanceled, "Automatic extraction is disabled for this project", s.now())
 			}
 		}
 	}
@@ -283,14 +283,14 @@ func (s *Store) save(scope Scope, m Mutation) (Entry, error) {
 		return Entry{}, err
 	}
 	now := s.now()
-	e := Entry{ID: m.ID, Version: 1, Scope: scope, Kind: m.Kind, Content: m.Content, TaskKey: m.TaskKey, Sources: m.Sources, ObservedAt: m.ObservedAt, ValidUntil: m.ValidUntil, State: "active", CreatedAt: now, UpdatedAt: now}
+	e := Entry{ID: m.ID, Version: 1, Scope: scope, Kind: m.Kind, Content: m.Content, TaskKey: m.TaskKey, Sources: m.Sources, ObservedAt: m.ObservedAt, ValidUntil: m.ValidUntil, State: EntryActive, CreatedAt: now, UpdatedAt: now}
 	if m.ID != "" {
 		i, err := target(d, m.ID, m.Version)
 		if err != nil {
 			return Entry{}, err
 		}
 		old := d.Entries[i]
-		d.Entries[i].State = "superseded"
+		d.Entries[i].State = EntrySuperseded
 		e.Version, e.Supersedes, e.CreatedAt = old.Version+1, old.Version, old.CreatedAt
 	} else {
 		e.ID, err = newID()
@@ -320,7 +320,7 @@ func (s *Store) Forget(scope Scope, id string, version uint64) (Entry, error) {
 	if err != nil {
 		return Entry{}, err
 	}
-	if d.Entries[i].State == "forgotten" {
+	if d.Entries[i].State == EntryForgotten {
 		return Entry{}, errors.New("Memory forgotten")
 	}
 	e := s.forgetIn(&d, scope, i)
@@ -351,7 +351,7 @@ func (s *Store) forgetIn(d *document, scope Scope, i int) Entry {
 			mark.Sources = append(mark.Sources, src)
 		}
 	}
-	e := Entry{ID: id, Version: old.Version + 1, Scope: scope, State: "forgotten", CreatedAt: old.CreatedAt, UpdatedAt: s.now()}
+	e := Entry{ID: id, Version: old.Version + 1, Scope: scope, State: EntryForgotten, CreatedAt: old.CreatedAt, UpdatedAt: s.now()}
 	d.Entries = append(keep, e)
 	d.Tombstones = append(d.Tombstones, mark)
 	scrubForgottenJobs(d, id, mark.Sources, s.now())
@@ -374,7 +374,7 @@ func (s *Store) Delete(scope Scope, id string, version uint64) error {
 	if err != nil {
 		return err
 	}
-	if d.Entries[i].State != "forgotten" {
+	if d.Entries[i].State != EntryForgotten {
 		s.forgetIn(&d, scope, i)
 	}
 	keep := d.Entries[:0]
@@ -405,7 +405,7 @@ func (s *Store) promote(scope Scope, id string, version uint64, before func() er
 	if err != nil {
 		return Entry{}, err
 	}
-	if d.Entries[i].State != "active" {
+	if d.Entries[i].State != EntryActive {
 		return Entry{}, errors.New("Only active memories can be promoted")
 	}
 	if before != nil {
@@ -416,9 +416,9 @@ func (s *Store) promote(scope Scope, id string, version uint64, before func() er
 	e := d.Entries[i]
 	e.Version++
 	e.Supersedes = version
-	e.State = "promoted"
+	e.State = EntryPromoted
 	e.UpdatedAt = s.now()
-	d.Entries[i].State = "superseded"
+	d.Entries[i].State = EntrySuperseded
 	d.Entries = append(d.Entries, e)
 	if err = s.commit(d); err != nil {
 		if before != nil {
@@ -446,7 +446,7 @@ func (s *Store) PromotePreference(scope Scope, id string, version uint64) (Entry
 		return Entry{}, err
 	}
 	old := effective(d.Entries[i], s.now())
-	if old.Kind != "preference" || old.State != "active" {
+	if old.Kind != "preference" || old.State != EntryActive {
 		return Entry{}, errors.New("Only active project preferences can be promoted to user scope")
 	}
 	e, err := s.save(UserScope(), Mutation{Kind: old.Kind, Content: old.Content, TaskKey: old.TaskKey, Sources: old.Sources, ObservedAt: old.ObservedAt, ValidUntil: old.ValidUntil})

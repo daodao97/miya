@@ -222,7 +222,7 @@ func (p *CollaborationPanel) drawDetail(c *ui.Context, v CollaborationPanelView,
 	ui.Text(c, msgfmt.NativeText(task.Title)).FontSize(13).FontWeight(600).TextColor(pals.Ink).SingleLine().Ellipsis("…").FillWidth()
 	ui.Text(c, model.AgentName(task.Agent)+" · "+collaborationStateLabel(task.State)).FontSize(12).TextColor(pals.Muted)
 	ui.Text(c, tr("Shared workspace: ")+task.Workspace).FontSize(11).TextColor(pals.Muted).SingleLine().Ellipsis("…").FillWidth().Tooltip(task.Workspace)
-	if task.Resolution == "abandoned" {
+	if task.Resolution == dg.ResolutionAbandoned {
 		ui.Text(c, tr("Tracking stopped · Native execution is still unverified")).FontSize(12).TextColor(pals.Muted).FillWidth().Wrap()
 	}
 	if task.RecheckError != "" {
@@ -236,7 +236,7 @@ func (p *CollaborationPanel) drawDetail(c *ui.Context, v CollaborationPanelView,
 	}
 	ui.Scroll(c.Key("result")).FillWidth().MaxHeight(180).Children(func() {
 		ui.Column(c).FillWidth().MinWidth(0).Gap(6).Children(func() {
-			if task.Result.Availability == "expired" {
+			if task.Result.Availability == dg.ResultExpired {
 				ui.Text(c, tr("The saved result has expired")).FontSize(12).TextColor(pals.Muted)
 			}
 			text := task.Result.Text
@@ -269,12 +269,12 @@ func (p *CollaborationPanel) drawDetail(c *ui.Context, v CollaborationPanelView,
 		}
 		if task.Notification == "watching" || task.Notification == "pending" {
 			button(c, "unwatch", tr("Keep result only"), locked, func() { p.Submit("unwatch_task", map[string]any{"task_id": task.ID}, v.Call) })
-		} else if !dg.Terminal(task.State) && task.Resolution != "abandoned" {
+		} else if !dg.Terminal(task.State) && task.Resolution != dg.ResolutionAbandoned {
 			button(c, "watch", tr("Return results automatically"), locked, func() { p.Submit("watch_task", map[string]any{"task_id": task.ID}, v.Call) })
 		}
 		if task.State == dg.NeedsAttention {
 			button(c, "recheck", tr("Recheck execution"), locked, func() { p.Submit("resolve_task", map[string]any{"task_id": task.ID, "action": "recheck"}, v.Call) })
-			if task.Resolution != "abandoned" {
+			if task.Resolution != dg.ResolutionAbandoned {
 				button(c, "abandon", tr("Stop tracking"), locked, func() { p.abandon = task.ID })
 			}
 		}

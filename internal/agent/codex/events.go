@@ -211,7 +211,7 @@ func (b Adapter) Handle(f codex.Frame) {
 			// messages immediately after an interrupted turn.
 			t.Status = ""
 			if e.Turn.Status == "interrupted" {
-				t.Status = "Stopped"
+				t.Status = model.StatusStopped
 			}
 			if e.Turn.Status == "failed" {
 				t.Status = "Turn failed"

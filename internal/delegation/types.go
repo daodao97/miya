@@ -70,38 +70,38 @@ type Result struct {
 }
 
 type Task struct {
-	ID               string    `json:"task_id"`
-	RequestID        string    `json:"request_id"`
-	RequestHash      string    `json:"request_hash"`
-	From             string    `json:"from"`
-	Target           string    `json:"thread,omitempty"`
-	NewSession       bool      `json:"new_session"`
-	ParentTaskID     string    `json:"parent_task_id,omitempty"`
-	PreviousTaskID   string    `json:"previous_task_id,omitempty"`
-	Depth            int       `json:"depth"`
-	Agent            string    `json:"agent"`
-	Workspace        string    `json:"workspace"`
-	Title            string    `json:"title"`
-	Prompt           string    `json:"task,omitempty"`
-	Snapshot         string    `json:"snapshot,omitempty"`
-	Config           Config    `json:"configuration"`
-	Requested        Config    `json:"requested_configuration,omitempty"`
-	State            State     `json:"state"`
-	WaitCause        string    `json:"wait_cause,omitempty"`
-	CancelRequested  bool      `json:"cancel_requested,omitempty"`
-	Resolution       string    `json:"resolution,omitempty"`
-	ResolutionReason string    `json:"resolution_reason,omitempty"`
-	NativeTurnID     string    `json:"native_turn_id,omitempty"`
-	SessionEpoch     string    `json:"session_epoch,omitempty"`
-	SubmissionPhase  string    `json:"submission_phase,omitempty"`
-	Progress         string    `json:"progress,omitempty"`
-	RecheckError     string    `json:"recheck_error,omitempty"`
-	Result           Result    `json:"result"`
-	Revision         uint64    `json:"revision"`
-	LastSequence     uint64    `json:"last_sequence,omitempty"`
-	CreatedAt        time.Time `json:"created_at"`
-	StartedAt        time.Time `json:"started_at,omitempty"`
-	FinishedAt       time.Time `json:"finished_at,omitempty"`
+	ID               string          `json:"task_id"`
+	RequestID        string          `json:"request_id"`
+	RequestHash      string          `json:"request_hash"`
+	From             string          `json:"from"`
+	Target           string          `json:"thread,omitempty"`
+	NewSession       bool            `json:"new_session"`
+	ParentTaskID     string          `json:"parent_task_id,omitempty"`
+	PreviousTaskID   string          `json:"previous_task_id,omitempty"`
+	Depth            int             `json:"depth"`
+	Agent            string          `json:"agent"`
+	Workspace        string          `json:"workspace"`
+	Title            string          `json:"title"`
+	Prompt           string          `json:"task,omitempty"`
+	Snapshot         string          `json:"snapshot,omitempty"`
+	Config           Config          `json:"configuration"`
+	Requested        Config          `json:"requested_configuration,omitempty"`
+	State            State           `json:"state"`
+	WaitCause        string          `json:"wait_cause,omitempty"`
+	CancelRequested  bool            `json:"cancel_requested,omitempty"`
+	Resolution       string          `json:"resolution,omitempty"`
+	ResolutionReason string          `json:"resolution_reason,omitempty"`
+	NativeTurnID     string          `json:"native_turn_id,omitempty"`
+	SessionEpoch     string          `json:"session_epoch,omitempty"`
+	SubmissionPhase  SubmissionPhase `json:"submission_phase,omitempty"`
+	Progress         string          `json:"progress,omitempty"`
+	RecheckError     string          `json:"recheck_error,omitempty"`
+	Result           Result          `json:"result"`
+	Revision         uint64          `json:"revision"`
+	LastSequence     uint64          `json:"last_sequence,omitempty"`
+	CreatedAt        time.Time       `json:"created_at"`
+	StartedAt        time.Time       `json:"started_at,omitempty"`
+	FinishedAt       time.Time       `json:"finished_at,omitempty"`
 }
 
 type Event struct {
@@ -110,7 +110,7 @@ type Event struct {
 	NativeTurnID     string
 	NativeResultID   string // Claude root result UUID, when provided by the native stream
 	SessionEpoch     string
-	SubmissionPhase  string `json:",omitempty"`
+	SubmissionPhase  SubmissionPhase `json:",omitempty"`
 	State            State
 	WaitCause        string
 	Progress         string
@@ -120,25 +120,25 @@ type Event struct {
 }
 
 type Watch struct {
-	TaskID string `json:"task_id"`
-	Notify string `json:"notify"`
-	State  string `json:"state"`
+	TaskID string      `json:"task_id"`
+	Notify string      `json:"notify"`
+	State  NotifyState `json:"state"`
 }
 
 type Delivery struct {
-	ID               string    `json:"delivery_id"`
-	TaskIDs          []string  `json:"task_ids"`
-	Notify           string    `json:"notify"`
-	State            string    `json:"state"`
-	TargetTurnID     string    `json:"target_turn_id,omitempty"`
-	Reason           string    `json:"reason,omitempty"`
-	CreatedAt        time.Time `json:"created_at"`
-	ExpiresAt        time.Time `json:"expires_at"`
-	Attempts         int       `json:"attempts,omitempty"`
-	NextAttempt      time.Time `json:"next_attempt,omitempty"`
-	SubmissionPhase  string    `json:"submission_phase,omitempty"`
-	Resolution       string    `json:"resolution,omitempty"`
-	ResolutionReason string    `json:"resolution_reason,omitempty"`
+	ID               string          `json:"delivery_id"`
+	TaskIDs          []string        `json:"task_ids"`
+	Notify           string          `json:"notify"`
+	State            NotifyState     `json:"state"`
+	TargetTurnID     string          `json:"target_turn_id,omitempty"`
+	Reason           string          `json:"reason,omitempty"`
+	CreatedAt        time.Time       `json:"created_at"`
+	ExpiresAt        time.Time       `json:"expires_at"`
+	Attempts         int             `json:"attempts,omitempty"`
+	NextAttempt      time.Time       `json:"next_attempt,omitempty"`
+	SubmissionPhase  SubmissionPhase `json:"submission_phase,omitempty"`
+	Resolution       string          `json:"resolution,omitempty"`
+	ResolutionReason string          `json:"resolution_reason,omitempty"`
 }
 
 // Operation receipts survive later state changes. Retrying an old watch must

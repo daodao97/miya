@@ -54,3 +54,17 @@ func TestDesktopPresenceSuppressesPhone(t *testing.T) {
 		t.Fatal("away desktop suppressed phone")
 	}
 }
+
+// Adapters store Status untranslated. A stopped turn must stay silent in
+// every interface language, and must not get a completion body.
+func TestStoppedTurnIsSilentRegardlessOfLocale(t *testing.T) {
+	old := model.Thread{ID: 7, Busy: true}
+	next := model.Thread{ID: 7, CompletedAtMs: 42, Status: model.StatusStopped}
+	if _, ok := Completion(old, next); ok {
+		t.Fatal("notified manual stop")
+	}
+	UpdateCompletionBody(old, &next)
+	if next.CompletionNoticeBody != "" {
+		t.Fatalf("stopped turn got a completion body: %q", next.CompletionNoticeBody)
+	}
+}

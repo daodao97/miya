@@ -89,17 +89,17 @@ func TestServiceSettingsIdleRestartAndReconnect(t *testing.T) {
 	if err := tt.Click("Restart"); err != nil {
 		t.Fatal(err)
 	}
-	waitRestartSettings(t, d, tt, func() bool { return app.ServiceRestart.Requested && !app.ServiceRestart.Checking })
-	if got := methods(); !reflect.DeepEqual(got, []string{"hello", "quitWhenIdle"}) || app.ServiceRestart.Confirming {
+	waitRestartSettings(t, d, tt, func() bool { return app.ServiceRestart.Phase == desktopui.RestartWaiting })
+	if got := methods(); !reflect.DeepEqual(got, []string{"hello", "quitWhenIdle"}) || app.ServiceRestart.Phase == desktopui.RestartConfirming {
 		t.Fatalf("idle restart did not use the safe shutdown path: %v", got)
 	}
-	if app.ServiceRestart.Completed {
+	if app.ServiceRestart.Phase == desktopui.RestartDone {
 		t.Fatal("shutdown alone was reported as a successful restart")
 	}
 	next, _ := restartTestClient(t, svcproto.Hello{PID: 200}, "")
 	app.C.(*controller.Controller).Remote = next
 	tt.Frame()
-	waitRestartSettings(t, d, tt, func() bool { return app.ServiceRestart.Completed })
+	waitRestartSettings(t, d, tt, func() bool { return app.ServiceRestart.Phase == desktopui.RestartDone })
 	if !tt.HasText("Background service restarted and reconnected.") || app.ServiceRestart.Err != "" {
 		t.Fatal("new service process was not verified")
 	}
@@ -118,37 +118,37 @@ func TestServiceSettingsBusyRestartRequiresChoice(t *testing.T) {
 	if err := tt.Click("Restart"); err != nil {
 		t.Fatal(err)
 	}
-	waitRestartSettings(t, d, tt, func() bool { return app.ServiceRestart.Confirming })
+	waitRestartSettings(t, d, tt, func() bool { return app.ServiceRestart.Phase == desktopui.RestartConfirming })
 	if !reflect.DeepEqual(methods(), []string{"hello"}) || !tt.HasText("Background tasks are still running. Restarting now interrupts tasks across all projects and briefly disconnects phones.") {
 		t.Fatal("busy service was stopped before the user chose how to restart")
 	}
 	if err := tt.Click("Cancel"); err != nil {
 		t.Fatal(err)
 	}
-	if app.ServiceRestart.Confirming || !reflect.DeepEqual(methods(), []string{"hello"}) {
+	if app.ServiceRestart.Phase == desktopui.RestartConfirming || !reflect.DeepEqual(methods(), []string{"hello"}) {
 		t.Fatal("canceling a restart sent a shutdown request")
 	}
 	if err := tt.Click("Restart"); err != nil {
 		t.Fatal(err)
 	}
-	waitRestartSettings(t, d, tt, func() bool { return app.ServiceRestart.Confirming })
+	waitRestartSettings(t, d, tt, func() bool { return app.ServiceRestart.Phase == desktopui.RestartConfirming })
 	if err := tt.Click("Restart when idle"); err != nil {
 		t.Fatal(err)
 	}
-	waitRestartSettings(t, d, tt, func() bool { return app.ServiceRestart.Requested && !app.ServiceRestart.Checking })
+	waitRestartSettings(t, d, tt, func() bool { return app.ServiceRestart.Phase == desktopui.RestartWaiting })
 	if !desktopui.ServiceConnected(cl) || !reflect.DeepEqual(methods(), []string{"hello", "hello", "quitWhenIdle"}) {
 		t.Fatal("waiting for idle interrupted the busy service")
 	}
 	if err := tt.Click("Restart now…"); err != nil {
 		t.Fatal(err)
 	}
-	if !app.ServiceRestart.Confirming || len(methods()) != 3 {
+	if app.ServiceRestart.Phase != desktopui.RestartConfirming || len(methods()) != 3 {
 		t.Fatal("overriding a scheduled restart skipped confirmation")
 	}
 	if err := tt.Click("Restart now"); err != nil {
 		t.Fatal(err)
 	}
-	waitRestartSettings(t, d, tt, func() bool { return !app.ServiceRestart.Checking && !desktopui.ServiceConnected(cl) })
+	waitRestartSettings(t, d, tt, func() bool { return !app.ServiceRestart.Phase.Calling() && !desktopui.ServiceConnected(cl) })
 	if got := methods(); !reflect.DeepEqual(got, []string{"hello", "hello", "quitWhenIdle", "quit"}) {
 		t.Fatalf("explicit restart did not request normal service shutdown: %v", got)
 	}
@@ -163,7 +163,7 @@ func TestServiceSettingsFailuresAndStandaloneMode(t *testing.T) {
 		t.Fatal("standalone mode did not explain why restart is unavailable")
 	}
 	_ = tt.Click("Restart")
-	if app.ServiceRestart.Checking {
+	if app.ServiceRestart.Phase.Calling() {
 		t.Fatal("standalone mode tried to restart a service")
 	}
 	cl, _ := restartTestClient(t, svcproto.Hello{}, "test hello failure")
@@ -173,16 +173,16 @@ func TestServiceSettingsFailuresAndStandaloneMode(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitRestartSettings(t, d, tt, func() bool { return app.ServiceRestart.Err != "" })
-	if !tt.HasText("Restart failed: test hello failure") || app.ServiceRestart.Checking || app.ServiceRestart.Requested {
+	if !tt.HasText("Restart failed: test hello failure") || app.ServiceRestart.Phase.Calling() || app.ServiceRestart.Pending() {
 		t.Fatal("restart error was hidden or left the controls disabled")
 	}
 	old, _ := restartTestClient(t, svcproto.Hello{PID: 100}, "")
 	next, _ := restartTestClient(t, svcproto.Hello{PID: 100}, "")
-	app.ServiceRestart = desktopui.ServiceRestartUI{Client: old, Pid: 100, Requested: true}
+	app.ServiceRestart = desktopui.ServiceRestartUI{Client: old, Pid: 100, Phase: desktopui.RestartWaiting}
 	app.C.(*controller.Controller).Remote = next
 	tt.Frame()
 	waitRestartSettings(t, d, tt, func() bool { return app.ServiceRestart.Err != "" })
-	if app.ServiceRestart.Completed || !strings.Contains(app.ServiceRestart.Err, "has not exited") {
+	if app.ServiceRestart.Phase == desktopui.RestartDone || !strings.Contains(app.ServiceRestart.Err, "has not exited") {
 		t.Fatal("reconnecting to the same process was reported as a restart")
 	}
 }

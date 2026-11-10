@@ -17,7 +17,7 @@ type Notice struct{ ID, Thread, Title, Body, ServerID, Agent, Project string }
 // Completion is the notice for a conversation that just finished, if it
 // finished on its own.
 func Completion(old, next model.Thread) (Notice, bool) {
-	if !old.Busy || next.Busy || next.CompletedAtMs == 0 || next.Status == tr("Stopped") {
+	if !old.Busy || next.Busy || next.CompletedAtMs == 0 || next.StoppedByUser() {
 		return Notice{}, false
 	}
 	title := tr("Miya · Completed")

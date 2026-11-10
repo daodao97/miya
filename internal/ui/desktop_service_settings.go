@@ -10,74 +10,116 @@ import (
 	"miya/internal/widgets"
 )
 
-type ServiceRestartUI struct {
-	Client     *svcclient.Client
-	Pid        int
-	Checking   bool
-	Confirming bool
-	Requested  bool
-	waitIdle   bool
-	Completed  bool
-	Err        string
+// RestartPhase is where a background service restart stands. Exactly one
+// phase holds at a time; the hello and quit calls run between phases.
+type RestartPhase uint8
+
+const (
+	RestartIdle       RestartPhase = iota
+	RestartChecking                // hello: is the service busy?
+	RestartConfirming              // busy: the person chooses now, when idle, or cancel
+	RestartRequesting              // quit or quitWhenIdle is in flight
+	RestartWaiting                 // the service agreed to exit; watchService reconnects
+	RestartVerifying               // reconnected: hello must report a different PID
+	RestartDone
+	RestartFailed
+)
+
+// Calling reports whether a service call for this restart is in flight.
+func (p RestartPhase) Calling() bool {
+	return p == RestartChecking || p == RestartRequesting || p == RestartVerifying
 }
+
+type ServiceRestartUI struct {
+	Client *svcclient.Client
+	Pid    int
+	Phase  RestartPhase
+	// back is where Cancel in RestartConfirming returns: RestartIdle, or
+	// RestartWaiting when the person is overriding a scheduled restart.
+	back RestartPhase
+	// whenIdle is true when the last request asked the service to exit
+	// only after its tasks finish.
+	whenIdle bool
+	Err      string
+}
+
+// Pending reports whether a restart has been requested and not yet settled.
+func (s *ServiceRestartUI) Pending() bool {
+	switch s.Phase {
+	case RestartRequesting, RestartWaiting, RestartVerifying:
+		return true
+	case RestartConfirming:
+		return s.back == RestartWaiting
+	}
+	return false
+}
+
+func (s *ServiceRestartUI) fail(err string) { s.Phase, s.Err = RestartFailed, err }
 
 func ServiceConnected(cl *svcclient.Client) bool { return cl.Connected() }
 
 func (app *App) checkServiceRestart() {
 	cl := app.C.State().Remote
-	if app.ServiceRestart.Checking || !ServiceConnected(cl) {
+	if app.ServiceRestart.Phase.Calling() || !ServiceConnected(cl) {
 		return
 	}
-	app.ServiceRestart = ServiceRestartUI{Client: cl, Checking: true}
+	app.ServiceRestart = ServiceRestartUI{Client: cl, Phase: RestartChecking}
 	go func() {
 		var h svcproto.Hello
 		err := cl.Call("hello", nil, &h)
 		app.C.Dispatch(func() {
 			s := &app.ServiceRestart
-			s.Checking = false
+			if s.Phase != RestartChecking || s.Client != cl {
+				return
+			}
 			if app.C.State().Remote != cl && err == nil {
 				err = svcproto.ErrClosed
 			}
 			if err != nil {
-				s.Err = err.Error()
+				s.fail(err.Error())
 				return
 			}
 			s.Pid = h.PID
 			if h.Busy {
-				s.Confirming = true
-			} else {
-				// Recheck idleness at the service: work may have started since hello.
-				app.sendServiceRestart(true)
+				s.Phase, s.back = RestartConfirming, RestartIdle
+				return
 			}
+			// Recheck idleness at the service: work may have started since hello.
+			s.Phase = RestartIdle
+			app.sendServiceRestart(true)
 		})
 	}()
 }
 
-func (app *App) sendServiceRestart(waitIdle bool) {
+func (app *App) sendServiceRestart(whenIdle bool) {
 	s := &app.ServiceRestart
 	cl := s.Client
-	if s.Checking {
+	if s.Phase.Calling() {
 		return
 	}
 	if cl != app.C.State().Remote || !ServiceConnected(cl) {
-		s.Confirming, s.Requested, s.Err = false, false, svcproto.ErrClosed.Error()
+		s.fail(svcproto.ErrClosed.Error())
 		return
 	}
-	s.Confirming, s.Checking, s.Requested, s.waitIdle, s.Err = false, true, true, waitIdle, ""
+	s.Phase, s.whenIdle, s.Err = RestartRequesting, whenIdle, ""
 	op := "quit"
-	if waitIdle {
+	if whenIdle {
 		op = "quitWhenIdle"
 	}
 	go func() {
 		err := cl.Call(op, nil, nil)
 		app.C.Dispatch(func() {
 			s := &app.ServiceRestart
-			s.Checking = false
-			// Shutdown can close the socket before its reply is written. The
-			// reconnect check below must still prove that a new process started.
-			if err != nil && ServiceConnected(cl) {
-				s.Requested, s.Err = false, err.Error()
+			if s.Phase != RestartRequesting || s.Client != cl {
+				return
 			}
+			// Shutdown can close the socket before its reply is written. The
+			// reconnect check must still prove that a new process started.
+			if err != nil && ServiceConnected(cl) {
+				s.fail(err.Error())
+				return
+			}
+			s.Phase = RestartWaiting
 		})
 	}()
 }
@@ -87,27 +129,31 @@ func (app *App) sendServiceRestart(waitIdle bool) {
 func (app *App) updateServiceRestart() {
 	s := &app.ServiceRestart
 	cl := app.C.State().Remote
-	if !s.Requested || s.Checking || cl == s.Client || !ServiceConnected(cl) {
+	waiting := s.Phase == RestartWaiting || s.Phase == RestartConfirming && s.back == RestartWaiting
+	if !waiting || cl == s.Client || !ServiceConnected(cl) {
 		return
 	}
-	s.Checking = true
+	// The old service is gone, so an override choice no longer applies.
+	s.Phase = RestartVerifying
 	go func() {
 		var h svcproto.Hello
 		err := cl.Call("hello", nil, &h)
 		app.C.Dispatch(func() {
 			s := &app.ServiceRestart
-			s.Checking = false
-			if cl != app.C.State().Remote {
-				return // another reconnect is already in progress
-			}
-			if err != nil {
-				s.Requested, s.Err = false, err.Error()
+			if s.Phase != RestartVerifying {
 				return
 			}
-			if h.PID != s.Pid && h.PID > 0 {
-				s.Confirming, s.Requested, s.Completed = false, false, true
-			} else {
-				s.Requested, s.Err = false, tr("The background service has not exited. Try restarting again.")
+			if cl != app.C.State().Remote {
+				s.Phase = RestartWaiting // another reconnect is already in progress
+				return
+			}
+			switch {
+			case err != nil:
+				s.fail(err.Error())
+			case h.PID != s.Pid && h.PID > 0:
+				s.Phase = RestartDone
+			default:
+				s.fail(tr("The background service has not exited. Try restarting again."))
 			}
 		})
 	}()
@@ -119,7 +165,7 @@ func (app *App) ServiceSettings(c *ui.Context) {
 	}
 	app.updateServiceRestart()
 	s := &app.ServiceRestart
-	if s.Requested {
+	if s.Pending() {
 		c.After(time.Second)
 	}
 	widgets.SettingsGroup(c, tr("Background service"), "", func() {
@@ -129,18 +175,20 @@ func (app *App) ServiceSettings(c *ui.Context) {
 		}
 		widgets.SettingRow(c, tr("Restart background service"), help, func() {
 			label := tr("Restart")
-			if s.Checking {
+			if s.Phase.Calling() {
 				label = tr("Working…")
 			}
-			if widgets.SmallButton(c.Key("restart-server"), label, !ServiceConnected(app.C.State().Remote) || s.Checking || s.Confirming || s.Requested).Clicked() {
+			settled := s.Phase == RestartIdle || s.Phase == RestartDone || s.Phase == RestartFailed
+			if widgets.SmallButton(c.Key("restart-server"), label, !ServiceConnected(app.C.State().Remote) || !settled).Clicked() {
 				app.checkServiceRestart()
 			}
 		})
-		if s.Confirming {
+		switch s.Phase {
+		case RestartConfirming:
 			ui.Text(c, tr("Background tasks are still running. Restarting now interrupts tasks across all projects and briefly disconnects phones.")).FontSize(12).TextColor(widgets.WarnInk).LineHeight(1.5)
 			ui.Row(c).Wrap().Gap(8).Children(func() {
 				if widgets.SmallButton(c.Key("cancel-restart"), tr("Cancel"), false).Clicked() {
-					s.Confirming = false
+					s.Phase = s.back
 				}
 				if widgets.SmallButton(c.Key("restart-idle"), tr("Restart when idle"), false).Clicked() {
 					app.sendServiceRestart(true)
@@ -149,20 +197,20 @@ func (app *App) ServiceSettings(c *ui.Context) {
 					app.sendServiceRestart(false)
 				}
 			})
-		} else if s.Err != "" {
+		case RestartFailed:
 			ui.Text(c, tr("Restart failed: ")+s.Err).FontSize(12).TextColor(widgets.Danger)
-		} else if s.Requested {
+		case RestartRequesting, RestartWaiting, RestartVerifying:
 			text := tr("Restarting the background service; waiting to reconnect…")
-			if s.waitIdle {
+			if s.whenIdle {
 				text = tr("Restart scheduled. The window will reconnect after background tasks finish.")
 			}
 			ui.Text(c, text).FontSize(12).TextColor(widgets.Muted)
-			if s.waitIdle && !s.Checking && ServiceConnected(s.Client) {
+			if s.Phase == RestartWaiting && s.whenIdle && ServiceConnected(s.Client) {
 				if widgets.SmallButton(c.Key("override-restart"), tr("Restart now…"), false).Clicked() {
-					s.Confirming = true
+					s.Phase, s.back = RestartConfirming, RestartWaiting
 				}
 			}
-		} else if s.Completed {
+		case RestartDone:
 			ui.Text(c, tr("Background service restarted and reconnected.")).FontSize(12).TextColor(widgets.Success)
 		}
 	})

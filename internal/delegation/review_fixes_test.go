@@ -30,7 +30,7 @@ func TestRecoveryOnlyReleasesProvenPreInputTasks(t *testing.T) {
 			task := create(t, m, in)
 			if err := m.change(func(s *Snapshot) error {
 				v := s.Tasks[task.ID]
-				v.SubmissionPhase = tc.phase
+				v.SubmissionPhase = SubmissionPhase(tc.phase)
 				s.Tasks[v.ID] = v
 				return nil
 			}); err != nil {
@@ -130,7 +130,7 @@ func TestRecoveryRetriesOnlyDeliveryWhoseInputIntentWasNotCommitted(t *testing.T
 			}
 			if err = m.change(func(s *Snapshot) error {
 				v := s.Deliveries[d.ID]
-				v.SubmissionPhase = phase
+				v.SubmissionPhase = SubmissionPhase(phase)
 				s.Deliveries[d.ID] = v
 				return nil
 			}); err != nil {

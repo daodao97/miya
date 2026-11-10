@@ -173,8 +173,8 @@ func validate(m Mutation, scope Scope) error {
 }
 
 func effective(e Entry, now time.Time) Entry {
-	if e.State == "active" && !e.ValidUntil.IsZero() && !now.Before(e.ValidUntil) {
-		e.State = "expired"
+	if e.State == EntryActive && !e.ValidUntil.IsZero() && !now.Before(e.ValidUntil) {
+		e.State = EntryExpired
 	}
 	return e
 }

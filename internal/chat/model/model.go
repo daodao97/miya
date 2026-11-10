@@ -34,6 +34,15 @@ type Message struct {
 	Agents []SubAgent `json:",omitempty"`
 }
 
+// StatusStopped is the Thread.Status every adapter writes when the person
+// stops a turn. Status is stored untranslated and translated when shown, so
+// compare against this value, never against tr("Stopped").
+const StatusStopped = "Stopped"
+
+// StoppedByUser reports whether the last turn ended because the person
+// stopped it.
+func (t Thread) StoppedByUser() bool { return t.Status == StatusStopped }
+
 type Thread struct {
 	ExecutionID          string `json:"executionId,omitempty"`
 	LaunchModel          string `json:"launchModel,omitempty"`

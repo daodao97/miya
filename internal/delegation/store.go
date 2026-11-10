@@ -147,7 +147,7 @@ func (s *Store) Save(state Snapshot) error {
 			index.Tasks[id] = pointer
 			continue
 		}
-		if task.Result.Availability == "expired" {
+		if task.Result.Availability == ResultExpired {
 			if !expiredSummary(task) {
 				return fmt.Errorf("invalid expired task summary")
 			}
@@ -201,7 +201,7 @@ func (s *Store) Save(state Snapshot) error {
 }
 
 func expiredSummary(t Task) bool {
-	return Terminal(t.State) && t.Result.Availability == "expired" && t.Prompt == "" && t.Snapshot == "" && t.Result.Text == "" && t.Result.Error == "" && len(t.Result.Artifacts) == 0
+	return Terminal(t.State) && t.Result.Availability == ResultExpired && t.Prompt == "" && t.Snapshot == "" && t.Result.Text == "" && t.Result.Error == "" && len(t.Result.Artifacts) == 0
 }
 
 // Prune only removes files absent from the successfully committed index. All
@@ -249,7 +249,7 @@ func (s *Store) Prune() error {
 		if entry.IsDir() || entry.Name() != id+".json" || !taskIDPattern.MatchString(id) {
 			continue
 		}
-		if task, ok := s.committedTasks[id]; ok && task.Result.Availability != "expired" {
+		if task, ok := s.committedTasks[id]; ok && task.Result.Availability != ResultExpired {
 			continue
 		}
 		if err := os.Remove(filepath.Join(outcomes, entry.Name())); err != nil && !os.IsNotExist(err) {

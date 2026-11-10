@@ -69,7 +69,7 @@ func (m *Manager) NativeOutcome(id string) (Event, error) {
 	if err != nil {
 		return Event{}, err
 	}
-	if m.store.dir == "" || !taskIDPattern.MatchString(id) || t.Result.Availability == "expired" {
+	if m.store.dir == "" || !taskIDPattern.MatchString(id) || t.Result.Availability == ResultExpired {
 		return Event{}, errCode("RECHECK_UNAVAILABLE", "No saved native outcome is available")
 	}
 	data, err := os.ReadFile(filepath.Join(m.store.dir, "outcomes", id+".json"))

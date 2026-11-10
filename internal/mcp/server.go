@@ -418,7 +418,7 @@ func legacyTaskStatus(s *Server, req mcpproto.Request, wait time.Duration) (stri
 		if err := json.Unmarshal(result, &v); err != nil {
 			return "", err
 		}
-		if dg.Terminal(v.State) || v.Resolution == "abandoned" {
+		if dg.Terminal(v.State) || v.Resolution == dg.ResolutionAbandoned {
 			return string(result), nil
 		}
 		if !time.Now().Before(deadline) {

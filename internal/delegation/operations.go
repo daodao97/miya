@@ -72,10 +72,10 @@ func (m *Manager) Mutate(op Operation) (receipt Receipt, fresh bool, err error) 
 			notification, err = m.watch(s, op.Caller, op.TaskID)
 		case "unwatch_task":
 			err = m.unwatch(s, op.Caller, op.TaskID)
-			notification = "cancelled"
+			notification = string(NotifyCancelled)
 		case "abandon_delivery":
 			err = m.abandonDelivery(s, op)
-			notification = "abandoned"
+			notification = ResolutionAbandoned
 		case "abandon":
 			err = m.abandon(s, op.Caller, op.TaskID, op.Reason)
 		case "recheck":

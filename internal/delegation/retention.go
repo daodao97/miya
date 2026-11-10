@@ -21,12 +21,12 @@ func (m *Manager) Collect() error {
 	err := m.change(func(s *Snapshot) error {
 		protected := map[string]bool{}
 		for _, w := range s.Watches {
-			if w.State == "watching" || w.State == "pending" || w.State == "submitting" || w.State == "needsAttention" {
+			if w.State.Live() {
 				protected[w.TaskID] = true
 			}
 		}
 		for _, d := range s.Deliveries {
-			if d.Resolution != "abandoned" && (d.State == "pending" || d.State == "submitting" || d.State == "needsAttention") {
+			if d.Resolution != ResolutionAbandoned && (d.State == NotifyPending || d.State.InFlight()) {
 				for _, id := range d.TaskIDs {
 					protected[id] = true
 				}
@@ -63,9 +63,9 @@ func (m *Manager) Collect() error {
 				continue
 			}
 			terminalCount++
-			if !protected[id] && !m.now().Before(t.FinishedAt.Add(m.retention)) && t.Result.Availability != "expired" {
+			if !protected[id] && !m.now().Before(t.FinishedAt.Add(m.retention)) && t.Result.Availability != ResultExpired {
 				t.Prompt, t.Snapshot, t.Progress = "", "", ""
-				t.Result = Result{Availability: "expired"}
+				t.Result = Result{Availability: ResultExpired}
 				s.Tasks[id] = t
 			}
 		}

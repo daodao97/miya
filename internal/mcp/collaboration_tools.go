@@ -55,7 +55,7 @@ func collaborationTool(s *Server, name string, raw json.RawMessage) (string, err
 		if err := json.Unmarshal(result, &v); err != nil {
 			return "", err
 		}
-		if dg.Terminal(v.State) || v.State == dg.NeedsAttention || v.Resolution == "abandoned" {
+		if dg.Terminal(v.State) || v.State == dg.NeedsAttention || v.Resolution == dg.ResolutionAbandoned {
 			return string(result), nil
 		}
 		if time.Since(start) >= time.Duration(wait)*time.Second {

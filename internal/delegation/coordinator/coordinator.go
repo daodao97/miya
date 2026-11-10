@@ -376,7 +376,7 @@ func (s *Coordinator) BindExecution(ctx context.Context, id, target, epoch strin
 			return fmt.Errorf("STORAGE_UNAVAILABLE: %s", err)
 		}
 		d, ok := s.Manager.Delivery(id)
-		if !ok || d.Notify != target || d.State != "submitting" {
+		if !ok || d.Notify != target || d.State != dg.NotifySubmitting {
 			return errors.New("Notification target does not match its persisted receiver")
 		}
 		var allowed bool
@@ -413,7 +413,7 @@ func (s *Coordinator) BindExecution(ctx context.Context, id, target, epoch strin
 			err = ErrCancelled
 		}
 		if err == nil {
-			err = s.Manager.Observe(dg.Event{TaskID: id, Target: target, SessionEpoch: epoch, SubmissionPhase: "submitting"})
+			err = s.Manager.Observe(dg.Event{TaskID: id, Target: target, SessionEpoch: epoch, SubmissionPhase: dg.PhaseSubmitting})
 		}
 		done <- err
 	})
@@ -438,9 +438,9 @@ func (s *Coordinator) Observe(id string, event dg.Event, saveOutcome bool) {
 			outcome = "accepted"
 		}
 		s.Post(func() {
-			if d, ok := s.Manager.Delivery(id); ok && d.SubmissionPhase == "prepared" && outcome == "unknown" {
+			if d, ok := s.Manager.Delivery(id); ok && d.SubmissionPhase == dg.PhasePrepared && outcome == "unknown" {
 				outcome = "not_started"
-			} else if ok && d.SubmissionPhase == "submitting" && event.NativeResultID != "" {
+			} else if ok && d.SubmissionPhase == dg.PhaseSubmitting && event.NativeResultID != "" {
 				// A root result (including a failed reply) proves the bound
 				// Claude process accepted input; delivery is not reply success.
 				outcome = "accepted"

@@ -171,7 +171,7 @@ func settle(t *model.Thread, state dg.State) {
 		item = "interrupted"
 		t.Status = ""
 		if t.StopRequested {
-			t.Status = "Stopped"
+			t.Status = model.StatusStopped
 		}
 	case dg.Failed:
 		item = "failed"

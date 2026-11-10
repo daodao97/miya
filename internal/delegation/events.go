@@ -53,7 +53,7 @@ func (m *Manager) Observe(e Event) error {
 			t.SessionEpoch = e.SessionEpoch
 		}
 		if e.SubmissionPhase != "" {
-			if e.SubmissionPhase != "submitting" {
+			if e.SubmissionPhase != PhaseSubmitting {
 				return errCode("INVALID_ARGUMENT", "Invalid native submission phase")
 			}
 			t.SubmissionPhase = e.SubmissionPhase
@@ -99,7 +99,7 @@ func (m *Manager) Observe(e Event) error {
 			t.Result = boundedResult(e.Result)
 		}
 		s.Tasks[t.ID] = t
-		if Terminal(t.State) && t.Resolution != "abandoned" {
+		if Terminal(t.State) && t.Resolution != ResolutionAbandoned {
 			m.enqueueNotifications(s, t)
 		}
 		return nil
@@ -111,12 +111,12 @@ func boundedResult(result Result) Result {
 	result.Text, result.Truncated = text, result.Truncated || truncated
 	result.Error, _ = bounded(result.Error, 4096)
 	if result.Text != "" {
-		result.Availability = "available"
+		result.Availability = ResultAvailable
 		if result.Source == "" {
 			result.Source = "final_message"
 		}
 	} else {
-		result.Availability = "unavailable"
+		result.Availability = ResultUnavailable
 	}
 	var files []string
 	for _, file := range result.Artifacts {
@@ -175,7 +175,7 @@ func (m *Manager) cancel(s *Snapshot, caller, id string) error {
 	if t.State == Queued {
 		t.State = Interrupted
 		t.FinishedAt = m.now()
-		t.Result = Result{Availability: "unavailable", Error: "Cancelled before starting"}
+		t.Result = Result{Availability: ResultUnavailable, Error: "Cancelled before starting"}
 	}
 	s.Tasks[id] = t
 	if Terminal(t.State) {
@@ -202,17 +202,17 @@ func (m *Manager) abandon(s *Snapshot, caller, id, reason string) error {
 	if strings.TrimSpace(reason) == "" {
 		return errCode("INVALID_ARGUMENT", "A reason is required")
 	}
-	t.Resolution = "abandoned"
+	t.Resolution = ResolutionAbandoned
 	t.ResolutionReason, _ = bounded(strings.TrimSpace(reason), 2000)
 	s.Tasks[id] = t
 	for key, w := range s.Watches {
-		if w.TaskID == id && w.State == "watching" {
-			w.State = "cancelled"
+		if w.TaskID == id && w.State == NotifyWatching {
+			w.State = NotifyCancelled
 			s.Watches[key] = w
 		}
 	}
 	for key, d := range s.Deliveries {
-		if d.State != "pending" {
+		if d.State != NotifyPending {
 			continue
 		}
 		var tasks []string
@@ -221,13 +221,13 @@ func (m *Manager) abandon(s *Snapshot, caller, id, reason string) error {
 				tasks = append(tasks, taskID)
 			} else {
 				w := s.Watches[watchKey(id, d.Notify)]
-				w.State = "cancelled"
+				w.State = NotifyCancelled
 				s.Watches[watchKey(id, d.Notify)] = w
 			}
 		}
 		d.TaskIDs = tasks
 		if len(tasks) == 0 {
-			d.State = "cancelled"
+			d.State = NotifyCancelled
 		}
 		s.Deliveries[key] = d
 	}
@@ -239,15 +239,15 @@ func (m *Manager) abandon(s *Snapshot, caller, id, reason string) error {
 func (m *Manager) Recover() error {
 	return m.change(func(s *Snapshot) error {
 		for id, t := range s.Tasks {
-			if t.State == Starting && t.NativeTurnID == "" && t.StartedAt.IsZero() && (t.SubmissionPhase == "prepared" || t.NewSession && t.Agent == "codex" && t.Target == "") {
+			if t.State == Starting && t.NativeTurnID == "" && t.StartedAt.IsZero() && (t.SubmissionPhase == PhasePrepared || t.NewSession && t.Agent == "codex" && t.Target == "") {
 				// prepared is a durable promise made by this version: every
 				// native input path commits submitting before writing input.
 				// Legacy Claude records with an empty phase remain unknown.
 				t.State = Failed
 				t.FinishedAt = m.now()
-				t.Result = Result{Availability: "unavailable", Error: "Service restarted before native input was submitted"}
+				t.Result = Result{Availability: ResultUnavailable, Error: "Service restarted before native input was submitted"}
 				s.Tasks[id] = t
-				if t.Resolution != "abandoned" {
+				if t.Resolution != ResolutionAbandoned {
 					m.enqueueNotifications(s, t)
 				}
 			} else if Occupies(t.State) {
@@ -257,12 +257,12 @@ func (m *Manager) Recover() error {
 			}
 		}
 		for id, d := range s.Deliveries {
-			if d.State == "submitting" {
-				if d.SubmissionPhase == "prepared" {
-					d.State = "pending"
+			if d.State == NotifySubmitting {
+				if d.SubmissionPhase == PhasePrepared {
+					d.State = NotifyPending
 					d.Reason = "Service restarted before notification input was submitted"
 				} else {
-					d.State = "needsAttention"
+					d.State = NotifyNeedsAttention
 					d.Reason = "Native submission outcome must be verified after restart"
 				}
 				s.Deliveries[id] = d

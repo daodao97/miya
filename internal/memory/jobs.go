@@ -43,7 +43,7 @@ type ExtractionJob struct {
 	Related        []Stamp    `json:"related,omitempty"`
 	Candidates     []Entry    `json:"candidates,omitempty"`
 	Fingerprint    string     `json:"fingerprint,omitempty"`
-	State          string     `json:"state"`
+	State          JobState   `json:"state"`
 	Attempts       int        `json:"attempts"`
 	CreatedAt      time.Time  `json:"createdAt"`
 	CompletedAt    time.Time  `json:"completedAt,omitzero"`
@@ -144,7 +144,7 @@ func (s *Store) EnqueueExtraction(scope Scope, job ExtractionJob) (bool, error) 
 	if _, paused := extractionPausedUntil(d, d.Settings.ExtractionAgent(), s.now()); paused {
 		return false, nil
 	}
-	job.State, job.CreatedAt = "pending", s.now()
+	job.State, job.CreatedAt = JobPending, s.now()
 	count := 0
 	for _, sc := range s.scopesOnDisk() {
 		doc, err := s.load(sc)
@@ -152,7 +152,7 @@ func (s *Store) EnqueueExtraction(scope Scope, job ExtractionJob) (bool, error) 
 			continue
 		}
 		for _, j := range doc.Jobs {
-			if j.State == "pending" || j.State == "running" {
+			if j.State.Open() {
 				count++
 			}
 		}
@@ -201,7 +201,7 @@ const (
 func extractionPausedUntil(d document, agent string, now time.Time) (time.Time, bool) {
 	var recent []ExtractionJob
 	for _, j := range d.Jobs {
-		if j.State == "pending" || j.State == "running" || j.Attempts == 0 || j.ExtractorAgent != agent {
+		if j.State.Open() || j.Attempts == 0 || j.ExtractorAgent != agent {
 			continue
 		}
 		recent = append(recent, j)
@@ -211,7 +211,7 @@ func extractionPausedUntil(d document, agent string, now time.Time) (time.Time, 
 		return time.Time{}, false
 	}
 	for _, j := range recent[:extractionFailureStreak] {
-		if j.State != "failed" {
+		if j.State != JobFailed {
 			return time.Time{}, false
 		}
 	}
@@ -231,7 +231,7 @@ func jobErrorDetail(err error) string {
 
 // Skipped rounds retain only bounded diagnostic metadata, never their input.
 func (s *Store) skipExtraction(d document, job ExtractionJob, reason string) (bool, error) {
-	finishJob(&job, "failed", reason, s.now())
+	finishJob(&job, JobFailed, reason, s.now())
 	if err := s.appendExtraction(d, job); err != nil {
 		return false, err
 	}
@@ -245,7 +245,7 @@ func (s *Store) appendExtraction(d document, job ExtractionJob) error {
 	kept := make([]ExtractionJob, 0, len(d.Jobs))
 	for i := len(d.Jobs) - 1; i >= 0; i-- {
 		j := d.Jobs[i]
-		if j.State != "pending" && j.State != "running" {
+		if !j.State.Open() {
 			terminal++
 			if terminal > 100 || s.now().Sub(j.CreatedAt) > 30*24*time.Hour {
 				continue
@@ -260,7 +260,7 @@ func (s *Store) appendExtraction(d document, job ExtractionJob) error {
 	return s.commit(d)
 }
 
-func finishJob(j *ExtractionJob, state, message string, now time.Time) {
+func finishJob(j *ExtractionJob, state JobState, message string, now time.Time) {
 	j.State, j.Error, j.CompletedAt = state, message, now
 	j.Evidence, j.Candidates = nil, nil
 }
@@ -276,12 +276,12 @@ func (s *Store) RecoverExtractions() error {
 		changed := false
 		for i := range d.Jobs {
 			j := &d.Jobs[i]
-			if j.State == "running" {
+			if j.State == JobRunning {
 				changed = true
 				if j.Attempts >= 2 {
-					finishJob(j, "failed", "Extraction interrupted; no retries remaining", s.now())
+					finishJob(j, JobFailed, "Extraction interrupted; no retries remaining", s.now())
 				} else {
-					j.State = "pending"
+					j.State = JobPending
 				}
 			}
 		}
@@ -304,11 +304,11 @@ func (s *Store) ClaimExtraction() (Scope, ExtractionJob, bool, error) {
 		}
 		for i := range d.Jobs {
 			j := &d.Jobs[i]
-			if j.State != "pending" {
+			if j.State != JobPending {
 				continue
 			}
 			if d.Settings.Disabled || !d.Settings.AutoExtract || d.DisabledSessions[j.Session] {
-				finishJob(j, "canceled", "Automatic extraction is disabled for this project", s.now())
+				finishJob(j, JobCanceled, "Automatic extraction is disabled for this project", s.now())
 				if err = s.commit(d); err != nil {
 					return Scope{}, ExtractionJob{}, false, err
 				}
@@ -317,7 +317,7 @@ func (s *Store) ClaimExtraction() (Scope, ExtractionJob, bool, error) {
 			j.ExtractorAgent = d.Settings.ExtractionAgent()
 			j.Candidates = jobRelated(s, scope, *j)
 			j.Fingerprint = knowledgeFingerprint(d)
-			j.State = "running"
+			j.State = JobRunning
 			j.Attempts++
 			// Candidate context is optional; never trim user evidence to fit it.
 			fits := false
@@ -331,7 +331,7 @@ func (s *Store) ClaimExtraction() (Scope, ExtractionJob, bool, error) {
 			// Retrying cannot shrink the input; report the real reason instead of
 			// spending attempts on a call that is rejected before it starts.
 			if !fits {
-				finishJob(j, "failed", "Extraction input exceeds the limit. Skipped this turn.", s.now())
+				finishJob(j, JobFailed, "Extraction input exceeds the limit. Skipped this turn.", s.now())
 				if err = s.commit(d); err != nil {
 					return Scope{}, ExtractionJob{}, false, err
 				}
@@ -378,7 +378,7 @@ func scrubForgottenJobs(d *document, id string, sources []Source, now time.Time)
 			}
 		}
 		if hit {
-			finishJob(j, "canceled", "The referenced memory was forgotten", now)
+			finishJob(j, JobCanceled, "The referenced memory was forgotten", now)
 		}
 	}
 }
@@ -494,21 +494,21 @@ func (s *Store) CompleteExtraction(scope Scope, key string, candidates []Candida
 			break
 		}
 	}
-	if index < 0 || d.Jobs[index].State != "running" {
+	if index < 0 || d.Jobs[index].State != JobRunning {
 		return nil, nil
 	}
 	j := d.Jobs[index]
 	j.DurationMs = duration.Milliseconds()
 	if runError != nil {
 		if requeue {
-			j.State = "pending"
+			j.State = JobPending
 			j.Attempts--
 		} else if j.Attempts < 2 {
-			j.State = "pending"
+			j.State = JobPending
 			j.Error = "Extraction failed. Waiting to retry."
 			j.Detail = jobErrorDetail(runError)
 		} else {
-			finishJob(&j, "failed", "Extraction failed. No further retries.", s.now())
+			finishJob(&j, JobFailed, "Extraction failed. No further retries.", s.now())
 			j.Detail = jobErrorDetail(runError)
 		}
 		d.Jobs[index] = j
@@ -516,14 +516,14 @@ func (s *Store) CompleteExtraction(scope Scope, key string, candidates []Candida
 	}
 	j.Detail = ""
 	if d.Settings.Disabled || !d.Settings.AutoExtract || d.DisabledSessions[j.Session] || j.Fingerprint != knowledgeFingerprint(d) {
-		finishJob(&j, "stale", "Memory or settings changed. Discarded the old result.", s.now())
+		finishJob(&j, JobStale, "Memory or settings changed. Discarded the old result.", s.now())
 		d.Jobs[index] = j
 		return nil, s.commit(d)
 	}
 	var accepted []Entry
 	added := false
 	if len(candidates) > 3 {
-		finishJob(&j, "failed", "Extraction returned more than three items", s.now())
+		finishJob(&j, JobFailed, "Extraction returned more than three items", s.now())
 		d.Jobs[index] = j
 		return nil, s.commit(d)
 	}
@@ -555,7 +555,7 @@ func (s *Store) CompleteExtraction(scope Scope, key string, candidates []Candida
 					mark.Sources = append(mark.Sources, src)
 				}
 			}
-			e := Entry{ID: old.ID, Version: old.Version + 1, Scope: scope, State: "forgotten", CreatedAt: old.CreatedAt, UpdatedAt: s.now()}
+			e := Entry{ID: old.ID, Version: old.Version + 1, Scope: scope, State: EntryForgotten, CreatedAt: old.CreatedAt, UpdatedAt: s.now()}
 			d.Entries = append(kept, e)
 			d.Tombstones = append(d.Tombstones, mark)
 			scrubForgottenJobs(&d, old.ID, mark.Sources, s.now())
@@ -568,14 +568,14 @@ func (s *Store) CompleteExtraction(scope Scope, key string, candidates []Candida
 		}
 		duplicate := false
 		for _, e := range latest(d) {
-			if e.State == "active" && normalized(e.Content) == normalized(m.Content) {
+			if e.State == EntryActive && normalized(e.Content) == normalized(m.Content) {
 				duplicate = true
 			}
 		}
 		if duplicate {
 			continue
 		}
-		e := Entry{Scope: scope, Kind: m.Kind, Content: m.Content, TaskKey: m.TaskKey, Sources: m.Sources, ObservedAt: m.ObservedAt, ValidUntil: m.ValidUntil, State: "active", Version: 1, CreatedAt: s.now(), UpdatedAt: s.now()}
+		e := Entry{Scope: scope, Kind: m.Kind, Content: m.Content, TaskKey: m.TaskKey, Sources: m.Sources, ObservedAt: m.ObservedAt, ValidUntil: m.ValidUntil, State: EntryActive, Version: 1, CreatedAt: s.now(), UpdatedAt: s.now()}
 		if e.Kind == "progress" && e.ValidUntil.IsZero() {
 			e.ValidUntil = e.ObservedAt.Add(7 * 24 * time.Hour)
 		}
@@ -587,16 +587,16 @@ func (s *Store) CompleteExtraction(scope Scope, key string, candidates []Candida
 			}
 			old := d.Entries[i]
 			if candidate.Action == "conflict" {
-				d.Entries[i].State = "superseded"
+				d.Entries[i].State = EntrySuperseded
 				conflict := old
 				conflict.Version++
 				conflict.Supersedes = old.Version
-				conflict.State = "conflicted"
+				conflict.State = EntryConflicted
 				conflict.UpdatedAt = s.now()
 				d.Entries = append(d.Entries, conflict)
-				e.State = "conflicted"
+				e.State = EntryConflicted
 			} else {
-				d.Entries[i].State = "superseded"
+				d.Entries[i].State = EntrySuperseded
 				e.ID, e.Version, e.Supersedes, e.CreatedAt = old.ID, old.Version+1, old.Version, old.CreatedAt
 				e.Sources = append(append([]Source(nil), old.Sources...), m.Sources...)
 				if len(e.Sources) > 8 {
@@ -617,7 +617,7 @@ func (s *Store) CompleteExtraction(scope Scope, key string, candidates []Candida
 		}
 	}
 	j.Accepted = len(accepted)
-	finishJob(&j, "completed", "", s.now())
+	finishJob(&j, JobCompleted, "", s.now())
 	d.Jobs[index] = j
 	if err = s.commit(d); err != nil {
 		return nil, err
@@ -655,17 +655,17 @@ func (s *Store) ExtractionStatus(scope Scope) (ExtractionStatus, error) {
 	for i := range d.Jobs {
 		j := &d.Jobs[i]
 		switch j.State {
-		case "pending", "running":
+		case JobPending, JobRunning:
 			out.Pending++
 			if j.Error != "" {
 				retryError, retryDetail = j.Error, j.Detail
 			}
-		case "completed":
+		case JobCompleted:
 			out.Completed++
 		default:
 			out.Failed++
 		}
-		if j.State != "pending" && j.State != "running" && (last == nil || !j.CompletedAt.Before(last.CompletedAt)) {
+		if !j.State.Open() && (last == nil || !j.CompletedAt.Before(last.CompletedAt)) {
 			last = j
 		}
 		out.Accepted += j.Accepted
@@ -676,7 +676,7 @@ func (s *Store) ExtractionStatus(scope Scope) (ExtractionStatus, error) {
 	}
 	if retryError != "" {
 		out.LastError, out.LastDetail = retryError, retryDetail
-	} else if last != nil && last.State == "failed" {
+	} else if last != nil && last.State == JobFailed {
 		out.LastError, out.LastDetail = last.Error, last.Detail
 	}
 	if until, paused := extractionPausedUntil(d, d.Settings.ExtractionAgent(), s.now()); paused {
@@ -707,8 +707,8 @@ func (s *Store) ConfigureSession(scope Scope, session string, disabled bool) err
 		d.DisabledSessions[session] = true
 		delete(d.Sessions, session)
 		for i := range d.Jobs {
-			if d.Jobs[i].Session == session && (d.Jobs[i].State == "pending" || d.Jobs[i].State == "running") {
-				finishJob(&d.Jobs[i], "canceled", "Automatic memory is disabled for this session", s.now())
+			if d.Jobs[i].Session == session && d.Jobs[i].State.Open() {
+				finishJob(&d.Jobs[i], JobCanceled, "Automatic memory is disabled for this session", s.now())
 			}
 		}
 	} else {

@@ -12,21 +12,21 @@ func watchKey(task, notify string) string { return task + "\n" + notify }
 
 func (m *Manager) enqueueNotifications(s *Snapshot, t Task) {
 	for key, w := range s.Watches {
-		if w.TaskID != t.ID || w.State != "watching" {
+		if w.TaskID != t.ID || w.State != NotifyWatching {
 			continue
 		}
-		w.State = "pending"
+		w.State = NotifyPending
 		s.Watches[key] = w
 		var id string
 		for _, d := range s.Deliveries {
-			if d.Notify == w.Notify && d.State == "pending" {
+			if d.Notify == w.Notify && d.State == NotifyPending {
 				id = d.ID
 				break
 			}
 		}
 		if id == "" {
 			id = newID("delivery-")
-			s.Deliveries[id] = Delivery{ID: id, Notify: w.Notify, State: "pending", CreatedAt: m.now(), ExpiresAt: t.FinishedAt.Add(DeliveryTTL)}
+			s.Deliveries[id] = Delivery{ID: id, Notify: w.Notify, State: NotifyPending, CreatedAt: m.now(), ExpiresAt: t.FinishedAt.Add(DeliveryTTL)}
 		}
 		d := s.Deliveries[id]
 		d.TaskIDs = append(d.TaskIDs, t.ID)
@@ -59,15 +59,15 @@ func (m *Manager) watch(s *Snapshot, caller, id string) (string, error) {
 	if Terminal(t.State) {
 		return "already_terminal", nil
 	}
-	if t.Resolution == "abandoned" {
+	if t.Resolution == ResolutionAbandoned {
 		return "", errCode("INVALID_STATE", "Tracking this unresolved task was abandoned")
 	}
 	key := watchKey(id, caller)
-	if w, ok := s.Watches[key]; ok && (w.State == "watching" || w.State == "pending" || w.State == "submitting" || w.State == "needsAttention") {
-		return w.State, nil
+	if w, ok := s.Watches[key]; ok && w.State.Live() {
+		return string(w.State), nil
 	}
-	s.Watches[key] = Watch{id, caller, "watching"}
-	return "watching", nil
+	s.Watches[key] = Watch{id, caller, NotifyWatching}
+	return string(NotifyWatching), nil
 }
 
 func (m *Manager) Unwatch(caller, id string) error {
@@ -87,13 +87,13 @@ func (m *Manager) unwatch(s *Snapshot, caller, id string) error {
 	if !ok {
 		return nil
 	}
-	if w.State == "submitting" || w.State == "delivered" || w.State == "needsAttention" {
+	if w.State.Started() {
 		return errCode("ALREADY_SUBMITTED", "Notification has already started")
 	}
-	w.State = "cancelled"
+	w.State = NotifyCancelled
 	s.Watches[key] = w
 	for did, d := range s.Deliveries {
-		if d.Notify != caller || d.State != "pending" {
+		if d.Notify != caller || d.State != NotifyPending {
 			continue
 		}
 		var tasks []string
@@ -104,7 +104,7 @@ func (m *Manager) unwatch(s *Snapshot, caller, id string) error {
 		}
 		d.TaskIDs = tasks
 		if len(tasks) == 0 {
-			d.State = "cancelled"
+			d.State = NotifyCancelled
 		}
 		s.Deliveries[did] = d
 	}
@@ -128,13 +128,13 @@ func (m *Manager) ClaimDelivery(notify string) (Delivery, error) {
 	}
 	ready := false
 	for _, d := range view.Deliveries {
-		if d.Notify != notify || d.Resolution == "abandoned" {
+		if d.Notify != notify || d.Resolution == ResolutionAbandoned {
 			continue
 		}
-		if d.State == "submitting" || d.State == "needsAttention" {
+		if d.State.InFlight() {
 			return Delivery{}, nil
 		}
-		ready = ready || d.State == "pending" && !m.now().Before(d.NextAttempt)
+		ready = ready || d.State == NotifyPending && !m.now().Before(d.NextAttempt)
 	}
 	if !ready {
 		return Delivery{}, nil
@@ -146,13 +146,13 @@ func (m *Manager) ClaimDelivery(notify string) (Delivery, error) {
 			return nil
 		}
 		for _, d := range s.Deliveries {
-			if d.Notify == notify && d.Resolution != "abandoned" && (d.State == "submitting" || d.State == "needsAttention") {
+			if d.Notify == notify && d.Resolution != ResolutionAbandoned && d.State.InFlight() {
 				return nil
 			}
 		}
 		var ids []string
 		for id, d := range s.Deliveries {
-			if d.Notify == notify && d.State == "pending" && d.Resolution == "" {
+			if d.Notify == notify && d.State == NotifyPending && d.Resolution == "" {
 				ids = append(ids, id)
 			}
 		}
@@ -162,14 +162,14 @@ func (m *Manager) ClaimDelivery(notify string) (Delivery, error) {
 			if !d.NextAttempt.IsZero() && m.now().Before(d.NextAttempt) {
 				continue
 			}
-			d.State = "submitting"
-			d.SubmissionPhase = "prepared"
+			d.State = NotifySubmitting
+			d.SubmissionPhase = PhasePrepared
 			d.Attempts++
 			d.NextAttempt = time.Time{}
 			s.Deliveries[id] = d
 			for _, taskID := range d.TaskIDs {
 				w := s.Watches[watchKey(taskID, notify)]
-				w.State = "submitting"
+				w.State = NotifySubmitting
 				s.Watches[watchKey(taskID, notify)] = w
 			}
 			claimed = d
@@ -184,10 +184,10 @@ func (m *Manager) ClaimDelivery(notify string) (Delivery, error) {
 func (m *Manager) BeginDeliveryInput(id string) error {
 	return m.change(func(s *Snapshot) error {
 		d, ok := s.Deliveries[id]
-		if !ok || d.State != "submitting" || d.Resolution != "" {
+		if !ok || d.State != NotifySubmitting || d.Resolution != "" {
 			return errCode("INVALID_STATE", "Notification is not reserved for input")
 		}
-		d.SubmissionPhase = "submitting"
+		d.SubmissionPhase = PhaseSubmitting
 		s.Deliveries[id] = d
 		return nil
 	})
@@ -210,16 +210,16 @@ func (m *Manager) abandonDelivery(s *Snapshot, op Operation) error {
 	if !matched || strings.TrimSpace(op.Reason) == "" {
 		return errCode("INVALID_ARGUMENT", "A matching task and a resolution reason are required")
 	}
-	if d.State != "needsAttention" {
+	if d.State != NotifyNeedsAttention {
 		return errCode("INVALID_STATE", "Only an uncertain notification can stop tracking")
 	}
-	d.Resolution = "abandoned"
+	d.Resolution = ResolutionAbandoned
 	d.ResolutionReason, _ = bounded(op.Reason, 2000)
 	s.Deliveries[d.ID] = d
 	for _, id := range d.TaskIDs {
 		key := watchKey(id, d.Notify)
 		w := s.Watches[key]
-		w.State = "cancelled"
+		w.State = NotifyCancelled
 		s.Watches[key] = w
 	}
 	return nil
@@ -233,18 +233,18 @@ func (m *Manager) DeliveryOutcome(id, turnID, outcome, reason string) error {
 		if !ok {
 			return errCode("DELIVERY_NOT_FOUND", "Unknown notification")
 		}
-		if d.State != "submitting" && d.State != "needsAttention" {
+		if !d.State.InFlight() {
 			return errCode("INVALID_STATE", "Notification is not awaiting a submission outcome")
 		}
 		switch outcome {
 		case "accepted":
-			d.State = "delivered"
+			d.State = NotifyDelivered
 			d.TargetTurnID = turnID
 		case "not_started":
-			if d.Resolution == "abandoned" {
+			if d.Resolution == ResolutionAbandoned {
 				break
 			}
-			d.State = "pending"
+			d.State = NotifyPending
 			delays := []time.Duration{time.Second, 5 * time.Second, 30 * time.Second, time.Minute}
 			attempt := d.Attempts - 1
 			if attempt < 0 {
@@ -255,8 +255,8 @@ func (m *Manager) DeliveryOutcome(id, turnID, outcome, reason string) error {
 			}
 			d.NextAttempt = m.now().Add(delays[attempt])
 		case "unknown":
-			d.State = "needsAttention"
-			d.SubmissionPhase = "submitting"
+			d.State = NotifyNeedsAttention
+			d.SubmissionPhase = PhaseSubmitting
 		default:
 			return errCode("INVALID_ARGUMENT", "Unsupported delivery outcome")
 		}
@@ -264,7 +264,7 @@ func (m *Manager) DeliveryOutcome(id, turnID, outcome, reason string) error {
 		s.Deliveries[id] = d
 		for _, taskID := range d.TaskIDs {
 			w := s.Watches[watchKey(taskID, d.Notify)]
-			if d.Resolution != "abandoned" {
+			if d.Resolution != ResolutionAbandoned {
 				w.State = d.State
 			}
 			s.Watches[watchKey(taskID, d.Notify)] = w
@@ -278,7 +278,7 @@ func (m *Manager) DeliveryOutcome(id, turnID, outcome, reason string) error {
 func (m *Manager) ExpireDeliveries() error {
 	due := false
 	for _, d := range m.view.Load().Deliveries {
-		if d.State == "pending" && !m.now().Before(d.ExpiresAt) {
+		if d.State == NotifyPending && !m.now().Before(d.ExpiresAt) {
 			due = true
 			break
 		}
@@ -292,7 +292,7 @@ func (m *Manager) ExpireDeliveries() error {
 func (m *Manager) expireDeliveries(s *Snapshot) {
 	now := m.now()
 	for id, d := range s.Deliveries {
-		if d.State != "pending" {
+		if d.State != NotifyPending {
 			continue
 		}
 		var tasks []string
@@ -301,7 +301,7 @@ func (m *Manager) expireDeliveries(s *Snapshot) {
 			deadline := s.Tasks[taskID].FinishedAt.Add(DeliveryTTL)
 			if !now.Before(deadline) {
 				w := s.Watches[watchKey(taskID, d.Notify)]
-				w.State = "expired"
+				w.State = NotifyExpired
 				s.Watches[watchKey(taskID, d.Notify)] = w
 				continue
 			}
@@ -313,7 +313,7 @@ func (m *Manager) expireDeliveries(s *Snapshot) {
 		d.TaskIDs = tasks
 		d.ExpiresAt = expiry
 		if len(tasks) == 0 {
-			d.State = "expired"
+			d.State = NotifyExpired
 			d.NextAttempt = time.Time{}
 		}
 		s.Deliveries[id] = d

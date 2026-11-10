@@ -290,7 +290,7 @@ func (rn *Runner) advance(id string, r *ActiveRun) {
 	a := rn.Store.Automations[i]
 	status, reply := rn.host.Outcome(t.ID)
 	switch {
-	case t.StopRequested || t.Status == "Stopped":
+	case t.StopRequested || t.StoppedByUser():
 		rn.finish(id, Interrupted, "Stopped in conversation")
 	case !a.Enabled && !r.allowPaused:
 		rn.finish(id, Interrupted, "Automation paused")

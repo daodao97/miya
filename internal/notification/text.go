@@ -128,7 +128,7 @@ func CompletionBody(old, next model.Thread) string {
 func UpdateCompletionBody(old model.Thread, next *model.Thread) {
 	if next.Busy {
 		next.CompletionNoticeBody = ""
-	} else if old.Busy && next.CompletedAtMs != 0 && next.Status != tr("Stopped") {
+	} else if old.Busy && next.CompletedAtMs != 0 && !next.StoppedByUser() {
 		next.CompletionNoticeBody = ""
 		next.CompletionNoticeBody = CompletionBody(old, *next)
 	}

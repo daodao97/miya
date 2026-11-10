@@ -86,7 +86,7 @@ func (b Adapter) Finish(id int, cwd string, err error) {
 		transcript.InterruptAgents(t, agentState)
 		t.Status = ""
 		if t.StopRequested {
-			t.Status = "Stopped"
+			t.Status = model.StatusStopped
 		} else if err != nil {
 			t.Status = err.Error()
 			t.Messages = append(t.Messages, model.Message{ID: c.NextID(), Role: "error", Content: err.Error(), StartedAtMs: t.CompletedAtMs})

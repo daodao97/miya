@@ -80,8 +80,8 @@ func stampOf(e Entry) Stamp   { return Stamp{e.Scope, e.ID, e.Version, e.State} 
 
 func recallEntry(e Entry, now time.Time, task string) Entry {
 	e = effective(e, now)
-	if e.State == "active" && e.Kind == "progress" && (task == "" || e.TaskKey != task) {
-		e.State = "unavailable"
+	if e.State == EntryActive && e.Kind == "progress" && (task == "" || e.TaskKey != task) {
+		e.State = EntryUnavailable
 	}
 	return e
 }
@@ -150,13 +150,13 @@ func (s *Store) Prepare(project Scope, session, epoch, query, task string) (Prep
 		seen := state.Seen[key]
 		e, ok := current[key]
 		v := seen
-		v.State = "unavailable"
+		v.State = EntryUnavailable
 		if ok {
 			v = stampOf(e)
 		}
 		if v != seen {
 			item := contextEntry{Stamp: v}
-			if ok && e.State == "active" {
+			if ok && e.State == EntryActive {
 				item.Content = e.Content
 				item.ObservedAt = e.ObservedAt
 			}
@@ -243,7 +243,7 @@ func (s *Store) ValidatePrepared(project Scope, p Prepared) bool {
 	}
 	for _, v := range p.Entries {
 		if v.Scope.Kind == "user" && project.Kind != "user" && !d.Settings.UseUserPreferences {
-			if v.State == "unavailable" {
+			if v.State == EntryUnavailable {
 				continue
 			}
 			return false
@@ -262,7 +262,7 @@ func (s *Store) ValidatePrepared(project Scope, p Prepared) bool {
 				break
 			}
 		}
-		if !found && v.State != "unavailable" {
+		if !found && v.State != EntryUnavailable {
 			return false
 		}
 	}
