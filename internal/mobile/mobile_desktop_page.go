@@ -1215,15 +1215,15 @@ func (m *App) desktopInputBar(c *ui.Context, p *MobileDesktopPage) {
 func (p *MobileDesktopPage) accessoryActions() []keyboardbar.Action {
 	var actions []keyboardbar.Action
 	for _, k := range desktopKeys {
-		actions = append(actions, keyboardbar.Action{ID: "key-" + k.key, Label: k.label})
+		actions = append(actions, keyboardbar.Action{ID: "key-" + k.key, Label: k.label, Cap: k.cap})
 	}
-	more := keyboardbar.Action{ID: "more", Label: tr("More")}
+	more := keyboardbar.Action{ID: "more", Label: tr("More"), Cap: "⋯"}
 	for _, k := range desktopModifiers {
-		more.Items = append(more.Items, keyboardbar.Action{ID: "mod-" + k.key, Label: k.label, Selected: p.modifier == k.key})
+		more.Items = append(more.Items, keyboardbar.Action{ID: "mod-" + k.key, Label: k.label, Cap: k.cap, Selected: p.modifier == k.key})
 	}
 	for _, keys := range [][]desktopKeyDef{desktopArrowKeys, desktopLetterKeys} {
 		for _, k := range keys {
-			more.Items = append(more.Items, keyboardbar.Action{ID: "key-" + k.key, Label: k.label})
+			more.Items = append(more.Items, keyboardbar.Action{ID: "key-" + k.key, Label: k.label, Cap: k.cap})
 		}
 	}
 	return append(actions, more, keyboardbar.Action{ID: "hide", Label: tr("Hide keyboard")})
