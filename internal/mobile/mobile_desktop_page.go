@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"math"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
+	"github.com/egoist/mygo/plugins/keyboardbar"
 	"github.com/egoist/mygo/ui"
 
 	"miya/internal/desktop"
@@ -960,10 +960,6 @@ var desktopLetterKeys = []desktopKeyDef{{"a", "A", "A"}, {"c", "C", "C"}, {"v", 
 
 var desktopModifiers = []desktopKeyDef{{"command", "⌘", "⌘"}, {"control", "⌃", "⌃"}, {"shift", "⇧", "⇧"}, {"option", "⌥", "⌥"}}
 
-var desktopKeySymbols = map[string]string{"escape": "escape", "tab": "arrow.right.to.line", "backspace": "delete.left", "enter": "return",
-	"left": "arrow.left", "up": "arrow.up", "down": "arrow.down", "right": "arrow.right",
-	"command": "command", "control": "control", "shift": "shift", "option": "option"}
-
 func (m *App) desktopLiveView(c *ui.Context, p *MobileDesktopPage) {
 	pal := m.Pal
 	vp := ui.Column(c.Key("desktop-viewport")).FillWidth().Grow(1).MinHeight(0).Clip().Background(pal.Bg).Label(tr("Live Mac screen. Tap, swipe, or pinch to zoom."))
@@ -1157,6 +1153,7 @@ func (m *App) desktopInputBar(c *ui.Context, p *MobileDesktopPage) {
 	pal := m.Pal
 	svc := c.Services()
 	handler := func(id string) { m.desktopAccessory(p, svc, id) }
+	focused := false
 	ui.Row(c.Key("desktop-input")).FillWidth().MinHeight(46).Padding(0, 2).Gap(2).AlignItems(ui.Center).Background(pal.surface).Radius(23).Children(func() {
 		// A secure field forces iOS's ASCII keyboard without input methods,
 		// so hide the text only when the person chooses password entry.
@@ -1183,7 +1180,7 @@ func (m *App) desktopInputBar(c *ui.Context, p *MobileDesktopPage) {
 		} else {
 			field.Label(tr("Text to send to Mac")).Placeholder(tr("Enter text to send"))
 		}
-		field.InputAccessory(p.accessoryActions(), handler)
+		focused = field.Focused()
 		if p.focusText {
 			field.Focus()
 			p.focusText = false
@@ -1206,30 +1203,30 @@ func (m *App) desktopInputBar(c *ui.Context, p *MobileDesktopPage) {
 			m.desktopSendText(p)
 		}
 	})
-	// iOS draws the keys natively above its keyboard; elsewhere, as in tests,
-	// the same actions show as a Go bar.
-	if runtime.GOOS != "ios" {
-		ui.InputAccessoryBar(c, p.accessoryActions(), &p.moreKeys, handler)
+	// The keys show while the field has the focus, at the bottom of the page,
+	// which phones lay out above the software keyboard.
+	if focused {
+		keyboardbar.Bar(c, p.accessoryActions(), &p.moreKeys, handler)
 	}
 }
 
 // accessoryActions are the Mac keys above the software keyboard: the common
 // four, a panel of modifiers, arrows and shortcut letters, and hide.
-func (p *MobileDesktopPage) accessoryActions() []ui.InputAction {
-	var actions []ui.InputAction
+func (p *MobileDesktopPage) accessoryActions() []keyboardbar.Action {
+	var actions []keyboardbar.Action
 	for _, k := range desktopKeys {
-		actions = append(actions, ui.InputAction{ID: "key-" + k.key, Label: k.label, Symbol: desktopKeySymbols[k.key]})
+		actions = append(actions, keyboardbar.Action{ID: "key-" + k.key, Label: k.label})
 	}
-	more := ui.InputAction{ID: "more", Label: tr("More"), Symbol: "ellipsis"}
+	more := keyboardbar.Action{ID: "more", Label: tr("More")}
 	for _, k := range desktopModifiers {
-		more.Items = append(more.Items, ui.InputAction{ID: "mod-" + k.key, Label: k.label, Symbol: desktopKeySymbols[k.key], Selected: p.modifier == k.key})
+		more.Items = append(more.Items, keyboardbar.Action{ID: "mod-" + k.key, Label: k.label, Selected: p.modifier == k.key})
 	}
 	for _, keys := range [][]desktopKeyDef{desktopArrowKeys, desktopLetterKeys} {
 		for _, k := range keys {
-			more.Items = append(more.Items, ui.InputAction{ID: "key-" + k.key, Label: k.label, Symbol: desktopKeySymbols[k.key]})
+			more.Items = append(more.Items, keyboardbar.Action{ID: "key-" + k.key, Label: k.label})
 		}
 	}
-	return append(actions, more, ui.InputAction{ID: "hide", Label: tr("Hide keyboard"), Symbol: "keyboard.chevron.compact.down"})
+	return append(actions, more, keyboardbar.Action{ID: "hide", Label: tr("Hide keyboard")})
 }
 
 func (m *App) desktopAccessory(p *MobileDesktopPage, svc ui.Services, id string) {
