@@ -20,13 +20,36 @@ type SlashCommand struct {
 	ArgumentHint string `json:"argumentHint"`
 }
 
+// Model is a model Claude Code offers in its model picker, as it reports
+// them on initialize: aliases, full IDs and the user's configured models.
+type Model struct {
+	Value                 string   `json:"value"`
+	ResolvedModel         string   `json:"resolvedModel"`
+	DisplayName           string   `json:"displayName"`
+	Description           string   `json:"description"`
+	SupportsEffort        bool     `json:"supportsEffort"`
+	SupportedEffortLevels []string `json:"supportedEffortLevels"`
+}
+
+// Catalog is what Claude Code reports on initialize that Miya offers.
+type Catalog struct {
+	Commands []SlashCommand
+	Models   []Model
+}
+
 // commandsSettle is how long to wait after initialize for the list that
 // plugins and MCP servers complete (system commands_changed).
 const commandsSettle = 2500 * time.Millisecond
 
-// ListCommands asks Claude Code in cwd for its slash commands: it starts the
-// CLI, initializes it and stops it, sending no message.
+// ListCommands asks Claude Code in cwd for its slash commands.
 func ListCommands(ctx context.Context, binary string, args, env []string, cwd string) ([]SlashCommand, error) {
+	cat, err := ReadCatalog(ctx, binary, args, env, cwd)
+	return cat.Commands, err
+}
+
+// ReadCatalog asks Claude Code in cwd for its slash commands and models: it
+// starts the CLI, initializes it and stops it, sending no message.
+func ReadCatalog(ctx context.Context, binary string, args, env []string, cwd string) (Catalog, error) {
 	if binary == "" {
 		binary = "claude"
 	}
@@ -40,15 +63,15 @@ func ListCommands(ctx context.Context, binary string, args, env []string, cwd st
 	cmd.WaitDelay = 2 * time.Second
 	in, err := cmd.StdinPipe()
 	if err != nil {
-		return nil, err
+		return Catalog{}, err
 	}
 	out, err := cmd.StdoutPipe()
 	if err != nil {
-		return nil, err
+		return Catalog{}, err
 	}
 	cmd.Stderr = io.Discard
 	if err := cmd.Start(); err != nil {
-		return nil, err
+		return Catalog{}, err
 	}
 	defer func() {
 		in.Close()
@@ -56,7 +79,7 @@ func ListCommands(ctx context.Context, binary string, args, env []string, cwd st
 		cmd.Wait()
 	}()
 	if _, err := io.WriteString(in, `{"type":"control_request","request_id":"commands","request":{"subtype":"initialize","hooks":{}}}`+"\n"); err != nil {
-		return nil, err
+		return Catalog{}, err
 	}
 	type frame struct {
 		Type     string         `json:"type"`
@@ -68,6 +91,7 @@ func ListCommands(ctx context.Context, binary string, args, env []string, cwd st
 			Error     string `json:"error"`
 			Response  struct {
 				Commands []SlashCommand `json:"commands"`
+				Models   []Model        `json:"models"`
 			} `json:"response"`
 		} `json:"response"`
 	}
@@ -89,6 +113,7 @@ func ListCommands(ctx context.Context, binary string, args, env []string, cwd st
 		}
 	}()
 	var cmds, changed []SlashCommand
+	var models []Model
 	got := false
 	var settle <-chan time.Time
 	for {
@@ -96,33 +121,33 @@ func ListCommands(ctx context.Context, binary string, args, env []string, cwd st
 		case f, ok := <-frames:
 			if !ok {
 				if got {
-					return cmds, nil
+					return Catalog{cmds, models}, nil
 				}
-				return nil, errors.New("Claude Code returned no command list")
+				return Catalog{}, errors.New("Claude Code returned no command list")
 			}
 			switch {
 			case f.Type == "control_response" && f.Response.RequestID == "commands":
 				if f.Response.Subtype == "error" {
-					return nil, errors.New(f.Response.Error)
+					return Catalog{}, errors.New(f.Response.Error)
 				}
-				cmds, got = f.Response.Response.Commands, true
+				cmds, models, got = f.Response.Response.Commands, f.Response.Response.Models, true
 				if changed != nil {
-					return changed, nil
+					return Catalog{changed, models}, nil
 				}
 				settle = time.After(commandsSettle)
 			case f.Type == "system" && f.Subtype == "commands_changed" && len(f.Commands) > 0:
 				if got {
-					return f.Commands, nil
+					return Catalog{f.Commands, models}, nil
 				}
 				changed = f.Commands
 			}
 		case <-settle:
-			return cmds, nil
+			return Catalog{cmds, models}, nil
 		case <-ctx.Done():
 			if got {
-				return cmds, nil
+				return Catalog{cmds, models}, nil
 			}
-			return nil, ctx.Err()
+			return Catalog{}, ctx.Err()
 		}
 	}
 }

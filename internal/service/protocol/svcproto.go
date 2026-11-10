@@ -64,6 +64,7 @@ type State struct {
 	ClaudeModel        string                     `json:"claudeModel"`
 	ClaudeEffort       string                     `json:"claudeEffort"`
 	ClaudeDefaultModel string                     `json:"claudeDefaultModel"`
+	ClaudeModels       []ClaudeModel              `json:"claudeModels,omitempty"`
 	PiCommand          string                     `json:"piCommand,omitempty"`
 	PiError            string                     `json:"piError,omitempty"`
 	PiBinary           string                     `json:"piBinary,omitempty"`

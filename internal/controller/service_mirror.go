@@ -326,6 +326,7 @@ func (c *Controller) ApplyState(s svcproto.State) {
 	c.ClaudeCommand, c.ClaudeError, c.ClaudeBinary, c.ClaudeArgs, c.ClaudeEnv = s.ClaudeCommand, s.ClaudeError, s.ClaudeBinary, s.ClaudeArgs, s.ClaudeEnv
 	c.ClaudeModel, c.ClaudeEffort = s.ClaudeModel, s.ClaudeEffort
 	c.claudeDefaultModel = s.ClaudeDefaultModel
+	c.claudeModels = nativeClaudeModels(s.ClaudeModels)
 	if c.Pi.Command != s.PiCommand || c.Pi.Binary != s.PiBinary || c.Pi.Error != s.PiError {
 		c.forgetInstalls()
 	}

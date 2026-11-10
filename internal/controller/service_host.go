@@ -396,7 +396,7 @@ func (c *Controller) SnapshotState() svcproto.State {
 		Cwd:             c.Cwd, Projects: c.Projects(), Threads: threads, Approvals: c.Approvals(),
 		Status: c.Status(), HistoryStatus: c.HistoryStatus(), Ready: c.Ready(),
 		Models: snapshotModels(c.Models()), Model: c.Model(), Effort: c.Effort(), PermissionPolicy: c.PermissionPolicy(), Locale: c.Locale(),
-		ClaudeCommand: c.ClaudeCommand, ClaudeError: c.ClaudeError, ClaudeBinary: c.ClaudeBinary, ClaudeArgs: c.ClaudeArgs, ClaudeEnv: c.ClaudeEnv, ClaudeModel: c.ClaudeModel, ClaudeEffort: c.ClaudeEffort, ClaudeDefaultModel: c.claudeDefaultModel,
+		ClaudeCommand: c.ClaudeCommand, ClaudeError: c.ClaudeError, ClaudeBinary: c.ClaudeBinary, ClaudeArgs: c.ClaudeArgs, ClaudeEnv: c.ClaudeEnv, ClaudeModel: c.ClaudeModel, ClaudeEffort: c.ClaudeEffort, ClaudeDefaultModel: c.claudeDefaultModel, ClaudeModels: snapshotClaudeModels(c.claudeModels),
 		PiCommand: c.Pi.Command, PiError: c.Pi.Error, PiBinary: c.Pi.Binary, PiArgs: c.Pi.Args, PiEnv: c.Pi.Env, PiModel: c.Pi.Model, PiEffort: c.Pi.Effort, AgentEnabled: c.AgentSwitches(), AgentUpdates: c.AgentUpdates(),
 		Account: c.AccountState, AccountReset: c.AccountReset, QuotaLimits: c.QuotaLimits, QuotaStatus: c.quotaStatus,
 		Phone: DesktopPhone.Status(),

@@ -35,3 +35,22 @@ sleep 10
 		t.Errorf("took %v; should stop once the list is complete", time.Since(start))
 	}
 }
+
+func TestReadCatalogReadsModels(t *testing.T) {
+	dir := t.TempDir()
+	fake := filepath.Join(dir, "claude")
+	script := `#!/bin/sh
+read line
+echo '{"type":"control_response","response":{"subtype":"success","request_id":"commands","response":{"commands":[],"models":[{"value":"default","resolvedModel":"claude-opus-5-5","displayName":"Default (recommended)","supportsEffort":true,"supportedEffortLevels":["low","high"]},{"value":"auto/x","resolvedModel":"auto/x","displayName":"X · routing group","supportsEffort":false}]}}}'
+`
+	if err := os.WriteFile(fake, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cat, err := ReadCatalog(context.Background(), fake, nil, nil, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cat.Models) != 2 || cat.Models[0].ResolvedModel != "claude-opus-5-5" || len(cat.Models[0].SupportedEffortLevels) != 2 || cat.Models[1].DisplayName != "X · routing group" || cat.Models[1].SupportsEffort {
+		t.Fatalf("models = %+v", cat.Models)
+	}
+}

@@ -85,6 +85,10 @@ type Controller struct {
 	ClaudeModel, ClaudeEffort string
 	// claudeDefaultModel is the model Claude Code uses when none is chosen.
 	claudeDefaultModel string
+	// claudeModels are the models Claude Code last reported, read again
+	// after claudeModelsTried.
+	claudeModels      []claude.Model
+	claudeModelsTried time.Time
 
 	ClaudeRuns map[int]*claude.Client
 	// Pi is the pi agent's command, choices and running processes.
@@ -178,6 +182,7 @@ func newChatController() *Controller {
 	c.applyClaudeCommand(claude.LoadCommand())
 	c.ClaudeModel, c.ClaudeEffort = prefs.Load("claudeModel"), prefs.Load("claudeEffort")
 	c.claudeDefaultModel = prefs.Load("claudeDefaultModel")
+	c.claudeModels = loadClaudeModels()
 	c.loadPiSettings()
 	c.agents = loadAgentSwitches()
 	c.Draft, c.SetDraft = uiruntime.CreateSignal("")

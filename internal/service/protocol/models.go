@@ -12,3 +12,14 @@ type LegacyModel struct {
 		ReasoningEffort string `json:"reasoningEffort"`
 	} `json:"supportedReasoningEfforts"`
 }
+
+// ClaudeModel is a model Claude Code offers, as it reports them on
+// initialize; it mirrors the Claude adapter's native model.
+type ClaudeModel struct {
+	Value                 string   `json:"value"`
+	ResolvedModel         string   `json:"resolvedModel"`
+	DisplayName           string   `json:"displayName"`
+	Description           string   `json:"description"`
+	SupportsEffort        bool     `json:"supportsEffort"`
+	SupportedEffortLevels []string `json:"supportedEffortLevels"`
+}

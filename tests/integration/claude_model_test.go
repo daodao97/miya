@@ -91,8 +91,16 @@ func TestClaudeDefaultModelFromInit(t *testing.T) {
 		t.Fatal("label before any run")
 	}
 	c.NoteClaudeModel("claude-opus-5-5")
-	if got := b.ModelLabel(""); got != "Default · Claude Opus 5.5" || prefs.Load("claudeDefaultModel") != "claude-opus-5-5" {
+	if got := b.ModelLabel(""); got != "Claude Opus 5.5" || prefs.Load("claudeDefaultModel") != "claude-opus-5-5" {
 		t.Fatalf("label %q", got)
+	}
+	// The default takes the place of the model it runs, listed once.
+	if got := strings.Join(b.ModelChoices(), ","); got != "claude-fable-5-1,,claude-sonnet-5-5,claude-haiku-5-5" {
+		t.Fatalf("choices %q", got)
+	}
+	b.SetModel("claude-opus-5-5")
+	if got := strings.Join(b.ModelChoices(), ","); got != "claude-fable-5-1,claude-opus-5-5,claude-sonnet-5-5,claude-haiku-5-5" {
+		t.Fatalf("choices with the default's model chosen by name %q", got)
 	}
 	if b.ModelLabel("opus") != "Opus (latest)" || b.ModelLabel("my-model") != "my-model" {
 		t.Fatal("alias labels")

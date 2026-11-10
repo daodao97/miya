@@ -76,7 +76,8 @@ func (c *Controller) loadClaudeCommands(cwd string) {
 	}
 	binary, args, env, ctx := c.ClaudeBinary, c.ClaudeArgs, c.ClaudeEnv, c.Ctx
 	go func() {
-		list, err := claude.ListCommands(ctx, binary, args, env, cwd)
+		cat, err := claude.ReadCatalog(ctx, binary, args, env, cwd)
+		list := cat.Commands
 		choices := make([]model.ComposerChoice, 0, len(list))
 		for _, cmd := range list {
 			if cmd.Name == "" {
@@ -93,6 +94,9 @@ func (c *Controller) loadClaudeCommands(cwd string) {
 		}
 		c.Dispatch(func() {
 			delete(c.claudeCmdLoading, cwd)
+			if err == nil {
+				c.setClaudeModels(cat.Models)
+			}
 			keep := claudeCommandsKept
 			if err != nil {
 				keep = claudeCommandsFailed

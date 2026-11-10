@@ -10,6 +10,8 @@ import (
 type State struct {
 	Binary, Error, Command, Model, Effort, DefaultModel string
 	Args, Env                                           []string
+	// Models are those Claude Code last reported, nil until it has.
+	Models []native.Model
 }
 
 type Host interface {
@@ -20,6 +22,8 @@ type Host interface {
 	ManagedStarted(int)
 	ManagedResult(int, dg.State, string)
 	NoteModel(string)
+	// RefreshModels starts reading Claude Code's models when they are due.
+	RefreshModels()
 	agent.Workspace
 	agent.Executions
 	Snapshot() State
