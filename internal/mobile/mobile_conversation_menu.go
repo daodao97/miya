@@ -34,12 +34,12 @@ func (m *App) conversationActionsSheet(c *ui.Context) {
 					m.ConversationMenu = false
 					m.OpenWebServices(m.conversationMenuProject)
 				}
+				m.conversationActionDivider(c.Key("web-divider"))
+				if m.conversationAction(c.Key("desktop-control"), tr("Remote desktop"), !m.Connected || m.DesktopRequest != "").Clicked() {
+					m.ConversationMenu = false
+					m.openRemoteDesktop()
+				}
 				if m.Open != 0 {
-					m.conversationActionDivider(c.Key("web-divider"))
-					if m.conversationAction(c.Key("desktop-control"), tr("Remote desktop"), !m.Connected || m.DesktopRequest != "").Clicked() {
-						m.ConversationMenu = false
-						m.openRemoteDesktop()
-					}
 					m.conversationActionDivider(c.Key("desktop-divider"))
 					if m.conversationAction(c.Key("runtime"), tr("Background tasks"), !m.Connected).Clicked() {
 						m.ConversationMenu = false

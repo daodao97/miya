@@ -126,6 +126,10 @@ func TestDesktopPhoneOpenRequiresStableConversation(t *testing.T) {
 	if f := ask(remote.Request{Op: "desktop-open", Thread: 1, ServerID: "missing", RequestID: "stale"}); f.Error == "" {
 		t.Fatal("stale conversation accepted")
 	}
+	// Naming a conversation commits to it, even for the full desktop.
+	if f := ask(remote.Request{Op: "desktop-open", Thread: 1, ServerID: "missing", RequestID: "stale-pick", WindowPick: true}); f.Error == "" {
+		t.Fatal("stale conversation accepted for the full desktop")
+	}
 	f := ask(remote.Request{Op: "desktop-open", Thread: 1, ServerID: "s1", RequestID: "open"})
 	var reply phoneproto.DesktopReply
 	if json.Unmarshal(f.Data, &reply) != nil || f.Error != "" || reply.RequestID != "open" || reply.Token == "" {
@@ -143,6 +147,44 @@ func TestDesktopPhoneOpenRequiresStableConversation(t *testing.T) {
 	}
 	if c.Desktop.Holds(reply.Token) {
 		t.Fatal("lease survived control disconnection")
+	}
+}
+
+// A new conversation has no conversation on the desktop yet; its menu still
+// opens the full desktop, while an approval takeover there stays refused.
+func TestDesktopPhoneOpenFromNewConversation(t *testing.T) {
+	if !desktop.Available() {
+		t.Skip("host capability unavailable")
+	}
+	c := serverController(t.TempDir(), "")
+	ctx, cancel := context.WithCancel(context.Background())
+	conn := &testPhoneConnection{ctx: ctx, requests: make(chan remote.Request, 8), frames: make(chan remote.Frame, 32)}
+	ex := async.NewExecutor()
+	quit, done, exited := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	c.Run = ex.Push
+	go func() { defer close(exited); ex.Loop(quit) }()
+	go func() { defer close(done); c.ServePhoneConnection(ctx, desktopEOFConnection{conn}) }()
+	t.Cleanup(func() { cancel(); <-done; close(quit); <-exited })
+	ask := func(r remote.Request) remote.Frame {
+		conn.requests <- r
+		for {
+			select {
+			case f := <-conn.frames:
+				if f.Type == "desktop-open" {
+					return f
+				}
+			case <-conn.ctx.Done():
+				t.Fatal("no desktop reply")
+			}
+		}
+	}
+	if f := ask(remote.Request{Op: "desktop-open", RequestID: "takeover", WindowOnly: true, WindowPick: true}); f.Error == "" {
+		t.Fatal("approval takeover accepted without a conversation")
+	}
+	f := ask(remote.Request{Op: "desktop-open", RequestID: "new", WindowPick: true})
+	var reply phoneproto.DesktopReply
+	if json.Unmarshal(f.Data, &reply) != nil || f.Error != "" || reply.RequestID != "new" || reply.Token == "" {
+		t.Fatal("new conversation got no desktop lease", f.Error)
 	}
 }
 

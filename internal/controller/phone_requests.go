@@ -115,7 +115,7 @@ func (ps *phoneSession) onDesktopOpen(r remote.Request) bool {
 	var err error
 	if !desktop.Available() {
 		err = fmt.Errorf("Remote desktop requires macOS 14 or later")
-	} else if !target.Found || r.ServerID == "" {
+	} else if !conversationFreeDesktop(r) && (!target.Found || r.ServerID == "") {
 		err = fmt.Errorf("Conversation is no longer on the desktop. Reopen it.")
 	} else {
 		var window *desktop.Window
@@ -156,6 +156,14 @@ func (ps *phoneSession) onDesktopOpen(r remote.Request) bool {
 		return false
 	}
 	return true
+}
+
+// conversationFreeDesktop reports a request for the full desktop from a page
+// with no conversation yet, as a new conversation's menu sends. A request
+// that names a conversation must still find it, and an approval takeover
+// always belongs to one.
+func conversationFreeDesktop(r remote.Request) bool {
+	return r.WindowPick && !r.WindowOnly && r.ServerID == ""
 }
 
 // onDesktopClose answers a phone's "desktop-close" request; false ends the connection.

@@ -55,7 +55,9 @@ func (m *App) openDesktopWindow(approval *interaction.Request, window desktop.Wi
 	if p := m.DesktopPage; p != nil && p.Floating && (approval != nil || p.Phase == "ended") {
 		m.CloseDesktopPage(false)
 	}
-	if !m.Connected || m.Conn == nil || m.Open == 0 || m.desktopUIOpen() || m.DesktopRequest != "" {
+	// An approval takeover needs its conversation; the full desktop opened
+	// from the menu does not, so a new conversation can open it too.
+	if !m.Connected || m.Conn == nil || (approval != nil && m.Open == 0) || m.desktopUIOpen() || m.DesktopRequest != "" {
 		return
 	}
 	if !m.State.DesktopControl {

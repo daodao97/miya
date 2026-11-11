@@ -49,7 +49,7 @@ func (m *App) resumeDesktopPage() {
 		return
 	}
 	r := p.owner
-	if r.ServerID == "" || !m.State.DesktopControl {
+	if (r.WindowOnly && r.ServerID == "") || !m.State.DesktopControl {
 		return
 	}
 	if r.WindowOnly && p.Window.ID != 0 {
