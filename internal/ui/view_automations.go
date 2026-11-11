@@ -49,6 +49,12 @@ type automationsUI struct {
 	editing     string
 	editText    string
 	editErr     string
+
+	// recipes are the ready-made triggers a request can ask for, and
+	// recipeProblems the recipe files that cannot be used; read when the
+	// form opens.
+	recipes        []automation.Recipe
+	recipeProblems []string
 }
 
 var autoOK = ui.Hex("#15803d")
@@ -572,6 +578,9 @@ func (app *App) OpenAutomationForm(v *automation.View) {
 		a.Agent = c.State().Agent()
 	}
 	a.gen++
+	// The window reads the recipe files itself: they are on this computer,
+	// and a background service of an earlier version could not list them.
+	a.recipes, a.recipeProblems = automation.Recipes()
 	if v != nil {
 		draft := *v
 		a.editID, a.Request, a.Draft = v.ID, textutil.FirstNonEmpty(v.Request, v.Instructions), &draft
@@ -639,6 +648,8 @@ func (app *App) automationForm(c *ui.Context) {
 			app.draftPreview(c, a.Draft)
 		case a.Drafting:
 			draftSkeleton(c)
+		default:
+			app.recipesView(c)
 		}
 		ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Margin(4, 0, 0, 0).Children(func() {
 			ui.Switch(c.Key("enable"), &a.enable).Label(tr("Enable after saving")).Shrink(0)
@@ -910,6 +921,7 @@ func (app *App) applyDraftEdit(key string) {
 	}
 	v := automation.ViewOf(next, d.Runs, d.Running, time.Now())
 	v.TimeMissing = d.TimeMissing && key != "schedule"
+	v.Trials = d.Trials
 	a.Draft, a.editing, a.editErr = &v, "", ""
 }
 

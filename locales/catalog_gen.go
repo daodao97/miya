@@ -19580,26 +19580,6 @@ func (msgs Messages) AgentUpdatedNextLaunch() string {
 	return Catalog.Format(msgs.locale, "agentUpdatedNextLaunch", nil)
 }
 
-// SFreeOnS5d8b98 says "%s free on %s"
-// in the language the app shows.
-func SFreeOnS5d8b98() string { return In(i18n.Locale()).SFreeOnS5d8b98() }
-
-// SFreeOnS5d8b98 says "%s free on %s"
-// in the language of msgs.
-func (msgs Messages) SFreeOnS5d8b98() string {
-	return Catalog.Format(msgs.locale, "sFreeOnS_5d8b98", nil)
-}
-
-// SOfMemoryAvailable43e2fc says "%s of memory available"
-// in the language the app shows.
-func SOfMemoryAvailable43e2fc() string { return In(i18n.Locale()).SOfMemoryAvailable43e2fc() }
-
-// SOfMemoryAvailable43e2fc says "%s of memory available"
-// in the language of msgs.
-func (msgs Messages) SOfMemoryAvailable43e2fc() string {
-	return Catalog.Format(msgs.locale, "sOfMemoryAvailable_43e2fc", nil)
-}
-
 // AfterSFinishes2953ec says "After \"%s\" finishes"
 // in the language the app shows.
 func AfterSFinishes2953ec() string { return In(i18n.Locale()).AfterSFinishes2953ec() }
@@ -19812,24 +19792,136 @@ func (msgs Messages) WhenSSucceeds12ae90() string {
 	return Catalog.Format(msgs.locale, "whenSSucceeds_12ae90", nil)
 }
 
-// WhenFreeMemoryIsBelowSD71e9e says "When free memory is below %s"
+// ConditionWhenOutputChanges says "When the output of `%s` changes"
 // in the language the app shows.
-func WhenFreeMemoryIsBelowSD71e9e() string { return In(i18n.Locale()).WhenFreeMemoryIsBelowSD71e9e() }
+func ConditionWhenOutputChanges() string { return In(i18n.Locale()).ConditionWhenOutputChanges() }
 
-// WhenFreeMemoryIsBelowSD71e9e says "When free memory is below %s"
+// ConditionWhenOutputChanges says "When the output of `%s` changes"
 // in the language of msgs.
-func (msgs Messages) WhenFreeMemoryIsBelowSD71e9e() string {
-	return Catalog.Format(msgs.locale, "whenFreeMemoryIsBelowS_d71e9e", nil)
+func (msgs Messages) ConditionWhenOutputChanges() string {
+	return Catalog.Format(msgs.locale, "conditionWhenOutputChanges", nil)
 }
 
-// WhenFreeSpaceOnSIsBelowC6142a says "When free space on %s is below %s"
+// ConditionWhenCommandPrintsLine says "When `%s` prints a line"
 // in the language the app shows.
-func WhenFreeSpaceOnSIsBelowC6142a() string { return In(i18n.Locale()).WhenFreeSpaceOnSIsBelowC6142a() }
+func ConditionWhenCommandPrintsLine() string {
+	return In(i18n.Locale()).ConditionWhenCommandPrintsLine()
+}
 
-// WhenFreeSpaceOnSIsBelowC6142a says "When free space on %s is below %s"
+// ConditionWhenCommandPrintsLine says "When `%s` prints a line"
 // in the language of msgs.
-func (msgs Messages) WhenFreeSpaceOnSIsBelowC6142a() string {
-	return Catalog.Format(msgs.locale, "whenFreeSpaceOnSIsBelow_c6142a", nil)
+func (msgs Messages) ConditionWhenCommandPrintsLine() string {
+	return Catalog.Format(msgs.locale, "conditionWhenCommandPrintsLine", nil)
+}
+
+// TriggerListening says "Listening"
+// in the language the app shows.
+func TriggerListening() string { return In(i18n.Locale()).TriggerListening() }
+
+// TriggerListening says "Listening"
+// in the language of msgs.
+func (msgs Messages) TriggerListening() string {
+	return Catalog.Format(msgs.locale, "triggerListening", nil)
+}
+
+// TrialNotMet says "Test run: not met right now"
+// in the language the app shows.
+func TrialNotMet() string { return In(i18n.Locale()).TrialNotMet() }
+
+// TrialNotMet says "Test run: not met right now"
+// in the language of msgs.
+func (msgs Messages) TrialNotMet() string {
+	return Catalog.Format(msgs.locale, "trialNotMet", nil)
+}
+
+// TrialMet says "Test run: met right now"
+// in the language the app shows.
+func TrialMet() string { return In(i18n.Locale()).TrialMet() }
+
+// TrialMet says "Test run: met right now"
+// in the language of msgs.
+func (msgs Messages) TrialMet() string {
+	return Catalog.Format(msgs.locale, "trialMet", nil)
+}
+
+// TrialStaysRunning says "Test run: the command stays running"
+// in the language the app shows.
+func TrialStaysRunning() string { return In(i18n.Locale()).TrialStaysRunning() }
+
+// TrialStaysRunning says "Test run: the command stays running"
+// in the language of msgs.
+func (msgs Messages) TrialStaysRunning() string {
+	return Catalog.Format(msgs.locale, "trialStaysRunning", nil)
+}
+
+// TrialRuns says "Test run: the command runs"
+// in the language the app shows.
+func TrialRuns() string { return In(i18n.Locale()).TrialRuns() }
+
+// TrialRuns says "Test run: the command runs"
+// in the language of msgs.
+func (msgs Messages) TrialRuns() string {
+	return Catalog.Format(msgs.locale, "trialRuns", nil)
+}
+
+// RecipeDiskFreeText says "When free space on $VOLUME is below $BELOW_GB GB"
+// in the language the app shows.
+func RecipeDiskFreeText() string { return In(i18n.Locale()).RecipeDiskFreeText() }
+
+// RecipeDiskFreeText says "When free space on $VOLUME is below $BELOW_GB GB"
+// in the language of msgs.
+func (msgs Messages) RecipeDiskFreeText() string {
+	return Catalog.Format(msgs.locale, "recipeDiskFreeText", nil)
+}
+
+// RecipeMemoryFreeText says "When free memory is below $BELOW_GB GB"
+// in the language the app shows.
+func RecipeMemoryFreeText() string { return In(i18n.Locale()).RecipeMemoryFreeText() }
+
+// RecipeMemoryFreeText says "When free memory is below $BELOW_GB GB"
+// in the language of msgs.
+func (msgs Messages) RecipeMemoryFreeText() string {
+	return Catalog.Format(msgs.locale, "recipeMemoryFreeText", nil)
+}
+
+// RecipesTitle says "Triggers you can ask for"
+// in the language the app shows.
+func RecipesTitle() string { return In(i18n.Locale()).RecipesTitle() }
+
+// RecipesTitle says "Triggers you can ask for"
+// in the language of msgs.
+func (msgs Messages) RecipesTitle() string {
+	return Catalog.Format(msgs.locale, "recipesTitle", nil)
+}
+
+// RecipeAddedByYou says "Added by you"
+// in the language the app shows.
+func RecipeAddedByYou() string { return In(i18n.Locale()).RecipeAddedByYou() }
+
+// RecipeAddedByYou says "Added by you"
+// in the language of msgs.
+func (msgs Messages) RecipeAddedByYou() string {
+	return Catalog.Format(msgs.locale, "recipeAddedByYou", nil)
+}
+
+// RecipeCannotBeUsed says "Cannot be used: "
+// in the language the app shows.
+func RecipeCannotBeUsed() string { return In(i18n.Locale()).RecipeCannotBeUsed() }
+
+// RecipeCannotBeUsed says "Cannot be used: "
+// in the language of msgs.
+func (msgs Messages) RecipeCannotBeUsed() string {
+	return Catalog.Format(msgs.locale, "recipeCannotBeUsed", nil)
+}
+
+// RecipesWhereToAdd says "Mention one in your request. To add a kind of trigger, put a .json file in "
+// in the language the app shows.
+func RecipesWhereToAdd() string { return In(i18n.Locale()).RecipesWhereToAdd() }
+
+// RecipesWhereToAdd says "Mention one in your request. To add a kind of trigger, put a .json file in "
+// in the language of msgs.
+func (msgs Messages) RecipesWhereToAdd() string {
+	return Catalog.Format(msgs.locale, "recipesWhereToAdd", nil)
 }
 
 // WhenTheComputerWakesFromSleep9feec0 says "When the computer wakes from sleep"

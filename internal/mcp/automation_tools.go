@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"miya/internal/automation"
 	"miya/internal/chat/model"
 	mcpproto "miya/internal/mcp/protocol"
 )
@@ -13,23 +14,24 @@ var automationToolProps = map[string]any{
 	"name":     map[string]any{"type": "string", "description": "Short name, in the user's language"},
 	"schedule": map[string]any{"type": "string", "description": "5-field cron in local time, e.g. 0 9 * * 1-5. Leave empty when only triggers wake it"},
 	"triggers": map[string]any{"type": "array", "description": "Other ways it wakes, any of which starts a run. " +
-		"condition: when a probe of the computer turns true, e.g. {kind:condition, condition:{probe:disk_free, path:/, belowGB:5}} for free disk space under 5 GB, probe memory_free with belowGB, or probe command with a shell command whose exit 0 means met; everyMinutes (default 5) and repeatHours (default 24, wake again while still met). " +
+		"condition: a shell command Miya runs in the project. Miya does not know what it looks at, so thresholds and comparisons belong in the command. Give a recipe, which is a ready-made command with params, or a command of your own. Recipes (the .json files in " + automation.RecipeDir() + "): " + automation.RecipeHints() + ". E.g. {kind:condition, condition:{recipe:disk_free, params:{VOLUME:\"/\", BELOW_GB:\"5\"}}} for free disk space under 5 GB. " +
+		"A command of your own wakes as when says. success (default): run every everyMinutes (default 5), met when it exits 0, not met when it exits 1, any other status is an error, and the first line it prints is shown; it wakes when it turns met and again after repeatHours (default 24) while still met. changed: run every everyMinutes, it wakes each time the command prints something else than before and gives the run what it printed, e.g. {command:\"gh issue list --limit 20\", when:changed}. line: Miya keeps the command running and wakes with each line it prints, for a command that waits for events, e.g. {command:\"tail -n 0 -F app.log | grep --line-buffered ERROR\", when:line}; set policy queue with it so that lines printed during a run are kept. Keep success and changed commands quick and free of side effects. " +
 		"ingress: woken from outside by `miya -wake <id>` or a local HTTP request with a token. file: when a file or a directory's entries change (path). " +
 		"after: when another automation's run finishes (after: its id; results: passed/failed/interrupted). system: event wake, when the computer wakes from sleep.",
 		"items": map[string]any{"type": "object", "required": []string{"kind"}, "properties": map[string]any{
 			"kind": map[string]any{"type": "string", "enum": []string{"condition", "ingress", "file", "after", "system"}},
 			"condition": map[string]any{"type": "object", "properties": map[string]any{
-				"probe":        map[string]any{"type": "string", "enum": []string{"disk_free", "memory_free", "command"}},
-				"path":         map[string]any{"type": "string"},
-				"belowGB":      map[string]any{"type": "number"},
+				"recipe":       map[string]any{"type": "string"},
+				"params":       map[string]any{"type": "object", "additionalProperties": map[string]any{"type": "string"}},
 				"command":      map[string]any{"type": "string"},
+				"when":         map[string]any{"type": "string", "enum": []string{automation.WhenSuccess, automation.WhenChanged, automation.WhenLine}},
 				"everyMinutes": map[string]any{"type": "integer"},
 				"repeatHours":  map[string]any{"type": "integer"}}},
 			"path":    map[string]any{"type": "string"},
 			"after":   map[string]any{"type": "string"},
 			"results": map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
 			"event":   map[string]any{"type": "string", "enum": []string{"wake"}}}}},
-	"policy": map[string]any{"type": "object", "description": "Holds back triggered wakes: queue (keep one wake that comes while running), debounceSeconds, cooldownMinutes, maxPerDay (default 24), gate (a condition checked on every wake; the run starts only when met)",
+	"policy": map[string]any{"type": "object", "description": "Holds back triggered wakes: queue (keep one wake that comes while running), debounceSeconds, cooldownMinutes, maxPerDay (default 24), gate (a condition as in triggers, of a recipe or a success command, checked on every wake; the run starts only when met)",
 		"properties": map[string]any{"queue": map[string]any{"type": "boolean"}, "debounceSeconds": map[string]any{"type": "integer"},
 			"cooldownMinutes": map[string]any{"type": "integer"}, "maxPerDay": map[string]any{"type": "integer"}, "gate": map[string]any{"type": "object"}}},
 	"instructions": map[string]any{"type": "string", "description": "First message each run sends to a coding agent: what to do, when it is done, and to reply that there is nothing to report when so"},

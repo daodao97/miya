@@ -1,0 +1,11 @@
+{
+  "name": "memory_free",
+  "description": "memory available without swapping is below an amount",
+  "when": "success",
+  "command": "if [ -r /proc/meminfo ]; then kb=$(awk '/^MemAvailable:/ { print $2 }' /proc/meminfo); else kb=$(vm_stat | awk '/page size of/ { for (i = 1; i < NF; i++) if ($i == \"of\") size = $(i + 1) } /^Pages (free|inactive|speculative|purgeable):/ { gsub(/[.]/, \"\", $NF); pages += $NF } END { printf \"%d\", pages * size / 1024 }'); fi; awk -v kb=\"$kb\" -v lim=\"$BELOW_GB\" 'BEGIN { if (kb + 0 <= 0) exit 2; gb = kb / 1048576; print sprintf(\"%.1f GB of memory available\", gb); exit !(gb < lim) }'",
+  "params": [
+    {"name": "BELOW_GB", "description": "amount in GB, a number"}
+  ],
+  "text": "When free memory is below $BELOW_GB GB",
+  "everyMinutes": 5
+}

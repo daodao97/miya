@@ -19,6 +19,9 @@ type View struct {
 	Runs         []Run       `json:"runs,omitempty"`
 	// TimeMissing marks a draft whose sentence named no time.
 	TimeMissing bool `json:"timeMissing,omitempty"`
+	// Trials are what the test run of a draft's conditions found, by
+	// trigger ID, and GateTrial for its gate.
+	Trials map[string]Trial `json:"trials,omitempty"`
 	// TriggerTexts say when each trigger wakes it, by trigger ID, and
 	// TriggerStates what each has seen.
 	TriggerTexts  map[string]string       `json:"triggerTexts,omitempty"`

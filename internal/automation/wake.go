@@ -38,13 +38,14 @@ type wakeState struct {
 	pending  map[string]*pendingWake
 	queued   map[string]WakeEvent
 	files    map[string]fileSnapshot
+	streams  map[string]*streamProc
 	lastTick time.Time
 }
 
 func (rn *Runner) wakes() *wakeState {
 	if rn.wake == nil {
 		rn.wake = &wakeState{probing: map[string]bool{}, scanning: map[string]bool{}, gating: map[string]bool{},
-			pending: map[string]*pendingWake{}, queued: map[string]WakeEvent{}, files: map[string]fileSnapshot{}}
+			pending: map[string]*pendingWake{}, queued: map[string]WakeEvent{}, files: map[string]fileSnapshot{}, streams: map[string]*streamProc{}}
 	}
 	return rn.wake
 }
@@ -120,13 +121,21 @@ func (rn *Runner) Wake(ev WakeEvent) (Wake, error) {
 
 // debounceWindow is how long a trigger's events are gathered into one.
 func debounceWindow(a Automation, t Trigger, source string) time.Duration {
+	// The lines a running command prints are events like the others; a
+	// command that is checked now and then wakes at most once a check.
+	line := source == TriggerCondition && t.Condition != nil && t.Condition.When == WhenLine
 	switch source {
 	case TriggerIngress, TriggerFile, TriggerAfter, TriggerSystem:
 	default:
-		return 0
+		if !line {
+			return 0
+		}
 	}
 	if a.Policy.DebounceSeconds > 0 {
 		return time.Duration(a.Policy.DebounceSeconds) * time.Second
+	}
+	if line {
+		return defaultLineDebounce * time.Second
 	}
 	if t.Kind == TriggerFile {
 		return defaultFileDebounce * time.Second
@@ -154,6 +163,9 @@ func (rn *Runner) deliver(a Automation, ev WakeEvent, gated bool) (Wake, error) 
 		if a.Policy.Queue && ev.Source != SourceManual {
 			if q, waiting := w.queued[a.ID]; waiting {
 				q.Count = max(q.Count, 1) + 1
+				if ev.Data != "" {
+					q.Data = clipData(q.Data + "\n\n" + ev.Data)
+				}
 				w.queued[a.ID] = q
 				return rn.record(a.ID, ev, WakeSkipped, "Merged into the wake already waiting"), nil
 			}
@@ -296,6 +308,7 @@ func (rn *Runner) tickWakes(now time.Time) {
 			}
 		}
 	}
+	rn.syncStreams()
 }
 
 // probeIfDue probes a condition when its interval has passed; not while a
@@ -303,7 +316,7 @@ func (rn *Runner) tickWakes(now time.Time) {
 func (rn *Runner) probeIfDue(a Automation, t Trigger, now time.Time) {
 	w := rn.wakes()
 	key := TriggerKey(a.ID, t.ID)
-	if _, running := rn.Active[a.ID]; running || w.probing[key] || t.Condition == nil {
+	if _, running := rn.Active[a.ID]; running || w.probing[key] || t.Condition == nil || t.Condition.When == WhenLine {
 		return
 	}
 	st := rn.Store.Triggers[key]
@@ -352,6 +365,23 @@ func (rn *Runner) afterProbe(id, tid string, res ProbeResult) {
 		return
 	}
 	st.Errors, st.Error, st.Met, st.Value = 0, "", res.Met, res.Value
+	if t.Condition.When == WhenChanged {
+		// Each change wakes it, with what the command printed as the run's
+		// data. The first look only remembers what is there.
+		fp := textFingerprint(res.Output)
+		changed := st.Fingerprint != "" && st.Fingerprint != fp
+		st.Fingerprint = fp
+		if changed {
+			st.LastFired = now
+		}
+		rn.Store.Triggers[key] = st
+		rn.Persist()
+		rn.host.Changed()
+		if changed {
+			_, _ = rn.Wake(WakeEvent{Automation: id, Trigger: tid, Source: TriggerCondition, Reason: conditionReason(*t.Condition, res), Data: res.Output})
+		}
+		return
+	}
 	fire, again := false, false
 	if res.Met {
 		if !st.Fired {
@@ -359,7 +389,7 @@ func (rn *Runner) afterProbe(id, tid string, res ProbeResult) {
 		} else if now.Sub(st.LastFired) >= time.Duration(t.Condition.RepeatHours)*time.Hour {
 			fire, again = true, true
 		}
-	} else if st.Fired && rearmed(*t.Condition, res) {
+	} else {
 		st.Fired = false
 	}
 	if fire {
@@ -380,16 +410,17 @@ func (rn *Runner) afterProbe(id, tid string, res ProbeResult) {
 
 // conditionReason says why a met condition woke the automation.
 func conditionReason(c Condition, res ProbeResult) string {
-	switch c.Probe {
-	case ProbeDiskFree, ProbeMemoryFree:
-		return fmt.Sprintf("%s, below %s", res.Value, formatGB(c.BelowGB))
-	case ProbeCommand:
-		if res.Value != "" {
-			return fmt.Sprintf("`%s` succeeded: %s", c.Command, res.Value)
-		}
-		return fmt.Sprintf("`%s` succeeded", c.Command)
+	what := "`" + commandLabel(c) + "`"
+	switch {
+	case c.When == WhenChanged:
+		return fmt.Sprintf("The output of %s changed: %s", what, textutil.FirstNonEmpty(res.Value, "it is now empty"))
+	case c.Text != "":
+		// A recipe says in words what it checks; its command says what it found.
+		return strings.TrimSuffix(conditionText(c, false)+": "+res.Value, ": ")
+	case res.Value != "":
+		return fmt.Sprintf("%s succeeded: %s", what, res.Value)
 	}
-	return res.Value
+	return what + " succeeded"
 }
 
 // scanFile looks at a watched path, at most one look at a time.
@@ -511,7 +542,7 @@ func (rn *Runner) reprobe(id string, run Run) {
 	}
 	a := rn.Store.Automations[i]
 	t, ok := a.Trigger(run.WakeTrigger)
-	if !ok || t.Condition == nil {
+	if !ok || t.Condition == nil || t.Condition.When == WhenLine {
 		return
 	}
 	c, dir, probe, started := *t.Condition, textutil.FirstNonEmpty(a.Project), rn.Probe, run.Started

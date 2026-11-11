@@ -123,8 +123,14 @@ func (c *Controller) prepareAutomationDraft(ctx context.Context, r automation.Re
 		if err != nil {
 			return nil, err
 		}
+		// A command nobody ran is not offered: the draft shows what its
+		// test run found, and one that cannot run is not a draft.
+		trials, err := automation.TryConditions(a)
+		if err != nil {
+			return nil, err
+		}
 		v := automation.ViewOf(a, nil, false, now)
-		v.TimeMissing = timeMissing
+		v.TimeMissing, v.Trials = timeMissing, trials
 		return v, nil
 	}), nil
 }

@@ -144,6 +144,10 @@ func TestAutomationInputDiscardsOldDraft(t *testing.T) {
 	if app.Autos.Draft != nil || app.Autos.Drafting || tt.HasText("Ready") {
 		t.Fatal("edited request kept old settings ready to save")
 	}
+	// With no settings yet, the form says which triggers a request can ask for.
+	if !tt.HasText("Triggers you can ask for") || !tt.HasText("disk_free") || !tt.HasText("memory_free") {
+		t.Fatal("the form does not list the ready-made triggers")
+	}
 	if err := tt.Click("Create"); err != nil {
 		t.Fatal(err)
 	}

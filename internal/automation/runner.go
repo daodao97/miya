@@ -65,8 +65,14 @@ type Runner struct {
 	WorktreeRoot string
 	// Probe probes a condition off the host's thread; replaced in tests.
 	Probe func(c Condition, dir string) ProbeResult
-	host  Host
-	wake  *wakeState
+	// Stream keeps a line trigger's command running until ctx ends and
+	// reports what it does; replaced in tests.
+	Stream func(ctx context.Context, dir string, c Condition, emit func(StreamEvent))
+	// Try runs an automation's conditions once before it is saved; replaced
+	// in tests.
+	Try  func(a Automation) (map[string]Trial, error)
+	host Host
+	wake *wakeState
 	// hook is the local HTTP wake endpoint; listen lets a scheduling
 	// runner open it.
 	hook   *webhook
@@ -99,7 +105,7 @@ const TickInterval = 15 * time.Second
 // NewRunner loads the automations stored at path.
 func NewRunner(host Host, path string) *Runner {
 	rn := &Runner{Path: path, Store: Load(path), Active: map[string]*ActiveRun{},
-		Now: time.Now, Submit: host.Submit, Check: runCheck, WorktreeRoot: WorktreeRoot(), Probe: runProbe, host: host}
+		Now: time.Now, Submit: host.Submit, Check: runCheck, WorktreeRoot: WorktreeRoot(), Probe: runProbe, Stream: runStream, Try: TryConditions, host: host}
 	rn.Background = func(work func() func()) {
 		go func() {
 			done := work()
@@ -143,6 +149,7 @@ func (rn *Runner) Start(done <-chan struct{}, schedule bool) {
 			select {
 			case <-done:
 				rn.host.Dispatch(rn.stopWebhook)
+				rn.host.Dispatch(rn.stopStreams)
 				return
 			case <-t.C:
 				rn.host.Dispatch(rn.Tick)

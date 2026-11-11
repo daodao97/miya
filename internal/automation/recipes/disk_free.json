@@ -1,0 +1,12 @@
+{
+  "name": "disk_free",
+  "description": "free disk space on a volume is below an amount, as in 'when storage is below 5G'",
+  "when": "success",
+  "command": "df -Pk \"$VOLUME\" | awk -v lim=\"$BELOW_GB\" -v vol=\"$VOLUME\" 'NR == 2 { gb = $4 / 1048576; print sprintf(\"%.1f GB free on %s\", gb, vol); found = 1; exit !(gb < lim) } END { if (!found) exit 2 }'",
+  "params": [
+    {"name": "VOLUME", "description": "path of the volume", "default": "/"},
+    {"name": "BELOW_GB", "description": "amount in GB, a number"}
+  ],
+  "text": "When free space on $VOLUME is below $BELOW_GB GB",
+  "everyMinutes": 5
+}

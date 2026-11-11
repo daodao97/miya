@@ -2,6 +2,7 @@ package integration
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -14,7 +15,7 @@ import (
 
 func lowDisk(gb float64) func(automation.Condition, string) automation.ProbeResult {
 	return func(c automation.Condition, _ string) automation.ProbeResult {
-		return automation.ProbeResult{Met: gb < c.BelowGB, Amount: gb, Value: formatGB(gb) + " free on /"}
+		return automation.ProbeResult{Met: gb < 5, Value: formatGB(gb) + " free on /"}
 	}
 }
 
@@ -26,7 +27,7 @@ func formatGB(gb float64) string {
 func TestAutomationWakesWhenDiskIsLow(t *testing.T) {
 	h := newAutomationHarness(t)
 	a := h.add(t, automation.Automation{Name: "Clean disk", Agent: appmodel.AgentClaude, Instructions: "Clear caches",
-		Triggers: []automation.Trigger{{Kind: automation.TriggerCondition, Condition: &automation.Condition{Probe: automation.ProbeDiskFree, BelowGB: 5}}}})
+		Triggers: []automation.Trigger{{Kind: automation.TriggerCondition, Condition: &automation.Condition{Recipe: "disk_free", Params: automation.Params{"BELOW_GB": "5"}}}}})
 	h.s.Probe = lowDisk(40)
 	h.c.Auto.Tick()
 	if len(h.sent) != 0 {
@@ -35,7 +36,7 @@ func TestAutomationWakesWhenDiskIsLow(t *testing.T) {
 	h.s.Probe = lowDisk(4)
 	h.now = h.now.Add(5 * time.Minute)
 	h.c.Auto.Tick()
-	if len(h.sent) != 1 || !strings.Contains(h.sent[0].Text, "4 GB free on /, below 5 GB") {
+	if len(h.sent) != 1 || !strings.Contains(h.sent[0].Text, "When free space on / is below 5 GB: 4 GB free on /") {
 		t.Fatalf("low disk did not start a run: %v", h.sent)
 	}
 	run := h.last(a.ID)
@@ -92,15 +93,44 @@ func TestAutomationWakeOperationAndRunNow(t *testing.T) {
 	_ = hook
 }
 
+// awaitCard waits for the confirmation card of a call whose conditions are
+// run before the user is asked.
+func awaitCard(t *testing.T, h *automationHarness) codex.Approval {
+	t.Helper()
+	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(5 * time.Millisecond) {
+		for _, a := range h.c.Approvals() {
+			if codex.IsMiyaApproval(a) {
+				return a
+			}
+		}
+	}
+	t.Fatal("no confirmation card")
+	return codex.Approval{}
+}
+
 func TestMCPCreateTriggerAutomationAndWake(t *testing.T) {
 	h := newAutomationHarness(t)
 	h.c.Run = func(f func()) { f() }
 	automationCaller(h, "create_automation")
 	triggers := json.RawMessage(`[{"kind":"condition","condition":{"probe":"disk_free","belowGB":5}}]`)
 	args := &mcpproto.AutomationArgs{Name: "Clean disk", Instructions: "Clear caches", Triggers: triggers, Policy: json.RawMessage(`{"cooldownMinutes":120}`)}
+	// A command that cannot run goes back to the agent, not to the user.
+	h.s.Try = func(automation.Automation) (map[string]automation.Trial, error) {
+		return nil, errors.New("The test run of the trigger failed: df: command not found")
+	}
 	res, err := h.c.MCP().Handle("mcpAutomationCreate", mcpproto.Request{Tool: "create_automation", Auto: args})
+	if failed, ok := (<-startDeferred(t, res, err)).(error); !ok || !strings.Contains(failed.Error(), "command not found") || len(h.c.Approvals()) != 0 || len(h.s.Store.Automations) != 0 {
+		t.Fatalf("a failed test run reached the user: %v, %d cards", failed, len(h.c.Approvals()))
+	}
+	h.s.Try = func(a automation.Automation) (map[string]automation.Trial, error) {
+		return map[string]automation.Trial{a.Triggers[0].ID: {Text: "When free space on / is below 5 GB", When: automation.WhenSuccess, Value: "17.5 GB free on /"}}, nil
+	}
+	res, err = h.c.MCP().Handle("mcpAutomationCreate", mcpproto.Request{Tool: "create_automation", Auto: args})
 	out := startDeferred(t, res, err)
-	card := miyaCard(t, h.c)
+	card := awaitCard(t, h)
+	if !strings.Contains(card.Command, "Test run of \"When free space on / is below 5 GB\": not met right now: 17.5 GB free on /") {
+		t.Fatalf("the card does not show the test run: %q", card.Command)
+	}
 	if !strings.Contains(card.Command, "Wakes: When free space on / is below 5 GB") || strings.Contains(card.Command, "next scheduled run") {
 		t.Fatalf("bad card: %q", card.Command)
 	}

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -41,13 +40,6 @@ const (
 	SourceAgent = "agent"
 )
 
-// Condition probes.
-const (
-	ProbeDiskFree   = "disk_free"
-	ProbeMemoryFree = "memory_free"
-	ProbeCommand    = "command"
-)
-
 // SystemWake is the system event of a computer waking from sleep.
 const SystemWake = "wake"
 
@@ -75,24 +67,6 @@ type Trigger struct {
 	// Token authorizes HTTP wakes of an ingress trigger.
 	Token    string `json:"token,omitempty"`
 	Disabled bool   `json:"disabled,omitempty"`
-}
-
-// Condition is a probe of the computer and when it is met.
-type Condition struct {
-	Probe string `json:"probe"`
-	// Path is the volume disk_free looks at.
-	Path string `json:"path,omitempty"`
-	// BelowGB is the amount of free space or memory under which the
-	// condition is met.
-	BelowGB float64 `json:"belowGB,omitempty"`
-	// Command runs in a login shell in the project; exit status 0 meets the
-	// condition, and the first line it prints is the value shown.
-	Command string `json:"command,omitempty"`
-	// EveryMinutes is how often it is probed.
-	EveryMinutes int `json:"everyMinutes,omitempty"`
-	// RepeatHours is how long a condition that stays met waits before it
-	// wakes the automation again.
-	RepeatHours int `json:"repeatHours,omitempty"`
 }
 
 // WakePolicy holds back wakes of an automation.
@@ -185,32 +159,8 @@ func (t *Trigger) normalize(self string) error {
 		if c == nil {
 			return errors.New("A condition trigger needs a condition")
 		}
-		c.Probe, c.Command, c.Path = strings.TrimSpace(c.Probe), strings.TrimSpace(c.Command), strings.TrimSpace(c.Path)
-		switch c.Probe {
-		case ProbeDiskFree:
-			if c.Path = expandHome(c.Path); c.Path == "" {
-				c.Path = "/"
-			}
-			fallthrough
-		case ProbeMemoryFree:
-			if c.BelowGB <= 0 {
-				return errors.New("The condition needs a threshold above 0 GB")
-			}
-			c.Command = ""
-		case ProbeCommand:
-			if c.Command == "" {
-				return errors.New("The condition needs a command")
-			}
-			c.Path, c.BelowGB = "", 0
-		default:
-			return fmt.Errorf("Unknown condition %q", c.Probe)
-		}
-		if c.EveryMinutes <= 0 {
-			c.EveryMinutes = defaultProbeEvery
-		}
-		c.EveryMinutes = min(c.EveryMinutes, 24*60)
-		if c.RepeatHours <= 0 {
-			c.RepeatHours = defaultProbeRepeat
+		if err := c.normalize(); err != nil {
+			return err
 		}
 	case TriggerIngress:
 		if t.Token == "" {
@@ -279,6 +229,9 @@ func (a *Automation) normalizeTriggers() error {
 		if err := gate.normalize(a.ID); err != nil {
 			return fmt.Errorf("Gate: %v", err)
 		}
+		if p.Gate.When != WhenSuccess {
+			return errors.New("Gate: a gate is met or not; it cannot wait for a change or a line")
+		}
 	}
 	p.DebounceSeconds = min(max(p.DebounceSeconds, 0), 3600)
 	p.CooldownMinutes = min(max(p.CooldownMinutes, 0), 7*24*60)
@@ -309,26 +262,13 @@ func (a Automation) HasTrigger(kind string) bool {
 	return false
 }
 
-func formatGB(gb float64) string {
-	return strconv.FormatFloat(gb, 'f', -1, 64) + " GB"
-}
-
 // DescribeTrigger says when a trigger wakes; name gives the names of other
 // automations.
 func DescribeTrigger(t Trigger, name func(id string) string) string {
 	switch t.Kind {
 	case TriggerCondition:
-		c := t.Condition
-		if c == nil {
-			break
-		}
-		switch c.Probe {
-		case ProbeDiskFree:
-			return fmt.Sprintf(tr("When free space on %s is below %s"), c.Path, formatGB(c.BelowGB))
-		case ProbeMemoryFree:
-			return fmt.Sprintf(tr("When free memory is below %s"), formatGB(c.BelowGB))
-		case ProbeCommand:
-			return fmt.Sprintf(tr("When `%s` succeeds"), c.Command)
+		if t.Condition != nil {
+			return describeCondition(*t.Condition)
 		}
 	case TriggerIngress:
 		return tr("When woken from outside Miya")
