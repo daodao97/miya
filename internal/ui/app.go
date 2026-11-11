@@ -57,7 +57,7 @@ type App struct {
 	desktopReadIntent                   appmodel.DesktopRead // a completed result the user chose to view
 
 	answers        map[string]map[string]string // question answers, by approval ID
-	forms          map[string]string            // MCP form JSON, by approval ID
+	forms          map[string]map[string]string // MCP form field values, by approval ID
 	formErrors     map[string]string
 	SettingsTab    int
 	settingDrafts  map[string]string
@@ -108,7 +108,7 @@ func NewChatAppWithController(c Host) *App {
 		ExpandedProject:    c.State().Cwd,
 		threadListExpanded: map[string]bool{},
 		answers:            map[string]map[string]string{},
-		forms:              map[string]string{},
+		forms:              map[string]map[string]string{},
 		formErrors:         map[string]string{},
 		settingDrafts:      map[string]string{},
 		Appearance:         prefs.NormalizeAppearance(prefs.Load("appearance")),

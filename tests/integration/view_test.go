@@ -207,13 +207,14 @@ func TestApprovalCardResolvesRequest(t *testing.T) {
 	id, _ := json.Marshal("claude:1:a1")
 	app.C.(*controller.Controller).SetApprovals([]codex.Approval{{ID: id, Method: "claude/permission", Command: "Bash", Reason: `{"command":"pwd"}`}})
 	tt.Frame()
-	if !tt.HasText("Claude Code requests approval") {
+	// The card names the action and shows the command itself, not the tool's JSON.
+	if !tt.HasText("Run a command") || !tt.HasText("pwd") || tt.HasText(`{"command":"pwd"}`) {
 		t.Fatalf("approval missing: %q", tt.Texts())
 	}
-	if err := tt.Click("Decline"); err != nil {
+	if err := tt.Click("Deny"); err != nil {
 		t.Fatal(err)
 	}
-	if len(app.C.(*controller.Controller).Approvals()) != 0 || tt.HasText("Claude Code requests approval") {
+	if len(app.C.(*controller.Controller).Approvals()) != 0 || tt.HasText("Run a command") {
 		t.Fatal("declined approval still pending")
 	}
 }
@@ -226,16 +227,19 @@ func TestQuestionNeedsEveryAnswer(t *testing.T) {
 		Description string `json:"description"`
 	}{{Label: "Blue", Description: "calm"}}}}}})
 	tt.Frame()
-	if err := tt.Click("Submit answers"); err != nil {
+	if err := tt.Click("Submit answer"); err != nil {
 		t.Fatal(err)
 	}
 	if len(app.C.(*controller.Controller).Approvals()) != 1 {
 		t.Fatal("submitted without an answer")
 	}
-	if err := tt.Click("Blue · calm"); err != nil {
+	if !tt.HasText("calm") {
+		t.Fatalf("option description missing: %q", tt.Texts())
+	}
+	if err := tt.Click("Blue"); err != nil {
 		t.Fatal(err)
 	}
-	if err := tt.Click("Submit answers"); err != nil {
+	if err := tt.Click("Submit answer"); err != nil {
 		t.Fatal(err)
 	}
 	if len(app.C.(*controller.Controller).Approvals()) != 0 {

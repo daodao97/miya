@@ -42,6 +42,17 @@ type Question struct {
 	} `json:"options"`
 }
 
+// HasOption reports whether label is one of the question's offered answers,
+// as opposed to one the person typed.
+func (q Question) HasOption(label string) bool {
+	for _, o := range q.Options {
+		if o.Label == label {
+			return true
+		}
+	}
+	return false
+}
+
 type Kind string
 
 const (

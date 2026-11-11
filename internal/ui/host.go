@@ -37,6 +37,7 @@ type Host interface {
 	AgentSpeedBadge(agent string) string
 	AllThreads() []model.Thread
 	ApprovalDetail(a interaction.Request) string
+	DescribeApproval(a interaction.Request) appmodel.ApprovalView
 	ArchiveProject(path string)
 	ArchiveThread(t model.Thread)
 	AskAccountReset()

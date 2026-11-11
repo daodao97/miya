@@ -19865,3 +19865,213 @@ func WokeItWaitsToRecoverC85a7b() string { return In(i18n.Locale()).WokeItWaitsT
 func (msgs Messages) WokeItWaitsToRecoverC85a7b() string {
 	return Catalog.Format(msgs.locale, "wokeItWaitsToRecover_c85a7b", nil)
 }
+
+// ApproveThisActionA7ba0e says "Approve this action"
+// in the language the app shows.
+func ApproveThisActionA7ba0e() string { return In(i18n.Locale()).ApproveThisActionA7ba0e() }
+
+// ApproveThisActionA7ba0e says "Approve this action"
+// in the language of msgs.
+func (msgs Messages) ApproveThisActionA7ba0e() string {
+	return Catalog.Format(msgs.locale, "approveThisAction_a7ba0e", nil)
+}
+
+// RunACommand7a4054 says "Run a command"
+// in the language the app shows.
+func RunACommand7a4054() string { return In(i18n.Locale()).RunACommand7a4054() }
+
+// RunACommand7a4054 says "Run a command"
+// in the language of msgs.
+func (msgs Messages) RunACommand7a4054() string {
+	return Catalog.Format(msgs.locale, "runACommand_7a4054", nil)
+}
+
+// ChangeFiles4e70e5 says "Change files"
+// in the language the app shows.
+func ChangeFiles4e70e5() string { return In(i18n.Locale()).ChangeFiles4e70e5() }
+
+// ChangeFiles4e70e5 says "Change files"
+// in the language of msgs.
+func (msgs Messages) ChangeFiles4e70e5() string {
+	return Catalog.Format(msgs.locale, "changeFiles_4e70e5", nil)
+}
+
+// GrantMoreAccess84d1cd says "Grant more access"
+// in the language the app shows.
+func GrantMoreAccess84d1cd() string { return In(i18n.Locale()).GrantMoreAccess84d1cd() }
+
+// GrantMoreAccess84d1cd says "Grant more access"
+// in the language of msgs.
+func (msgs Messages) GrantMoreAccess84d1cd() string {
+	return Catalog.Format(msgs.locale, "grantMoreAccess_84d1cd", nil)
+}
+
+// RequestedRoot7da3dd says "Requested root"
+// in the language the app shows.
+func RequestedRoot7da3dd() string { return In(i18n.Locale()).RequestedRoot7da3dd() }
+
+// RequestedRoot7da3dd says "Requested root"
+// in the language of msgs.
+func (msgs Messages) RequestedRoot7da3dd() string {
+	return Catalog.Format(msgs.locale, "requestedRoot_7da3dd", nil)
+}
+
+// EditAFileF870fe says "Edit a file"
+// in the language the app shows.
+func EditAFileF870fe() string { return In(i18n.Locale()).EditAFileF870fe() }
+
+// EditAFileF870fe says "Edit a file"
+// in the language of msgs.
+func (msgs Messages) EditAFileF870fe() string {
+	return Catalog.Format(msgs.locale, "editAFile_f870fe", nil)
+}
+
+// WriteAFile04955d says "Write a file"
+// in the language the app shows.
+func WriteAFile04955d() string { return In(i18n.Locale()).WriteAFile04955d() }
+
+// WriteAFile04955d says "Write a file"
+// in the language of msgs.
+func (msgs Messages) WriteAFile04955d() string {
+	return Catalog.Format(msgs.locale, "writeAFile_04955d", nil)
+}
+
+// EditANotebook468eaf says "Edit a notebook"
+// in the language the app shows.
+func EditANotebook468eaf() string { return In(i18n.Locale()).EditANotebook468eaf() }
+
+// EditANotebook468eaf says "Edit a notebook"
+// in the language of msgs.
+func (msgs Messages) EditANotebook468eaf() string {
+	return Catalog.Format(msgs.locale, "editANotebook_468eaf", nil)
+}
+
+// ReadAFile1d3fb8 says "Read a file"
+// in the language the app shows.
+func ReadAFile1d3fb8() string { return In(i18n.Locale()).ReadAFile1d3fb8() }
+
+// ReadAFile1d3fb8 says "Read a file"
+// in the language of msgs.
+func (msgs Messages) ReadAFile1d3fb8() string {
+	return Catalog.Format(msgs.locale, "readAFile_1d3fb8", nil)
+}
+
+// SearchFilesEc8825 says "Search files"
+// in the language the app shows.
+func SearchFilesEc8825() string { return In(i18n.Locale()).SearchFilesEc8825() }
+
+// SearchFilesEc8825 says "Search files"
+// in the language of msgs.
+func (msgs Messages) SearchFilesEc8825() string {
+	return Catalog.Format(msgs.locale, "searchFiles_ec8825", nil)
+}
+
+// OpenAWebPage0d6f2b says "Open a web page"
+// in the language the app shows.
+func OpenAWebPage0d6f2b() string { return In(i18n.Locale()).OpenAWebPage0d6f2b() }
+
+// OpenAWebPage0d6f2b says "Open a web page"
+// in the language of msgs.
+func (msgs Messages) OpenAWebPage0d6f2b() string {
+	return Catalog.Format(msgs.locale, "openAWebPage_0d6f2b", nil)
+}
+
+// SearchTheWeb7f5d69 says "Search the web"
+// in the language the app shows.
+func SearchTheWeb7f5d69() string { return In(i18n.Locale()).SearchTheWeb7f5d69() }
+
+// SearchTheWeb7f5d69 says "Search the web"
+// in the language of msgs.
+func (msgs Messages) SearchTheWeb7f5d69() string {
+	return Catalog.Format(msgs.locale, "searchTheWeb_7f5d69", nil)
+}
+
+// ServerCb0cb1 says "Server"
+// in the language the app shows.
+func ServerCb0cb1() string { return In(i18n.Locale()).ServerCb0cb1() }
+
+// ServerCb0cb1 says "Server"
+// in the language of msgs.
+func (msgs Messages) ServerCb0cb1() string {
+	return Catalog.Format(msgs.locale, "server_cb0cb1", nil)
+}
+
+// UseATool634569 says "Use a tool"
+// in the language the app shows.
+func UseATool634569() string { return In(i18n.Locale()).UseATool634569() }
+
+// UseATool634569 says "Use a tool"
+// in the language of msgs.
+func (msgs Messages) UseATool634569() string {
+	return Catalog.Format(msgs.locale, "useATool_634569", nil)
+}
+
+// UseS29de5a says "Use %s"
+// in the language the app shows.
+func UseS29de5a() string { return In(i18n.Locale()).UseS29de5a() }
+
+// UseS29de5a says "Use %s"
+// in the language of msgs.
+func (msgs Messages) UseS29de5a() string {
+	return Catalog.Format(msgs.locale, "useS_29de5a", nil)
+}
+
+// SHasAQuestion9647a4 says "%s has a question"
+// in the language the app shows.
+func SHasAQuestion9647a4() string { return In(i18n.Locale()).SHasAQuestion9647a4() }
+
+// SHasAQuestion9647a4 says "%s has a question"
+// in the language of msgs.
+func (msgs Messages) SHasAQuestion9647a4() string {
+	return Catalog.Format(msgs.locale, "sHasAQuestion_9647a4", nil)
+}
+
+// SHasSomeQuestionsCa7b4a says "%s has some questions"
+// in the language the app shows.
+func SHasSomeQuestionsCa7b4a() string { return In(i18n.Locale()).SHasSomeQuestionsCa7b4a() }
+
+// SHasSomeQuestionsCa7b4a says "%s has some questions"
+// in the language of msgs.
+func (msgs Messages) SHasSomeQuestionsCa7b4a() string {
+	return Catalog.Format(msgs.locale, "sHasSomeQuestions_ca7b4a", nil)
+}
+
+// DOfDAnswered43ba6b says "%d of %d answered"
+// in the language the app shows.
+func DOfDAnswered43ba6b() string { return In(i18n.Locale()).DOfDAnswered43ba6b() }
+
+// DOfDAnswered43ba6b says "%d of %d answered"
+// in the language of msgs.
+func (msgs Messages) DOfDAnswered43ba6b() string {
+	return Catalog.Format(msgs.locale, "dOfDAnswered_43ba6b", nil)
+}
+
+// ContinueInYourBrowser136c45 says "Continue in your browser"
+// in the language the app shows.
+func ContinueInYourBrowser136c45() string { return In(i18n.Locale()).ContinueInYourBrowser136c45() }
+
+// ContinueInYourBrowser136c45 says "Continue in your browser"
+// in the language of msgs.
+func (msgs Messages) ContinueInYourBrowser136c45() string {
+	return Catalog.Format(msgs.locale, "continueInYourBrowser_136c45", nil)
+}
+
+// SNeedsSomeInformationC30bc8 says "%s needs some information"
+// in the language the app shows.
+func SNeedsSomeInformationC30bc8() string { return In(i18n.Locale()).SNeedsSomeInformationC30bc8() }
+
+// SNeedsSomeInformationC30bc8 says "%s needs some information"
+// in the language of msgs.
+func (msgs Messages) SNeedsSomeInformationC30bc8() string {
+	return Catalog.Format(msgs.locale, "sNeedsSomeInformation_c30bc8", nil)
+}
+
+// QuestionDOfD231e8d says "Question %d of %d"
+// in the language the app shows.
+func QuestionDOfD231e8d() string { return In(i18n.Locale()).QuestionDOfD231e8d() }
+
+// QuestionDOfD231e8d says "Question %d of %d"
+// in the language of msgs.
+func (msgs Messages) QuestionDOfD231e8d() string {
+	return Catalog.Format(msgs.locale, "questionDOfD_231e8d", nil)
+}
