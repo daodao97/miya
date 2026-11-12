@@ -2,7 +2,7 @@ module miya
 
 go 1.27.3
 
-replace github.com/egoist/mygo => github.com/daodao97/mygo-mobile v0.0.0-20261110104535-23e766f46149
+replace github.com/egoist/mygo => github.com/daodao97/mygo-mobile v0.0.0-20261112103112-fd6700a91e26
 
 require (
 	github.com/coder/websocket v1.8.15
@@ -21,8 +21,10 @@ require (
 require (
 	filippo.io/edwards25519 v1.2.0 // indirect
 	github.com/Heyana/typesetting-go v0.3.5-heyana.4 // indirect
+	github.com/ProtonMail/go-crypto v1.4.1 // indirect
 	github.com/akutz/memconn v0.1.0 // indirect
 	github.com/anmitsu/go-shlex v0.0.0-20200514113438-38f4b401e2be // indirect
+	github.com/cloudflare/circl v1.6.3 // indirect
 	github.com/creachadair/msync v0.10.1 // indirect
 	github.com/dblohm7/wingoes v0.0.0-20260526185140-fb298caac7ca // indirect
 	github.com/ebitengine/purego v0.11.1 // indirect
@@ -50,7 +52,9 @@ require (
 	github.com/tailscale/web-client-prebuilt v0.0.0-20260917222731-e0ed2d0d0fea // indirect
 	github.com/tailscale/wireguard-go v0.0.0-20260928213353-e61b6b78110b // indirect
 	github.com/u-root/u-root v0.16.0 // indirect
+	github.com/ulikunitz/xz v0.5.16 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
+	go.digitalxero.dev/rpm v0.3.4 // indirect
 	go4.org/mem v0.0.0-20240501181205-ae6ca9944745 // indirect
 	go4.org/netipx v0.0.0-20260823151212-3075585bcbeb // indirect
 	golang.org/x/crypto v0.57.0 // indirect
