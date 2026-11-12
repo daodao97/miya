@@ -2,7 +2,7 @@ module miya
 
 go 1.27.3
 
-replace github.com/egoist/mygo => github.com/daodao97/mygo-mobile v0.0.0-20261112103112-fd6700a91e26
+replace github.com/egoist/mygo => github.com/daodao97/mygo-mobile v0.0.0-20261112142321-f29b5777f85a
 
 require (
 	github.com/coder/websocket v1.8.15
