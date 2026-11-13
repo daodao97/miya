@@ -466,7 +466,7 @@ func panelBar(c *ui.Context, fn func()) {
 }
 
 func (app *App) startBrowser(s *PanelSurface) {
-	w := uiruntime.CurrentWindow()
+	w := mainWindow()
 	if w == nil {
 		s.webErr = tr("The browser requires an app window")
 		return

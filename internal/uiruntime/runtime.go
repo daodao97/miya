@@ -3,8 +3,7 @@ package uiruntime
 import (
 	"sync"
 	"sync/atomic"
-
-	"github.com/egoist/mygo"
+	"time"
 )
 
 // The controller was written against getter/setter pairs. In MyGo's
@@ -20,13 +19,28 @@ func CreateSignal[T any](initial T) (func() T, func(T)) {
 	}
 }
 
+// Window is what code outside the view layer needs of the app's window. The
+// UI framework's window implements it; this package names no framework, so
+// the controller does not either.
+type Window interface {
+	// Update runs f on the UI thread and draws a new frame afterwards.
+	Update(f func())
+	Invalidate()
+	Show()
+	Focus()
+	Restore()
+	IsFocused() bool
+	IsMinimized() bool
+}
+
 var WindowMu sync.Mutex
 
-var appWindow *mygo.Window
+var appWindow Window
 
 var Pending []func()
 
-func SetAppWindow(w *mygo.Window) {
+// SetAppWindow records the app's window, or clears it with an untyped nil.
+func SetAppWindow(w Window) {
 	WindowMu.Lock()
 	appWindow = w
 	queued := Pending
@@ -40,7 +54,7 @@ func SetAppWindow(w *mygo.Window) {
 	}
 }
 
-func CurrentWindow() *mygo.Window {
+func CurrentWindow() Window {
 	WindowMu.Lock()
 	defer WindowMu.Unlock()
 	return appWindow
@@ -95,6 +109,30 @@ func Invalidate() {
 	if h := CurrentInvalidateHook(); h != nil {
 		h()
 	}
+}
+
+// Platform services the UI layer provides. Left nil (tests, before the UI
+// installs them) the user counts as present and no notification is shown.
+var (
+	// IdleTime reports how long the user has been away from the machine.
+	IdleTime func() time.Duration
+	// ShowNotice shows a system notification.
+	ShowNotice func(Notice) error
+)
+
+// Notice is a system notification. OnClick runs when the user clicks it.
+type Notice struct {
+	ID, Title, Body, Group string
+	Data                   map[string]string
+	OnClick                func()
+}
+
+// Idle is IdleTime, or zero when no UI provides it.
+func Idle() time.Duration {
+	if IdleTime == nil {
+		return 0
+	}
+	return IdleTime()
 }
 
 // cleanups run once as the app quits, in place of component cleanups.

@@ -7,8 +7,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/egoist/mygo"
-
 	codex "miya/internal/agent/codex/native"
 	"miya/internal/chat/model"
 	"miya/internal/notification"
@@ -76,7 +74,7 @@ func (c *Controller) deliverNotice(n notification.Notice, kind string) {
 		return
 	}
 	w := uiruntime.CurrentWindow()
-	if c.Remote != nil && mygo.Power.IdleTime() >= 5*time.Minute {
+	if c.Remote != nil && uiruntime.Idle() >= 5*time.Minute {
 		return
 	}
 	if w == nil {
@@ -86,8 +84,10 @@ func (c *Controller) deliverNotice(n notification.Notice, kind string) {
 	if (c.WorkspaceVisible == nil || c.WorkspaceVisible()) && c.Active != nil && c.Active() == id && w.IsFocused() && !w.IsMinimized() {
 		return
 	}
-	notice := mygo.NewNotification(mygo.NotificationOptions{ID: n.ID, Title: tr(n.Title), Body: n.Body, Group: "miya-tasks", Data: map[string]string{"thread": n.Thread}})
-	notice.OnClick(func() {
+	if uiruntime.ShowNotice == nil {
+		return
+	}
+	err := uiruntime.ShowNotice(uiruntime.Notice{ID: n.ID, Title: tr(n.Title), Body: n.Body, Group: "miya-tasks", Data: map[string]string{"thread": n.Thread}, OnClick: func() {
 		w.Restore()
 		w.Show()
 		w.Focus()
@@ -102,10 +102,9 @@ func (c *Controller) deliverNotice(n notification.Notice, kind string) {
 				}
 			}
 		})
-	})
-	if e := notice.Show(); e != nil {
-		log.Printf("miya: notification: %v", e)
-		notice.Close()
+	}})
+	if err != nil {
+		log.Printf("miya: notification: %v", err)
 	}
 }
 
@@ -122,7 +121,7 @@ func (c *Controller) StartNotificationPresence(cl *svcclient.Client) <-chan stru
 				}
 				w := uiruntime.CurrentWindow()
 				if w != nil && (c.WorkspaceVisible == nil || c.WorkspaceVisible()) {
-					cl.Notify("notification-presence", mygo.Power.IdleTime() < 5*time.Minute)
+					cl.Notify("notification-presence", uiruntime.Idle() < 5*time.Minute)
 				}
 			})
 		}

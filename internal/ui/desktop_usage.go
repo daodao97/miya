@@ -16,7 +16,6 @@ import (
 	"miya/internal/prefs"
 	svcclient "miya/internal/service/client"
 	svcproto "miya/internal/service/protocol"
-	"miya/internal/uiruntime"
 )
 
 type UsagePreferences struct {
@@ -221,7 +220,7 @@ func (app *App) showMainWindow() {
 	if app.openWindow != nil {
 		app.openWindow()
 	}
-	if w := uiruntime.CurrentWindow(); w != nil && !w.IsDestroyed() {
+	if w := mainWindow(); w != nil && !w.IsDestroyed() {
 		w.Show()
 		w.Focus()
 		w.Invalidate()

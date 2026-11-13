@@ -156,7 +156,7 @@ func DesktopMain() {
 	// window only mirrors the current project.
 	app.C.EnsurePhoneHost()
 	open := func() {
-		if w := uiruntime.CurrentWindow(); w != nil && !w.IsDestroyed() {
+		if w := mainWindow(); w != nil && !w.IsDestroyed() {
 			w.Show()
 			w.Focus()
 			return
@@ -318,7 +318,7 @@ func (app *App) attachFiles() {
 	}
 	go func() {
 		paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{
-			Parent:      uiruntime.CurrentWindow(),
+			Parent:      mainWindow(),
 			Title:       tr("Add files"),
 			DefaultPath: cwd,
 			ButtonLabel: tr("Attach"),
@@ -394,7 +394,7 @@ func (app *App) browseProject() {
 	start := app.Workspace
 	go func() {
 		paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{
-			Parent:            uiruntime.CurrentWindow(),
+			Parent:            mainWindow(),
 			Title:             tr("Select project directory"),
 			DefaultPath:       start,
 			ButtonLabel:       tr("Choose"),
