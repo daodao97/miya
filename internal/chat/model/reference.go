@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/egoist/mygo/ui/markdown/parser"
+	"miya/internal/markdown/parser"
 )
 
 func ParseThreadURL(raw string) (ThreadRef, bool) {

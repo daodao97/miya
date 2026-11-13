@@ -5,9 +5,24 @@ import (
 	"errors"
 	"runtime"
 	"time"
-
-	"github.com/egoist/mygo/plugins/network"
 )
+
+// PrepareNetwork, when set, brings up the app's network access through the
+// system's own stack before the tunnel opens raw sockets: on iOS one request
+// through Foundation raises the cellular-data and local-network prompts and
+// the VPN and DNS64 routes. Desktops and servers leave it nil. The phone
+// sets it; failures that have a kind come back as *PrepareError.
+var PrepareNetwork func(ctx context.Context, rawURL string) error
+
+// PrepareError reports why PrepareNetwork failed: Kind is "offline",
+// "timeout", "canceled" or "failed".
+type PrepareError struct {
+	Kind string
+	Err  error
+}
+
+func (e *PrepareError) Error() string { return e.Err.Error() }
+func (e *PrepareError) Unwrap() error { return e.Err }
 
 // Connect opens a tunnel to the desktop in raw, a miya:// link or bare
 // Tailcat address. Closing the Conn closes its tunnel.
@@ -26,9 +41,11 @@ func connectPort(ctx context.Context, raw string, port uint16) (*Conn, error) {
 		return nil, err
 	}
 	// iOS establishes the app's network access through Foundation before Go
-	// opens raw sockets; MyGo returns at once on desktops.
-	if err := network.Prepare(ctx, RelayURL(raw)); err != nil {
-		return nil, networkError(err)
+	// opens raw sockets; nothing is prepared on desktops.
+	if PrepareNetwork != nil {
+		if err := PrepareNetwork(ctx, RelayURL(raw)); err != nil {
+			return nil, networkError(err)
+		}
 	}
 	server := addr
 	if runtime.GOOS == "ios" {
@@ -52,7 +69,7 @@ func connectPort(ctx context.Context, raw string, port uint16) (*Conn, error) {
 }
 
 func networkError(err error) error {
-	var failure *network.Error
+	var failure *PrepareError
 	if !errors.As(err, &failure) {
 		return err
 	}
