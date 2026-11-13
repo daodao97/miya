@@ -2,7 +2,7 @@
 
 package desktop
 
-import dc "github.com/egoist/mygo/plugins/desktopcontrol"
+import dc "miya/internal/desktopcontrol"
 
 func Displays() ([]Display, error) {
 	ds, err := dc.Displays()

@@ -10,7 +10,7 @@ import (
 	"os"
 	"testing"
 
-	dc "github.com/egoist/mygo/plugins/desktopcontrol"
+	dc "miya/internal/desktopcontrol"
 )
 
 // Opt in to reading real screen pixels. No image or window title is logged.

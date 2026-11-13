@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/egoist/mygo/push/apns"
+	"miya/internal/apns"
 )
 
 // LiveMessage is a notification sent to an Android phone over its paired

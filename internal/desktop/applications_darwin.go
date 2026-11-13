@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	dc "github.com/egoist/mygo/plugins/desktopcontrol"
+	dc "miya/internal/desktopcontrol"
 )
 
 func Applications() ([]Application, error) {

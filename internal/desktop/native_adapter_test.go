@@ -7,7 +7,7 @@ import (
 	"errors"
 	"testing"
 
-	dc "github.com/egoist/mygo/plugins/desktopcontrol"
+	dc "miya/internal/desktopcontrol"
 )
 
 func TestNativeInputCoordinates(t *testing.T) {

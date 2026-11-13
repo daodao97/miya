@@ -7,8 +7,9 @@ import (
 	"errors"
 	"time"
 
-	dc "github.com/egoist/mygo/plugins/desktopcontrol"
 	"github.com/egoist/mygo/plugins/permissionflow"
+
+	dc "miya/internal/desktopcontrol"
 )
 
 func Available() bool { return dc.Available() }

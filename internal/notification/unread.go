@@ -8,8 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/egoist/mygo/push/apns"
-
+	"miya/internal/apns"
 	"miya/internal/chat/model"
 	"miya/internal/textutil"
 )

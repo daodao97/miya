@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	dc "github.com/egoist/mygo/plugins/desktopcontrol"
+	dc "miya/internal/desktopcontrol"
 )
 
 // A separate process owns gamma changes. EOF, a three-second heartbeat loss,
