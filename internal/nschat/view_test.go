@@ -141,3 +141,47 @@ func TestComposerSendsAndStops(t *testing.T) {
 		t.Fatalf("stopped %d times, want 1", stopped)
 	}
 }
+
+func TestPromptShowsImagesAndFiles(t *testing.T) {
+	app, _ := start(t, model.Thread{ID: 1, HistoryLoaded: true, Messages: []model.Message{
+		{ID: 1, Role: "user", Content: "Look at this", Images: []string{"/tmp/shot.png"}, Attachments: []string{"/work/notes.md"}, TurnID: "t1"},
+	}}, nil)
+	if !app.Exists("id:image-1-0") {
+		t.Error("image thumbnail missing")
+	}
+	if text := joined(app); !strings.Contains(text, "notes.md") {
+		t.Errorf("attachment chip missing from %q", text)
+	}
+	if got := imageURI("/tmp/a b.png"); got != "file:///tmp/a%20b.png" {
+		t.Errorf("imageURI = %q", got)
+	}
+	if got := imageURI("data:image/png;base64,AA=="); got != "data:image/png;base64,AA==" {
+		t.Errorf("imageURI(data) = %q", got)
+	}
+}
+
+// A finished response offers its actions; a streaming one does not yet.
+func TestResponseActionsAfterTurn(t *testing.T) {
+	handoffs := 0
+	c := &conversation{thread: model.Thread{ID: 1, Busy: true, HistoryLoaded: true, Messages: []model.Message{
+		{ID: 1, Role: "user", Content: "Hi", TurnID: "t1"},
+		{ID: 2, Role: "assistant", Content: "Working on it", Status: "inProgress", TurnID: "t1"},
+	}}}
+	app := nsgotest.Start(t, func(cx *core.Scope) core.Node {
+		cx.SetTheme(nswidgets.Theme())
+		c.rev = core.NewSignal(cx, 0)
+		return View{Thread: c.get, OnHandoff: func() { handoffs++ }}
+	}, nsgotest.Size(900, 800))
+	if app.Exists("id:handoff") {
+		t.Fatal("actions shown while the reply streams")
+	}
+	c.change(app, func(t *model.Thread) { t.Busy = false; t.Messages[1].Status = "completed" })
+	if !app.Exists("id:handoff") {
+		t.Fatalf("actions missing after the turn; texts %q", joined(app))
+	}
+	app.Press("id:handoff")
+	app.Settle()
+	if handoffs != 1 {
+		t.Fatalf("handoffs = %d", handoffs)
+	}
+}

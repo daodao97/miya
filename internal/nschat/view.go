@@ -4,6 +4,8 @@
 package nschat
 
 import (
+	"net/url"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -30,6 +32,8 @@ type View struct {
 	// conversation that failed to load.
 	OnRetry  func(appmodel.RetryRequest)
 	OnReload func()
+	// OnHandoff starts a new conversation from this one's latest response.
+	OnHandoff func()
 	// Draft shows the composer: the conversation's draft, which
 	// OnDraftChange keeps. OnSend sends it, OnStop stops the running turn.
 	// Without Draft the view has no composer, as for a read-only mirror.
@@ -198,6 +202,16 @@ func (v View) groupRow(cx *core.Scope, group func() msgfmt.MessageGroup) core.No
 				func(cx *core.Scope, run func() msgfmt.ActivityRun, _ func() int) core.Node {
 					return v.runRow(cx, run)
 				}),
+			// A finished response can be copied whole or handed off.
+			core.Show{When: func() bool { g := group(); return !g.Streaming && len(g.Messages) > 0 }, Then: func(cx *core.Scope) core.Node {
+				var extra []core.Node
+				if v.OnHandoff != nil {
+					extra = append(extra, chat.IconAction{Label: tr("Hand off to a new conversation"), Icon: nswidgets.IconOf("arrow-right"),
+						OnPress: v.OnHandoff, TestID: "handoff"})
+				}
+				return chat.Actions{Text: func() string { return msgfmt.MessageGroupText(group()) }, Children: extra,
+					TestID: "actions-" + strconv.Itoa(core.Untracked(cx, func() int { return group().ID }))}
+			}},
 		}}
 	})
 }
@@ -264,11 +278,50 @@ func (v View) message(cx *core.Scope, m func() model.Message) core.Node {
 }
 
 func (v View) userMessage(cx *core.Scope, m func() model.Message) core.Node {
+	// Images and attached files rarely change; their row is built again
+	// only when the list does.
+	files := core.NewMemo(cx, func() string {
+		msg := m()
+		return strings.Join(msg.Images, "\x00") + "\x01" + strings.Join(msgfmt.MessageAttachments(msg), "\x00")
+	})
 	return chat.Message{Outgoing: true, Children: []core.Node{
+		core.Dynamic(func(cx *core.Scope) core.Node {
+			files.Get()
+			return attachments(cx, core.Untracked(cx, m))
+		}),
 		core.Text{TestID: "prompt-" + idOf(cx, m), Selectable: core.SelectableOn,
 			Style:       core.Style{FontSize: 13, LineHeight: 19},
 			ContentFunc: func() string { return msgfmt.NativeText(msgfmt.Message(m()).Content) }},
 	}}
+}
+
+// attachments are a prompt's images as thumbnails and its files as chips.
+func attachments(cx *core.Scope, m model.Message) core.Node {
+	paths := msgfmt.MessageAttachments(m)
+	if len(m.Images) == 0 && len(paths) == 0 {
+		return core.Group(nil)
+	}
+	var items []core.Node
+	for i, src := range m.Images {
+		items = append(items, core.Image{Source: core.Src(imageURI(src)), ResizeMode: core.Cover, Label: tr("Image preview"),
+			TestID: "image-" + strconv.Itoa(m.ID) + "-" + strconv.Itoa(i),
+			Style:  core.Style{Width: core.Pt(80), Height: core.Pt(80), CornerRadius: 8, FlexShrink: 0}})
+	}
+	for _, p := range paths {
+		items = append(items, chat.Attachment{Label: filepath.Base(p), Detail: filepath.Dir(p)})
+	}
+	return core.View{Style: core.Style{Direction: core.Row, Wrap: core.Wrap, Gap: 8, JustifyContent: core.JustifyEnd}, Children: items}
+}
+
+// imageURI is a message image as a URI: data and file URLs as they are,
+// a path as a file URL.
+func imageURI(src string) string {
+	for _, scheme := range []string{"data:", "file:", "http:", "https:"} {
+		if strings.HasPrefix(src, scheme) {
+			return src
+		}
+	}
+	return (&url.URL{Scheme: "file", Path: src}).String()
 }
 
 // assistant is a reply's Markdown, streamed while the turn writes it: only
