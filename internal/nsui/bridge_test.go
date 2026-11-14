@@ -55,6 +55,7 @@ type fakeHost struct {
 	phoneOK      bool
 	phoneActions []string
 	refreshes    int
+	remote       bool
 	memory       *manager.Manager
 	loginCall    func(login.Request) (login.State, error)
 	files        projectaccess.Files
@@ -245,7 +246,7 @@ func (h *fakeHost) UpgradeAgent(string)                                         
 func (h *fakeHost) SelectedPermissionPolicy() string                             { return h.permission }
 func (h *fakeHost) RefreshAccount()                                              { h.refreshes++ }
 func (h *fakeHost) AccountLoginTarget() func(login.Request) (login.State, error) { return h.loginCall }
-func (h *fakeHost) RemoteHost() bool                                             { return false }
+func (h *fakeHost) RemoteHost() bool                                             { return h.remote }
 func (h *fakeHost) AskAccountReset()                                             {}
 func (h *fakeHost) CancelAccountReset()                                          {}
 func (h *fakeHost) ConfirmAccountReset()                                         {}

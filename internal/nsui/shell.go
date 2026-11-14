@@ -22,6 +22,7 @@ func tr(english string) string { return locales.T(english) }
 func root(cx *core.Scope, c Host, sidebarFooter ...core.Node) core.Node {
 	// page is the main area: "chat" or "automations". Choosing a
 	// conversation always goes back to chat.
+	usage := usageFor(cx, c)
 	page := core.NewSignal(cx, "chat")
 	// expanded is the project whose conversations the sidebar lists.
 	expanded := core.NewSignal(cx, c.State().Cwd)
@@ -46,6 +47,8 @@ func root(cx *core.Scope, c Host, sidebarFooter ...core.Node) core.Node {
 	// settingsOpen shows the settings dialog; see settings.go.
 	settingsOpen := core.NewSignal(cx, false)
 	paletteOpen := core.NewSignal(cx, false)
+	usage.openSettings = func(category string) { usage.category.Set(category); settingsOpen.Set(true) }
+	cx.Cleanup(func() { usage.openSettings = nil })
 	cmd := commands{
 		openPalette:   func() { paletteOpen.Set(true) },
 		shortcuts:     func() { shortcutsOpen.Set(true) },
@@ -114,7 +117,7 @@ func root(cx *core.Scope, c Host, sidebarFooter ...core.Node) core.Node {
 		Right: []core.Node{filePanel(cx, c, panelOpen)}, RightOpen: panelOpen.Get, OnRightOpenChange: panelOpen.Set,
 		RightToggleLabel: tr("Show / Hide right panel"), RightResizeLabel: tr("Resize right panel"),
 		RightWidth: panelWidth.Get, OnRightWidthChange: panelWidth.Set, RightDefaultWidth: 460, RightMinWidth: 320, RightMaxWidth: 960,
-		Sidebar: []core.Node{sidebar(cx, c, shellNav{page: page, expanded: expanded, settings: cmd.openSettings, project: openProject, footer: sidebarFooter})},
+		Sidebar: []core.Node{sidebar(cx, c, shellNav{page: page, expanded: expanded, settings: cmd.openSettings, project: openProject, usage: func() { usage.openSettings("usage") }, footer: sidebarFooter})},
 		Header: []core.Node{core.Text{TestID: "current-title", MaxLines: 1,
 			ContentFunc: func() string {
 				if page.Get() == "automations" {

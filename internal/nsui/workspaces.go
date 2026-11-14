@@ -34,6 +34,8 @@ type workspaceHub struct {
 	generation         uint64
 	cancel             context.CancelFunc
 	closed             bool
+	usage              *desktopUsage
+	usages             map[Host]*desktopUsage
 	connect            func(context.Context, workspaces.Workspace) (*svcclient.Client, svcproto.State, error)
 }
 
@@ -48,6 +50,9 @@ func newWorkspaceHub(cx *core.Scope, root Host, store workspaces.Store, loadErr 
 		m.err.Set(loadErr.Error())
 	}
 	m.bind(root)
+	m.usage = newDesktopUsage(cx, root)
+	m.usages = map[Host]*desktopUsage{root: m.usage}
+	m.usage.start()
 	cx.Cleanup(m.close)
 	return m
 }
@@ -195,6 +200,13 @@ func (m *workspaceHub) activate(h Host) {
 	if m.active.GetUntracked() == h {
 		return
 	}
+	m.usage.stop()
+	m.usage = m.usages[h]
+	if m.usage == nil {
+		m.cx.Run(func() { m.usage = newDesktopUsage(m.cx, h) })
+		m.usages[h] = m.usage
+	}
+	m.usage.start()
 	m.active.Set(h)
 	h.EnsurePhoneHost()
 }
@@ -204,6 +216,7 @@ func (m *workspaceHub) close() {
 		return
 	}
 	m.closed = true
+	m.usage.stop()
 	m.cancelConnection()
 	for _, h := range m.sessions {
 		if h == m.root {

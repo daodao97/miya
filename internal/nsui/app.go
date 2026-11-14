@@ -10,6 +10,7 @@ import (
 	"miya/internal/agent"
 	"miya/internal/agent/cliupdate"
 	"miya/internal/agent/login"
+	"miya/internal/agent/quota"
 	"miya/internal/appmodel"
 	"miya/internal/automation"
 	"miya/internal/chat/model"
@@ -98,6 +99,7 @@ type Host interface {
 // Environment supplies controller creation at the executable's composition
 // root, as internal/ui.Environment does.
 type Environment struct {
+	Quotas    func() *quota.Service
 	NewWindow func() Host
 	// NewLocal and NewMirror make the controllers of other workspaces:
 	// one running conversations itself, one mirroring a service.
@@ -142,10 +144,14 @@ func appMain(cx *core.Scope) {
 	nsgo.SetMainView(cx, func(cx *core.Scope) core.Node {
 		return core.Dynamic(func(cx *core.Scope) core.Node {
 			h := hub.active.Get()
+			usageKey.Provide(cx, hub.usage)
 			return root(cx, h, workspaceSelector(cx, hub))
 		})
 	})
-	b.setWindow(desktop.MainWindow(cx))
+	w := desktop.MainWindow(cx)
+	b.setWindow(w)
+	// Keep the app-scoped usage tray and controllers alive when the window closes.
+	w.OnClosing(cx, func(close *desktop.WindowClosing) { close.Cancel(); w.Hide() })
 }
 
 // installPlatformServices gives the controller NSGo's notifications. Idle

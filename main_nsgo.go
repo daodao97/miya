@@ -5,6 +5,7 @@
 package main
 
 import (
+	"miya/internal/agent/integrations"
 	"miya/internal/controller"
 	"miya/internal/nsui"
 )
@@ -18,6 +19,7 @@ func main() {
 
 func init() {
 	nsui.ConfigureEnvironment(nsui.Environment{
+		Quotas:          integrations.Quotas,
 		NewWindow:       func() nsui.Host { return controller.NewWindowController() },
 		NewLocal:        func() nsui.Host { return controller.NewLocalWindowController() },
 		NewMirror:       func() nsui.MirrorHost { return controller.NewMirrorController() },

@@ -22,6 +22,7 @@ type shellNav struct {
 	expanded *core.Signal[string]
 	settings func()
 	project  func()
+	usage    func()
 	footer   []core.Node
 }
 
@@ -228,6 +229,7 @@ func sidebar(cx *core.Scope, c Host, nav shellNav) core.Node {
 			sections = append(sections, ui.SidebarSection{Items: []ui.SidebarItem{
 				{ID: "nav:new", Text: tr("New conversation"), Icon: nswidgets.IconOf("edit"), TestID: "new-thread"},
 				{ID: "nav:automations", Text: tr("Automations"), Icon: nswidgets.IconOf("clock"), TestID: "open-automations"},
+				{ID: "nav:usage", Text: tr("Usage"), Icon: nswidgets.IconOf("pi"), TestID: "open-usage"},
 			}})
 			for _, a := range []struct {
 				key, title string
@@ -278,10 +280,15 @@ func sidebar(cx *core.Scope, c Host, nav shellNav) core.Node {
 			kind, rest, _ := strings.Cut(id, ":")
 			switch kind {
 			case "nav":
-				if rest == "new" {
+				switch rest {
+				case "new":
 					c.NewThread()
-				} else {
+				case "automations":
 					nav.page.Set("automations")
+				case "usage":
+					if nav.usage != nil {
+						nav.usage()
+					}
 				}
 			case "t", "a":
 				if n, err := strconv.Atoi(rest); err == nil {

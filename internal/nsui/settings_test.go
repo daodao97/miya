@@ -51,7 +51,7 @@ func TestSettingsDialogOpensAndCloses(t *testing.T) {
 		t.Fatal("closed dialog rendered settings")
 	}
 	app.Press("id:open-settings")
-	for _, category := range []string{"general", "account", "phone", "memory"} {
+	for _, category := range []string{"general", "account", "usage", "phone", "memory"} {
 		if !app.Exists("id:settings-nav-" + category) {
 			t.Errorf("missing category %s", category)
 		}

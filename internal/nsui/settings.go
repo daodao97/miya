@@ -20,7 +20,8 @@ import (
 // settingsDialog is intentionally separate from the shell: menu commands and
 // the sidebar share the same open signal. Closing disposes pending view work.
 func settingsDialog(cx *core.Scope, c Host, open *core.Signal[bool]) core.Node {
-	category, query := core.NewSignal(cx, "general"), core.NewSignal(cx, "")
+	usage := usageFor(cx, c)
+	category, query := usage.category, core.NewSignal(cx, "")
 	service := newSettingsService(cx, c)
 	// Apply saved device preferences before constructing the dialog, including
 	// when it starts closed. The shell can use the same environment settings.
@@ -49,6 +50,7 @@ func settingsDialog(cx *core.Scope, c Host, open *core.Signal[bool]) core.Node {
 							OnClose: func() { open.Set(false) }, Categories: []ui.SettingsCategory{
 								{ID: "general", Title: tr("General"), Icon: nswidgets.IconOf("settings"), Groups: generalSettings(cx, c, service, drafts)},
 								{ID: "account", Title: tr("Account"), Icon: nswidgets.IconOf("user-circle"), Groups: account.groups()},
+								{ID: "usage", Title: tr("Usage"), Icon: nswidgets.IconOf("pi"), Groups: usage.groups()},
 								{ID: "phone", Title: tr("Phone"), Icon: nswidgets.IconOf("device-mobile"), Groups: phoneSettings(cx, c)},
 								{ID: "memory", Title: tr("Memory"), Icon: nswidgets.IconOf("bulb"), Description: tr("Saved locally and shared by Codex and Claude. Current instructions and project files take priority. Forgetting removes Miya's content, but not agent history or backups."), Groups: memory.groups()},
 							}}
