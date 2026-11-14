@@ -106,3 +106,21 @@ func TestApprovalNoticeDescribesRequest(t *testing.T) {
 		})
 	}
 }
+
+func TestNoticeInProject(t *testing.T) {
+	n := Notice{Title: "Miya · Completed"}
+	n.InProject("/Users/me/work/Shop/")
+	if n.Title != "Shop · Completed" {
+		t.Fatalf("title = %q", n.Title)
+	}
+	n = Notice{Title: "Miya · Failed"}
+	n.InProject("")
+	if n.Title != "Miya · Failed" {
+		t.Fatalf("title without project = %q", n.Title)
+	}
+	n = Notice{Title: "Nightly report"}
+	n.InProject("/w/Shop")
+	if n.Title != "Nightly report" {
+		t.Fatalf("automation title = %q", n.Title)
+	}
+}

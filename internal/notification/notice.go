@@ -5,7 +5,9 @@ package notification
 
 import (
 	"fmt"
+	"path/filepath"
 	"strconv"
+	"strings"
 
 	"miya/internal/chat/model"
 	"miya/locales"
@@ -25,6 +27,18 @@ func Completion(old, next model.Thread) (Notice, bool) {
 		title = tr("Miya · Failed")
 	}
 	return Notice{ID: fmt.Sprintf("miya-%d-%d", next.ID, next.CompletedAtMs), Thread: strconv.Itoa(next.ID), Title: title, Body: CompletionBody(old, next)}, true
+}
+
+// InProject names the conversation's project in place of Miya at the start
+// of the title, so notices from several projects tell apart at a glance.
+func (n *Notice) InProject(path string) {
+	name := filepath.Base(filepath.Clean(path))
+	if path == "" || name == "." || name == string(filepath.Separator) {
+		return
+	}
+	if rest, ok := strings.CutPrefix(n.Title, "Miya · "); ok {
+		n.Title = name + " · " + rest
+	}
 }
 
 func tr(s string) string { return locales.T(s) }

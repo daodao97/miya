@@ -64,12 +64,13 @@ func (c *Controller) deliverNotice(n notification.Notice, kind string) {
 	if prefs.Load("notifications-"+kind) == "off" {
 		return
 	}
-	if c.Push != nil {
-		if id, err := strconv.Atoi(n.Thread); err == nil {
-			if target := c.phoneThread(id); target.Found {
-				n.ServerID, n.Agent, n.Project = target.Thread.ServerID, model.ThreadAgent(target.Thread), target.cwd
-			}
+	if id, err := strconv.Atoi(n.Thread); err == nil {
+		if target := c.phoneThread(id); target.Found {
+			n.ServerID, n.Agent, n.Project = target.Thread.ServerID, model.ThreadAgent(target.Thread), target.cwd
 		}
+	}
+	n.InProject(n.Project)
+	if c.Push != nil {
 		c.Push.Publish(n)
 		return
 	}
