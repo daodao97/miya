@@ -7,9 +7,14 @@ import (
 	"github.com/nsgo-dev/nsgo/core"
 	"github.com/nsgo-dev/nsgo/desktop"
 
+	"miya/internal/agent"
+	"miya/internal/agent/cliupdate"
+	"miya/internal/agent/login"
 	"miya/internal/appmodel"
 	"miya/internal/chat/model"
+	"miya/internal/memory/manager"
 	"miya/internal/nswidgets"
+	svcproto "miya/internal/service/protocol"
 	"miya/internal/uiruntime"
 )
 
@@ -26,6 +31,27 @@ type Host interface {
 	Stop()
 	NewThread()
 	EnsurePhoneHost()
+	AgentSettings() []agent.Setting
+	Agents() []agent.Availability
+	SetAgentEnabled(id string, on bool)
+	RecheckAgents()
+	EnsureAgentUpdates()
+	AgentUpdates() map[string]cliupdate.Info
+	AgentUpdateBusy() bool
+	UpgradeAgent(string)
+	SelectedPermissionPolicy() string
+	RefreshAccount()
+	AccountLoginTarget() func(login.Request) (login.State, error)
+	RemoteHost() bool
+	AskAccountReset()
+	CancelAccountReset()
+	ConfirmAccountReset()
+	PhoneControls() (st svcproto.PhoneStatus, act func(string), ok bool)
+	AllThreads() []model.Thread
+	ThreadRef(model.Thread) model.ThreadRef
+	ThreadWorkspace(id int) string
+	ChangeWorkspace(path string) error
+	Memories() *manager.Manager
 }
 
 // Environment supplies controller creation at the executable's composition

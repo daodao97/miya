@@ -1,4 +1,7 @@
 {
+  "searchSettings": "Search settings",
+  "noMatchingSettings": "No matching settings.",
+
   "webhookWaitingForService": "Waiting for running conversations to finish before the webhook update takes effect.",
   "miyaWebhook": "Miya webhook",
   "enableWebhook": "Enable webhook",
