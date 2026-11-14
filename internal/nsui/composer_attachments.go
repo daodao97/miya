@@ -36,7 +36,11 @@ func (d *desktopComposer) addPaths(paths []string) {
 }
 func (d *desktopComposer) pickFiles() {
 	project, thread, source := d.host.State().Cwd, d.host.Current().ID, d.host.State().ReferenceSource
-	d.cx.PickFiles(core.PickFilesOptions{Multiple: true}, func(files []core.File, err error) {
+	directory := project
+	if d.host.RemoteHost() {
+		directory, _ = os.UserHomeDir()
+	}
+	d.cx.PickFiles(core.PickFilesOptions{Multiple: true, Dialog: core.OpenDialogOptions{Title: tr("Add files"), Directory: directory, Prompt: tr("Attach")}}, func(files []core.File, err error) {
 		if err != nil {
 			d.notice.Set(err.Error())
 			return

@@ -1,11 +1,11 @@
 package nschat
 
 import (
-	"github.com/nsgo-dev/nsgo/ui"
 	"strings"
 	"unicode/utf16"
 
 	"github.com/nsgo-dev/nsgo/core"
+	"github.com/nsgo-dev/nsgo/ui"
 	"miya/internal/chat/composer"
 	"miya/internal/chat/model"
 	"miya/internal/nswidgets"
@@ -88,20 +88,6 @@ func utf16ByteOffset(text string, units int) int {
 	}
 	return len(text)
 }
-func (v View) copyDraft(cx *core.Scope, selection core.TextRange, cut bool) {
-	if selection.Start == selection.End {
-		return
-	}
-	raw := v.Draft()
-	visible := referenceText(raw, v.ReferenceTitle)
-	a, b := utf16ByteOffset(visible, max(0, min(selection.Start, selection.End))), utf16ByteOffset(visible, max(selection.Start, selection.End))
-	a, b = referenceRange(raw, a, b, v.ReferenceTitle)
-	cx.SetClipboard(raw[a:b])
-	if cut && v.OnDraftChange != nil {
-		v.OnDraftChange(raw[:a] + raw[b:])
-	}
-}
-
 func (v View) referenceChips(cx *core.Scope, text func() string, remove func(string)) core.Node {
 	return core.View{Style: core.Style{Direction: core.Row, Wrap: core.Wrap, Gap: 6}, Children: []core.Node{
 		core.Each(func() []model.MessagePart {
@@ -166,9 +152,8 @@ func referenceKey(p model.MessagePart) string {
 	return model.AgentURL(p.Agent)
 }
 
-// ReferenceInput is a native text field over a lossless wire draft. References
-// are short labels in the editor; edits and keyboard copy/cut keep their IDs.
-// The native input's context menu has no copy hook; chips offer explicit Copy.
+// ReferenceInput is the native field used for prompt editing. The main composer
+// uses ReferenceEditor; both serialize the same durable reference identities.
 type ReferenceInput struct {
 	Input          core.Input
 	ReferenceTitle func(model.ThreadRef) string
@@ -180,40 +165,36 @@ func (r ReferenceInput) Render(cx *core.Scope) core.Node {
 	if get == nil {
 		get = func() string { return "" }
 	}
-	v := View{Draft: get, OnDraftChange: changed, ReferenceTitle: r.ReferenceTitle}
-	focused := core.NewSignal(cx, false)
-	selection := core.NewSignal(cx, core.TextRange{})
 	in.Value = func() string { return referenceText(get(), r.ReferenceTitle) }
 	in.OnChange = func(value string) {
 		if changed != nil {
 			changed(referenceEdit(get(), value, r.ReferenceTitle))
 		}
 	}
-	in.OnSelectionChange = func(value core.TextRange) {
-		selection.Set(value)
-		if r.Input.OnSelectionChange != nil {
-			r.Input.OnSelectionChange(value)
-		}
+	selectionRange := func(selection core.InputSelection) (int, int) {
+		visible := referenceText(get(), r.ReferenceTitle)
+		a, b := utf16ByteOffset(visible, max(0, min(selection.Range.Start, selection.Range.End))), utf16ByteOffset(visible, max(selection.Range.Start, selection.Range.End))
+		return referenceRange(get(), a, b, r.ReferenceTitle)
 	}
-	in.OnFocus = func() {
-		focused.Set(true)
-		if r.Input.OnFocus != nil {
-			r.Input.OnFocus()
+	in.CopyText = func(selection core.InputSelection) string { a, b := selectionRange(selection); return get()[a:b] }
+	in.ContextMenu = append(in.ContextMenu, core.InputMenuItem{Label: tr("Paste as conversation reference"), OnPress: func(selection core.InputSelection) {
+		if in.Disabled != nil && in.Disabled() || in.Readonly || in.ReadonlyFunc != nil && in.ReadonlyFunc() {
+			return
 		}
-	}
-	in.OnBlur = func() {
-		focused.Set(false)
-		if r.Input.OnBlur != nil {
-			r.Input.OnBlur()
-		}
-	}
-	return core.Group{in, core.Show{When: focused.Get, Then: func(cx *core.Scope) core.Node {
-		cx.OnKeyWith("mod+c", core.KeyOptions{When: core.KeyAlways}, func() { v.copyDraft(cx, selection.Get(), false) })
-		cx.OnKeyWith("mod+x", core.KeyOptions{When: core.KeyAlways}, func() {
-			if in.Disabled == nil || !in.Disabled() {
-				v.copyDraft(cx, selection.Get(), true)
+		source := get()
+		a, b := selectionRange(selection)
+		cx.ReadClipboard(func(text string) {
+			if source != get() || changed == nil || in.Disabled != nil && in.Disabled() || in.Readonly || in.ReadonlyFunc != nil && in.ReadonlyFunc() {
+				return
+			}
+			if ref, ok := model.ParseThreadURL(strings.TrimSpace(text)); ok {
+				title := ""
+				if r.ReferenceTitle != nil {
+					title = r.ReferenceTitle(ref)
+				}
+				changed(source[:a] + model.ReferenceText(ref, title) + source[b:])
 			}
 		})
-		return core.Group(nil)
-	}}}
+	}})
+	return in
 }

@@ -146,7 +146,7 @@ func TestComposerHandoffAndReferenceCompletion(t *testing.T) {
 	if h.current != 0 || h.draft != model.ReferenceText(ref, "Source")+" " || len(h.prefetched) != 1 {
 		t.Fatalf("handoff: current=%d draft=%q prefetch=%v", h.current, h.draft, h.prefetched)
 	}
-	if !app.Exists("id:reference-" + ref.URL()) {
+	if !app.Exists("text:@Source") {
 		t.Fatal("reference chip missing")
 	}
 	app.Post(func() { h.RememberDraft("") })
@@ -188,7 +188,7 @@ func TestComposerFilePickerAndPickers(t *testing.T) {
 	app.PickFiles = pickedFiles(app.PickFiles, []core.File{{Path: "/tmp/chosen.txt"}})
 	app.Press("id:attach-files")
 	app.WaitUntil(time.Second, func() bool { return len(h.attachments) == 1 })
-	if h.attachments[0] != "/tmp/chosen.txt" || len(app.FilePicks) != 1 || app.FilePicks[0].Limit < 2 {
+	if h.attachments[0] != "/tmp/chosen.txt" || len(app.FilePicks) != 1 || app.FilePicks[0].Limit < 2 || app.FilePicks[0].Dialog.Title != tr("Add files") || app.FilePicks[0].Dialog.Directory != h.state.Cwd || app.FilePicks[0].Dialog.Prompt != tr("Attach") {
 		t.Fatal("file picker did not allow multiple files", h.attachments)
 	}
 	for _, p := range []struct{ id, choice string }{{"model", "fast"}, {"effort", "high"}, {"permissions", "never"}, {"agent", model.AgentClaude}} {
@@ -285,5 +285,85 @@ func TestComposerMirroredDraftPreviewsLocalAttachment(t *testing.T) {
 	app := startBridged(t, mirroredComposerHost{h})
 	if got := app.Find("id:attachment-image-/tmp/local image.png").Image.Source.URI; got != "file:///tmp/local%20image.png" {
 		t.Fatalf("new local attachment used server preview: %q", got)
+	}
+}
+
+type commandComposerHost struct {
+	*fakeHost
+	commands []string
+}
+
+func (h *commandComposerHost) RunThreadCommand(command string) string {
+	h.commands = append(h.commands, command)
+	return ""
+}
+func TestComposerCompletionKeysDoNotSendOrEdit(t *testing.T) {
+	h := &commandComposerHost{fakeHost: newFakeHost(model.Thread{ID: 1})}
+	h.collab = &model.CollaborationStatus{Version: 1}
+	app := startBridged(t, h)
+	app.SetEnvironment(core.Environment{OS: core.OSMacOS, Idiom: core.IdiomDesktop})
+	app.Type("id:composer", "/rev")
+	if !app.Exists("id:composer-completion") {
+		t.Fatal("completion did not open")
+	}
+	app.Key("down")
+	app.Key("up")
+	app.Key("tab")
+	if h.draft != "/review " || len(h.sent) != 0 || app.Exists("id:composer-completion") {
+		t.Fatalf("draft=%q sends=%v", h.draft, h.sent)
+	}
+	app.Find("text:/review")
+	app.Key("enter")
+	if len(h.commands) != 1 || h.commands[0] != "review" {
+		t.Fatal("Enter after completion did not execute command", h.commands)
+	}
+	app.Post(func() { h.RememberDraft("") })
+	app.Settle()
+	app.Type("id:composer", "/rev")
+	app.Key("escape")
+	if h.draft != "/rev" || app.Exists("id:composer-completion") {
+		t.Fatal("Escape changed draft or kept popup", h.draft)
+	}
+	app.Post(func() { h.RememberDraft("plain message") })
+	app.Settle()
+	app.Key("enter")
+	if len(h.sent) != 1 {
+		t.Fatal("Enter after Escape did not send", h.sent)
+	}
+	app.Type("id:composer", "/rev")
+	app.Key("enter")
+	if h.draft != "/review " || len(h.sent) != 1 {
+		t.Fatal("completion Enter sent", h.draft, h.sent)
+	}
+	app.Post(func() { h.RememberDraft("") })
+	app.Settle()
+	app.Type("id:composer", "#Claude")
+	app.Key("enter")
+	mentions := model.AgentMentions(h.draft)
+	if len(mentions) != 1 || mentions[0].Agent != model.AgentClaude || len(h.sent) != 1 {
+		t.Fatal("agent completion lost identity or sent", h.draft, h.sent)
+	}
+	app.Find("text:#Claude")
+
+}
+
+func TestComposerAttachmentOnlyEnterAndLoading(t *testing.T) {
+	h := newFakeHost(model.Thread{ID: 1})
+	h.attachments = []string{"/tmp/attachment.png"}
+	app := startBridged(t, h)
+	app.SetEnvironment(core.Environment{OS: core.OSMacOS, Idiom: core.IdiomDesktop})
+	app.Focus("id:composer")
+	app.Key("enter")
+	if len(h.sent) != 1 {
+		t.Fatal("attachment-only Enter did not send", h.sent)
+	}
+	app.Post(func() { h.threads[0].Loading = true; uiruntime.Invalidate() })
+	app.Settle()
+	if app.Enabled("id:composer") {
+		t.Fatal("loading editor enabled")
+	}
+	app.DropFiles("id:composer-card", "file:///tmp/ignored")
+	if h.draft != "" || len(h.attachments) != 0 {
+		t.Fatal("loading editor accepted data", h.draft, h.attachments)
 	}
 }

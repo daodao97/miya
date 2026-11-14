@@ -27,14 +27,14 @@ func TestReferenceEditPreservesIdentity(t *testing.T) {
 		}
 	}
 }
-func TestNativeComposerEditsReferenceLabelsAndChips(t *testing.T) {
+func TestNativeReferenceInputEditsAndCopiesIdentity(t *testing.T) {
 	ref := model.ThreadRef{Source: strings.Repeat("b", 32), Backend: model.AgentCodex, SessionID: "session"}
 	raw := model.ReferenceText(ref, "Previous task") + " "
 	var draft *core.Signal[string]
 	app := nsgotest.Start(t, func(cx *core.Scope) core.Node {
 		cx.SetTheme(nswidgets.Theme())
 		draft = core.NewSignal(cx, raw)
-		return View{Thread: func() model.Thread { return model.Thread{} }, Draft: draft.Get, OnDraftChange: draft.Set}
+		return ReferenceInput{ReferenceTitle: func(model.ThreadRef) string { return "Previous task" }, Input: core.Input{TestID: "composer", Value: draft.Get, OnChange: draft.Set}}
 	}, nsgotest.Size(900, 700))
 	if got := app.Find("id:composer").Text; got != "@Previous task " {
 		t.Fatalf("displayed raw reference: %q", got)
@@ -50,9 +50,21 @@ func TestNativeComposerEditsReferenceLabelsAndChips(t *testing.T) {
 	if app.Clipboard != model.ReferenceText(ref, "Previous task") {
 		t.Fatalf("copy lost reference identity: %q", app.Clipboard)
 	}
-	app.Press("id:remove-reference-" + ref.URL())
-	app.Settle()
-	if got := draft.GetUntracked(); got != " continue" {
-		t.Fatalf("remove chip = %q", got)
+	app.RightClick("id:composer")
+	app.ChoosePopup("Copy")
+	if app.Clipboard != model.ReferenceText(ref, "Previous task") {
+		t.Fatal("native copy lost identity", app.Clipboard)
 	}
+	app.Key("mod+x")
+	if got := draft.GetUntracked(); got != " continue" {
+		t.Fatalf("native cut = %q", got)
+	}
+	app.Clipboard = ref.URL()
+	app.RightClick("id:composer")
+	app.ChoosePopup("Paste as conversation reference")
+	app.Settle()
+	if got := draft.GetUntracked(); got != model.ReferenceText(ref, "Previous task")+" continue" {
+		t.Fatal("native reference paste", got)
+	}
+
 }

@@ -55,11 +55,22 @@ type View struct {
 	HasAttachments                          func() bool
 	ComposerVisible                         func() bool
 	EditorDisabled                          func() bool
-	OnDropFiles                             func([]string)
-	OnPaste                                 func(core.PasteEvent)
-	OnSteer                                 func()
-	// OnComposerSubmit consumes Enter, for example to confirm a completion.
-	OnComposerSubmit func() bool
+	EditorReadonly                          func() bool
+	// Commands and FileReferences identify confirmed inline tokens.
+	Commands       func() []model.ComposerChoice
+	FileReferences func() []string
+	// CaptureKeys/OnComposerKey consume completion keys inside the editor.
+	CaptureKeys   func() []string
+	OnComposerKey func(string)
+	// OnDraftEdit includes the UTF-8 wire offset of the caret.
+	OnDraftEdit        func(string, int)
+	OnComposerMove     func()
+	OnInvalidReference func()
+	// ComposerOwner resets undo when the workspace or conversation changes.
+	ComposerOwner func() string
+	OnDropFiles   func([]string)
+	OnPaste       func(core.PasteEvent)
+	OnSteer       func()
 	// UserContent can replace a prompt with an app-owned editing surface.
 	UserContent func(*core.Scope, func() model.Message, core.Node) core.Node
 	// ImageSource resolves remote thumbnails without coupling this view to a host.

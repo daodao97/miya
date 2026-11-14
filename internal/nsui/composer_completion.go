@@ -3,6 +3,7 @@ package nsui
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/nsgo-dev/nsgo/core"
@@ -25,10 +26,11 @@ type composerCompletion struct {
 	choices    *core.Signal[[]model.ComposerChoice]
 	selected   *core.Signal[int]
 	status     *core.Signal[string]
+	files      *core.Signal[[]string]
 }
 
 func newComposerCompletion(cx *core.Scope, d *desktopComposer) *composerCompletion {
-	m := &composerCompletion{d: d, open: core.NewSignal(cx, false), choices: core.NewSignalFunc(cx, []model.ComposerChoice(nil), func(a, b []model.ComposerChoice) bool { return false }), selected: core.NewSignal(cx, 0), status: core.NewSignal(cx, "")}
+	m := &composerCompletion{d: d, files: core.NewSignalFunc(cx, []string(nil), slices.Equal), open: core.NewSignal(cx, false), choices: core.NewSignalFunc(cx, []model.ComposerChoice(nil), func(a, b []model.ComposerChoice) bool { return false }), selected: core.NewSignal(cx, 0), status: core.NewSignal(cx, "")}
 	cx.Cleanup(func() { m.close() })
 	return m
 }
@@ -45,8 +47,10 @@ func (m *composerCompletion) visible() bool {
 	return m.open.Get() && m.source == m.d.draft() && !t.ReadOnly && !t.Loading
 }
 func (m *composerCompletion) edit(value string) {
+	m.editAt(value, composer.ComposerEditEnd(m.d.draft(), value))
+}
+func (m *composerCompletion) editAt(value string, end int) {
 	c := m.d.host
-	end := composer.ComposerEditEnd(m.d.draft(), value)
 	c.RememberDraft(value)
 	m.d.notice.Set("")
 	m.close()
@@ -165,6 +169,9 @@ func (m *composerCompletion) choose(index int) {
 			c.RememberDraft(composer.InsertThreadReference(value, token, *choice.Ref, choice.Name))
 			c.PrefetchReference(*choice.Ref)
 		} else {
+			if !slices.Contains(m.files.Get(), choice.Name) {
+				m.files.Set(append(append([]string(nil), m.files.Get()...), choice.Name))
+			}
 			c.RememberDraft(composer.InsertFileReference(value, token, choice.Name))
 		}
 	case '/':
@@ -180,21 +187,6 @@ func (m *composerCompletion) choose(index int) {
 }
 func (m *composerCompletion) view() core.Node {
 	return core.Show{When: Live(m.visible), Then: func(cx *core.Scope) core.Node {
-		cx.OnKeyWith("escape", core.KeyOptions{When: core.KeyAlways}, m.close)
-		cx.OnKeyWith("tab", core.KeyOptions{When: core.KeyAlways}, func() { m.submit() })
-		for _, key := range []string{"up", "down"} {
-			cx.OnKeyWith(key, core.KeyOptions{When: core.KeyAlways}, func() {
-				items := m.items()
-				if len(items) == 0 {
-					return
-				}
-				step := 1
-				if key == "up" {
-					step = -1
-				}
-				m.selected.Set((m.selected.Get() + step + len(items)) % len(items))
-			})
-		}
 		return core.View{TestID: "composer-completion", StyleFunc: nswidgets.CardStyle(cx), Children: []core.Node{
 			nswidgets.MutedText(cx, func() string {
 				switch m.token.Kind {
@@ -240,4 +232,32 @@ func (m *composerCompletion) view() core.Node {
 			})),
 		}}
 	}}
+}
+
+func (m *composerCompletion) captureKeys() []string {
+	if m.visible() {
+		return []string{"enter", "tab", "up", "down", "escape"}
+	}
+	return nil
+}
+func (m *composerCompletion) onKey(key string) {
+	if !m.visible() {
+		return
+	}
+	switch key {
+	case "enter", "tab":
+		m.submit()
+	case "escape":
+		m.close()
+	case "up", "down":
+		items := m.items()
+		if len(items) == 0 {
+			return
+		}
+		step := 1
+		if key == "up" {
+			step = -1
+		}
+		m.selected.Set((m.selected.Get() + step + len(items)) % len(items))
+	}
 }
