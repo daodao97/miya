@@ -27,6 +27,7 @@ type App struct {
 	cx                      *core.Scope
 	revision                *core.Signal[uint64]
 	sheet, search, pairCode *core.Signal[string]
+	scanning                bool
 	optionsAgent            string
 	filesURL                *core.Signal[string]
 	closeFiles              func()
@@ -51,21 +52,10 @@ func NewMobileApp() *App {
 }
 
 func MobileEntry() {
-	installNetworkHooks()
 	nsgo.Run(func(cx *core.Scope) {
 		m := NewMobileApp()
 		m.DataDir = cx.DataDir()
-		m.PrepareNetwork = PlatformHooks.PrepareNetwork
-		m.DesktopAuthenticate = PlatformHooks.DesktopAuthenticate
-		// NSGo mobile has no secure-store implementation yet. The adapter reports
-		// that explicitly; pairing remains usable for this process without saving
-		// secrets to an ordinary file. See TODO.md for the platform contract.
-		m.Store = scopeSecrets{cx}
-		if PlatformHooks.SecretStore != nil {
-			m.Store = PlatformHooks.SecretStore(cx)
-		}
 		nsgo.SetMainView(cx, m.Render)
-		cx.Post(func() { go m.LoadSaved(core.ErrSecretNotFound) })
 		cx.OnQuit(func(context.Context) { m.Close() })
 	}, nsgo.WindowSize(390, 844))
 }
@@ -88,6 +78,7 @@ func (m *App) Render(cx *core.Scope) core.Node {
 	m.filesURL = core.NewSignal(cx, "")
 	m.Client.Dispatch = cx.Post
 	m.Client.Changed = m.change
+	m.setupNative(cx)
 	// Drop resolved or superseded form values, including secret answers.
 	cx.Effect(func() {
 		m.revision.Get()
@@ -142,13 +133,6 @@ func (m *App) Render(cx *core.Scope) core.Node {
 			}
 		}
 	})
-	stop := cx.ObserveNetworkPath(func(online bool, err error) {
-		if err == nil {
-			m.NetworkPathChanged(online, "")
-			m.change()
-		}
-	})
-	cx.Cleanup(stop)
 	// Only a pending reconnect schedules a countdown wake-up.
 	cx.Effect(func() {
 		m.revision.Get()

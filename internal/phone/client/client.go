@@ -178,16 +178,17 @@ func (m *Client) LoadSaved(notFound error) {
 	m.post(func() {
 		m.Loaded = true
 		m.SecretNotFound = notFound
+		m.desktopLoadFailed = linkErr != nil
 		if err != nil {
 			m.PersistenceError = tr("Secure pairing storage is unavailable. Pair again after restarting.")
 			return
 		}
 		if linkErr != nil {
-			m.desktopLoadFailed = true
 			m.PersistenceError = linkErr.Error()
 			return
 		}
 		m.restoreDesktops(registry)
+		m.SaveDesktops()
 		if item, ok := m.Desktops.find(m.Desktops.Active); ok && m.Link == "" {
 			m.Connect(item.Link)
 		}
