@@ -56,6 +56,7 @@ require (
 	github.com/u-root/u-root v0.16.0 // indirect
 	github.com/ulikunitz/xz v0.5.16 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
+	github.com/yuin/goldmark v1.8.6 // indirect
 	go.digitalxero.dev/rpm v0.3.4 // indirect
 	go.yaml.in/yaml/v3 v3.0.6 // indirect
 	go4.org/mem v0.0.0-20240501181205-ae6ca9944745 // indirect
@@ -73,4 +74,4 @@ require (
 
 tool github.com/egoist/mygo/cmd/mygo
 
-replace github.com/nsgo-dev/nsgo => ../nsgo
+replace github.com/nsgo-dev/nsgo => ../nsgo-miya

@@ -1,7 +1,6 @@
 package widgets
 
 import (
-	"embed"
 	"encoding/base64"
 	"net/url"
 	"os"
@@ -11,11 +10,9 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	agentmeta "miya/internal/agent/catalog"
+	"miya/internal/iconassets"
 	"miya/internal/uiruntime"
 )
-
-//go:embed assets/icons/*.svg
-var icons embed.FS
 
 var Canvas = ui.Hex("#ffffff")
 
@@ -64,7 +61,7 @@ func svgIcon(name string) *ui.SVG {
 	if s, ok := iconCache[name]; ok {
 		return s
 	}
-	data, err := icons.ReadFile("assets/icons/" + name + ".svg")
+	data, err := iconassets.SVG(name)
 	if err != nil {
 		panic(err)
 	}

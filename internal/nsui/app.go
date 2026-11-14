@@ -10,6 +10,7 @@ import (
 
 	"miya/internal/appmodel"
 	"miya/internal/chat/model"
+	"miya/internal/nswidgets"
 	"miya/internal/uiruntime"
 )
 
@@ -45,6 +46,7 @@ func DesktopMain() {
 // engine, then opens the main window.
 func appMain(cx *core.Scope) {
 	b := installBridge(cx)
+	cx.SetTheme(nswidgets.Theme())
 	installPlatformServices(cx)
 	c := environment.NewWindow()
 	// With the background service running, the service serves phones: a
@@ -91,16 +93,21 @@ func root(cx *core.Scope, c Host) core.Node {
 		return st.Threads()
 	})
 	current := Live(c.Current)
+	colors := nswidgets.ColorsOf(cx)
 	return core.View{
-		Style: core.Style{Direction: core.Row, FlexGrow: 1},
+		StyleFunc: func() core.Style {
+			return core.Style{Direction: core.Row, FlexGrow: 1, Background: colors.Canvas(), Color: colors.Ink()}
+		},
 		Children: []core.Node{
 			core.Scroll{
-				Style: core.Style{Width: core.Pt(280), Background: core.RGBA(0x000000, 0.04)},
+				StyleFunc: func() core.Style {
+					return core.Style{Width: core.Pt(280), Background: colors.Side(), Borders: core.Edges{Right: 1}, BorderColor: colors.Line()}
+				},
 				Children: []core.Node{
 					core.View{Style: core.Style{Padding: core.Symmetric(52, 8), Gap: 2}, Children: []core.Node{
 						core.Each(threads, func(t model.Thread) int { return t.ID },
 							func(cx *core.Scope, item func() model.Thread, _ func() int) core.Node {
-								return threadRow(item, current, c)
+								return threadRow(colors, item, current, c)
 							}),
 					}},
 				},
@@ -114,7 +121,7 @@ func root(cx *core.Scope, c Host) core.Node {
 						ContentFunc: func() string { return threadTitle(current()) },
 					},
 					core.Text{
-						Style:       core.Style{FontSize: 12, Color: core.RGBA(0x000000, 0.5)},
+						StyleFunc:   func() core.Style { return core.Style{FontSize: 12, Color: colors.Muted()} },
 						ContentFunc: func() string { return current().Status },
 					},
 				},
@@ -123,7 +130,7 @@ func root(cx *core.Scope, c Host) core.Node {
 	}
 }
 
-func threadRow(item func() model.Thread, current func() model.Thread, c Host) core.Node {
+func threadRow(colors nswidgets.Colors, item func() model.Thread, current func() model.Thread, c Host) core.Node {
 	// Rows are keyed by ID, so a row keeps the ID it was built with.
 	id := fmt.Sprintf("thread-%d", item().ID)
 	return core.View{
@@ -131,7 +138,7 @@ func threadRow(item func() model.Thread, current func() model.Thread, c Host) co
 		StyleFunc: func() core.Style {
 			s := core.Style{Padding: core.Symmetric(6, 10), CornerRadius: 6}
 			if current().ID == item().ID {
-				s.Background = core.RGBA(0x000000, 0.08)
+				s.Background = colors.Chosen()
 			}
 			return s
 		},

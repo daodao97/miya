@@ -1,6 +1,6 @@
 # 迁移到 NSGo
 
-分支 `nsgo` 把 Miya 的界面从 MyGo 迁到 [NSGo](../../nsgo)（模块 `github.com/nsgo-dev/nsgo`，开发期 `replace` 到相邻的 `../nsgo`）。控制器、后台服务、Agent 适配、自动化和手机协议不随界面框架变化，迁移只替换视图层和平台服务。
+分支 `nsgo` 把 Miya 的界面从 MyGo 迁到 [NSGo](../../nsgo)（模块 `github.com/nsgo-dev/nsgo`，开发期 `replace` 到 `../nsgo-miya`，它是 `../nsgo` 的独立 worktree）。控制器、后台服务、Agent 适配、自动化和手机协议不随界面框架变化，迁移只替换视图层和平台服务。
 
 ## 为什么不能只改 import
 
@@ -17,6 +17,10 @@ MyGo 是即时模式：`ui.Row(c).Children(func() { ... })` 每帧重建，视�
 | `internal/chat/view` | 1.2k | 会话视图（桌面和手机共用） |
 | `internal/voiceinput` | 1.1k | 语音输入 |
 | `tests/integration` | 13.8k | 依赖 MyGo 测试器的界面测试 |
+
+## 依赖的 NSGo 检出
+
+Miya 不直接用 `../nsgo`：那里可能正在开发 NSGo 本身（补 Miya 需要的平台能力，之后向上游提 PR），半成品会让 Miya 无法构建。`../nsgo-miya` 是 `git -C ../nsgo worktree add` 建的独立检出，固定在已验证的提交上；NSGo 的改动完成并通过测试后，再把它前移到对应分支或提交。
 
 ## 并存方式
 
@@ -41,7 +45,7 @@ MyGo 是即时模式：`ui.Row(c).Children(func() { ... })` 每帧重建，视�
 | 阶段 | 内容 | 完成标准 |
 | --- | --- | --- |
 | 0 · 基础 | 依赖、构建标签入口、桥接层、会话列表骨架 | 两种构建通过；桥接测试（含 `-race`）通过 ✅ |
-| 1 · 主题与控件 | 把 `internal/widgets` 的主题、颜色、图标、按钮、开关、菜单映射到 NSGo 的 `base`/`ui` 组件，新建 `internal/nswidgets` | 控件快照测试 |
+| 1 · 主题与控件 | `internal/nswidgets`：Miya 明暗色板作为 `core.Theme`（自有角色放 `Palette.Colors`），`ColorsOf` 颜色访问器、图标与通用控件；Tabler 图标移到框架无关的 `internal/iconassets` 供新旧两套共用。设置页布局与菜单随第 3 阶段迁移 | 主题、外观切换、图标解析与控件测试通过 ✅（设置页、菜单待做） |
 | 2 · 会话视图 | `internal/chat/view` 的消息列表、Markdown、工具详情、图片、引用和富文本输入（NSGo `ui/chat`、`base/richeditor`） | 桌面能完整对话 |
 | 3 · 桌面外壳 | 侧栏、工作区切换、文件面板、命令面板、设置、自动化、托盘、多窗口 | 与 MyGo 版功能对齐，`internal/ui` 的界面测试迁到 nsgotest |
 | 4 · 手机端 | `internal/mobile`、远程桌面、语音输入，接 NSGo 的 iOS/Android 运行时 | 真机验证 |

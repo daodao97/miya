@@ -8,6 +8,7 @@ import (
 
 	"miya/internal/appmodel"
 	"miya/internal/chat/model"
+	"miya/internal/nswidgets"
 	"miya/internal/uiruntime"
 )
 
@@ -26,7 +27,7 @@ func newFakeHost(threads ...model.Thread) *fakeHost {
 }
 
 func (h *fakeHost) State() *appmodel.WindowState { return &h.state }
-func (h *fakeHost) EnsurePhoneHost()              {}
+func (h *fakeHost) EnsurePhoneHost()             {}
 
 func (h *fakeHost) Current() model.Thread {
 	for _, t := range h.threads {
@@ -50,6 +51,7 @@ func startBridged(t *testing.T, h Host) *nsgotest.App {
 	})
 	return nsgotest.Start(t, func(cx *core.Scope) core.Node {
 		installBridge(cx)
+		cx.SetTheme(nswidgets.Theme())
 		return root(cx, h)
 	}, nsgotest.Size(900, 600))
 }
