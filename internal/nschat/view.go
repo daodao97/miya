@@ -130,8 +130,8 @@ func (v View) Render(cx *core.Scope) core.Node {
 	// The status lines and the composer float over the transcript's end,
 	// as Agio's do: the messages scroll behind them.
 	floating := []core.Node{
-		core.View{StyleFunc: func() core.Style {
-			return core.Style{Display: displayIf(turnStatus(v.Thread(), groups(), now.Get()) != ""), Direction: core.Row, AlignItems: core.AlignCenter, Gap: 8, Padding: core.Symmetric(0, 4)}
+		core.View{TestID: "turn-status", StyleFunc: func() core.Style {
+			return core.Style{Display: displayIf(turnStatus(v.Thread(), groups(), now.Get()) != ""), Direction: core.Row, AlignItems: core.AlignCenter, Gap: 8, MinHeight: core.Pt(28), Padding: core.Symmetric(0, 4)}
 		},
 			Children: []core.Node{nswidgets.WorkingLabel(cx, "clock", func() string { return turnStatus(v.Thread(), groups(), now.Get()) }), v.diffSummary(cx, groups)}},
 
@@ -154,15 +154,27 @@ func (v View) Render(cx *core.Scope) core.Node {
 	} else if v.Draft != nil {
 		floating = append(floating, core.Show{When: func() bool { return v.ComposerVisible == nil || v.ComposerVisible() }, Then: func(cx *core.Scope) core.Node { return v.composer(cx) }})
 	}
+	transcript := column(
+		core.Each(groups, func(g msgfmt.MessageGroup) int { return g.ID },
+			func(cx *core.Scope, group func() msgfmt.MessageGroup, _ func() int) core.Node {
+				return v.groupRow(cx, group)
+			}),
+		core.Dynamic(func(cx *core.Scope) core.Node { return v.emptyState(cx, empty.Get()) }),
+	)
+	// On a desktop the composer docks under the transcript, as Miya's window
+	// always had it: the status lines read against the window and no message
+	// shows through between them. A phone floats it on glass.
+	if cx.Env().Desktop() {
+		return core.View{TestID: v.TestID, Style: ui.FillRest, Children: []core.Node{
+			chat.Conversation{State: v.State, JumpLabel: tr("↓ Latest"), TestID: "chat-transcript", Children: []core.Node{transcript}},
+			core.View{Style: core.Style{FlexShrink: 0, AlignItems: core.AlignCenter, Padding: core.Edges{Right: 20, Bottom: 12, Left: 20}}, Children: []core.Node{
+				core.View{TestID: "composer-dock", Style: core.Style{Width: core.Pct(100), MaxWidth: core.Pt(maxWidth), MinWidth: core.Pt(0)}, Children: []core.Node{nswidgets.Stack(cx, 8, floating...)}},
+			}},
+		}}
+	}
 	return chat.FloatingConversation{State: v.State, JumpLabel: tr("↓ Latest"), TestID: v.TestID,
-		Children: []core.Node{column(
-			core.Each(groups, func(g msgfmt.MessageGroup) int { return g.ID },
-				func(cx *core.Scope, group func() msgfmt.MessageGroup, _ func() int) core.Node {
-					return v.groupRow(cx, group)
-				}),
-			core.Dynamic(func(cx *core.Scope) core.Node { return v.emptyState(cx, empty.Get()) }),
-		)},
-		Composer: []core.Node{core.View{Style: core.Style{Gap: 6, MinWidth: core.Pt(0)}, Children: floating}},
+		Children: []core.Node{transcript},
+		Composer: []core.Node{nswidgets.Stack(cx, 6, floating...)},
 	}
 }
 

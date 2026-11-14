@@ -162,7 +162,7 @@ func sidebar(cx *core.Scope, c Host, nav shellNav) core.Node {
 		if nested {
 			indent = 16
 		}
-		content := core.View{Style: core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Gap: 8, FlexGrow: 1, MinWidth: core.Pt(0), Padding: core.Edges{Left: indent}},
+		content := core.View{Style: core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Gap: 8, FlexGrow: 1, FlexShrink: 1, MinWidth: core.Pt(0), Padding: core.Edges{Left: indent}},
 			Children: []core.Node{lead,
 				core.Text{Content: threadTitle(t), MaxLines: 1, Style: core.Style{FontSize: 13, FlexGrow: 1, FlexShrink: 1, MinWidth: core.Pt(0)}},
 				trail}}
@@ -185,7 +185,7 @@ func sidebar(cx *core.Scope, c Host, nav shellNav) core.Node {
 		path := p.Path
 		return ui.SidebarItem{ID: "p:" + path, Text: p.Name, TestID: "project-" + path,
 			Expanded: func() bool { return nav.expanded.Get() == path },
-			Content: core.View{Style: core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Gap: 8, FlexGrow: 1, MinWidth: core.Pt(0)}, Children: []core.Node{
+			Content: core.View{Style: core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Gap: 8, FlexGrow: 1, FlexShrink: 1, MinWidth: core.Pt(0)}, Children: []core.Node{
 				nswidgets.Icon("folder", 16, colors.Faint),
 				core.Text{Content: p.Name, MaxLines: 1, Style: core.Style{FontSize: 13, FlexGrow: 1, FlexShrink: 1, MinWidth: core.Pt(0)}},
 				trail,
@@ -199,13 +199,25 @@ func sidebar(cx *core.Scope, c Host, nav shellNav) core.Node {
 				ui.MenuItem{Text: tr("Delete project"), Variant: ui.MenuItemDanger, OnSelect: func() { c.DeleteProject(path) }},
 			}}
 	}
+	// secondaryItem is a quiet row, as Expand or the history's state, whose
+	// text starts where the conversation titles do.
+	secondaryItem := func(id, testID, text string, nested bool) ui.SidebarItem {
+		var indent core.Points = 22
+		if nested {
+			indent += 16
+		}
+		return ui.SidebarItem{ID: id, Text: text, TestID: testID,
+			Content: core.View{Style: core.Style{FlexGrow: 1, FlexShrink: 1, MinWidth: core.Pt(0), Padding: core.Edges{Left: indent}}, Children: []core.Node{
+				core.Text{Content: text, MaxLines: 1, StyleFunc: func() core.Style { return core.Style{FontSize: 12, Color: colors.Muted(), MinWidth: core.Pt(0)} }},
+			}}}
+	}
 	// threadItems are the open project's conversations, newest first and
 	// compact unless expanded, with the history's state when it has none.
 	threadItems := func(d sidebarData, path string, nested bool) []ui.SidebarItem {
 		var items []ui.SidebarItem
 		if len(d.threads) == 0 && d.history != "" && (d.history == tr("Loading conversations…") ||
 			strings.HasPrefix(d.history, "Unable to load") || strings.HasPrefix(d.history, "History")) {
-			items = append(items, ui.SidebarItem{ID: "h:" + path, Text: d.history, TestID: "history-status"})
+			items = append(items, secondaryItem("h:"+path, "history-status", d.history, nested))
 		}
 		for _, t := range msgfmt.DisplayedThreads(d.threads, more[path]) {
 			items = append(items, threadItem("t:", "thread-", t, d.unread[t.ID], nested))
@@ -215,7 +227,7 @@ func sidebar(cx *core.Scope, c Host, nav shellNav) core.Node {
 			if more[path] {
 				label = tr("Collapse")
 			}
-			items = append(items, ui.SidebarItem{ID: "m:" + path, Text: label, TestID: "more-threads"})
+			items = append(items, secondaryItem("m:"+path, "more-threads", label, nested))
 		}
 		return items
 	}

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/nsgo-dev/nsgo/base"
 	"github.com/nsgo-dev/nsgo/core"
 	"github.com/nsgo-dev/nsgo/ui"
 
@@ -81,17 +80,11 @@ func (d *desktopComposer) wire(v *nschat.View) {
 	v.SendDisabled = Live(d.disabled)
 	v.EditorDisabled = Live(func() bool { t := c.Current(); return t.ReadOnly || t.Loading })
 	v.ComposerVisible = Live(func() bool { return !c.Current().ReadOnly })
-	v.Above = settingsColumn(d.suggestions(), d.problem(), queueView(cx, c), taskStatus(cx, c, d.notice), collaborationStatus(cx, c, d.notice, d.collaborationPanes), d.readOnly(), d.diffDialog(), d.complete.view(), d.commandHint(), nswidgets.MutedText(cx, d.notice.Get))
-	v.Accessory = settingsActions(ui.IconButton{Icon: nswidgets.IconOf("plus"), Label: tr("Add context"), TestID: "attach-files", OnPress: d.pickFiles, Disabled: Live(func() bool { return c.Current().Loading })}, d.agentPicker())
-	v.Trailing = settingsActions(d.picker("permissions", tr("Permissions"), Live(func() string { return permissionTitle(c.CurrentPermissionPolicy()) }), func() []model.ComposerChoice {
-		return []model.ComposerChoice{
-			{Name: "on-request", Detail: tr("Ask when needed") + " · " + tr("Always ask before editing external files or accessing the internet")},
-			{Name: "on-failure", Detail: tr("Automatic approval") + " · " + tr("Request approval only for detected risky actions")},
-			{Name: "never", Detail: tr("Full access") + " · " + tr("Unrestricted access to the internet and any file on your computer")},
-		}
-	}, c.SetCurrentPermissionPolicy),
+	v.Above = nswidgets.Stack(cx, 10, d.suggestions(), d.problem(), queueView(cx, c), taskStatus(cx, c, d.notice), collaborationStatus(cx, c, d.notice, d.collaborationPanes), d.readOnly(), d.diffDialog(), d.complete.view(), d.commandHint(), noticeLine(cx, d.notice.Get))
+	v.Accessory = controlRow(ui.IconButton{Icon: nswidgets.IconOf("plus"), Label: tr("Add context"), TestID: "attach-files", Size: 28, IconSize: 16, OnPress: d.pickFiles, Disabled: Live(func() bool { return c.Current().Loading })}, d.agentPicker())
+	v.Trailing = controlRow(d.permissionsPicker(),
 		core.Show{When: Live(func() bool { return c.CurrentAgentControls().Caps().Models }), Then: func(cx *core.Scope) core.Node {
-			return d.picker("model", tr("Model"), Live(func() string { b := c.CurrentAgentControls(); return b.ModelLabel(b.Model()) }), func() []model.ComposerChoice {
+			return d.textPicker("model", tr("Model"), 260, Live(func() string { b := c.CurrentAgentControls(); return b.ModelLabel(b.Model()) }), Live(func() string { return c.CurrentAgentControls().Model() }), func() []model.ComposerChoice {
 				b := c.CurrentAgentControls()
 				var out []model.ComposerChoice
 				for _, m := range b.ModelChoices() {
@@ -101,7 +94,7 @@ func (d *desktopComposer) wire(v *nschat.View) {
 			}, func(v string) { c.CurrentAgentControls().SetModel(v) })
 		}},
 		core.Show{When: Live(func() bool { return c.CurrentAgentControls().Caps().Effort }), Then: func(cx *core.Scope) core.Node {
-			return d.picker("effort", tr("Thinking"), Live(func() string { return firstSettingsText(c.CurrentAgentControls().Effort(), tr("Default effort")) }), func() []model.ComposerChoice {
+			return d.textPicker("effort", tr("Thinking"), 200, Live(func() string { return tr(firstSettingsText(c.CurrentAgentControls().Effort(), "Default effort")) }), Live(func() string { return c.CurrentAgentControls().Effort() }), func() []model.ComposerChoice {
 				var out []model.ComposerChoice
 				for _, e := range c.CurrentAgentControls().EffortChoices() {
 					out = append(out, model.ComposerChoice{Name: e, Detail: tr(firstSettingsText(e, "Default"))})
@@ -112,7 +105,7 @@ func (d *desktopComposer) wire(v *nschat.View) {
 		core.Show{When: Live(func() bool {
 			return c.Current().Busy && (strings.TrimSpace(d.draft()) != "" || len(d.attachments()) > 0)
 		}), Then: func(cx *core.Scope) core.Node {
-			return ui.Button{Text: tr("Steer now"), TestID: "steer-draft", Variant: ui.ButtonGhost, Size: ui.SizeSmall, Disabled: Live(d.disabled), OnPress: func() { d.send(true) }}
+			return ui.Button{Text: tr("Steer now"), Icon: nswidgets.IconOf("arrow-up"), TestID: "steer-draft", Variant: ui.ButtonGhost, Size: ui.SizeSmall, Disabled: Live(d.disabled), OnPress: func() { d.send(true) }}
 		}})
 	v.Attachments = d.attachmentChips()
 	v.HasAttachments = Live(func() bool { return len(d.attachments()) > 0 })
@@ -138,21 +131,6 @@ func permissionTitle(p string) string {
 	return tr("Ask when needed")
 }
 
-func (d *desktopComposer) suggestions() core.Node {
-	return core.Show{When: Live(func() bool { return d.host.Current().ID == 0 }), Then: func(cx *core.Scope) core.Node {
-		rows := []core.Node{nswidgets.MutedText(cx, func() string { return tr("A few ideas to get started") })}
-		var buttons []core.Node
-		for _, s := range []struct{ id, icon, title, prompt string }{
-			{"snake", "device-gamepad-2", "Create a classic snake game", "Create a classic snake game in this project."},
-			{"bug", "bug", "Find and fix a bug in my code", "Find and fix a bug in my code. Explain the root cause and verify the fix."},
-			{"pdf", "file-text", "Summarize this app in a PDF", "Summarize this app in a one-page PDF."},
-		} {
-			buttons = append(buttons, ui.Button{TestID: "suggestion-" + s.id, Text: tr(s.title), Icon: nswidgets.IconOf(s.icon), Variant: ui.ButtonSecondary, OnPress: func() { d.host.RememberDraft(tr(s.prompt)) }, Flex: 1})
-		}
-		rows = append(rows, settingsActions(buttons...))
-		return settingsColumn(rows...)
-	}}
-}
 func (d *desktopComposer) problem() core.Node {
 	return core.Show{When: Live(func() bool { s, _ := d.host.CurrentAgentControls().Problem(); return s != "" }), Then: func(cx *core.Scope) core.Node {
 		return settingsActions(core.Text{ContentFunc: Live(func() string { s, _ := d.host.CurrentAgentControls().Problem(); return s }), Style: core.Style{FlexGrow: 1}}, core.Show{When: Live(func() bool { _, r := d.host.CurrentAgentControls().Problem(); return r }), Then: func(cx *core.Scope) core.Node {
@@ -166,43 +144,6 @@ func (d *desktopComposer) readOnly() core.Node {
 			core.Text{Content: tr("Open in another app")}, nswidgets.MutedText(cx, func() string { return tr("Close the conversation there before continuing here.") }), ui.Button{Text: tr("Retry"), Disabled: Live(func() bool { return d.host.Current().Loading }), OnPress: func() { d.host.Resume(d.host.Current(), nil) }},
 		}}
 	}}
-}
-func (d *desktopComposer) picker(id, label string, value func() string, choices func() []model.ComposerChoice, pick func(string)) core.Node {
-	return core.Func(func(cx *core.Scope) core.Node {
-		caption := core.NewMemo(cx, value)
-		return core.Dynamic(func(cx *core.Scope) core.Node {
-			title := caption.Get()
-			return ui.Popover{TestID: "picker-" + id, Label: label, Open: func() bool { return d.menu.Get() == id }, OnOpenChange: func(v bool, _ base.Reason) {
-				if v {
-					d.menu.Set(id)
-				} else {
-					d.menu.Set("")
-				}
-			}, Placement: core.PlaceTop,
-				Trigger: ui.Button{Text: title, Variant: ui.ButtonGhost, Size: ui.SizeSmall},
-				Children: []core.Node{core.Text{Content: label}, core.Each(Live(choices), func(c model.ComposerChoice) string { return c.Name }, func(cx *core.Scope, get func() model.ComposerChoice, _ func() int) core.Node {
-					name := core.Untracked(cx, func() string { return get().Name })
-					return composerButton("pick-"+id+"-"+name, func() string { return firstSettingsText(get().Detail, get().Name) }, func() { pick(name); d.menu.Set("") })
-				})}}
-		})
-	})
-}
-func (d *desktopComposer) agentPicker() core.Node {
-	// The disabled wrapper also blocks popover triggers, whose own Disabled is ignored.
-	return core.View{Disabled: Live(func() bool { return d.host.Current().ID != 0 }), Children: []core.Node{d.picker("agent", tr("Agents"), Live(func() string {
-		id := d.host.CurrentAgent()
-		return model.AgentName(id) + " " + d.host.AgentSpeedBadge(id)
-	}), func() []model.ComposerChoice {
-		var out []model.ComposerChoice
-		for _, id := range d.host.EnabledAgents() {
-			out = append(out, model.ComposerChoice{Name: id, Detail: model.AgentName(id) + " " + d.host.AgentSpeedBadge(id)})
-		}
-		return out
-	}, func(v string) {
-		if d.host.Current().ID == 0 && d.host.State().SetAgent != nil {
-			d.host.State().SetAgent(v)
-		}
-	})}}
 }
 func (d *desktopComposer) handoff() {
 	c := d.host
@@ -279,7 +220,7 @@ func (d *desktopComposer) referenceTitle(ref model.ThreadRef) string {
 }
 
 func (d *desktopComposer) commandHint() core.Node {
-	return nswidgets.MutedText(d.cx, Live(func() string {
+	return noticeLine(d.cx, Live(func() string {
 		text := strings.TrimPrefix(d.draft(), "/")
 		if text == d.draft() {
 			return ""

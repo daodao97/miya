@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	"github.com/nsgo-dev/nsgo/core"
-	"github.com/nsgo-dev/nsgo/ui"
 	"miya/internal/nswidgets"
 )
 
@@ -56,22 +55,14 @@ func (v View) composer(cx *core.Scope) core.Node {
 	if v.Trailing != nil {
 		row = append(row, v.Trailing)
 	}
-	row = append(row, core.Dynamic(func(cx *core.Scope) core.Node {
-		if v.Thread().Busy && !has() {
-			return ui.Button{Text: tr("Stop"), TestID: "composer-stop", OnPress: v.OnStop, Disabled: disabled, Size: ui.SizeSmall}
-		}
-		label := tr("Send")
-		if v.Thread().Busy {
-			label = tr("Add to queue")
-		}
-		return ui.Button{Text: label, TestID: "composer-send", OnPress: send, Disabled: func() bool { return !has() || disabled() }, Size: ui.SizeSmall}
-	}))
+	row = append(row, v.sendButton(cx, has, disabled, send))
 	children = append(children, core.View{Style: core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Gap: 6, MinWidth: core.Pt(0), Wrap: core.Wrap}, Children: row})
 	dragging := core.NewSignal(cx, false)
 	colors := nswidgets.ColorsOf(cx)
 	cardStyle := nswidgets.CardStyle(cx)
 	return core.View{TestID: "composer-card", StyleFunc: func() core.Style {
 		s := cardStyle()
+		s.CornerRadius, s.Padding, s.Gap, s.BorderCurve = 16, core.All(12), 8, core.BorderCurveContinuous
 		if dragging.Get() {
 			s.BorderColor = colors.Link()
 			s.Background = colors.Subtle()
