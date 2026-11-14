@@ -104,7 +104,10 @@ type App struct {
 	DialDesktop         func(context.Context, string) (*remote.Conn, error)
 	// view renders a conversation with the desktop's own message views, over
 	// a controller that only holds what the desktop sent.
-	View       *conversation.View
+	View *conversation.View
+	// composerH is the height of the composer floating over the messages,
+	// in the previous frame.
+	composerH  float32
 	Viewer     *mobileViewer
 	FormErrors map[string]string
 	Nav        *ui.Router
@@ -1643,20 +1646,45 @@ func (m *App) threadView(c *ui.Context) {
 		more := m.circle(c, "more", tr("More"), func() { widgets.Icon(c, "dots", 20, p.ink) })
 		m.conversationActions(c, more, proj.Path, agent)
 	})
-	ui.Column(c).Grow(1).MinHeight(0).FillWidth().Children(func() {
-		if pending, ok := m.PendingSendThread(cur); ok {
-			m.View.MessageList(c, pending)
-			m.pendingSendStatus(c)
-		} else if m.Open == 0 {
-			m.newConversationView(c, proj)
-		} else {
-			m.View.MessageList(c, cur)
+	// In a conversation the messages scroll under the composer, which
+	// floats over their bottom; a new or pending one keeps it below them.
+	pendingThread, pending := m.PendingSendThread(cur)
+	floating := !pending && m.Open != 0
+	m.View.BottomInset = 0
+	if floating {
+		m.View.BottomInset = m.composerH
+	}
+	ui.Column(c.Key("conversation-body")).Grow(1).MinHeight(0).FillWidth().Children(func() {
+		ui.Column(c).Grow(1).MinHeight(0).FillWidth().Children(func() {
+			if pending {
+				m.View.MessageList(c, pendingThread)
+				m.pendingSendStatus(c)
+			} else if m.Open == 0 {
+				m.newConversationView(c, proj)
+			} else {
+				m.View.MessageList(c, cur)
+			}
+		})
+		bar := ui.Column(c.Key("composer-overlay")).FillWidth()
+		if floating {
+			bar.Absolute().Left(0).Right(0).Bottom(0)
+		}
+		bar.Children(func() {
+			m.View.Footer()
+			for _, a := range m.ApprovalsFor(cur.ServerID) {
+				ui.Column(c.Key("approval:" + string(a.ID))).FillWidth().Children(func() { m.approvalCard(c, a) })
+			}
+			m.composer(c, agent, busy)
+		})
+		h := float32(0)
+		if floating {
+			h = bar.LayoutBounds().H
+		}
+		if h != m.composerH {
+			m.composerH = h
+			c.After(0)
 		}
 	})
-	for _, a := range m.ApprovalsFor(cur.ServerID) {
-		ui.Column(c.Key("approval:" + string(a.ID))).FillWidth().Children(func() { m.approvalCard(c, a) })
-	}
-	m.composer(c, agent, busy)
 }
 
 func (m *App) newConversationView(c *ui.Context, proj model.ProjectSnapshot) {
@@ -1731,7 +1759,8 @@ func (m *App) composer(c *ui.Context, agent string, busy bool) {
 		if hint := m.InlineInput.CommandHint(); hint != "" {
 			ui.Text(c, hint).FontSize(m.Font(12)).TextColor(p.muted).FillWidth().Wrap().Padding(0, 10)
 		}
-		ui.Column(c.Key("composer-box")).FillWidth().Padding(6, 6, 6, 10).Background(p.surface).Radius(26).Children(func() {
+		// A little translucent: what scrolls under the composer shows through.
+		ui.Column(c.Key("composer-box")).FillWidth().Padding(6, 6, 6, 10).Background(p.surface.Alpha(0.85)).Radius(26).Children(func() {
 			opts := m.SendOptions(agent)
 			effort := strings.ToUpper(textutil.FirstNonEmpty(opts.Effort, tr("Default")))
 			hasDraft := strings.TrimSpace(m.Draft) != "" || len(m.Images) > 0

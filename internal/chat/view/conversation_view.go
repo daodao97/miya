@@ -51,6 +51,22 @@ type View struct {
 	Lists            map[int]*ui.ListState
 	Groups           GroupCache
 	Copied, Open     map[int]bool
+	// BottomInset is the height of what floats over the bottom of the
+	// messages, as the phone's composer: the list scrolls under it and
+	// keeps that much room after its last message. The rows under the list
+	// (Latest, background tasks, the turn's status) are then left for
+	// Footer to build in the floating bar, in the same frame.
+	BottomInset float32
+	footer      func()
+}
+
+// Footer builds the rows under the list that MessageList left for the
+// floating bar, where it is called; nothing without BottomInset.
+func (app *View) Footer() {
+	if f := app.footer; f != nil {
+		app.footer = nil
+		f()
+	}
 }
 
 func NewConversationView(host Host) *View {
@@ -88,13 +104,17 @@ func (app *View) MessageList(c *ui.Context, t model.Thread) {
 		// The elapsed time of the running turn counts up.
 		c.After(time.Second)
 	}
+	pad, bottom := app.listPadding(), app.listPadding()
+	if app.BottomInset > 0 {
+		bottom += app.BottomInset
+	}
 	list := ui.List(c, state, len(groups), func(i int) {
 		ui.Column(c).FillWidth().AlignItems(ui.Center).Children(func() {
 			ui.Column(c).FillWidth().MaxWidth(744).Children(func() {
 				app.groupViewWithFooter(c, groups[i], i != completedGroup)
 			})
 		})
-	}).Grow(1).MinHeight(0).Padding(app.listPadding()).Gap(app.listPadding()).Children(func() {
+	}).Grow(1).MinHeight(0).Padding(pad, pad, bottom, pad).Gap(pad).Children(func() {
 		if len(t.Messages) == 0 && !t.Loading && t.Status != "" && !t.Busy {
 			ui.Column(c).AlignItems(ui.Center).Gap(8).Margin(ui.Auto).Children(func() {
 				widgets.MutedText(c, tr("Unable to load conversation"))
@@ -130,101 +150,109 @@ func (app *View) MessageList(c *ui.Context, t model.Thread) {
 			c.After(0)
 		}
 	}
-	// Read AtEnd every frame, even with no messages: reading it is what
-	// asks the list for another frame when its position changes.
-	atEnd := state.AtEnd()
-	if len(groups) > 0 {
-		// The button floats over the bottom of the list from a row of no
-		// height, kept in the layout either way. Showing it must not resize
-		// the list: that flipped AtEnd near the bottom and made it flicker,
-		// and reserved room pushed the composer off a short phone screen.
-		row := ui.Row(c).Height(0).Justify(ui.Center)
-		if atEnd {
-			row.Invisible()
-		}
-		row.Children(func() {
-			ui.Row(c).TranslatePercent(0, -100).Translate(0, -8).Children(func() {
-				jump := widgets.Quiet(c.Key("latest")).Background(widgets.Canvas).Border(1, widgets.Line).Radius(16).Shadow(0, 2, 8, 0, widgets.Shadow)
-				jump.Children(func() { widgets.MutedText(c, tr("↓ Latest")) })
-				if jump.Clicked() {
-					state.ScrollToEnd()
-				}
-			})
-		})
-	}
-	if len(t.BackgroundTasks) > 0 {
-		ui.Row(c.Key("background-tasks")).FillWidth().Justify(ui.Center).Padding(4, app.listPadding()).Children(func() {
-			ui.Column(c).FillWidth().MaxWidth(744).Gap(4).Children(func() {
-				widgets.WorkingLabel(c, "clock", fmt.Sprintf(tr("Background tasks running (%d) · Waiting for results"), len(t.BackgroundTasks)))
-				names := make([]string, 0, len(t.BackgroundTasks))
-				for _, task := range t.BackgroundTasks {
-					names = append(names, textutil.ClipRunes(strings.Join(strings.Fields(task.Description), " "), 100))
-				}
-				ui.Text(c, strings.Join(names, " · ")).FontSize(12).TextColor(widgets.Muted).MaxLines(2).Tooltip(strings.Join(names, "\n"))
-			})
-		})
-	}
-	if status != "" || completedGroup >= 0 {
-		ui.Row(c).FillWidth().Justify(ui.Center).Padding(0, app.listPadding()).Children(func() {
-			// Match the response actions so finishing a turn does not move
-			// the label. Phone actions retain their full touch target.
-			height := float32(28)
-			if app.Mobile {
-				height = 44
-			}
-			row := ui.Row(c.Key("turn-status")).FillWidth().MaxWidth(744).MinHeight(height).Gap(8).AlignItems(ui.Center)
-			if app.Mobile {
-				row.Gap(6)
+	footer := func() {
+		// Read AtEnd every frame, even with no messages: reading it is what
+		// asks the list for another frame when its position changes.
+		atEnd := state.AtEnd()
+		if len(groups) > 0 {
+			// The button floats over the bottom of the list from a row of no
+			// height, kept in the layout either way. Showing it must not resize
+			// the list: that flipped AtEnd near the bottom and made it flicker,
+			// and reserved room pushed the composer off a short phone screen.
+			row := ui.Row(c).Height(0).Justify(ui.Center)
+			if atEnd {
+				row.Invisible()
 			}
 			row.Children(func() {
-				phoneHint, desktopHint := "", false
-				if label := msgfmt.ThreadReconnectLabel(t); t.Busy && label != "" {
-					ui.Row(c.Key("reconnecting")).Gap(8).AlignItems(ui.Center).Label(label).Children(func() {
-						ui.Spinner(c).FontSize(13).TextColor(widgets.WarnInk)
-						ui.Text(c, label).FontSize(12).TextColor(widgets.WarnInk).Tooltip(t.Status)
-					})
-				} else if status != "" {
-					label := widgets.WorkingLabel(c.Key("working"), "clock", status).MinWidth(0).Shrink(1)
-					if t.Busy {
-						label.Tooltip(tr("Average output speed for this turn, including wait time."))
-					} else if completedGroup >= 0 {
-						label.Tooltip(msgfmt.FormatMessageTimestamp(groups[completedGroup].Timestamp))
-					}
-					if hint := appmodel.StalledHint(t, len(app.C.ViewApprovals()) > 0, time.Now()); t.Busy && hint != "" {
-						if app.Mobile {
-							phoneHint = hint
-						} else {
-							desktopHint = true
-							ui.Text(c, "· "+hint).Grow(1).MinWidth(0).FontSize(12).TextColor(widgets.WarnInk)
-						}
-					}
-				}
-				if completedGroup >= 0 {
-					responseDiffStats(c.Key("diff-stats"), groups[completedGroup].DiffStats)
-					app.responseActions(c.Key("response-actions"), groups[completedGroup])
-				}
-				// The phone's short hint and the Agent tasks toggle keep to the
-				// right edge; a desktop hint takes the free space before them.
-				trailing := ui.Row(c.Key("trailing")).MinWidth(0).Shrink(0).Gap(8).Justify(ui.End).AlignItems(ui.Center)
-				if desktopHint {
-					trailing.Shrink(0)
-				} else {
-					trailing.Grow(1)
-				}
-				trailing.Children(func() {
-					if phoneHint != "" {
-						ui.Text(c, tr("No response yet")).Shrink(0).SingleLine().FontSize(12).TextColor(widgets.WarnInk).Tooltip(phoneHint)
-					}
-					if app.WorkingAccessory != nil {
-						app.WorkingAccessory(c.Key("accessory"))
-					} else if !app.Mobile {
-						if app.DesktopAccessory != nil {
-							app.DesktopAccessory(c.Key("accessory"), t)
-						}
+				ui.Row(c).TranslatePercent(0, -100).Translate(0, -8).Children(func() {
+					jump := widgets.Quiet(c.Key("latest")).Background(widgets.Canvas).Border(1, widgets.Line).Radius(16).Shadow(0, 2, 8, 0, widgets.Shadow)
+					jump.Children(func() { widgets.MutedText(c, tr("↓ Latest")) })
+					if jump.Clicked() {
+						state.ScrollToEnd()
 					}
 				})
 			})
-		})
+		}
+		if len(t.BackgroundTasks) > 0 {
+			ui.Row(c.Key("background-tasks")).FillWidth().Justify(ui.Center).Padding(4, app.listPadding()).Children(func() {
+				ui.Column(c).FillWidth().MaxWidth(744).Gap(4).Children(func() {
+					widgets.WorkingLabel(c, "clock", fmt.Sprintf(tr("Background tasks running (%d) · Waiting for results"), len(t.BackgroundTasks)))
+					names := make([]string, 0, len(t.BackgroundTasks))
+					for _, task := range t.BackgroundTasks {
+						names = append(names, textutil.ClipRunes(strings.Join(strings.Fields(task.Description), " "), 100))
+					}
+					ui.Text(c, strings.Join(names, " · ")).FontSize(12).TextColor(widgets.Muted).MaxLines(2).Tooltip(strings.Join(names, "\n"))
+				})
+			})
+		}
+		if status != "" || completedGroup >= 0 {
+			ui.Row(c).FillWidth().Justify(ui.Center).Padding(0, app.listPadding()).Children(func() {
+				// Match the response actions so finishing a turn does not move
+				// the label. Phone actions retain their full touch target.
+				height := float32(28)
+				if app.Mobile {
+					height = 44
+				}
+				row := ui.Row(c.Key("turn-status")).FillWidth().MaxWidth(744).MinHeight(height).Gap(8).AlignItems(ui.Center)
+				if app.Mobile {
+					row.Gap(6)
+				}
+				row.Children(func() {
+					phoneHint, desktopHint := "", false
+					if label := msgfmt.ThreadReconnectLabel(t); t.Busy && label != "" {
+						ui.Row(c.Key("reconnecting")).Gap(8).AlignItems(ui.Center).Label(label).Children(func() {
+							ui.Spinner(c).FontSize(13).TextColor(widgets.WarnInk)
+							ui.Text(c, label).FontSize(12).TextColor(widgets.WarnInk).Tooltip(t.Status)
+						})
+					} else if status != "" {
+						label := widgets.WorkingLabel(c.Key("working"), "clock", status).MinWidth(0).Shrink(1)
+						if t.Busy {
+							label.Tooltip(tr("Average output speed for this turn, including wait time."))
+						} else if completedGroup >= 0 {
+							label.Tooltip(msgfmt.FormatMessageTimestamp(groups[completedGroup].Timestamp))
+						}
+						if hint := appmodel.StalledHint(t, len(app.C.ViewApprovals()) > 0, time.Now()); t.Busy && hint != "" {
+							if app.Mobile {
+								phoneHint = hint
+							} else {
+								desktopHint = true
+								ui.Text(c, "· "+hint).Grow(1).MinWidth(0).FontSize(12).TextColor(widgets.WarnInk)
+							}
+						}
+					}
+					if completedGroup >= 0 {
+						responseDiffStats(c.Key("diff-stats"), groups[completedGroup].DiffStats)
+						app.responseActions(c.Key("response-actions"), groups[completedGroup])
+					}
+					// The phone's short hint and the Agent tasks toggle keep to the
+					// right edge; a desktop hint takes the free space before them.
+					trailing := ui.Row(c.Key("trailing")).MinWidth(0).Shrink(0).Gap(8).Justify(ui.End).AlignItems(ui.Center)
+					if desktopHint {
+						trailing.Shrink(0)
+					} else {
+						trailing.Grow(1)
+					}
+					trailing.Children(func() {
+						if phoneHint != "" {
+							ui.Text(c, tr("No response yet")).Shrink(0).SingleLine().FontSize(12).TextColor(widgets.WarnInk).Tooltip(phoneHint)
+						}
+						if app.WorkingAccessory != nil {
+							app.WorkingAccessory(c.Key("accessory"))
+						} else if !app.Mobile {
+							if app.DesktopAccessory != nil {
+								app.DesktopAccessory(c.Key("accessory"), t)
+							}
+						}
+					})
+				})
+			})
+		}
+	}
+	app.footer = nil
+	if app.BottomInset > 0 {
+		app.footer = footer
+	} else {
+		footer()
 	}
 }
 
