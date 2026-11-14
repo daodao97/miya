@@ -1,6 +1,6 @@
 // Package client holds the phone's desktop connection and conversation state.
 // It has no UI framework dependency. The NSGo adapter dispatches changes onto
-// its engine; the legacy MyGo surface remains in internal/mobile unchanged.
+// its engine, independently of the phone renderer.
 package client
 
 import (

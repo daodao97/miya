@@ -913,7 +913,7 @@
   "permissions_d06d55": "Permissions",
   "phone_77064d": "Phone",
   "phoneNotificationsInTheBackgroundNeedMiya_1d38a2": "Phone notifications in the background need Miya''s APNs key on the sending side and permission on the phone.",
-  "phoneRegisteredApnsIsNotConfiguredOn_97486e": "Phone registered. APNs is not configured on the desktop; run mygo push setup.",
+  "phoneRegisteredApnsIsNotConfiguredOn_97486e": "Phone registered. APNs is not configured on the desktop; see docs/notifications.md.",
   "planDDCompleted_bd7d4c": "Plan · %d / %d completed",
   "port_ad542d": "Port ",
   "preference_97d9b2": "Preference",

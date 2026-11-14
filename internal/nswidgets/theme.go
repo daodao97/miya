@@ -1,6 +1,4 @@
-// Package nswidgets is Miya's shared look on NSGo: its theme, colors, icons
-// and common controls. It replaces internal/widgets, which is written
-// against MyGo, as views move over; see docs/nsgo-migration.md.
+// Package nswidgets holds Miya's NSGo theme, icons and common controls.
 package nswidgets
 
 import (
@@ -35,8 +33,7 @@ const (
 	RoleCodeInk   = "codeInk"
 )
 
-// palette is Miya's colors for one appearance, as internal/widgets keeps
-// them, so both interfaces look the same while they coexist.
+// palette holds Miya's colors for one appearance.
 type palette struct {
 	canvas, side, panel, ink, muted, line, hover, chosen, bubble core.Color
 	edge, subtle, selected, faint, warnBg, warnLine, warnInk     core.Color

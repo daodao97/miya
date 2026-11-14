@@ -2,13 +2,10 @@ module miya
 
 go 1.27.3
 
-replace github.com/egoist/mygo => github.com/daodao97/mygo-mobile v0.0.0-20261112142321-f29b5777f85a
-
 require (
 	github.com/coder/websocket v1.8.15
 	github.com/creack/pty v1.1.24
 	github.com/ebitengine/purego v0.11.2
-	github.com/egoist/mygo v0.7.4
 	github.com/klauspost/compress v1.20.0
 	github.com/nsgo-dev/nsgo v0.0.0-00010101000000-000000000000
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
@@ -23,7 +20,6 @@ require (
 
 require (
 	filippo.io/edwards25519 v1.2.0 // indirect
-	github.com/Heyana/typesetting-go v0.3.5-heyana.4 // indirect
 	github.com/akutz/memconn v0.1.0 // indirect
 	github.com/alecthomas/chroma/v2 v2.27.0 // indirect
 	github.com/andybalholm/brotli v1.2.6 // indirect

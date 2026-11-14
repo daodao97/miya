@@ -48,17 +48,9 @@ func TestCatalogsCoverTheSameMessagesAndFormatArguments(t *testing.T) {
 
 func TestGeneratedAccessorsFollowInterfaceLanguage(t *testing.T) {
 	previous := Current()
-	t.Cleanup(func() { SetCurrent(previous); SetMessageLocaleFunc(nil) })
+	t.Cleanup(func() { SetCurrent(previous) })
 	SetCurrent("zh-Hans")
 	if PhoneUnread() != "未读" || In("en-GB").PhoneUnread() != "Unread" {
 		t.Fatal("generated accessors did not follow the selected or explicit locale")
-	}
-	SetMessageLocaleFunc(func() string { return "en" })
-	if PhoneUnread() != "Unread" || Current() != "zh-Hans" {
-		t.Fatal("legacy application locale did not select the generated message")
-	}
-	SetMessageLocaleFunc(nil)
-	if PhoneUnread() != "未读" {
-		t.Fatal("resetting the legacy locale provider did not restore Current")
 	}
 }

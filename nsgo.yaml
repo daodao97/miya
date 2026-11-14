@@ -49,9 +49,6 @@
     "channel": "none"
   },
   "miya": {
-    "tags": [
-      "nsgo"
-    ],
     "ldflags": "-X miya/internal/selfupdate.Build=miya-release:{version}:end",
     "url_schemes": [
       "miya"

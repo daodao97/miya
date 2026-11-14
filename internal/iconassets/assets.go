@@ -1,6 +1,5 @@
-// Package iconassets holds Miya's Tabler icons as SVG documents, shared by
-// the MyGo widgets and the NSGo widgets so neither names the other's
-// framework. See icons/LICENSE.
+// Package iconassets holds Miya's framework-free Tabler SVG assets.
+// See icons/LICENSE.
 package iconassets
 
 import (

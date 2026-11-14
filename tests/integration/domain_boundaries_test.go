@@ -76,7 +76,7 @@ func TestSharedDomainPackagesDoNotImportAgentImplementations(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				for _, blocked := range []string{"miya/internal/agent/codex", "miya/internal/agent/claude", "miya/internal/agent/integrations", "miya/internal/controller", "miya/internal/ui", "miya/internal/mobile", "miya/internal/nsui", "miya/internal/nsmobile", "miya/internal/nschat", "miya/internal/nswidgets", "miya/internal/nsrequests"} {
+				for _, blocked := range []string{"miya/internal/agent/codex", "miya/internal/agent/claude", "miya/internal/agent/integrations", "miya/internal/controller", "miya/internal/nsui", "miya/internal/nsmobile", "miya/internal/nschat", "miya/internal/nswidgets", "miya/internal/nsrequests"} {
 					if name == blocked || strings.HasPrefix(name, blocked+"/") {
 						t.Errorf("%s imports implementation %s", path, name)
 					}

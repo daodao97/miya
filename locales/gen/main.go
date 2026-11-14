@@ -61,7 +61,7 @@ type Messages struct{ locale string }
 func In(locale string) Messages { return Messages{locale} }
 `)
 	used := map[string]bool{"In": true, "Messages": true, "Catalog": true, "Current": true, "Match": true,
-		"SetCurrent": true, "T": true, "TextIn": true, "HasMessage": true, "CatalogFiles": true, "SetMessageLocaleFunc": true}
+		"SetCurrent": true, "T": true, "TextIn": true, "HasMessage": true}
 	for _, key := range catalog.Keys() {
 		name := goName(key)
 		if !token.IsIdentifier(name) || !token.IsExported(name) || used[name] {

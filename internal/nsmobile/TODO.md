@@ -6,7 +6,7 @@ approval or starts one of these features implicitly.
 
 | Feature | Hook for the next port |
 | --- | --- |
-| Remote desktop | Ported: retained live image/cursor, touch/trackpad/zoom, IME/password entry and Mac keys, connecting/error/ended/picker states, permission previews/actions, apps/displays, privacy, manual unlock, floating preview and exact-target resume. Session/protocol ownership lives in `phone/client`; frame validation and input geometry are shared with MyGo in `phone/desktopview`. Back/close revoke leases; background/disconnect clear frames, input and secrets before requesting a fresh lease on authoritative state. Native authentication and device validation remain below. |
+| Remote desktop | Ported: retained live image/cursor, touch/trackpad/zoom, IME/password entry and Mac keys, connecting/error/ended/picker states, permission previews/actions, apps/displays, privacy, manual unlock, floating preview and exact-target resume. Session/protocol ownership lives in `phone/client`; frame validation and input geometry live in framework-free `phone/desktopview`. Back/close revoke leases; background/disconnect clear frames, input and secrets before requesting a fresh lease on authoritative state. Native authentication and device validation remain below. |
 | Multiple desktop management | Ported: add/switch/rename/remove/reload, secure registry migration and persistence, per-desktop drafts/attachments/conversation selection and caches/options. Switching ends remote control and remounts the destination under the new desktop identity. |
 
 ## Ported feature sheets
@@ -37,7 +37,7 @@ into `memory/presentation`; automation run lookup moved out of `mobile` into
 `phone/protocol`; the collaboration user request moved from `appmodel` to
 `delegation` with a compatibility alias. Safe automation cloning is shared by
 desktop and both phone implementations in `automation.Clone`. The feature transport state lives in
-`phone/client`, and the MyGo UI continues compiling.
+`phone/client`, and the old MyGo UI has been removed.
 
 `features_test.go` covers each sheet with nsgotest, including required answers,
 MCP validation, memory revisions/scopes/source links, automation list/detail/run/

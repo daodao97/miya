@@ -1,5 +1,3 @@
-//go:build !mygo_ui
-
 package integration
 
 import (

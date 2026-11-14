@@ -3,7 +3,7 @@ package locales
 import "sync/atomic"
 
 // current is the interface language the UI last matched. It belongs to this
-// device; code outside a ui.Context reads it through T.
+// device; shared code reads it through T.
 var current atomic.Value
 
 // SetCurrent records the matched interface language tag.
@@ -32,22 +32,4 @@ func Match(preferred []string) string {
 	return Catalog.Match(preferred)
 }
 
-var messageLocaleFunc atomic.Pointer[func() string]
-
-// SetMessageLocaleFunc lets the legacy UI supply its application locale to the
-// generated accessors. With nil, accessors use Current, as the NSGo UI does.
-// The function must be safe to call concurrently.
-func SetMessageLocaleFunc(f func() string) {
-	if f == nil {
-		messageLocaleFunc.Store(nil)
-	} else {
-		messageLocaleFunc.Store(&f)
-	}
-}
-
-func messageLocale() string {
-	if f := messageLocaleFunc.Load(); f != nil {
-		return (*f)()
-	}
-	return Current()
-}
+func messageLocale() string { return Current() }

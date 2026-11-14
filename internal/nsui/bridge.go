@@ -1,5 +1,5 @@
-// Package nsui is Miya's desktop interface on NSGo. It replaces internal/ui,
-// which is written against MyGo, view by view; see docs/nsgo-migration.md.
+// Package nsui is Miya's desktop interface on NSGo. It connects controllers
+// through the framework-free uiruntime contract; see docs/nsgo-migration.md.
 package nsui
 
 import (
