@@ -57,7 +57,6 @@ func root(cx *core.Scope, c Host) core.Node {
 		},
 	}
 	bindCommands(cx, cmd)
-	_ = settingsOpen
 	colors := nswidgets.ColorsOf(cx)
 	conversation := nschat.View{TestID: "conversation", Thread: current,
 		OnRetry:  func(r appmodel.RetryRequest) { _ = c.RetryResponse(r) },
@@ -95,7 +94,7 @@ func root(cx *core.Scope, c Host) core.Node {
 			StyleFunc:   func() core.Style { return core.Style{Color: colors.Ink()} }}},
 		Content: []core.Node{conversation, commandPalette(cx, paletteOpen, func() []paletteEntry {
 			return paletteEntries(cmd, current(), threads(), c.SelectThread, time.Now())
-		})},
+		}), settingsDialog(cx, c, settingsOpen)},
 	}
 }
 

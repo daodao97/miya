@@ -1,4 +1,7 @@
 {
+  "searchSettings": "搜索设置",
+  "noMatchingSettings": "没有匹配的设置。",
+
   "webhookWaitingForService": "正在等待运行中的对话结束，Webhook 更新随后生效。",
   "miyaWebhook": "Miya Webhook",
   "enableWebhook": "启用 Webhook",
