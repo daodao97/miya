@@ -16,21 +16,22 @@ import (
 )
 
 type State struct {
-	Collaboration    *model.CollaborationStatus `json:"collaboration,omitempty"`
-	DesktopWindows   bool                       `json:"desktopWindows,omitempty"`
-	DesktopControl   bool                       `json:"desktopControl,omitempty"`
-	MemoryRevision   uint64                     `json:"memoryRevision,omitempty"`
-	Memory           bool                       `json:"memory,omitempty"`
-	ReferenceSource  string                     `json:"referenceSource"`
-	Files            bool                       `json:"files,omitempty"`
-	WebPorts         bool                       `json:"webPorts,omitempty"`
-	Runtime          bool                       `json:"runtime,omitempty"`
-	WebServices      bool                       `json:"webServices,omitempty"`
-	FileReferences   bool                       `json:"fileReferences,omitempty"`
-	Automations      bool                       `json:"automations,omitempty"`
-	AutomationRun    bool                       `json:"automationRun,omitempty"`
-	AutomationCreate bool                       `json:"automationCreate,omitempty"`
-	Projects         []model.ProjectSnapshot    `json:"projects"`
+	Collaboration     *model.CollaborationStatus `json:"collaboration,omitempty"`
+	DesktopWindows    bool                       `json:"desktopWindows,omitempty"`
+	DesktopControl    bool                       `json:"desktopControl,omitempty"`
+	MemoryRevision    uint64                     `json:"memoryRevision,omitempty"`
+	Memory            bool                       `json:"memory,omitempty"`
+	ReferenceSource   string                     `json:"referenceSource"`
+	Files             bool                       `json:"files,omitempty"`
+	WebPorts          bool                       `json:"webPorts,omitempty"`
+	Runtime           bool                       `json:"runtime,omitempty"`
+	WebServices       bool                       `json:"webServices,omitempty"`
+	FileReferences    bool                       `json:"fileReferences,omitempty"`
+	AutomationWebhook bool                       `json:"automationWebhook,omitempty"`
+	Automations       bool                       `json:"automations,omitempty"`
+	AutomationRun     bool                       `json:"automationRun,omitempty"`
+	AutomationCreate  bool                       `json:"automationCreate,omitempty"`
+	Projects          []model.ProjectSnapshot    `json:"projects"`
 	// An empty map is authoritative; nil means an older desktop that only
 	// provides per-phone push unread state.
 	CompletionUnread map[string]int64        `json:"completionUnread"`

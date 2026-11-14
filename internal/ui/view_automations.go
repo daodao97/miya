@@ -21,6 +21,7 @@ import (
 // automationsUI is the Automations page's state; the automations live in
 // the service, which the page asks through automationCall.
 type automationsUI struct {
+	Webhook  *automation.WebhookView
 	Page     string // "", "detail" or "form"
 	Detail   string // the automation the detail page shows
 	list     []automation.View
@@ -125,6 +126,20 @@ func (app *App) loadAutomations() {
 		return
 	}
 	a.loading = true
+	app.autoCall("automationWebhook", automation.Request{}, func(raw json.RawMessage, err error) {
+		if err != nil {
+			message := err.Error()
+			if strings.Contains(strings.ToLower(message), "unknown operation") || strings.Contains(message, "Unknown automation operation") {
+				message = tr("Waiting for running conversations to finish before the webhook update takes effect.")
+			}
+			a.Webhook = &automation.WebhookView{Enabled: true, Error: message}
+			return
+		}
+		var v automation.WebhookView
+		if json.Unmarshal(raw, &v) == nil {
+			a.Webhook = &v
+		}
+	})
 	app.autoCall("automationList", automation.Request{}, func(raw json.RawMessage, err error) {
 		a.loading, a.loadedAt = false, time.Now()
 		if err != nil {
@@ -211,6 +226,24 @@ func (app *App) automationList(c *ui.Context) {
 	})
 	if a.err != "" {
 		ui.Text(c, a.err).FontSize(12).TextColor(widgets.Failed)
+	}
+	if a.Webhook != nil {
+		widgets.WebhookInbox(c.Key("webhook"), *a.Webhook, func(enabled bool) {
+			action := "disable"
+			if enabled {
+				action = "enable"
+			}
+			app.autoCall("automationWebhook", automation.Request{Action: action}, func(raw json.RawMessage, err error) {
+				if err != nil {
+					a.err = err.Error()
+					return
+				}
+				var v automation.WebhookView
+				if json.Unmarshal(raw, &v) == nil {
+					a.Webhook = &v
+				}
+			})
+		})
 	}
 	switch {
 	case !a.loaded:

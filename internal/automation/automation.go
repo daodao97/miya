@@ -174,8 +174,11 @@ func (a Automation) Next(after time.Time) time.Time {
 // Store is everything automations keep: what people set up and
 // what their runs did.
 type Store struct {
-	Automations []Automation     `json:"automations"`
-	Runs        map[string][]Run `json:"runs,omitempty"`
+	// WebhookDisabled controls Miya’s shared message receiver.
+	WebhookDisabled bool             `json:"webhookDisabled,omitempty"`
+	Inbox           []WebhookMessage `json:"inbox,omitempty"`
+	Automations     []Automation     `json:"automations"`
+	Runs            map[string][]Run `json:"runs,omitempty"`
 	// Triggers is what each trigger has seen, by TriggerKey, so that a
 	// restart neither wakes again for what it already woke for nor misses
 	// what changed meanwhile.

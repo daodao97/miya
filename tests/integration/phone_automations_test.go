@@ -262,3 +262,29 @@ func TestPhoneAutomationRunUnavailable(t *testing.T) {
 		}
 	}
 }
+
+func TestPhoneSharedWebhookWithoutTasks(t *testing.T) {
+	c := serverController(t.TempDir(), "")
+	c.StartAutomations(filepath.Join(t.TempDir(), "automations.json"), false)
+	c.Auto.ReceiveWebhook("hello Miya")
+	if !c.PhoneSnapshot().AutomationWebhook {
+		t.Fatal("shared webhook capability missing")
+	}
+	conn, _ := serveTestPhone(t, c)
+	conn.requests <- remote.Request{Op: "automation-webhook"}
+	for {
+		select {
+		case frame := <-conn.frames:
+			if frame.Type != "automation-webhook" {
+				continue
+			}
+			var inbox automation.WebhookView
+			if err := json.Unmarshal(frame.Data, &inbox); err != nil || frame.Error != "" || len(inbox.Messages) != 1 || inbox.Messages[0].Data != "hello Miya" {
+				t.Fatal("global inbox missing from phone transport")
+			}
+			return
+		case <-conn.ctx.Done():
+			t.Fatal("no shared webhook response")
+		}
+	}
+}

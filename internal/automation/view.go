@@ -24,6 +24,7 @@ func (rn *Runner) View(a Automation, now time.Time) View {
 	v.ScheduleText = WakeText(a, rn.name)
 	for _, t := range a.Triggers {
 		v.TriggerTexts[t.ID] = DescribeTrigger(t, rn.name)
+
 		if url := rn.TriggerURL(a, t); url != "" && !t.Disabled {
 			if v.WakeURLs == nil {
 				v.WakeURLs = map[string]string{}

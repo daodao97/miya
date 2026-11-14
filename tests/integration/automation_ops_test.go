@@ -1,6 +1,8 @@
 package integration
 
 import (
+	"encoding/json"
+	svcproto "miya/internal/service/protocol"
 	"testing"
 	"time"
 
@@ -76,5 +78,27 @@ func TestServiceCallTimeoutsFitSlowOperations(t *testing.T) {
 	}
 	if svcclient.CallTimeout("state") != 15*time.Second {
 		t.Fatal("ordinary requests lost their timeout")
+	}
+}
+
+func TestSharedWebhookServiceOperationWithoutTasks(t *testing.T) {
+	h := newAutomationHarness(t)
+	value, err := h.c.ServiceRequest(svcproto.Request{Op: "automationWebhook"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	v, ok := value.(automation.WebhookView)
+	if !ok || !v.Enabled {
+		t.Fatal("service did not expose the global receiver before tasks exist")
+	}
+	h.s.ReceiveWebhook("notification before any task")
+	value, err = h.c.ServiceRequest(svcproto.Request{Op: "automationWebhook"})
+	if err != nil || len(value.(automation.WebhookView).Messages) != 1 {
+		t.Fatal("received message not exposed by service")
+	}
+	args, _ := json.Marshal(automation.Request{Action: "disable"})
+	value, err = h.c.ServiceRequest(svcproto.Request{Op: "automationWebhook", Args: args})
+	if err != nil || value.(automation.WebhookView).Enabled || !h.s.Store.WebhookDisabled {
+		t.Fatal("global receiver switch did not persist")
 	}
 }

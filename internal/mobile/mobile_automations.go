@@ -20,6 +20,7 @@ import (
 )
 
 type mobileAutomations struct {
+	Webhook          *automation.WebhookView
 	Form             mobileAutomationForm
 	List             []automation.View
 	Detail           string
@@ -87,7 +88,11 @@ func (m *App) loadPhoneAutomations() {
 	}
 	m.Autos.Loading, m.Autos.RequestedAt = true, time.Now()
 	conn, gen := m.Conn, m.Generation
+	webhookSupported := m.State.AutomationWebhook
 	go func() {
+		if webhookSupported {
+			_ = conn.Send(remote.Request{Op: "automation-webhook"})
+		}
 		if err := conn.Send(remote.Request{Op: "automations"}); err != nil {
 			m.onMain(gen, func() {
 				if m.Conn == conn {
@@ -186,6 +191,9 @@ func (m *App) automationsPage(c *ui.Context, detail bool) {
 				}
 				ui.Text(c, tr("This automation was deleted")).TextColor(p.muted)
 				return
+			}
+			if a.Webhook != nil {
+				widgets.WebhookInbox(c.Key("webhook"), *a.Webhook, nil)
 			}
 			if len(a.List) == 0 {
 				message := tr("Tap the top-right button to create a task and schedule.")
@@ -355,6 +363,7 @@ func (m *App) automationPhoneDetail(c *ui.Context, v automation.View) {
 		}
 	})
 	ui.Box(c).FillWidth().Height(0.5).Margin(8, 0, 0, 0).Background(p.line)
+
 	ui.Row(c).FillWidth().Gap(8).Margin(8, 0, 0, 0).AlignItems(ui.Center).Children(func() {
 		ui.Text(c, tr("Run history")).Grow(1).FontSize(m.Font(16)).FontWeight(600)
 		if len(v.Runs) > 0 {

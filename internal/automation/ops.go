@@ -166,7 +166,8 @@ func (rn *Runner) SaveWithID(a Automation, createID string) (Automation, error) 
 func (rn *Runner) Changed() {
 	rn.Persist()
 	rn.syncWebhook()
-	rn.host.SyncLoginItem(rn.Store.AnyEnabled())
+	rn.syncRelay()
+	rn.host.SyncLoginItem(rn.Enabled())
 	rn.host.Changed()
 }
 

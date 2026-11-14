@@ -50,6 +50,7 @@ func (c *Controller) PhoneSnapshot() phoneproto.State {
 	s.DesktopWindows = s.DesktopControl
 	s.AutomationRun = c.Auto != nil
 	s.AutomationCreate = c.Auto != nil
+	s.AutomationWebhook = c.Auto != nil
 	if c.Agent != nil {
 		s.Agent = c.Agent()
 	}
@@ -485,8 +486,11 @@ var DesktopPhone *phoneHost
 
 // newPhoneHost restores the bridge if the user left it on, so the phone's
 // saved link keeps working across desktop restarts.
-func NewPhoneHost(c *Controller) *phoneHost {
+func NewPhoneHost(c *Controller, configure ...func(*phoneHost)) *phoneHost {
 	p := phoneserver.NewPairing(phoneHostOf{c})
+	for _, setup := range configure {
+		setup(p)
+	}
 	uiruntime.OnCleanup(p.Close)
 	if phoneserver.LoadEnabled() && !servingRemote {
 		p.Start()

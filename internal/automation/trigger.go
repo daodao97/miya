@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
@@ -22,7 +23,7 @@ const (
 	// TriggerCondition wakes when a probe of the computer turns true.
 	TriggerCondition = "condition"
 	// TriggerIngress wakes when something outside Miya asks: miya -wake, or
-	// an HTTP request to the local wake endpoint.
+	// an HTTP request to the local wake endpoint or Tailcat webhook relay.
 	TriggerIngress = "ingress"
 	// TriggerFile wakes when a file or a directory's entries change.
 	TriggerFile = "file"
@@ -65,8 +66,11 @@ type Trigger struct {
 	// Event is a system trigger's event: SystemWake.
 	Event string `json:"event,omitempty"`
 	// Token authorizes HTTP wakes of an ingress trigger.
-	Token    string `json:"token,omitempty"`
-	Disabled bool   `json:"disabled,omitempty"`
+	Token string `json:"token,omitempty"`
+	// Match selects JSON fields by dotted path; Contains selects text.
+	Match    map[string]string `json:"match,omitempty"`
+	Contains string            `json:"contains,omitempty"`
+	Disabled bool              `json:"disabled,omitempty"`
 }
 
 // WakePolicy holds back wakes of an automation.
@@ -163,6 +167,15 @@ func (t *Trigger) normalize(self string) error {
 			return err
 		}
 	case TriggerIngress:
+		t.Contains = strings.TrimSpace(t.Contains)
+		if len([]rune(t.Contains)) > 300 || len(t.Match) > 16 {
+			return errors.New("Webhook filters are too long")
+		}
+		for field, value := range t.Match {
+			if strings.TrimSpace(field) == "" || len(field) > 128 || len([]rune(value)) > 300 {
+				return errors.New("Invalid webhook field filter")
+			}
+		}
 		if t.Token == "" {
 			t.Token = newToken()
 		}
@@ -203,6 +216,7 @@ func (t *Trigger) normalize(self string) error {
 	}
 	if t.Kind != TriggerIngress {
 		t.Token = ""
+		t.Match, t.Contains = nil, ""
 	}
 	if t.ID == "" {
 		t.ID = NewID()
@@ -271,6 +285,17 @@ func DescribeTrigger(t Trigger, name func(id string) string) string {
 			return describeCondition(*t.Condition)
 		}
 	case TriggerIngress:
+		var filters []string
+		for field, value := range t.Match {
+			filters = append(filters, field+" = "+value)
+		}
+		sort.Strings(filters)
+		if t.Contains != "" {
+			filters = append(filters, fmt.Sprintf(tr("text contains %q"), t.Contains))
+		}
+		if len(filters) > 0 {
+			return tr("Webhook messages matching: ") + strings.Join(filters, "; ")
+		}
 		return tr("When woken from outside Miya")
 	case TriggerFile:
 		return fmt.Sprintf(tr("When %s changes"), t.Path)

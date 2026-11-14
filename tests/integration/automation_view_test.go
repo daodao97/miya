@@ -4,6 +4,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -154,4 +155,28 @@ func TestAutomationInputDiscardsOldDraft(t *testing.T) {
 	if app.Autos.Saving || app.Autos.DraftErr != "" {
 		t.Fatal("edited request allowed saving old settings")
 	}
+}
+
+func TestSharedWebhookVisibleWithoutAutomations(t *testing.T) {
+	app, tt := testApp(t)
+	c := app.C.(*controller.Controller)
+	c.StartAutomations(filepath.Join(t.TempDir(), "automations.json"), false)
+	app.ShowAutomations()
+	tt.Frame()
+	tt.Frame()
+	url := "https://tailcat-webhook.daodao973597.workers.dev/push/tcw_" + strings.Repeat("b", 64)
+	app.Autos.Webhook = &automation.WebhookView{Enabled: true, URL: url, Messages: []automation.WebhookMessage{{ID: "msg", At: time.Now(), Data: "deploy finished", Detail: "No matching automation"}}}
+	tt.Frame()
+	for _, text := range []string{"Miya webhook", url, "Copy webhook URL", "deploy finished", "No matching automation", "No automations yet"} {
+		if !tt.HasText(text) {
+			t.Fatalf("shared inbox missing %q: %q", text, tt.Texts())
+		}
+	}
+	if err := tt.Click("Copy webhook URL"); err != nil {
+		t.Fatal(err)
+	}
+	if tt.Clipboard() != url {
+		t.Fatal("global webhook address was not copied")
+	}
+	automationSnapshot(t, tt, "desktop-shared-webhook")
 }

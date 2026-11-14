@@ -369,3 +369,31 @@ func TestMobileAutomationsLongContentAndTextScaling(t *testing.T) {
 		}
 	}
 }
+
+func TestMobileSharedWebhookURLAndCopyWithoutTasks(t *testing.T) {
+	m := testMobileApp()
+	m.State.Automations, m.State.AutomationWebhook = true, true
+	m.Autos.Loaded = true
+	url := "https://tailcat-webhook.daodao973597.workers.dev/push/tcw_" + strings.Repeat("a", 64)
+	m.Autos.Webhook = &automation.WebhookView{Enabled: true, URL: url, Messages: []automation.WebhookMessage{{ID: "received", At: time.Now(), Data: "deploy finished", Detail: "No matching automation"}}}
+	m.Router().Push("/automations")
+	tt := ui.NewTester(m.ViewRoot, 390, 1000)
+	tt.Frame()
+	for _, text := range []string{"Miya webhook", "Webhook ready", url, "Copy webhook URL", "deploy finished", "No matching automation"} {
+		if !tt.HasText(text) {
+			t.Fatalf("global inbox lacks %q: %q", text, tt.Texts())
+		}
+	}
+	if err := tt.Click("Copy webhook URL"); err != nil {
+		t.Fatal(err)
+	}
+	if tt.Clipboard() != url {
+		t.Fatal("copy did not preserve global webhook URL")
+	}
+	automationSnapshot(t, tt, "mobile-shared-webhook")
+	m.Autos.Webhook.Error = "Unable to reach the webhook relay"
+	tt.Frame()
+	if !tt.HasText("Webhook unavailable: Unable to reach the webhook relay") {
+		t.Fatal("registration error not shown")
+	}
+}

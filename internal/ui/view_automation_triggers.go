@@ -140,10 +140,15 @@ func (app *App) triggerRow(c *ui.Context, v automation.View, i int) {
 				})
 			}
 		})
-		ui.Text(c, triggerState(t, st, ok)).FontSize(12).TextColor(widgets.Muted).SingleLine().Ellipsis("…")
+		state := triggerState(t, st, ok)
+		if t.Kind == automation.TriggerIngress && !t.Disabled {
+			state = tr("Uses the shared Miya webhook")
+		}
+		ui.Text(c, state).FontSize(12).TextColor(widgets.Muted)
 		if t.Kind != automation.TriggerIngress || t.Disabled {
 			return
 		}
+
 		if v.WakeCommand != "" {
 			ui.Text(c, v.WakeCommand+" [-data text|@file|-]").FontSize(12).Font(widgets.MonoFont).Selectable()
 		}

@@ -48,7 +48,7 @@ cron 是标准 5 段写法（分 时 日 月 周），按本地时间，支持 `
 | 类型 | 何时唤醒 | 实现 |
 | --- | --- | --- |
 | `condition` | 一条命令说了算：命令成功（`success`）、输出变了（`changed`），或常驻命令打印了一行（`line`）。可以直接写命令，也可以用配方（`recipe` 加参数），见下文「条件」 | `success` 和 `changed` 默认每 5 分钟执行一次（`everyMinutes`），最长 30 秒；`line` 由 Miya 守护一个常驻进程。命令都在项目目录用登录 shell 执行 |
-| `ingress` | 外部主动唤醒：`miya -wake` 或本机 HTTP | 见下文「外部唤醒」 |
+| `ingress` | 外部主动唤醒：`miya -wake`、本机 HTTP 或 Tailcat webhook | 见下文「外部唤醒」 |
 | `file` | 文件或目录（不含子目录）的条目、大小或修改时间变化 | 每 15 秒比对一次快照，默认合并 30 秒内的变化；第一次只记录现状 |
 | `after` | 另一个自动化的运行结束，可限定结果（`passed`/`failed`/`interrupted`） | 运行结束时触发，附上那次运行的结构化结果；不能跟随自己 |
 | `system` | 电脑从睡眠中唤醒（`wake`） | 两次 Tick 之间墙上时钟跳过 2 分钟以上即判定为睡醒 |
@@ -137,7 +137,31 @@ Miya 不理解条件在测什么：一个条件就是一条命令，阈值、单
 
 1. **命令行**：`miya -wake <自动化 ID 或名称> [-trigger ID] [-data 文本|@文件|-] [-dedupe KEY]`，通过 service.sock 投递；服务没在运行时先拉起服务。系统 cron、git hook、快捷指令和脚本都可以用。自动化必须有 `ingress` 触发器才能这样唤醒。
 2. **本机 HTTP**：存在启用中的 `ingress` 触发器时，服务监听 `127.0.0.1:47321`（被占用时换一个随机端口），接受 `POST /wake/<自动化>/<触发器>`，用 `Authorization: Bearer <触发器 token>` 鉴权，请求体最多 1 MB，作为数据交给 agent。返回 202（已处理，响应体给出结果）、401（token 错误）、404（找不到）、409（运行中或已暂停）。只监听回环地址，其他电脑访问不到；所有 `ingress` 触发器都关闭后停止监听。详情页显示命令行和 curl 示例。
-3. **公网 webhook**（GitHub 等）：尚未实现。需要经 Tailcat 中继发布地址，或改用轮询型触发器，涉及对外暴露，单独评审。
+3. **公网 webhook**：Miya 后台通过 Tailcat 向 [Tailcat Webhook](https://tailcat-webhook.daodao973597.workers.dev/llm.txt) 注册一个统一消息入口，与自动化任务的数量和生命周期无关。地址显示在桌面和手机的「自动化」首页「Miya Webhook」中，即使没有任何任务也能查看和复制。页面同时显示最近收到的消息及内部路由结果。
+
+```sh
+curl --fail-with-body -X POST '<自动化首页的 Miya Webhook 地址>' \
+  -H 'Content-Type: application/json' \
+  --data '{"topic":"deploy","event":{"status":"failed"},"payload":"部署失败"}'
+```
+
+消息到达 Miya 后，按各个 `ingress` 触发器的订阅规则路由：
+
+- `match` 按 JSON 字段精确匹配，支持点分隔路径，例如 `{"topic":"deploy","event.status":"failed"}`。值可以是字符串、数字或布尔量；规则中的值使用对应的文本形式。
+- `contains` 按消息内容匹配文字，不区分大小写。
+- 同一触发器的多个条件必须同时满足。不设置条件的外部唤醒触发器订阅所有消息。
+- 一条消息可以匹配多个任务；同一个任务即使多个触发器匹配，也只唤醒一次。暂停的任务和关闭的触发器不参与路由。已匹配的任务继续经过原有的去重、合并、冷却、排队与 Gate 流程。
+- 未匹配的消息也保存在统一收件记录中并通知用户。最近 50 条消息及其路由结果保存在 `automations.json`，最多保留 4000 字消息正文。
+
+例如创建自动化时描述「收到包含 deploy failed 的 webhook 消息时检查部署」，会生成 `contains` 订阅；也可通过 MCP 设置 `{"kind":"ingress","match":{"topic":"deploy"}}`。任务详情只展示订阅规则，不再提供单独的公网地址。不同任务共用一个 Miya webhook，修改或删除任务不会撤销它。
+
+需要显式选择目标时，可在事件中带 `"miya":{"automation":"任务 ID 或唯一名称","trigger":"可选触发器 ID","dedupe":"可选事件 ID"}`。这是可选的内部路由元数据；普通文本和 JSON 事件无需携带任务标识。无效目标不回退到其他任务。`dedupe` 也支持顶层字段，同一事件 ID 只接收处理一次。
+
+公网中继会提取 JSON 顶层的 `message` / `text` 字符串，丢弃其余字段。需按 JSON 字段路由时，应使用上例的 `payload` 等字段，避免顶层 `message` / `text`。其他 JSON 会作为紧凑文本传入。中继不透传 HTTP 头，不能依赖 `X-GitHub-Delivery` 去重；请求体限制 64 KiB。
+
+统一注册地址及管理凭据保存到 `automations.json.webhooks.json`（权限 `0600`）。管理凭据只供后台使用。重启会更新同一注册的 Tailcat 地址，保留 webhook URL；自动化首页的开关可暂停整个接收入口，恢复时沿用原 URL。旧版按任务注册的公网地址会在迁移时撤销，不会被悄悄改为广播入口。注册失败会显示原因并遵守 `Retry-After` 重试；中继过期或外部撤销注册后，在启动、恢复接收或每小时检查时重新注册并显示新 URL。
+
+开启统一接收入口时，后台保持运行并设置登录自启。Miya 后台必须在线且电脑处于唤醒状态；中继不存储、不排队、不重试通知。HTTP 200 表示消息已交给接收端，不表示匹配任务已经运行或完成。内部路由结果在「最近收到的消息」中查看。
 
 对话里的 agent 可以用 miya MCP 的 `wake_automation` 唤醒已有的自动化，用户确认后才运行，来源记为「对话」。
 
@@ -186,7 +210,7 @@ Automations 页面（`view_automations.go`）有三个画面：
 | 收件箱与「无事可报自动归档」 | 自动化多了，空结果的推送开始打扰人时 |
 | 每次都继续同一个对话 | 需要跨天保持上下文的长期跟进 |
 | 每个自动化单独设模型与推理强度 | 默认模型不合适时 |
-| 公网 webhook（经 Tailcat 中继）、GitHub 等轮询型触发器 | 需要直接接收第三方服务事件时；本机 HTTP 与 `miya -wake` 已可用 |
+| GitHub 等轮询型触发器 | 需要主动拉取第三方服务事件时；公网 Tailcat webhook、本机 HTTP 与 `miya -wake` 已可用 |
 | 桌面端编辑触发器的表单 | 需要在不重新整理一句话的情况下调整配方参数、命令或路径时；目前通过整理、对话或单个开关调整 |
 | 手机端管理页 | 经常需要在手机上开关自动化时 |
 

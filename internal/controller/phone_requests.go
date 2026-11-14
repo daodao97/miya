@@ -55,32 +55,33 @@ type previewRequest struct {
 
 // phoneRequests answer a phone's requests by their Op; unknown ones are ignored.
 var phoneRequests = map[string]func(*phoneSession, remote.Request) bool{
-	"desktop-preview":   (*phoneSession).onDesktopPreview,
-	"desktop-action":    (*phoneSession).onDesktopPreview,
-	"desktop-open":      (*phoneSession).onDesktopOpen,
-	"desktop-close":     (*phoneSession).onDesktopClose,
-	"image":             (*phoneSession).onImage,
-	"memory":            (*phoneSession).onMemory,
-	"collaboration":     (*phoneSession).onCollaboration,
-	"automation-draft":  (*phoneSession).onAutomationDraft,
-	"automation-create": (*phoneSession).onAutomationCreate,
-	"automation-run":    (*phoneSession).onAutomationRun,
-	"automations":       (*phoneSession).onAutomations,
-	"quota":             (*phoneSession).onQuota,
-	"push":              (*phoneSession).onPush,
-	"read":              (*phoneSession).onRead,
-	"read-all":          (*phoneSession).onRead,
-	"subscribe":         (*phoneSession).onSubscribe,
-	"send":              (*phoneSession).onSend,
-	"prefetch":          (*phoneSession).onPrefetch,
-	"stop":              (*phoneSession).onStop,
-	"task":              (*phoneSession).onTask,
-	"retry":             (*phoneSession).onRetry,
-	"dequeue":           (*phoneSession).onQueueAction,
-	"steer-queued":      (*phoneSession).onQueueAction,
-	"drain-queue":       (*phoneSession).onQueueAction,
-	"respond":           (*phoneSession).onRespond,
-	"commands":          (*phoneSession).onCommands,
+	"desktop-preview":    (*phoneSession).onDesktopPreview,
+	"desktop-action":     (*phoneSession).onDesktopPreview,
+	"desktop-open":       (*phoneSession).onDesktopOpen,
+	"desktop-close":      (*phoneSession).onDesktopClose,
+	"image":              (*phoneSession).onImage,
+	"memory":             (*phoneSession).onMemory,
+	"collaboration":      (*phoneSession).onCollaboration,
+	"automation-draft":   (*phoneSession).onAutomationDraft,
+	"automation-create":  (*phoneSession).onAutomationCreate,
+	"automation-run":     (*phoneSession).onAutomationRun,
+	"automations":        (*phoneSession).onAutomations,
+	"automation-webhook": (*phoneSession).onAutomationWebhook,
+	"quota":              (*phoneSession).onQuota,
+	"push":               (*phoneSession).onPush,
+	"read":               (*phoneSession).onRead,
+	"read-all":           (*phoneSession).onRead,
+	"subscribe":          (*phoneSession).onSubscribe,
+	"send":               (*phoneSession).onSend,
+	"prefetch":           (*phoneSession).onPrefetch,
+	"stop":               (*phoneSession).onStop,
+	"task":               (*phoneSession).onTask,
+	"retry":              (*phoneSession).onRetry,
+	"dequeue":            (*phoneSession).onQueueAction,
+	"steer-queued":       (*phoneSession).onQueueAction,
+	"drain-queue":        (*phoneSession).onQueueAction,
+	"respond":            (*phoneSession).onRespond,
+	"commands":           (*phoneSession).onCommands,
 }
 
 // onDesktopPreview answers a phone's "desktop-preview", "desktop-action" request; false ends the connection.
@@ -486,4 +487,19 @@ func (ps *phoneSession) onCommands(r remote.Request) bool {
 		ps.cmdAgent = agentmeta.LegacyCommandAgent()
 	}
 	return true
+}
+
+func (ps *phoneSession) onAutomationWebhook(r remote.Request) bool {
+	frame, ok := async.OnMain(ps.ctx, ps.c.Dispatch, func() remote.Frame {
+		result, err := ps.c.AutomationOp("automationWebhook", automation.Request{})
+		frame := remote.Frame{Type: "automation-webhook"}
+		if err == nil {
+			frame.Data, err = json.Marshal(result)
+		}
+		if err != nil {
+			frame.Error = err.Error()
+		}
+		return frame
+	})
+	return ok && ps.send(frame)
 }

@@ -37,7 +37,7 @@ type Host interface {
 	AutoReport(model.Thread) *Report
 	Deliver(notification.Notice)
 	// SyncLoginItem keeps the service starting at login while an
-	// automation is on.
+	// automation or the shared webhook is on.
 	SyncLoginItem(enabled bool)
 	// Changed tells windows the automations changed.
 	Changed()
@@ -75,8 +75,10 @@ type Runner struct {
 	wake *wakeState
 	// hook is the local HTTP wake endpoint; listen lets a scheduling
 	// runner open it.
-	hook   *webhook
-	listen bool
+	hook        *webhook
+	listen      bool
+	relay       *relay
+	relayStates map[string]relayStatus
 }
 
 // ActiveRun is a run in progress: its conversation and round.
@@ -135,12 +137,14 @@ func (rn *Runner) Start(done <-chan struct{}, schedule bool) {
 		}
 	}
 	rn.Persist()
-	rn.host.SyncLoginItem(rn.Store.AnyEnabled())
+	rn.listen = schedule
+	rn.host.SyncLoginItem(rn.Enabled())
 	if !schedule {
 		return
 	}
-	rn.listen = true
 	rn.syncWebhook()
+	rn.syncRelay()
+	relayWorker := rn.relay
 	go func() {
 		rn.host.Dispatch(rn.Tick)
 		t := time.NewTicker(TickInterval)
@@ -148,6 +152,14 @@ func (rn *Runner) Start(done <-chan struct{}, schedule bool) {
 		for {
 			select {
 			case <-done:
+				// Dispatch may already ignore callbacks once the controller
+				// closes. Cancel network work independently of that callback.
+				if relayWorker != nil {
+					relayWorker.cancel()
+				}
+				rn.host.Dispatch(func() {
+					rn.listen = false
+				})
 				rn.host.Dispatch(rn.stopWebhook)
 				rn.host.Dispatch(rn.stopStreams)
 				return
@@ -165,10 +177,10 @@ func (rn *Runner) Persist() {
 	}
 }
 
-// Enabled reports whether some automation is on: the service stays up for
-// it. A nil runner has none.
+// Enabled reports whether automations or the shared webhook need the
+// service to stay running. A nil runner needs none.
 func (rn *Runner) Enabled() bool {
-	return rn != nil && rn.Store.AnyEnabled()
+	return rn != nil && (rn.Store.AnyEnabled() || rn.listen && !rn.Store.WebhookDisabled)
 }
 
 // due is the latest scheduled time of a that has come and has no run yet,

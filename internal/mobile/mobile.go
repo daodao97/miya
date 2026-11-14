@@ -22,6 +22,7 @@ import (
 	"miya/internal/agent"
 	agentmeta "miya/internal/agent/catalog"
 	"miya/internal/appmodel"
+	"miya/internal/automation"
 	"miya/internal/chat/model"
 	msgfmt "miya/internal/chat/presentation"
 	conversation "miya/internal/chat/view"
@@ -658,6 +659,17 @@ func (m *App) read(gen int, conn *remote.Conn) (greeted bool, err error) {
 		case "memory":
 			data, message := f.Data, f.Error
 			m.onMain(gen, func() { m.ReceiveMemory(data, message) })
+		case "automation-webhook":
+			data, message := f.Data, f.Error
+			m.onMain(gen, func() {
+				if message != "" {
+					return
+				}
+				var v automation.WebhookView
+				if json.Unmarshal(data, &v) == nil {
+					m.Autos.Webhook = &v
+				}
+			})
 		case "automations":
 			data, message := f.Data, f.Error
 			m.onMain(gen, func() { m.ReceiveAutomations(data, message) })

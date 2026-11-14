@@ -16,7 +16,7 @@ var automationToolProps = map[string]any{
 	"triggers": map[string]any{"type": "array", "description": "Other ways it wakes, any of which starts a run. " +
 		"condition: a shell command Miya runs in the project. Miya does not know what it looks at, so thresholds and comparisons belong in the command. Give a recipe, which is a ready-made command with params, or a command of your own. Recipes (the .json files in " + automation.RecipeDir() + "): " + automation.RecipeHints() + ". E.g. {kind:condition, condition:{recipe:disk_free, params:{VOLUME:\"/\", BELOW_GB:\"5\"}}} for free disk space under 5 GB. " +
 		"A command of your own wakes as when says. success (default): run every everyMinutes (default 5), met when it exits 0, not met when it exits 1, any other status is an error, and the first line it prints is shown; it wakes when it turns met and again after repeatHours (default 24) while still met. changed: run every everyMinutes, it wakes each time the command prints something else than before and gives the run what it printed, e.g. {command:\"gh issue list --limit 20\", when:changed}. line: Miya keeps the command running and wakes with each line it prints, for a command that waits for events, e.g. {command:\"tail -n 0 -F app.log | grep --line-buffered ERROR\", when:line}; set policy queue with it so that lines printed during a run are kept. Keep success and changed commands quick and free of side effects. " +
-		"ingress: woken from outside by `miya -wake <id>` or a local HTTP request with a token. file: when a file or a directory's entries change (path). " +
+		"ingress: subscribe to messages arriving at the one shared Miya webhook, or wake directly with `miya -wake <id>` / local HTTP. Optional match maps dotted JSON paths to exact scalar values (e.g. {topic:deploy,event.status:failed}); contains is a case-insensitive literal text filter. All supplied filters must match; no filters subscribes to every message. URLs belong to Miya, not to tasks. file: when a file or a directory's entries change (path). " +
 		"after: when another automation's run finishes (after: its id; results: passed/failed/interrupted). system: event wake, when the computer wakes from sleep.",
 		"items": map[string]any{"type": "object", "required": []string{"kind"}, "properties": map[string]any{
 			"kind": map[string]any{"type": "string", "enum": []string{"condition", "ingress", "file", "after", "system"}},
@@ -27,10 +27,12 @@ var automationToolProps = map[string]any{
 				"when":         map[string]any{"type": "string", "enum": []string{automation.WhenSuccess, automation.WhenChanged, automation.WhenLine}},
 				"everyMinutes": map[string]any{"type": "integer"},
 				"repeatHours":  map[string]any{"type": "integer"}}},
-			"path":    map[string]any{"type": "string"},
-			"after":   map[string]any{"type": "string"},
-			"results": map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
-			"event":   map[string]any{"type": "string", "enum": []string{"wake"}}}}},
+			"match":    map[string]any{"type": "object", "additionalProperties": map[string]any{"type": "string"}},
+			"contains": map[string]any{"type": "string"},
+			"path":     map[string]any{"type": "string"},
+			"after":    map[string]any{"type": "string"},
+			"results":  map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+			"event":    map[string]any{"type": "string", "enum": []string{"wake"}}}}},
 	"policy": map[string]any{"type": "object", "description": "Holds back triggered wakes: queue (keep one wake that comes while running), debounceSeconds, cooldownMinutes, maxPerDay (default 24), gate (a condition as in triggers, of a recipe or a success command, checked on every wake; the run starts only when met)",
 		"properties": map[string]any{"queue": map[string]any{"type": "boolean"}, "debounceSeconds": map[string]any{"type": "integer"},
 			"cooldownMinutes": map[string]any{"type": "integer"}, "maxPerDay": map[string]any{"type": "integer"}, "gate": map[string]any{"type": "object"}}},
