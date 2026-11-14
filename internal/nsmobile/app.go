@@ -44,6 +44,7 @@ type App struct {
 	collaborations          nsrequests.CollaborationUI
 	collaborationOwner      string
 	requestFields           map[string]map[string]string
+	authentication          desktopAuthentication
 }
 
 func NewMobileApp() *App {
@@ -110,6 +111,9 @@ func (m *App) Render(cx *core.Scope) core.Node {
 		}
 		prev := lifecycle
 		lifecycle = next
+		if next == core.LifecycleActive {
+			m.refreshDesktopAuthentication()
+		}
 		if next == core.LifecycleBackground {
 			m.cancelVoice()
 			m.closeWebServices()

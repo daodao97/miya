@@ -26,7 +26,7 @@ var PlatformHooks struct {
 	// Nil uses the authenticated activity protocol operation. Provider signing
 	// keys remain on the desktop. Overrides must serialize registrations.
 	RegisterActivity func(apns.ActivityRegistration)
-	// DesktopAuthenticate must perform fresh biometric/device authentication
-	// before saving or using a desktop password. NSGo has no equivalent API.
+	// DesktopAuthenticate overrides NSGo's device owner authentication (with
+	// passcode fallback). It must freshly authenticate before each save/use.
 	DesktopAuthenticate func(context.Context) error
 }

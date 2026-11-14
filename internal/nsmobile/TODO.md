@@ -6,7 +6,7 @@ approval or starts one of these features implicitly.
 
 | Feature | Hook for the next port |
 | --- | --- |
-| Remote desktop | Ported: retained live image/cursor, touch/trackpad/zoom, IME/password entry and Mac keys, connecting/error/ended/picker states, permission previews/actions, apps/displays, privacy, manual unlock, floating preview and exact-target resume. Session/protocol ownership lives in `phone/client`; frame validation and input geometry are shared with MyGo in `phone/desktopview`. Back/close revoke leases; background/disconnect clear frames, input and secrets before requesting a fresh lease on authoritative state. Native authentication and device validation remain below. |
+| Remote desktop | Ported: retained live image/cursor, touch/trackpad/zoom, IME/password entry and Mac keys, connecting/error/ended/picker states, permission previews/actions, apps/displays, privacy, authenticated saved-password/manual unlock, floating preview and exact-target resume. Session/protocol ownership lives in `phone/client`; frame validation and input geometry are shared with MyGo in `phone/desktopview`. Back/close revoke leases; background/disconnect clear frames, input and secrets before requesting a fresh lease on authoritative state. Native authentication is implemented; device validation remains below. |
 | Multiple desktop management | Ported: add/switch/rename/remove/reload, secure registry migration and persistence, per-desktop drafts/attachments/conversation selection and caches/options. Switching ends remote control and remounts the destination under the new desktop identity. |
 
 ## Ported feature sheets
@@ -132,8 +132,10 @@ its asynchronous error result, eliminating a timing failure seen under load.
   unchanged and errors keep the fallback available. Late results cannot replace
   a desktop selected in the meantime. Packaging must declare
   `apple.info.NSCameraUsageDescription` on iOS and `CAMERA` in
-  `android.permissions`; embedded Android hosts also declare
-  `ACCESS_NETWORK_STATE` (standalone NSGo apps already include it).
+  `android.permissions`. Device authentication also requires a localized
+  `apple.info.NSFaceIDUsageDescription` and Android `USE_BIOMETRIC`.
+  Embedded Android hosts also declare `ACCESS_NETWORK_STATE` (standalone NSGo
+  apps already include it).
 - Detailed network observation tracks availability and the sorted name/kind
   inventory. The initial report records state; coming online or changing
   interfaces wakes a waiting reconnect or gives a live tunnel a 20-second
@@ -170,12 +172,17 @@ code; it does not build an IPA/APK or exercise platform services.
   composition. There is no general surface key-down/key-up stream with raw
   modifier state. The port offers named Mac key/modifier buttons and native
   text entry; it does not claim arbitrary hardware-key forwarding.
-- There is no NSGo biometric/device-authentication API. Manual Mac unlock is
-  available. Saving and using a stored password require a fresh successful
-  `PlatformHooks.DesktopAuthenticate` call plus secure storage; without a host
-  adapter the UI explains the limitation and never bypasses authentication.
-  Existing stored passwords can still be forgotten. Native secure storage
-  alone does not authenticate the person; `DesktopAuthenticate` remains required.
+- Saving and using a stored Mac password now use NSGo
+  `Scope.AuthenticationAvailability` and a fresh successful `Scope.Authenticate`
+  with `AllowDevicePasscode: true`. Only `ok && err == nil` authorizes the
+  worker; cancellation, failure, timeout or a closed page cannot read/submit the
+  saved password or save a new one. Passwords stay in native secure storage and
+  are saved only after successful Mac unlock. `PlatformHooks.DesktopAuthenticate`
+  remains an optional host override, responsible for the same fresh device owner
+  authentication. Settings/unlock show availability and biometric hardware;
+  unavailable policies retain manual unlock and forgetting. Face ID/Touch ID,
+  passcode fallback, enrollment/lockout changes and Android BiometricPrompt
+  still require physical-device validation and packaging permissions.
 - Frames update `SourceFunc` on one image node; unchanged encoded frames skip
   decoding and source replacement. Polling is serialized, input is ordered and
   bounded, and floating previews poll at most once per second. Target revisions

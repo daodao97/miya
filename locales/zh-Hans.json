@@ -1955,5 +1955,12 @@
   "nsDesktopRestore": "恢复远程桌面",
   "nsDesktopRightClick": "右键点击",
   "nsDesktopSwitchPointer": "切换控制模式",
-  "nsDesktopTab": "Tab"
+  "nsDesktopTab": "Tab",
+  "nsDeviceAuthentication": "设备身份验证",
+  "nsAuthenticationFaceID": "面容 ID 或设备密码",
+  "nsAuthenticationTouchID": "触控 ID 或设备密码",
+  "nsAuthenticationFace": "人脸识别或设备锁屏验证",
+  "nsAuthenticationFingerprint": "指纹或设备锁屏验证",
+  "nsAuthenticationScreenLock": "设备锁屏验证",
+  "nsAuthenticationBiometrics": "生物识别或设备锁屏验证"
 }

@@ -21,9 +21,7 @@ func (m *App) setupNative(cx *core.Scope) {
 	if m.Store == nil {
 		m.Store = scopeSecrets{cx: cx, legacyIOS: cx.Env().OS() == core.OSIOS}
 	}
-	if m.DesktopAuthenticate == nil {
-		m.DesktopAuthenticate = PlatformHooks.DesktopAuthenticate
-	}
+	m.setupDesktopAuthentication()
 	m.setupNetwork(cx)
 	if !m.Loaded {
 		cx.Post(func() { go m.LoadSaved(core.ErrSecretNotFound) })

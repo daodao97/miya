@@ -209,14 +209,13 @@ func (m *App) desktopOptions(cx *core.Scope, p *phoneclient.MobileDesktopPage) c
 	return core.Scroll{Style: core.Style{MaxHeight: core.Pt(220)}, Children: []core.Node{column(nodes...)}}
 }
 func (m *App) desktopUnlock(cx *core.Scope, p *phoneclient.MobileDesktopPage) core.Node {
+	m.refreshDesktopAuthentication()
 	return column(core.Show{When: live(m, func() bool { return p.CanUnlock() && p.Unlock.Locked }), Then: func(*core.Scope) core.Node {
-		return column(text(tr("Mac is locked")), base.Input{TestID: "desktop-unlock-password", Label: tr("Mac login password"), Masked: true, Value: live(m, func() string { return p.Unlock.Text }), OnChange: func(s string) { p.Unlock.Text = s; m.change() }, Style: core.Style{MinHeight: core.Pt(44)}}, m.button("desktop-unlock", tr("Unlock"), live(m, func() bool { return p.Unlock.Busy || p.Unlock.Text == "" }), func() { m.DesktopUnlock(p) }), core.Show{When: func() bool { return m.DesktopAuthenticate == nil }, Then: func(*core.Scope) core.Node {
-			return text(tr("Password saving requires device authentication, which is unavailable in this NSGo build."))
-		}},
-			core.Show{When: live(m, func() bool { return p.Unlock.Saved && m.DesktopAuthenticate != nil }), Then: func(*core.Scope) core.Node {
+		return column(text(tr("Mac is locked")), base.Input{TestID: "desktop-unlock-password", Label: tr("Mac login password"), Masked: true, Value: live(m, func() string { return p.Unlock.Text }), OnChange: func(s string) { p.Unlock.Text = s; m.change() }, Style: core.Style{MinHeight: core.Pt(44)}}, m.button("desktop-unlock", tr("Unlock"), live(m, func() bool { return p.Unlock.Busy || p.Unlock.Text == "" }), func() { m.DesktopUnlock(p) }), m.desktopAuthenticationStatus(),
+			core.Show{When: live(m, func() bool { return p.Unlock.Saved && m.authentication.available }), Then: func(*core.Scope) core.Node {
 				return m.button("desktop-unlock-saved", tr("Verify and unlock"), live(m, func() bool { return p.Unlock.Busy }), func() { m.DesktopUnlockSaved(p) })
 			}},
-			core.Show{When: func() bool { return m.DesktopAuthenticate != nil && m.Store != nil }, Then: func(*core.Scope) core.Node {
+			core.Show{When: live(m, func() bool { return m.authentication.available && m.Store != nil }), Then: func(*core.Scope) core.Node {
 				return ui.Checkbox{TestID: "desktop-unlock-save", Text: tr("Save password for automatic unlock after identity verification"), Checked: live(m, func() bool { return p.Unlock.Remember }), OnChange: func(v bool) { p.Unlock.Remember = v; m.change() }, Disabled: live(m, func() bool { return p.Unlock.Busy }), Style: core.Style{MinHeight: core.Pt(44)}}
 			}})
 	}}, core.Text{ContentFunc: live(m, func() string { return p.Unlock.Status })})

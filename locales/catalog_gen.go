@@ -21026,3 +21026,73 @@ func NsDesktopTab() string { return In(messageLocale()).NsDesktopTab() }
 func (msgs Messages) NsDesktopTab() string {
 	return Catalog.Format(msgs.locale, "nsDesktopTab", nil)
 }
+
+// NsDeviceAuthentication says "Device authentication"
+// in the language the app shows.
+func NsDeviceAuthentication() string { return In(messageLocale()).NsDeviceAuthentication() }
+
+// NsDeviceAuthentication says "Device authentication"
+// in the language of msgs.
+func (msgs Messages) NsDeviceAuthentication() string {
+	return Catalog.Format(msgs.locale, "nsDeviceAuthentication", nil)
+}
+
+// NsAuthenticationFaceID says "Face ID or device passcode"
+// in the language the app shows.
+func NsAuthenticationFaceID() string { return In(messageLocale()).NsAuthenticationFaceID() }
+
+// NsAuthenticationFaceID says "Face ID or device passcode"
+// in the language of msgs.
+func (msgs Messages) NsAuthenticationFaceID() string {
+	return Catalog.Format(msgs.locale, "nsAuthenticationFaceID", nil)
+}
+
+// NsAuthenticationTouchID says "Touch ID or device passcode"
+// in the language the app shows.
+func NsAuthenticationTouchID() string { return In(messageLocale()).NsAuthenticationTouchID() }
+
+// NsAuthenticationTouchID says "Touch ID or device passcode"
+// in the language of msgs.
+func (msgs Messages) NsAuthenticationTouchID() string {
+	return Catalog.Format(msgs.locale, "nsAuthenticationTouchID", nil)
+}
+
+// NsAuthenticationFace says "Face recognition or device screen lock"
+// in the language the app shows.
+func NsAuthenticationFace() string { return In(messageLocale()).NsAuthenticationFace() }
+
+// NsAuthenticationFace says "Face recognition or device screen lock"
+// in the language of msgs.
+func (msgs Messages) NsAuthenticationFace() string {
+	return Catalog.Format(msgs.locale, "nsAuthenticationFace", nil)
+}
+
+// NsAuthenticationFingerprint says "Fingerprint or device screen lock"
+// in the language the app shows.
+func NsAuthenticationFingerprint() string { return In(messageLocale()).NsAuthenticationFingerprint() }
+
+// NsAuthenticationFingerprint says "Fingerprint or device screen lock"
+// in the language of msgs.
+func (msgs Messages) NsAuthenticationFingerprint() string {
+	return Catalog.Format(msgs.locale, "nsAuthenticationFingerprint", nil)
+}
+
+// NsAuthenticationScreenLock says "Device screen lock"
+// in the language the app shows.
+func NsAuthenticationScreenLock() string { return In(messageLocale()).NsAuthenticationScreenLock() }
+
+// NsAuthenticationScreenLock says "Device screen lock"
+// in the language of msgs.
+func (msgs Messages) NsAuthenticationScreenLock() string {
+	return Catalog.Format(msgs.locale, "nsAuthenticationScreenLock", nil)
+}
+
+// NsAuthenticationBiometrics says "Biometrics or device screen lock"
+// in the language the app shows.
+func NsAuthenticationBiometrics() string { return In(messageLocale()).NsAuthenticationBiometrics() }
+
+// NsAuthenticationBiometrics says "Biometrics or device screen lock"
+// in the language of msgs.
+func (msgs Messages) NsAuthenticationBiometrics() string {
+	return Catalog.Format(msgs.locale, "nsAuthenticationBiometrics", nil)
+}

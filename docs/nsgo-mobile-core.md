@@ -57,8 +57,9 @@ in `internal/nsrequests`. Voice, push and web services are ported (see the TODO 
 Remote desktop and multi-desktop management are now ported;
 `phone/client` owns their leases, targets, secure registry and composer sessions.
 `phone/desktopview` shares frame validation and pointer mapping with MyGo;
-NSGo updates one retained image node per frame. Saved-password unlock requires
-a native authentication hook. See the TODO for precise platform limits.
+NSGo updates one retained image node per frame. Saved-password unlock uses
+NSGo device owner authentication with passcode fallback. See the TODO for
+precise platform limits.
 NSGo now supplies mobile Keychain/Keystore credentials, QR scanning and detailed
 network paths. Pairing and the multi-desktop registry persist through the native
 secure store; missing registries migrate the older core singleton keys. The
@@ -72,9 +73,11 @@ not exposed by NSGo, and separate app identities do not share credentials.
 Scan to connect validates the desktop QR through the same pairing action as
 paste/manual entry. Cancel, invalid codes and camera errors preserve the current
 desktop. Native callbacks cannot replace a subsequently selected desktop.
-Declare `NSCameraUsageDescription` in `apple.info` and `CAMERA` in
-`android.permissions` when packaging; Android embedding hosts also need
-`ACCESS_NETWORK_STATE`.
+Declare `NSCameraUsageDescription` and a localized `NSFaceIDUsageDescription`
+(for saving/using the Mac login password) in `apple.info` when packaging.
+Android needs `CAMERA` and `USE_BIOMETRIC` in `android.permissions`; embedding
+hosts also need `ACCESS_NETWORK_STATE`. Face ID authentication requires the
+purpose string even when device passcode fallback is allowed.
 
 Detailed paths drive the shared client's existing reconnect wake and live-tunnel
 probe logic. Names and transport kinds form an order-independent path identity,
@@ -100,10 +103,23 @@ for notifications, voice recording, remote desktop and active turns. Optional
 `PlatformHooks` remain compatible host overrides. See
 [mobile push packaging](nsgo-mobile-push.md) for entitlements, widget schema,
 foreground-service types and the Android host's FCM responsibilities.
-Saved-password unlock still requires a fresh successful
-`PlatformHooks.DesktopAuthenticate`; secure storage does not replace biometrics
-or device authentication, which NSGo does not expose. Manual unlock and forgetting
-stored passwords remain available without that hook.
+Saved-password unlock queries `Scope.AuthenticationAvailability` and requires a
+fresh successful `Scope.Authenticate` before each save or use. Both use
+`AuthenticateOptions{AllowDevicePasscode: true}` to match MyGo's device owner
+policy. Only `ok == true && err == nil` authorizes the worker. Cancellation,
+failure, timeout and closed-page results leave the password unused and storage
+unchanged; only a confirmed successful Mac unlock saves a new password. Secrets
+remain in native Keychain/Keystore storage, never preferences or ordinary files.
+This is an app-level gate, not a cryptographically bound secret-store operation.
+
+Settings and the unlock UI show policy availability and biometric hardware
+(Face ID/Touch ID on iOS, face/fingerprint on Android, or device screen lock).
+Availability refreshes on opening those views, on returning active and before
+each attempt; it never replaces fresh authentication. Unsupported/unavailable
+policies keep the unavailable explanation, manual unlock and forgetting.
+`PlatformHooks.DesktopAuthenticate` remains an optional host override and must
+provide the same fresh authentication guarantee; its UI reports generic device
+authentication because the override does not expose hardware metadata.
 
 ## Validation
 
@@ -162,3 +178,16 @@ activity reconnect/relaunch, and acknowledged Android service leases/failures.
 All checks use the shared Go cache; no private cache or dependency edits were
 created. Device signing, real APNs/ActivityKit delivery and Android host behavior
 remain the packaging/device checks in [mobile push](nsgo-mobile-push.md).
+
+2026-11-14 device authentication port: nsgotest exercises authenticated password
+save/use through native secure storage, fresh prompts with passcode fallback,
+cancellation/failure/unavailability, canceled pages and late success, retained
+settings/unlock availability and biometric labels. Required formatting,
+localization, desktop/iOS vet, default/NSGo builds and the full requested phone
+and integration suites pass using the shared Go cache (725 tests passed).
+The initial suite hit a temporary-directory cleanup race in
+`TestCollaborationPhoneRequestsDoNotBlockStateStreaming`; both its targeted rerun
+and the full suite rerun passed without unrelated code changes. No physical
+device or IPA/APK validation is claimed; native prompts, passcode fallback,
+enrollment and lockout changes, and Face ID purpose/Android permission packaging
+need device validation.
