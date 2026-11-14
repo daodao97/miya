@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -372,26 +371,24 @@ func TestDesktopUnlockRemovePairingClearsOnlyItsPassword(t *testing.T) {
 	waitDesktopSave(t, m, store)
 }
 
-// The native MyGo bridge compiles authentication to ErrUnsupported unless the
-// capability is declared; a purpose string alone does not enable Face ID.
+// NSGo enables native authentication at runtime; iOS still requires the
+// purpose string in the packaged app for Face ID.
 func TestDesktopUnlockIOSAuthenticationCapability(t *testing.T) {
-	data, err := os.ReadFile("mygo.json")
+	data, err := os.ReadFile("nsgo.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}
 	var config struct {
-		IOS struct {
-			Capabilities []string       `json:"capabilities"`
-			InfoPlist    map[string]any `json:"infoPlist"`
-		} `json:"ios"`
+		Miya struct {
+			IOS struct {
+				Info map[string]any `json:"info"`
+			} `json:"ios"`
+		} `json:"miya"`
 	}
 	if err := json.Unmarshal(data, &config); err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Contains(config.IOS.Capabilities, "biometrics") {
-		t.Fatal("remote unlock requires the native iOS biometrics capability")
-	}
-	purpose, _ := config.IOS.InfoPlist["NSFaceIDUsageDescription"].(string)
+	purpose, _ := config.Miya.IOS.Info["NSFaceIDUsageDescription"].(string)
 	if strings.TrimSpace(purpose) == "" {
 		t.Fatal("remote unlock requires a Face ID purpose string")
 	}

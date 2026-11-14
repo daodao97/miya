@@ -1,0 +1,180 @@
+// Miya's temporary packaging additions to cmd/nsgo. Applied through Go's
+// read-only source overlay; see docs/nsgo-packaging.md for removal criteria.
+package main
+
+import (
+	"context"
+	"fmt"
+	"github.com/nsgo-dev/nsgo/cmd/nsgo/apk"
+	"os"
+	"path/filepath"
+	"strings"
+)
+
+type miyaApplePackaging struct {
+	Info            map[string]any `yaml:"info"`
+	Entitlements    map[string]any `yaml:"entitlements"`
+	BuildNumber     string         `yaml:"build_number"`
+	Icon            string         `yaml:"icon"`
+	DevelopmentTeam string         `yaml:"development_team"`
+}
+type miyaPackaging struct {
+	NotaryKeychain string             `yaml:"notary_keychain"`
+	Tags           []string           `yaml:"tags"`
+	LDFlags        string             `yaml:"ldflags"`
+	URLSchemes     []string           `yaml:"url_schemes"`
+	Resources      []string           `yaml:"resources"`
+	MacOS          miyaApplePackaging `yaml:"macos"`
+	IOS            miyaApplePackaging `yaml:"ios"`
+	Android        struct {
+		AppAttributes            map[string]any    `yaml:"app_attributes"`
+		ActivityAttributes       map[string]any    `yaml:"activity_attributes"`
+		ExtraConfigChanges       []string          `yaml:"extra_config_changes"`
+		OptionalFeatures         []string          `yaml:"optional_features"`
+		Queries                  []apk.IntentQuery `yaml:"queries"`
+		NetworkSecurityXML       string            `yaml:"network_security_xml"`
+		MinimumSDK               int               `yaml:"minimum_sdk"`
+		PermissionMaxSDK         map[string]int    `yaml:"permission_max_sdk"`
+		ForegroundServiceSubtype string            `yaml:"foreground_service_subtype"`
+	} `yaml:"android"`
+}
+
+func miyaPlist(p *project, data []byte, mac bool) ([]byte, error) {
+	v, err := decodePlist(data)
+	if err != nil {
+		return nil, err
+	}
+	d := v.(map[string]any)
+	settings := p.Miya.IOS
+	if mac {
+		settings = p.Miya.MacOS
+	}
+	for k, v := range settings.Info {
+		d[k] = v
+	}
+	if len(p.Miya.URLSchemes) > 0 {
+		schemes := make([]any, len(p.Miya.URLSchemes))
+		for i, s := range p.Miya.URLSchemes {
+			schemes[i] = s
+		}
+		d["CFBundleURLTypes"] = []any{map[string]any{
+			"CFBundleURLName": p.ID, "CFBundleURLSchemes": schemes,
+		}}
+	}
+	d["CFBundleDisplayName"] = p.Name
+	return encodePlist(d), nil
+}
+
+func miyaResources(p *project, f func(string, []byte) error) error {
+	for _, src := range p.Miya.Resources {
+		base := filepath.Join(p.Dir, resourcesDir, src)
+		err := filepath.WalkDir(base, func(path string, d os.DirEntry, err error) error {
+			if err != nil || d.IsDir() {
+				return err
+			}
+			rel, err := filepath.Rel(filepath.Dir(base), path)
+			if err != nil {
+				return err
+			}
+			data, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			return f(filepath.ToSlash(rel), data)
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Expand the legacy Keychain group spelling using the provisioning profile's
+// actual prefix (which need not equal the developer team). Refuse to sign
+// groups the profile does not grant instead of producing an un-installable IPA.
+func miyaIOSEntitlements(p *project, ents map[string]any, check bool) error {
+	prefix := p.Miya.IOS.DevelopmentTeam + "."
+	if id, _ := ents["application-identifier"].(string); strings.Contains(id, ".") {
+		prefix = strings.SplitN(id, ".", 2)[0] + "."
+	}
+	for k, v := range p.Miya.IOS.Entitlements {
+		if k == "keychain-access-groups" {
+			groups, ok := v.([]any)
+			if !ok {
+				return fmt.Errorf("miya.ios.entitlements: keychain-access-groups must be a list")
+			}
+			allowed, _ := ents[k].([]any)
+			expanded := []any{}
+			for _, g := range groups {
+				group, ok := g.(string)
+				if !ok {
+					return fmt.Errorf("keychain group must be a string")
+				}
+				group = strings.ReplaceAll(group, "$(AppIdentifierPrefix)", prefix)
+				granted := !check
+				for _, a := range allowed {
+					if s, ok := a.(string); ok && (s == group || strings.HasSuffix(s, "*") && strings.HasPrefix(group, strings.TrimSuffix(s, "*"))) {
+						granted = true
+					}
+				}
+				if !granted {
+					return fmt.Errorf("provisioning profile does not grant Keychain group %s", group)
+				}
+				expanded = append(expanded, group)
+			}
+			ents[k] = expanded
+		} else {
+			return fmt.Errorf("unsupported Miya iOS entitlement %s: add profile validation before using it", k)
+		}
+	}
+	return nil
+}
+
+// NSGo currently builds per architecture. Merge every Mach-O at the same
+// relative path, including bundled libraries, before the final signature/DMG.
+func buildMiyaUniversal(ctx context.Context, p *project, dir string) (string, error) {
+	work, err := os.MkdirTemp(dir, ".universal-")
+	if err != nil {
+		return "", err
+	}
+	defer os.RemoveAll(work)
+	app, err := buildMacApp(ctx, p, dir, "arm64")
+	if err != nil {
+		return "", err
+	}
+	intel, err := buildMacApp(ctx, p, work, "amd64")
+	if err != nil {
+		return "", err
+	}
+	err = filepath.WalkDir(app, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		rel, err := filepath.Rel(app, path)
+		if err != nil {
+			return err
+		}
+		other := filepath.Join(intel, rel)
+		if _, err := output(ctx, "lipo", "-info", path); err != nil {
+			return nil
+		}
+		tmp := path + ".universal"
+		if err := run(ctx, "lipo", "-create", path, other, "-output", tmp); err != nil {
+			return err
+		}
+		if err := os.Chmod(tmp, 0o755); err != nil {
+			return err
+		}
+		return os.Rename(tmp, path)
+	})
+	return app, err
+}
+
+// NSGo normally caches actool/widget products globally. Packaging must keep
+// these outputs in this worktree, while leaving Go's shared cache alone.
+func miyaBuildCacheDir() (string, error) {
+	if dir := os.Getenv("MIYA_NSGO_BUILD_CACHE"); dir != "" {
+		return dir, nil
+	}
+	return os.UserCacheDir()
+}

@@ -1,6 +1,6 @@
-# Local build output and MyGo staging files
+# Local packaging output and NSGo cache (symlinked into build/)
 /build/
-/.mygo/
+/.nsgo
 /miya
 /Miya
 

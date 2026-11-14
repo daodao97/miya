@@ -75,7 +75,7 @@ func TestProductSourceCopyUsesEnglishCatalog(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, path := range []string{"mygo.json", "resources/ios/MiyaFiles.swift"} {
+	for _, path := range []string{"nsgo.yaml", "resources/ios/MiyaFiles.swift"} {
 		data, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatal(err)

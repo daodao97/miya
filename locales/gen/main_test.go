@@ -17,31 +17,30 @@ func TestGeneratedCatalogIsCurrent(t *testing.T) {
 	}
 }
 
-func TestLegacyPackagingKeepsCatalogOwnershipAndLanguages(t *testing.T) {
-	data, err := os.ReadFile("../../mygo.json")
+func TestPackagingKeepsCatalogLanguages(t *testing.T) {
+	// nsgo.yaml is written as JSON, which YAML reads as well.
+	data, err := os.ReadFile("../../nsgo.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}
 	var config struct {
-		I18n  json.RawMessage `json:"i18n"`
-		MacOS struct {
-			InfoPlist map[string]json.RawMessage `json:"infoPlist"`
-		} `json:"macos"`
-		IOS struct {
-			InfoPlist map[string]json.RawMessage `json:"infoPlist"`
-		} `json:"ios"`
+		Miya struct {
+			MacOS struct {
+				Info map[string]json.RawMessage `json:"info"`
+			} `json:"macos"`
+			IOS struct {
+				Info map[string]json.RawMessage `json:"info"`
+			} `json:"ios"`
+		} `json:"miya"`
 	}
 	if err := json.Unmarshal(data, &config); err != nil {
 		t.Fatal(err)
-	}
-	if len(config.I18n) != 0 {
-		t.Fatal("MyGo packaging must not regenerate Miya's catalog")
 	}
 	catalog, err := i18ncatalog.New(os.DirFS(".."), "en")
 	if err != nil {
 		t.Fatal(err)
 	}
-	for platform, plist := range map[string]map[string]json.RawMessage{"macOS": config.MacOS.InfoPlist, "iOS": config.IOS.InfoPlist} {
+	for platform, plist := range map[string]map[string]json.RawMessage{"macOS": config.Miya.MacOS.Info, "iOS": config.Miya.IOS.Info} {
 		var languages []string
 		var source string
 		if err := json.Unmarshal(plist["CFBundleLocalizations"], &languages); err != nil {

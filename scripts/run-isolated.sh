@@ -16,9 +16,23 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 export PATH="/opt/homebrew/bin:$PATH"
 export MIYA_ISOLATED_DIR="${MIYA_ISOLATED_DIR:-$HOME/Library/Application Support/Miya-dev}"
-APP=build/darwin-arm64/Miya.app
-BIN="$PWD/$APP/Contents/MacOS/Miya"
-SOCK="$MIYA_ISOLATED_DIR/service.sock"
+VERSION=$(python3 -c 'import json; print(json.load(open("nsgo.yaml"))["version"])')
+ARCH=$(go env GOARCH)
+[ "$ARCH" != amd64 ] || ARCH=x64
+APP=${MIYA_ISOLATED_APP:-build/Miya-$VERSION-macos_$ARCH/Miya.app}
+case "$APP" in /*) ;; *) APP="$PWD/$APP" ;; esac
+BIN="$APP/Contents/MacOS/Miya"
+SOCK=$(python3 - "$MIYA_ISOLATED_DIR" <<'PY_SOCKET'
+import os, sys, tempfile
+path = os.path.join(sys.argv[1], 'service.sock')
+if len(path.encode()) >= 100:
+    h = 2166136261
+    for b in path.encode():
+        h = ((h ^ b) * 16777619) & 0xffffffff
+    path = os.path.join(tempfile.gettempdir(), f'miya-{os.getuid()}-{h:x}.sock')
+print(path)
+PY_SOCKET
+)
 
 service() {
 	python3 - "$SOCK" "$@" <<'PY'
@@ -46,7 +60,7 @@ for rid, op in enumerate(ops, 1):
     if m.get('error'):
         print(op, 'error:', m['error'])
     elif op == 'hello':
-        print('hello:', json.dumps({k: r.get(k) for k in ('version', 'pid', 'busy', 'exe', 'exeTime')}, ensure_ascii=False))
+        print('hello:', json.dumps({k: r.get(k) for k in ('version', 'release', 'pid', 'busy', 'exe', 'exeTime')}, ensure_ascii=False))
     elif op == 'state':
         print('state:', json.dumps({'threads': len(r.get('threads', [])), 'background_projects': len(r.get('projectThreads', {})), 'busy_projects': r.get('projectBusy', {})}, ensure_ascii=False))
 PY
@@ -56,12 +70,19 @@ case "${1:-run}" in
 run)
 	shift || true
 	if [ "${1:-}" != "--no-build" ]; then
-		./scripts/build-macos.sh -platform darwin/arm64
+		./scripts/build-macos.sh
 	fi
 	mkdir -p "$MIYA_ISOLATED_DIR"
 	# Run the binary itself: open(1) would hand the bundle ID to the installed app.
-	nohup "$BIN" >>"$MIYA_ISOLATED_DIR/window.log" 2>&1 &
-	echo "isolated window: pid $!"
+	python3 - "$BIN" "$MIYA_ISOLATED_DIR" <<'PY_LAUNCH'
+import os, pathlib, subprocess, sys
+binary, directory = sys.argv[1:]
+with open(pathlib.Path(directory) / 'window.log', 'ab') as log:
+    child = subprocess.Popen([binary], stdin=subprocess.DEVNULL, stdout=log,
+                             stderr=log, start_new_session=True, env=os.environ.copy())
+(pathlib.Path(directory) / 'window.pid').write_text(str(child.pid) + '\n')
+print('isolated window: pid', child.pid)
+PY_LAUNCH
 	echo "data: $MIYA_ISOLATED_DIR"
 	echo "status: $0 status    stop: $0 stop"
 	;;
