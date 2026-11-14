@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
-	"math"
 	"path/filepath"
 	"strings"
 	"time"
@@ -14,22 +13,14 @@ import (
 
 	"miya/internal/desktop"
 	"miya/internal/desktop/control"
+	"miya/internal/phone/desktopview"
 	"miya/internal/remote"
 	"miya/internal/textutil"
 	"miya/internal/uiruntime"
 	"miya/internal/widgets"
 )
 
-type DesktopPoint struct{ X, Y float64 }
-
-type desktopPointer struct {
-	active                       bool
-	startX, startY, lastX, lastY float32
-	at                           time.Time
-	moved, drag                  bool
-	from                         DesktopPoint
-	seq                          int
-}
+type DesktopPoint = desktopview.Point
 
 type MobileDesktopPage struct {
 	Client   *control.Client
@@ -62,9 +53,7 @@ type MobileDesktopPage struct {
 	Trackpad         bool
 	TouchMode        int // 0 tap and swipe, 1 drag, 2 move the zoomed view
 	Cursor           DesktopPoint
-	pointer          desktopPointer
-	lastTap          time.Time
-	scrollX, scrollY float32
+	mapping          desktopview.Mapper
 
 	text     string
 	modifier string
@@ -403,7 +392,7 @@ func (m *App) DesktopPoll(p *MobileDesktopPage) {
 		data, locked, err := p.Client.Frame(ctx)
 		var image ui.ImageSource
 		if err == nil {
-			if image, _ = ui.DecodeImage(data); image == nil {
+			if image, _ = decodeDesktopImage(data); image == nil {
 				err = fmt.Errorf("%s", tr("Unable to decode the screen. Retrying."))
 			}
 		}
@@ -581,195 +570,58 @@ func desktopClampInt(v int) int { return max(-1000, min(1000, v)) }
 
 func desktopClamp(v, lo, hi float32) float32 { return max(lo, min(hi, v)) }
 
-func desktopDist(dx, dy float32) float32 {
-	return float32(math.Hypot(float64(dx), float64(dy)))
+func (p *MobileDesktopPage) mapper() *desktopview.Mapper {
+	q := &p.mapping
+	q.Active, q.Blocked = p.Active, p.Unlock.Locked || p.Unlock.Busy
+	q.Width, q.Height = ui.ImageSize(p.Image)
+	q.View = desktopview.Rect{W: p.View.W, H: p.View.H}
+	q.Zoom, q.PanX = p.Zoom, p.PanX
+	q.SetPanY(p.panY)
+	q.Trackpad, q.TouchMode, q.Cursor = p.Trackpad, p.TouchMode, p.Cursor
+	q.Overlays = q.Overlays[:0]
+	for _, r := range p.overlays {
+		q.Overlays = append(q.Overlays, desktopview.Rect{X: r.X, Y: r.Y, W: r.W, H: r.H})
+	}
+	return q
 }
-
-// imageRect is where the frame shows inside the viewport, in local DIPs.
+func (p *MobileDesktopPage) mapped() {
+	p.Zoom, p.PanX, p.panY, p.Cursor = p.mapping.Zoom, p.mapping.PanX, p.mapping.PanY(), p.mapping.Cursor
+}
 func (p *MobileDesktopPage) ImageRect() (ui.Rect, bool) {
-	if p.Image == nil {
-		return ui.Rect{}, false
-	}
-	iw, ih := ui.ImageSize(p.Image)
-	vw, vh := p.View.W, p.View.H
-	if iw <= 0 || ih <= 0 || vw <= 0 || vh <= 0 {
-		return ui.Rect{}, false
-	}
-	s := min(vw/iw, vh/ih) * p.Zoom
-	w, h := iw*s, ih*s
-	maxX, maxY := max(0, (w-p.View.W)/2), max(0, (h-p.View.H)/2)
-	p.PanX, p.panY = desktopClamp(p.PanX, -maxX, maxX), desktopClamp(p.panY, -maxY, maxY)
-	return ui.Rect{X: (p.View.W-w)/2 + p.PanX, Y: (p.View.H-h)/2 + p.panY, W: w, H: h}, true
+	r, ok := p.mapper().ImageRect()
+	p.mapped()
+	return ui.Rect{X: r.X, Y: r.Y, W: r.W, H: r.H}, ok
 }
-
-func (p *MobileDesktopPage) point(x, y float32) (DesktopPoint, bool) {
-	r, ok := p.ImageRect()
-	if !ok || !r.Contains(x, y) {
-		return DesktopPoint{}, false
-	}
-	return DesktopPoint{X: float64(desktopClamp((x-r.X)/r.W, 0, 1)), Y: float64(desktopClamp((y-r.Y)/r.H, 0, 1))}, true
-}
-
-func (p *MobileDesktopPage) SetZoom(z float32) {
-	p.Zoom = desktopClamp(z, 1, 4)
-}
-
-// moveCursor accelerates faster swipes, as the previous page did.
-func (p *MobileDesktopPage) moveCursor(dx, dy float32) {
-	r, ok := p.ImageRect()
-	if !ok {
-		return
-	}
-	gain := 1.1 + min(1.4, desktopDist(dx, dy)/24)
-	p.Cursor.X = float64(desktopClamp(float32(p.Cursor.X)+dx*gain/r.W, 0, 1))
-	p.Cursor.Y = float64(desktopClamp(float32(p.Cursor.Y)+dy*gain/r.H, 0, 1))
-	// Keep the cursor on screen when zoomed in.
-	cx, cy := r.X+float32(p.Cursor.X)*r.W, r.Y+float32(p.Cursor.Y)*r.H
-	const margin = 24
-	if cx < margin {
-		p.PanX += margin - cx
-	} else if cx > p.View.W-margin {
-		p.PanX -= cx - (p.View.W - margin)
-	}
-	if cy < margin {
-		p.panY += margin - cy
-	} else if cy > p.View.H-margin {
-		p.panY -= cy - (p.View.H - margin)
-	}
-}
-
+func (p *MobileDesktopPage) SetZoom(z float32) { p.mapper().SetZoom(z); p.mapped() }
 func (m *App) DesktopAtCursor(p *MobileDesktopPage, kind string) {
 	m.DesktopSend(p, desktop.Input{Kind: kind, X: p.Cursor.X, Y: p.Cursor.Y})
 }
-
 func (m *App) DesktopPointerInput(p *MobileDesktopPage, ev ui.InputEvent) bool {
-	if !p.Active || p.Image == nil || p.Unlock.Locked || p.Unlock.Busy {
-		return false
-	}
-	g := &p.pointer
+	var kind desktopview.InputKind
 	switch ev.Kind {
 	case ui.InputPointerDown:
-		if ev.Button != 0 {
-			return false
-		}
-		for _, o := range p.overlays {
-			if o.Contains(ev.X, ev.Y) {
-				return false
-			}
-		}
-		*g = desktopPointer{active: true, startX: ev.X, startY: ev.Y, lastX: ev.X, lastY: ev.Y, at: time.Now(), from: p.Cursor, seq: g.seq + 1}
-		if p.Trackpad {
-			seq := g.seq
-			m.desktopAfter(p, 450*time.Millisecond, func() {
-				if p.pointer.active && p.pointer.seq == seq && !p.pointer.moved {
-					p.pointer.drag = true
-				}
-			})
-		}
-		return true
+		kind = desktopview.InputPointerDown
 	case ui.InputPointerMove:
-		if !g.active {
-			return false
-		}
-		if !g.moved {
-			if desktopDist(ev.X-g.startX, ev.Y-g.startY) < 8 {
-				return true
-			}
-			g.moved = true
-		}
-		dx, dy := ev.X-g.lastX, ev.Y-g.lastY
-		g.lastX, g.lastY = ev.X, ev.Y
-		if p.Trackpad {
-			p.moveCursor(dx, dy)
-			m.DesktopAtCursor(p, "move")
-		} else if p.TouchMode == 2 {
-			p.PanX, p.panY = p.PanX+dx, p.panY+dy
-		} else if p.TouchMode == 0 {
-			if at, ok := p.point(g.startX, g.startY); ok {
-				m.desktopScroll(p, at, dx*2, dy*2)
-			}
-		}
-		return true
+		kind = desktopview.InputPointerMove
 	case ui.InputPointerUp:
-		if !g.active {
-			return false
-		}
-		down := *g
-		g.active = false
-		if ev.Canceled {
-			// The system or a touch gesture took the press: nothing it did
-			// is sent to the desktop.
-			return true
-		}
-		if p.Trackpad {
-			if down.drag {
-				if down.moved {
-					m.DesktopSend(p, desktop.Input{Kind: "drag", X: down.from.X, Y: down.from.Y, ToX: p.Cursor.X, ToY: p.Cursor.Y})
-				}
-				return true
-			}
-			if !down.moved && time.Since(down.at) < 400*time.Millisecond {
-				kind := "click"
-				if time.Since(p.lastTap) < 350*time.Millisecond {
-					kind, p.lastTap = "doubleClick", time.Time{}
-				} else {
-					p.lastTap = time.Now()
-				}
-				m.DesktopAtCursor(p, kind)
-			}
-			return true
-		}
-		start, startOK := p.point(down.startX, down.startY)
-		end, endOK := p.point(ev.X, ev.Y)
-		dx, dy := ev.X-down.startX, ev.Y-down.startY
-		switch {
-		case p.TouchMode == 2:
-		case p.TouchMode == 1:
-			if startOK && endOK {
-				m.DesktopSend(p, desktop.Input{Kind: "drag", X: start.X, Y: start.Y, ToX: end.X, ToY: end.Y})
-			}
-		case desktopDist(dx, dy) > 10:
-			// Moves stream scrolls while the finger is down. Only a release
-			// without move events needs the full displacement as a fallback.
-			if startOK && !down.moved {
-				m.desktopScroll(p, start, dx*2, dy*2)
-			}
-		case endOK && !down.moved:
-			m.DesktopSend(p, desktop.Input{Kind: "click", X: end.X, Y: end.Y})
-		}
-		return true
+		kind = desktopview.InputPointerUp
 	case ui.InputScroll:
-		// UIKit's keyboard container and touch-scroll arbitration deliver
-		// scrolls directly, without a pointer-up. Their deltas are offsets;
-		// CGEvent takes the inverse, matching a finger dragging the content.
-		switch {
-		case p.Trackpad:
-			m.desktopScroll(p, p.Cursor, -ev.DX*2, -ev.DY*2)
-		case p.TouchMode == 0:
-			if at, ok := p.point(ev.X, ev.Y); ok {
-				m.desktopScroll(p, at, -ev.DX*2, -ev.DY*2)
-			}
-		case p.TouchMode == 2:
-			p.PanX, p.panY = p.PanX-ev.DX, p.panY-ev.DY
-		}
-		return true
+		kind = desktopview.InputScroll
 	case ui.InputZoom:
-		if ev.Scale > 0 {
-			p.SetZoom(p.Zoom * ev.Scale)
-		}
-		return true
+		kind = desktopview.InputZoom
 	}
-	return false
+	q := p.mapper()
+	q.Send = func(in desktop.Input) { m.DesktopSend(p, in) }
+	q.After = func(d time.Duration, f func()) { m.desktopAfter(p, d, func() { p.mapper(); f(); p.mapped() }) }
+	ok := q.Input(desktopview.InputEvent{Kind: kind, X: ev.X, Y: ev.Y, DX: ev.DX, DY: ev.DY, Scale: ev.Scale, Button: int(ev.Button), Canceled: ev.Canceled})
+	p.mapped()
+	return ok
 }
-
 func (m *App) desktopScroll(p *MobileDesktopPage, at DesktopPoint, dx, dy float32) {
-	p.scrollX, p.scrollY = p.scrollX+dx, p.scrollY+dy
-	x, y := int(p.scrollX), int(p.scrollY)
-	if x == 0 && y == 0 {
-		return
-	}
-	p.scrollX, p.scrollY = p.scrollX-float32(x), p.scrollY-float32(y)
-	m.DesktopSend(p, desktop.Input{Kind: "scroll", X: at.X, Y: at.Y, DeltaX: desktopClampInt(x), DeltaY: desktopClampInt(y)})
+	q := p.mapper()
+	q.Send = func(in desktop.Input) { m.DesktopSend(p, in) }
+	q.Scroll(at, dx, dy)
+	p.mapped()
 }
 
 func (m *App) desktopGestures(p *MobileDesktopPage, events []ui.GestureEvent) {
@@ -980,7 +832,7 @@ func (m *App) desktopLiveView(c *ui.Context, p *MobileDesktopPage) {
 		c.After(16 * time.Millisecond) // animate until the ripples fade
 	}
 	if haveImage && (p.Trackpad || len(taps) > 0) {
-		trackpad, cursor, dragging := p.Trackpad, p.Cursor, p.pointer.active && p.pointer.drag
+		trackpad, cursor, dragging := p.Trackpad, p.Cursor, p.mapping.Dragging()
 		vp.DrawOver(func(painter *ui.Painter, box ui.Rect) {
 			now := time.Now()
 			for _, tap := range taps {
@@ -1100,7 +952,8 @@ func (m *App) desktopControls(c *ui.Context, p *MobileDesktopPage) {
 			label, glyph = tr("Touch"), "hand-stop"
 		}
 		if m.desktopControl(c, "desktop-pointer", glyph, tr("Switch control mode, currently ")+label, false).Clicked() {
-			p.Trackpad, p.pointer = !p.Trackpad, desktopPointer{}
+			p.Trackpad = !p.Trackpad
+			p.mapping.Reset()
 			prefs := map[bool]string{true: "trackpad", false: "touch"}[p.Trackpad]
 			path := m.desktopPrefsFile()
 			go func() { _ = control.WritePrefs(path, prefs) }()
@@ -1325,7 +1178,7 @@ func (m *App) desktopLoadThumbs(p *MobileDesktopPage) {
 			data, err := p.Client.Thumbnail(ctx, w)
 			var img ui.ImageSource
 			if err == nil {
-				img, _ = ui.DecodeImage(data)
+				img, _ = decodeDesktopImage(data)
 			}
 			return func() {
 				p.ThumbBusy = false
@@ -1439,4 +1292,14 @@ func (p *MobileDesktopPage) ActiveTaps(now time.Time) []desktopTap {
 	}
 	p.Taps = keep
 	return keep
+}
+
+// Decoding and validation are shared with the NSGo phone. Only converting the
+// decoded raster to a MyGo bitmap belongs to this adapter.
+func decodeDesktopImage(data []byte) (ui.ImageSource, error) {
+	img, err := desktopview.DecodeRaster(data)
+	if err != nil {
+		return nil, err
+	}
+	return ui.NewBitmap(img), nil
 }

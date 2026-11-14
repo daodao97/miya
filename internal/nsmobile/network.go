@@ -14,6 +14,7 @@ import (
 // ReadNetworkPath/ObserveNetworkPath report ErrPlatformUnsupported on phones;
 // the transport still reconnects on timeout and foreground activation.
 var PlatformHooks struct {
+	DesktopAuthenticate func(context.Context) error
 	// NetworkInterfaces supplies Android's native interface snapshot. Android
 	// app UIDs cannot enumerate interfaces using NETLINK_ROUTE.
 	NetworkInterfaces func() ([]netmon.Interface, error)

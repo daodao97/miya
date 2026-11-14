@@ -6,7 +6,6 @@ package client
 import (
 	"context"
 	"crypto/rand"
-	"encoding/json"
 	"errors"
 	"path/filepath"
 	"sync"
@@ -14,6 +13,7 @@ import (
 	"time"
 
 	"miya/internal/chat/model"
+	"miya/internal/desktop/control"
 	"miya/internal/notification"
 	phonecache "miya/internal/phone/cache"
 	phoneproto "miya/internal/phone/protocol"
@@ -29,6 +29,20 @@ var ErrIncompatible = errors.New(tr("Incompatible desktop version. Update both t
 // Client is owned by the UI goroutine. Network and disk workers publish only
 // through Dispatch, and connection generations reject stale callbacks.
 type Client struct {
+	DesktopPage                   *MobileDesktopPage
+	DesktopClient                 func(*remote.Conn, string) *control.Client
+	DesktopAuthenticate           func(context.Context) error
+	SecretNotFound                error
+	DesktopReturn, DesktopRequest string
+	DesktopClosing                []string
+	DesktopApproval               MobileDesktopApproval
+	DesktopPreviews               map[string]*MobileWindowPreview
+	desktopOpening                remote.Request
+	desktopOpenTimer              *time.Timer
+	Desktops                      MobileDesktops
+	desktopSessions               map[string]phonecache.Session
+	desktopLoadFailed             bool
+
 	Dispatch func(func())
 	Changed  func()
 	// SendRequest is an optional transport adapter, also useful for protocol tests.
@@ -149,35 +163,22 @@ func (m *Client) LoadSaved(notFound error) {
 			remote.SetClientSecret(ephemeral)
 		}
 	}
-	link, linkErr := store.Get("nsgo-desktop-link")
-	if errors.Is(linkErr, notFound) {
-		link, linkErr = store.Get("desktop-link")
-		if data, registryErr := store.Get(phonecache.DesktopsKey); registryErr == nil {
-			var registry struct {
-				Version int                  `json:"version"`
-				Active  string               `json:"active"`
-				Items   []phonecache.Desktop `json:"items"`
-			}
-			if json.Unmarshal(data, &registry) == nil && registry.Version == 1 {
-				link = nil
-				linkErr = nil
-				for _, item := range registry.Items {
-					if item.ID == registry.Active {
-						link = []byte(item.Link)
-						break
-					}
-				}
-			}
-		}
-	}
+	registry, linkErr := ReadDesktops(store, notFound)
 	m.post(func() {
 		m.Loaded = true
+		m.SecretNotFound = notFound
 		if err != nil {
 			m.PersistenceError = tr("Secure pairing storage is unavailable. Pair again after restarting.")
 			return
 		}
-		if linkErr == nil && len(link) > 0 && m.Link == "" {
-			m.Connect(string(link))
+		if linkErr != nil {
+			m.desktopLoadFailed = true
+			m.PersistenceError = linkErr.Error()
+			return
+		}
+		m.restoreDesktops(registry)
+		if item, ok := m.Desktops.find(m.Desktops.Active); ok && m.Link == "" {
+			m.Connect(item.Link)
 		}
 	})
 }
@@ -188,11 +189,23 @@ func (m *Client) Connect(raw string) {
 		return
 	}
 	changed := m.Link != raw
+	if changed {
+		m.saveDesktopSession()
+	}
 	m.PersistState()
 	m.FlushCache(true)
 	m.Disconnect()
 	if changed {
+		m.CloseDesktopPage(false)
+	}
+	if changed {
 		m.State = phoneproto.State{}
+		m.Options, m.Commands, m.Asked = nil, nil, nil
+		m.Outbox, m.sending, m.pendingProjection = nil, nil, nil
+		m.Selected, m.ExpandedProject, m.Title, m.NewAgent = "", "", "", ""
+		m.ThreadListExpanded = map[string]bool{}
+		m.Viewer = NewViewer()
+		m.Viewer.Changed = m.change
 		m.Host = ""
 		m.Home()
 	}
@@ -200,7 +213,12 @@ func (m *Client) Connect(raw string) {
 	m.OpenDiskCache(raw)
 	m.loadDesktopOptions()
 	m.PreviewPaths, m.PreviewRetries, m.Asked = nil, nil, nil
-	m.persistPair(raw)
+	item, _ := m.Desktops.Remember(raw, "")
+	m.Desktops.Active = item.ID
+	m.SaveDesktops()
+	if changed {
+		m.restoreDesktopSession(item.ID)
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	m.Cancel = cancel
@@ -208,6 +226,9 @@ func (m *Client) Connect(raw string) {
 	go m.Run(ctx, m.Generation, raw, m.Wake)
 }
 func (m *Client) Disconnect() {
+	m.suspendDesktopPage()
+	m.stopDesktopOpen()
+	m.DesktopPreviews = nil
 	m.Generation++
 	if m.Cancel != nil {
 		m.Cancel()
@@ -225,16 +246,7 @@ func (m *Client) Disconnect() {
 		m.failPendingSend()
 	}
 }
-func (m *Client) Forget() {
-	m.PersistState()
-	m.FlushCache(true)
-	m.Disconnect()
-	m.Link, m.Host, m.Status = "", "", ""
-	m.State = phoneproto.State{}
-	m.DropDiskCache()
-	m.Home()
-	m.persistPair("")
-}
+func (m *Client) Forget() { m.RemoveDesktop(m.CurrentDesktopID()) }
 func (m *Client) EnterBackground() {
 	m.background = true
 	m.PersistState()
@@ -249,7 +261,12 @@ func (m *Client) EnterForeground() {
 	m.markCompletionRead()
 	m.markOpenRead()
 }
-func (m *Client) Close() { m.PersistState(); m.FlushCache(true); m.Disconnect() }
+func (m *Client) Close() {
+	m.CloseDesktopPage(false)
+	m.PersistState()
+	m.FlushCache(true)
+	m.Disconnect()
+}
 
 func (m *Client) Home() {
 	m.Path = "/"
@@ -306,6 +323,20 @@ func (m *Client) ApplyPhoneState(s phoneproto.State) {
 	}
 	m.markOpenRead()
 	m.PersistState()
+	m.CloseResolvedDesktopControl(s.Approvals)
+	for id, p := range m.DesktopPreviews {
+		found := false
+		for _, a := range s.Approvals {
+			if string(a.ID) == id && phoneproto.ApprovalFingerprint(a) == p.Version {
+				found = true
+				break
+			}
+		}
+		if !found {
+			delete(m.DesktopPreviews, id)
+		}
+	}
+	m.resumeDesktopPage()
 }
 func (m *Client) Send()                         { m.sendDraft(false) }
 func (m *Client) Steer()                        { m.sendDraft(true) }
@@ -338,29 +369,4 @@ func (m *Client) FileTarget(rel string) (string, string, bool)      { return m.m
 func (m *Client) RetryNow() bool                                    { return m.retryNow() }
 func (m *Client) ReferenceThread(ref model.ThreadRef) (model.Thread, model.ProjectSnapshot, bool) {
 	return m.referencedThread(ref)
-}
-
-// Revision checks serialize quick pairing/forget actions without letting an
-// older worker overwrite a newer credential. Links never reach ordinary files.
-func (m *Client) persistPair(link string) {
-	if m.Store == nil {
-		return
-	}
-	store := m.Store
-	revision := m.storeRevision.Add(1)
-	go func() {
-		m.storeMu.Lock()
-		defer m.storeMu.Unlock()
-		if revision != m.storeRevision.Load() {
-			return
-		}
-		err := store.Set("nsgo-desktop-link", []byte(link))
-		if err != nil {
-			m.post(func() {
-				if revision == m.storeRevision.Load() {
-					m.PersistenceError = tr("Secure pairing storage is unavailable. Pair again after restarting.")
-				}
-			})
-		}
-	}()
 }

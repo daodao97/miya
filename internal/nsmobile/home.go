@@ -17,6 +17,8 @@ import (
 func (m *App) home(cx *core.Scope) core.Node {
 	return core.View{TestID: "mobile-home", Style: core.Style{FlexGrow: 1, MinHeight: core.Pt(0)}, Children: []core.Node{
 		m.toolbar(func() string { return "Miya" }, false),
+		m.errorText(cx),
+		m.button("desktop-manager", tr("Desktops"), nil, func() { m.sheet.Set("desktops") }),
 		nswidgets.MutedText(cx, live(m, func() string { return textutil.FirstNonEmpty(m.ConnectionLine(), m.Host, tr("Connected")) })),
 		base.Input{Label: tr("Search conversations"), Placeholder: tr("Search conversations"), Value: m.search.Get, OnChange: m.search.Set, TestID: "home-search", Style: core.Style{MinHeight: core.Pt(44), Padding: core.All(12), FontSize: 16}},
 		scroll(

@@ -52,6 +52,7 @@ func liveImage(m *App) func(string) string {
 func (m *App) composer(cx *core.Scope, state *chat.ConversationState) core.Node {
 	return column(
 		m.errorText(cx),
+		m.desktopPreviews(cx),
 		m.pendingView(cx), m.queueView(cx), m.references(cx),
 		// TODO(approvals): show pending request cards here; the desktop remains
 		// their owner. No automatic response is sent by this surface.

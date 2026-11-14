@@ -1933,5 +1933,15 @@
   "nsToggleSidebar": "Toggle sidebar",
   "nsMenuView": "View",
   "nsComposerStatus": "Model: %s · Thinking: %s · Permissions: %s · Tokens: %d",
-  "nsComposerUnknownCommand": "Unknown command. Type / to choose a supported command."
+  "nsComposerUnknownCommand": "Unknown command. Type / to choose a supported command.",
+  "nsDesktopEndControl": "End control",
+  "nsDesktopEsc": "Esc",
+  "nsDesktopPasswordInput": "Password input",
+  "nsDesktopAuthenticationUnavailable": "Password saving requires device authentication, which is unavailable in this NSGo build.",
+  "nsDesktopRemove": "Remove",
+  "nsDesktopRename": "Rename",
+  "nsDesktopRestore": "Restore remote desktop",
+  "nsDesktopRightClick": "Right click",
+  "nsDesktopSwitchPointer": "Switch control mode",
+  "nsDesktopTab": "Tab"
 }

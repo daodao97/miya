@@ -31,7 +31,11 @@ type App struct {
 	caret                   int
 }
 
-func NewMobileApp() *App { return &App{Client: phoneclient.New(), caret: -1} }
+func NewMobileApp() *App {
+	m := &App{Client: phoneclient.New(), caret: -1}
+	m.SecretNotFound = core.ErrSecretNotFound
+	return m
+}
 
 func MobileEntry() {
 	installNetworkHooks()
@@ -39,6 +43,7 @@ func MobileEntry() {
 		m := NewMobileApp()
 		m.DataDir = cx.DataDir()
 		m.PrepareNetwork = PlatformHooks.PrepareNetwork
+		m.DesktopAuthenticate = PlatformHooks.DesktopAuthenticate
 		// NSGo mobile has no secure-store implementation yet. The adapter reports
 		// that explicitly; pairing remains usable for this process without saving
 		// secrets to an ordinary file. See TODO.md for the platform contract.
@@ -124,6 +129,11 @@ func (m *App) Render(cx *core.Scope) core.Node {
 			m.closeFileBrowser()
 			return true
 		}
+		if m.Path == "/desktop" {
+			m.CloseDesktopPage(true)
+			m.change()
+			return true
+		}
 		if m.Path != "/" {
 			m.Home()
 			m.change()
@@ -131,7 +141,7 @@ func (m *App) Render(cx *core.Scope) core.Node {
 		}
 		return false
 	})
-	cx.Cleanup(func() { m.closeFileBrowser() })
+	cx.Cleanup(func() { m.closeFileBrowser(); m.CloseDesktopPage(false) })
 	// Static translated labels are rebuilt only when language changes. Client
 	// state and composer drafts stay outside this region.
 	return core.Dynamic(func(cx *core.Scope) core.Node {
@@ -160,6 +170,7 @@ func (m *App) root(cx *core.Scope) core.Node {
 		return core.Style{Width: core.Pct(100), Height: core.Pct(100), Padding: safe, Background: colors.Canvas(), Color: colors.Ink(), MinHeight: core.Pt(0)}
 	}, Children: []core.Node{
 		m.page(cx),
+		m.desktopFloat(cx),
 		ui.Sheet{Open: func() bool { return m.sheet.Get() != "" }, OnClose: func() { m.sheet.Set("") }, Children: []core.Node{
 			core.Dynamic(func(cx *core.Scope) core.Node { return m.sheetContent(cx) }),
 		}},
@@ -168,26 +179,29 @@ func (m *App) root(cx *core.Scope) core.Node {
 func (m *App) page(cx *core.Scope) core.Node {
 	// The memo subscribes broadly, but notifies this region only if its key
 	// changes, so network deltas keep the transcript and native input mounted.
-	key := core.NewMemo(cx, live(m, func() string {
+	type destination struct{ owner, path string }
+	key := core.NewMemo(cx, live(m, func() destination {
 		if !m.Loaded {
-			return "loading"
+			return destination{path: "loading"}
 		}
 		if m.Link == "" {
-			return "pair"
+			return destination{path: "pair"}
 		}
 		if m.filesURL.Get() != "" {
-			return "files"
+			return destination{path: "files"}
 		}
-		return m.Path
+		return destination{owner: m.CurrentDesktopID(), path: m.Path}
 	}))
 	return core.Dynamic(func(cx *core.Scope) core.Node {
-		switch key.Get() {
+		switch key.Get().path {
 		case "loading":
 			return ui.Spinner{}
 		case "pair":
 			return m.pairView(cx)
 		case "files":
 			return m.fileView(cx)
+		case "/desktop":
+			return m.desktopPage(cx)
 		case "/thread":
 			return m.conversation(cx)
 		default:
@@ -196,10 +210,12 @@ func (m *App) page(cx *core.Scope) core.Node {
 	})
 }
 
-// TODO(automations, memory, remote-desktop, web-services, delegations): add
+// TODO(automations, memory, web-services, delegations): add
 // owned destinations here alongside their frame handlers in phone/client.
 func (m *App) sheetContent(cx *core.Scope) core.Node {
 	switch m.sheet.Get() {
+	case "desktops":
+		return m.desktopsView(cx)
 	case "settings":
 		return m.settings(cx)
 	case "language":

@@ -1,7 +1,8 @@
 # NSGo phone core
 
 `go build -tags nsgo` selects `main_nsgo_mobile.go` on iOS and Android. The
-untagged application still selects `main.go`; `internal/mobile` is unchanged.
+untagged application still selects `main.go`; `internal/mobile` remains the
+MyGo reference and shares only the framework-free desktop frame/input helper.
 Desktop NSGo builds continue to select `main_nsgo.go`. Android's MyGo JNI
 startup in `main_android.go` is excluded under `nsgo`.
 
@@ -46,8 +47,12 @@ owns the conversation's home-indicator spacing.
 ## Deferred work
 
 See [phone follow-ups](../internal/nsmobile/TODO.md) for all feature hooks and
-platform gaps. Approvals, remote desktop, automations, memory, voice, push,
-web services, delegations and multi-desktop management remain separate ports.
+platform gaps. Approvals, automations, memory, voice, push, web services and
+delegations remain separate ports. Remote desktop and multi-desktop management are now ported;
+`phone/client` owns their leases, targets, secure registry and composer sessions.
+`phone/desktopview` shares frame validation and pointer mapping with MyGo;
+NSGo updates one retained image node per frame. Saved-password unlock requires
+a native authentication hook. See the TODO for precise platform limits.
 The current pinned NSGo has no mobile secure-store or network-path service and
 no QR scanner. Connection-code pairing is session-only unless a host supplies
 a secure-store adapter. No credentials fall back to ordinary files.
@@ -77,8 +82,8 @@ go test ./internal/phone/client/... ./internal/nschat/...
 ```
 
 2026-11-14: formatting, localization, both build modes, desktop vet and iOS
-cross-vet passed. Phone, client, chat and entry-point tests passed. The full
-integration run failed only at the known existing failure,
-`TestDesktopPageRendersLiveConnectingAndEnded` (missing Trackpad in the MyGo
-remote desktop page). No physical phone, IPA/APK packaging or deployment is
-claimed by these checks.
+cross-vet passed. Phone, client, chat and entry-point tests passed. The remote
+desktop port adds retained image/input/lifecycle tests. The full requested
+integration suite passes, including the MyGo test corrected to hide the keyboard
+before operating its deliberately hidden floating toolbar. No physical phone,
+IPA/APK packaging or deployment is claimed by these checks.

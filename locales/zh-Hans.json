@@ -1933,5 +1933,15 @@
   "nsToggleSidebar": "显示或隐藏侧边栏",
   "nsMenuView": "显示",
   "nsComposerStatus": "模型：%s · 思考：%s · 权限：%s · Token：%d",
-  "nsComposerUnknownCommand": "未知命令。输入 / 选择支持的命令。"
+  "nsComposerUnknownCommand": "未知命令。输入 / 选择支持的命令。",
+  "nsDesktopEndControl": "结束控制",
+  "nsDesktopEsc": "Esc",
+  "nsDesktopPasswordInput": "密码输入",
+  "nsDesktopAuthenticationUnavailable": "保存密码需要设备身份验证，当前 NSGo 版本尚不支持。",
+  "nsDesktopRemove": "移除",
+  "nsDesktopRename": "重命名",
+  "nsDesktopRestore": "恢复远程桌面",
+  "nsDesktopRightClick": "右键点击",
+  "nsDesktopSwitchPointer": "切换控制模式",
+  "nsDesktopTab": "Tab"
 }
