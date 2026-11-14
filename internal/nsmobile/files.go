@@ -24,8 +24,8 @@ func (m *App) conversationMenu(cx *core.Scope) core.Node {
 			m.sheet.Set("")
 		}),
 		m.button("handoff", tr("Hand off to a new conversation"), live(m, func() bool { return m.Open == 0 || m.Sending }), func() { m.Handoff(); m.Path = "/thread"; m.sheet.Set("") }),
-		// TODO(remote-desktop): add their sheet actions when their
-		// respective NSGo adapters are implemented. No inactive controls are shown.
+		m.button("remote-desktop", tr("Open remote desktop"), live(m, func() bool { return !m.Connected || !m.State.DesktopControl || m.DesktopRequest != "" }), func() { m.closeFileBrowser(); m.sheet.Set(""); m.OpenRemoteDesktop() }),
+		m.errorText(cx),
 		m.button("actions-cancel", tr("Cancel"), nil, func() { m.sheet.Set("") }),
 	)
 }

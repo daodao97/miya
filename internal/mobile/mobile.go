@@ -643,7 +643,7 @@ func (m *App) read(gen int, conn *remote.Conn) (greeted bool, err error) {
 				var image ui.ImageSource
 				message := f.Error
 				if len(p.Data) > 0 && len(p.Data) <= thumbnail.MaxBytes {
-					image, _ = ui.DecodeImage(p.Data)
+					image, _ = decodeDesktopImage(p.Data)
 					if image == nil {
 						message = tr("Unable to decode window preview")
 					}

@@ -28,8 +28,9 @@ func (m *App) DesktopMinimize(p *MobileDesktopPage) {
 	}
 	p.Floating = true
 	p.keyboard, p.More, p.moreKeys, p.focusText = false, false, false, false
-	p.pointer, p.text, p.modifier = desktopPointer{}, "", ""
+	p.text, p.modifier = "", ""
 	p.Queue = nil
+	p.mapping.Reset()
 	if m.Router().Path() == "/desktop" {
 		m.Router().Back()
 	}

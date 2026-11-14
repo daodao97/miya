@@ -1,8 +1,8 @@
 # NSGo phone core
 
 `go build -tags nsgo` selects `main_nsgo_mobile.go` on iOS and Android. The
-untagged application still selects `main.go` and the existing `internal/mobile`
-surface.
+untagged application still selects `main.go`; `internal/mobile` remains the
+MyGo reference and shares only the framework-free desktop frame/input helper.
 Desktop NSGo builds continue to select `main_nsgo.go`. Android's MyGo JNI
 startup in `main_android.go` is excluded under `nsgo`.
 
@@ -53,8 +53,12 @@ owns the conversation's home-indicator spacing.
 See [phone follow-ups](../internal/nsmobile/TODO.md) for all feature hooks and
 platform gaps. Approvals, delegations, read-only memory and automation list/detail/create now
 use phone sheets, with request cards and delegation content shared with desktop
-in `internal/nsrequests`. Voice, push and web services are ported (see the TODO list); remote
-desktop and multi-desktop management remain separate ports.
+in `internal/nsrequests`. Voice, push and web services are ported (see the TODO list).
+Remote desktop and multi-desktop management are now ported;
+`phone/client` owns their leases, targets, secure registry and composer sessions.
+`phone/desktopview` shares frame validation and pointer mapping with MyGo;
+NSGo updates one retained image node per frame. Saved-password unlock requires
+a native authentication hook. See the TODO for precise platform limits.
 The current pinned NSGo has no mobile secure-store or network-path service and
 no QR scanner. General APNs device registration/remote-delivery callbacks and
 Android foreground services need the host hooks documented in TODO.md. NSGo
@@ -88,11 +92,11 @@ go test ./internal/phone/client/... ./internal/nschat/...
 ```
 
 2026-11-14: formatting, localization, both build modes, desktop vet and iOS
-cross-vet passed. Phone, client, chat and entry-point tests passed. The full
-integration run failed only at the known existing failure,
-`TestDesktopPageRendersLiveConnectingAndEnded` (missing Trackpad in the MyGo
-remote desktop page). No physical phone, IPA/APK packaging or deployment is
-claimed by these checks.
+cross-vet passed. Phone, client, chat and entry-point tests passed. The remote
+desktop port adds retained image/input/lifecycle tests. The full requested
+integration suite passes, including the MyGo test corrected to hide the keyboard
+before operating its deliberately hidden floating toolbar. No physical phone,
+IPA/APK packaging or deployment is claimed by these checks.
 
 2026-11-14 phone-services port: the required format/localization checks, desktop
 and iOS vet, default and NSGo builds passed. The injected nsgotest voice,
@@ -100,6 +104,6 @@ notification registration/routing and verified web-service ownership tests pass,
 as do the legacy MyGo phone, shared client and notification tests. The voice
 WebSocket fixture now ignores unrelated ordinary HTTP probes of its ephemeral
 port; these previously polluted its session-result channel. The full
-integration run reports only the existing Trackpad failure described above.
+integration run passes.
 See [TODO.md](../internal/nsmobile/TODO.md) for native APNs/Android hooks, Live Activity packaging and the
 remaining background activity subscription protocol work.

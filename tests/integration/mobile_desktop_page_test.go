@@ -160,7 +160,7 @@ func TestDesktopPageRendersLiveConnectingAndEnded(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	for _, s := range []string{"Remote desktop", "Trackpad", "Send", "Return", "Esc", "More", "Connected · Full desktop"} {
+	for _, s := range []string{"Remote desktop", "Send", "Return", "Esc", "More", "Connected · Full desktop"} {
 		if !tt.HasText(s) {
 			t.Fatal("live page missing", s)
 		}
@@ -171,6 +171,15 @@ func TestDesktopPageRendersLiveConnectingAndEnded(t *testing.T) {
 	tt.Frame()
 	if !tt.HasText("⌘") || tt.HasText("Move screen") {
 		t.Fatal("more keys did not open")
+	}
+	// Focusing the native field deliberately hides the floating capsule.
+	// Its mode switch returns after the keyboard accessory dismisses input.
+	if err := tt.Click("Hide keyboard"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !tt.HasText("Trackpad") {
+		t.Fatal("control mode missing after hiding keyboard")
 	}
 	if err := tt.Click("Switch control mode, currently Trackpad"); err != nil {
 		t.Fatal(err)

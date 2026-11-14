@@ -17,9 +17,8 @@ func (p *MobileDesktopPage) InvalidateTarget() {
 	p.targetRevision++
 	p.Active, p.Image, p.Queue, p.actionsFresh, p.More = false, nil, nil, false, false
 	p.Polling, p.Sending, p.actionsBusy = false, false, false
-	p.pointer = desktopPointer{}
-	p.lastTap, p.Taps = time.Time{}, nil
-	p.scrollX, p.scrollY = 0, 0
+	p.mapping.Reset()
+	p.Taps = nil
 }
 
 func desktopDisplayTitle(display desktop.Display, number int) string {

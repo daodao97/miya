@@ -52,6 +52,7 @@ func liveImage(m *App) func(string) string {
 func (m *App) composer(cx *core.Scope, state *chat.ConversationState) core.Node {
 	return column(
 		m.errorText(cx),
+		m.desktopPreviews(cx),
 		m.pendingView(cx), m.queueView(cx), m.references(cx),
 		m.requestCards(cx),
 		core.Show{When: live(m, func() bool { return len(m.Images) > 0 }), Then: func(cx *core.Scope) core.Node {

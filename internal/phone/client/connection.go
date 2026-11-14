@@ -10,7 +10,9 @@ import (
 	"miya/internal/agent"
 	agentmeta "miya/internal/agent/catalog"
 	"miya/internal/chat/model"
+	"miya/internal/desktop/control"
 	"miya/internal/notification"
+	"miya/internal/phone/desktopview"
 	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/remote"
 	"miya/internal/thumbnail"
@@ -70,6 +72,9 @@ func (m *Client) Run(ctx context.Context, gen int, link string, wake <-chan stru
 
 			m.interruptFeatureRequests()
 			m.interruptApprovals()
+			m.suspendDesktopPage()
+			m.stopDesktopOpen()
+			m.DesktopPreviews = nil
 			m.Conn, m.Connected, m.Status = nil, false, message
 
 			m.RetryAt, m.RetryError = retryAt, retryError
@@ -112,6 +117,9 @@ func (m *Client) read(gen int, conn *remote.Conn) (greeted bool, err error) {
 			host := f.Host
 			m.onMain(gen, func() {
 				m.Host, m.Connected, m.Status, m.Error = host, true, "", ""
+				item, _ := m.Desktops.Remember(m.Link, host)
+				m.Desktops.Active = item.ID
+				m.SaveDesktops()
 				m.RetryAt, m.RetryError = time.Time{}, ""
 				m.Conn = conn
 				m.CompletionRead = notification.DesktopRead{}
@@ -227,7 +235,22 @@ func (m *Client) read(gen int, conn *remote.Conn) (greeted bool, err error) {
 					m.ReceiveFeatureFrame(f)
 				}
 			})
-			// TODO: remote desktop and push frames.
+		case "desktop-open":
+			data, message := f.Data, f.Error
+			m.onMain(gen, func() { m.receiveDesktopControl(conn, data, message) })
+		case "desktop-preview":
+			var p control.Preview
+			if json.Unmarshal(f.Data, &p) == nil {
+				image, _ := desktopview.DecodeImage(p.Data)
+				message := f.Error
+				m.onMain(gen, func() { m.ReceiveWindowPreview(conn, p, image, message) })
+			}
+		case "desktop-action":
+			var p control.Preview
+			if json.Unmarshal(f.Data, &p) == nil {
+				message := f.Error
+				m.onMain(gen, func() { m.receiveWindowAction(conn, p, message) })
+			}
 		case "sent":
 			id, msg := f.Thread, f.Error
 			m.onMain(gen, func() { m.Sent(id, msg) })

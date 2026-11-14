@@ -1,13 +1,14 @@
 # Phone follow-ups
 
-The NSGo core deliberately does not expose controls for these pending ports.
+The table records completed phone ports and the remaining follow-ups.
 Protocol state is retained where needed; receiving a frame never grants an
 approval or starts one of these features implicitly.
 
 | Feature | Hook for the next port |
 | --- | --- |
-| Remote desktop | Add a destination to `sheetContent` and an action to `conversationMenu`; consume `desktop-open`, `desktop-preview`, and `desktop-action` frames. Own and end leases on Back/background/disconnect. |
-| Multiple desktop management | Add the registry manager and per-desktop composer sessions. The core uses one active link, per-desktop disk caches/options, and reads the old active secure registry when available. |
+| Remote desktop | Ported: retained live image/cursor, touch/trackpad/zoom, IME/password entry and Mac keys, connecting/error/ended/picker states, permission previews/actions, apps/displays, privacy, manual unlock, floating preview and exact-target resume. Session/protocol ownership lives in `phone/client`; frame validation and input geometry are shared with MyGo in `phone/desktopview`. Back/close revoke leases; background/disconnect clear frames, input and secrets before requesting a fresh lease on authoritative state. Native authentication and device validation remain below. |
+| Multiple desktop management | Ported: add/switch/rename/remove/reload, secure registry migration and persistence, per-desktop drafts/attachments/conversation selection and caches/options. Switching ends remote control and remounts the destination under the new desktop identity. |
+
 ## Ported feature sheets
 
 - Approvals, questions and MCP forms open from conversation request cards.
@@ -139,3 +140,39 @@ Physical-device validation, packaging/configuration for the NSGo mobile CLI,
 QR permissions, secure-store migration from the installed MyGo app, and
 network permission prompts still need device-level work. Cross-vet checks Go
 code; it does not build an IPA/APK or exercise platform services.
+
+## Remote desktop platform limits and validation
+
+- The pinned core exposes `View.OnTouch` with finger IDs, `Responder`, pinch,
+  wheel and canvas APIs. Single-finger touch/drag/scroll, trackpad motion,
+  hold-to-drag, two-finger scrolling/right-click and pinch are mapped in the
+  framework-free helper. System cancellation drops pending clicks/drags.
+- `Scope.OnKey` supplies named shortcuts and `Input` supplies native text/IME
+  composition. There is no general surface key-down/key-up stream with raw
+  modifier state. The port offers named Mac key/modifier buttons and native
+  text entry; it does not claim arbitrary hardware-key forwarding.
+- There is no NSGo biometric/device-authentication API. Manual Mac unlock is
+  available. Saving and using a stored password require a fresh successful
+  `PlatformHooks.DesktopAuthenticate` call plus secure storage; without a host
+  adapter the UI explains the limitation and never bypasses authentication.
+  Existing stored passwords can still be forgotten. Phone secure storage is
+  unsupported by the pinned core unless the host supplies `SecretStore`.
+- Frames update `SourceFunc` on one image node; unchanged encoded frames skip
+  decoding and source replacement. Polling is serialized, input is ordered and
+  bounded, and floating previews poll at most once per second. Target revisions
+  and lease contexts reject stale workers; reconnect checks window ID+PID or
+  display ID+UUID before resuming.
+- nsgotest covers connecting/live/ended, retained image/editor IDs, Unicode
+  text, touch scrolling/cancellation, pinch/wheel, modifier keys, float/restore,
+  background cleanup and desktop management. Domain tests cover stale leases,
+  exact-target resume, registry migration, separate drafts/options, authenticated
+  unlock and multi-touch arbitration. Required build/vet/localization checks and
+  the full requested integration suite pass with a worktree-local Go cache
+  (the shared cache returned an invalid standard-library reference).
+- The old MyGo `Trackpad` test was stale: the focused keyboard deliberately
+  hides the floating capsule. The test now dismisses input with `Hide keyboard`
+  before switching modes; no MyGo toolbar behavior change was needed.
+
+Physical iOS/Android gesture delivery, hardware keyboards, secure-store/native
+identity adapters, app packaging and real Mac capture remain device validation.
+No dependency checkout was changed and no build was installed.

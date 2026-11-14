@@ -26,7 +26,7 @@ func (m *App) DesktopChooseApps(p *MobileDesktopPage) {
 		if err == nil {
 			for i := range apps {
 				if len(apps[i].Icon) > 0 {
-					icons[apps[i].ID], _ = ui.DecodeImage(apps[i].Icon)
+					icons[apps[i].ID], _ = decodeDesktopImage(apps[i].Icon)
 				}
 				apps[i].Icon = nil
 			}

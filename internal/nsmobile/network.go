@@ -31,7 +31,8 @@ var PlatformHooks struct {
 	// apns.ActivityManager. An empty DeviceToken unregisters the subscription.
 	// No provider signing keys belong in the phone. There is no default protocol
 	// operation for this yet. The host must serialize registrations/unregisters.
-	RegisterActivity func(apns.ActivityRegistration)
+	RegisterActivity    func(apns.ActivityRegistration)
+	DesktopAuthenticate func(context.Context) error
 	// NetworkInterfaces supplies Android's native interface snapshot. Android
 	// app UIDs cannot enumerate interfaces using NETLINK_ROUTE.
 	NetworkInterfaces func() ([]netmon.Interface, error)

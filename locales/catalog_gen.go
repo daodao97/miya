@@ -20879,3 +20879,105 @@ func RequestResolved() string { return In(i18n.Locale()).RequestResolved() }
 func (msgs Messages) RequestResolved() string {
 	return Catalog.Format(msgs.locale, "requestResolved", nil)
 }
+
+// NsDesktopEndControl says "End control"
+// in the language the app shows.
+func NsDesktopEndControl() string { return In(i18n.Locale()).NsDesktopEndControl() }
+
+// NsDesktopEndControl says "End control"
+// in the language of msgs.
+func (msgs Messages) NsDesktopEndControl() string {
+	return Catalog.Format(msgs.locale, "nsDesktopEndControl", nil)
+}
+
+// NsDesktopEsc says "Esc"
+// in the language the app shows.
+func NsDesktopEsc() string { return In(i18n.Locale()).NsDesktopEsc() }
+
+// NsDesktopEsc says "Esc"
+// in the language of msgs.
+func (msgs Messages) NsDesktopEsc() string {
+	return Catalog.Format(msgs.locale, "nsDesktopEsc", nil)
+}
+
+// NsDesktopPasswordInput says "Password input"
+// in the language the app shows.
+func NsDesktopPasswordInput() string { return In(i18n.Locale()).NsDesktopPasswordInput() }
+
+// NsDesktopPasswordInput says "Password input"
+// in the language of msgs.
+func (msgs Messages) NsDesktopPasswordInput() string {
+	return Catalog.Format(msgs.locale, "nsDesktopPasswordInput", nil)
+}
+
+// NsDesktopAuthenticationUnavailable says "Password saving requires device authentication, which is unavailable in this NSGo build."
+// in the language the app shows.
+func NsDesktopAuthenticationUnavailable() string {
+	return In(i18n.Locale()).NsDesktopAuthenticationUnavailable()
+}
+
+// NsDesktopAuthenticationUnavailable says "Password saving requires device authentication, which is unavailable in this NSGo build."
+// in the language of msgs.
+func (msgs Messages) NsDesktopAuthenticationUnavailable() string {
+	return Catalog.Format(msgs.locale, "nsDesktopAuthenticationUnavailable", nil)
+}
+
+// NsDesktopRemove says "Remove"
+// in the language the app shows.
+func NsDesktopRemove() string { return In(i18n.Locale()).NsDesktopRemove() }
+
+// NsDesktopRemove says "Remove"
+// in the language of msgs.
+func (msgs Messages) NsDesktopRemove() string {
+	return Catalog.Format(msgs.locale, "nsDesktopRemove", nil)
+}
+
+// NsDesktopRename says "Rename"
+// in the language the app shows.
+func NsDesktopRename() string { return In(i18n.Locale()).NsDesktopRename() }
+
+// NsDesktopRename says "Rename"
+// in the language of msgs.
+func (msgs Messages) NsDesktopRename() string {
+	return Catalog.Format(msgs.locale, "nsDesktopRename", nil)
+}
+
+// NsDesktopRestore says "Restore remote desktop"
+// in the language the app shows.
+func NsDesktopRestore() string { return In(i18n.Locale()).NsDesktopRestore() }
+
+// NsDesktopRestore says "Restore remote desktop"
+// in the language of msgs.
+func (msgs Messages) NsDesktopRestore() string {
+	return Catalog.Format(msgs.locale, "nsDesktopRestore", nil)
+}
+
+// NsDesktopRightClick says "Right click"
+// in the language the app shows.
+func NsDesktopRightClick() string { return In(i18n.Locale()).NsDesktopRightClick() }
+
+// NsDesktopRightClick says "Right click"
+// in the language of msgs.
+func (msgs Messages) NsDesktopRightClick() string {
+	return Catalog.Format(msgs.locale, "nsDesktopRightClick", nil)
+}
+
+// NsDesktopSwitchPointer says "Switch control mode"
+// in the language the app shows.
+func NsDesktopSwitchPointer() string { return In(i18n.Locale()).NsDesktopSwitchPointer() }
+
+// NsDesktopSwitchPointer says "Switch control mode"
+// in the language of msgs.
+func (msgs Messages) NsDesktopSwitchPointer() string {
+	return Catalog.Format(msgs.locale, "nsDesktopSwitchPointer", nil)
+}
+
+// NsDesktopTab says "Tab"
+// in the language the app shows.
+func NsDesktopTab() string { return In(i18n.Locale()).NsDesktopTab() }
+
+// NsDesktopTab says "Tab"
+// in the language of msgs.
+func (msgs Messages) NsDesktopTab() string {
+	return Catalog.Format(msgs.locale, "nsDesktopTab", nil)
+}
