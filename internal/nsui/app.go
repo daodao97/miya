@@ -1,6 +1,7 @@
 package nsui
 
 import (
+	"runtime"
 	"sync"
 
 	"github.com/nsgo-dev/nsgo"
@@ -150,8 +151,13 @@ func appMain(cx *core.Scope) {
 	})
 	w := desktop.MainWindow(cx)
 	b.setWindow(w)
-	// Keep the app-scoped usage tray and controllers alive when the window closes.
-	w.OnClosing(cx, func(close *desktop.WindowClosing) { close.Cancel(); w.Hide() })
+	// On macOS the app outlives its window, as Mac apps do: closing hides it,
+	// keeping the usage tray and the controllers alive, and the Dock shows it
+	// again. Elsewhere nothing would bring a hidden window back, so closing
+	// it quits.
+	if runtime.GOOS == "darwin" {
+		w.OnClosing(cx, func(close *desktop.WindowClosing) { close.Cancel(); w.Hide() })
+	}
 }
 
 // installPlatformServices gives the controller NSGo's notifications. Idle
