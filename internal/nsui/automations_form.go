@@ -3,7 +3,6 @@ package nsui
 import (
 	"encoding/json"
 	"fmt"
-	"maps"
 	"path/filepath"
 	"reflect"
 	"slices"
@@ -358,24 +357,4 @@ func (a *automationsState) recipesView(cx *core.Scope) core.Node {
 	return autoCard(cx, children...)
 }
 
-// Normalize edits triggers and conditions in place. Copy them first so
-// validating a field cannot change the accepted draft or the service view.
-func autoClone(a automation.Automation) automation.Automation {
-	condition := func(c *automation.Condition) *automation.Condition {
-		if c == nil {
-			return nil
-		}
-		copy := *c
-		copy.Params = maps.Clone(c.Params)
-		return &copy
-	}
-	a.Triggers = slices.Clone(a.Triggers)
-	for i := range a.Triggers {
-		t := &a.Triggers[i]
-		t.Condition = condition(t.Condition)
-		t.Match = maps.Clone(t.Match)
-		t.Results = slices.Clone(t.Results)
-	}
-	a.Policy.Gate = condition(a.Policy.Gate)
-	return a
-}
+func autoClone(a automation.Automation) automation.Automation { return automation.Clone(a) }

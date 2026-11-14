@@ -1,7 +1,8 @@
 # NSGo phone core
 
 `go build -tags nsgo` selects `main_nsgo_mobile.go` on iOS and Android. The
-untagged application still selects `main.go`; `internal/mobile` is unchanged.
+untagged application still selects `main.go` and the existing `internal/mobile`
+surface.
 Desktop NSGo builds continue to select `main_nsgo.go`. Android's MyGo JNI
 startup in `main_android.go` is excluded under `nsgo`.
 
@@ -46,8 +47,10 @@ owns the conversation's home-indicator spacing.
 ## Deferred work
 
 See [phone follow-ups](../internal/nsmobile/TODO.md) for all feature hooks and
-platform gaps. Approvals, remote desktop, automations, memory, voice, push,
-web services, delegations and multi-desktop management remain separate ports.
+platform gaps. Approvals, delegations, read-only memory and automation list/detail/create now
+use phone sheets, with request cards and delegation content shared with desktop
+in `internal/nsrequests`. Remote desktop, voice, push, web services and
+multi-desktop management remain separate ports.
 The current pinned NSGo has no mobile secure-store or network-path service and
 no QR scanner. Connection-code pairing is session-only unless a host supplies
 a secure-store adapter. No credentials fall back to ordinary files.

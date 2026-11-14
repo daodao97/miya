@@ -492,21 +492,7 @@ func (m *App) automationPhoneRun(c *ui.Context, v automation.View, r automation.
 }
 
 func (m *App) AutomationRunThread(v automation.View, r automation.Run) (model.Thread, bool) {
-	workspace := automation.Workspace(v.Project, r)
-	for _, p := range m.State.Projects {
-		if p.Path != workspace {
-			continue
-		}
-		for _, t := range p.Threads {
-			if model.ThreadAgent(t) != textutil.FirstNonEmpty(v.Agent, m.defaultAgent()) {
-				continue
-			}
-			if r.ServerID != "" && t.ServerID == r.ServerID || r.ServerID == "" && r.Thread != 0 && t.ID == r.Thread {
-				return t, true
-			}
-		}
-	}
-	return model.Thread{}, false
+	return phoneproto.AutomationRunThread(m.State.Projects, m.defaultAgent(), v, r)
 }
 
 // automationPhoneWhen says when an automation wakes: its schedule and

@@ -20739,3 +20739,13 @@ func NsComposerUnknownCommand() string { return In(i18n.Locale()).NsComposerUnkn
 func (msgs Messages) NsComposerUnknownCommand() string {
 	return Catalog.Format(msgs.locale, "nsComposerUnknownCommand", nil)
 }
+
+// RequestResolved says "This request has been resolved"
+// in the language the app shows.
+func RequestResolved() string { return In(i18n.Locale()).RequestResolved() }
+
+// RequestResolved says "This request has been resolved"
+// in the language of msgs.
+func (msgs Messages) RequestResolved() string {
+	return Catalog.Format(msgs.locale, "requestResolved", nil)
+}

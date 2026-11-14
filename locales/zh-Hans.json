@@ -1933,5 +1933,6 @@
   "nsToggleSidebar": "显示或隐藏侧边栏",
   "nsMenuView": "显示",
   "nsComposerStatus": "模型：%s · 思考：%s · 权限：%s · Token：%d",
-  "nsComposerUnknownCommand": "未知命令。输入 / 选择支持的命令。"
+  "nsComposerUnknownCommand": "未知命令。输入 / 选择支持的命令。",
+  "requestResolved": "此请求已处理"
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nsgo-dev/nsgo/core"
 	"github.com/nsgo-dev/nsgo/nsgotest"
@@ -58,7 +59,8 @@ func TestWorkspaceConnectionFailureShows(t *testing.T) {
 	app.Press("id:workspace-switcher")
 	app.Settle()
 	app.Press("id:workspace-prod")
-	app.Settle()
+	// The connection runs on a worker; settling current UI work does not wait for it.
+	app.WaitFor("id:workspace-error", 2*time.Second)
 	if !app.Exists("id:workspace-error") || !strings.Contains(app.Find("id:workspace-error").Text, "refused") {
 		t.Fatalf("no connection error; texts %q", app.Texts())
 	}

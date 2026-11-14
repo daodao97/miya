@@ -3,15 +3,18 @@ package nsmobile
 import (
 	"net/url"
 
+	"github.com/nsgo-dev/nsgo/core"
+
 	"miya/internal/chat/model"
 	msgfmt "miya/internal/chat/presentation"
 	phoneproxy "miya/internal/phone/proxy"
-
-	"github.com/nsgo-dev/nsgo/core"
 )
 
 func (m *App) conversationMenu(cx *core.Scope) core.Node {
-	return scroll(text(tr("Conversation actions")),
+	return scroll(
+		m.button("menu-automations", tr("Automations"), nil, func() { m.sheet.Set("automations") }),
+		m.button("menu-memory", tr("Shared memory"), nil, func() { m.sheet.Set("memory") }),
+		m.button("menu-delegations", tr("Agent tasks"), live(m, func() bool { return m.Open == 0 || m.State.Collaboration == nil || m.State.Collaboration.Version < 1 }), func() { m.sheet.Set("delegations") }), text(tr("Conversation actions")),
 		m.button("project-files", tr("Project files"), live(m, func() bool { return !m.Connected || m.ComposerProject() == "" }), func() { m.sheet.Set(""); m.openProjectFile(m.ComposerProject(), "") }),
 		m.button("new-from-menu", tr("New conversation"), nil, func() {
 			project, agent := m.ComposerProject(), m.Agent()

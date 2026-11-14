@@ -5,13 +5,13 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/nsgo-dev/nsgo/base"
+	"github.com/nsgo-dev/nsgo/core"
+
 	"miya/internal/chat/model"
 	msgfmt "miya/internal/chat/presentation"
 	"miya/internal/nswidgets"
 	"miya/internal/textutil"
-
-	"github.com/nsgo-dev/nsgo/base"
-	"github.com/nsgo-dev/nsgo/core"
 )
 
 func (m *App) home(cx *core.Scope) core.Node {
@@ -30,6 +30,8 @@ func (m *App) home(cx *core.Scope) core.Node {
 			core.Each(live(m, func() []model.ProjectSnapshot { return m.State.Projects }), func(p model.ProjectSnapshot) string { return p.Path }, func(cx *core.Scope, p func() model.ProjectSnapshot, _ func() int) core.Node {
 				return m.projectRow(cx, p)
 			}),
+			m.button("automations", tr("Automations"), nil, func() { m.sheet.Set("automations") }),
+			m.button("memory", tr("Shared memory"), nil, func() { m.sheet.Set("memory") }),
 			m.button("quota", tr("Usage"), nil, func() { m.sheet.Set("quota") }),
 		),
 	}}

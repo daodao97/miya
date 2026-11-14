@@ -1933,5 +1933,6 @@
   "nsToggleSidebar": "Toggle sidebar",
   "nsMenuView": "View",
   "nsComposerStatus": "Model: %s · Thinking: %s · Permissions: %s · Tokens: %d",
-  "nsComposerUnknownCommand": "Unknown command. Type / to choose a supported command."
+  "nsComposerUnknownCommand": "Unknown command. Type / to choose a supported command.",
+  "requestResolved": "This request has been resolved"
 }

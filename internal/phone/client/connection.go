@@ -68,6 +68,8 @@ func (m *Client) Run(ctx context.Context, gen int, link string, wake <-chan stru
 		}
 		m.onMain(gen, func() {
 
+			m.interruptFeatureRequests()
+			m.interruptApprovals()
 			m.Conn, m.Connected, m.Status = nil, false, message
 
 			m.RetryAt, m.RetryError = retryAt, retryError
@@ -190,8 +192,22 @@ func (m *Client) read(gen int, conn *remote.Conn) (greeted bool, err error) {
 					m.Commands[agent.CommandKey(pc.Agent, pc.Project)] = pc.Commands
 				})
 			}
-		// TODO: approvals/responded, remote desktop, automation, memory,
-		// collaboration/delegation and push frames belong to the deferred ports.
+		case "responded":
+			var result phoneproto.ApprovalReply
+			if json.Unmarshal(f.Data, &result) == nil {
+				m.onMain(gen, func() {
+					if m.Conn == conn {
+						m.ApprovalAnswered(result.ID, f.Error)
+					}
+				})
+			}
+		case "memory", "automations", "automation-webhook", "automation-run", "automation-draft", "automation-create", "collaboration":
+			m.onMain(gen, func() {
+				if m.Conn == conn {
+					m.ReceiveFeatureFrame(f)
+				}
+			})
+			// TODO: remote desktop and push frames.
 		case "sent":
 			id, msg := f.Thread, f.Error
 			m.onMain(gen, func() { m.Sent(id, msg) })
