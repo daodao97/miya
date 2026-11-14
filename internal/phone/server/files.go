@@ -16,7 +16,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/egoist/mygo/i18n"
 	"golang.org/x/text/language"
 
 	"miya/internal/chat/composer"
@@ -205,10 +204,7 @@ func (s DesktopFileServer) directory(w http.ResponseWriter, r *http.Request, pro
 	for i, tag := range preferred {
 		tags[i] = tag.String()
 	}
-	lang := i18n.Match(tags, locales.Catalog.Languages())
-	if lang == "" {
-		lang = locales.Catalog.Source()
-	}
+	lang := locales.Match(tags)
 	text := func(source string) string { return locales.TextIn(lang, source) }
 	data := FileDirectory{Project: project.Name, Path: "/", Language: lang, FilesLabel: text("Files"), ParentLabel: text("Parent folder"), DownloadLabel: text("Download"), EmptyLabel: text("This folder is empty")}
 	if name != "." {

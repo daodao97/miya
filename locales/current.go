@@ -1,6 +1,10 @@
 package locales
 
-import "sync/atomic"
+import (
+	"sync/atomic"
+
+	"github.com/egoist/mygo/i18n"
+)
 
 // current is the interface language the UI last matched. It belongs to this
 // device; code outside a ui.Context reads it through T.
@@ -25,3 +29,12 @@ func Current() string {
 // so TestProductSourceCopyUsesEnglishCatalog finds every tr("…") literal and
 // checks it against the catalog.
 func T(source string) string { return TextIn(Current(), source) }
+
+// Match returns the catalog's language that suits the preferred tags best,
+// the source language when none does.
+func Match(preferred []string) string {
+	if lang := i18n.Match(preferred, Catalog.Languages()); lang != "" {
+		return lang
+	}
+	return Catalog.Source()
+}
