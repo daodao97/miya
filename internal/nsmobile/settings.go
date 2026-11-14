@@ -22,7 +22,7 @@ func (m *App) settings(cx *core.Scope) core.Node {
 		m.button("add-desktop", tr("Add desktop"), nil, func() { m.sheet.Set("pair") }),
 		m.button("message-options", tr("Model and permissions"), nil, func() { m.optionsAgent = m.Agent(); m.sheet.Set("options") }),
 		m.button("read-all", tr("Mark all as read"), live(m, func() bool { return !m.Connected || len(m.State.Notifications.Unread) == 0 }), m.MarkAllRead),
-		m.button("disconnect", tr("Disconnect"), nil, func() { m.Disconnect(); m.sheet.Set("") }),
+		m.button("disconnect", tr("Disconnect"), nil, func() { m.CloseDesktopPage(false); m.Disconnect(); m.sheet.Set("") }),
 		m.button("forget", tr("Forget desktop"), nil, func() { m.Forget(); m.sheet.Set("") }),
 		core.Text{ContentFunc: live(m, func() string { return m.Error + "\n" + m.PersistenceError })},
 	)

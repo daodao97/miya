@@ -211,6 +211,7 @@ func (m *Client) Connect(raw string) {
 	}
 	if changed {
 		m.State = phoneproto.State{}
+		m.BadgeRevision = 0
 		m.Autos = Automations{}
 		m.Memories = Memory{}
 		m.ApprovalErrors = nil

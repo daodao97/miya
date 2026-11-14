@@ -146,7 +146,10 @@ func (m *Client) SaveDesktops() {
 		}
 		err := store.Set(phonecache.DesktopsKey, data)
 		if err == nil {
-			err = store.Set("nsgo-desktop-link", nil)
+			err = store.Delete("nsgo-desktop-link")
+		}
+		if err == nil {
+			err = store.Delete("desktop-link")
 		}
 		m.post(func() {
 			if revision == m.storeRevision.Load() {

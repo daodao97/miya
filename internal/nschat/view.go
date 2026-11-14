@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/nsgo-dev/nsgo/base/diff"
 	"github.com/nsgo-dev/nsgo/base/textview"
@@ -60,8 +61,10 @@ type View struct {
 	Commands       func() []model.ComposerChoice
 	FileReferences func() []string
 	// CaptureKeys/OnComposerKey consume completion keys inside the editor.
-	CaptureKeys   func() []string
-	OnComposerKey func(string)
+	CaptureKeys        func() []string
+	OnComposerKey      func(string)
+	OnComposerShortcut func(string) bool
+	WaitingApproval    func() bool
 	// OnDraftEdit includes the UTF-8 wire offset of the caret.
 	OnDraftEdit        func(string, int)
 	OnComposerMove     func()
@@ -89,6 +92,19 @@ func (v View) Render(cx *core.Scope) core.Node {
 	if v.State == nil {
 		v.State = chat.NewConversationState(cx)
 	}
+
+	clockStart, wallStart := cx.Now(), time.Now()
+	now := core.NewSignal(cx, wallStart)
+	cx.Effect(func() {
+		if !v.Thread().Busy {
+			return
+		}
+		var stop func() bool
+		var tick func()
+		tick = func() { now.Set(wallStart.Add(cx.Now().Sub(clockStart))); stop = cx.AfterFunc(time.Second, tick) }
+		stop = cx.AfterFunc(time.Second, tick)
+		cx.Cleanup(func() { stop() })
+	})
 	groups := func() []msgfmt.MessageGroup {
 		t := v.Thread()
 		return msgfmt.ThreadMessageGroups(t, msgfmt.GroupMessages(t.Messages))
@@ -115,13 +131,18 @@ func (v View) Render(cx *core.Scope) core.Node {
 	// as Agio's do: the messages scroll behind them.
 	floating := []core.Node{
 		core.View{StyleFunc: func() core.Style {
-			return core.Style{Display: displayIf(turnStatus(v.Thread(), groups()) != ""), Padding: core.Symmetric(0, 4)}
+			return core.Style{Display: displayIf(turnStatus(v.Thread(), groups(), now.Get()) != ""), Direction: core.Row, AlignItems: core.AlignCenter, Gap: 8, Padding: core.Symmetric(0, 4)}
 		},
-			Children: []core.Node{nswidgets.WorkingLabel(cx, "clock", func() string { return turnStatus(v.Thread(), groups()) })}},
+			Children: []core.Node{nswidgets.WorkingLabel(cx, "clock", func() string { return turnStatus(v.Thread(), groups(), now.Get()) }), v.diffSummary(cx, groups)}},
+
 		core.View{StyleFunc: func() core.Style {
 			return core.Style{Display: displayIf(len(v.Thread().BackgroundTasks) > 0), Padding: core.Symmetric(0, 4)}
 		}, Children: []core.Node{nswidgets.MutedText(cx, func() string { return backgroundTasks(v.Thread()) })}},
 	}
+
+	floating = append(floating, core.View{StyleFunc: func() core.Style {
+		return core.Style{Display: displayIf(v.stalledHint(now.Get()) != "")}
+	}, Children: []core.Node{nswidgets.MutedText(cx, func() string { return v.stalledHint(now.Get()) })}})
 	if v.Above != nil {
 		floating = append(floating, v.Above)
 	}
@@ -145,6 +166,30 @@ func (v View) Render(cx *core.Scope) core.Node {
 	}
 }
 
+func (v View) diffSummary(cx *core.Scope, groups func() []msgfmt.MessageGroup) core.Node {
+	return core.View{TestID: "turn-diff", StyleFunc: func() core.Style {
+		stats := latestDiff(groups())
+		return core.Style{Display: displayIf(!v.Thread().Busy && stats != (model.DiffLineStats{})), Direction: core.Row, Gap: 8}
+	}, Children: []core.Node{
+		core.Show{When: func() bool { return latestDiff(groups()).Added > 0 }, Then: func(cx *core.Scope) core.Node {
+			return core.Text{TestID: "turn-added", ContentFunc: func() string { return "+" + strconv.Itoa(latestDiff(groups()).Added) }, Style: core.Style{FontSize: 12}, StyleFunc: func() core.Style { return core.Style{Color: nswidgets.ColorsOf(cx).Ink()} }}
+		}},
+		core.Show{When: func() bool { return latestDiff(groups()).Deleted > 0 }, Then: func(cx *core.Scope) core.Node {
+			return core.Text{TestID: "turn-deleted", ContentFunc: func() string { return "−" + strconv.Itoa(latestDiff(groups()).Deleted) }, Style: core.Style{FontSize: 12}, StyleFunc: func() core.Style { return core.Style{Color: nswidgets.ColorsOf(cx).Danger()} }}
+		}},
+	}}
+}
+
+// Only the latest response contributes to the floating turn summary.
+func latestDiff(groups []msgfmt.MessageGroup) model.DiffLineStats {
+	for i := len(groups) - 1; i >= 0; i-- {
+		if !groups[i].User {
+			return groups[i].DiffStats
+		}
+	}
+	return model.DiffLineStats{}
+}
+
 func displayIf(on bool) core.Display {
 	if on {
 		return core.DisplayFlex
@@ -154,17 +199,21 @@ func displayIf(on bool) core.Display {
 
 // turnStatus is the label above the composer: the running turn's progress,
 // or how long the latest completed response took.
-func turnStatus(t model.Thread, groups []msgfmt.MessageGroup) string {
+func turnStatus(t model.Thread, groups []msgfmt.MessageGroup, now time.Time) string {
 	if t.Busy {
 		if label := msgfmt.ThreadReconnectLabel(t); label != "" {
 			return label
 		}
-		return msgfmt.ThreadWorkingLabel(t)
+		return msgfmt.ThreadWorkingLabelAt(t, now)
 	}
 	if last := len(groups) - 1; last >= 0 && !groups[last].User && len(t.BackgroundTasks) == 0 {
 		return msgfmt.TurnElapsedLabel(groups[last].Messages, false)
 	}
 	return ""
+}
+
+func (v View) stalledHint(now time.Time) string {
+	return appmodel.StalledHint(v.Thread(), v.WaitingApproval != nil && v.WaitingApproval(), now)
 }
 
 func backgroundTasks(t model.Thread) string {
@@ -214,9 +263,13 @@ func (v View) groupRow(cx *core.Scope, group func() msgfmt.MessageGroup) core.No
 			}
 			body := v.userMessage(cx, first)
 			if v.UserContent != nil {
-				return v.UserContent(cx, first, body)
+				body = v.UserContent(cx, first, body)
 			}
-			return body
+			return core.View{Style: core.Style{Gap: 6, MinWidth: core.Pt(0)}, Children: []core.Node{
+				core.Show{When: func() bool { return group().ShowTimestamp }, Then: func(cx *core.Scope) core.Node {
+					return core.Text{TestID: "timestamp-" + strconv.Itoa(core.Untracked(cx, func() int { return group().ID })), ContentFunc: func() string { return msgfmt.FormatMessageTimestamp(group().Timestamp) }, Style: core.Style{FontSize: 11, AlignSelf: core.AlignEnd}, StyleFunc: func() core.Style { return core.Style{Color: nswidgets.ColorsOf(cx).Muted()} }}
+				}}, body,
+			}}
 		}
 		runs := func() []msgfmt.ActivityRun { return msgfmt.ActivityRuns(group().Messages) }
 		return core.View{Style: core.Style{Gap: 12, MinWidth: core.Pt(0)}, Children: []core.Node{

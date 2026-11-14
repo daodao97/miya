@@ -94,7 +94,7 @@ func TestRetryableErrorAsksAgain(t *testing.T) {
 		t.Fatalf("error text = %q", got)
 	}
 	if !app.Exists("label:Retry response") {
-		t.Skip("presentation does not count this error as retryable")
+		t.Fatal("latest error after a user prompt must offer retry")
 	}
 	app.Press("label:Retry response")
 	app.Settle()

@@ -161,7 +161,7 @@ type panel struct {
 
 // filePanel keeps each conversation's state for the life of the shell. Switching
 // views disposes their bindings, but leaves terminal connections and tab state alive.
-func filePanel(cx *core.Scope, c Host, open *core.Signal[bool]) core.Node {
+func filePanel(cx *core.Scope, c Host, open *core.Signal[bool], onCurrent ...func(*panel)) core.Node {
 	ctx := cx.Context()
 	panels := map[model.ThreadRef]*panel{}
 	// A thread has no stable ref until its backend session starts. Keep its
@@ -225,6 +225,9 @@ func filePanel(cx *core.Scope, c Host, open *core.Signal[bool]) core.Node {
 			}
 			p.lastBusy = thread.Busy
 			shown.Set(p)
+			for _, f := range onCurrent {
+				f(p)
+			}
 			previousID = thread.ID
 		})
 	})

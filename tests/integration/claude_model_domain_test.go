@@ -1,0 +1,81 @@
+//go:build !mygo_ui && !windows
+
+package integration
+
+import (
+	"context"
+	codex "miya/internal/agent/codex/native"
+	"miya/internal/appmodel"
+	"miya/internal/chat/model"
+	"miya/internal/controller"
+	"miya/internal/prefs"
+	"miya/internal/uiruntime"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestClaudeRunUsesTheChosenModelAndEffort(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	d := &testDispatch{}
+	dir := t.TempDir()
+	out := filepath.Join(dir, "argv")
+	bin := filepath.Join(dir, "claude")
+	// Publish complete argv atomically; the observer must not accept a partially
+	// written file as the final invocation under a loaded full-suite run.
+	if err := os.WriteFile(bin, []byte("#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$MIYA_OUT.tmp\"\nmv \"$MIYA_OUT.tmp\" \"$MIYA_OUT\"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	c := &controller.Controller{WindowState: appmodel.WindowState{Cwd: dir, Ctx: context.Background()}, ClaudeBinary: bin, ClaudeEnv: []string{"MIYA_OUT=" + out}, Run: d.push}
+	c.Threads, c.SetThreads = uiruntime.CreateSignal([]model.Thread{})
+	c.Approvals, c.SetApprovals = uiruntime.CreateSignal([]codex.Approval{})
+	b := c.BackendFor(appmodel.AgentClaude)
+	b.SetModel("opus")
+	b.SetEffort("high")
+	if prefs.Load("claudeModel") != "opus" || prefs.Load("claudeEffort") != "high" {
+		t.Fatal("choices not saved")
+	}
+	if c.Submit(model.SendRequest{Agent: appmodel.AgentClaude, Text: "hi"}) == 0 {
+		t.Fatal("not sent")
+	}
+	var args string
+	for deadline := time.Now().Add(time.Minute); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
+		d.drain()
+		if data, err := os.ReadFile(out); err == nil && len(data) > 0 {
+			args = string(data)
+			break
+		}
+	}
+	if !strings.Contains(args, "--model\nopus\n") || !strings.Contains(args, "--effort\nhigh\n") {
+		t.Fatalf("CLI arguments %q", args)
+	}
+	if got := b.ModelChoices(); got[0] != "" || !strings.Contains(strings.Join(got, ","), "sonnet") {
+		t.Fatalf("choices %q", got)
+	}
+}
+
+func TestClaudeDefaultModelFromInit(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	c := testController()
+	b := c.BackendFor(appmodel.AgentClaude)
+	if b.ModelLabel("") != "Default model" {
+		t.Fatal("label before any run")
+	}
+	c.NoteClaudeModel("claude-opus-5-5")
+	if got := b.ModelLabel(""); got != "Claude Opus 5.5" || prefs.Load("claudeDefaultModel") != "claude-opus-5-5" {
+		t.Fatalf("label %q", got)
+	}
+	// The default takes the place of the model it runs, listed once.
+	if got := strings.Join(b.ModelChoices(), ","); got != "claude-fable-5-1,,claude-sonnet-5-5,claude-haiku-5-5" {
+		t.Fatalf("choices %q", got)
+	}
+	b.SetModel("claude-opus-5-5")
+	if got := strings.Join(b.ModelChoices(), ","); got != "claude-fable-5-1,claude-opus-5-5,claude-sonnet-5-5,claude-haiku-5-5" {
+		t.Fatalf("choices with the default's model chosen by name %q", got)
+	}
+	if b.ModelLabel("opus") != "Opus (latest)" || b.ModelLabel("my-model") != "my-model" {
+		t.Fatal("alias labels")
+	}
+}

@@ -373,12 +373,15 @@ func FormatElapsed(ms int64) string {
 	return fmt.Sprintf("%dh %dm", minutes/60, minutes%60)
 }
 
-func ThreadWorkingLabel(t model.Thread) string {
+func ThreadWorkingLabel(t model.Thread) string { return ThreadWorkingLabelAt(t, time.Now()) }
+
+// ThreadWorkingLabelAt lets retained views update elapsed time from their clock.
+func ThreadWorkingLabelAt(t model.Thread, now time.Time) string {
 	if label := ThreadReconnectLabel(t); label != "" {
 		return label
 	}
 	if t.StartedAtMs > 0 {
-		elapsed := time.Now().UnixMilli() - t.StartedAtMs
+		elapsed := now.UnixMilli() - t.StartedAtMs
 		label := tr("Working for ") + FormatElapsed(elapsed)
 		if rate := ThreadTokenRateLabel(t, elapsed); rate != "" {
 			label += " · " + rate
