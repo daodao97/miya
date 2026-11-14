@@ -18,23 +18,16 @@ import (
 	"miya/internal/agent/quota"
 	"miya/internal/nswidgets"
 	svcclient "miya/internal/service/client"
-	svcproto "miya/internal/service/protocol"
 )
 
 type settingsAccount struct {
-	cx                   *core.Scope
-	c                    Host
-	revision             *core.Signal[int]
-	logins               map[string]*settingsLogin
-	client               *svcclient.Client
-	remote               bool
-	readings             []quota.Reading
-	usageBusy            bool
-	usageError           string
-	stopUsage            func() bool
-	reset                *quota.ResetAttempt
-	resetOpen, resetBusy bool
-	resetMessage         string
+	cx       *core.Scope
+	c        Host
+	revision *core.Signal[int]
+	logins   map[string]*settingsLogin
+	client   *svcclient.Client
+	remote   bool
+	usage    *desktopUsage
 }
 type settingsLogin struct {
 	state          login.State
@@ -49,7 +42,7 @@ type settingsLogin struct {
 }
 
 func newSettingsAccount(cx *core.Scope, c Host, category *core.Signal[string]) *settingsAccount {
-	a := &settingsAccount{cx: cx, c: c, revision: core.NewSignal(cx, 0), logins: map[string]*settingsLogin{}}
+	a := &settingsAccount{cx: cx, c: c, revision: core.NewSignal(cx, 0), logins: map[string]*settingsLogin{}, usage: usageFor(cx, c)}
 	cx.Effect(func() {
 		cl := Live(func() *svcclient.Client { return c.State().Remote })()
 		remote := Live(c.RemoteHost)()
@@ -57,16 +50,7 @@ func newSettingsAccount(cx *core.Scope, c Host, category *core.Signal[string]) *
 			if a.client != cl || a.remote != remote {
 				a.stopLogins()
 				a.client, a.remote = cl, remote
-				a.readings = nil
-				a.reset = nil
-				a.resetOpen = false
-				a.resetBusy = false
-				a.resetMessage = ""
-				a.usageBusy = false
 				a.changed()
-				if a.stopUsage != nil {
-					a.stopUsage()
-				}
 			}
 		})
 	})
@@ -207,37 +191,7 @@ func (a *settingsAccount) loginAction(id, action string) {
 		})
 	}()
 }
-func (a *settingsAccount) refreshUsage() {
-	if a.usageBusy || a.resetBusy {
-		return
-	}
-	cl := a.c.State().Remote
-	if cl == nil {
-		return
-	}
-	if a.stopUsage != nil {
-		a.stopUsage()
-	}
-	a.usageBusy = true
-	a.usageError = ""
-	a.changed()
-	go func() {
-		var readings []quota.Reading
-		err := cl.Call("host", svcproto.HostRequest{Action: "usage"}, &readings)
-		a.cx.Post(func() {
-			if a.c.State().Remote != cl {
-				return
-			}
-			a.usageBusy = false
-			a.readings = readings
-			if err != nil {
-				a.usageError = err.Error()
-			}
-			a.changed()
-			a.stopUsage = a.cx.AfterFunc(3*time.Minute, a.refreshUsage)
-		})
-	}()
-}
+func (a *settingsAccount) refreshUsage() { a.usage.refresh() }
 func (a *settingsAccount) groups() []ui.SettingsGroup {
 	title := tr("Accounts on this computer")
 	help := tr("Sign in with the official CLI. Credentials are saved on this computer.")
@@ -253,9 +207,9 @@ func (a *settingsAccount) groups() []ui.SettingsGroup {
 		group.Items = append(group.Items, ui.SettingsItem{ID: "login-" + p.UsageID, Title: p.Name, Content: a.loginCard(p)})
 	}
 	return []ui.SettingsGroup{group, {ID: "subscriptions", Title: tr("Usage"), Actions: []core.Node{settingsButton("refresh-account", tr("Refresh"), func() { a.c.RefreshAccount(); a.refreshUsage() }, Live(func() bool {
-		a.revision.Get()
+		a.usage.revision.Get()
 		d := a.c.State().AccountState
-		return a.usageBusy || a.resetBusy || d.Loading || d.Refreshing || a.c.State().AccountReset.Busy
+		return a.usage.busy || d.Loading || d.Refreshing || a.c.State().AccountReset.Busy
 	}))}, Items: []ui.SettingsItem{{ID: "subscriptions", Title: tr("Codex account"), Content: a.subscriptionView()}}}}
 }
 func (a *settingsAccount) loginCard(p agentmeta.Descriptor) core.Node {
@@ -419,22 +373,12 @@ func (a *settingsAccount) subscriptionView() core.Node {
 				nodes = append(nodes, a.resetCard(cx, d))
 			}
 		}
-		add(a.usageError)
-		for _, r := range a.readings {
-			if r.Agent == "codex" && d.Identity != nil {
+		a.usage.revision.Get()
+		for _, provider := range agentmeta.Usage() {
+			if provider.UsageReset && d.Identity != nil {
 				continue
 			}
-			add(agentmeta.UsageFor(r.Agent).Name + " · " + r.Account + " · " + r.Plan)
-			add(r.Error)
-			for _, w := range r.Windows {
-				nodes = append(nodes, settingsQuota(cx, w.Name, w.Used))
-				if w.Reset != "" {
-					add(tr("Resets: ") + w.Reset)
-				}
-			}
-			if r.Resets != nil {
-				nodes = append(nodes, a.usageResetCard(cx, r))
-			}
+			nodes = append(nodes, a.usage.subscriptionCard(cx, provider.UsageID))
 		}
 		return settingsColumn(nodes...)
 	})
@@ -496,84 +440,4 @@ func (a *settingsAccount) resetCard(cx *core.Scope, d account.Display) core.Node
 	}
 	add(action.Notice)
 	return settingsColumn(nodes...)
-}
-
-// Service-backed readings can supply Codex quota before a conversation has
-// connected. Keep their confirmation bound to the displayed CLI account and
-// reuse the same operation key after an ambiguous failure.
-func (a *settingsAccount) usageResetCard(cx *core.Scope, r quota.Reading) core.Node {
-	nodes := []core.Node{settingsText(cx, func() string { return fmt.Sprintf(tr("%d reset cards"), r.Resets.AvailableCount) })}
-	for _, card := range r.Resets.Credits {
-		nodes = append(nodes, settingsText(cx, func() string { return account.ResetExpiryText(card) }))
-	}
-	matches := func() bool {
-		return a.reset != nil && a.reset.Agent == r.Agent && a.reset.AccountKey == r.AccountKey && a.reset.Home == r.Home
-	}
-	disabled := func() bool {
-		a.revision.Get()
-		return a.usageBusy || a.resetBusy || r.Error != "" || r.AccountKey == "" || r.Home == "" || r.Resets.AvailableCount == 0 && !matches()
-	}
-	label := tr("Use a card…")
-	if matches() {
-		label = tr("Retry reset…")
-	}
-	nodes = append(nodes, settingsButton("usage-reset-"+r.Agent, label, func() {
-		if !matches() {
-			attempt, err := quota.NewResetAttempt(r)
-			if err != nil {
-				a.resetMessage = tr(err.Error())
-				a.changed()
-				return
-			}
-			a.reset = &attempt
-		}
-		a.resetOpen = true
-		a.changed()
-	}, disabled))
-	if matches() && a.resetOpen {
-		body := tr("Uses 1 card to reset eligible quota cycles. This cannot be undone.")
-		if a.resetMessage != "" {
-			body = tr("The last result is unconfirmed. Retrying the same operation will not use another card.")
-		}
-		nodes = append(nodes, settingsText(cx, func() string { return tr("Use a Codex reset card?") + "\n" + r.Account + "\n" + body }), settingsActions(settingsButton("usage-reset-cancel", tr("Cancel"), func() { a.resetOpen = false; a.changed() }, func() bool { a.revision.Get(); return a.resetBusy }), settingsButton("usage-reset-confirm", tr("Confirm"), func() {
-			if matches() {
-				a.confirmUsageReset(*a.reset)
-			}
-		}, disabled)))
-	}
-	if a.resetMessage != "" {
-		nodes = append(nodes, settingsText(cx, func() string { return a.resetMessage }))
-	}
-	return settingsColumn(nodes...)
-}
-func (a *settingsAccount) confirmUsageReset(attempt quota.ResetAttempt) {
-	cl := a.c.State().Remote
-	if cl == nil || cl != a.client || a.resetBusy || a.usageBusy {
-		return
-	}
-	a.resetBusy = true
-	a.changed()
-	go func() {
-		var result quota.ResetResult
-		err := cl.Call("host", svcproto.HostRequest{Action: "usage-reset", Reset: &attempt}, &result)
-		a.cx.Post(func() {
-			if cl != a.c.State().Remote || a.reset == nil || a.reset.Key != attempt.Key {
-				return
-			}
-			a.resetBusy = false
-			if err != nil {
-				a.resetMessage = err.Error()
-			} else {
-				a.resetOpen = false
-				a.reset = nil
-				a.resetMessage = account.ResetOutcomeText(result.Outcome)
-				for i := range a.readings {
-					if a.readings[i].Agent == result.Reading.Agent {
-						a.readings[i] = result.Reading
-					}
-				}
-			}
-			a.changed()
-		})
-	}()
 }

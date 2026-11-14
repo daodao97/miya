@@ -26,6 +26,7 @@ func tr(english string) string { return locales.T(english) }
 func root(cx *core.Scope, c Host, sidebarFooter ...core.Node) core.Node {
 	// page is the main area: "chat" or "automations". Choosing a
 	// conversation always goes back to chat.
+	usage := usageFor(cx, c)
 	page := core.NewSignal(cx, "chat")
 	c = chatHost{Host: c, page: page}
 	st := c.State()
@@ -41,6 +42,8 @@ func root(cx *core.Scope, c Host, sidebarFooter ...core.Node) core.Node {
 	// settingsOpen shows the settings dialog; see settings.go.
 	settingsOpen := core.NewSignal(cx, false)
 	paletteOpen := core.NewSignal(cx, false)
+	usage.openSettings = func(category string) { usage.category.Set(category); settingsOpen.Set(true) }
+	cx.Cleanup(func() { usage.openSettings = nil })
 	cmd := commands{
 		openPalette:   func() { paletteOpen.Set(true) },
 		newThread:     c.NewThread,
@@ -90,6 +93,7 @@ func root(cx *core.Scope, c Host, sidebarFooter ...core.Node) core.Node {
 		Sidebar: []core.Node{core.View{Style: ui.FillRest.Merge(core.Style{Gap: 2}), Children: []core.Node{
 			core.View{Style: core.Style{Padding: core.Symmetric(0, 12), FlexShrink: 0}, Children: []core.Node{
 				ui.SidebarButton{Text: tr("New conversation"), Icon: nswidgets.IconOf("edit"), TestID: "new-thread", OnPress: c.NewThread},
+				ui.SidebarButton{Text: tr("Usage"), Icon: nswidgets.IconOf("pi"), TestID: "open-usage", OnPress: func() { usage.openSettings("usage") }},
 				ui.SidebarButton{Text: tr("Automations"), Icon: nswidgets.IconOf("clock"), TestID: "open-automations", OnPress: func() { page.Set("automations") }},
 			}},
 			threadSidebar(cx, threads, current, c),

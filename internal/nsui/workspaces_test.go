@@ -41,6 +41,7 @@ func startHub(t *testing.T, connect func(context.Context, workspaces.Workspace) 
 		hub = newWorkspaceHub(cx, h, twoWorkspaces(), nil)
 		hub.connect = connect
 		return core.Dynamic(func(cx *core.Scope) core.Node {
+			usageKey.Provide(cx, hub.usage)
 			return root(cx, hub.active.Get(), workspaceSelector(cx, hub))
 		})
 	}, nsgotest.Size(900, 600))
