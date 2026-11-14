@@ -18,6 +18,9 @@ func main() {
 
 func init() {
 	nsui.ConfigureEnvironment(nsui.Environment{
-		NewWindow: func() nsui.Host { return controller.NewWindowController() },
+		NewWindow:       func() nsui.Host { return controller.NewWindowController() },
+		NewLocal:        func() nsui.Host { return controller.NewLocalWindowController() },
+		NewMirror:       func() nsui.MirrorHost { return controller.NewMirrorController() },
+		LocalConnection: controller.LocalWindowConnection,
 	})
 }

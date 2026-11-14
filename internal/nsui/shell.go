@@ -22,7 +22,8 @@ func tr(english string) string { return locales.T(english) }
 
 // root is the window: the conversations in a sidebar beside the selected
 // one, on an inset card, as Agio's window is.
-func root(cx *core.Scope, c Host) core.Node {
+// sidebarFooter goes at the sidebar's end, as the workspace selector.
+func root(cx *core.Scope, c Host, sidebarFooter ...core.Node) core.Node {
 	// page is the main area: "chat" or "automations". Choosing a
 	// conversation always goes back to chat.
 	page := core.NewSignal(cx, "chat")
@@ -92,6 +93,7 @@ func root(cx *core.Scope, c Host) core.Node {
 				ui.SidebarButton{Text: tr("Automations"), Icon: nswidgets.IconOf("clock"), TestID: "open-automations", OnPress: func() { page.Set("automations") }},
 			}},
 			threadSidebar(cx, threads, current, c),
+			core.View{Style: core.Style{Padding: core.Symmetric(4, 12), FlexShrink: 0}, Children: sidebarFooter},
 		}}},
 		Header: []core.Node{core.Text{TestID: "current-title", MaxLines: 1,
 			ContentFunc: func() string {

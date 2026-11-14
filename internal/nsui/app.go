@@ -15,7 +15,9 @@ import (
 	"miya/internal/chat/model"
 	"miya/internal/memory/manager"
 	"miya/internal/nswidgets"
+	svcclient "miya/internal/service/client"
 	svcproto "miya/internal/service/protocol"
+	"miya/internal/service/workspaces"
 	"miya/internal/uiruntime"
 )
 
@@ -63,6 +65,18 @@ type Host interface {
 // root, as internal/ui.Environment does.
 type Environment struct {
 	NewWindow func() Host
+	// NewLocal and NewMirror make the controllers of other workspaces:
+	// one running conversations itself, one mirroring a service.
+	NewLocal        func() Host
+	NewMirror       func() MirrorHost
+	LocalConnection func() (*svcclient.Client, svcproto.State, error)
+}
+
+// MirrorHost is a controller mirroring a background service.
+type MirrorHost interface {
+	Host
+	ConfigureMirror(remote bool, reconnect func() (*svcclient.Client, svcproto.State, error))
+	AttachService(cl *svcclient.Client, st svcproto.State)
 }
 
 var environment Environment
@@ -88,7 +102,15 @@ func appMain(cx *core.Scope) {
 	// With the background service running, the service serves phones: a
 	// window only mirrors the current project.
 	c.EnsurePhoneHost()
-	nsgo.SetMainView(cx, func(cx *core.Scope) core.Node { return root(cx, c) })
+	store, err := workspaces.Load()
+	hub := newWorkspaceHub(cx, c, store, err)
+	// Switching workspace shows that workspace's controller in a new shell.
+	nsgo.SetMainView(cx, func(cx *core.Scope) core.Node {
+		return core.Dynamic(func(cx *core.Scope) core.Node {
+			h := hub.active.Get()
+			return root(cx, h, workspaceSelector(cx, hub))
+		})
+	})
 	b.setWindow(desktop.MainWindow(cx))
 }
 
