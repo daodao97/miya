@@ -1,16 +1,19 @@
 package nsui
 
 import (
+	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/nsgo-dev/nsgo/base"
 	"github.com/nsgo-dev/nsgo/core"
 	"github.com/nsgo-dev/nsgo/ui"
 
+	"miya/internal/appmodel"
 	"miya/internal/chat/model"
 	"miya/internal/nswidgets"
+	"miya/internal/textutil"
 )
 
 // paletteEntry is a command palette row and what choosing it does.
@@ -21,33 +24,53 @@ type paletteEntry struct {
 
 // paletteEntries are the commands, then the conversations in the sidebar's
 // order. Stop shows only while the current turn runs.
-func paletteEntries(cmd commands, current model.Thread, threads []model.Thread, selectThread func(model.Thread), now time.Time) []paletteEntry {
+func paletteEntries(cmd commands, current model.Thread, refs []appmodel.ThreadReference, selectThread func(model.Thread)) []paletteEntry {
 	command := tr("Command")
 	entries := []paletteEntry{
 		{base.CommandItem{ID: "cmd:new", Label: tr("New conversation"), Group: command, Shortcut: "mod+n", Icon: nswidgets.SVG("edit")}, cmd.newThread},
 		{base.CommandItem{ID: "cmd:settings", Label: tr("Open settings"), Group: command, Shortcut: "mod+,", Icon: nswidgets.SVG("settings")}, cmd.openSettings},
 		{base.CommandItem{ID: "cmd:sidebar", Label: tr("Toggle sidebar"), Group: command, Shortcut: "mod+b", Icon: nswidgets.SVG("layout-sidebar")}, cmd.toggleSidebar},
+		{base.CommandItem{ID: "cmd:shortcuts", Label: tr("Show shortcuts"), Group: command, Shortcut: "f1", Icon: nswidgets.SVG("keyboard")}, cmd.shortcuts},
 	}
 	if current.Busy && !current.StopRequested {
 		entries = append(entries, paletteEntry{base.CommandItem{ID: "cmd:stop", Label: tr("Stop response"), Group: command, Shortcut: "mod+.", Icon: nswidgets.SVG("player-pause")}, cmd.stop})
 	}
 	conversations := tr("Conversations")
-	for _, g := range threadGroups(threads, now) {
-		for _, t := range g.threads {
-			detail := t.Project
-			if name := model.AgentName(model.ThreadAgent(t)); name != "" {
-				if detail != "" {
-					detail += " · "
-				}
-				detail += name
+	for _, r := range refs {
+		t := r.Thread
+		detail := r.ProjectName
+		if name := model.AgentName(model.ThreadAgent(t)); name != "" {
+			if detail != "" {
+				detail += " · "
 			}
-			entries = append(entries, paletteEntry{
-				base.CommandItem{ID: "thread:" + strconv.Itoa(t.ID), Label: threadTitle(t), Description: detail, Group: conversations, Icon: nswidgets.SVG("message-circle")},
-				func() { selectThread(t) },
-			})
+			detail += name
 		}
+		entries = append(entries, paletteEntry{
+			base.CommandItem{ID: "thread:" + strconv.Itoa(t.ID), Label: appmodel.ThreadRefTitle(t), Description: detail, Group: conversations, Icon: nswidgets.SVG("message-circle")},
+			func() { selectThread(t) },
+		})
 	}
 	return entries
+}
+
+// threadChoices are the conversations of every project, most recently
+// active first, as MyGo's switcher lists them, including ones whose first
+// send has no backend session yet.
+func threadChoices(projects []model.ProjectSnapshot) []appmodel.ThreadReference {
+	var out []appmodel.ThreadReference
+	seen := map[int]bool{}
+	for _, p := range projects {
+		name := textutil.FirstNonEmpty(p.Name, filepath.Base(p.Path))
+		for _, t := range p.Threads {
+			if t.ID == 0 || seen[t.ID] {
+				continue
+			}
+			seen[t.ID] = true
+			out = append(out, appmodel.ThreadReference{Thread: t, ProjectName: name})
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].LastActivityAt > out[j].LastActivityAt })
+	return out
 }
 
 // paletteMatches matches words independently, with ordered letters within

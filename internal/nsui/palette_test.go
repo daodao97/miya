@@ -2,7 +2,6 @@ package nsui
 
 import (
 	"testing"
-	"time"
 
 	"miya/internal/chat/model"
 )
@@ -25,14 +24,13 @@ func TestPaletteMatches(t *testing.T) {
 }
 
 func TestPaletteEntries(t *testing.T) {
-	now := time.Date(2026, 11, 14, 15, 0, 0, 0, time.Local)
 	var picked int
 	noop := func() {}
-	cmd := commands{newThread: noop, openSettings: noop, toggleSidebar: noop, stop: noop, openPalette: noop}
-	threads := []model.Thread{{ID: 7, Title: "Fix build", Project: "miya", LastActivityAt: now.UnixMilli()}}
+	cmd := commands{newThread: noop, openSettings: noop, toggleSidebar: noop, stop: noop, openPalette: noop, shortcuts: noop}
+	refs := threadChoices([]model.ProjectSnapshot{{Name: "miya", Path: "/w/miya", Threads: []model.Thread{{ID: 7, Title: "Fix build", LastActivityAt: 1}}}})
 	ids := func(current model.Thread) map[string]paletteEntry {
 		out := map[string]paletteEntry{}
-		for _, e := range paletteEntries(cmd, current, threads, func(t model.Thread) { picked = t.ID }, now) {
+		for _, e := range paletteEntries(cmd, current, refs, func(t model.Thread) { picked = t.ID }) {
 			out[e.item.ID] = e
 		}
 		return out

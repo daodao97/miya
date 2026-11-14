@@ -279,3 +279,7 @@ func (h *fakeHost) ReadDesktopThread(t model.Thread) {
 	delete(h.unread, t.ID)
 	uiruntime.Invalidate()
 }
+
+func (h *fakeHost) ThreadRefProjects() []model.ProjectSnapshot {
+	return []model.ProjectSnapshot{{Name: "workspace", Path: h.state.Cwd, Threads: h.threads}}
+}

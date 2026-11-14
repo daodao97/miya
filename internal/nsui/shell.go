@@ -1,12 +1,6 @@
 package nsui
 
 import (
-	"fmt"
-	"slices"
-	"strconv"
-	"strings"
-	"time"
-
 	"github.com/nsgo-dev/nsgo/core"
 	"github.com/nsgo-dev/nsgo/ui"
 	"github.com/nsgo-dev/nsgo/ui/chat"
@@ -40,6 +34,8 @@ func root(cx *core.Scope, c Host, sidebarFooter ...core.Node) core.Node {
 		return st.Threads()
 	})
 	current := Live(c.Current)
+	refProjects := Live(c.ThreadRefProjects)
+	shortcutsOpen := core.NewSignal(cx, false)
 	open := core.NewSignal(cx, true)
 	width := core.NewSignal(cx, core.Points(260))
 	// panelOpen shows the right panel; see panel.go.
@@ -51,6 +47,7 @@ func root(cx *core.Scope, c Host, sidebarFooter ...core.Node) core.Node {
 	paletteOpen := core.NewSignal(cx, false)
 	cmd := commands{
 		openPalette:   func() { paletteOpen.Set(true) },
+		shortcuts:     func() { shortcutsOpen.Set(true) },
 		newThread:     c.NewThread,
 		openSettings:  func() { settingsOpen.Set(true) },
 		toggleSidebar: func() { open.Update(func(b bool) bool { return !b }) },
@@ -61,7 +58,7 @@ func root(cx *core.Scope, c Host, sidebarFooter ...core.Node) core.Node {
 		},
 		step: func(step int) {
 			all := core.Untracked(cx, threads)
-			id := stepThread(all, c.Current().ID, step, time.Now())
+			id := stepThread(all, c.Current().ID, step)
 			for _, t := range all {
 				if t.ID == id {
 					c.SelectThread(t)
@@ -124,126 +121,9 @@ func root(cx *core.Scope, c Host, sidebarFooter ...core.Node) core.Node {
 			}, Children: []core.Node{conversation}},
 			core.Show{When: func() bool { return page.Get() == "automations" }, Then: func(cx *core.Scope) core.Node { return automationsPage(cx, c) }},
 			commandPalette(cx, paletteOpen, func() []paletteEntry {
-				return paletteEntries(cmd, current(), threads(), c.SelectThread, time.Now())
-			}), settingsDialog(cx, c, settingsOpen), projectNode},
+				return paletteEntries(cmd, current(), threadChoices(refProjects()), c.SelectThread)
+			}), settingsDialog(cx, c, settingsOpen), projectNode, shortcutsDialog(cx, shortcutsOpen)},
 	}
-}
-
-// period groups conversations that are not running by local calendar day:
-// one falls into the first period it is old enough for, the last unbounded.
-type period struct {
-	key, title string
-	days       int
-}
-
-var periods = []period{
-	{"today", "Today", 0},
-	{"yesterday", "Yesterday", 1},
-	{"week", "Previous 7 days", 7},
-	{"month", "Previous 30 days", 30},
-	{"older", "Older", -1},
-}
-
-func periodOf(now, t time.Time) int {
-	y, mo, d := now.Date()
-	midnight := time.Date(y, mo, d, 0, 0, 0, 0, now.Location())
-	for i, p := range periods {
-		if p.days < 0 || !t.Before(midnight.AddDate(0, 0, -p.days)) {
-			return i
-		}
-	}
-	return len(periods) - 1
-}
-
-type threadGroup struct {
-	key, title string
-	threads    []model.Thread
-}
-
-// lastActive is when t was last active.
-func lastActive(t model.Thread) time.Time {
-	for _, ms := range []int64{t.LastActivityAt, t.CompletedAtMs, t.StartedAtMs} {
-		if ms > 0 {
-			return time.UnixMilli(ms)
-		}
-	}
-	return time.Time{}
-}
-
-// threadGroups are the running conversations, then the others by period,
-// most recently active first, without empty groups.
-func threadGroups(threads []model.Thread, now time.Time) []threadGroup {
-	list := slices.Clone(threads)
-	slices.SortStableFunc(list, func(a, b model.Thread) int { return lastActive(b).Compare(lastActive(a)) })
-	groups := []threadGroup{{key: "running", title: "Running"}}
-	for _, p := range periods {
-		groups = append(groups, threadGroup{key: p.key, title: p.title})
-	}
-	for _, t := range list {
-		i := 0
-		if !t.Busy {
-			i = 1 + periodOf(now, lastActive(t))
-		}
-		groups[i].threads = append(groups[i].threads, t)
-	}
-	return slices.DeleteFunc(groups, func(g threadGroup) bool { return len(g.threads) == 0 })
-}
-
-// threadSidebar lists the conversations in collapsible groups with their
-// counts. Its rows are built again only when what they show changes.
-func threadSidebar(cx *core.Scope, threads func() []model.Thread, current func() model.Thread, c Host) core.Node {
-	closed, folds := map[string]bool{}, core.NewSignal(cx, 0)
-	key := core.NewMemo(cx, func() string {
-		var b strings.Builder
-		for _, g := range threadGroups(threads(), time.Now()) {
-			fmt.Fprint(&b, g.key, ":")
-			for _, t := range g.threads {
-				fmt.Fprint(&b, t.ID, "\x00", t.Title, "\x00", t.Project, ",")
-			}
-		}
-		return b.String()
-	})
-	sections := func() []ui.SidebarSection {
-		key.Get()
-		var sections []ui.SidebarSection
-		cx.Untrack(func() {
-			colors := ui.ColorsOf(cx)
-			groups := threadGroups(threads(), time.Now())
-			if len(groups) == 0 {
-				sections = []ui.SidebarSection{{Note: ui.Text(tr("No conversations yet"), 13, ui.Regular, colors.Muted)}}
-				return
-			}
-			for _, g := range groups {
-				items := make([]ui.SidebarItem, 0, len(g.threads))
-				for _, t := range g.threads {
-					id := strconv.Itoa(t.ID)
-					items = append(items, ui.SidebarItem{ID: id, Text: threadTitle(t), TestID: "thread-" + id})
-				}
-				sections = append(sections, ui.SidebarSection{Title: tr(g.title), Collapsible: true, Items: items, TestID: "threads-" + g.key,
-					Trailing: ui.Text(strconv.Itoa(len(g.threads)), 11, ui.Regular, colors.Muted),
-					Open:     func() bool { folds.Get(); return !closed[g.key] },
-					OnOpenChange: func(open bool) {
-						closed[g.key] = !open
-						folds.Update(func(n int) int { return n + 1 })
-					}})
-			}
-		})
-		return sections
-	}
-	return ui.Sidebar{SectionsFunc: sections, TestID: "threads",
-		Selected: func() string { return strconv.Itoa(current().ID) },
-		OnSelect: func(id string) {
-			n, err := strconv.Atoi(id)
-			if err != nil {
-				return
-			}
-			for _, t := range threads() {
-				if t.ID == n {
-					c.SelectThread(t)
-					return
-				}
-			}
-		}}
 }
 
 func threadTitle(t model.Thread) string {

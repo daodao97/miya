@@ -70,6 +70,7 @@ type Host interface {
 	DesktopThreadUnread(t model.Thread) bool
 	ReadDesktopThread(t model.Thread)
 	MirroredHistory(id int) bool
+	ThreadRefProjects() []model.ProjectSnapshot
 	WorkspaceFiles() projectaccess.Files
 }
 
