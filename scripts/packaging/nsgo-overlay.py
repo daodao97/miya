@@ -50,7 +50,6 @@ patch('cmd/nsgo/build.go', [
         var app string
         var err error
         if arch == "universal" { app, err = buildMiyaUniversal(ctx, p, dir) } else { app, err = buildMacApp(ctx, p, dir, goArch(arch)) }'''),
-    ('\ttags := extra.tags', '\ttags := append(append([]string(nil), extra.tags...), p.Miya.Tags...)'),
     ('\treturn os.WriteFile(path, []byte(plist), 0o644)', '''    data, err := miyaPlist(p, []byte(plist), t == macPlist)
     if err != nil { return err }
     return os.WriteFile(path, data, 0o644)'''),
@@ -60,9 +59,6 @@ patch('cmd/nsgo/widgets.go', [
 ])
 patch('cmd/nsgo/icon.go', [
     ('cache, err := os.UserCacheDir()', 'cache, err := miyaBuildCacheDir()'),
-])
-patch('cmd/nsgo/natives.go', [
-    ('args := []string{"list", "-deps",', 'args := []string{"list", "-tags", strings.Join(p.Miya.Tags, ","), "-deps",'),
 ])
 patch('cmd/nsgo/resources.go', [
     ('\tsrc := filepath.Join(p.Dir, resourcesDir)', '\tif len(p.Miya.Resources) > 0 { return miyaResources(p, f) }\n\tsrc := filepath.Join(p.Dir, resourcesDir)'),

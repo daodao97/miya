@@ -9853,13 +9853,13 @@ func (msgs Messages) PhoneNotificationsInTheBackgroundNeedMiya1d38a2() string {
 	return Catalog.Format(msgs.locale, "phoneNotificationsInTheBackgroundNeedMiya_1d38a2", nil)
 }
 
-// PhoneRegisteredApnsIsNotConfiguredOn97486e says "Phone registered. APNs is not configured on the desktop; run mygo push setup."
+// PhoneRegisteredApnsIsNotConfiguredOn97486e says "Phone registered. APNs is not configured on the desktop; see docs/notifications.md."
 // in the language the app shows.
 func PhoneRegisteredApnsIsNotConfiguredOn97486e() string {
 	return In(messageLocale()).PhoneRegisteredApnsIsNotConfiguredOn97486e()
 }
 
-// PhoneRegisteredApnsIsNotConfiguredOn97486e says "Phone registered. APNs is not configured on the desktop; run mygo push setup."
+// PhoneRegisteredApnsIsNotConfiguredOn97486e says "Phone registered. APNs is not configured on the desktop; see docs/notifications.md."
 // in the language of msgs.
 func (msgs Messages) PhoneRegisteredApnsIsNotConfiguredOn97486e() string {
 	return Catalog.Format(msgs.locale, "phoneRegisteredApnsIsNotConfiguredOn_97486e", nil)

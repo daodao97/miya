@@ -26,9 +26,7 @@ import (
 	"miya/internal/uiruntime"
 )
 
-// Host is what the NSGo desktop needs of a window's controller. It grows
-// toward internal/ui.Host as views move over; the controller already
-// implements the whole of that.
+// Host is what the NSGo desktop needs of a window's controller.
 type Host interface {
 	requestsHost
 	AddAttachments(paths []string)
@@ -102,7 +100,7 @@ type Host interface {
 }
 
 // Environment supplies controller creation at the executable's composition
-// root, as internal/ui.Environment does.
+// root.
 type Environment struct {
 	Quotas    func() *quota.Service
 	NewWindow func() Host

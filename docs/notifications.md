@@ -14,22 +14,29 @@
 
 ## Android
 
-Android 不使用第三方推送服务。开启手机通知并配对电脑后，Miya 在通知栏常驻一条低优先级通知「正在接收电脑通知」（前台服务，`mygo.Power.KeepRunning`），退到后台时保持与电脑的 tailcat 加密连接；桌面直接经这条连接发送通知，内容不经第三方，也不需要配置发送端。文案、角标、未读、正在查看的会话不弹、人在电脑前不发，都与 iOS 相同；点击通知打开对应会话。
+Android 不使用第三方推送服务。开启手机通知并配对电脑后，Miya 在通知栏常驻一条低优先级通知「正在接收电脑通知」（前台服务，NSGo `mobile.StartForegroundService`），退到后台时保持与电脑的 tailcat 加密连接；桌面直接经这条连接发送通知，内容不经第三方，也不需要配置发送端。文案、角标、未读、正在查看的会话不弹、人在电脑前不发，都与 iOS 相同；点击通知打开对应会话。
 
 限制：Miya 被系统清理或被用户结束后收不到通知，重新打开后读取未读状态，不补发错过的提醒。部分国产 ROM 需要允许 Miya 自启动或忽略电池优化。电脑关机或休眠时同样无法发送。设计与验收见 [Android 通知](android-push-design.md)。
 
 ## 配置发送端
 
-在本项目目录运行（密钥路径替换成自己的文件）：
+发送端由 `internal/apns` 管理，不再依赖旧框架 CLI。已有应用数据目录中的 `push-config.json` 和 Keychain 凭据继续可用。首次配置可使用 `apns.ImportProvider` 在发送端导入并校验密钥（macOS 存入登录 Keychain，Linux 存入权限为 0600 的文件）；当前没有用户可用的设置命令或导入界面。
 
-```sh
-go tool mygo push setup -team XNDA84PBM3 -environment sandbox /path/to/AuthKey_KEYID.p8
-go tool mygo push status
+也可在桌面应用数据目录手动配置已有的 owner-only 密钥文件，例如：
+
+```json
+{
+  "teamID": "YOURTEAMID",
+  "keyID": "YOURKEYID1",
+  "topic": "com.daodao.miya",
+  "environment": "sandbox",
+  "keyFile": "/absolute/private/path/AuthKey_YOURKEYID1.p8"
+}
 ```
 
-默认使用 `com.daodao.miya` 和应用数据目录 `Miya`。如果服务设置了 `MIYA_DIR`，配置时追加 `-data-dir "$MIYA_DIR"`（放在密钥路径前）。密钥只保存在桌面端，由 MyGo 管理；不会传给手机或打包进应用。
+将这份 JSON 保存为 `push-config.json`，配置与密钥文件权限均设为 0600。默认目录是 macOS 的 `~/Library/Application Support/Miya`；服务器使用 `MIYA_DIR`，隔离验证使用 `MIYA_ISOLATED_DIR`。密钥仅保存在发送端，不会传给手机或打包进应用。导入后的 Keychain 配置使用 `keychainService: "com.daodao.miya.apns"` 代替 `keyFile`。通用 CLI/设置导入入口仍待补齐；不要尝试已移除的旧框架工具。
 
-开发签名使用 sandbox；TestFlight/App Store 使用 production，并确保手机构建的 aps-environment 与发送端环境一致。`mygo.json` 已开启 `ios.pushNotifications`。Apple Developer 中的 Miya App ID 必须开启 Push Notifications，重新生成包含该能力的 provisioning profile 后重建安装：
+开发签名使用 sandbox；TestFlight/App Store 使用 production，并确保手机构建的 aps-environment 与发送端环境一致。`nsgo.yaml` 已开启 `ios.remote_notifications`。Apple Developer 中的 Miya App ID 必须开启 Push Notifications，重新生成包含该能力的 provisioning profile 后重建安装：
 
 ```sh
 ./scripts/build-ios.sh

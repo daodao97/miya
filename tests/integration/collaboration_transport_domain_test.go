@@ -1,4 +1,4 @@
-//go:build !mygo_ui && !windows
+//go:build !windows
 
 package integration
 

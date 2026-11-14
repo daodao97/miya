@@ -1,5 +1,5 @@
 // Package nschat is the conversation view on NSGo, shared by the desktop and
-// the phone as internal/chat/view is on MyGo. Grouping and presentation stay
+// the phone. Grouping and presentation stay
 // in internal/chat/presentation; this package only draws them.
 package nschat
 

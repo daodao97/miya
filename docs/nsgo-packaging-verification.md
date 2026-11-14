@@ -48,7 +48,7 @@ unbuilt MyGo mobile bundles. NSGo entries describe inspected local packages.
 | Android network policy | Cleartext denied except `127.0.0.1` and `localhost` | Same resource policy; aapt2 reads the packaged binary XML successfully |
 | Android host | MyGo activity + `libmygo.so`, Gradle/HarfBuzz/NDK | NSGo activity + `libnsgo.so`; arm64 packaging needs Go alone |
 | FCM | Optional; no Firebase configuration committed | Standalone APK has no Firebase; optional embedded host hooks documented |
-| Old packaging files | `mygo.json`, `.mygo` local staging, MyGo tool declaration | Removed; no tracked `.mygo` files existed. Legacy UI library dependency remains for next step |
+| Old packaging files | `mygo.json`, `.mygo` local staging, MyGo tool declaration | Phase 5 removed the library dependency, old UI sources and tracked `.mygo` artifacts |
 | CI dependency | MyGo published fork; NSGo local replacement unresolved | Explicit publication gate: real `NSGO_FORK_MODULE` + immutable `NSGO_FORK_VERSION` required; no fabricated pin |
 
 Desktop icon pixel digest (RGBA, 1024×1024) for both toolchains:

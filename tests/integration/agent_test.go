@@ -116,7 +116,7 @@ func TestAgentImplementationsDoNotImportControllerOrViews(t *testing.T) {
 			}
 			for _, imp := range file.Imports {
 				name, _ := strconv.Unquote(imp.Path.Value)
-				for _, forbidden := range []string{"miya/internal/controller", "miya/internal/ui", "miya/internal/mobile", "miya/internal/nsui", "miya/internal/nsmobile", "miya/internal/nschat", "miya/internal/nswidgets", "miya/internal/nsrequests", "miya/internal/appmodel"} {
+				for _, forbidden := range []string{"miya/internal/controller", "miya/internal/nsui", "miya/internal/nsmobile", "miya/internal/nschat", "miya/internal/nswidgets", "miya/internal/nsrequests", "miya/internal/appmodel"} {
 					if name == forbidden {
 						t.Errorf("%s: imports host implementation %s", path, name)
 					}

@@ -20,7 +20,6 @@ type miyaApplePackaging struct {
 }
 type miyaPackaging struct {
 	NotaryKeychain string             `yaml:"notary_keychain"`
-	Tags           []string           `yaml:"tags"`
 	LDFlags        string             `yaml:"ldflags"`
 	URLSchemes     []string           `yaml:"url_schemes"`
 	Resources      []string           `yaml:"resources"`

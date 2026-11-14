@@ -4,7 +4,7 @@ Linux 服务器运行 `miya -serve`，电脑端和手机端通过 Tailcat 配对
 
 ## 构建与安装
 
-从 Miya 源码目录构建 Linux amd64 或 arm64 安装目录。需要仓库 `go.mod` 指定的 Go 版本和 Python 3（读取应用版本；生成升级包需 Python 3.11 及以上），开发检出仍按仓库约定使用相邻的 `../mygo` 模块。
+从 Miya 源码目录构建 Linux amd64 或 arm64 安装目录。需要仓库 `go.mod` 指定的 Go 版本和 Python 3（读取应用版本；生成升级包需 Python 3.11 及以上），开发检出仍按仓库约定使用相邻的 `../nsgo-miya` 模块（发布 fork 与 CI 配置见 [NSGo 打包](nsgo-packaging.md)）。
 
 ```sh
 ./scripts/build-server.sh amd64

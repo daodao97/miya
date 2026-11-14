@@ -11,6 +11,6 @@
 .env.*
 !.env.example
 
-# Local workspace that points github.com/egoist/mygo at ../mygo
+# Local workspaces; NSGo development uses the go.mod replacement to ../nsgo-miya
 /go.work
 /go.work.sum

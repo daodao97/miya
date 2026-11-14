@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-// ProviderConfig is sender metadata written by `mygo push setup`. Private keys
+// ProviderConfig is sender metadata stored in push-config.json. Private keys
 // are stored separately in the macOS login Keychain or an owner-only file.
 // The file format also accepts existing MyGo application provider settings.
 type ProviderConfig struct {
@@ -49,7 +49,7 @@ func (c ProviderConfig) validate() error {
 }
 
 // ImportProvider validates and stores a provider key, then atomically publishes
-// its metadata in dir/push-config.json. It needs no MyGo event loop. Call it on
+// its metadata in dir/push-config.json. It needs no UI event loop. Call it on
 // the sender host only; iOS cannot store provider credentials with this API.
 // Keychain access is bounded and private key bytes never enter command arguments.
 func ImportProvider(dir string, cfg ProviderConfig, key []byte) error {
@@ -152,7 +152,7 @@ func providerKey(cfg ProviderConfig) ([]byte, error) {
 }
 
 // Provider is a configured sender with a default topic. It is safe for
-// concurrent use, independent of the MyGo event loop, and retains its HTTP/2
+// concurrent use, independent of the UI event loop, and retains its HTTP/2
 // connections and JWT when Reload finds unchanged credentials.
 type Provider struct {
 	mu     sync.Mutex
@@ -169,8 +169,8 @@ func (p *Provider) Topic() string {
 	return p.topic
 }
 
-// OpenProvider loads credentials created by `mygo push setup` from an
-// application data directory. It never reads mygo.json or embeds a private key.
+// OpenProvider loads sender credentials from an
+// application data directory. It never embeds a private key.
 func OpenProvider(dir string) (*Provider, error) {
 	if runtime.GOOS == "ios" {
 		return nil, errors.New("apns: provider credentials belong on a desktop or server")
@@ -197,7 +197,7 @@ func (p *Provider) Reload() error {
 func (p *Provider) reload() error {
 	f, err := os.Open(filepath.Join(p.dir, "push-config.json"))
 	if err != nil {
-		return errors.New("apns: provider is not configured; run mygo push setup")
+		return errors.New("apns: provider is not configured; see docs/notifications.md")
 	}
 	defer f.Close()
 	raw, err := io.ReadAll(io.LimitReader(f, 8193))

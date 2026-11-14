@@ -913,7 +913,7 @@
   "permissions_d06d55": "权限",
   "phone_77064d": "手机",
   "phoneNotificationsInTheBackgroundNeedMiya_1d38a2": "手机后台通知需要在发送端配置 Miya 的 APNs 密钥，并在手机允许通知。",
-  "phoneRegisteredApnsIsNotConfiguredOn_97486e": "手机已注册；桌面端尚未配置 APNs，请运行 mygo push setup",
+  "phoneRegisteredApnsIsNotConfiguredOn_97486e": "手机已注册；桌面端尚未配置 APNs，请参阅 docs/notifications.md",
   "planDDCompleted_bd7d4c": "计划 · 已完成 %d / %d",
   "port_ad542d": "端口 ",
   "preference_97d9b2": "偏好",

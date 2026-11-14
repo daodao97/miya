@@ -92,7 +92,7 @@ func SaveLocale(locale string) {
 	_ = os.WriteFile(path, data, 0600)
 }
 
-// Keep the legacy service preference stable; device UI uses MyGo i18n.
+// Keep the legacy service preference stable; device UI uses Miya locales.
 func NormalizeLocale(_ string) string { return "en" }
 
 // loadSetting and persistSetting read and write one string of the
@@ -133,7 +133,7 @@ func Save(key, value string) {
 }
 
 // Interface language belongs to this device, independently of the service
-// or workspace it connects to. MyGo owns matching, persistence and updates.
+// or workspace it connects to. Miya locales and the NSGo UI own matching, persistence and updates.
 func NormalizeInterfaceLanguage(value string) string {
 	switch strings.ToLower(strings.ReplaceAll(strings.TrimSpace(value), "_", "-")) {
 	case "en", "en-us", "en-gb":

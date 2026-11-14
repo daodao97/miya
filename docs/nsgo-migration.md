@@ -1,6 +1,6 @@
 # 迁移到 NSGo
 
-分支 `nsgo` 把 Miya 的界面从 MyGo 迁到 [NSGo](../../nsgo)（模块 `github.com/nsgo-dev/nsgo`，开发期 `replace` 到 `../nsgo-miya`，它是 `../nsgo` 的独立 worktree）。控制器、后台服务、Agent 适配、自动化和手机协议不随界面框架变化，迁移只替换视图层和平台服务。
+Miya 的界面已从 MyGo 迁到 [NSGo](../../nsgo)（模块 `github.com/nsgo-dev/nsgo`，开发期 `replace` 到 `../nsgo-miya`，它是 `../nsgo` 的独立 worktree）。控制器、后台服务、Agent 适配、自动化和手机协议不随界面框架变化，迁移只替换视图层和平台服务。
 
 ## 为什么不能只改 import
 
@@ -26,14 +26,15 @@ Miya 不直接用 `../nsgo`：那里可能正在开发 NSGo 本身（补 Miya �
 
 [Agio](https://github.com/oneo-me/nsgo-agio)（相邻检出 `../nsgo-agio`，只读）是 NSGo 作者用 NSGo 写的编码 Agent 外壳，`chatview/conversation.go` 的会话、Markdown（`ui.TextView`）、悬浮输入框与模型选择是 Miya 对应视图的首选参考。
 
-## 并存方式
+## 唯一构建入口
 
-迁移期间两套界面并存，每一步都能构建和发布：
+第 5 阶段已完成。普通 `go build`、测试、打包脚本及 CI 全部使用 NSGo，不再需要自定义构建标签。
 
-- 裸 `go build` 默认构建仍是 MyGo 版本（`main.go`，`//go:build !nsgo`）；正式打包脚本、服务器包与 CI 已改走 NSGo，配置集中在 `nsgo.yaml`。
-- `go build -tags nsgo .` 在桌面平台使用 `main_nsgo.go`，入口 `internal/nsui.DesktopMain`。iOS/Android 的 `-tags nsgo` 改走 `main_nsgo_mobile.go` → `internal/nsmobile.MobileEntry`，不带标签时仍走原 MyGo 手机端。
-- `internal/nsui` 不带构建标签，`go build ./...` 和 `go test ./...` 始终编译并测试它，避免新界面腐烂。
-- 包边界测试把 `internal/nsui` 视同其他视图包：不得导入控制器、Agent 实现或旧界面包。
+- `main_nsgo.go` 仅按 `!ios && !android` 选择桌面入口，先执行 `controller.RunCommands()`，完整保留后台、MCP、隐私 helper、连接及服务器命令，再启动 `internal/nsui.DesktopMain`。
+- `main_nsgo_mobile.go` 仅按 `ios || android` 选择 `internal/nsmobile.MobileEntry`。旧 `main.go` 和 MyGo Android JNI 初始化入口已删除；Android 网络接口注册由 `nsmobile.setupNetwork` 负责。
+- 已删除 `internal/ui`、`internal/mobile`、`internal/widgets`、`internal/chat/view`、旧 Swift 浏览器、MyGo 原生测试 fixture、历史 UI 测试及 `.mygo` 生成物。框架无关实现已在前几阶段迁至 `phone/client`、`phone/desktopview`、`iconassets`、`runtime/presentation` 等包，本轮依赖检查无需再搬代码。
+- `go.mod` / `go.sum` 不再包含 MyGo。保留 `replace github.com/nsgo-dev/nsgo => ../nsgo-miya`；CI 必须先发布包含 Miya 平台能力的 NSGo fork，再配置 `NSGO_FORK_MODULE` 与不可变 `NSGO_FORK_VERSION`。
+- `go.work` 是本机未提交配置，不属于发布依赖。其他检出的旧 workspace 若仍包含 `../mygo`，应在该检出后续维护时移除；本轮只修改 `Miya-nsgo-final`，没有修改主检出的 workspace。
 
 ## 桥接层
 
@@ -43,18 +44,18 @@ Miya 不直接用 `../nsgo`：那里可能正在开发 NSGo 本身（补 Miya �
 - `Live(getter)` 把 getter 包成绑定：先读修订号信号再读 getter。控制器每次失效后绑定重算，NSGo 只发出实际变化的部分。需要更细粒度时再用 memo 包装。
 - 通知走 NSGo 的 `ShowNotification` / `OnNotificationPress`。系统空闲时间每 15 秒采样给 `uiruntime.IdleTime`（无此能力的平台保持 nil，视为用户在场）。
 - `IsFocused` / `IsMinimized` 来自 NSGo 的窗口状态，桥接层镜像为原子值供控制器跨协程读取。
-- 多工作区：`workspaces.go` 的 hub 在 App 作用域持有每个工作区的控制器，主视图按当前控制器重建外壳（与 MyGo 一样保活各工作区的草稿、终端与重连）。
+- 多工作区：`workspaces.go` 的 hub 在 App 作用域持有每个工作区的控制器，主视图按当前控制器重建外壳（保活各工作区的草稿、终端与重连）。
 
 ## 阶段
 
 | 阶段 | 内容 | 完成标准 |
 | --- | --- | --- |
 | 0 · 基础 | 依赖、构建标签入口、桥接层、会话列表骨架 | 两种构建通过；桥接测试（含 `-race`）通过 ✅ |
-| 1 · 主题与控件 | `internal/nswidgets`：Miya 明暗色板作为 `core.Theme`（自有角色放 `Palette.Colors`），`ColorsOf` 颜色访问器、图标与通用控件；Tabler 图标移到框架无关的 `internal/iconassets` 供新旧两套共用。设置页布局与菜单随第 3 阶段迁移 | 主题、外观切换、图标解析与控件测试通过 ✅（设置页、菜单待做） |
+| 1 · 主题与控件 | `internal/nswidgets`：Miya 明暗色板作为 `core.Theme`（自有角色放 `Palette.Colors`），`ColorsOf` 颜色访问器、图标与通用控件；Tabler 图标移到框架无关的 `internal/iconassets`。设置页布局与菜单随第 3 阶段迁移 | 主题、外观切换、图标解析与控件测试通过 ✅（设置页、菜单已随第 3 阶段完成） |
 | 2 · 会话视图 | `internal/chat/view` 的消息列表、Markdown、工具详情、图片、引用和富文本输入（NSGo `ui/chat`、`base/richeditor`） | 桌面能完整对话。进度：`internal/nschat` 的消息列表已完成——分组复用 `chat/presentation`，助手回复用 `base/textview` 流式 Markdown（流式时行不重建），工具活动用 `chat.ActivityRow`，详情按计划、diff、文件、Markdown、等宽输出呈现，错误卡片可重试；外层为 `chat.FloatingConversation`，回合状态、后台任务与富文本 composer（草稿、发送/引导、停止）悬浮在末尾。用户消息显示图片缩略图与附件标签，完成的回复下有复制与交接操作（交接已接到桌面控制器）。子代理列表（按 ID 原地更新，活动标题带摘要，有活跃子代理时活动显示运行中）已完成。桌面输入周边已迁移：新会话建议、Agent 重连、只读提示、Agent/模型/思考/权限选择、排队/立即引导、队列编辑、已发送消息编辑重发、附件粘贴/拖放/选择/移除、远程图片缩略图、@ 会话及文件与 # Agent 补全、交接与任务/协作状态。引用和已确认命令以行内富文本 chip 显示，草稿、复制/剪切与粘贴保留稳定身份；列表按 ID 保持，文件 I/O 在后台执行并通过 `Scope.Post` 回传 |
-| 3 · 桌面外壳 | 侧栏、工作区切换、文件面板、命令面板、设置、自动化、托盘、多窗口 | 已完成：`ui.SidebarShell`（内嵌卡片、可折叠拖宽，右侧文件面板）；按项目分组的侧栏（跨项目的进行中/未读活动、项目展开与菜单、会话归档删除、添加项目对话框与 NSGo 文件选择器浏览本机或服务端目录），设置与工作区在底部；会话在聚焦窗口里看到即已读；工作区切换（本机/远程，添加、改名、连接进度与取消）；文件面板（按会话保存的标签；文件树与编辑保存、变更审阅 diff、浏览器（镜像窗口经服务代理）、终端、后台任务，⌘⌥B；HTML 文件经工作区文件代理在不可信 WebView 中预览）；设置（通用、账户、手机、记忆、Miya 远程升级）；自动化页；审批、提问与 MCP 表单卡片；输入框周边（建议、Agent/模型/思考/权限选择、附件、@ 引用、队列与编辑、交接、任务与协作状态）；用量（菜单栏图标与面板、额度重置、用量设置；NSGo 暂无面板调整尺寸接口，面板固定尺寸滚动）；命令面板 ⌘K / ⌘⇧P（命令与所有项目的会话）；F1 快捷键一览；macOS 菜单栏与 `⌘N` `⌘,` `⌘B` `⌘.` `Control+Tab`。待做：多窗口；`internal/ui` 的界面测试迁到 nsgotest |
-| 4 · 手机端 | `internal/nsmobile` 核心外壳、会话、发送/队列、照片、设置/选项、引用和文件，以及远程桌面（选窗口/应用/显示器、隐私、解锁、悬浮和重连恢复）与多桌面管理已接 NSGo；审批、委派、只读记忆与自动化（与桌面共用 `internal/nsrequests`）已移植；语音输入、通知适配和已验证会话 Web 服务已移植，APNs/后台活动推送与 Android 前台服务仍需原生宿主或协议支持；框架无关状态在 `internal/phone/client`，原 `internal/mobile` 保留。见[手机核心](nsgo-mobile-core.md) | nsgotest 与 iOS cross-vet；原生安全存储/扫码/网络路径及其他功能见 [TODO](../internal/nsmobile/TODO.md)，待真机验证 |
-| 5 · 收尾 | 打包已改为 `go tool nsgo`（含本检出内的兼容 overlay，见 [打包说明](nsgo-packaging.md)）；下一步删除 MyGo 依赖、旧界面包和构建标签 | `go list -deps` 不含 `egoist/mygo` |
+| 3 · 桌面外壳 | 侧栏、工作区切换、文件面板、命令面板、设置、自动化、托盘、多窗口 | 已完成：`ui.SidebarShell`（内嵌卡片、可折叠拖宽，右侧文件面板）；按项目分组的侧栏（跨项目的进行中/未读活动、项目展开与菜单、会话归档删除、添加项目对话框与 NSGo 文件选择器浏览本机或服务端目录），设置与工作区在底部；会话在聚焦窗口里看到即已读；工作区切换（本机/远程，添加、改名、连接进度与取消）；文件面板（按会话保存的标签；文件树与编辑保存、变更审阅 diff、浏览器（镜像窗口经服务代理）、终端、后台任务，⌘⌥B；HTML 文件经工作区文件代理在不可信 WebView 中预览）；设置（通用、账户、手机、记忆、Miya 远程升级）；自动化页；审批、提问与 MCP 表单卡片；输入框周边（建议、Agent/模型/思考/权限选择、附件、@ 引用、队列与编辑、交接、任务与协作状态）；用量（菜单栏图标与面板、额度重置、用量设置；NSGo 暂无面板调整尺寸接口，面板固定尺寸滚动）；命令面板 ⌘K / ⌘⇧P（命令与所有项目的会话）；F1 快捷键一览；macOS 菜单栏与 `⌘N` `⌘,` `⌘B` `⌘.` `Control+Tab`。界面测试已迁到 nsgotest，旧测试已删除；原生多窗口交互待设备验证 |
+| 4 · 手机端 | `internal/nsmobile` 核心外壳、会话、发送/队列、照片、设置/选项、引用和文件，以及远程桌面（选窗口/应用/显示器、隐私、解锁、悬浮和重连恢复）与多桌面管理已接 NSGo；审批、委派、只读记忆与自动化（与桌面共用 `internal/nsrequests`）已移植；语音输入、通知适配和已验证会话 Web 服务已移植，APNs/后台活动推送与 Android 前台服务仍需原生宿主或协议支持；框架无关状态在 `internal/phone/client`，旧 `internal/mobile` 已删除。见[手机核心](nsgo-mobile-core.md) | nsgotest 与 iOS cross-vet；原生安全存储/扫码/网络路径及其他功能见 [TODO](../internal/nsmobile/TODO.md)，待真机验证 |
+| 5 · 收尾 | 打包已改为 `go tool nsgo`（含本检出内的兼容 overlay，见 [打包说明](nsgo-packaging.md)）；MyGo 依赖、旧界面包、历史 UI 测试及迁移构建标签已删除 ✅ | `go list -deps` 不含 `egoist/mygo` |
 
 ## 需要 Miya 自己补的平台能力
 
@@ -64,20 +65,26 @@ Miya 不直接用 `../nsgo`：那里可能正在开发 NSGo 本身（补 Miya �
 
 非界面包已去除 MyGo 依赖：
 
-- `locales` 使用 Miya 自有的 `internal/i18ncatalog` 加载嵌入的英文和中文 JSON；`go generate ./locales` 生成访问器，`go run ./locales/gen -check` 校验目录与生成文件。MyGo 的 catalog 注册、应用语言函数及自有控件中文翻译只留在旧界面的 `internal/widgets` 中。
+- `locales` 使用 Miya 自有的 `internal/i18ncatalog` 加载嵌入的英文和中文 JSON；`go generate ./locales` 生成访问器，`go run ./locales/gen -check` 校验目录与生成文件。旧 catalog 注册、语言适配函数及 `internal/widgets` 均已删除。
 - `internal/desktop` 已改为 `internal/desktopcontrol` 自持的屏幕录制与辅助功能检查和请求（与 `permissionflow.Check` / `Request` 相同的系统调用，`Request` 本就不弹引导面板）。
 
-`go list -tags nsgo -deps .` 已不再包含 `github.com/egoist/mygo`（迁移开始时 22 个包）。默认 MyGo 源码构建仍保留，待第 5 阶段删除旧界面时移除。MyGo 打包工具声明和 `mygo.json` 已删除；`.mygo` 不再使用，NSGo 本地缓存与临时 overlay 均在 `build/`，应用与发布包统一由 NSGo 构建。
+桌面 `go list -deps ./...` 和 iOS `go list -deps .` 均应不含 `egoist`。MyGo 打包工具、依赖、配置、旧源码与 `.mygo` 生成物均已移除；NSGo 本地缓存与临时 overlay 均在 `build/`。
+
+剩余工作是 iOS/Android 真机端到端验证、解锁桌面的绘制与交互验收，以及发布 NSGo fork / 提交平台和打包能力的上游 PR。APNs payload 字段和旧设备安全存储迁移仍兼容已有安装，并非 MyGo 链接依赖。详见手机 TODO 和测试迁移账本。
 
 ## 验证
 
 ```sh
-go build ./... && go build -tags nsgo .
-go test -race ./internal/nsui ./internal/nschat ./internal/nswidgets
+go build ./... && go build -o /dev/null .
+go test ./...
 go test ./tests/integration -run 'Boundar|TestViewsDoNotKnowAgents'
 ```
 
-2026-11-14 冒烟：`-tags nsgo` 二进制以 `MIYA_ISOLATED_DIR` 隔离运行，窗口进程正常常驻、无报错，拉起隔离后台并读到 71 个会话，随后正常停止；当时屏幕锁定，截图全黑，界面绘制尚待解锁后截图确认。
+2026-11-14 冒烟：NSGo 二进制以 `MIYA_ISOLATED_DIR` 隔离运行，窗口进程正常常驻、无报错，拉起隔离后台并读到 71 个会话，随后正常停止；当时屏幕锁定，截图全黑，界面绘制尚待解锁后截图确认。
+
+2026-11-14 第 5 阶段验收（`nsgo-final`）：`go mod tidy`、桌面与 iOS 依赖扫描（均无 `egoist`）、`go vet ./...`、`go build ./...`、`go build -o /dev/null .`、iOS arm64/cgo 的 `nsmobile` vet、语言生成校验和 `go test ./...` 全部通过，两项已知偶发失败本次均未发生。仅使用共享 Go cache，没有全仓库 race。
+
+`scripts/build-macos.sh` 产出 arm64 app（56.4 MB），`verify-package.py` 和严格 codesign 校验通过。以本检出 `build/isolated` 为 `MIYA_ISOLATED_DIR` 启动，已通过原生截图确认侧栏、新会话及 composer 绘制。窗口 PID `77449`，隔离服务 PID `77462`；hello 为协议 2 / release `0.1.0` / 本检出 build 二进制，空闲、50 个会话。窗口通过正常 Quit 退出，再通过隔离 socket 请求服务退出；两个 PID 均已消失，status 确认服务未运行。退出时仅有系统 IMK mach-port 诊断，无应用 panic。验收后删除 app 和临时 overlay/cache，保留小型检查日志；未覆盖 `/Applications/Miya.app` 或重启现有后台。
 
 实际窗口验证按[独立验证流程](install-and-upgrade.md#独立验证不覆盖已安装应用)进行，不覆盖已安装应用、不切换生产后台。
 
@@ -95,7 +102,7 @@ go test ./tests/integration -run 'Boundar|TestViewsDoNotKnowAgents'
 
 NSGo 面板按 `model.ThreadRef` 保存各会话的标签、选中项、文件编辑内容与终端；首次发送后草稿面板交给新会话。切换会话不关闭终端，关闭标签或销毁外壳时关闭连接，包括销毁后才返回的异步创建结果。
 
-“后台任务”标签沿用 `ReadRuntime` / `Runtimes`，展示原生任务、系统进程、已验证 HTTP 服务、TCP 端点与观测时间。显示期间每 5 秒刷新；观测失败时保留上次结果，将活跃状态标成待验证，并移除服务入口。服务打开前通过后台 `runtimeValidate` 或本地 `ValidateToken` 再次核验。状态、类型与观测丢失处理共用于 `internal/runtime/presentation`，MyGo 的 widgets 保留转调入口。
+“后台任务”标签沿用 `ReadRuntime` / `Runtimes`，展示原生任务、系统进程、已验证 HTTP 服务、TCP 端点与观测时间。显示期间每 5 秒刷新；观测失败时保留上次结果，将活跃状态标成待验证，并移除服务入口。服务打开前通过后台 `runtimeValidate` 或本地 `ValidateToken` 再次核验。状态、类型与观测丢失处理共用于 `internal/runtime/presentation`。
 
 镜像窗口的浏览器将 localhost、回环/未指定 IP，以及带 runtime token 的服务交给 `phone/proxy.NewPhoneWebProxy`；公共 URL 直接加载。每次导航、标签关闭与外壳销毁都会释放旧代理。地址栏展示服务地址而非客户端临时代理地址。
 
@@ -107,7 +114,7 @@ HTML 文件与 MyGo 一样预览：本地或经服务端的工作区文件代理
 
 NSGo 当前 CLI 尚缺 typed plist、URL scheme、自定义 Keychain 等配置入口，所以脚本在本检出的 `build/.nsgo-overlay/` 生成有锚点检查的 Go source overlay，再调用 `go tool nsgo build`，不修改 NSGo 检出。macOS universal 先合并主程序和所有 Mach-O 库，再交给 NSGo 签名、做 DMG 和公证。完整属性对照、签名与验证见 [NSGo 打包](nsgo-packaging.md)。
 
-CI 仍有明确前置条件：先发布包含本地 NSGo `0820d6f7` 能力的 fork，再设置真实 `NSGO_FORK_MODULE` 和不可变 `NSGO_FORK_VERSION`。工作流不会猜测一个不存在的发布版本；未配置时停止并说明原因。iOS 分发还需要应用及 widgets 两份 provisioning profile。裸 `go build ./...` 仍验证旧入口；包内使用 `-tags nsgo` 的入口由实际三端构建验证。
+CI 仍有明确前置条件：先发布包含本地 NSGo `0820d6f7` 能力的 fork，再设置真实 `NSGO_FORK_MODULE` 和不可变 `NSGO_FORK_VERSION`。工作流不会猜测一个不存在的发布版本；未配置时停止并说明原因。iOS 分发还需要应用及 widgets 两份 provisioning profile。裸 `go build ./...` 与打包都使用同一套 NSGo 入口。
 
 本轮打包实测与逐项 MyGo/NSGo 对照见 [打包验收记录](nsgo-packaging-verification.md)。
 

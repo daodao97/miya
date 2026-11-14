@@ -336,7 +336,7 @@ func (ps *phoneSession) onPush(r remote.Request) bool {
 		}
 		if message == "" && !registration.Disabled && !registration.Live {
 			if _, err := apns.OpenProvider(appdir.Dir()); err != nil {
-				message = "Phone registered. APNs is not configured on the desktop; run mygo push setup."
+				message = "Phone registered. APNs is not configured on the desktop; see docs/notifications.md."
 			}
 		}
 	}
