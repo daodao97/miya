@@ -1650,9 +1650,13 @@ func (m *App) threadView(c *ui.Context) {
 	// floats over their bottom; a new or pending one keeps it below them.
 	pendingThread, pending := m.PendingSendThread(cur)
 	floating := !pending && m.Open != 0
+	// The bar reaches under the home indicator, past the bottom of the
+	// messages, which keep room only for what is above it.
+	safe := safeAreaOf(c)
 	m.View.BottomInset = 0
 	if floating {
-		m.View.BottomInset = m.composerH
+		// The fade over the bar's top may cover the list's own padding.
+		m.View.BottomInset = max(0, m.composerH-safe.Bottom-composerFade)
 	}
 	ui.Column(c.Key("conversation-body")).Grow(1).MinHeight(0).FillWidth().Children(func() {
 		ui.Column(c).Grow(1).MinHeight(0).FillWidth().Children(func() {
@@ -1667,7 +1671,13 @@ func (m *App) threadView(c *ui.Context) {
 		})
 		bar := ui.Column(c.Key("composer-overlay")).FillWidth()
 		if floating {
-			bar.Absolute().Left(0).Right(0).Bottom(0)
+			// What scrolls under the bar fades out over its top, so the
+			// turn's status and the composer read on the page's own color.
+			fade := min(1, 28/max(m.composerH, 28))
+			bar.Absolute().Left(0).Right(0).Bottom(-safe.Bottom).Padding(composerFade, 0, safe.Bottom, 0).
+				LinearGradient(ui.LinearGradient{Angle: 180, Stops: []ui.GradientStop{
+					{Color: p.Bg.Alpha(0), At: 0}, {Color: p.Bg.Alpha(0.85), At: fade * 0.6}, {Color: p.Bg, At: fade},
+				}})
 		}
 		bar.Children(func() {
 			m.View.Footer()
@@ -1731,6 +1741,10 @@ func (m *App) composerAgent() string {
 	}
 	return m.defaultAgent()
 }
+
+// composerFade is the room over the floating composer where the messages
+// scrolling under it fade out.
+const composerFade = 18
 
 // composer is the floating message box: the agent, the text, the model's
 // effort, and a button that sends, or stops a running turn.
