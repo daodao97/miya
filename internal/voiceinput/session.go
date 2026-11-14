@@ -2,58 +2,83 @@ package voiceinput
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"sync"
 	"time"
 
-	"github.com/egoist/mygo/plugins/microphone"
-	"github.com/egoist/mygo/plugins/speech"
+	"github.com/nsgo-dev/nsgo/microphone"
 )
 
-// ProviderName is the speech (plugins/speech) provider that recognizes speech through
-// WeChat's cloud service.
-const ProviderName = "wechat"
+// SampleRate is the audio the recognizers take: mono signed 16-bit
+// little-endian PCM at 16 kHz.
+const SampleRate = 16000
 
-// Provider captures with plugins/microphone and streams the audio to the cloud.
-// Dir keeps the service's device identity.
-type Provider struct{ Dir string }
+// MaxDuration bounds one recording; recognition of what was said then
+// still finishes.
+const MaxDuration = 60 * time.Second
 
-var register struct {
-	once sync.Once
-	err  error
+// Result is recognized text: partial while the user speaks, then once
+// Final, with Err when recognition or capture failed.
+type Result struct {
+	Text  string
+	Final bool
+	Err   error
 }
 
-// Start begins a WeChat recognition session, registering the provider on
-// first use; dir is fixed by the first call.
-func Start(ctx context.Context, dir string) (*speech.Session, error) {
-	register.once.Do(func() { register.err = speech.RegisterProvider(ProviderName, Provider{Dir: dir}) })
-	if register.err != nil {
-		return nil, register.err
-	}
-	return speech.Start(ctx, speech.Options{Provider: ProviderName})
-}
+// Session is a recording being recognized.
+type Session struct{ r *recording }
 
-func (p Provider) Start(ctx context.Context, _ speech.Options, emit func(speech.Result)) (speech.Recording, error) {
-	// speech.Start ends capture after its MaxDuration; this bounds the cloud
-	// round trips that follow.
-	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
+// Stop ends capture and lets the cloud finish the text; emit then gets the
+// final Result.
+func (s *Session) Stop() { s.r.Stop() }
+
+// Cancel discards the recording at once.
+func (s *Session) Cancel() { s.r.Cancel() }
+
+// Start records the default input and recognizes it through WeChat's cloud
+// service; dir keeps the service's device identity. emit runs on other
+// goroutines, the last time with a Final Result. Start may wait for the
+// user to answer the microphone prompt, so call it off the UI.
+func Start(ctx context.Context, dir string, emit func(Result)) (*Session, error) {
+	// MaxDuration ends capture; this bounds the cloud round trips that follow.
+	ctx, cancel := context.WithTimeout(ctx, MaxDuration+30*time.Second)
 	r := &recording{audio: make(chan []byte, 640), cancel: cancel}
-	mic, err := microphone.Start(ctx, r.capture)
+	stream, err := microphone.Capture(SampleRate, r.samples)
 	if err != nil {
 		cancel()
 		return nil, err
 	}
-	r.mic = mic
+	r.mu.Lock()
+	r.stream = stream
+	r.mu.Unlock()
+	// The system may take the microphone away, as iOS does for a call: what
+	// was said so far is still recognized.
+	go func() {
+		select {
+		case <-stream.Ended():
+			r.end(nil)
+		case <-ctx.Done():
+		}
+	}()
+	limit := time.AfterFunc(MaxDuration, r.Stop)
 	go func() {
 		defer cancel()
-		defer mic.Cancel()
-		text, err := recognizeWechat(ctx, p.Dir, r.audio, func(text string) { emit(speech.Result{Text: text}) })
-		if captureError := r.captureErr(); captureError != nil {
-			err = captureError
+		defer limit.Stop()
+		defer stream.Stop()
+		text, err := Recognize(ctx, dir, r.audio, func(text string) { emit(Result{Text: text}) })
+		if captureErr := r.captureErr(); captureErr != nil {
+			err = captureErr
 		}
-		emit(speech.Result{Text: text, Final: true, Err: err})
+		emit(Result{Text: text, Final: true, Err: err})
 	}()
-	return r, nil
+	return &Session{r: r}, nil
+}
+
+// Recognize streams SampleRate PCM from audio to WeChat's cloud recognizer
+// until audio closes, reporting partial text, and returns the final text.
+func Recognize(ctx context.Context, dir string, audio <-chan []byte, partial func(string)) (string, error) {
+	return recognizeWechat(ctx, dir, audio, partial)
 }
 
 // recording hands microphone audio to the recognizer. Stop ends capture and
@@ -63,20 +88,34 @@ type recording struct {
 	audio        chan []byte
 	captureError error
 	closed       bool
-	mic          *microphone.Capture
+	stream       *microphone.Stream
 	cancel       context.CancelFunc
 	stopOnce     sync.Once
 }
 
 func (r *recording) Stop() {
 	r.stopOnce.Do(func() {
-		r.mic.Stop()
+		r.stopStream()
+		r.end(nil)
 		// Also bound finalization when release precedes the cloud handshake.
 		time.AfterFunc(20*time.Second, r.cancel)
 	})
 }
 
-func (r *recording) Cancel() { r.cancel(); r.mic.Cancel() }
+func (r *recording) Cancel() {
+	r.cancel()
+	r.stopStream()
+	r.end(nil)
+}
+
+func (r *recording) stopStream() {
+	r.mu.Lock()
+	s := r.stream
+	r.mu.Unlock()
+	if s != nil {
+		s.Stop()
+	}
+}
 
 func (r *recording) captureErr() error {
 	r.mu.Lock()
@@ -84,24 +123,41 @@ func (r *recording) captureErr() error {
 	return r.captureError
 }
 
-// capture runs on the audio thread; it never blocks.
-func (r *recording) capture(c microphone.Chunk) {
+// samples runs on the system's audio thread; it never blocks.
+func (r *recording) samples(s []int16) {
+	pcm := make([]byte, 2*len(s))
+	for i, v := range s {
+		binary.LittleEndian.PutUint16(pcm[2*i:], uint16(v))
+	}
+	r.push(pcm)
+}
+
+// push queues audio for the recognizer, ending capture when the bounded
+// buffer is full rather than blocking the audio thread.
+func (r *recording) push(pcm []byte) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.closed {
+	if r.closed || len(pcm) == 0 {
 		return
 	}
-	err, end := c.Err, c.End
-	if len(c.PCM) > 0 {
-		select {
-		case r.audio <- c.PCM:
-		default:
-			err, end = errors.New("voice audio buffer full"), true
-		}
+	select {
+	case r.audio <- pcm:
+	default:
+		r.closeLocked(errors.New("voice audio buffer full"))
 	}
-	if err != nil || end {
-		r.captureError = err
-		r.closed = true
-		close(r.audio)
+}
+
+// end closes the audio once, recording why when err is not nil.
+func (r *recording) end(err error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if !r.closed {
+		r.closeLocked(err)
 	}
+}
+
+func (r *recording) closeLocked(err error) {
+	r.captureError = err
+	r.closed = true
+	close(r.audio)
 }

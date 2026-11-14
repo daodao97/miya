@@ -12,7 +12,6 @@ import (
 
 	"miya/internal/prefs"
 	"miya/internal/uiruntime"
-	"miya/internal/voiceinput"
 	"miya/internal/widgets"
 )
 
@@ -72,7 +71,7 @@ func (m *App) beginVoice() {
 	start := m.voiceStart
 	dir := m.DataDir
 	if start == nil {
-		start = func(ctx context.Context) (mobileVoiceSession, error) { return voiceinput.Start(ctx, dir) }
+		start = func(ctx context.Context) (mobileVoiceSession, error) { return startSpeech(ctx, dir) }
 	}
 	// Capture starts on the touch's UI thread; the cloud runs in Session's
 	// worker. MyGo permission prompts pump native events, so a release during
