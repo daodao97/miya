@@ -63,8 +63,14 @@ func (b *bridge) setWindow(w *core.Window) {
 	}
 	b.cx.Effect(func() {
 		shown := !w.Closed() && w.Visible()
-		b.focused.Store(shown && w.IsFocused())
+		focused := shown && w.IsFocused()
+		was := b.focused.Swap(focused)
 		b.minimized.Store(!shown || w.IsMinimized())
+		// Coming to the front, the window shows what it holds as of now, as a
+		// conversation the user has now seen: bindings read again.
+		if focused && !was {
+			b.Invalidate()
+		}
 	})
 }
 
