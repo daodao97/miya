@@ -20,7 +20,7 @@ MyGo 是即时模式：`ui.Row(c).Children(func() { ... })` 每帧重建，视�
 
 ## 依赖的 NSGo 检出
 
-Miya 不直接用 `../nsgo`：那里可能正在开发 NSGo 本身（补 Miya 需要的平台能力，之后向上游提 PR），半成品会让 Miya 无法构建。`../nsgo-miya` 是 `git -C ../nsgo worktree add` 建的独立检出，固定在已验证的提交上（当前为 `platform-services` 分支的 `c246c3fc`）；NSGo 的改动完成并通过测试后，再把它前移到对应分支或提交。
+Miya 不直接用 `../nsgo`：那里可能正在开发 NSGo 本身（补 Miya 需要的平台能力，之后向上游提 PR），半成品会让 Miya 无法构建。`../nsgo-miya` 是 `git -C ../nsgo worktree add` 建的独立检出，固定在已验证的提交上（当前为集成分支 `miya` 的 `d8efa00c`：`platform-services` 加上 `miya-input` 的原生对话框选项、输入框复制与上下文菜单、富文本粘贴数据与行内 atom、Composer 控制）；NSGo 的改动完成并通过测试后，再把它前移到对应分支或提交。
 
 ## 参考实现
 
