@@ -218,3 +218,28 @@ func TestBrowserURL(t *testing.T) {
 		}
 	}
 }
+
+// An HTML file previews as a page served from the workspace.
+func TestPanelPreviewsHTML(t *testing.T) {
+	h := newFakeHost(model.Thread{ID: 1, Title: "Alpha"})
+	// The proxy serves a real folder.
+	h.state.Cwd = t.TempDir()
+	files := newPanelFiles()
+	h.files = files
+	app := startBridged(t, h)
+	app.Press("role:button Show / Hide right panel")
+	app.Settle()
+	files.mu.Lock()
+	files.dirs[""] = append(files.dirs[""], projectfiles.FileEntry{Name: "index.html", Rel: "index.html"})
+	files.texts["index.html"] = "<h1>Hello</h1>\n"
+	files.mu.Unlock()
+	app.Press("id:panel-open-files")
+	app.WaitFor("id:file-index.html", time.Second)
+	app.Press("id:file-index.html")
+	app.WaitFor("id:file-preview", time.Second)
+	app.Press("id:file-preview")
+	app.WaitFor("id:file-html", time.Second)
+	if strings.Contains(joinedTexts(app), "Browser unavailable") {
+		t.Fatalf("preview failed; texts %q", app.Texts())
+	}
+}

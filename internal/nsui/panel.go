@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	phoneproxy "miya/internal/phone/proxy"
 	"net/url"
 	"os"
 	"path"
@@ -922,14 +923,12 @@ func (p *panel) saveFile(ed *fileEditor) {
 	}()
 }
 
-// editorView edits an open file, or previews a Markdown file or an image.
-// An HTML file shows its source: MyGo's preview needs a web view kept to
-// the workspace proxy's exact origin, which NSGo's hostname-only policy
-// cannot enforce (see docs/nsgo-migration.md).
+// editorView edits an open file, or previews a Markdown or HTML file or an
+// image.
 func (p *panel) editorView(cx *core.Scope, ed *fileEditor) core.Node {
 	colors := nswidgets.ColorsOf(cx)
 	rel := ed.rel
-	previewable := markdownFile(rel) || ed.image == "svg"
+	previewable := markdownFile(rel) || htmlFile(rel) || ed.image == "svg"
 	cx.OnKey("mod+s", func() { p.saveFile(ed) })
 	return core.View{Style: ui.FillRest, Children: []core.Node{
 		panelBar(cx,
@@ -976,6 +975,8 @@ func (p *panel) editorView(cx *core.Scope, ed *fileEditor) core.Node {
 				return panelMessage(cx, tr("Unable to open this file"), ed.err.Get())
 			case ed.preview.Get() && ed.image != "":
 				return p.imagePreview(cx, ed)
+			case ed.preview.Get() && htmlFile(rel):
+				return p.htmlPreview(cx, ed)
 			case ed.preview.Get() && markdownFile(rel):
 				return core.Scroll{TestID: "file-markdown", StyleFunc: func() core.Style { return ui.FillRest.Merge(core.Style{Background: colors.Canvas()}) }, Children: []core.Node{
 					core.View{Style: core.Style{Padding: core.Symmetric(16, 20)}, Children: []core.Node{
@@ -1251,4 +1252,50 @@ func (p *panel) sidesView(cx *core.Scope) core.Node {
 		}
 		return core.View{Style: ui.FillRest.Merge(core.Style{AlignItems: core.AlignCenter, JustifyContent: core.JustifyCenter}), Children: []core.Node{ui.Spinner{Size: 16}}}
 	})
+}
+
+func htmlFile(rel string) bool {
+	ext := path.Ext(rel)
+	return strings.EqualFold(ext, ".html") || strings.EqualFold(ext, ".htm")
+}
+
+// htmlPreview shows an HTML file as a page, as MyGo does: served from the
+// workspace by a file proxy, local or through the service, with the text
+// being edited, in an untrusted web view that loads and navigates only
+// within the proxy's exact origin. The proxy lives with the preview.
+func (p *panel) htmlPreview(cx *core.Scope, ed *fileEditor) core.Node {
+	root := p.cwd.GetUntracked()
+	var proxy *phoneproxy.PhoneFileProxy
+	var err error
+	if p.host.RemoteHost() {
+		cl := p.host.State().Remote
+		if cl == nil || cl.Wire() == nil {
+			return panelMessage(cx, tr("Browser unavailable"), svcproto.ErrClosed.Error())
+		}
+		proxy, err = phoneproxy.NewPhoneFileProxy(cl.Wire(), root)
+	} else {
+		proxy, err = phoneproxy.NewLocalFileProxy(root)
+	}
+	if err != nil {
+		return panelMessage(cx, tr("Browser unavailable"), err.Error())
+	}
+	cx.Cleanup(proxy.Close)
+	proxy.SetPreview(ed.rel, core.Untracked(cx, ed.text.Get))
+	origin, err := url.Parse(proxy.URL)
+	if err != nil {
+		return panelMessage(cx, tr("Browser unavailable"), err.Error())
+	}
+	allowed := origin.Scheme + "://" + origin.Host
+	page := proxy.URL + "?path=" + url.QueryEscape((&url.URL{Path: "/" + ed.rel}).String())
+	colors := nswidgets.ColorsOf(cx)
+	return core.WebView{TestID: "file-html", Label: tr("Preview"), Style: ui.FillRest,
+		Untrusted: true, AllowedOrigins: []string{allowed},
+		// The bootstrap redirects before the first document commits, so the
+		// policy, not only the resource rules, keeps it to the proxy.
+		NavigationPolicy: func(r core.WebNavigationRequest) bool {
+			target, err := url.Parse(r.URL)
+			return err == nil && !r.NewWindow && target.Scheme == origin.Scheme && target.Host == origin.Host
+		},
+		SourceFunc: func() core.WebSource { return core.WebSrc(page) },
+		StyleFunc:  func() core.Style { return ui.FillRest.Merge(core.Style{Background: colors.Canvas()}) }}
 }
