@@ -7,8 +7,6 @@ import (
 	"errors"
 	"time"
 
-	"github.com/egoist/mygo/plugins/permissionflow"
-
 	dc "miya/internal/desktopcontrol"
 )
 
@@ -18,13 +16,18 @@ func Authorize() error {
 	if !Available() {
 		return permissionError(3)
 	}
-	for i, p := range []permissionflow.Permission{permissionflow.ScreenRecording, permissionflow.Accessibility} {
-		st, err := permissionflow.Check(p)
+	// Screen Recording first, then Accessibility: the error names the first
+	// missing one, after the system was asked for it.
+	for i, p := range []struct {
+		allowed func() (bool, error)
+		request func() bool
+	}{{dc.ScreenRecordingAllowed, dc.RequestScreenRecording}, {dc.AccessibilityAllowed, dc.RequestAccessibility}} {
+		ok, err := p.allowed()
 		if err != nil {
 			return err
 		}
-		if st != permissionflow.Granted {
-			_, _ = permissionflow.Request(context.Background(), p)
+		if !ok {
+			p.request()
 			return permissionError(i + 1)
 		}
 	}

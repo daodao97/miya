@@ -64,7 +64,9 @@ Miya 不直接用 `../nsgo`：那里可能正在开发 NSGo 本身（补 Miya �
 非界面包对 MyGo 的残留依赖（第 5 阶段前处理）：
 
 - `locales`、`internal/phone/server`：`mygo/i18n` 与 `mygo/locales/zh-Hans`。
-- `internal/desktop`：`mygo/plugins/permissionflow`。
+- ~~`internal/desktop`：`mygo/plugins/permissionflow`~~ 已改为 `internal/desktopcontrol` 自持的屏幕录制与辅助功能检查和请求（与 `permissionflow.Check` / `Request` 相同的系统调用，`Request` 本就不弹引导面板）。
+
+`go list -tags nsgo -deps .` 现在只剩 `locales` 带来的 `mygo/i18n` 及其 3 个内部包（迁移开始时 22 个）。`locales` 由 `mygo generate` 生成，MyGo 版切换语言依赖它，故在第 5 阶段与 MyGo 一起换成 NSGo 的 i18n。
 
 ## 验证
 

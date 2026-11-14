@@ -29,3 +29,8 @@ func capture(context.Context, Display, Window, CaptureOptions) ([]byte, error) {
 }
 func runPrivacy(context.Context, func() error) error { return ErrUnsupported }
 func postToDisplay(Display, Input) error             { return ErrUnsupported }
+
+func ScreenRecordingAllowed() (bool, error) { return false, ErrUnsupported }
+func RequestScreenRecording() bool          { return false }
+func AccessibilityAllowed() (bool, error)   { return false, ErrUnsupported }
+func RequestAccessibility() bool            { return false }
