@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -28,6 +29,31 @@ type PhoneFileProxy struct {
 	URL         string
 	WebHost     string
 	webToken    string
+	localRoot   *os.Root
+	preview     atomic.Pointer[filePreview]
+}
+
+type filePreview struct{ path, text string }
+
+// NewLocalFileProxy exposes only the selected workspace, including assets
+// referenced by HTML previews. os.Root keeps symlinks inside that workspace.
+func NewLocalFileProxy(project string) (*PhoneFileProxy, error) {
+	root, err := os.OpenRoot(project)
+	if err != nil {
+		return nil, err
+	}
+	p := &PhoneFileProxy{localRoot: root}
+	if err := p.startHandler("", func(string, string) http.Handler { return http.FileServerFS(root.FS()) }); err != nil {
+		root.Close()
+		return nil, err
+	}
+	return p, nil
+}
+
+// SetPreview serves an editor snapshot at its original URL without saving it.
+// Other requests keep loading the workspace's styles, scripts and images.
+func (p *PhoneFileProxy) SetPreview(rel, text string) {
+	p.preview.Store(&filePreview{path: "/" + strings.TrimPrefix(rel, "/"), text: text})
 }
 
 // The browser sees ordinary same-origin HTTP, including absolute /assets URLs.
@@ -50,22 +76,12 @@ func (p *PhoneFileProxy) Start(project string, dial func(context.Context) (net.C
 }
 
 func (p *PhoneFileProxy) StartProxy(prefix, webOrigin string, dial func(context.Context) (net.Conn, error)) error {
-	var secret [32]byte
-	if _, err := rand.Read(secret[:]); err != nil {
-		return err
-	}
-	token := hex.EncodeToString(secret[:])
-	cookieName := "miya_files_" + token[:12]
-	ln, err := net.Listen("tcp4", "127.0.0.1:0")
-	if err != nil {
-		return err
-	}
-	origin := "http://" + ln.Addr().String()
-	bootstrapPath := "/.miya-open/" + token
-	if webOrigin != "" {
-		bootstrapPath = "/.miya-web-open/" + token
-	}
-	p.URL = origin + bootstrapPath
+	return p.startHandler(webOrigin, func(origin, cookieName string) http.Handler {
+		return p.reverseProxy(prefix, webOrigin, origin, cookieName, dial)
+	})
+}
+
+func (p *PhoneFileProxy) reverseProxy(prefix, webOrigin, origin, cookieName string, dial func(context.Context) (net.Conn, error)) http.Handler {
 	p.transport = &http.Transport{MaxIdleConns: 8, MaxIdleConnsPerHost: 6, IdleConnTimeout: 30 * time.Second, ResponseHeaderTimeout: 20 * time.Second,
 		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
 			ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
@@ -73,7 +89,7 @@ func (p *PhoneFileProxy) StartProxy(prefix, webOrigin string, dial func(context.
 			return dial(ctx)
 		},
 	}
-	proxy := &httputil.ReverseProxy{Transport: p.transport, ModifyResponse: func(response *http.Response) error {
+	return &httputil.ReverseProxy{Transport: p.transport, ModifyResponse: func(response *http.Response) error {
 		location := response.Header.Get("Location")
 		if strings.HasPrefix(location, prefix+"/") {
 			response.Header.Set("Location", strings.TrimPrefix(location, prefix))
@@ -111,6 +127,26 @@ func (p *PhoneFileProxy) StartProxy(prefix, webOrigin string, dial func(context.
 	}, ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
 		http.Error(w, "Unable to connect to the desktop service. Check that your desktop is online and the service is running.", http.StatusBadGateway)
 	}}
+}
+
+func (p *PhoneFileProxy) startHandler(webOrigin string, handler func(origin, cookieName string) http.Handler) error {
+	var secret [32]byte
+	if _, err := rand.Read(secret[:]); err != nil {
+		return err
+	}
+	token := hex.EncodeToString(secret[:])
+	cookieName := "miya_files_" + token[:12]
+	ln, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		return err
+	}
+	origin := "http://" + ln.Addr().String()
+	bootstrapPath := "/.miya-open/" + token
+	if webOrigin != "" {
+		bootstrapPath = "/.miya-web-open/" + token
+	}
+	p.URL = origin + bootstrapPath
+	serve := handler(origin, cookieName)
 	p.server = &http.Server{ReadHeaderTimeout: 10 * time.Second, IdleTimeout: time.Minute, ConnState: func(conn net.Conn, state http.ConnState) {
 		if state == http.StateNew {
 			p.connections.Store(conn, true)
@@ -149,7 +185,12 @@ func (p *PhoneFileProxy) StartProxy(prefix, webOrigin string, dial func(context.
 			http.Error(w, "Forbidden", 403)
 			return
 		}
-		proxy.ServeHTTP(w, r)
+		if preview := p.preview.Load(); preview != nil && r.URL.Path == preview.path {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			http.ServeContent(w, r, "preview.html", time.Time{}, strings.NewReader(preview.text))
+			return
+		}
+		serve.ServeHTTP(w, r)
 	})}
 	go p.server.Serve(ln)
 	return nil
@@ -157,7 +198,9 @@ func (p *PhoneFileProxy) StartProxy(prefix, webOrigin string, dial func(context.
 
 func (p *PhoneFileProxy) SetConn(conn *remote.Conn) {
 	p.conn.Store(conn)
-	p.transport.CloseIdleConnections()
+	if p.transport != nil {
+		p.transport.CloseIdleConnections()
+	}
 }
 
 func (p *PhoneFileProxy) Close() {
@@ -165,6 +208,11 @@ func (p *PhoneFileProxy) Close() {
 		p.conn.Store(nil)
 		p.server.Close()
 		p.connections.Range(func(key, _ any) bool { key.(net.Conn).Close(); p.connections.Delete(key); return true })
-		p.transport.CloseIdleConnections()
+		if p.transport != nil {
+			p.transport.CloseIdleConnections()
+		}
+		if p.localRoot != nil {
+			p.localRoot.Close()
+		}
 	})
 }

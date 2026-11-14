@@ -94,6 +94,7 @@ type fileEditor struct {
 	// image is the picture an image file previews as; an SVG's is parsed
 	// again from its text each time the preview opens.
 	image ui.ImageSource
+	html  *PanelSurface
 }
 
 // svgPreview parses an SVG's text for the preview, nil when it is not a
@@ -145,6 +146,7 @@ func newPanelState(cwd string, visible bool) *panelState {
 // resetWorkspace forgets what the files and the review read of the old
 // workspace; terminals and browsers keep running.
 func (p *panelState) resetWorkspace(cwd string) {
+	p.closeFilePreviews()
 	p.Cwd = cwd
 	p.Selected = ""
 	p.expanded = map[string]bool{}
@@ -212,6 +214,7 @@ func (app *App) HidePanel(p *panelState) {
 
 func (app *App) closePanels() {
 	for _, p := range app.panels {
+		p.closeFilePreviews()
 		for _, s := range p.Surfaces {
 			closeSurfaceResources(s)
 		}
@@ -267,6 +270,9 @@ func (app *App) openSurface(p *panelState, k surfaceKind) {
 func (app *App) closeSurface(p *panelState, i int) {
 	if i < 0 || i >= len(p.Surfaces) {
 		return
+	}
+	if p.Surfaces[i].Kind == SurfaceFiles {
+		p.closeFilePreviews()
 	}
 	closeSurfaceResources(p.Surfaces[i])
 	p.Surfaces = append(p.Surfaces[:i:i], p.Surfaces[i+1:]...)
@@ -658,13 +664,16 @@ func (app *App) loadDir(p *panelState, rel string) {
 }
 
 func (app *App) openFile(p *panelState, rel string) {
+	if p.Selected != rel {
+		p.closeFilePreviews()
+	}
 	p.Selected = rel
 	// An editor already open keeps its unsaved edits.
 	if ed := p.Editors[rel]; ed != nil && ed.err == "" {
 		return
 	}
 	kind := projectfiles.ImageFileKind(rel)
-	ed := &fileEditor{loading: true, Preview: strings.EqualFold(path.Ext(rel), ".md") || kind != ""}
+	ed := &fileEditor{loading: true, Preview: strings.EqualFold(path.Ext(rel), ".md") || isHTMLFile(rel) || kind != ""}
 	p.Editors[rel] = ed
 	root := p.Cwd
 	files := app.C.WorkspaceFiles()
@@ -810,23 +819,33 @@ func (app *App) fileEditorView(c *ui.Context, p *panelState, rel string) {
 		return
 	}
 	markdownFile := strings.EqualFold(path.Ext(rel), ".md")
+	htmlFile := isHTMLFile(rel)
 	imageKind := projectfiles.ImageFileKind(rel)
 	ui.Column(c).Grow(1).MinHeight(0).Children(func() {
 		panelBar(c, func() {
 			if widgets.ToolButton(c.Key("back"), "arrow-left", tr("Back to file list")).Clicked() {
+				ed.closeHTMLPreview()
 				p.Selected = ""
 			}
 			ui.Text(c, rel).Grow(1).MinWidth(0).SingleLine().Ellipsis("…").FontSize(12).TextColor(widgets.Muted)
-			if (markdownFile || imageKind == "svg") && ed.State != nil {
+			if (markdownFile || htmlFile || imageKind == "svg") && ed.State != nil {
 				label, symbol := tr("Preview"), "eye"
 				if ed.Preview {
 					label, symbol = tr("Source"), "code"
 				}
 				if widgets.ToolButton(c.Key("preview"), symbol, label).Clicked() {
 					ed.Preview = !ed.Preview
+					if !ed.Preview {
+						ed.closeHTMLPreview()
+					}
 					if ed.Preview && imageKind == "svg" {
 						ed.image = svgPreview(ed.State.Buffer.String())
 					}
+				}
+			}
+			if htmlFile && ed.Preview && ed.State != nil {
+				if widgets.ToolButton(c.Key("reload"), "refresh", tr("Reload")).Clicked() {
+					ed.closeHTMLPreview()
 				}
 			}
 			if ed.State != nil && ed.State.Buffer.Modified() {
@@ -835,6 +854,9 @@ func (app *App) fileEditorView(c *ui.Context, p *panelState, rel string) {
 				}
 			}
 		})
+		if p.Selected != rel {
+			return
+		}
 		if ed.saveErr != "" {
 			ui.Text(c, ed.saveErr).FontSize(11).TextColor(widgets.Danger).Padding(4, 10)
 		}
@@ -859,6 +881,8 @@ func (app *App) fileEditorView(c *ui.Context, p *panelState, rel string) {
 				})
 				ui.Text(c, fmt.Sprintf("%d × %d", int(w+0.5), int(h+0.5))).FontSize(11).TextColor(widgets.Muted).TextAlign(ui.Center).FillWidth()
 			})
+		case ed.Preview && htmlFile && ed.State != nil:
+			app.htmlPreviewView(c, p, rel, ed)
 		case ed.Preview && ed.State != nil:
 			ui.Scroll(c.Key("preview")).Grow(1).MinHeight(0).Background(widgets.Canvas).Children(func() {
 				ui.Column(c).Padding(16, 20).Children(func() {
