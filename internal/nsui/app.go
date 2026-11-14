@@ -18,6 +18,7 @@ import (
 	"miya/internal/chat/model"
 	"miya/internal/memory/manager"
 	"miya/internal/nswidgets"
+	"miya/internal/prefs"
 	projectaccess "miya/internal/project/access"
 	"miya/internal/runtime/tracker"
 	svcclient "miya/internal/service/client"
@@ -144,11 +145,17 @@ func appMain(cx *core.Scope) {
 	store, err := workspaces.Load()
 	hub := newWorkspaceHub(cx, c, store, err)
 	// Switching workspace shows that workspace's controller in a new shell.
+	// The saved language, else the system's; the whole window rebuilds when
+	// it changes, as its labels are read while views build.
+	cx.SetLocale(prefs.NormalizeInterfaceLanguage(prefs.Load("interfaceLanguage")))
 	nsgo.SetMainView(cx, func(cx *core.Scope) core.Node {
 		return core.Dynamic(func(cx *core.Scope) core.Node {
-			h := hub.active.Get()
-			usageKey.Provide(cx, hub.usage)
-			return root(cx, h, workspaceSelector(cx, hub))
+			interfaceLanguage(cx)
+			return core.Dynamic(func(cx *core.Scope) core.Node {
+				h := hub.active.Get()
+				usageKey.Provide(cx, hub.usage)
+				return root(cx, h, workspaceSelector(cx, hub))
+			})
 		})
 	})
 	w := desktop.MainWindow(cx)
