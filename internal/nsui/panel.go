@@ -20,16 +20,19 @@ import (
 	"github.com/nsgo-dev/nsgo/core"
 	"github.com/nsgo-dev/nsgo/ui"
 
+	"miya/internal/chat/model"
 	"miya/internal/fsutil"
 	"miya/internal/nswidgets"
 	projectfiles "miya/internal/project/files"
 	projectgit "miya/internal/project/git"
+	"miya/internal/runtime/tracker"
+	webservice "miya/internal/runtime/web"
 	svcproto "miya/internal/service/protocol"
 )
 
 // The right panel, as on MyGo, holds tabs of surfaces beside the
 // conversation: browsers and terminals, as many as asked, and one tab each
-// of the workspace's files and a review of its changes, chosen from cards
+// of the workspace's files, changes and runtime, chosen from cards
 // while none is open. Its state belongs to the engine; reads of the
 // workspace run on goroutines of their own and post their results back.
 type surfaceKind int
@@ -39,32 +42,47 @@ const (
 	surfaceTerminal
 	surfaceFiles
 	surfaceReview
+	surfaceRuntime
 )
 
-var surfaceKinds = []surfaceKind{surfaceBrowser, surfaceTerminal, surfaceFiles, surfaceReview}
+var surfaceKinds = []surfaceKind{surfaceBrowser, surfaceTerminal, surfaceFiles, surfaceReview, surfaceRuntime}
 
 func (k surfaceKind) label() string {
-	return [...]string{tr("Browser"), tr("Terminal"), tr("Files"), tr("Review")}[k]
+	return [...]string{tr("Browser"), tr("Terminal"), tr("Files"), tr("Review"), tr("Background tasks")}[k]
 }
 
-func (k surfaceKind) key() string { return [...]string{"browser", "terminal", "files", "review"}[k] }
+func (k surfaceKind) key() string {
+	return [...]string{"browser", "terminal", "files", "review", "runtime"}[k]
+}
 
 func (k surfaceKind) icon() string {
-	return [...]string{"globe", "terminal-2", "folder", "file-diff"}[k]
+	return [...]string{"globe", "terminal-2", "folder", "file-diff", "stack-2"}[k]
 }
 
 func (k surfaceKind) description() string {
-	return [...]string{tr("Open a local app or URL"), tr("Open a terminal in this workspace"), tr("Browse and read workspace files"), tr("Review file changes")}[k]
+	return [...]string{tr("Open a local app or URL"), tr("Open a terminal in this workspace"), tr("Browse and read workspace files"), tr("Review file changes"), tr("View this conversation's tasks, processes, and services")}[k]
 }
 
 // single kinds open one tab; another request shows it again.
-func (k surfaceKind) single() bool { return k == surfaceFiles || k == surfaceReview }
+func (k surfaceKind) single() bool {
+	return k == surfaceFiles || k == surfaceReview || k == surfaceRuntime
+}
 
 // surface is one tab. Its signals live as long as the panel.
 type surface struct {
-	id     int
-	kind   surfaceKind
-	closed bool
+	id          int
+	kind        surfaceKind
+	closed      bool
+	ctx         context.Context
+	cancel      context.CancelFunc
+	webCancel   context.CancelFunc
+	webProxyURL string
+	webTarget   string
+	webService  webservice.Service
+	runtimeData *core.Signal[*tracker.ConversationRuntime]
+	runtimeBusy *core.Signal[bool]
+	runtimeErr  *core.Signal[string]
+	runtimeRef  model.ThreadRef
 
 	// A browser's typed address, the URL it loads and the page it shows.
 	address, loaded, page, webErr *core.Signal[string]
@@ -105,9 +123,13 @@ type diffSides struct {
 }
 
 type panel struct {
-	cx   *core.Scope
-	host Host
-	open *core.Signal[bool]
+	cx       *core.Scope
+	ctx      context.Context
+	ref      *core.Signal[model.ThreadRef]
+	threadID int
+	lastBusy bool
+	host     Host
+	open     *core.Signal[bool]
 
 	cwd      *core.Signal[string]
 	surfaces *core.Signal[[]*surface]
@@ -136,10 +158,95 @@ type panel struct {
 	diffGen int
 }
 
-// filePanel is the right panel. open shows it; it follows the window's
-// workspace, and reads the workspace again as a turn ends.
+// filePanel keeps each conversation's state for the life of the shell. Switching
+// views disposes their bindings, but leaves terminal connections and tab state alive.
 func filePanel(cx *core.Scope, c Host, open *core.Signal[bool]) core.Node {
-	p := &panel{cx: cx, host: c, open: open,
+	ctx := cx.Context()
+	panels := map[model.ThreadRef]*panel{}
+	// A thread has no stable ref until its backend session starts. Keep its
+	// provisional ownership even while another conversation is selected.
+	pending := map[int]*panel{}
+	known := map[int]bool{}
+	for _, thread := range c.AllThreads() {
+		known[thread.ID] = true
+	}
+	shown := core.NewSignal[*panel](cx, nil)
+	current := Live(c.Current)
+	cwd := Live(func() string { return c.State().Cwd })
+	var previousID int
+	cx.Effect(func() {
+		thread, dir := current(), cwd()
+		cx.Untrack(func() {
+			// A newly allocated sidebar row inherits the unsent draft, before
+			// it has a backend session ID. Selecting an existing row never does.
+			if thread.ID != 0 && previousID == 0 && !known[thread.ID] && pending[thread.ID] == nil {
+				pending[thread.ID] = pending[0]
+				delete(pending, 0)
+			}
+			all := append(slices.Clone(c.AllThreads()), thread)
+			for _, t := range all {
+				ref := c.ThreadRef(t)
+				if p := pending[t.ID]; p != nil && ref.Valid() {
+					if panels[ref] == nil {
+						panels[ref] = p
+					} else {
+						p.closeAll()
+					}
+					delete(pending, t.ID)
+					p.ref.Set(ref)
+					p.threadID = t.ID
+				}
+				known[t.ID] = true
+			}
+			ref := c.ThreadRef(thread)
+			var p *panel
+			if ref.Valid() {
+				p = panels[ref]
+			} else {
+				ref = model.ThreadRef{}
+				p = pending[thread.ID]
+			}
+			if p == nil {
+				p = newPanel(cx, ctx, c, open)
+			}
+			if ref.Valid() {
+				panels[ref] = p
+			} else {
+				pending[thread.ID] = p
+			}
+			p.ref.Set(ref)
+			p.threadID = thread.ID
+			if dir != p.cwd.GetUntracked() {
+				p.resetWorkspace(dir)
+				p.reload()
+			} else if p.lastBusy && !thread.Busy {
+				p.workspaceChanged()
+			}
+			p.lastBusy = thread.Busy
+			shown.Set(p)
+			previousID = thread.ID
+		})
+	})
+	cx.Cleanup(func() {
+		for _, p := range panels {
+			p.closeAll()
+		}
+		for _, p := range pending {
+			if p != nil {
+				p.closeAll()
+			}
+		}
+	})
+	return core.Dynamic(func(cx *core.Scope) core.Node {
+		if p := shown.Get(); p != nil {
+			return p.view(cx)
+		}
+		return core.Group(nil)
+	})
+}
+
+func newPanel(cx *core.Scope, ctx context.Context, c Host, open *core.Signal[bool]) *panel {
+	p := &panel{cx: cx, host: c, open: open, ctx: ctx, ref: core.NewSignal(cx, model.ThreadRef{}),
 		cwd:        core.NewSignal(cx, ""),
 		surfaces:   core.NewSignalFunc[[]*surface](cx, nil, slices.Equal),
 		active:     core.NewSignal(cx, 0),
@@ -154,25 +261,10 @@ func filePanel(cx *core.Scope, c Host, open *core.Signal[bool]) core.Node {
 		sides:      core.NewSignal(cx, diffSides{}),
 	}
 	p.resetWorkspace("")
-	st := c.State()
-	cwd := Live(func() string { return st.Cwd })
-	busy := Live(func() bool { return c.Current().Busy })
-	lastBusy := false
-	cx.Effect(func() {
-		dir, running := cwd(), busy()
-		cx.Untrack(func() {
-			switch {
-			case dir != p.cwd.Get():
-				p.resetWorkspace(dir)
-				p.reload()
-			case lastBusy && !running:
-				// A turn that ended may have changed the workspace.
-				p.workspaceChanged()
-			}
-			lastBusy = running
-		})
-	})
-	cx.Cleanup(p.closeAll)
+	return p
+}
+
+func (p *panel) view(cx *core.Scope) core.Node {
 	active := core.NewMemo(cx, func() *surface {
 		id := p.active.Get()
 		for _, s := range p.surfaces.Get() {
@@ -257,7 +349,9 @@ func (p *panel) openSurface(k surfaceKind) {
 	}
 	p.nextID++
 	cx := p.cx
-	s := &surface{id: p.nextID, kind: k,
+	ctx, cancel := context.WithCancel(p.ctx)
+	s := &surface{id: p.nextID, kind: k, ctx: ctx, cancel: cancel,
+		runtimeData: core.NewSignal[*tracker.ConversationRuntime](cx, nil), runtimeBusy: core.NewSignal(cx, false), runtimeErr: core.NewSignal(cx, ""),
 		address: core.NewSignal(cx, ""), loaded: core.NewSignal(cx, ""), page: core.NewSignal(cx, ""), webErr: core.NewSignal(cx, ""), web: &core.Ref{},
 		term: core.NewSignal[*terminal.Terminal](cx, nil), termErr: core.NewSignal(cx, ""), starting: core.NewSignal(cx, false), exited: core.NewSignal(cx, false)}
 	p.surfaces.Set(append(slices.Clone(p.surfaces.GetUntracked()), s))
@@ -296,9 +390,7 @@ func (p *panel) closeSurface(id int) {
 
 func closeSurface(s *surface) {
 	s.closed = true
-	if t := s.term.GetUntracked(); t != nil {
-		go t.Close()
-	}
+	s.cancel()
 }
 
 func (p *panel) closeAll() {
@@ -415,6 +507,7 @@ func (p *panel) chooser(cx *core.Scope) core.Node {
 			core.View{Style: core.Style{Height: core.Pt(10)}},
 			row(surfaceBrowser, surfaceTerminal),
 			row(surfaceFiles, surfaceReview),
+			row(surfaceRuntime),
 		}},
 	}}
 }
@@ -427,6 +520,8 @@ func (p *panel) body(cx *core.Scope, s *surface) core.Node {
 		return p.terminalView(cx, s)
 	case surfaceFiles:
 		return p.filesView(cx)
+	case surfaceRuntime:
+		return p.runtimeView(cx, s)
 	default:
 		return p.reviewView(cx)
 	}
@@ -468,13 +563,9 @@ func muted(c nswidgets.Colors) core.Color   { return c.Muted() }
 func success(c nswidgets.Colors) core.Color { return c.Success() }
 func danger(c nswidgets.Colors) core.Color  { return c.Danger() }
 
-// browserView shows a page of the local machine or the web. A mirrored
-// window's pages are the host's, which MyGo reaches through the service's
-// proxy; that path is not ported yet.
+// browserView shows public pages directly and remote local services through
+// the service proxy, keeping the user's address separate from the proxy URL.
 func (p *panel) browserView(cx *core.Scope, s *surface) core.Node {
-	if p.host.RemoteHost() {
-		return panelMessage(cx, tr("Browser unavailable"), "")
-	}
 	id := strconv.Itoa(s.id)
 	return core.View{Style: ui.FillRest, Children: []core.Node{
 		panelBar(cx,
@@ -499,8 +590,9 @@ func (p *panel) browserView(cx *core.Scope, s *surface) core.Node {
 			return core.WebView{TestID: "browser-" + id, Label: tr("Browser"), Ref: s.web, Style: ui.FillRest,
 				SourceFunc: func() core.WebSource { return core.WebSrc(s.loaded.Get()) },
 				OnNavigationStateChange: func(n core.WebNavigation) {
-					s.page.Set(n.URL)
-					s.address.Set(n.URL)
+					target := browserPageURL(s, n.URL)
+					s.page.Set(target)
+					s.address.Set(target)
 				},
 				OnError: func(err error) { s.webErr.Set(err.Error()) }}
 		}),
@@ -513,6 +605,10 @@ func (p *panel) navigate(s *surface) {
 		return
 	}
 	s.address.Set(target)
+	if p.host.RemoteHost() {
+		p.navigateRemoteBrowser(s, target, webservice.Service{})
+		return
+	}
 	s.webErr.Set("")
 	if s.loaded.GetUntracked() == target {
 		s.web.Reload()
@@ -561,14 +657,16 @@ func (p *panel) startTerminal(s *surface) {
 		if err != nil && opts.Conn != nil {
 			opts.Conn.Close()
 		}
+		if t != nil {
+			context.AfterFunc(s.ctx, func() { _ = t.Close() })
+		}
 		p.cx.Post(func() {
+			if s.closed {
+				return
+			}
 			s.starting.Set(false)
 			if err != nil {
 				s.termErr.Set(err.Error())
-				return
-			}
-			if s.closed {
-				go t.Close()
 				return
 			}
 			s.term.Set(t)
@@ -826,7 +924,8 @@ func (p *panel) saveFile(ed *fileEditor) {
 
 // editorView edits an open file, or previews a Markdown file or an image.
 // An HTML file shows its source: MyGo's preview needs a web view kept to
-// the workspace's proxy, which NSGo's WebView cannot yet restrict.
+// the workspace proxy's exact origin, which NSGo's hostname-only policy
+// cannot enforce (see docs/nsgo-migration.md).
 func (p *panel) editorView(cx *core.Scope, ed *fileEditor) core.Node {
 	colors := nswidgets.ColorsOf(cx)
 	rel := ed.rel

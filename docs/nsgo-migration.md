@@ -52,7 +52,7 @@ Miya 不直接用 `../nsgo`：那里可能正在开发 NSGo 本身（补 Miya �
 | 0 · 基础 | 依赖、构建标签入口、桥接层、会话列表骨架 | 两种构建通过；桥接测试（含 `-race`）通过 ✅ |
 | 1 · 主题与控件 | `internal/nswidgets`：Miya 明暗色板作为 `core.Theme`（自有角色放 `Palette.Colors`），`ColorsOf` 颜色访问器、图标与通用控件；Tabler 图标移到框架无关的 `internal/iconassets` 供新旧两套共用。设置页布局与菜单随第 3 阶段迁移 | 主题、外观切换、图标解析与控件测试通过 ✅（设置页、菜单待做） |
 | 2 · 会话视图 | `internal/chat/view` 的消息列表、Markdown、工具详情、图片、引用和富文本输入（NSGo `ui/chat`、`base/richeditor`） | 桌面能完整对话。进度：`internal/nschat` 的消息列表已完成——分组复用 `chat/presentation`，助手回复用 `base/textview` 流式 Markdown（流式时行不重建），工具活动用 `chat.ActivityRow`，详情按计划、diff、文件、Markdown、等宽输出呈现，错误卡片可重试；外层为 `chat.FloatingConversation`，回合状态、后台任务与 `chat.Composer`（草稿、发送/引导、停止）悬浮在末尾。用户消息显示图片缩略图与附件标签，完成的回复下有复制与交接操作（交接已接到桌面控制器）。子代理列表（按 ID 原地更新，活动标题带摘要，有活跃子代理时活动显示运行中）已完成。桌面输入周边已迁移：新会话建议、Agent 重连、只读提示、Agent/模型/思考/权限选择、排队/立即引导、队列编辑、已发送消息编辑重发、附件粘贴/拖放/选择/移除、远程图片缩略图、@ 会话及文件与 # Agent 补全、交接与任务/协作状态。引用以短标签和独立 chip 显示，草稿保留稳定身份；列表按 ID 保持，文件 I/O 在后台执行并通过 `Scope.Post` 回传 |
-| 3 · 桌面外壳 | 侧栏、工作区切换、文件面板、命令面板、设置、自动化、托盘、多窗口 | 已完成：`ui.SidebarShell`（内嵌卡片、可折叠拖宽，右侧文件面板）；按项目分组的侧栏（跨项目的进行中/未读活动、项目展开与菜单、会话归档删除、添加项目对话框与 NSGo 文件选择器浏览本机或服务端目录），设置与工作区在底部；会话在聚焦窗口里看到即已读；工作区切换（本机/远程，添加、改名、连接进度与取消）；文件面板（文件树与编辑保存、变更审阅 diff、浏览器、终端，⌘⌥B）；设置（通用、账户、手机、记忆、Miya 远程升级）；自动化页；审批、提问与 MCP 表单卡片；输入框周边（建议、Agent/模型/思考/权限选择、附件、@ 引用、队列与编辑、交接、任务与协作状态）；用量（菜单栏图标与面板、额度重置、用量设置；NSGo 暂无面板调整尺寸接口，面板固定尺寸滚动）；命令面板 ⌘K / ⌘⇧P（命令与所有项目的会话）；F1 快捷键一览；macOS 菜单栏与 `⌘N` `⌘,` `⌘B` `⌘.` `Control+Tab`。进行中（子任务分支）：面板的运行时视图、受限 HTML 预览、镜像窗口浏览器与按会话的面板状态 `nsgo-panel2`。待做：多窗口；`internal/ui` 的界面测试迁到 nsgotest |
+| 3 · 桌面外壳 | 侧栏、工作区切换、文件面板、命令面板、设置、自动化、托盘、多窗口 | 已完成：`ui.SidebarShell`（内嵌卡片、可折叠拖宽，右侧文件面板）；按项目分组的侧栏（跨项目的进行中/未读活动、项目展开与菜单、会话归档删除、添加项目对话框与 NSGo 文件选择器浏览本机或服务端目录），设置与工作区在底部；会话在聚焦窗口里看到即已读；工作区切换（本机/远程，添加、改名、连接进度与取消）；文件面板（按会话保存的标签；文件树与编辑保存、变更审阅 diff、浏览器（镜像窗口经服务代理）、终端、后台任务，⌘⌥B；HTML 预览待 NSGo 的不可信网页策略，暂显示源码）；设置（通用、账户、手机、记忆、Miya 远程升级）；自动化页；审批、提问与 MCP 表单卡片；输入框周边（建议、Agent/模型/思考/权限选择、附件、@ 引用、队列与编辑、交接、任务与协作状态）；用量（菜单栏图标与面板、额度重置、用量设置；NSGo 暂无面板调整尺寸接口，面板固定尺寸滚动）；命令面板 ⌘K / ⌘⇧P（命令与所有项目的会话）；F1 快捷键一览；macOS 菜单栏与 `⌘N` `⌘,` `⌘B` `⌘.` `Control+Tab`。待做：多窗口；`internal/ui` 的界面测试迁到 nsgotest |
 | 4 · 手机端 | `internal/mobile`、远程桌面、语音输入，接 NSGo 的 iOS/Android 运行时 | 进行中：手机端核心（新包 `internal/nsmobile`：连接、导航、首页、会话、发送与队列、设置）在 `nsgo-mobile` 分支迁移；之后分派审批、远程桌面、自动化、记忆、语音、推送、网页服务与委派。完成标准：真机验证 |
 | 5 · 收尾 | 删除 MyGo 依赖、旧界面包和构建标签；构建脚本与 CI 改用 `go tool nsgo` | `go list -deps` 不含 `egoist/mygo` |
 
@@ -89,3 +89,19 @@ NSGo 已有 `core.Input.OnPaste`（图片字节和文件 URL）、`View.OnFileDr
 
 - `PickFilesOptions` 没有初始目录、标题、按钮文案选项，使用系统默认值。
 - 原生 `core.Input` 没有复制/剪切及原生上下文菜单的定制回调。键盘和 chip 菜单已适配；原生文本菜单复制的是可见标签。编辑器中的引用/命令尚未画成 MyGo 的行内富文本 chip，引用 chip 显示在输入框上方；没有旧输入框的“粘贴为会话引用”原生菜单项。`base/richeditor.View.OnPasteFiles` 目前只回传文件名，不能保留粘贴图片字节，所以这里保留 `core.Input`，避免丢失附件粘贴。`ui/chat.Composer` 也缺少纯附件可发送判定、编辑禁用和补全提交拦截，Miya 在共享会话包中组合原生卡片与输入框，继续使用 `chat.FloatingConversation`。
+
+## 右侧面板（第二次移植）
+
+NSGo 面板按 `model.ThreadRef` 保存各会话的标签、选中项、文件编辑内容与终端；首次发送后草稿面板交给新会话。切换会话不关闭终端，关闭标签或销毁外壳时关闭连接，包括销毁后才返回的异步创建结果。
+
+“后台任务”标签沿用 `ReadRuntime` / `Runtimes`，展示原生任务、系统进程、已验证 HTTP 服务、TCP 端点与观测时间。显示期间每 5 秒刷新；观测失败时保留上次结果，将活跃状态标成待验证，并移除服务入口。服务打开前通过后台 `runtimeValidate` 或本地 `ValidateToken` 再次核验。状态、类型与观测丢失处理共用于 `internal/runtime/presentation`，MyGo 的 widgets 保留转调入口。
+
+镜像窗口的浏览器将 localhost、回环/未指定 IP，以及带 runtime token 的服务交给 `phone/proxy.NewPhoneWebProxy`；公共 URL 直接加载。每次导航、标签关闭与外壳销毁都会释放旧代理。地址栏展示服务地址而非客户端临时代理地址。
+
+HTML 文件仍仅显示源码。已核查当前只读 NSGo 检出：
+
+- `core.WebView` 只有加载/导航状态通知，缺少可以取消的导航回调、请求拦截与 MyGo `PageOptions.Untrusted` 对等选项。
+- `Scope.ProvideAccess` / `Access.WebHosts()` 确实可限制顶层导航；但 `internal/driver.WebConfig.Navigable` 仅比较 hostname，无法限制代理的完整 origin（scheme + host + port），允许 `about:` / `data:` / `blob:`，且不限制 iframe、脚本、图片、fetch 等页内请求。
+- `Access.Allows` 能检查应用设置的初始 source URL，不会对网页后续导航/子请求逐次调用。`NoJavaScript` 也不能替代 origin/请求限制。
+
+因此当前 API 无法忠实实现 MyGo 的不可信工作区预览（工作区文件代理 + 导航前精确 origin 校验）。需要 NSGo 提供等效的不可信页面策略与可取消的精确 origin 导航策略/请求限制之后，才能启用 HTML 预览；本次未修改 NSGo。
