@@ -26,8 +26,9 @@ func newFakeHost(threads ...model.Thread) *fakeHost {
 	return h
 }
 
-func (h *fakeHost) State() *appmodel.WindowState { return &h.state }
-func (h *fakeHost) EnsurePhoneHost()             {}
+func (h *fakeHost) State() *appmodel.WindowState              { return &h.state }
+func (h *fakeHost) EnsurePhoneHost()                          {}
+func (h *fakeHost) RetryResponse(appmodel.RetryRequest) error { return nil }
 
 func (h *fakeHost) Current() model.Thread {
 	for _, t := range h.threads {

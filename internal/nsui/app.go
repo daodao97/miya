@@ -10,6 +10,7 @@ import (
 
 	"miya/internal/appmodel"
 	"miya/internal/chat/model"
+	"miya/internal/nschat"
 	"miya/internal/nswidgets"
 	"miya/internal/uiruntime"
 )
@@ -21,6 +22,7 @@ type Host interface {
 	State() *appmodel.WindowState
 	Current() model.Thread
 	SelectThread(t model.Thread)
+	RetryResponse(req appmodel.RetryRequest) error
 	EnsurePhoneHost()
 }
 
@@ -124,6 +126,9 @@ func root(cx *core.Scope, c Host) core.Node {
 						StyleFunc:   func() core.Style { return core.Style{FontSize: 12, Color: colors.Muted()} },
 						ContentFunc: func() string { return current().Status },
 					},
+					nschat.View{TestID: "conversation", Thread: current,
+						OnRetry:  func(r appmodel.RetryRequest) { _ = c.RetryResponse(r) },
+						OnReload: func() { c.SelectThread(c.Current()) }},
 				},
 			},
 		},

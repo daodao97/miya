@@ -31,6 +31,15 @@ func SVG(name string) *core.SVG {
 	return s
 }
 
+// LookupSVG is SVG for a name that comes from data, such as an activity's
+// icon: it reports false rather than panicking when there is no such icon.
+func LookupSVG(name string) (*core.SVG, bool) {
+	if _, err := iconassets.SVG(name); err != nil {
+		return nil, false
+	}
+	return SVG(name), true
+}
+
 // IconOf returns a loader of the icon called name, for components that take
 // func() *core.SVG.
 func IconOf(name string) func() *core.SVG { return func() *core.SVG { return SVG(name) } }
