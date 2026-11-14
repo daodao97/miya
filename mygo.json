@@ -6,7 +6,12 @@
   "macos": {
     "minimumSystemVersion": "13.0",
     "infoPlist": {
-      "NSLocalNetworkUsageDescription": "Connect to Miya on your phone over the same Wi-Fi using an encrypted local connection for lower latency."
+      "NSLocalNetworkUsageDescription": "Connect to Miya on your phone over the same Wi-Fi using an encrypted local connection for lower latency.",
+      "CFBundleDevelopmentRegion": "en",
+      "CFBundleLocalizations": [
+        "en",
+        "zh-Hans"
+      ]
     }
   },
   "urlSchemes": [
@@ -26,7 +31,12 @@
       "NSLocalNetworkUsageDescription": "Connect to Miya on your desktop over the same Wi-Fi using an encrypted local connection for lower latency.",
       "NSAppTransportSecurity": {
         "NSAllowsLocalNetworking": true
-      }
+      },
+      "CFBundleDevelopmentRegion": "en",
+      "CFBundleLocalizations": [
+        "en",
+        "zh-Hans"
+      ]
     },
     "buildNumber": "1",
     "developmentTeam": "XNDA84PBM3",
@@ -46,10 +56,6 @@
         "QuickLook"
       ]
     }
-  },
-  "i18n": {
-    "dir": "locales",
-    "source": "en"
   },
   "resources": [
     "resources/languages/en.lproj",

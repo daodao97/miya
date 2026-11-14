@@ -16,10 +16,7 @@ import (
 
 func TestInterfaceLanguageSystemMatching(t *testing.T) {
 	for _, test := range []struct{ preferred, want string }{{"zh-CN", "zh-Hans"}, {"en-GB", "en"}, {"de-DE", "en"}} {
-		got := i18n.Match([]string{test.preferred}, locales.Catalog.Languages())
-		if got == "" {
-			got = locales.Catalog.Source()
-		}
+		got := locales.Match([]string{test.preferred})
 		if got != test.want {
 			t.Errorf("system %s matched %s, want %s", test.preferred, got, test.want)
 		}
@@ -46,6 +43,26 @@ func TestInterfaceLanguageSystemMatching(t *testing.T) {
 		t.Fatal("system language change lost the current page or failed to redraw")
 	}
 	saveReconnectSnapshot(t, tt, "language-en-settings")
+}
+
+// Check every shipped message against the old formatter while the MyGo UI is
+// still present, including apostrophe unescaping and regional locale matching.
+func TestMiyaCatalogMatchesLegacyMyGo(t *testing.T) {
+	legacy, err := i18n.NewCatalog(locales.CatalogFiles(), "en")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tag := range []string{"", "en", "en-GB", "zh-Hans", "zh-CN", "zh-SG", "zh-TW", "de-DE", "invalid!"} {
+		for _, key := range locales.Catalog.Keys() {
+			want := legacy.Format(tag, key, nil)
+			if got := locales.Catalog.Format(tag, key, nil); got != want {
+				t.Errorf("Format(%q, %q) = %q; MyGo = %q", tag, key, got, want)
+			}
+		}
+		if got := locales.Catalog.Format(tag, "missing.key", nil); got != legacy.Format(tag, "missing.key", nil) {
+			t.Errorf("unknown key behavior differs in %q", tag)
+		}
+	}
 }
 
 func TestInterfaceLanguageChoiceAndDeviceIsolation(t *testing.T) {

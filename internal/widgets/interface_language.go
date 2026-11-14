@@ -3,6 +3,7 @@ package widgets
 import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/i18n"
+	_ "github.com/egoist/mygo/locales/zh-Hans"
 	"github.com/egoist/mygo/ui"
 
 	"miya/internal/prefs"
@@ -10,6 +11,15 @@ import (
 )
 
 var ApplyInterfaceLanguage = func(tag string) { mygo.App.SetLocale(tag) }
+
+func init() {
+	catalog, err := i18n.NewCatalog(locales.CatalogFiles(), locales.Catalog.Source())
+	if err != nil {
+		panic(err)
+	}
+	i18n.Register(catalog)
+	locales.SetMessageLocaleFunc(i18n.Locale)
+}
 
 func ConfigureInterfaceLanguage() {
 	if saved := prefs.Load("interfaceLanguage"); saved != "" {

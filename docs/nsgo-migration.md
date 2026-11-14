@@ -62,12 +62,12 @@ Miya 不直接用 `../nsgo`：那里可能正在开发 NSGo 本身（补 Miya �
 
 仍需补的：生物识别、扫码、窗口内 WebView 的部分选项。
 
-非界面包对 MyGo 的残留依赖（第 5 阶段前处理）：
+非界面包已去除 MyGo 依赖：
 
-- `locales`、`internal/phone/server`：`mygo/i18n` 与 `mygo/locales/zh-Hans`。
-- ~~`internal/desktop`：`mygo/plugins/permissionflow`~~ 已改为 `internal/desktopcontrol` 自持的屏幕录制与辅助功能检查和请求（与 `permissionflow.Check` / `Request` 相同的系统调用，`Request` 本就不弹引导面板）。
+- `locales` 使用 Miya 自有的 `internal/i18ncatalog` 加载嵌入的英文和中文 JSON；`go generate ./locales` 生成访问器，`go run ./locales/gen -check` 校验目录与生成文件。MyGo 的 catalog 注册、应用语言函数及自有控件中文翻译只留在旧界面的 `internal/widgets` 中。
+- `internal/desktop` 已改为 `internal/desktopcontrol` 自持的屏幕录制与辅助功能检查和请求（与 `permissionflow.Check` / `Request` 相同的系统调用，`Request` 本就不弹引导面板）。
 
-`go list -tags nsgo -deps .` 现在只剩 `locales` 带来的 `mygo/i18n` 及其 3 个内部包（迁移开始时 22 个）。`locales` 由 `mygo generate` 生成，MyGo 版切换语言依赖它，故在第 5 阶段与 MyGo 一起换成 NSGo 的 i18n。
+`go list -tags nsgo -deps .` 已不再包含 `github.com/egoist/mygo`（迁移开始时 22 个包）。默认 MyGo 构建及其打包工具仍保留，待第 5 阶段删除旧界面时一并移除。
 
 ## 验证
 
