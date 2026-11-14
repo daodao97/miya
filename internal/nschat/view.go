@@ -43,8 +43,10 @@ type View struct {
 	OnSend        func()
 	OnStop        func()
 	SendDisabled  func() bool
-	State         *chat.ConversationState
-	TestID        string
+	// Requests are the pending approvals and questions, above the composer.
+	Requests core.Node
+	State    *chat.ConversationState
+	TestID   string
 }
 
 // maxWidth is the column the conversation keeps to on wide windows.
@@ -87,6 +89,9 @@ func (v View) Render(cx *core.Scope) core.Node {
 		core.View{StyleFunc: func() core.Style {
 			return core.Style{Display: displayIf(len(v.Thread().BackgroundTasks) > 0), Padding: core.Symmetric(0, 4)}
 		}, Children: []core.Node{nswidgets.MutedText(cx, func() string { return backgroundTasks(v.Thread()) })}},
+	}
+	if v.Requests != nil {
+		floating = append(floating, v.Requests)
 	}
 	if v.Draft != nil {
 		floating = append(floating, v.composer())

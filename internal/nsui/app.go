@@ -17,6 +17,7 @@ import (
 // toward internal/ui.Host as views move over; the controller already
 // implements the whole of that.
 type Host interface {
+	requestsHost
 	State() *appmodel.WindowState
 	Current() model.Thread
 	SelectThread(t model.Thread)

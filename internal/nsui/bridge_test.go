@@ -10,6 +10,7 @@ import (
 
 	"miya/internal/appmodel"
 	"miya/internal/chat/model"
+	"miya/internal/interaction"
 	"miya/internal/nswidgets"
 	"miya/internal/uiruntime"
 )
@@ -17,9 +18,10 @@ import (
 // fakeHost holds controller state as the controller does: plain fields,
 // changed on the UI thread, followed by uiruntime.Invalidate.
 type fakeHost struct {
-	threads []model.Thread
-	current int
-	state   appmodel.WindowState
+	answered []interaction.Response
+	threads  []model.Thread
+	current  int
+	state    appmodel.WindowState
 }
 
 func newFakeHost(threads ...model.Thread) *fakeHost {
@@ -35,6 +37,13 @@ func (h *fakeHost) RememberDraft(string)                      {}
 func (h *fakeHost) SendDraft(bool) int                        { return 0 }
 func (h *fakeHost) Stop()                                     {}
 func (h *fakeHost) NewThread()                                {}
+func (h *fakeHost) DescribeApproval(a interaction.Request) appmodel.ApprovalView {
+	return appmodel.ApprovalView{Title: "Run a command", Icon: "terminal-2", Code: a.Command}
+}
+func (h *fakeHost) Answer(a interaction.Request, r interaction.Response) {
+	h.answered = append(h.answered, r)
+}
+func (h *fakeHost) RespondMCPAlways(interaction.Request) error { return nil }
 
 func (h *fakeHost) Current() model.Thread {
 	for _, t := range h.threads {

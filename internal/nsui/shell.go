@@ -12,6 +12,7 @@ import (
 
 	"miya/internal/appmodel"
 	"miya/internal/chat/model"
+	"miya/internal/interaction"
 	"miya/internal/nschat"
 	"miya/internal/nswidgets"
 	"miya/locales"
@@ -71,6 +72,12 @@ func root(cx *core.Scope, c Host) core.Node {
 		// Sending while a turn runs steers it, as on MyGo.
 		OnSend: func() { c.SendDraft(c.Current().Busy) },
 		OnStop: c.Stop,
+		Requests: pendingRequests(cx, c, Live(func() []interaction.Request {
+			if st.Approvals == nil {
+				return nil
+			}
+			return st.Approvals()
+		})),
 	}
 	return ui.SidebarShell{TestID: "window", Variant: ui.SidebarShellInset,
 		Open: open.Get, OnOpenChange: open.Set, ToggleLabel: tr("Toggle sidebar"),
