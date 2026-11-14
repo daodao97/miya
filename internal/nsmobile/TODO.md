@@ -11,12 +11,67 @@ approval or starts one of these features implicitly.
 | Multiple desktop management | Add the registry manager and per-desktop composer sessions. The core uses one active link, per-desktop disk caches/options, and reads the old active secure registry when available. |
 | Automations | Add list/detail/create destinations to `sheetContent`; add automation frame handlers to `client.read`. |
 | Memory | Add a memory sheet; use state revisions to invalidate its data and add the memory frame handler. |
-| Voice | Add a composer accessory beside photo selection; cancel recording on owner epoch, navigation, background, and disconnect. |
-| Push | Add registration, badge and notification routing to the lifecycle adapter. Read-version acknowledgements already live in `phone/client`; no push registration is sent. Android foreground keep-running belongs here too. |
-| Web services | Add the conversation-menu action and owned WebView/proxy lifecycle. Project files already use an authenticated phone file proxy. |
 | Delegations | Add agent tags to the reference suggestions and collaboration frame handlers; thread/file references already work. |
 
+## Voice, notifications and web services
+
+- Voice uses `voiceinput.Start` and NSGo's microphone, off the engine thread.
+  Hold the microphone accessory for 350 ms; partial text replaces the captured
+  UTF-16 selection in the draft. Release finishes recognition; the saved
+  `phone-voice-auto-send` preference optionally sends the final text. Sliding
+  60 points away or native touch cancellation discards capture and its preview.
+  Navigation, composer epoch, link/generation changes, background and disconnect
+  cancel it. A late session returned after a permission prompt is canceled.
+  Denied microphone access has its own translated error. Recording is injected
+  in nsgotest; actual microphone and cloud recognition require device testing.
+- Notifications have a settings permission action, `push` registration and
+  result handling, Android `notice` frames, foreground conversation suppression,
+  durable session routing, local notification IDs and authoritative unread badges.
+  The public device identifier is persisted separately for the NSGo adapter;
+  token/provider secrets are never stored in preferences. Notification and voice
+  preferences reuse the MyGo keys. Launch taps wait for the desktop state;
+  notifications naming another desktop ask for desktop selection (the registry
+  manager remains a separate port).
+- Live Activities are opt-in for the currently viewed busy conversation. The
+  adapter uses `widget.StartActivity`, `Update`, `End`, `OnPushToken` and thread
+  URLs. They end on completion, navigation, background, disconnect or disable;
+  local content is refreshed while active. ActivityKit tokens remain separate
+  from alert-device tokens. Packaging must enable `live_activities.enabled` in
+  `nsgo.yaml` and build the widget extension; otherwise settings reports that
+  activities are unavailable. Background push updates need an authenticated
+  desktop subscription operation, which the existing phone protocol lacks.
+  `PlatformHooks.RegisterActivity` receives `apns.ActivityRegistration` rotations
+  and empty-token unregisters for a host to connect to `apns.ActivityManager`;
+  the provider must encode content with NSGo's `widget.ActivityState`. The default
+  adapter does not invent a protocol operation or ship APNs signing keys.
+- The conversation menu opens a refreshed sheet of verified conversation HTTP
+  services. `phone/services` shares runtime identity/endpoint validation with
+  MyGo. Opening passes the runtime token through `phone/proxy.NewPhoneWebProxy`
+  for desktop revalidation and loads its authenticated loopback URL in an app
+  WebView. Back, sheet dismissal, navigation, background, disconnect and connection
+  replacement cancel outstanding work and release the proxy. Failed observation
+  removes old entries. Project-wide candidate listings, manual ports and the
+  background-task details UI remain outside this port.
+
 ## Platform gaps in the pinned NSGo checkout
+
+- `core/notifications.go` implements local permission, show/close, badge and
+  press APIs. The pinned checkout has **no general APNs alert-device registration
+  or remote-notification receive/open API** (the `mobile` package only wraps
+  tab bars, keyboard accessories, haptics and install APIs). ActivityKit's
+  `widget.OnPushToken` is an activity token, not an alert-device token.
+  `PlatformHooks.RegisterPush` and `ObserveRemoteNotifications` are explicit
+  cancellable registration / observer hooks. The observer must queue launch
+  taps and suppress native foreground banners so this adapter can decide
+  presentation; payloads follow `internal/apns.Payload`. Without those hooks,
+  iOS settings reports remote registration unavailable; local notifications and
+  badges remain usable. No NSGo files were modified.
+- NSGo exposes no Android foreground-service / keep-running API. Android can
+  register for notices over the paired connection while the app runs. A native
+  `PlatformHooks.KeepRunning` lease enables keeping that connection in background;
+  without a lease the core retains its normal background disconnect behavior.
+  This is not a claim of background delivery without a native service.
+
 
 - `Scope.ReadSecret`, `StoreSecret`, and `DeleteSecret` return
   `ErrPlatformUnsupported` on iOS and Android. `scopeSecrets` preserves that

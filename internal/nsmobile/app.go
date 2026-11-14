@@ -11,6 +11,7 @@ import (
 	"github.com/nsgo-dev/nsgo/core"
 	"github.com/nsgo-dev/nsgo/ui"
 
+	"miya/internal/chat/model"
 	"miya/internal/nswidgets"
 	phoneclient "miya/internal/phone/client"
 	"miya/internal/prefs"
@@ -28,10 +29,20 @@ type App struct {
 	optionsAgent            string
 	filesURL                *core.Signal[string]
 	closeFiles              func()
-	caret                   int
+	caret, anchor           int
+	voice                   *phoneVoice
+	voiceStart              voiceStart
+	voiceAutoSend           bool
+	push                    phonePush
+	web                     *webServices
+	fetchRuntime            runtimeFetcher
+	openWebProxy            webProxyOpener
+	webBrowser              bool
 }
 
-func NewMobileApp() *App { return &App{Client: phoneclient.New(), caret: -1} }
+func NewMobileApp() *App {
+	return &App{Client: phoneclient.New(), caret: -1, voiceAutoSend: prefs.Load("phone-voice-auto-send") == "on"}
+}
 
 func MobileEntry() {
 	installNetworkHooks()
@@ -72,7 +83,13 @@ func (m *App) Render(cx *core.Scope) core.Node {
 	m.Client.Changed = m.change
 	cx.SetTheme(nswidgets.Theme())
 	cx.SetLocale(prefs.NormalizeInterfaceLanguage(prefs.Load("interfaceLanguage")))
-	// TODO(push): notification registration/routing and Android keep-running.
+	m.setupPush(cx)
+	cx.Effect(func() {
+		m.revision.Get()
+		if v := m.voice; v != nil && !m.voiceValid(v) {
+			cx.Post(m.act(m.cancelVoice))
+		}
+	})
 	lifecycle := cx.Env().Lifecycle()
 	cx.Effect(func() {
 		next := cx.Env().Lifecycle()
@@ -82,11 +99,14 @@ func (m *App) Render(cx *core.Scope) core.Node {
 		prev := lifecycle
 		lifecycle = next
 		if next == core.LifecycleBackground {
+			m.cancelVoice()
+			m.closeWebServices()
 			m.closeFileBrowser()
 			m.EnterBackground()
 			m.change()
 		} else if prev == core.LifecycleBackground && next == core.LifecycleActive {
 			m.EnterForeground()
+			m.requestPush(false)
 			m.change()
 		}
 	})
@@ -95,7 +115,9 @@ func (m *App) Render(cx *core.Scope) core.Node {
 		raw := cx.Env().OpenedURL()
 		if raw != "" && raw != opened {
 			opened = raw
-			if _, err := remote.ParseLink(raw); err == nil {
+			if _, ok := model.ParseThreadURL(raw); ok {
+				cx.Post(m.act(func() { m.openActivityURL(raw) }))
+			} else if _, err := remote.ParseLink(raw); err == nil {
 				cx.Post(m.act(func() { m.Connect(raw) }))
 			}
 		}
@@ -117,6 +139,7 @@ func (m *App) Render(cx *core.Scope) core.Node {
 	})
 	cx.OnBackPress(func() bool {
 		if m.sheet.Get() != "" {
+			m.closeWebServices()
 			m.sheet.Set("")
 			return true
 		}
@@ -131,7 +154,7 @@ func (m *App) Render(cx *core.Scope) core.Node {
 		}
 		return false
 	})
-	cx.Cleanup(func() { m.closeFileBrowser() })
+	cx.Cleanup(func() { m.cancelVoice(); m.closeWebServices(); m.closeFileBrowser(); m.closePush() })
 	// Static translated labels are rebuilt only when language changes. Client
 	// state and composer drafts stay outside this region.
 	return core.Dynamic(func(cx *core.Scope) core.Node {
@@ -160,7 +183,7 @@ func (m *App) root(cx *core.Scope) core.Node {
 		return core.Style{Width: core.Pct(100), Height: core.Pct(100), Padding: safe, Background: colors.Canvas(), Color: colors.Ink(), MinHeight: core.Pt(0)}
 	}, Children: []core.Node{
 		m.page(cx),
-		ui.Sheet{Open: func() bool { return m.sheet.Get() != "" }, OnClose: func() { m.sheet.Set("") }, Children: []core.Node{
+		ui.Sheet{Open: func() bool { return m.sheet.Get() != "" }, OnClose: func() { m.closeWebServices(); m.sheet.Set("") }, Children: []core.Node{
 			core.Dynamic(func(cx *core.Scope) core.Node { return m.sheetContent(cx) }),
 		}},
 	}}
@@ -196,10 +219,16 @@ func (m *App) page(cx *core.Scope) core.Node {
 	})
 }
 
-// TODO(automations, memory, remote-desktop, web-services, delegations): add
+// TODO(automations, memory, remote-desktop, delegations): add
 // owned destinations here alongside their frame handlers in phone/client.
 func (m *App) sheetContent(cx *core.Scope) core.Node {
 	switch m.sheet.Get() {
+	case "web-services":
+		return m.webServicesSheet(cx)
+	case "voice":
+		return m.voiceSettings(cx)
+	case "push":
+		return m.pushSettings(cx)
 	case "settings":
 		return m.settings(cx)
 	case "language":

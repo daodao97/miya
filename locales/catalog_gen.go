@@ -20739,3 +20739,133 @@ func NsComposerUnknownCommand() string { return In(i18n.Locale()).NsComposerUnkn
 func (msgs Messages) NsComposerUnknownCommand() string {
 	return Catalog.Format(msgs.locale, "nsComposerUnknownCommand", nil)
 }
+
+// NsgoPhoneHoldToSpeak says "Hold to speak"
+// in the language the app shows.
+func NsgoPhoneHoldToSpeak() string { return In(i18n.Locale()).NsgoPhoneHoldToSpeak() }
+
+// NsgoPhoneHoldToSpeak says "Hold to speak"
+// in the language of msgs.
+func (msgs Messages) NsgoPhoneHoldToSpeak() string {
+	return Catalog.Format(msgs.locale, "nsgoPhoneHoldToSpeak", nil)
+}
+
+// NsgoPhoneSlideToCancel says "Slide away to cancel"
+// in the language the app shows.
+func NsgoPhoneSlideToCancel() string { return In(i18n.Locale()).NsgoPhoneSlideToCancel() }
+
+// NsgoPhoneSlideToCancel says "Slide away to cancel"
+// in the language of msgs.
+func (msgs Messages) NsgoPhoneSlideToCancel() string {
+	return Catalog.Format(msgs.locale, "nsgoPhoneSlideToCancel", nil)
+}
+
+// NsgoPhoneVoiceHelp says "Hold the microphone button to speak. Release to insert text, or enable automatic sending."
+// in the language the app shows.
+func NsgoPhoneVoiceHelp() string { return In(i18n.Locale()).NsgoPhoneVoiceHelp() }
+
+// NsgoPhoneVoiceHelp says "Hold the microphone button to speak. Release to insert text, or enable automatic sending."
+// in the language of msgs.
+func (msgs Messages) NsgoPhoneVoiceHelp() string {
+	return Catalog.Format(msgs.locale, "nsgoPhoneVoiceHelp", nil)
+}
+
+// NsgoPhoneDisableNotifications says "Disable notifications"
+// in the language the app shows.
+func NsgoPhoneDisableNotifications() string { return In(i18n.Locale()).NsgoPhoneDisableNotifications() }
+
+// NsgoPhoneDisableNotifications says "Disable notifications"
+// in the language of msgs.
+func (msgs Messages) NsgoPhoneDisableNotifications() string {
+	return Catalog.Format(msgs.locale, "nsgoPhoneDisableNotifications", nil)
+}
+
+// NsgoPhoneNotificationsDisabled says "Notifications disabled"
+// in the language the app shows.
+func NsgoPhoneNotificationsDisabled() string {
+	return In(i18n.Locale()).NsgoPhoneNotificationsDisabled()
+}
+
+// NsgoPhoneNotificationsDisabled says "Notifications disabled"
+// in the language of msgs.
+func (msgs Messages) NsgoPhoneNotificationsDisabled() string {
+	return Catalog.Format(msgs.locale, "nsgoPhoneNotificationsDisabled", nil)
+}
+
+// NsgoPhoneRemoteNotificationsUnavailable says "Remote notifications are unavailable in this app build."
+// in the language the app shows.
+func NsgoPhoneRemoteNotificationsUnavailable() string {
+	return In(i18n.Locale()).NsgoPhoneRemoteNotificationsUnavailable()
+}
+
+// NsgoPhoneRemoteNotificationsUnavailable says "Remote notifications are unavailable in this app build."
+// in the language of msgs.
+func (msgs Messages) NsgoPhoneRemoteNotificationsUnavailable() string {
+	return Catalog.Format(msgs.locale, "nsgoPhoneRemoteNotificationsUnavailable", nil)
+}
+
+// NsgoPhoneLiveActivities says "Live Activities"
+// in the language the app shows.
+func NsgoPhoneLiveActivities() string { return In(i18n.Locale()).NsgoPhoneLiveActivities() }
+
+// NsgoPhoneLiveActivities says "Live Activities"
+// in the language of msgs.
+func (msgs Messages) NsgoPhoneLiveActivities() string {
+	return Catalog.Format(msgs.locale, "nsgoPhoneLiveActivities", nil)
+}
+
+// NsgoPhoneLiveActivitiesEnabled says "Live Activities enabled"
+// in the language the app shows.
+func NsgoPhoneLiveActivitiesEnabled() string {
+	return In(i18n.Locale()).NsgoPhoneLiveActivitiesEnabled()
+}
+
+// NsgoPhoneLiveActivitiesEnabled says "Live Activities enabled"
+// in the language of msgs.
+func (msgs Messages) NsgoPhoneLiveActivitiesEnabled() string {
+	return Catalog.Format(msgs.locale, "nsgoPhoneLiveActivitiesEnabled", nil)
+}
+
+// NsgoPhoneLiveActivitiesDisabled says "Live Activities disabled"
+// in the language the app shows.
+func NsgoPhoneLiveActivitiesDisabled() string {
+	return In(i18n.Locale()).NsgoPhoneLiveActivitiesDisabled()
+}
+
+// NsgoPhoneLiveActivitiesDisabled says "Live Activities disabled"
+// in the language of msgs.
+func (msgs Messages) NsgoPhoneLiveActivitiesDisabled() string {
+	return Catalog.Format(msgs.locale, "nsgoPhoneLiveActivitiesDisabled", nil)
+}
+
+// NsgoPhoneLiveActivitiesUnavailable says "Live Activities are unavailable in this app build."
+// in the language the app shows.
+func NsgoPhoneLiveActivitiesUnavailable() string {
+	return In(i18n.Locale()).NsgoPhoneLiveActivitiesUnavailable()
+}
+
+// NsgoPhoneLiveActivitiesUnavailable says "Live Activities are unavailable in this app build."
+// in the language of msgs.
+func (msgs Messages) NsgoPhoneLiveActivitiesUnavailable() string {
+	return Catalog.Format(msgs.locale, "nsgoPhoneLiveActivitiesUnavailable", nil)
+}
+
+// NsgoPhoneWebLoadFailed says "Unable to load web services. Refresh to try again."
+// in the language the app shows.
+func NsgoPhoneWebLoadFailed() string { return In(i18n.Locale()).NsgoPhoneWebLoadFailed() }
+
+// NsgoPhoneWebLoadFailed says "Unable to load web services. Refresh to try again."
+// in the language of msgs.
+func (msgs Messages) NsgoPhoneWebLoadFailed() string {
+	return Catalog.Format(msgs.locale, "nsgoPhoneWebLoadFailed", nil)
+}
+
+// NsgoPhoneNoVerifiedService says "No verified HTTP service for this conversation."
+// in the language the app shows.
+func NsgoPhoneNoVerifiedService() string { return In(i18n.Locale()).NsgoPhoneNoVerifiedService() }
+
+// NsgoPhoneNoVerifiedService says "No verified HTTP service for this conversation."
+// in the language of msgs.
+func (msgs Messages) NsgoPhoneNoVerifiedService() string {
+	return Catalog.Format(msgs.locale, "nsgoPhoneNoVerifiedService", nil)
+}

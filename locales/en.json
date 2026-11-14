@@ -7,7 +7,6 @@
   "phoneSecureStoreUnavailable": "Secure pairing storage is unavailable. Pair again after restarting.",
   "searchSettings": "Search settings",
   "noMatchingSettings": "No matching settings.",
-
   "webhookWaitingForService": "Waiting for running conversations to finish before the webhook update takes effect.",
   "miyaWebhook": "Miya webhook",
   "enableWebhook": "Enable webhook",
@@ -1933,5 +1932,17 @@
   "nsToggleSidebar": "Toggle sidebar",
   "nsMenuView": "View",
   "nsComposerStatus": "Model: %s · Thinking: %s · Permissions: %s · Tokens: %d",
-  "nsComposerUnknownCommand": "Unknown command. Type / to choose a supported command."
+  "nsComposerUnknownCommand": "Unknown command. Type / to choose a supported command.",
+  "nsgoPhoneHoldToSpeak": "Hold to speak",
+  "nsgoPhoneSlideToCancel": "Slide away to cancel",
+  "nsgoPhoneVoiceHelp": "Hold the microphone button to speak. Release to insert text, or enable automatic sending.",
+  "nsgoPhoneDisableNotifications": "Disable notifications",
+  "nsgoPhoneNotificationsDisabled": "Notifications disabled",
+  "nsgoPhoneRemoteNotificationsUnavailable": "Remote notifications are unavailable in this app build.",
+  "nsgoPhoneLiveActivities": "Live Activities",
+  "nsgoPhoneLiveActivitiesEnabled": "Live Activities enabled",
+  "nsgoPhoneLiveActivitiesDisabled": "Live Activities disabled",
+  "nsgoPhoneLiveActivitiesUnavailable": "Live Activities are unavailable in this app build.",
+  "nsgoPhoneWebLoadFailed": "Unable to load web services. Refresh to try again.",
+  "nsgoPhoneNoVerifiedService": "No verified HTTP service for this conversation."
 }

@@ -62,26 +62,36 @@ func (m *App) composer(cx *core.Scope, state *chat.ConversationState) core.Node 
 					m.button("remove-image-"+strconv.Itoa(index()), tr("Remove image"), nil, func() { m.RemoveImage(index()) }))
 			}))}}
 		}},
-		base.Input{Value: live(m, func() string { return m.Draft }), OnChange: func(s string) { m.caret = composer.ComposerEditEnd(m.Draft, s); m.Draft = s; m.change() }, Label: tr("Message"), Placeholder: tr("Ask for follow-up changes"), TestID: "mobile-composer", Multiline: true, SubmitBehavior: core.SubmitBehaviorNewline,
-			OnSelectionChange: func(r core.TextRange) { m.caret = utf16ByteOffset(m.Draft, r.End); m.change() },
-			Style:             core.Style{MinHeight: core.Pt(48), MaxHeight: core.Pt(180), FontSize: 17, Padding: core.All(12), TextAlignVertical: core.TextAlignVerticalTop}},
+		base.Input{Value: live(m, func() string { return m.Draft }), OnChange: func(s string) {
+			m.caret = composer.ComposerEditEnd(m.Draft, s)
+			m.anchor = m.caret
+			m.Draft = s
+			m.change()
+		}, Label: tr("Message"), Placeholder: tr("Ask for follow-up changes"), TestID: "mobile-composer", Multiline: true, SubmitBehavior: core.SubmitBehaviorNewline,
+			SelectedRange: live(m, m.selectedRange),
+			OnSelectionChange: func(r core.TextRange) {
+				m.anchor = utf16ByteOffset(m.Draft, r.Start)
+				m.caret = utf16ByteOffset(m.Draft, r.End)
+				m.change()
+			},
+			Style: core.Style{MinHeight: core.Pt(48), MaxHeight: core.Pt(180), FontSize: 17, Padding: core.All(12), TextAlignVertical: core.TextAlignVerticalTop}},
 		core.Show{When: live(m, func() bool { return m.Open == 0 }), Then: func(cx *core.Scope) core.Node {
 			return m.button("select-project", tr("Select project"), nil, func() { m.sheet.Set("projects") })
 		}},
 		row(
-			// TODO(voice): add the cancellable recording accessory here.
+			m.voiceAccessory(cx),
 			m.button("add-image", tr("Add image"), nil, m.addPhotos),
 			core.Text{ContentFunc: live(m, func() string { return m.agentName(m.Agent()) + " · " + m.SendOptions(m.Agent()).Model }), Style: core.Style{FontSize: 13, FlexShrink: 1}},
 			m.button("model-options", tr("Model settings"), nil, func() { m.optionsAgent = m.Agent(); m.sheet.Set("options") }),
 		),
 		row(
 			m.button("send", tr("Send"), live(m, func() bool {
-				return !m.Connected || m.Sending || strings.TrimSpace(m.Draft) == "" && len(m.Images) == 0
+				return m.voice != nil || !m.Connected || m.Sending || strings.TrimSpace(m.Draft) == "" && len(m.Images) == 0
 			}), func() { m.Send(); state.JumpToLatest() }),
 			core.Show{When: live(m, func() bool { return m.Viewer.Current().Busy }), Then: func(cx *core.Scope) core.Node {
 				return row(
 					m.button("steer", tr("Steer now"), live(m, func() bool {
-						return !m.Connected || m.Sending || strings.TrimSpace(m.Draft) == "" && len(m.Images) == 0
+						return m.voice != nil || !m.Connected || m.Sending || strings.TrimSpace(m.Draft) == "" && len(m.Images) == 0
 					}), m.Steer),
 					m.button("stop", tr("Stop"), live(m, func() bool { return !m.Connected }), m.Stop),
 				)
