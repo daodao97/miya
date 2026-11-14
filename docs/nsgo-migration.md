@@ -20,7 +20,7 @@ MyGo 是即时模式：`ui.Row(c).Children(func() { ... })` 每帧重建，视�
 
 ## 依赖的 NSGo 检出
 
-Miya 不直接用 `../nsgo`：那里可能正在开发 NSGo 本身（补 Miya 需要的平台能力，之后向上游提 PR），半成品会让 Miya 无法构建。`../nsgo-miya` 是 `git -C ../nsgo worktree add` 建的独立检出，固定在已验证的提交上（当前为集成分支 `miya` 的 `0820d6f7`：`platform-services` 加上 `miya-input` 的原生对话框选项、输入框复制与上下文菜单、富文本粘贴数据与行内 atom、Composer 控制，`miya-webview` 的不可信网页模式、精确来源白名单与可取消的导航策略，`miya-mobile` 的 iOS/Android 安全存储、网络路径详情与扫码，以及 `miya-push` 的 APNs 远程通知、实时活动 JSON 与推送令牌、Android FCM 宿主钩子与前台服务）；NSGo 的改动完成并通过测试后，再把它前移到对应分支或提交。
+Miya 不直接用 `../nsgo`：那里可能正在开发 NSGo 本身（补 Miya 需要的平台能力，之后向上游提 PR），半成品会让 Miya 无法构建。`../nsgo-miya` 是 `git -C ../nsgo worktree add` 建的独立检出，固定在已验证的提交上（当前为集成分支 `miya` 的 `2cbf0800`：`platform-services` 加上 `miya-input` 的原生对话框选项、输入框复制与上下文菜单、富文本粘贴数据与行内 atom、Composer 控制，`miya-webview` 的不可信网页模式、精确来源白名单与可取消的导航策略，`miya-mobile` 的 iOS/Android 安全存储、网络路径详情与扫码，以及 `miya-push` 的 APNs 远程通知、实时活动 JSON 与推送令牌、Android FCM 宿主钩子与前台服务，以及 `miya-bio` 的设备认证（Face ID/Touch ID/密码，Android BiometricPrompt））；NSGo 的改动完成并通过测试后，再把它前移到对应分支或提交。
 
 ## 参考实现
 
@@ -60,7 +60,7 @@ Miya 不直接用 `../nsgo`：那里可能正在开发 NSGo 本身（补 Miya �
 
 已在本地 NSGo 补齐、待向上游提 PR（`../nsgo` 的 `platform-services` 分支，macOS 实现，其他平台返回 `ErrPlatformUnsupported`）：Keychain（`Scope.StoreSecret` / `ReadSecret` / `DeleteSecret`、`ErrSecretNotFound`）、系统空闲时间（`SystemIdleTime`，`nsui` 每 15 秒采样给 `uiruntime.IdleTime`）、网络路径（`ReadNetworkPath` / `ObserveNetworkPath`）、窗口焦点与最小化（`Window.IsFocused` / `IsMinimized`，桥接层镜像为原子值供控制器跨协程读取）。真实的网络切换与窗口焦点切换尚未在真机验证。
 
-仍需补的：生物识别、扫码、窗口内 WebView 的部分选项。
+已补：生物识别（`Scope.Authenticate`）、扫码、不可信 WebView 策略。
 
 非界面包已去除 MyGo 依赖：
 
