@@ -15,6 +15,7 @@ import (
 	"miya/internal/nsrequests"
 	"miya/internal/nswidgets"
 	phoneclient "miya/internal/phone/client"
+	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/prefs"
 	"miya/internal/remote"
 	"miya/locales"
@@ -117,6 +118,7 @@ func (m *App) Render(cx *core.Scope) core.Node {
 			m.change()
 		} else if prev == core.LifecycleBackground && next == core.LifecycleActive {
 			m.EnterForeground()
+			m.push.foreground.attempted = 0
 			m.requestPush(false)
 			m.change()
 		}
@@ -126,7 +128,9 @@ func (m *App) Render(cx *core.Scope) core.Node {
 		raw := cx.Env().OpenedURL()
 		if raw != "" && raw != opened {
 			opened = raw
-			if _, ok := model.ParseThreadURL(raw); ok {
+			if _, _, ok := phoneproto.ParseActivityURL(raw); ok {
+				cx.Post(m.act(func() { m.openActivityURL(raw) }))
+			} else if _, ok := model.ParseThreadURL(raw); ok {
 				cx.Post(m.act(func() { m.openActivityURL(raw) }))
 			} else if _, err := remote.ParseLink(raw); err == nil {
 				cx.Post(m.act(func() { m.Connect(raw) }))

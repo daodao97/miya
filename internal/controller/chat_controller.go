@@ -21,6 +21,7 @@ import (
 	integrations "miya/internal/agent/integrations"
 	"miya/internal/agent/login"
 	agentpolicy "miya/internal/agent/policy"
+	"miya/internal/apns"
 	"miya/internal/appdir"
 	"miya/internal/appmodel"
 	"miya/internal/automation"
@@ -77,6 +78,7 @@ type Controller struct {
 	mcpSessionAccess      access.Grants
 	fastMode              bool
 	Push                  *notification.Hub
+	Activities            *apns.ActivityManager
 	ClaudeBinary          string
 	ClaudeError           string
 	ClaudeArgs, ClaudeEnv []string

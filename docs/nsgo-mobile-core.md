@@ -89,9 +89,17 @@ NETLINK_ROUTE. This is the default path's inventory, with no claim to enumerate
 every interface beneath a VPN. Physical network/permission transitions need
 device verification.
 
-General APNs device registration/remote-delivery callbacks and Android foreground
-services still need host hooks. NSGo Live Activities require widget packaging;
-background activity subscriptions still need a desktop protocol operation.
+APNs registration, token changes, remote receipt/open events and Android foreground
+services now use NSGo mobile APIs directly. The `activity` protocol operation
+registers ActivityKit tokens with the desktop service's `apns.ActivityManager`;
+provider credentials stay on the desktop. Background activities receive desktop
+updates and completion/end pushes. Notification and widget opens select a known
+paired desktop before resolving the durable conversation, including cold launch.
+Android retains paired notices and uses acknowledged foreground-service leases
+for notifications, voice recording, remote desktop and active turns. Optional
+`PlatformHooks` remain compatible host overrides. See
+[mobile push packaging](nsgo-mobile-push.md) for entitlements, widget schema,
+foreground-service types and the Android host's FCM responsibilities.
 Saved-password unlock still requires a fresh successful
 `PlatformHooks.DesktopAuthenticate`; secure storage does not replace biometrics
 or device authentication, which NSGo does not expose. Manual unlock and forgetting
@@ -113,11 +121,11 @@ Required checks:
 gofmt -l .
 go run ./locales/gen -check
 go generate ./locales
-go vet ./internal/nsmobile/... ./internal/phone/...
+go vet ./internal/nsmobile/... ./internal/phone/... ./internal/apns/...
 go build ./...
 go build -tags nsgo -o /dev/null .
 GOOS=ios GOARCH=arm64 CGO_ENABLED=1 go vet -tags nsgo ./internal/nsmobile/
-go test ./internal/nsmobile/... ./internal/phone/... ./tests/integration/...
+go test ./internal/nsmobile/... ./internal/phone/... ./internal/apns/... ./tests/integration/...
 ```
 
 2026-11-14: formatting, localization, both build modes, desktop vet and iOS
@@ -134,8 +142,8 @@ as do the legacy MyGo phone, shared client and notification tests. The voice
 WebSocket fixture now ignores unrelated ordinary HTTP probes of its ephemeral
 port; these previously polluted its session-result channel. The full
 integration run passes.
-See [TODO.md](../internal/nsmobile/TODO.md) for native APNs/Android hooks, Live Activity packaging and the
-remaining background activity subscription protocol work.
+See [TODO.md](../internal/nsmobile/TODO.md) and [push packaging](nsgo-mobile-push.md)
+for native service behavior and device validation still required.
 
 2026-11-14 native-services port: the required checks above pass with the shared
 Go cache, as does Android cross-vet. Headless native-service tests cover QR
@@ -144,3 +152,13 @@ Forget tombstones, binary secrets, network changes and canceled/offline prefligh
 No private cache was created. Camera permission/capture, installed-app Keychain
 access groups, Android routing/VPN/IPv6, iOS permission prompts, IPA/APK packaging
 and biometric integration still need device validation.
+
+2026-11-14 native push port: every required check above passes, including APNs
+vet/tests and the full integration suite. Additional controller tests exercise
+activity registration, token replacement, per-device namespaces, desktop reference
+validation and widget update/end payloads. Native nsgotest seams cover launch
+opens and desktop routing, token rotation, foreground suppression and badges,
+activity reconnect/relaunch, and acknowledged Android service leases/failures.
+All checks use the shared Go cache; no private cache or dependency edits were
+created. Device signing, real APNs/ActivityKit delivery and Android host behavior
+remain the packaging/device checks in [mobile push](nsgo-mobile-push.md).

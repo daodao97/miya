@@ -31,6 +31,7 @@ func NewService(c *Controller, ex *async.Executor) *serviceserver.Service {
 	s := serviceserver.New(c, ex)
 	c.Push = notification.NewHub()
 	c.Run = ex.Push
+	c.startPhoneActivities()
 	c.OnDraftReturned = s.DraftReturned
 	c.Memories().Engine = NewMemoryEngine(c)
 	c.Collaboration = NewCollaboration(c, filepath.Join(appdir.Dir(), "delegations"))
