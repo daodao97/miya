@@ -46,9 +46,10 @@ Physical-device layout and interaction validation remain outstanding.
 
 Validation (2026-11-14): `gofmt -l .`, localization check/generation, desktop
 vet, `go build ./...`, the NSGo-tagged build, and iOS cross-vet passed. Phone,
-shared-client/protocol, NSGo desktop/chat and automation tests pass. Full
-integration has the pre-existing `TestDesktopPageRendersLiveConnectingAndEnded`
-failure (missing Trackpad). The desktop workspace connection test now waits for
+shared-client/protocol, NSGo desktop/chat and automation tests pass. At that stage, full
+integration exposed a stale `TestDesktopPageRendersLiveConnectingAndEnded`
+expectation (missing Trackpad), corrected by the later remote desktop validation
+described below. The desktop workspace connection test now waits for
 its asynchronous error result, eliminating a timing failure seen under load.
 
 ## Voice, notifications and web services
@@ -68,20 +69,20 @@ its asynchronous error result, eliminating a timing failure seen under load.
   The public device identifier is persisted separately for the NSGo adapter;
   token/provider secrets are never stored in preferences. Notification and voice
   preferences reuse the MyGo keys. Launch taps wait for the desktop state;
-  notifications naming another desktop ask for desktop selection (the registry
-  manager remains a separate port).
-- Live Activities are opt-in for the currently viewed busy conversation. The
-  adapter uses `widget.StartActivity`, `Update`, `End`, `OnPushToken` and thread
-  URLs. They end on completion, navigation, background, disconnect or disable;
-  local content is refreshed while active. ActivityKit tokens remain separate
-  from alert-device tokens. Packaging must enable `live_activities.enabled` in
-  `nsgo.yaml` and build the widget extension; otherwise settings reports that
-  activities are unavailable. Background push updates need an authenticated
-  desktop subscription operation, which the existing phone protocol lacks.
-  `PlatformHooks.RegisterActivity` receives `apns.ActivityRegistration` rotations
-  and empty-token unregisters for a host to connect to `apns.ActivityManager`;
-  the provider must encode content with NSGo's `widget.ActivityState`. The default
-  adapter does not invent a protocol operation or ship APNs signing keys.
+  notifications naming a known paired desktop switch to it before resolving
+  the durable conversation. Unknown desktops ask for selection.
+- Live Activities are opt-in on iOS for the currently viewed busy conversation.
+  `widget.ActivityState` encodes the packaged NSGo widget schema for
+  `StartActivityJSON`, `UpdateJSON` and `EndJSON`. Token rotations and reconnects
+  register through the authenticated `activity` operation; empty tokens remove
+  a subscription. The desktop service namespaces native IDs by device, validates
+  the durable reference and publishes APNs updates/end events through
+  `apns.ActivityManager`. Provider keys stay on the desktop. Background and a
+  temporary disconnect preserve the activity; completion, navigation, desktop
+  changes, disable and scope cleanup end it. Relaunch adopts an existing native
+  activity using persisted public IDs/references and native token callbacks;
+  tokens are never persisted. Widget URLs include the paired desktop identity.
+  See [packaging and push validation](../../docs/nsgo-mobile-push.md).
 - The conversation menu opens a refreshed sheet of verified conversation HTTP
   services. `phone/services` shares runtime identity/endpoint validation with
   MyGo. Opening passes the runtime token through `phone/proxy.NewPhoneWebProxy`
@@ -93,23 +94,25 @@ its asynchronous error result, eliminating a timing failure seen under load.
 
 ## Native services and remaining platform gaps
 
-- `core/notifications.go` implements local permission, show/close, badge and
-  press APIs. The pinned checkout has **no general APNs alert-device registration
-  or remote-notification receive/open API** (the `mobile` package only wraps
-  tab bars, keyboard accessories, haptics and install APIs). ActivityKit's
-  `widget.OnPushToken` is an activity token, not an alert-device token.
-  `PlatformHooks.RegisterPush` and `ObserveRemoteNotifications` are explicit
-  cancellable registration / observer hooks. The observer must queue launch
-  taps and suppress native foreground banners so this adapter can decide
-  presentation; payloads follow `internal/apns.Payload`. Without those hooks,
-  iOS settings reports remote registration unavailable; local notifications and
-  badges remain usable. No NSGo files were modified.
-- NSGo exposes no Android foreground-service / keep-running API. Android can
-  register for notices over the paired connection while the app runs. A native
-  `PlatformHooks.KeepRunning` lease enables keeping that connection in background;
-  without a lease the core retains its normal background disconnect behavior.
-  This is not a claim of background delivery without a native service.
-
+- NSGo's `mobile.OnNotificationEvent` delivers APNs registration, token changes,
+  receipts and queued cold-start opens. Registration requests native presentation
+  mask zero; the adapter decodes `internal/apns.Payload` (`aps`, `mygoID`, `mygo`)
+  and applies local foreground presentation/suppression. iOS background alerts
+  remain system-owned. Local presses use the scope callback exactly once. Unread
+  state frames own badges; delayed pushes cannot restore a cleared badge.
+  Existing `PlatformHooks` are optional overrides, not required services.
+- Android retains MyGo's paired `notice` delivery. NSGo's standalone APK has no
+  Firebase SDK. An embedding host can forward FCM events via `NsgoView`; it must
+  supply Firebase configuration, registration, permission handling and cold-launch
+  intent forwarding. FCM tokens never go to the desktop APNs provider.
+- Android uses one native foreground service with combined leases for paired
+  notification delivery, microphone recording, remote desktop and active turns.
+  It starts/updates while visible, retains an acknowledged lease in background,
+  and stops after the final reason ends. Failed or late callbacks cannot claim
+  background retention or revive a closed app. Recording requests microphone
+  service type after microphone permission/capture succeeds; the phone views
+  remote desktop frames, so that lease uses dataSync, not mediaProjection.
+  Android OS limits still apply; task removal/process death ends NSGo work.
 
 - Pairings, the multi-desktop registry, tunnel identity and optional desktop
   passwords now use NSGo's iOS Keychain / Android Keystore through `scopeSecrets`.
@@ -203,3 +206,17 @@ service model, not `PlatformHooks`. Formatting, localization check/generation,
 desktop vet, both builds, iOS cross-vet and the full requested phone/integration
 test suite pass. Android cross-vet also passes. All commands use the shared Go
 cache; no private cache, dependency changes, installation or device testing.
+
+## Native push validation (2026-11-14)
+
+The native defaults and authenticated activity protocol are implemented. All
+requested checks pass: clean `gofmt -l .`, localization generation/check, targeted
+nsmobile/phone/APNs vet, default and NSGo builds, iOS NSGo cross-vet and the full
+nsmobile/phone/APNs/integration test suite. Controller activity tests also pass.
+The new nsgotest seams cover native registration/token rotation, queued opens,
+foreground suppression/badges, desktop and widget routing, activity reconnect/
+relaunch/unregister and combined foreground-service leases, including failed
+promotion, final background release and late callbacks. No private Go cache,
+dependency checkout edits, installation, push or merge. Signed-device APNs,
+ActivityKit/widget packaging and Android/FCM host validation remain as documented
+in [push packaging](../../docs/nsgo-mobile-push.md).

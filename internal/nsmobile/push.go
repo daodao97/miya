@@ -8,10 +8,12 @@ import (
 	"time"
 
 	"github.com/nsgo-dev/nsgo/core"
+	nativemobile "github.com/nsgo-dev/nsgo/mobile"
 	"github.com/nsgo-dev/nsgo/widget"
 	"miya/internal/apns"
 	"miya/internal/chat/model"
 	"miya/internal/notification"
+	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/prefs"
 	"miya/internal/remote"
 	"miya/internal/service/workspaces"
@@ -19,6 +21,7 @@ import (
 
 type phonePush struct {
 	activityUpdated                             time.Time
+	activityTimer                               func() bool
 	pendingActivity                             model.ThreadRef
 	activityDesktop                             string
 	id, token, err, sent, owner, pendingDesktop string
@@ -31,13 +34,22 @@ type phonePush struct {
 	stopRemote, keepRunning                     func()
 	pending                                     map[string]string
 	shown                                       map[string]string
-	activity                                    *widget.Activity
+	activity                                    phoneActivity
 	activityOwner                               model.ThreadRef
 	activityState                               string
+	activityToken, activitySent, activityLink   string
+	services                                    phoneServices
+	restoredActivity                            *savedPushActivity
+	restoredToken                               string
+	foreground                                  foregroundLease
+	sendQueue                                   chan pushRequest
 }
 
 func (m *App) desktopID() string { id, _ := workspaces.IDFromLink(m.Link); return id }
 func (m *App) setupPush(cx *core.Scope) {
+	m.push.services.defaults()
+	m.push.sendQueue = make(chan pushRequest, 64)
+	go m.runPushQueue(m.push.sendQueue)
 	m.push.id = prefs.Load("nsgo-notification-device")
 	if decoded, err := hex.DecodeString(m.push.id); err != nil || len(decoded) != 16 {
 		var b [16]byte
@@ -48,6 +60,10 @@ func (m *App) setupPush(cx *core.Scope) {
 	}
 	m.push.disabled = prefs.Load("phone-notifications") == "off"
 	m.push.activities = prefs.Load("nsgo-phone-live-activities") == "on"
+	var saved savedPushActivity
+	if json.Unmarshal([]byte(prefs.Load("nsgo-phone-activity")), &saved) == nil && saved.ID != "" {
+		m.push.restoredActivity = &saved
+	}
 	m.push.shown = map[string]string{}
 	m.OnLiveNotification = m.showLiveNotice
 	m.OnPushResult = func(message string) { m.push.err = message }
@@ -61,6 +77,9 @@ func (m *App) setupPush(cx *core.Scope) {
 	if PlatformHooks.ObserveRemoteNotifications != nil {
 		m.push.stopRemote = PlatformHooks.ObserveRemoteNotifications(func(n notification.LiveMessage, opened bool) {
 			cx.Post(func() {
+				if m.push.closed {
+					return
+				}
 				if opened {
 					m.openNotification(n.Data)
 				} else {
@@ -70,19 +89,32 @@ func (m *App) setupPush(cx *core.Scope) {
 			})
 		})
 	}
-	// Activity tokens belong to ActivityKit, never to the alert-push registration.
-	// The desktop protocol has no activity subscription operation yet. A host
-	// may forward these to an apns.ActivityManager through its own authenticated API.
-	widget.OnPushToken(func(t widget.PushToken) {
+	// NSGo retains cold-start opens until this observer is installed. Keep the
+	// native presentation silent; showLiveNotice applies conversation suppression.
+	m.push.services.observe(func(n nativemobile.NotificationEvent) {
 		cx.Post(func() {
-			if t.Activity != nil && m.push.activity != nil && t.Activity.ID() == m.push.activity.ID() && PlatformHooks.RegisterActivity != nil {
-				PlatformHooks.RegisterActivity(apns.ActivityRegistration{ID: t.Activity.ID(), DeviceToken: t.Token, ResourceID: m.push.activityOwner.URL()})
+			if !m.push.closed {
+				m.notificationEvent(n)
+				m.change()
+			}
+		})
+	})
+	m.push.services.observeActivity(func(id, token string) {
+		cx.Post(func() {
+			if !m.push.closed && m.push.activity != nil && id == m.push.activity.ID() {
+				m.push.activityToken = token
+				m.syncActivityToken()
+			} else if !m.push.closed && m.push.restoredActivity != nil && id == m.push.restoredActivity.ID {
+				m.push.restoredToken = token
 			}
 		})
 	})
 	permissionChecked := false
 	cx.Effect(func() {
 		m.revision.Get()
+		if m.push.closed {
+			return
+		}
 		if !permissionChecked && m.Loaded && cx.Env().Lifecycle() != core.LifecycleBackground {
 			permissionChecked = true
 			cx.Post(func() { m.requestPush(false) })
@@ -94,6 +126,7 @@ func (m *App) setupPush(cx *core.Scope) {
 		}
 		if m.push.owner != owner || m.push.conn != m.Conn || m.push.generation != m.Generation {
 			m.push.owner, m.push.conn, m.push.generation, m.push.sent = owner, m.Conn, m.Generation, ""
+			m.push.activitySent = ""
 		}
 		m.syncPush()
 		badge := len(m.State.Notifications.Unread)
@@ -104,8 +137,13 @@ func (m *App) setupPush(cx *core.Scope) {
 		m.openPendingNotification()
 		m.openPendingActivity()
 		m.syncActivity()
-		if m.push.activity != nil {
-			cx.AfterFunc(30*time.Second, m.change)
+		if m.push.activity != nil && cx.Env().Lifecycle() != core.LifecycleBackground {
+			if m.push.activityTimer == nil {
+				m.push.activityTimer = cx.AfterFunc(30*time.Second, func() { m.push.activityTimer = nil; m.change() })
+			}
+		} else if m.push.activityTimer != nil {
+			m.push.activityTimer()
+			m.push.activityTimer = nil
 		}
 	})
 }
@@ -128,11 +166,7 @@ func (m *App) requestPush(ask bool) {
 		}
 		m.push.err = ""
 		if m.cx.Env().OS() == core.OSIOS {
-			if PlatformHooks.RegisterPush == nil {
-				m.push.err = tr("Remote notifications are unavailable in this app build.")
-			} else {
-				m.registerPush()
-			}
+			m.registerPush()
 		}
 		m.syncPush()
 		m.change()
@@ -144,6 +178,24 @@ func (m *App) requestPush(ask bool) {
 	}
 }
 func (m *App) registerPush() {
+	if PlatformHooks.RegisterPush == nil {
+		m.push.requestSeq++
+		m.push.requesting = true
+		if err := m.push.services.register(0); err != nil {
+			m.push.requesting = false
+			m.push.err = tr("Remote notifications are unavailable in this app build.")
+		} else {
+			seq := m.push.requestSeq
+			m.cx.AfterFunc(2*time.Minute, func() {
+				if !m.push.closed && m.push.requesting && seq == m.push.requestSeq {
+					m.push.requesting = false
+					m.push.err = tr("Unable to register for notifications. Check system notification settings.")
+					m.change()
+				}
+			})
+		}
+		return
+	}
 	if m.push.requesting {
 		return
 	}
@@ -175,16 +227,11 @@ func (m *App) registerPush() {
 	}()
 }
 func (m *App) syncPush() {
+	if m.push.closed {
+		return
+	}
 	live := m.cx.Env().OS() == core.OSAndroid && m.push.granted
-	wantLease := live && !m.push.disabled && m.Link != ""
-	if wantLease && m.push.keepRunning == nil && m.cx.Env().Lifecycle() != core.LifecycleBackground && PlatformHooks.KeepRunning != nil {
-		m.push.keepRunning = PlatformHooks.KeepRunning(tr("Receiving notifications from your Mac"))
-	}
-	if !wantLease && m.push.keepRunning != nil {
-		m.push.keepRunning()
-		m.push.keepRunning = nil
-	}
-	m.KeepConnectionInBackground = m.push.keepRunning != nil
+	m.syncForeground(live)
 	if !m.Connected || !m.CanSend() || m.push.id == "" || (!m.push.disabled && (!m.push.granted || m.push.token == "" && !live)) {
 		return
 	}
@@ -193,13 +240,13 @@ func (m *App) syncPush() {
 		return
 	}
 	m.push.sent = string(b)
-	m.Action(remote.Request{Op: "push", Push: b})
+	m.sendPush(remote.Request{Op: "push", Push: b})
 }
 func (m *App) shouldPresent(data map[string]string) bool {
 	if m.push.disabled {
 		return false
 	}
-	if d := data["desktop"]; d != "" && d != m.desktopID() {
+	if d := data["desktop"]; d != "" && d != m.desktopID() || d == "" && len(m.Desktops.Items) > 1 {
 		return true
 	}
 	if m.cx.Env().Lifecycle() == core.LifecycleBackground {
@@ -207,9 +254,9 @@ func (m *App) shouldPresent(data map[string]string) bool {
 	}
 	r, t := notification.Target(data), m.Viewer.Current()
 	if r.ServerID != "" {
-		return m.Open == 0 || t.ServerID != r.ServerID || r.Agent != "" && model.ThreadAgent(t) != r.Agent || r.Project != "" && m.ComposerProject() != r.Project
+		return m.Path != "/thread" || m.Open == 0 || t.ServerID != r.ServerID || r.Agent != "" && model.ThreadAgent(t) != r.Agent || r.Project != "" && m.ComposerProject() != r.Project
 	}
-	return m.Open == 0 || r.Thread != m.Open
+	return m.Path != "/thread" || m.Open == 0 || r.Thread != m.Open
 }
 func (m *App) showLiveNotice(n notification.LiveMessage) {
 	if m.push.disabled {
@@ -235,23 +282,33 @@ func (m *App) showLiveNotice(n notification.LiveMessage) {
 	m.push.shown[n.ID] = id
 }
 func (m *App) openNotification(data map[string]string) {
-	if d := data["desktop"]; m.Link != "" && d != "" && d != m.desktopID() {
-		m.SendErr = tr("Select the desktop for this notification")
-		return
-	}
-	m.push.pending, m.push.pendingDesktop = data, m.Link
+	m.push.pending, m.push.pendingDesktop = data, ""
 	m.openPendingNotification()
 }
 func (m *App) openPendingNotification() {
 	if m.push.pending == nil {
 		return
 	}
-	if m.Link == "" {
+	if !m.Loaded {
 		return
 	}
 	if d := m.push.pending["desktop"]; d != "" && d != m.desktopID() {
+		for _, desktop := range m.Desktops.Items {
+			if desktop.ID == d {
+				m.endActivity()
+				m.cancelVoice()
+				m.closeWebServices()
+				m.closeFileBrowser()
+				m.SwitchDesktop(d)
+				m.push.pendingDesktop = m.Link
+				return // wait for this desktop's state, never use the previous snapshot
+			}
+		}
 		m.SendErr = tr("Select the desktop for this notification")
 		m.push.pending = nil
+		return
+	}
+	if m.Link == "" || !m.Connected {
 		return
 	}
 	if m.push.pendingDesktop != "" && m.push.pendingDesktop != m.Link {
@@ -279,19 +336,37 @@ func (m *App) openPendingNotification() {
 	}
 }
 func (m *App) openActivityURL(raw string) {
+	reference, desktop, encoded := phoneproto.ParseActivityURL(raw)
+	if encoded {
+		raw = reference
+	}
 	ref, ok := model.ParseThreadURL(raw)
 	if !ok {
 		return
 	}
-	m.push.pendingActivity, m.push.activityDesktop = ref, m.Link
+	m.push.pendingActivity, m.push.activityDesktop = ref, desktop
 	m.openPendingActivity()
 }
 func (m *App) openPendingActivity() {
 	ref := m.push.pendingActivity
-	if ref.SessionID == "" || m.Link == "" || m.State.ReferenceSource == "" {
+	if ref.SessionID == "" || !m.Loaded {
 		return
 	}
-	if ref.Source != m.State.ReferenceSource || m.push.activityDesktop != "" && m.push.activityDesktop != m.Link {
+	if desktop := m.push.activityDesktop; desktop != "" && desktop != m.desktopID() {
+		for _, d := range m.Desktops.Items {
+			if d.ID == desktop {
+				m.SwitchDesktop(desktop)
+				return
+			}
+		}
+		m.push.pendingActivity = model.ThreadRef{}
+		m.SendErr = tr("Select the desktop for this notification")
+		return
+	}
+	if m.Link == "" || !m.Connected || m.State.ReferenceSource == "" {
+		return
+	}
+	if ref.Source != m.State.ReferenceSource {
 		m.push.pendingActivity = model.ThreadRef{}
 		m.SendErr = tr("Select the desktop for this notification")
 		return
@@ -302,47 +377,85 @@ func (m *App) openPendingActivity() {
 	}
 }
 func (m *App) syncActivity() {
+	if m.push.closed {
+		return
+	}
+	if !m.restoreActivity() {
+		return
+	}
 	t := m.Viewer.Current()
 	ref := model.ThreadRef{Source: m.State.ReferenceSource, Backend: model.ThreadAgent(t), SessionID: t.ServerID}
-	want := m.push.activities && !m.push.disabled && m.Connected && m.Path == "/thread" && t.Busy && ref.SessionID != "" && m.cx.Env().Lifecycle() != core.LifecycleBackground
+	if m.push.activity == nil {
+		m.push.activityLink = m.Link
+	}
+	want := m.cx.Env().OS() == core.OSIOS && m.push.activities && !m.push.disabled && m.Path == "/thread" && t.Busy && ref.SessionID != "" && m.Link == m.push.activityLink
 	if m.push.activity != nil && (!want || ref != m.push.activityOwner) {
 		m.endActivity()
 	}
 	if !want {
 		return
 	}
-	content := widget.ActivityContent{Title: t.Title, Body: tr("Running"), Symbol: "bubble.left.and.bubble.right", URL: ref.URL(), Stale: time.Now().Add(time.Minute)}
+	if m.cx.Env().Lifecycle() == core.LifecycleBackground {
+		return
+	}
+	if !m.Connected {
+		return
+	}
+	content := widget.ActivityContent{Title: t.Title, Body: tr("Running"), Symbol: "bubble.left.and.bubble.right", URL: phoneproto.ActivityURL(ref.URL(), m.desktopID()), Stale: time.Now().Add(time.Minute)}
 	if content.Title == "" {
 		content.Title = "Miya"
 	}
+	raw, err := widget.ActivityState(content)
+	if err != nil {
+		return
+	}
 	state := content.Title + content.Body
 	if m.push.activity != nil {
+		m.syncActivityToken()
 		if state != m.push.activityState || time.Since(m.push.activityUpdated) >= 30*time.Second {
-			if err := m.push.activity.Update(content); err == nil {
+			if err := m.push.activity.UpdateJSON(raw); err == nil {
 				m.push.activityState, m.push.activityUpdated = state, time.Now()
 			}
 		}
 		return
 	}
-	if !widget.ActivitiesEnabled() {
+	if !m.push.services.activitiesEnabled() {
 		return
 	}
-	activity, err := widget.StartActivity("miya-conversation", content, widget.ActivityOptions{Push: PlatformHooks.RegisterActivity != nil})
+	activity, err := m.push.services.startActivity("miya-conversation", raw, widget.ActivityOptions{Push: true})
 	if err == nil {
 		m.push.activity, m.push.activityOwner, m.push.activityState = activity, ref, state
 		m.push.activityUpdated = time.Now()
+		m.saveActivity()
 	}
+	m.syncActivityToken()
 }
 func (m *App) endActivity() {
-	if a := m.push.activity; a != nil {
-		_ = a.End(nil, widget.DismissNow)
-		if PlatformHooks.RegisterActivity != nil {
-			PlatformHooks.RegisterActivity(apns.ActivityRegistration{ID: a.ID(), ResourceID: m.push.activityOwner.URL()})
+	if m.push.activityTimer != nil {
+		m.push.activityTimer()
+		m.push.activityTimer = nil
+	}
+	if r := m.push.restoredActivity; r != nil {
+		for _, a := range m.push.services.listActivities() {
+			if a.ID() == r.ID {
+				_ = a.EndJSON(nil, widget.DismissNow)
+			}
 		}
+		m.push.restoredActivity = nil
+		m.push.restoredToken = ""
+	}
+	prefs.Save("nsgo-phone-activity", "")
+	if a := m.push.activity; a != nil {
+		_ = a.EndJSON(nil, widget.DismissNow)
+		m.registerActivity(apns.ActivityRegistration{ID: a.ID(), ResourceID: m.push.activityOwner.URL()})
+		m.push.activityToken, m.push.activitySent = "", ""
 		m.push.activity = nil
 	}
 }
 func (m *App) closePush() {
+	if m.push.closed {
+		return
+	}
 	m.push.closed = true
 	m.push.requestSeq++
 	if m.push.cancel != nil {
@@ -355,7 +468,10 @@ func (m *App) closePush() {
 		m.push.keepRunning()
 	}
 	m.endActivity()
-	widget.OnPushToken(func(widget.PushToken) {})
+	m.closeForeground()
+	m.push.services.observe(nil)
+	close(m.push.sendQueue)
+	m.push.services.observeActivity(nil)
 	m.OnLiveNotification, m.OnPushResult = nil, nil
 }
 func (m *App) pushSettings(cx *core.Scope) core.Node {
@@ -392,7 +508,7 @@ func (m *App) pushSettings(cx *core.Scope) core.Node {
 		})},
 		core.Text{ContentFunc: live(m, func() string {
 			if m.push.activities {
-				if !widget.ActivitiesEnabled() {
+				if m.cx.Env().OS() != core.OSIOS || !m.push.services.activitiesEnabled() {
 					return tr("Live Activities are unavailable in this app build.")
 				}
 				return tr("Live Activities enabled")

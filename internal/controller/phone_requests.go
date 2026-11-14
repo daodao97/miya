@@ -69,6 +69,7 @@ var phoneRequests = map[string]func(*phoneSession, remote.Request) bool{
 	"automation-webhook": (*phoneSession).onAutomationWebhook,
 	"quota":              (*phoneSession).onQuota,
 	"push":               (*phoneSession).onPush,
+	"activity":           (*phoneSession).onActivity,
 	"read":               (*phoneSession).onRead,
 	"read-all":           (*phoneSession).onRead,
 	"subscribe":          (*phoneSession).onSubscribe,
@@ -318,6 +319,13 @@ func (ps *phoneSession) onPush(r remote.Request) bool {
 		message = result
 		if message == "" {
 			ps.deviceID = registration.ID
+			if registration.Disabled && ps.c.Activities != nil {
+				for _, target := range ps.c.Activities.Targets() {
+					if strings.HasPrefix(target.ID, strings.ToLower(registration.ID)+":") {
+						ps.c.Activities.Remove(target.ID)
+					}
+				}
+			}
 			if registration.Live && !registration.Disabled {
 				// Android: notifications come over this connection while it lasts.
 				send := ps.send

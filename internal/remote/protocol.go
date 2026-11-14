@@ -95,6 +95,7 @@ type Request struct {
 	// independently of APNs registration and its per-device notification version.
 	ReadCompletedAtMs int64           `json:"readCompletedAtMs,omitempty"`
 	Push              json.RawMessage `json:"push,omitempty"`
+	Activity          json.RawMessage `json:"activity,omitempty"`
 	Op                string          `json:"op"`
 	Thread            int             `json:"thread"`
 	// ServerID is the durable identity; Thread is a desktop-local number.

@@ -15,6 +15,11 @@ import (
 
 func startPhone(t *testing.T) (*nsgotest.App, *App, chan remote.Request) {
 	t.Helper()
+	return startConfiguredPhone(t, core.OSIOS, nil)
+}
+
+func startConfiguredPhone(t *testing.T, os core.OS, configure func(*App)) (*nsgotest.App, *App, chan remote.Request) {
+	t.Helper()
 	t.Setenv("MIYA_ISOLATED_DIR", t.TempDir())
 	m := NewMobileApp()
 	m.Loaded, m.Link, m.Connected = true, "paired-desktop", true
@@ -22,7 +27,10 @@ func startPhone(t *testing.T) (*nsgotest.App, *App, chan remote.Request) {
 	m.State = phoneproto.State{Agent: "codex", ReferenceSource: "0123456789abcdef0123456789abcdef", Projects: []model.ProjectSnapshot{{Name: "Work", Path: "/work", Current: true, Threads: []model.Thread{{ID: 7, ServerID: "session", Agent: "codex", Title: "Fix the phone"}}}}}
 	sent := make(chan remote.Request, 30)
 	m.SendRequest = func(r remote.Request) error { sent <- r; return nil }
-	app := nsgotest.Start(t, m.Render, nsgotest.Size(390, 844), nsgotest.Environment(core.Environment{OS: core.OSIOS, Idiom: core.IdiomPhone, Locale: "en", SafeArea: core.Edges{Top: 47, Bottom: 34}}))
+	if configure != nil {
+		configure(m)
+	}
+	app := nsgotest.Start(t, m.Render, nsgotest.Size(390, 844), nsgotest.Environment(core.Environment{OS: os, Idiom: core.IdiomPhone, Locale: "en", SafeArea: core.Edges{Top: 47, Bottom: 34}}))
 	return app, m, sent
 }
 func awaitRequest(t *testing.T, app *nsgotest.App, sent <-chan remote.Request, op string) remote.Request {

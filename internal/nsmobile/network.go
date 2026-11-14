@@ -7,11 +7,11 @@ import (
 	"miya/internal/notification"
 )
 
-// PlatformHooks supplies services that NSGo does not yet expose. Install
-// before MobileEntry. Credentials, QR scanning and paths use NSGo directly.
+// PlatformHooks supplies optional host overrides. Install before MobileEntry.
+// Notification, activity and foreground-service defaults use NSGo directly.
 var PlatformHooks struct {
 	// RegisterPush asks APNs for an alert device token, in hex, honoring ctx.
-	// NSGo currently has no general remote-notification registration API.
+	// Nil uses mobile.RegisterRemoteNotifications and its token events.
 	RegisterPush func(context.Context) (string, error)
 	// ObserveRemoteNotifications delivers queued launch taps and foreground
 	// payloads decoded using internal/apns.Payload's ID/title/body/data format.
@@ -23,8 +23,8 @@ var PlatformHooks struct {
 	KeepRunning func(string) func()
 	// RegisterActivity forwards ActivityKit token rotations to a desktop
 	// apns.ActivityManager. An empty DeviceToken unregisters the subscription.
-	// No provider signing keys belong in the phone. There is no default protocol
-	// operation for this yet. The host must serialize registrations/unregisters.
+	// Nil uses the authenticated activity protocol operation. Provider signing
+	// keys remain on the desktop. Overrides must serialize registrations.
 	RegisterActivity func(apns.ActivityRegistration)
 	// DesktopAuthenticate must perform fresh biometric/device authentication
 	// before saving or using a desktop password. NSGo has no equivalent API.

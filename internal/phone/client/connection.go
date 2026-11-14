@@ -138,7 +138,7 @@ func (m *Client) read(gen int, conn *remote.Conn) (greeted bool, err error) {
 					m.SendErr = message
 				}
 			})
-		case "push":
+		case "push", "activity":
 			message := f.Error
 			m.onMain(gen, func() {
 				if m.OnPushResult != nil {
