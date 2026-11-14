@@ -113,3 +113,31 @@ func TestEmptyStates(t *testing.T) {
 		t.Errorf("failure state missing: %q", text)
 	}
 }
+
+// The composer edits the controller's draft, sends it, and stops a turn.
+func TestComposerSendsAndStops(t *testing.T) {
+	var sent []string
+	stopped := 0
+	c := &conversation{thread: model.Thread{ID: 1, HistoryLoaded: true}}
+	var draft *core.Signal[string]
+	app := nsgotest.Start(t, func(cx *core.Scope) core.Node {
+		cx.SetTheme(nswidgets.Theme())
+		c.rev = core.NewSignal(cx, 0)
+		draft = core.NewSignal(cx, "")
+		return View{Thread: c.get, Draft: draft.Get, OnDraftChange: draft.Set,
+			OnSend: func() { sent = append(sent, draft.GetUntracked()); draft.Set("") },
+			OnStop: func() { stopped++ }}
+	}, nsgotest.Size(900, 800))
+	app.Type("label:Message", "Run the tests")
+	app.Press("label:Send")
+	app.Settle()
+	if len(sent) != 1 || sent[0] != "Run the tests" {
+		t.Fatalf("sent = %q", sent)
+	}
+	c.change(app, func(t *model.Thread) { t.Busy = true })
+	app.Press("label:Stop")
+	app.Settle()
+	if stopped != 1 {
+		t.Fatalf("stopped %d times, want 1", stopped)
+	}
+}

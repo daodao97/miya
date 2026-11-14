@@ -30,8 +30,16 @@ type View struct {
 	// conversation that failed to load.
 	OnRetry  func(appmodel.RetryRequest)
 	OnReload func()
-	State    *chat.ConversationState
-	TestID   string
+	// Draft shows the composer: the conversation's draft, which
+	// OnDraftChange keeps. OnSend sends it, OnStop stops the running turn.
+	// Without Draft the view has no composer, as for a read-only mirror.
+	Draft         func() string
+	OnDraftChange func(string)
+	OnSend        func()
+	OnStop        func()
+	SendDisabled  func() bool
+	State         *chat.ConversationState
+	TestID        string
 }
 
 // maxWidth is the column the conversation keeps to on wide windows.
@@ -64,23 +72,55 @@ func (v View) Render(cx *core.Scope) core.Node {
 	column := func(children ...core.Node) core.Node {
 		return core.View{Style: core.Style{Width: core.Pct(100), MaxWidth: core.Pt(maxWidth), AlignSelf: core.AlignCenter, Gap: 28}, Children: children}
 	}
-	return core.View{TestID: v.TestID, Style: core.Style{FlexGrow: 1, MinHeight: core.Pt(0)}, Children: []core.Node{
-		chat.Conversation{State: v.State, JumpLabel: tr("↓ Latest"), Children: []core.Node{
-			column(
-				core.Each(groups, func(g msgfmt.MessageGroup) int { return g.ID },
-					func(cx *core.Scope, group func() msgfmt.MessageGroup, _ func() int) core.Node {
-						return v.groupRow(cx, group)
-					}),
-				core.Dynamic(func(cx *core.Scope) core.Node { return v.emptyState(cx, empty.Get()) }),
-			),
-		}},
-		core.View{Style: core.Style{Width: core.Pct(100), MaxWidth: core.Pt(maxWidth), AlignSelf: core.AlignCenter, Padding: core.Symmetric(4, 28)}, Children: []core.Node{
-			nswidgets.WorkingLabel(cx, "clock", func() string { return turnStatus(v.Thread(), groups()) }),
-		}},
-		core.View{StyleFunc: func() core.Style { return core.Style{Display: displayIf(len(v.Thread().BackgroundTasks) > 0)} }, Children: []core.Node{
-			nswidgets.MutedText(cx, func() string { return backgroundTasks(v.Thread()) }),
-		}},
-	}}
+	// The status lines and the composer float over the transcript's end,
+	// as Agio's do: the messages scroll behind them.
+	floating := []core.Node{
+		core.View{StyleFunc: func() core.Style {
+			return core.Style{Display: displayIf(turnStatus(v.Thread(), groups()) != ""), Padding: core.Symmetric(0, 4)}
+		},
+			Children: []core.Node{nswidgets.WorkingLabel(cx, "clock", func() string { return turnStatus(v.Thread(), groups()) })}},
+		core.View{StyleFunc: func() core.Style {
+			return core.Style{Display: displayIf(len(v.Thread().BackgroundTasks) > 0), Padding: core.Symmetric(0, 4)}
+		}, Children: []core.Node{nswidgets.MutedText(cx, func() string { return backgroundTasks(v.Thread()) })}},
+	}
+	if v.Draft != nil {
+		floating = append(floating, v.composer())
+	}
+	return chat.FloatingConversation{State: v.State, JumpLabel: tr("↓ Latest"), TestID: v.TestID,
+		Children: []core.Node{column(
+			core.Each(groups, func(g msgfmt.MessageGroup) int { return g.ID },
+				func(cx *core.Scope, group func() msgfmt.MessageGroup, _ func() int) core.Node {
+					return v.groupRow(cx, group)
+				}),
+			core.Dynamic(func(cx *core.Scope) core.Node { return v.emptyState(cx, empty.Get()) }),
+		)},
+		Composer: []core.Node{core.View{Style: core.Style{Gap: 6, MinWidth: core.Pt(0)}, Children: floating}},
+	}
+}
+
+// composer is the conversation's editor: Send while it waits, Stop while a
+// turn runs.
+func (v View) composer() core.Node {
+	return chat.Composer{Label: tr("Message"), SendLabel: tr("Send"), StopLabel: tr("Stop"), Glass: true, State: v.State, TestID: "composer",
+		PlaceholderFunc: func() string {
+			if v.Thread().Busy {
+				return tr("Steer the running turn…")
+			}
+			return tr("Ask for follow-up changes")
+		},
+		Draft:         v.Draft,
+		OnDraftChange: v.OnDraftChange,
+		Running:       func() bool { return v.Thread().Busy },
+		SendDisabled:  v.SendDisabled,
+		OnSend: func() {
+			if strings.TrimSpace(v.Draft()) == "" || v.OnSend == nil {
+				return
+			}
+			v.State.JumpToLatest()
+			v.OnSend()
+		},
+		OnStop: v.OnStop,
+	}
 }
 
 func displayIf(on bool) core.Display {
@@ -242,7 +282,7 @@ func (v View) assistant(cx *core.Scope, m func() model.Message) core.Node {
 	id := "reply-" + idOf(cx, m)
 	content := func() string { return model.ImagePlaceholder.ReplaceAllString(msgfmt.Message(m()).Content, "") }
 	return core.Dynamic(func(cx *core.Scope) core.Node {
-		return textview.TextView{TestID: id, MarkdownFunc: content,
+		return ui.TextView{TestID: id, MarkdownFunc: content, OnLinkPress: openLink(cx),
 			Options: textview.Options{Streaming: streaming.Get()}, Selectable: true, NoCodeBlockScrollbar: true}
 	})
 }
@@ -329,7 +369,7 @@ func detail(cx *core.Scope, p func() model.MessagePresentation) core.Node {
 				return strings.TrimSuffix(b.String(), "\n")
 			}}
 		case "markdown":
-			return textview.TextView{MarkdownFunc: func() string { return p().Content }, Selectable: true}
+			return ui.TextView{MarkdownFunc: func() string { return p().Content }, Selectable: true, OnLinkPress: openLink(cx)}
 		case "diff":
 			return diff.DiffView{Patch: func() string { return p().Content }, Unified: true, Selectable: true}
 		case "files":
@@ -356,4 +396,9 @@ func detail(cx *core.Scope, p func() model.MessagePresentation) core.Node {
 // of the message, as a message holds slices and notifies on each read.
 func idOf(cx *core.Scope, m func() model.Message) string {
 	return strconv.Itoa(core.Untracked(cx, func() int { return m().ID }))
+}
+
+// openLink opens a link a reply holds with the system.
+func openLink(cx *core.Scope) func(textview.LinkPressEvent) {
+	return func(e textview.LinkPressEvent) { cx.OpenURL(e.URL, nil) }
 }

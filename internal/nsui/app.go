@@ -23,6 +23,9 @@ type Host interface {
 	Current() model.Thread
 	SelectThread(t model.Thread)
 	RetryResponse(req appmodel.RetryRequest) error
+	RememberDraft(value string)
+	SendDraft(steer bool) int
+	Stop()
 	EnsurePhoneHost()
 }
 
@@ -128,7 +131,17 @@ func root(cx *core.Scope, c Host) core.Node {
 					},
 					nschat.View{TestID: "conversation", Thread: current,
 						OnRetry:  func(r appmodel.RetryRequest) { _ = c.RetryResponse(r) },
-						OnReload: func() { c.SelectThread(c.Current()) }},
+						OnReload: func() { c.SelectThread(c.Current()) },
+						Draft: Live(func() string {
+							if st.Draft == nil {
+								return ""
+							}
+							return st.Draft()
+						}),
+						OnDraftChange: c.RememberDraft,
+						// Sending while a turn runs steers it, as on MyGo.
+						OnSend: func() { c.SendDraft(c.Current().Busy) },
+						OnStop: c.Stop},
 				},
 			},
 		},
