@@ -32,6 +32,28 @@ func root(cx *core.Scope, c Host) core.Node {
 	current := Live(c.Current)
 	open := core.NewSignal(cx, true)
 	width := core.NewSignal(cx, core.Points(260))
+	// settingsOpen shows the settings dialog; see settings.go.
+	settingsOpen := core.NewSignal(cx, false)
+	bindCommands(cx, commands{
+		newThread:     c.NewThread,
+		openSettings:  func() { settingsOpen.Set(true) },
+		toggleSidebar: func() { open.Update(func(b bool) bool { return !b }) },
+		stop: func() {
+			if c.Current().Busy {
+				c.Stop()
+			}
+		},
+		step: func(step int) {
+			all := core.Untracked(cx, threads)
+			id := stepThread(all, c.Current().ID, step, time.Now())
+			for _, t := range all {
+				if t.ID == id {
+					c.SelectThread(t)
+				}
+			}
+		},
+	})
+	_ = settingsOpen
 	colors := nswidgets.ColorsOf(cx)
 	conversation := nschat.View{TestID: "conversation", Thread: current,
 		OnRetry:  func(r appmodel.RetryRequest) { _ = c.RetryResponse(r) },
