@@ -50,6 +50,9 @@ func TestBackgroundShellSurvivesReplyUntilNativeCompletion(t *testing.T) {
 				if !f.KeepingAlive || f.WaitingForAgents {
 					t.Fatal("background shell ended or kept model turn busy")
 				}
+				if len(f.BackgroundTasks) != 1 || f.BackgroundTasks[0].Description != "Web app" || f.BackgroundTasks[0].Status != "running" {
+					t.Fatalf("reply lost live background work: %+v", f.BackgroundTasks)
+				}
 				tasks, known, pid, epoch := client.Runtime()
 				if len(tasks) != 1 || !known || pid <= 0 || epoch == "" || tasks[0].ID != "1234" {
 					t.Fatal("missing native work and dedicated process identity")
@@ -57,6 +60,9 @@ func TestBackgroundShellSurvivesReplyUntilNativeCompletion(t *testing.T) {
 				if err := client.Write(map[string]any{"probe": true}); err != nil {
 					t.Fatal(err)
 				}
+			}
+			if f.Type == "system" && f.Subtype == "background_tasks_changed" && len(f.Tasks) == 0 && (f.BackgroundTasks == nil || len(f.BackgroundTasks) != 0) {
+				t.Fatalf("completion did not publish an empty live snapshot: %+v", f.BackgroundTasks)
 			}
 		case err := <-done:
 			if err != nil || !reply {

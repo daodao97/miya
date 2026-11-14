@@ -45,6 +45,9 @@ func currentTurnStatus(t model.Thread, groups []msgfmt.MessageGroup) (string, in
 		return msgfmt.ThreadWorkingLabel(t), -1
 	}
 	if last := len(groups) - 1; last >= 0 && !groups[last].User {
+		if len(t.BackgroundTasks) > 0 {
+			return "", last
+		}
 		return msgfmt.TurnElapsedLabel(groups[last].Messages, false), last
 	}
 	return "", -1

@@ -50,6 +50,17 @@ func TestBackgroundShellEventsDoNotBecomeSubagents(t *testing.T) {
 	}
 }
 
+func TestBackgroundShellInternalNotificationCompletesWithoutCreatingAgent(t *testing.T) {
+	var tasks backgroundTracker
+	var agents agentTracker
+	backgroundFrame(t, &tasks, `{"type":"system","subtype":"task_started","task_id":"deploy","task_type":"local_bash","description":"Deploy"}`)
+	f := backgroundFrame(t, &tasks, `{"type":"user","message":{"content":[{"type":"text","text":"<task-notification><task-id>deploy</task-id><status>completed</status><summary>Deployment finished</summary></task-notification>"}]}}`)
+	agents.apply(&f)
+	if tasks.active() || len(f.BackgroundTasks) != 1 || f.BackgroundTasks[0].Status != "completed" || len(agents.tasks) != 0 {
+		t.Fatalf("shell notification lost completion or created an agent: tasks=%+v agents=%+v", f.BackgroundTasks, agents.tasks)
+	}
+}
+
 func TestLateShellAcknowledgementDoesNotResurrectRemovedTask(t *testing.T) {
 	var s backgroundTracker
 	backgroundFrame(t, &s, `{"type":"assistant","message":{"content":[{"type":"tool_use","id":"bash","name":"Bash","input":{"command":"serve"}}]}}`)

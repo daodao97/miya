@@ -173,6 +173,18 @@ func (s *agentTracker) apply(f *Frame) {
 		for _, b := range f.Message.Content {
 			if b.Type == "text" {
 				if notification, ok := TaskNotification(b.Text); ok {
+					// Shell completion can also arrive as an internal user message.
+					// Its native tracker already handled it; it is not a new agent.
+					shell := false
+					for _, task := range f.BackgroundTasks {
+						if task.ID == notification.TaskID {
+							shell = true
+							break
+						}
+					}
+					if shell {
+						continue
+					}
 					s.apply(&notification)
 					changed = true
 				}

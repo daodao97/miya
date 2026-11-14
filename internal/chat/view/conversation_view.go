@@ -152,6 +152,18 @@ func (app *View) MessageList(c *ui.Context, t model.Thread) {
 			})
 		})
 	}
+	if len(t.BackgroundTasks) > 0 {
+		ui.Row(c.Key("background-tasks")).FillWidth().Justify(ui.Center).Padding(4, app.listPadding()).Children(func() {
+			ui.Column(c).FillWidth().MaxWidth(744).Gap(4).Children(func() {
+				widgets.WorkingLabel(c, "clock", fmt.Sprintf(tr("Background tasks running (%d) · Waiting for results"), len(t.BackgroundTasks)))
+				names := make([]string, 0, len(t.BackgroundTasks))
+				for _, task := range t.BackgroundTasks {
+					names = append(names, textutil.ClipRunes(strings.Join(strings.Fields(task.Description), " "), 100))
+				}
+				ui.Text(c, strings.Join(names, " · ")).FontSize(12).TextColor(widgets.Muted).MaxLines(2).Tooltip(strings.Join(names, "\n"))
+			})
+		})
+	}
 	if status != "" || completedGroup >= 0 {
 		ui.Row(c).FillWidth().Justify(ui.Center).Padding(0, app.listPadding()).Children(func() {
 			// Match the response actions so finishing a turn does not move

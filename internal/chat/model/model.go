@@ -82,4 +82,11 @@ type Thread struct {
 	Messages      []Message
 	// Queue waits for the running turn to end.
 	Queue []QueuedMessage `json:"queue,omitempty"`
+	// BackgroundTasks is live native work still running after a model reply.
+	// It is sent to windows and phones, and never restored from history.
+	BackgroundTasks []BackgroundTask `json:"backgroundTasks,omitempty"`
+}
+
+type BackgroundTask struct {
+	ID, Description string
 }

@@ -57,6 +57,7 @@ func (b Adapter) Finish(id int, cwd string, err error) {
 		return
 	}
 	c.Update(id, func(t *model.Thread) {
+		t.BackgroundTasks = nil
 		t.Busy = false
 		t.TaskStopping = false
 		t.CompletedAtMs = time.Now().UnixMilli()

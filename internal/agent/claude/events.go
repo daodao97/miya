@@ -79,6 +79,14 @@ func (b Adapter) Handle(id int, f claude.Frame) {
 		defer func() { transcript.ApplyAgentTasks(t, f.AgentTasks) }()
 		now := time.Now().UnixMilli()
 		t.LastOutputAtMs = now
+		if f.BackgroundTasks != nil {
+			t.BackgroundTasks = nil
+			for _, task := range f.BackgroundTasks {
+				if task.Status == "running" || task.Status == "pending" {
+					t.BackgroundTasks = append(t.BackgroundTasks, model.BackgroundTask{ID: task.ID, Description: textutil.FirstNonEmpty(task.Description, task.Command, task.ID)})
+				}
+			}
+		}
 		if f.SchedulesKnown {
 			claude.ApplySchedules(t, f.Schedules)
 		}

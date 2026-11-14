@@ -33,6 +33,7 @@ func (s *backgroundTracker) snapshot() []BackgroundTask {
 	return out
 }
 func (s *backgroundTracker) apply(f *Frame) {
+	defer func() { f.BackgroundTasks = s.snapshot() }()
 	if s.tasks == nil {
 		s.tasks = map[string]BackgroundTask{}
 		s.tools = map[string]BackgroundTask{}
@@ -53,6 +54,11 @@ func (s *backgroundTracker) apply(f *Frame) {
 	}
 	if f.Type == "user" {
 		for _, b := range f.Message.Content {
+			if b.Type == "text" {
+				if notification, ok := TaskNotification(b.Text); ok {
+					s.apply(&notification)
+				}
+			}
 			if b.Type != "tool_result" {
 				continue
 			}

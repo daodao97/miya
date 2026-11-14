@@ -46,6 +46,7 @@ type Frame struct {
 	RunID            string                 `json:"run_id"`
 	Tasks            []NativeBackgroundTask `json:"tasks"`
 	BackgroundWork   bool                   `json:"-"`
+	BackgroundTasks  []BackgroundTask       `json:"-"`
 	Type             string                 `json:"type"`
 	ToolUseResult    json.RawMessage        `json:"tool_use_result"`
 	CommandState     string                 `json:"state"`
