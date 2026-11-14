@@ -20489,3 +20489,83 @@ func MiyaUpdateC6af4c94ac() string { return In(i18n.Locale()).MiyaUpdateC6af4c94
 func (msgs Messages) MiyaUpdateC6af4c94ac() string {
 	return Catalog.Format(msgs.locale, "miyaUpdate_c6af4c94ac", nil)
 }
+
+// NsAskFollowUp says "Ask for follow-up changes"
+// in the language the app shows.
+func NsAskFollowUp() string { return In(i18n.Locale()).NsAskFollowUp() }
+
+// NsAskFollowUp says "Ask for follow-up changes"
+// in the language of msgs.
+func (msgs Messages) NsAskFollowUp() string {
+	return Catalog.Format(msgs.locale, "nsAskFollowUp", nil)
+}
+
+// NsMenuFile says "File"
+// in the language the app shows.
+func NsMenuFile() string { return In(i18n.Locale()).NsMenuFile() }
+
+// NsMenuFile says "File"
+// in the language of msgs.
+func (msgs Messages) NsMenuFile() string {
+	return Catalog.Format(msgs.locale, "nsMenuFile", nil)
+}
+
+// NsResizeSidebar says "Resize sidebar"
+// in the language the app shows.
+func NsResizeSidebar() string { return In(i18n.Locale()).NsResizeSidebar() }
+
+// NsResizeSidebar says "Resize sidebar"
+// in the language of msgs.
+func (msgs Messages) NsResizeSidebar() string {
+	return Catalog.Format(msgs.locale, "nsResizeSidebar", nil)
+}
+
+// NsSearchMenu says "Search…"
+// in the language the app shows.
+func NsSearchMenu() string { return In(i18n.Locale()).NsSearchMenu() }
+
+// NsSearchMenu says "Search…"
+// in the language of msgs.
+func (msgs Messages) NsSearchMenu() string {
+	return Catalog.Format(msgs.locale, "nsSearchMenu", nil)
+}
+
+// NsSettingsMenu says "Settings…"
+// in the language the app shows.
+func NsSettingsMenu() string { return In(i18n.Locale()).NsSettingsMenu() }
+
+// NsSettingsMenu says "Settings…"
+// in the language of msgs.
+func (msgs Messages) NsSettingsMenu() string {
+	return Catalog.Format(msgs.locale, "nsSettingsMenu", nil)
+}
+
+// NsSteerRunningTurn says "Steer the running turn…"
+// in the language the app shows.
+func NsSteerRunningTurn() string { return In(i18n.Locale()).NsSteerRunningTurn() }
+
+// NsSteerRunningTurn says "Steer the running turn…"
+// in the language of msgs.
+func (msgs Messages) NsSteerRunningTurn() string {
+	return Catalog.Format(msgs.locale, "nsSteerRunningTurn", nil)
+}
+
+// NsToggleSidebar says "Toggle sidebar"
+// in the language the app shows.
+func NsToggleSidebar() string { return In(i18n.Locale()).NsToggleSidebar() }
+
+// NsToggleSidebar says "Toggle sidebar"
+// in the language of msgs.
+func (msgs Messages) NsToggleSidebar() string {
+	return Catalog.Format(msgs.locale, "nsToggleSidebar", nil)
+}
+
+// NsMenuView says "View"
+// in the language the app shows.
+func NsMenuView() string { return In(i18n.Locale()).NsMenuView() }
+
+// NsMenuView says "View"
+// in the language of msgs.
+func (msgs Messages) NsMenuView() string {
+	return Catalog.Format(msgs.locale, "nsMenuView", nil)
+}

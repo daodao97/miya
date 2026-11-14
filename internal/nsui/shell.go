@@ -34,7 +34,9 @@ func root(cx *core.Scope, c Host) core.Node {
 	width := core.NewSignal(cx, core.Points(260))
 	// settingsOpen shows the settings dialog; see settings.go.
 	settingsOpen := core.NewSignal(cx, false)
-	bindCommands(cx, commands{
+	paletteOpen := core.NewSignal(cx, false)
+	cmd := commands{
+		openPalette:   func() { paletteOpen.Set(true) },
 		newThread:     c.NewThread,
 		openSettings:  func() { settingsOpen.Set(true) },
 		toggleSidebar: func() { open.Update(func(b bool) bool { return !b }) },
@@ -52,7 +54,8 @@ func root(cx *core.Scope, c Host) core.Node {
 				}
 			}
 		},
-	})
+	}
+	bindCommands(cx, cmd)
 	_ = settingsOpen
 	colors := nswidgets.ColorsOf(cx)
 	conversation := nschat.View{TestID: "conversation", Thread: current,
@@ -83,7 +86,9 @@ func root(cx *core.Scope, c Host) core.Node {
 			ContentFunc: func() string { return threadTitle(current()) },
 			Style:       core.Style{FontSize: 13, FontWeight: ui.Semibold, FlexShrink: 1, MinWidth: core.Pt(0)},
 			StyleFunc:   func() core.Style { return core.Style{Color: colors.Ink()} }}},
-		Content: []core.Node{conversation},
+		Content: []core.Node{conversation, commandPalette(cx, paletteOpen, func() []paletteEntry {
+			return paletteEntries(cmd, current(), threads(), c.SelectThread, time.Now())
+		})},
 	}
 }
 

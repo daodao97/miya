@@ -51,7 +51,7 @@ Miya 不直接用 `../nsgo`：那里可能正在开发 NSGo 本身（补 Miya �
 | 0 · 基础 | 依赖、构建标签入口、桥接层、会话列表骨架 | 两种构建通过；桥接测试（含 `-race`）通过 ✅ |
 | 1 · 主题与控件 | `internal/nswidgets`：Miya 明暗色板作为 `core.Theme`（自有角色放 `Palette.Colors`），`ColorsOf` 颜色访问器、图标与通用控件；Tabler 图标移到框架无关的 `internal/iconassets` 供新旧两套共用。设置页布局与菜单随第 3 阶段迁移 | 主题、外观切换、图标解析与控件测试通过 ✅（设置页、菜单待做） |
 | 2 · 会话视图 | `internal/chat/view` 的消息列表、Markdown、工具详情、图片、引用和富文本输入（NSGo `ui/chat`、`base/richeditor`） | 桌面能完整对话。进度：`internal/nschat` 的消息列表已完成——分组复用 `chat/presentation`，助手回复用 `base/textview` 流式 Markdown（流式时行不重建），工具活动用 `chat.ActivityRow`，详情按计划、diff、文件、Markdown、等宽输出呈现，错误卡片可重试；外层为 `chat.FloatingConversation`，回合状态、后台任务与 `chat.Composer`（草稿、发送/引导、停止）悬浮在末尾。用户消息显示图片缩略图与附件标签，完成的回复下有复制与交接操作（交接接线待第 3 阶段，逻辑在旧 `internal/ui.App`）。子代理列表（按 ID 原地更新，活动标题带摘要，有活跃子代理时活动显示运行中）已完成。待做：会话引用（@ 提及）、粘贴与拖入附件 |
-| 3 · 桌面外壳 | 侧栏、工作区切换、文件面板、命令面板、设置、自动化、托盘、多窗口 | 进度：`ui.SidebarShell`（内嵌卡片、可折叠拖宽）、新会话按钮、会话按运行中/今天/昨天/7 天/30 天/更早分组的侧栏、标题栏已完成。macOS 菜单栏（应用、文件、编辑、显示、窗口）与快捷键 `⌘N` `⌘,` `⌘B` `⌘.` `Control+Tab` 已完成；设置页由 Codex 在 `nsgo-settings` 分支迁移中。与 MyGo 版功能对齐，`internal/ui` 的界面测试迁到 nsgotest |
+| 3 · 桌面外壳 | 侧栏、工作区切换、文件面板、命令面板、设置、自动化、托盘、多窗口 | 进度：`ui.SidebarShell`（内嵌卡片、可折叠拖宽）、新会话按钮、会话按运行中/今天/昨天/7 天/30 天/更早分组的侧栏、标题栏已完成。macOS 菜单栏（应用、文件、编辑、显示、窗口）与快捷键 `⌘N` `⌘,` `⌘B` `⌘.` `Control+Tab` 已完成；命令面板 `⌘K`（`ui.CommandDialog`，命令与会话两组，沿用逐词按序的模糊匹配）已完成；设置页由 Codex 在 `nsgo-settings` 分支迁移中。与 MyGo 版功能对齐，`internal/ui` 的界面测试迁到 nsgotest |
 | 4 · 手机端 | `internal/mobile`、远程桌面、语音输入，接 NSGo 的 iOS/Android 运行时 | 真机验证 |
 | 5 · 收尾 | 删除 MyGo 依赖、旧界面包和构建标签；构建脚本与 CI 改用 `go tool nsgo` | `go list -deps` 不含 `egoist/mygo` |
 

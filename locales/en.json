@@ -1907,5 +1907,13 @@
   "miyaUpdate_6262cefc86": "The target is running the requested Miya version.",
   "miyaUpdate_b3693583c0": "Miya is up to date on this workspace.",
   "miyaUpdate_493ab70aef": "Backup on target: %s",
-  "miyaUpdate_c6af4c94ac": "Check for Miya updates"
+  "miyaUpdate_c6af4c94ac": "Check for Miya updates",
+  "nsAskFollowUp": "Ask for follow-up changes",
+  "nsMenuFile": "File",
+  "nsResizeSidebar": "Resize sidebar",
+  "nsSearchMenu": "Search…",
+  "nsSettingsMenu": "Settings…",
+  "nsSteerRunningTurn": "Steer the running turn…",
+  "nsToggleSidebar": "Toggle sidebar",
+  "nsMenuView": "View"
 }

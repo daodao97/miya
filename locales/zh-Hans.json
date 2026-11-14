@@ -1907,5 +1907,13 @@
   "miyaUpdate_6262cefc86": "对端已运行目标 Miya 版本。",
   "miyaUpdate_b3693583c0": "当前工作空间的 Miya 已是最新版本。",
   "miyaUpdate_493ab70aef": "对端备份：%s",
-  "miyaUpdate_c6af4c94ac": "检查 Miya 更新"
+  "miyaUpdate_c6af4c94ac": "检查 Miya 更新",
+  "nsAskFollowUp": "继续提出修改要求",
+  "nsMenuFile": "文件",
+  "nsResizeSidebar": "调整侧边栏宽度",
+  "nsSearchMenu": "搜索…",
+  "nsSettingsMenu": "设置…",
+  "nsSteerRunningTurn": "引导正在进行的回复…",
+  "nsToggleSidebar": "显示或隐藏侧边栏",
+  "nsMenuView": "显示"
 }

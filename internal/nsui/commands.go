@@ -12,7 +12,7 @@ import (
 
 // commands are what the menu bar and the window's shortcuts do.
 type commands struct {
-	newThread, openSettings, toggleSidebar, stop func()
+	newThread, openSettings, toggleSidebar, stop, openPalette func()
 	// step selects the conversation step places after the current one in
 	// the sidebar's order, before it when negative.
 	step func(step int)
@@ -30,6 +30,7 @@ func bindCommands(cx *core.Scope, cmd commands) {
 		cx.OnKey("mod+n", cmd.newThread)
 		cx.OnKey("mod+,", cmd.openSettings)
 	}
+	cx.OnKey("mod+k", cmd.openPalette)
 	cx.OnKey("mod+b", cmd.toggleSidebar)
 	cx.OnKey("mod+.", cmd.stop)
 	cx.OnKey("ctrl+tab", func() { cmd.step(1) })
@@ -59,6 +60,7 @@ func appMenu(cmd commands) []desktop.MenuItem {
 			{Role: desktop.MenuCut}, {Role: desktop.MenuCopy}, {Role: desktop.MenuPaste}, {Role: desktop.MenuSelectAll},
 		}},
 		{Label: tr("View"), Items: []desktop.MenuItem{
+			{Label: tr("Search…"), Shortcut: "mod+k", OnSelect: cmd.openPalette},
 			{Label: tr("Toggle sidebar"), Shortcut: "mod+b", OnSelect: cmd.toggleSidebar},
 		}},
 		{Label: tr("Window"), Items: []desktop.MenuItem{
