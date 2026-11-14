@@ -65,16 +65,7 @@ func root(cx *core.Scope, c Host) core.Node {
 	conversation := nschat.View{TestID: "conversation", Thread: current,
 		OnRetry:  func(r appmodel.RetryRequest) { _ = c.RetryResponse(r) },
 		OnReload: func() { c.SelectThread(c.Current()) },
-		Draft: Live(func() string {
-			if st.Draft == nil {
-				return ""
-			}
-			return st.Draft()
-		}),
-		OnDraftChange: c.RememberDraft,
-		// Sending while a turn runs steers it, as on MyGo.
-		OnSend: func() { c.SendDraft(c.Current().Busy) },
-		OnStop: c.Stop,
+		OnStop:   c.Stop,
 		Requests: pendingRequests(cx, c, Live(func() []interaction.Request {
 			if st.Approvals == nil {
 				return nil
@@ -82,6 +73,25 @@ func root(cx *core.Scope, c Host) core.Node {
 			return st.Approvals()
 		})),
 	}
+	desktopComposer := newDesktopComposer(cx, c)
+	desktopComposer.active = func() bool { return page.Get() == "chat" && !settingsOpen.Get() && !paletteOpen.Get() }
+	desktopComposer.wire(&conversation)
+	conversationKey := core.NewMemo(cx, Live(func() string {
+		return fmt.Sprintf("%s:%s:%d", c.State().ReferenceSource, c.State().Cwd, c.Current().ID)
+	}))
+	cx.Effect(func() {
+		conversationKey.Get()
+		cx.Untrack(func() {
+			desktopComposer.complete.close()
+			desktopComposer.menu.Set("")
+			desktopComposer.diffOpen.Set(false)
+		})
+	})
+	conversationNode := core.Dynamic(func(cx *core.Scope) core.Node {
+		conversationKey.Get()
+		return core.Func(func(cx *core.Scope) core.Node { return conversation })
+	})
+
 	return ui.SidebarShell{TestID: "window", Variant: ui.SidebarShellInset,
 		Open: open.Get, OnOpenChange: open.Set, ToggleLabel: tr("Toggle sidebar"),
 		Width: width.Get, OnWidthChange: width.Set, ResizeLabel: tr("Resize sidebar"),
@@ -107,7 +117,7 @@ func root(cx *core.Scope, c Host) core.Node {
 			// automations exist only while shown, so they poll only then.
 			core.View{StyleFunc: func() core.Style {
 				return ui.FillRest.Merge(core.Style{Display: displayIf(page.Get() == "chat")})
-			}, Children: []core.Node{conversation}},
+			}, Children: []core.Node{conversationNode}},
 			core.Show{When: func() bool { return page.Get() == "automations" }, Then: func(cx *core.Scope) core.Node { return automationsPage(cx, c) }},
 			commandPalette(cx, paletteOpen, func() []paletteEntry {
 				return paletteEntries(cmd, current(), threads(), c.SelectThread, time.Now())

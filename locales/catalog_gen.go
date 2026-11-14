@@ -34,6 +34,26 @@ type Messages struct{ locale string }
 // source language.
 func In(locale string) Messages { return Messages{locale} }
 
+// SearchSettings says "Search settings"
+// in the language the app shows.
+func SearchSettings() string { return In(i18n.Locale()).SearchSettings() }
+
+// SearchSettings says "Search settings"
+// in the language of msgs.
+func (msgs Messages) SearchSettings() string {
+	return Catalog.Format(msgs.locale, "searchSettings", nil)
+}
+
+// NoMatchingSettings says "No matching settings."
+// in the language the app shows.
+func NoMatchingSettings() string { return In(i18n.Locale()).NoMatchingSettings() }
+
+// NoMatchingSettings says "No matching settings."
+// in the language of msgs.
+func (msgs Messages) NoMatchingSettings() string {
+	return Catalog.Format(msgs.locale, "noMatchingSettings", nil)
+}
+
 // WebhookWaitingForService says "Waiting for running conversations to finish before the webhook update takes effect."
 // in the language the app shows.
 func WebhookWaitingForService() string { return In(i18n.Locale()).WebhookWaitingForService() }
@@ -20568,4 +20588,24 @@ func NsMenuView() string { return In(i18n.Locale()).NsMenuView() }
 // in the language of msgs.
 func (msgs Messages) NsMenuView() string {
 	return Catalog.Format(msgs.locale, "nsMenuView", nil)
+}
+
+// NsComposerStatus says "Model: %s · Thinking: %s · Permissions: %s · Tokens: %d"
+// in the language the app shows.
+func NsComposerStatus() string { return In(i18n.Locale()).NsComposerStatus() }
+
+// NsComposerStatus says "Model: %s · Thinking: %s · Permissions: %s · Tokens: %d"
+// in the language of msgs.
+func (msgs Messages) NsComposerStatus() string {
+	return Catalog.Format(msgs.locale, "nsComposerStatus", nil)
+}
+
+// NsComposerUnknownCommand says "Unknown command. Type / to choose a supported command."
+// in the language the app shows.
+func NsComposerUnknownCommand() string { return In(i18n.Locale()).NsComposerUnknownCommand() }
+
+// NsComposerUnknownCommand says "Unknown command. Type / to choose a supported command."
+// in the language of msgs.
+func (msgs Messages) NsComposerUnknownCommand() string {
+	return Catalog.Format(msgs.locale, "nsComposerUnknownCommand", nil)
 }

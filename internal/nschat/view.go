@@ -45,8 +45,25 @@ type View struct {
 	SendDisabled  func() bool
 	// Requests are the pending approvals and questions, above the composer.
 	Requests core.Node
-	State    *chat.ConversationState
-	TestID   string
+	// Above contains app-owned status, suggestions and notices. Accessory and
+	// Trailing are composer controls; Attachments is the removable preview row.
+	Above, Accessory, Trailing, Attachments core.Node
+	HasAttachments                          func() bool
+	ComposerVisible                         func() bool
+	EditorDisabled                          func() bool
+	OnDropFiles                             func([]string)
+	OnPaste                                 func(core.PasteEvent)
+	OnSteer                                 func()
+	// OnComposerSubmit consumes Enter, for example to confirm a completion.
+	OnComposerSubmit func() bool
+	// UserContent can replace a prompt with an app-owned editing surface.
+	UserContent func(*core.Scope, func() model.Message, core.Node) core.Node
+	// ImageSource resolves remote thumbnails without coupling this view to a host.
+	ImageSource     func(*core.Scope, string) func() string
+	ReferenceTitle  func(model.ThreadRef) string
+	OnOpenReference func(model.ThreadRef)
+	State           *chat.ConversationState
+	TestID          string
 }
 
 // maxWidth is the column the conversation keeps to on wide windows.
@@ -90,11 +107,14 @@ func (v View) Render(cx *core.Scope) core.Node {
 			return core.Style{Display: displayIf(len(v.Thread().BackgroundTasks) > 0), Padding: core.Symmetric(0, 4)}
 		}, Children: []core.Node{nswidgets.MutedText(cx, func() string { return backgroundTasks(v.Thread()) })}},
 	}
+	if v.Above != nil {
+		floating = append(floating, v.Above)
+	}
 	if v.Requests != nil {
 		floating = append(floating, v.Requests)
 	}
 	if v.Draft != nil {
-		floating = append(floating, v.composer())
+		floating = append(floating, core.Show{When: func() bool { return v.ComposerVisible == nil || v.ComposerVisible() }, Then: func(cx *core.Scope) core.Node { return v.composer(cx) }})
 	}
 	return chat.FloatingConversation{State: v.State, JumpLabel: tr("↓ Latest"), TestID: v.TestID,
 		Children: []core.Node{column(
@@ -105,31 +125,6 @@ func (v View) Render(cx *core.Scope) core.Node {
 			core.Dynamic(func(cx *core.Scope) core.Node { return v.emptyState(cx, empty.Get()) }),
 		)},
 		Composer: []core.Node{core.View{Style: core.Style{Gap: 6, MinWidth: core.Pt(0)}, Children: floating}},
-	}
-}
-
-// composer is the conversation's editor: Send while it waits, Stop while a
-// turn runs.
-func (v View) composer() core.Node {
-	return chat.Composer{Label: tr("Message"), SendLabel: tr("Send"), StopLabel: tr("Stop"), Glass: true, State: v.State, TestID: "composer",
-		PlaceholderFunc: func() string {
-			if v.Thread().Busy {
-				return tr("Steer the running turn…")
-			}
-			return tr("Ask for follow-up changes")
-		},
-		Draft:         v.Draft,
-		OnDraftChange: v.OnDraftChange,
-		Running:       func() bool { return v.Thread().Busy },
-		SendDisabled:  v.SendDisabled,
-		OnSend: func() {
-			if strings.TrimSpace(v.Draft()) == "" || v.OnSend == nil {
-				return
-			}
-			v.State.JumpToLatest()
-			v.OnSend()
-		},
-		OnStop: v.OnStop,
 	}
 }
 
@@ -200,7 +195,11 @@ func (v View) groupRow(cx *core.Scope, group func() msgfmt.MessageGroup) core.No
 				}
 				return model.Message{}
 			}
-			return v.userMessage(cx, first)
+			body := v.userMessage(cx, first)
+			if v.UserContent != nil {
+				return v.UserContent(cx, first, body)
+			}
+			return body
 		}
 		runs := func() []msgfmt.ActivityRun { return msgfmt.ActivityRuns(group().Messages) }
 		return core.View{Style: core.Style{Gap: 12, MinWidth: core.Pt(0)}, Children: []core.Node{
@@ -291,25 +290,33 @@ func (v View) userMessage(cx *core.Scope, m func() model.Message) core.Node {
 		return strings.Join(msg.Images, "\x00") + "\x01" + strings.Join(msgfmt.MessageAttachments(msg), "\x00")
 	})
 	return chat.Message{Outgoing: true, Children: []core.Node{
+		v.referenceChips(cx, func() string { return msgfmt.Message(m()).Content }, nil),
 		core.Dynamic(func(cx *core.Scope) core.Node {
 			files.Get()
-			return attachments(cx, core.Untracked(cx, m))
+			return v.attachments(cx, core.Untracked(cx, m))
 		}),
 		core.Text{TestID: "prompt-" + idOf(cx, m), Selectable: core.SelectableOn,
-			Style:       core.Style{FontSize: 13, LineHeight: 19},
-			ContentFunc: func() string { return msgfmt.NativeText(msgfmt.Message(m()).Content) }},
+			Style: core.Style{FontSize: 13, LineHeight: 19},
+			ContentFunc: func() string {
+				body, _ := model.SplitReferenceContext(msgfmt.Message(m()).Content)
+				return msgfmt.NativeText(referenceText(body, v.ReferenceTitle))
+			}},
 	}}
 }
 
 // attachments are a prompt's images as thumbnails and its files as chips.
-func attachments(cx *core.Scope, m model.Message) core.Node {
+func (v View) attachments(cx *core.Scope, m model.Message) core.Node {
 	paths := msgfmt.MessageAttachments(m)
 	if len(m.Images) == 0 && len(paths) == 0 {
 		return core.Group(nil)
 	}
 	var items []core.Node
 	for i, src := range m.Images {
-		items = append(items, core.Image{Source: core.Src(imageURI(src)), ResizeMode: core.Cover, Label: tr("Image preview"),
+		source := func() string { return imageURI(src) }
+		if v.ImageSource != nil {
+			source = v.ImageSource(cx, src)
+		}
+		items = append(items, core.Image{SourceFunc: func() core.ImageSource { return core.Src(source()) }, ResizeMode: core.Cover, Label: tr("Image preview"),
 			TestID: "image-" + strconv.Itoa(m.ID) + "-" + strconv.Itoa(i),
 			Style:  core.Style{Width: core.Pt(80), Height: core.Pt(80), CornerRadius: 8, FlexShrink: 0}})
 	}
