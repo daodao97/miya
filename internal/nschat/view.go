@@ -18,6 +18,7 @@ import (
 	"miya/internal/appmodel"
 	"miya/internal/chat/model"
 	msgfmt "miya/internal/chat/presentation"
+	"miya/internal/chat/subagent"
 	"miya/internal/nswidgets"
 	"miya/locales"
 )
@@ -371,10 +372,29 @@ func (v View) activity(cx *core.Scope, m func() model.Message) core.Node {
 		msg := m()
 		p := msgfmt.Message(msg)
 		a := chat.Activity{ID: strconv.Itoa(msg.ID), Action: msgfmt.NativeText(p.Title), Status: status(msg.Status)}
+		// Sub-agents inside an activity show that it still works.
+		if s := subagent.Summary(msg.Agents); s != "" {
+			a.Detail = msgfmt.NativeText(s)
+		}
+		if subagent.AnyActive(msg.Agents) {
+			a.Status = chat.Running
+		}
 		if svg, ok := nswidgets.LookupSVG(p.Icon); ok {
 			a.Icon = func() *core.SVG { return svg }
 		}
-		if strings.TrimSpace(p.Content) != "" || len(p.Plan) > 0 || len(p.Changes) > 0 {
+		hasBody := strings.TrimSpace(p.Content) != "" || len(p.Plan) > 0 || len(p.Changes) > 0
+		switch {
+		case len(msg.Agents) > 0:
+			a.Content = func(cx *core.Scope) core.Node {
+				children := []core.Node{subAgentList(cx, func() []model.SubAgent { return m().Agents })}
+				// An adapter leaves the content empty when the list says it all.
+				children = append(children, core.Show{When: func() bool { return strings.TrimSpace(msgfmt.Message(m()).Content) != "" },
+					Then: func(cx *core.Scope) core.Node {
+						return detail(cx, func() model.MessagePresentation { return msgfmt.Message(m()) })
+					}})
+				return core.View{Style: core.Style{Gap: 8, MinWidth: core.Pt(0)}, Children: children}
+			}
+		case hasBody:
 			a.Content = func(cx *core.Scope) core.Node {
 				return detail(cx, func() model.MessagePresentation { return msgfmt.Message(m()) })
 			}

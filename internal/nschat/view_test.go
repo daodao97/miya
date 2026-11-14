@@ -185,3 +185,37 @@ func TestResponseActionsAfterTurn(t *testing.T) {
 		t.Fatalf("handoffs = %d", handoffs)
 	}
 }
+
+// A sub-agent row updates in place as the sub-agent works.
+func TestSubAgentsUpdateInPlace(t *testing.T) {
+	var agents *core.Signal[[]model.SubAgent]
+	app := nsgotest.Start(t, func(cx *core.Scope) core.Node {
+		cx.SetTheme(nswidgets.Theme())
+		agents = core.NewSignalFunc(cx, []model.SubAgent{{ID: "a", Name: "Write tests", Status: "running", Detail: "reading files"}},
+			func(x, y []model.SubAgent) bool { return false })
+		return subAgentList(cx, agents.Get)
+	}, nsgotest.Size(400, 300))
+	if !strings.Contains(joined(app), "Write tests") || !strings.Contains(joined(app), "reading files") {
+		t.Fatalf("sub-agent missing: %q", joined(app))
+	}
+	before := app.Find("id:subagent-a").ID
+	app.Post(func() {
+		agents.Set([]model.SubAgent{{ID: "a", Name: "Write tests", Status: "completed", Detail: "all green"}, {ID: "b", Name: "Review", Status: "running"}})
+	})
+	app.Settle()
+	if text := joined(app); !strings.Contains(text, "all green") || !strings.Contains(text, "Review") || !strings.Contains(text, "✓") {
+		t.Fatalf("sub-agents did not update: %q", text)
+	}
+	if app.Find("id:subagent-a").ID != before {
+		t.Error("sub-agent row rebuilt on update")
+	}
+}
+
+func TestSubAgentLine(t *testing.T) {
+	if got := subAgentLine(model.SubAgent{Status: "running", Steps: 3, Detail: "editing"}); !strings.Contains(got, "3") || !strings.HasSuffix(got, "editing") {
+		t.Errorf("line = %q", got)
+	}
+	if marker("completed") != "✓" || marker("weird") != "○" {
+		t.Error("markers")
+	}
+}
