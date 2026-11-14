@@ -15,6 +15,7 @@ import (
 	"miya/internal/chat/model"
 	"miya/internal/memory/manager"
 	"miya/internal/nswidgets"
+	projectaccess "miya/internal/project/access"
 	svcclient "miya/internal/service/client"
 	svcproto "miya/internal/service/protocol"
 	"miya/internal/service/workspaces"
@@ -69,6 +70,7 @@ type Host interface {
 	DesktopThreadUnread(t model.Thread) bool
 	ReadDesktopThread(t model.Thread)
 	MirroredHistory(id int) bool
+	WorkspaceFiles() projectaccess.Files
 }
 
 // Environment supplies controller creation at the executable's composition

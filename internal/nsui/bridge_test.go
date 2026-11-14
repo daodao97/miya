@@ -17,6 +17,7 @@ import (
 	"miya/internal/interaction"
 	"miya/internal/memory/manager"
 	"miya/internal/nswidgets"
+	projectaccess "miya/internal/project/access"
 	svcproto "miya/internal/service/protocol"
 	"miya/internal/uiruntime"
 )
@@ -40,6 +41,7 @@ type fakeHost struct {
 	refreshes    int
 	memory       *manager.Manager
 	loginCall    func(login.Request) (login.State, error)
+	files        projectaccess.Files
 }
 
 func newFakeHost(threads ...model.Thread) *fakeHost {
@@ -228,7 +230,13 @@ func (h *fakeHost) ChangeWorkspace(path string) error {
 	return nil
 }
 func (h *fakeHost) AutomationOp(string, automation.Request) (any, error) { return nil, nil }
-func (h *fakeHost) EnabledAgents() []string                              { return model.Backends }
+func (h *fakeHost) WorkspaceFiles() projectaccess.Files {
+	if h.files == nil {
+		return &fakeFiles{}
+	}
+	return h.files
+}
+func (h *fakeHost) EnabledAgents() []string { return model.Backends }
 func (h *fakeHost) ThreadWithID(id int) model.Thread {
 	for _, t := range h.threads {
 		if t.ID == id {

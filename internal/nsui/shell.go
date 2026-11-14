@@ -42,6 +42,10 @@ func root(cx *core.Scope, c Host, sidebarFooter ...core.Node) core.Node {
 	current := Live(c.Current)
 	open := core.NewSignal(cx, true)
 	width := core.NewSignal(cx, core.Points(260))
+	// panelOpen shows the right panel; see panel.go.
+	panelOpen := core.NewSignal(cx, false)
+	panelWidth := core.NewSignal(cx, core.Points(460))
+	cx.OnKey("mod+alt+b", func() { panelOpen.Update(func(b bool) bool { return !b }) })
 	// settingsOpen shows the settings dialog; see settings.go.
 	settingsOpen := core.NewSignal(cx, false)
 	paletteOpen := core.NewSignal(cx, false)
@@ -99,6 +103,9 @@ func root(cx *core.Scope, c Host, sidebarFooter ...core.Node) core.Node {
 		Open: open.Get, OnOpenChange: open.Set, ToggleLabel: tr("Toggle sidebar"),
 		Width: width.Get, OnWidthChange: width.Set, ResizeLabel: tr("Resize sidebar"),
 		DefaultWidth: 260, MinWidth: 220, MaxWidth: 420,
+		Right: []core.Node{filePanel(cx, c, panelOpen)}, RightOpen: panelOpen.Get, OnRightOpenChange: panelOpen.Set,
+		RightToggleLabel: tr("Show / Hide right panel"), RightResizeLabel: tr("Resize right panel"),
+		RightWidth: panelWidth.Get, OnRightWidthChange: panelWidth.Set, RightDefaultWidth: 460, RightMinWidth: 320, RightMaxWidth: 960,
 		Sidebar: []core.Node{sidebar(cx, c, shellNav{page: page, expanded: expanded, settings: cmd.openSettings, project: openProject, footer: sidebarFooter})},
 		Header: []core.Node{core.Text{TestID: "current-title", MaxLines: 1,
 			ContentFunc: func() string {
