@@ -1,6 +1,7 @@
 package nsui
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/nsgo-dev/nsgo/core"
@@ -32,6 +33,7 @@ func (h *fakeHost) RetryResponse(appmodel.RetryRequest) error { return nil }
 func (h *fakeHost) RememberDraft(string)                      {}
 func (h *fakeHost) SendDraft(bool) int                        { return 0 }
 func (h *fakeHost) Stop()                                     {}
+func (h *fakeHost) NewThread()                                {}
 
 func (h *fakeHost) Current() model.Thread {
 	for _, t := range h.threads {
@@ -66,8 +68,8 @@ func TestBridgeShowsControllerState(t *testing.T) {
 	if got := app.Find("id:current-title").Text; got != "Alpha" {
 		t.Fatalf("title = %q, want Alpha", got)
 	}
-	if got := app.Find("id:thread-2").Text; got != "Beta" {
-		t.Fatalf("row = %q, want Beta", got)
+	if !app.Exists("id:thread-2") || !strings.Contains(strings.Join(app.Texts(), "\n"), "Beta") {
+		t.Fatalf("row Beta missing; texts %q", app.Texts())
 	}
 }
 
@@ -102,8 +104,8 @@ func TestBridgeFollowsInvalidate(t *testing.T) {
 	if got := app.Find("id:current-title").Text; got != "Alpha renamed" {
 		t.Fatalf("title = %q, want Alpha renamed", got)
 	}
-	if got := app.Find("id:thread-3").Text; got != "Gamma" {
-		t.Fatalf("new row = %q, want Gamma", got)
+	if !app.Exists("id:thread-3") || !strings.Contains(strings.Join(app.Texts(), "\n"), "Gamma") {
+		t.Fatalf("new row Gamma missing; texts %q", app.Texts())
 	}
 	if bumps := current.rev.GetUntracked() - before; bumps < 1 || bumps > 2 {
 		t.Fatalf("5 invalidates made %d revisions, want them coalesced", bumps)

@@ -1,7 +1,6 @@
 package nsui
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/nsgo-dev/nsgo"
@@ -10,7 +9,6 @@ import (
 
 	"miya/internal/appmodel"
 	"miya/internal/chat/model"
-	"miya/internal/nschat"
 	"miya/internal/nswidgets"
 	"miya/internal/uiruntime"
 )
@@ -26,6 +24,7 @@ type Host interface {
 	RememberDraft(value string)
 	SendDraft(steer bool) int
 	Stop()
+	NewThread()
 	EnsurePhoneHost()
 }
 
@@ -84,92 +83,4 @@ func installPlatformServices(cx *core.Scope) {
 		}
 		return cx.ShowNotification(core.Notification{ID: n.ID, Title: n.Title, Body: n.Body}, nil)
 	}
-}
-
-// root is the window's content. This is the migration's first view: the
-// conversation list and the selected conversation's title, to prove the
-// controller drives NSGo through the bridge.
-func root(cx *core.Scope, c Host) core.Node {
-	st := c.State()
-	threads := Live(func() []model.Thread {
-		if st.Threads == nil {
-			return nil
-		}
-		return st.Threads()
-	})
-	current := Live(c.Current)
-	colors := nswidgets.ColorsOf(cx)
-	return core.View{
-		StyleFunc: func() core.Style {
-			return core.Style{Direction: core.Row, FlexGrow: 1, Background: colors.Canvas(), Color: colors.Ink()}
-		},
-		Children: []core.Node{
-			core.Scroll{
-				StyleFunc: func() core.Style {
-					return core.Style{Width: core.Pt(280), Background: colors.Side(), Borders: core.Edges{Right: 1}, BorderColor: colors.Line()}
-				},
-				Children: []core.Node{
-					core.View{Style: core.Style{Padding: core.Symmetric(52, 8), Gap: 2}, Children: []core.Node{
-						core.Each(threads, func(t model.Thread) int { return t.ID },
-							func(cx *core.Scope, item func() model.Thread, _ func() int) core.Node {
-								return threadRow(colors, item, current, c)
-							}),
-					}},
-				},
-			},
-			core.View{
-				Style: core.Style{FlexGrow: 1, Padding: core.Symmetric(52, 24), Gap: 8},
-				Children: []core.Node{
-					core.Text{
-						TestID:      "current-title",
-						Style:       core.Style{FontSize: 20, FontWeight: core.FontWeightSemibold},
-						ContentFunc: func() string { return threadTitle(current()) },
-					},
-					core.Text{
-						StyleFunc:   func() core.Style { return core.Style{FontSize: 12, Color: colors.Muted()} },
-						ContentFunc: func() string { return current().Status },
-					},
-					nschat.View{TestID: "conversation", Thread: current,
-						OnRetry:  func(r appmodel.RetryRequest) { _ = c.RetryResponse(r) },
-						OnReload: func() { c.SelectThread(c.Current()) },
-						Draft: Live(func() string {
-							if st.Draft == nil {
-								return ""
-							}
-							return st.Draft()
-						}),
-						OnDraftChange: c.RememberDraft,
-						// Sending while a turn runs steers it, as on MyGo.
-						OnSend: func() { c.SendDraft(c.Current().Busy) },
-						OnStop: c.Stop},
-				},
-			},
-		},
-	}
-}
-
-func threadRow(colors nswidgets.Colors, item func() model.Thread, current func() model.Thread, c Host) core.Node {
-	// Rows are keyed by ID, so a row keeps the ID it was built with.
-	id := fmt.Sprintf("thread-%d", item().ID)
-	return core.View{
-		Role: core.RoleButton,
-		StyleFunc: func() core.Style {
-			s := core.Style{Padding: core.Symmetric(6, 10), CornerRadius: 6}
-			if current().ID == item().ID {
-				s.Background = colors.Chosen()
-			}
-			return s
-		},
-		OnPress: func(core.PressEvent) { c.SelectThread(item()) },
-		Children: []core.Node{
-			core.Text{TestID: id, MaxLines: 1, Style: core.Style{FontSize: 13}, ContentFunc: func() string { return threadTitle(item()) }},
-		},
-	}
-}
-
-func threadTitle(t model.Thread) string {
-	if t.Title != "" {
-		return t.Title
-	}
-	return "New conversation"
 }
