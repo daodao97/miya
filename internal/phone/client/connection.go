@@ -128,6 +128,26 @@ func (m *Client) read(gen int, conn *remote.Conn) (greeted bool, err error) {
 					m.SendErr = message
 				}
 			})
+		case "push":
+			message := f.Error
+			m.onMain(gen, func() {
+				if m.OnPushResult != nil {
+					m.OnPushResult(message)
+				}
+				if message == "" {
+					m.readPending = nil
+					m.markOpenRead()
+				}
+			})
+		case "notice":
+			var n notification.LiveMessage
+			if json.Unmarshal(f.Data, &n) == nil {
+				m.onMain(gen, func() {
+					if m.OnLiveNotification != nil {
+						m.OnLiveNotification(n)
+					}
+				})
+			}
 		case "read":
 			var n notification.PhoneState
 			if json.Unmarshal(f.Data, &n) == nil {
@@ -191,7 +211,7 @@ func (m *Client) read(gen int, conn *remote.Conn) (greeted bool, err error) {
 				})
 			}
 		// TODO: approvals/responded, remote desktop, automation, memory,
-		// collaboration/delegation and push frames belong to the deferred ports.
+		// collaboration/delegation frames belong to the deferred ports.
 		case "sent":
 			id, msg := f.Thread, f.Error
 			m.onMain(gen, func() { m.Sent(id, msg) })

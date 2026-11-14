@@ -1,8 +1,6 @@
 package mobile
 
 import (
-	"strconv"
-
 	"github.com/egoist/mygo"
 
 	"miya/internal/appmodel"
@@ -133,10 +131,7 @@ func (m *App) updateBadge() {
 	mygo.App.SetBadgeCount(count)
 }
 
-func notificationTarget(data map[string]string) remote.Request {
-	id, _ := strconv.Atoi(data["thread"])
-	return remote.Request{Thread: id, ServerID: data["serverId"], Agent: data["agent"], Project: data["project"]}
-}
+var notificationTarget = notification.Target
 
 func (m *App) markAllRead() {
 	if m.Conn == nil {

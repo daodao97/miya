@@ -7,7 +7,6 @@
   "phoneSecureStoreUnavailable": "安全配对存储不可用，重启后需要重新配对。",
   "searchSettings": "搜索设置",
   "noMatchingSettings": "没有匹配的设置。",
-
   "webhookWaitingForService": "正在等待运行中的对话结束，Webhook 更新随后生效。",
   "miyaWebhook": "Miya Webhook",
   "enableWebhook": "启用 Webhook",
@@ -1933,5 +1932,17 @@
   "nsToggleSidebar": "显示或隐藏侧边栏",
   "nsMenuView": "显示",
   "nsComposerStatus": "模型：%s · 思考：%s · 权限：%s · Token：%d",
-  "nsComposerUnknownCommand": "未知命令。输入 / 选择支持的命令。"
+  "nsComposerUnknownCommand": "未知命令。输入 / 选择支持的命令。",
+  "nsgoPhoneHoldToSpeak": "按住说话",
+  "nsgoPhoneSlideToCancel": "滑开以取消",
+  "nsgoPhoneVoiceHelp": "按住麦克风按钮说话，松开后插入文字，也可开启自动发送。",
+  "nsgoPhoneDisableNotifications": "关闭通知",
+  "nsgoPhoneNotificationsDisabled": "通知已关闭",
+  "nsgoPhoneRemoteNotificationsUnavailable": "此应用构建暂不支持远程通知。",
+  "nsgoPhoneLiveActivities": "实时活动",
+  "nsgoPhoneLiveActivitiesEnabled": "实时活动已开启",
+  "nsgoPhoneLiveActivitiesDisabled": "实时活动已关闭",
+  "nsgoPhoneLiveActivitiesUnavailable": "此应用构建暂不支持实时活动。",
+  "nsgoPhoneWebLoadFailed": "无法加载 Web 服务，请刷新重试。",
+  "nsgoPhoneNoVerifiedService": "此对话暂无已验证的 HTTP 服务。"
 }

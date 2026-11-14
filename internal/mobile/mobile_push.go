@@ -4,9 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
-	"net/url"
 	"runtime"
-	"strings"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -42,41 +40,10 @@ func (m *App) setupPush() {
 	})
 }
 
-// notificationData decodes what a push carries, as JSON.
-func notificationData(data []byte) map[string]string {
-	var d map[string]string
-	_ = json.Unmarshal(data, &d)
-	return d
-}
-
-// notificationID is the ID of a notification Miya shows, key, which carries
-// data, what a tap opens: mygo.App.OnNotificationClick is told only the ID,
-// also after the process was ended.
-func notificationID(key string, data map[string]string) string {
-	q := url.Values{}
-	for k, v := range data {
-		q.Set(k, v)
-	}
-	return key + "#" + q.Encode()
-}
-
-// parseNotificationID returns the key and data of a notificationID, and
-// false for an ID of another kind, as a push's.
-func parseNotificationID(id string) (key string, data map[string]string, ok bool) {
-	key, query, ok := strings.Cut(id, "#")
-	if !ok {
-		return "", nil, false
-	}
-	q, err := url.ParseQuery(query)
-	if err != nil {
-		return "", nil, false
-	}
-	data = map[string]string{}
-	for k := range q {
-		data[k] = q.Get(k)
-	}
-	return key, data, true
-}
+// Keep the legacy phone's entry points on the shared routing codec.
+var notificationData = notification.Data
+var notificationID = notification.ID
+var parseNotificationID = notification.ParseID
 
 // ShouldPresentNotification reports whether a notification arriving while
 // the app is in the foreground should be shown: not for the conversation

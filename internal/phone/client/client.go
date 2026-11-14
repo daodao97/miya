@@ -33,7 +33,13 @@ type Client struct {
 	Changed  func()
 	// SendRequest is an optional transport adapter, also useful for protocol tests.
 	SendRequest func(remote.Request) error
-	DialDesktop func(context.Context, string) (*remote.Conn, error)
+	// OnLiveNotification receives paired-connection notifications on Dispatch.
+	OnLiveNotification func(notification.LiveMessage)
+	OnPushResult       func(string)
+	// KeepConnectionInBackground is enabled only while a native Android host
+	// holds a foreground-service lease. Other phones disconnect on background.
+	KeepConnectionInBackground bool
+	DialDesktop                func(context.Context, string) (*remote.Conn, error)
 	// PrepareNetwork is an optional platform warm-up/permission hook. Nil uses
 	// the transport directly. It must honor cancellation.
 	PrepareNetwork                                                func(context.Context, string) error
@@ -239,7 +245,9 @@ func (m *Client) EnterBackground() {
 	m.background = true
 	m.PersistState()
 	m.FlushCache(true)
-	m.Disconnect()
+	if !m.KeepConnectionInBackground {
+		m.Disconnect()
+	}
 }
 func (m *Client) EnterForeground() {
 	m.background = false

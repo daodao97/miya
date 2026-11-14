@@ -26,6 +26,28 @@ func utf16ByteOffset(s string, offset int) int {
 	}
 	return len(s)
 }
+
+// byteUTF16Offset converts the model's caret back to the native input range.
+func byteUTF16Offset(s string, offset int) int {
+	units := 0
+	for i, r := range s {
+		if i >= offset {
+			break
+		}
+		units++
+		if r > 0xffff {
+			units++
+		}
+	}
+	return units
+}
+func (m *App) selectedRange() core.TextRange {
+	a, b := m.anchor, m.caret
+	if b < 0 || b > len(m.Draft) {
+		a, b = len(m.Draft), len(m.Draft)
+	}
+	return core.TextRange{Start: byteUTF16Offset(m.Draft, max(0, a)), End: byteUTF16Offset(m.Draft, b)}
+}
 func (m *App) references(cx *core.Scope) core.Node {
 	return core.Dynamic(func(cx *core.Scope) core.Node {
 		m.revision.Get()

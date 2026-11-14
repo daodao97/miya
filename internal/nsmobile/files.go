@@ -12,6 +12,7 @@ import (
 
 func (m *App) conversationMenu(cx *core.Scope) core.Node {
 	return scroll(text(tr("Conversation actions")),
+		m.button("web-services", tr("Web services"), live(m, func() bool { return !m.Connected || m.Open == 0 || m.Viewer.Current().ServerID == "" }), m.openWebServices),
 		m.button("project-files", tr("Project files"), live(m, func() bool { return !m.Connected || m.ComposerProject() == "" }), func() { m.sheet.Set(""); m.openProjectFile(m.ComposerProject(), "") }),
 		m.button("new-from-menu", tr("New conversation"), nil, func() {
 			project, agent := m.ComposerProject(), m.Agent()
@@ -20,7 +21,7 @@ func (m *App) conversationMenu(cx *core.Scope) core.Node {
 			m.sheet.Set("")
 		}),
 		m.button("handoff", tr("Hand off to a new conversation"), live(m, func() bool { return m.Open == 0 || m.Sending }), func() { m.Handoff(); m.Path = "/thread"; m.sheet.Set("") }),
-		// TODO(remote-desktop, web-services): add their sheet actions when their
+		// TODO(remote-desktop): add their sheet actions when their
 		// respective NSGo adapters are implemented. No inactive controls are shown.
 		m.button("actions-cancel", tr("Cancel"), nil, func() { m.sheet.Set("") }),
 	)
@@ -54,6 +55,7 @@ func (m *App) openProjectFile(project, file string) {
 		m.SendErr = tr("Update Miya on your desktop first. If the background service is busy, it will update when idle.")
 		return
 	}
+	m.closeWebServices()
 	m.closeFileBrowser()
 	proxy, err := phoneproxy.NewPhoneFileProxy(m.Conn, project)
 	if err != nil {
@@ -69,6 +71,7 @@ func (m *App) openProjectFile(project, file string) {
 	m.filesURL.Set(proxy.URL)
 }
 func (m *App) closeFileBrowser() {
+	m.webBrowser = false
 	if m.closeFiles != nil {
 		m.closeFiles()
 		m.closeFiles = nil
@@ -78,18 +81,22 @@ func (m *App) closeFileBrowser() {
 	}
 }
 func (m *App) fileView(cx *core.Scope) core.Node {
-	conn := m.Conn
+	conn, owner := m.Conn, m.composerOwner()
+	label, id, failure := tr("Project files"), "project-files-webview", tr("Unable to open project files")
+	if m.webBrowser {
+		label, id, failure = tr("Web services"), "web-service-webview", tr("Unable to open web service")
+	}
 	cx.Effect(func() {
 		m.revision.Get()
-		if m.Conn != conn || !m.Connected {
+		if m.Conn != conn || !m.Connected || m.composerOwner() != owner {
 			cx.Post(m.closeFileBrowser)
 		}
 	})
 	return core.View{Style: core.Style{FlexGrow: 1, MinHeight: core.Pt(0)}, Children: []core.Node{
 		m.button("close-files", tr("Back"), nil, m.closeFileBrowser),
-		core.WebView{Source: core.WebSrc(core.Untracked(cx, m.filesURL.Get)), Label: tr("Project files"), TestID: "project-files-webview", Style: core.Style{FlexGrow: 1},
+		core.WebView{Source: core.WebSrc(core.Untracked(cx, m.filesURL.Get)), Label: label, TestID: id, Style: core.Style{FlexGrow: 1},
 			OnError: func(err error) {
-				m.SendErr = tr("Unable to open project files") + ": " + err.Error()
+				m.SendErr = failure + ": " + err.Error()
 				m.closeFileBrowser()
 				m.change()
 			}},

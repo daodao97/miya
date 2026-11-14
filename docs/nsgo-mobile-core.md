@@ -1,7 +1,8 @@
 # NSGo phone core
 
 `go build -tags nsgo` selects `main_nsgo_mobile.go` on iOS and Android. The
-untagged application still selects `main.go`; `internal/mobile` is unchanged.
+untagged application still selects `main.go`; `internal/mobile` keeps its MyGo
+adapter.
 Desktop NSGo builds continue to select `main_nsgo.go`. Android's MyGo JNI
 startup in `main_android.go` is excluded under `nsgo`.
 
@@ -10,7 +11,9 @@ startup in `main_android.go` is excluded under `nsgo`.
 - `internal/nsmobile`: application/lifecycle adapter, revision-backed retained
   views, home/projects/activity, conversation navigation, safe-area/keyboard
   insets, settings and model/effort/permission sheets, photos, references,
-  quotas, handoff and project-file WebView. Touch rows have a 44-point minimum.
+  quotas, handoff, cancellable voice input, notification/lifecycle adapters,
+  verified conversation services and owned file/service WebViews. Touch rows
+  have a 44-point minimum.
 - `internal/phone/client`: UI-independent connection generations, reconnect
   backoff and path probes, protocol frame dispatch, durable thread identity,
   delta merging and cache subscriptions, pending send/upload/ack/echo state,
@@ -25,7 +28,9 @@ startup in `main_android.go` is excluded under `nsgo`.
   sources for protocol types and framework-free helpers.
 
 The client port lifts the original phone core into a reusable package while
-leaving the legacy phone implementation intact. To preserve the phone domain
+keeping the legacy phone implementation compiling. Runtime fetching lives in
+`phone/services`, and local notification IDs/targets live in `notification`;
+MyGo retains compatibility entry points for both. To preserve the phone domain
 boundary, `SameMessageOrder` moved from `appmodel` to `chat/model`, reference
 title/context formatting moved to `chat/presentation`, and `DesktopRead` and
 its durable unread key moved to `notification`. `appmodel` keeps compatibility
@@ -46,10 +51,14 @@ owns the conversation's home-indicator spacing.
 ## Deferred work
 
 See [phone follow-ups](../internal/nsmobile/TODO.md) for all feature hooks and
-platform gaps. Approvals, remote desktop, automations, memory, voice, push,
-web services, delegations and multi-desktop management remain separate ports.
+platform gaps. Approvals, remote desktop, automations, memory, delegations
+and multi-desktop management remain separate ports.
 The current pinned NSGo has no mobile secure-store or network-path service and
-no QR scanner. Connection-code pairing is session-only unless a host supplies
+no QR scanner. General APNs device registration/remote-delivery callbacks and
+Android foreground services need the host hooks documented in TODO.md. NSGo
+Live Activities exist, but require native widget packaging; background activity
+push subscriptions still need a desktop protocol operation. Connection-code pairing is session-only unless a host
+supplies
 a secure-store adapter. No credentials fall back to ordinary files.
 
 ## Validation
@@ -82,3 +91,13 @@ integration run failed only at the known existing failure,
 `TestDesktopPageRendersLiveConnectingAndEnded` (missing Trackpad in the MyGo
 remote desktop page). No physical phone, IPA/APK packaging or deployment is
 claimed by these checks.
+
+2026-11-14 phone-services port: the required format/localization checks, desktop
+and iOS vet, default and NSGo builds passed. The injected nsgotest voice,
+notification registration/routing and verified web-service ownership tests pass,
+as do the legacy MyGo phone, shared client and notification tests. The voice
+WebSocket fixture now ignores unrelated ordinary HTTP probes of its ephemeral
+port; these previously polluted its session-result channel. The full
+integration run reports only the existing Trackpad failure described above.
+See [TODO.md](../internal/nsmobile/TODO.md) for native APNs/Android hooks, Live Activity packaging and the
+remaining background activity subscription protocol work.

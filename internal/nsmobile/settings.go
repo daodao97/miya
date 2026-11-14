@@ -15,6 +15,8 @@ import (
 
 func (m *App) settings(cx *core.Scope) core.Node {
 	return scroll(text(tr("Settings")),
+		m.button("voice-settings", tr("Voice input"), nil, func() { m.sheet.Set("voice") }),
+		m.button("push-settings", tr("Notifications"), nil, func() { m.sheet.Set("push") }),
 		m.button("language", tr("Interface language"), nil, func() { m.sheet.Set("language") }),
 		m.button("reconnect", tr("Reconnect"), live(m, func() bool { return m.Link == "" }), func() { m.Connect(m.Link); m.sheet.Set("") }),
 		m.button("add-desktop", tr("Add desktop"), nil, func() { m.sheet.Set("pair") }),
@@ -23,7 +25,6 @@ func (m *App) settings(cx *core.Scope) core.Node {
 		m.button("disconnect", tr("Disconnect"), nil, func() { m.Disconnect(); m.sheet.Set("") }),
 		m.button("forget", tr("Forget desktop"), nil, func() { m.Forget(); m.sheet.Set("") }),
 		core.Text{ContentFunc: live(m, func() string { return m.Error + "\n" + m.PersistenceError })},
-		// TODO(settings): voice and push controls belong to their deferred adapters.
 	)
 }
 func (m *App) languageSettings(cx *core.Scope) core.Node {

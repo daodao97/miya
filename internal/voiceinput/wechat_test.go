@@ -120,6 +120,13 @@ func TestWechatStreamFramesPCMAndPollsPolishedFinal(t *testing.T) {
 	}
 	done := make(chan uploaded, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Ordinary HTTP probes of ephemeral localhost ports are not recognition
+		// sessions and must not publish into the WebSocket result channel.
+		if !strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
+			http.NotFound(w, r)
+			return
+		}
+
 		ws, err := websocket.Accept(w, r, nil)
 		if err != nil {
 			done <- uploaded{err: err}
@@ -262,7 +269,7 @@ func TestWechatStreamFramesPCMAndPollsPolishedFinal(t *testing.T) {
 	}
 	got := <-done
 	if got.err != nil || got.packets != 18 || got.uploads != 4 || !got.polled {
-		t.Fatalf("uploaded=%+v", got)
+		t.Fatalf("uploaded=%+v error=%v", got, got.err)
 	}
 }
 
