@@ -13,12 +13,14 @@ import (
 // CaptureKeys/OnKey follow chat.Composer's contract, through the session keymap
 // so native editing and IME composition retain priority outside completions.
 type ReferenceEditor struct {
-	Input              core.Input
-	ReferenceTitle     func(model.ThreadRef) string
-	Commands           func() []model.ComposerChoice
-	Files              func() []string
-	CaptureKeys        func() []string
-	OnKey              func(string)
+	Input          core.Input
+	ReferenceTitle func(model.ThreadRef) string
+	Commands       func() []model.ComposerChoice
+	Files          func() []string
+	CaptureKeys    func() []string
+	OnKey          func(string)
+	// OnShortcut handles application keys the rich editor would otherwise consume.
+	OnShortcut         func(string) bool
 	OnEdit             func(string, int)
 	OnMove             func()
 	OnInvalidReference func()
@@ -136,6 +138,9 @@ func (r ReferenceEditor) Render(cx *core.Scope) core.Node {
 	})
 	// A session plugin consumes only the keys requested by the completion popup.
 	p := &re.Plugin{Key: "miya-composer-keys", HandleKeyDown: func(_ *re.Session, key string) bool {
+		if r.OnShortcut != nil && r.OnShortcut(key) {
+			return true
+		}
 		names := map[string]string{"Enter": "enter", "Tab": "tab", "ArrowUp": "up", "ArrowDown": "down", "Escape": "escape"}
 		if r.CaptureKeys != nil && r.OnKey != nil {
 			for _, k := range r.CaptureKeys() {

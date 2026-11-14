@@ -30,7 +30,7 @@ func (v View) composer(cx *core.Scope) core.Node {
 	if v.Attachments != nil {
 		children = append(children, v.Attachments)
 	}
-	children = append(children, ReferenceEditor{ReferenceTitle: v.ReferenceTitle, Commands: v.Commands, Files: v.FileReferences, CaptureKeys: v.CaptureKeys, OnKey: v.OnComposerKey, OnEdit: v.OnDraftEdit, OnMove: v.OnComposerMove, Owner: v.ComposerOwner, OnInvalidReference: v.OnInvalidReference, Input: core.Input{TestID: "composer", Label: tr("Message"), Value: v.Draft, OnChange: v.OnDraftChange,
+	children = append(children, ReferenceEditor{ReferenceTitle: v.ReferenceTitle, Commands: v.Commands, Files: v.FileReferences, CaptureKeys: v.CaptureKeys, OnKey: v.OnComposerKey, OnShortcut: v.OnComposerShortcut, OnEdit: v.OnDraftEdit, OnMove: v.OnComposerMove, Owner: v.ComposerOwner, OnInvalidReference: v.OnInvalidReference, Input: core.Input{TestID: "composer", Label: tr("Message"), Value: v.Draft, OnChange: v.OnDraftChange,
 		OnContentSizeChange: func(s core.Size) { height.Set(min(core.Points(200), max(core.Points(48), s.Height))) },
 		StyleFunc:           func() core.Style { return core.Style{Height: core.Pt(height.Get())} },
 		AutoFocus:           true, Multiline: true, SubmitBehavior: submit, OnSubmit: func(string) {

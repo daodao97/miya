@@ -19,7 +19,7 @@ import (
 
 func (m *App) conversation(cx *core.Scope) core.Node {
 	state := chat.NewConversationState(cx)
-	return core.View{TestID: "mobile-conversation", Style: core.Style{FlexGrow: 1, MinHeight: core.Pt(0)}, Children: []core.Node{
+	return core.View{TestID: "mobile-conversation", Style: core.Style{FlexGrow: 1, FlexShrink: 1, MinHeight: core.Pt(0)}, Children: []core.Node{
 		m.toolbar(live(m, func() string {
 			if m.Title != "" {
 				return m.Title
@@ -32,7 +32,8 @@ func (m *App) conversation(cx *core.Scope) core.Node {
 			OnRetry: func(req appmodel.RetryRequest) {
 				m.act(func() { r := m.ThreadRequest("retry", req.ThreadID); r.MessageID = req.MessageID; m.Action(r) })()
 			},
-			OnReload: m.act(func() { m.Subscribe(m.Open) }), OnHandoff: m.act(func() {
+			WaitingApproval: live(m, func() bool { return len(m.State.Approvals) > 0 }),
+			OnReload:        m.act(func() { m.Subscribe(m.Open) }), OnHandoff: m.act(func() {
 				m.Handoff()
 				if m.Open == 0 && m.Draft != "" {
 					m.Path = "/thread"

@@ -1,4 +1,4 @@
-//go:build darwin && !ios
+//go:build mygo_ui && darwin && !ios
 
 package integration
 

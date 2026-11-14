@@ -1,0 +1,144 @@
+//go:build !mygo_ui
+
+package integration
+
+import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"miya/internal/appmodel"
+	"miya/internal/chat/model"
+	dg "miya/internal/delegation"
+	widgets "miya/internal/nsrequests"
+	"strings"
+	"testing"
+)
+
+func TestNSGoCollaborationPanelRetriesExactRequestAfterAmbiguousResponse(t *testing.T) {
+	p := (&widgets.CollaborationUI{}).Pane("source")
+	var requests []appmodel.CollaborationRequest
+	var complete func(json.RawMessage, error)
+	call := func(r appmodel.CollaborationRequest, done func(json.RawMessage, error)) {
+		if r.Operation == "read_task" {
+			done(widgets.CollaborationArgsJSON(widgets.CollaborationTaskView{ID: "accepted", State: dg.Running}), nil)
+			return
+		}
+		requests = append(requests, r)
+		complete = done
+	}
+	p.Submit("cancel_task", map[string]any{"task_id": "accepted"}, call)
+	original := append([]byte(nil), p.Pending.Arguments...)
+	complete(nil, errors.New("connection closed before acknowledgement"))
+	if p.Pending == nil || p.Busy {
+		t.Fatal("ambiguous request discarded")
+	}
+	p.Retry(call)
+	if len(requests) != 2 || !bytes.Equal(requests[1].Arguments, original) {
+		t.Fatal("retry created another request ID")
+	}
+	complete(json.RawMessage(`{}`), nil)
+	if p.Pending == nil || !strings.Contains(p.Err, "incomplete") {
+		t.Fatal("malformed response acknowledged work")
+	}
+	p.Retry(call)
+	complete(json.RawMessage(`{"accepted":true}`), nil)
+	if p.Pending != nil || p.Err != "" {
+		t.Fatal("accepted request stayed pending")
+	}
+}
+
+func TestNSGoCollaborationPanelLateResponsesCannotReplaceAnotherTaskOrSource(t *testing.T) {
+	var cache widgets.CollaborationUI
+	a, b := cache.Pane("source-a"), cache.Pane("source-b")
+	callbacks := map[string]func(json.RawMessage, error){}
+	call := func(r appmodel.CollaborationRequest, done func(json.RawMessage, error)) {
+		var args struct {
+			ID string `json:"task_id"`
+		}
+		_ = json.Unmarshal(r.Arguments, &args)
+		callbacks[r.From+args.ID] = done
+	}
+	a.Read("old", call)
+	a.Read("new", call)
+	b.Read("other", call)
+	callbacks["source-anew"](widgets.CollaborationArgsJSON(widgets.CollaborationTaskView{ID: "new", Result: dg.Result{Text: "new fixed result"}}), nil)
+	callbacks["source-aold"](widgets.CollaborationArgsJSON(widgets.CollaborationTaskView{ID: "old", Result: dg.Result{Text: "late old result"}}), nil)
+	callbacks["source-bother"](widgets.CollaborationArgsJSON(widgets.CollaborationTaskView{ID: "other", Result: dg.Result{Text: "other source"}}), nil)
+	if a.Selected != "new" || a.Details["new"].Result.Text != "new fixed result" || b.Details["other"].Result.Text != "other source" {
+		t.Fatal("late response crossed task/source identity")
+	}
+}
+
+func TestNSGoCollaborationPanelRefreshesSelectedNotificationWithoutTaskRevisionChange(t *testing.T) {
+	for _, offPage := range []bool{false, true} {
+		t.Run(fmt.Sprint(offPage), func(t *testing.T) {
+			p := (&widgets.CollaborationUI{}).Pane("source")
+			p.Selected, p.Revision = "task-selected", 7
+			p.Details[p.Selected] = widgets.CollaborationTaskView{ID: p.Selected, Revision: 3, Notification: "pending"}
+			reads := 0
+			call := func(r appmodel.CollaborationRequest, done func(json.RawMessage, error)) {
+				switch r.Operation {
+				case "list_tasks":
+					row := p.Details[p.Selected]
+					row.Notification = "delivered"
+					if offPage {
+						row.ID = "newer-task"
+					}
+					done(widgets.CollaborationArgsJSON(widgets.CollaborationListView{Tasks: []widgets.CollaborationTaskView{row}, Revision: 8}), nil)
+				case "read_task":
+					reads++
+					task := p.Details[p.Selected]
+					task.Notification = "delivered"
+					done(widgets.CollaborationArgsJSON(task), nil)
+				}
+			}
+			p.Refresh(&model.CollaborationStatus{Version: 1, Revision: 8}, call, false)
+			if reads != 1 || p.Details[p.Selected].Notification != "delivered" {
+				t.Fatal("selected delivery state stayed stale", p.Details[p.Selected])
+			}
+		})
+	}
+}
+
+func TestNSGoCollaborationRefreshDoesNotOpenPopover(t *testing.T) {
+	pane := (&widgets.CollaborationUI{}).Pane("source")
+	pane.Refresh(&model.CollaborationStatus{Version: 1}, func(_ appmodel.CollaborationRequest, done func(json.RawMessage, error)) {
+		done(widgets.CollaborationArgsJSON(widgets.CollaborationListView{Tasks: []widgets.CollaborationTaskView{{ID: "review", Title: "Review", State: dg.Running}}}), nil)
+	}, false)
+	if pane.Hidden() || pane.Open {
+		t.Fatal("refresh should reveal the task entry without opening its popover")
+	}
+}
+
+func TestNSGoCollaborationEntryHidesOnceTasksFinish(t *testing.T) {
+	pane := (&widgets.CollaborationUI{}).Pane("source")
+	done := widgets.CollaborationTaskView{ID: "done", Title: "Review", State: dg.Completed, Notification: "delivered"}
+	pane.Rows = []widgets.CollaborationTaskView{done, {ID: "run", Title: "Fix", State: dg.Running}}
+	if pane.Hidden() {
+		t.Fatal("running task hidden")
+	}
+	pane.Rows = []widgets.CollaborationTaskView{done, {ID: "failed", Title: "Fix", State: dg.Failed}}
+	if !pane.Hidden() {
+		t.Fatal("finished tasks still shown above the composer")
+	}
+	for _, row := range []widgets.CollaborationTaskView{
+		{ID: "attention", State: dg.NeedsAttention},
+		{ID: "returning", State: dg.Completed, Notification: "submitting"},
+		{ID: "undelivered", State: dg.Completed, Notification: "needsAttention"},
+	} {
+		pane.Rows = []widgets.CollaborationTaskView{done, row}
+		if pane.Hidden() {
+			t.Fatalf("%s hidden before the person can resolve it", row.ID)
+		}
+	}
+	pane.Rows = []widgets.CollaborationTaskView{done}
+	pane.Open = true
+	if pane.Hidden() {
+		t.Fatal("open popover vanished")
+	}
+	pane.Open = false
+	if !pane.Hidden() {
+		t.Fatal("closing the popover kept the finished entry")
+	}
+}

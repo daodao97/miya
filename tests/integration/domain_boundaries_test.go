@@ -53,7 +53,7 @@ func TestUITransitiveDependenciesStayProviderNeutral(t *testing.T) {
 			}
 		}
 	}
-	for _, root := range []string{"miya/internal/ui", "miya/internal/mobile", "miya/internal/chat/view", "miya/internal/nsui", "miya/internal/nsmobile", "miya/internal/nschat", "miya/internal/nswidgets"} {
+	for _, root := range []string{"miya/internal/nsui", "miya/internal/nsmobile", "miya/internal/nschat", "miya/internal/nswidgets", "miya/internal/nsrequests"} {
 		visit(root, nil)
 	}
 }
@@ -76,7 +76,7 @@ func TestSharedDomainPackagesDoNotImportAgentImplementations(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				for _, blocked := range []string{"miya/internal/agent/codex", "miya/internal/agent/claude", "miya/internal/agent/integrations", "miya/internal/controller", "miya/internal/ui", "miya/internal/mobile", "miya/internal/nsui", "miya/internal/nsmobile", "miya/internal/nschat", "miya/internal/nswidgets"} {
+				for _, blocked := range []string{"miya/internal/agent/codex", "miya/internal/agent/claude", "miya/internal/agent/integrations", "miya/internal/controller", "miya/internal/ui", "miya/internal/mobile", "miya/internal/nsui", "miya/internal/nsmobile", "miya/internal/nschat", "miya/internal/nswidgets", "miya/internal/nsrequests"} {
 					if name == blocked || strings.HasPrefix(name, blocked+"/") {
 						t.Errorf("%s imports implementation %s", path, name)
 					}

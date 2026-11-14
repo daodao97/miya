@@ -8,6 +8,7 @@ import (
 
 	"miya/internal/appmodel"
 	"miya/internal/chat/model"
+	msgfmt "miya/internal/chat/presentation"
 	"miya/internal/interaction"
 	"miya/internal/nschat"
 	"miya/internal/nswidgets"
@@ -74,9 +75,10 @@ func root(cx *core.Scope, c Host, sidebarFooter ...core.Node) core.Node {
 	colors := nswidgets.ColorsOf(cx)
 	convState := chat.NewConversationState(cx)
 	conversation := nschat.View{TestID: "conversation", Thread: current, State: convState,
-		OnRetry:  func(r appmodel.RetryRequest) { _ = c.RetryResponse(r) },
-		OnReload: func() { c.SelectThread(c.Current()) },
-		OnStop:   c.Stop,
+		OnRetry:         func(r appmodel.RetryRequest) { _ = c.RetryResponse(r) },
+		OnReload:        func() { c.SelectThread(c.Current()) },
+		OnStop:          c.Stop,
+		WaitingApproval: Live(func() bool { return c.TaskWaitingApproval(c.Current()) }),
 		Requests: pendingRequests(cx, c, Live(func() []interaction.Request {
 			if st.Approvals == nil {
 				return nil
@@ -94,6 +96,30 @@ func root(cx *core.Scope, c Host, sidebarFooter ...core.Node) core.Node {
 	desktopComposer := newDesktopComposer(cx, c)
 	desktopComposer.active = func() bool { return page.Get() == "chat" && !settingsOpen.Get() && !paletteOpen.Get() }
 	desktopComposer.wire(&conversation)
+	conversation.OnComposerShortcut = func(key string) bool {
+		// NSGo's rich editor owns modified keys while focused. Forward shell
+		// actions explicitly so typing in the composer does not swallow them.
+		switch key {
+		case "Mod-k", "Mod-Shift-p":
+			cmd.openPalette()
+		case "Mod-b":
+			cmd.toggleSidebar()
+		case "Mod-.":
+			cmd.stop()
+		case "Mod-,":
+			cmd.openSettings()
+		case "Mod-n":
+			cmd.newThread()
+		case "Mod-Alt-b", "Alt-Mod-b":
+			panelOpen.Update(func(v bool) bool { return !v })
+		case "Mod-Shift-o":
+			desktopComposer.pickFiles()
+		default:
+			return false
+		}
+		return true
+	}
+
 	conversationKey := core.NewMemo(cx, Live(func() string {
 		return fmt.Sprintf("%s:%s:%d", c.State().ReferenceSource, c.State().Cwd, c.Current().ID)
 	}))
@@ -110,11 +136,26 @@ func root(cx *core.Scope, c Host, sidebarFooter ...core.Node) core.Node {
 		return core.Func(func(cx *core.Scope) core.Node { return conversation })
 	})
 
+	var messagePanel *panel
+	panelNode := filePanel(cx, c, panelOpen, func(p *panel) { messagePanel = p })
+	conversation.OnLink = func(raw string) {
+		if _, ok := model.ParseThreadURL(raw); ok {
+			openCollaborationThread(c, raw, desktopComposer.notice)
+			return
+		}
+		if rel, ok := msgfmt.LocalFileLink(c.State().Cwd, raw); ok && messagePanel != nil {
+			panelOpen.Set(true)
+			messagePanel.openSurface(surfaceFiles)
+			messagePanel.openFile(rel)
+			return
+		}
+		cx.OpenURL(raw, nil)
+	}
 	return ui.SidebarShell{TestID: "window", Variant: ui.SidebarShellInset,
 		Open: open.Get, OnOpenChange: open.Set, ToggleLabel: tr("Toggle sidebar"),
 		Width: width.Get, OnWidthChange: width.Set, ResizeLabel: tr("Resize sidebar"),
 		DefaultWidth: 260, MinWidth: 220, MaxWidth: 420,
-		Right: []core.Node{filePanel(cx, c, panelOpen)}, RightOpen: panelOpen.Get, OnRightOpenChange: panelOpen.Set,
+		Right: []core.Node{panelNode}, RightOpen: panelOpen.Get, OnRightOpenChange: panelOpen.Set,
 		RightToggleLabel: tr("Show / Hide right panel"), RightResizeLabel: tr("Resize right panel"),
 		RightWidth: panelWidth.Get, OnRightWidthChange: panelWidth.Set, RightDefaultWidth: 460, RightMinWidth: 320, RightMaxWidth: 960,
 		Sidebar: []core.Node{sidebar(cx, c, shellNav{page: page, expanded: expanded, settings: cmd.openSettings, project: openProject, usage: func() { usage.openSettings("usage") }, footer: sidebarFooter})},

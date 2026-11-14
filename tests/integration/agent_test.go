@@ -19,10 +19,10 @@ import (
 // All presentation packages consume shared contracts, including phone and shared
 // widgets. Inspect Go syntax rather than an incomplete filename/text convention.
 func TestViewsDoNotKnowAgents(t *testing.T) {
-	for _, dir := range []string{"internal/ui", "internal/mobile", "internal/chat/view", "internal/widgets", "internal/agent"} {
+	for _, dir := range []string{"internal/nsui", "internal/nsmobile", "internal/nschat", "internal/nswidgets", "internal/nsrequests", "internal/agent"} {
 		files, err := filepath.Glob(filepath.Join(dir, "*.go"))
-		if err != nil {
-			t.Fatal(err)
+		if err != nil || len(files) == 0 {
+			t.Fatalf("missing source package %s: %v", dir, err)
 		}
 		for _, path := range files {
 			if strings.HasSuffix(path, "_test.go") {
@@ -116,7 +116,7 @@ func TestAgentImplementationsDoNotImportControllerOrViews(t *testing.T) {
 			}
 			for _, imp := range file.Imports {
 				name, _ := strconv.Unquote(imp.Path.Value)
-				for _, forbidden := range []string{"miya/internal/controller", "miya/internal/ui", "miya/internal/mobile", "miya/internal/appmodel"} {
+				for _, forbidden := range []string{"miya/internal/controller", "miya/internal/ui", "miya/internal/mobile", "miya/internal/nsui", "miya/internal/nsmobile", "miya/internal/nschat", "miya/internal/nswidgets", "miya/internal/nsrequests", "miya/internal/appmodel"} {
 					if name == forbidden {
 						t.Errorf("%s: imports host implementation %s", path, name)
 					}
