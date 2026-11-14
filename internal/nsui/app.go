@@ -15,6 +15,7 @@ import (
 	"miya/internal/chat/model"
 	"miya/internal/memory/manager"
 	"miya/internal/nswidgets"
+	projectaccess "miya/internal/project/access"
 	svcproto "miya/internal/service/protocol"
 	"miya/internal/uiruntime"
 )
@@ -57,6 +58,7 @@ type Host interface {
 	ThreadWorkspace(id int) string
 	ChangeWorkspace(path string) error
 	Memories() *manager.Manager
+	WorkspaceFiles() projectaccess.Files
 }
 
 // Environment supplies controller creation at the executable's composition
