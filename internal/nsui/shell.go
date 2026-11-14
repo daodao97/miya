@@ -9,6 +9,7 @@ import (
 
 	"github.com/nsgo-dev/nsgo/core"
 	"github.com/nsgo-dev/nsgo/ui"
+	"github.com/nsgo-dev/nsgo/ui/chat"
 
 	"miya/internal/appmodel"
 	"miya/internal/chat/model"
@@ -27,7 +28,10 @@ func root(cx *core.Scope, c Host, sidebarFooter ...core.Node) core.Node {
 	// page is the main area: "chat" or "automations". Choosing a
 	// conversation always goes back to chat.
 	page := core.NewSignal(cx, "chat")
-	c = chatHost{Host: c, page: page}
+	// expanded is the project whose conversations the sidebar lists.
+	expanded := core.NewSignal(cx, c.State().Cwd)
+	reads := &readTracker{c: c}
+	c = chatHost{Host: c, page: page, expanded: expanded, reads: reads}
 	st := c.State()
 	threads := Live(func() []model.Thread {
 		if st.Threads == nil {
@@ -63,7 +67,8 @@ func root(cx *core.Scope, c Host, sidebarFooter ...core.Node) core.Node {
 	}
 	bindCommands(cx, cmd)
 	colors := nswidgets.ColorsOf(cx)
-	conversation := nschat.View{TestID: "conversation", Thread: current,
+	convState := chat.NewConversationState(cx)
+	conversation := nschat.View{TestID: "conversation", Thread: current, State: convState,
 		OnRetry:  func(r appmodel.RetryRequest) { _ = c.RetryResponse(r) },
 		OnReload: func() { c.SelectThread(c.Current()) },
 		Draft: Live(func() string {
@@ -83,18 +88,18 @@ func root(cx *core.Scope, c Host, sidebarFooter ...core.Node) core.Node {
 			return st.Approvals()
 		})),
 	}
+	// The conversation counts as seen while it shows in a focused window.
+	cx.Effect(func() {
+		current()
+		showing, atLatest := page.Get() == "chat", convState.AtLatest()
+		cx.Untrack(func() { reads.markVisible(showing, atLatest) })
+	})
+	projectNode, openProject := projectDialog(cx, c, expanded)
 	return ui.SidebarShell{TestID: "window", Variant: ui.SidebarShellInset,
 		Open: open.Get, OnOpenChange: open.Set, ToggleLabel: tr("Toggle sidebar"),
 		Width: width.Get, OnWidthChange: width.Set, ResizeLabel: tr("Resize sidebar"),
 		DefaultWidth: 260, MinWidth: 220, MaxWidth: 420,
-		Sidebar: []core.Node{core.View{Style: ui.FillRest.Merge(core.Style{Gap: 2}), Children: []core.Node{
-			core.View{Style: core.Style{Padding: core.Symmetric(0, 12), FlexShrink: 0}, Children: []core.Node{
-				ui.SidebarButton{Text: tr("New conversation"), Icon: nswidgets.IconOf("edit"), TestID: "new-thread", OnPress: c.NewThread},
-				ui.SidebarButton{Text: tr("Automations"), Icon: nswidgets.IconOf("clock"), TestID: "open-automations", OnPress: func() { page.Set("automations") }},
-			}},
-			threadSidebar(cx, threads, current, c),
-			core.View{Style: core.Style{Padding: core.Symmetric(4, 12), FlexShrink: 0}, Children: sidebarFooter},
-		}}},
+		Sidebar: []core.Node{sidebar(cx, c, shellNav{page: page, expanded: expanded, settings: cmd.openSettings, project: openProject, footer: sidebarFooter})},
 		Header: []core.Node{core.Text{TestID: "current-title", MaxLines: 1,
 			ContentFunc: func() string {
 				if page.Get() == "automations" {
@@ -113,7 +118,7 @@ func root(cx *core.Scope, c Host, sidebarFooter ...core.Node) core.Node {
 			core.Show{When: func() bool { return page.Get() == "automations" }, Then: func(cx *core.Scope) core.Node { return automationsPage(cx, c) }},
 			commandPalette(cx, paletteOpen, func() []paletteEntry {
 				return paletteEntries(cmd, current(), threads(), c.SelectThread, time.Now())
-			}), settingsDialog(cx, c, settingsOpen)},
+			}), settingsDialog(cx, c, settingsOpen), projectNode},
 	}
 }
 
@@ -242,14 +247,29 @@ func threadTitle(t model.Thread) string {
 }
 
 // chatHost returns to the conversation whenever one is chosen or started.
+// A conversation in another project opens that project first, and choosing
+// one marks it read once its history shows.
 type chatHost struct {
 	Host
-	page *core.Signal[string]
+	page     *core.Signal[string]
+	expanded *core.Signal[string]
+	reads    *readTracker
 }
 
 func (h chatHost) SelectThread(t model.Thread) {
 	h.page.Set("chat")
+	st := h.State()
+	if path := h.ThreadWorkspace(t.ID); path != "" && path != st.Cwd {
+		if err := h.ChangeWorkspace(path); err != nil {
+			if st.SetStatus != nil {
+				st.SetStatus("Project selection failed: " + err.Error())
+			}
+			return
+		}
+		h.expanded.Set(path)
+	}
 	h.Host.SelectThread(t)
+	h.reads.request(t)
 }
 
 func (h chatHost) NewThread() {

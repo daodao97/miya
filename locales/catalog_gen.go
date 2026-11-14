@@ -34,6 +34,26 @@ type Messages struct{ locale string }
 // source language.
 func In(locale string) Messages { return Messages{locale} }
 
+// SearchSettings says "Search settings"
+// in the language the app shows.
+func SearchSettings() string { return In(i18n.Locale()).SearchSettings() }
+
+// SearchSettings says "Search settings"
+// in the language of msgs.
+func (msgs Messages) SearchSettings() string {
+	return Catalog.Format(msgs.locale, "searchSettings", nil)
+}
+
+// NoMatchingSettings says "No matching settings."
+// in the language the app shows.
+func NoMatchingSettings() string { return In(i18n.Locale()).NoMatchingSettings() }
+
+// NoMatchingSettings says "No matching settings."
+// in the language of msgs.
+func (msgs Messages) NoMatchingSettings() string {
+	return Catalog.Format(msgs.locale, "noMatchingSettings", nil)
+}
+
 // WebhookWaitingForService says "Waiting for running conversations to finish before the webhook update takes effect."
 // in the language the app shows.
 func WebhookWaitingForService() string { return In(i18n.Locale()).WebhookWaitingForService() }
@@ -20498,6 +20518,16 @@ func NsAskFollowUp() string { return In(i18n.Locale()).NsAskFollowUp() }
 // in the language of msgs.
 func (msgs Messages) NsAskFollowUp() string {
 	return Catalog.Format(msgs.locale, "nsAskFollowUp", nil)
+}
+
+// NsEnterProjectName says "Enter a project name."
+// in the language the app shows.
+func NsEnterProjectName() string { return In(i18n.Locale()).NsEnterProjectName() }
+
+// NsEnterProjectName says "Enter a project name."
+// in the language of msgs.
+func (msgs Messages) NsEnterProjectName() string {
+	return Catalog.Format(msgs.locale, "nsEnterProjectName", nil)
 }
 
 // NsMenuFile says "File"

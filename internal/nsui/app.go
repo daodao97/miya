@@ -59,6 +59,16 @@ type Host interface {
 	ThreadWorkspace(id int) string
 	ChangeWorkspace(path string) error
 	Memories() *manager.Manager
+	Connect()
+	ProjectBusy(path string) bool
+	RenameProject(path string, name string)
+	ArchiveProject(path string)
+	DeleteProject(path string)
+	ArchiveThread(t model.Thread)
+	DeleteThread(t model.Thread)
+	DesktopThreadUnread(t model.Thread) bool
+	ReadDesktopThread(t model.Thread)
+	MirroredHistory(id int) bool
 }
 
 // Environment supplies controller creation at the executable's composition

@@ -25,6 +25,8 @@ import (
 // changed on the UI thread, followed by uiruntime.Invalidate.
 type fakeHost struct {
 	answered     []interaction.Response
+	unread       map[int]bool
+	readIDs      []int
 	threads      []model.Thread
 	current      int
 	state        appmodel.WindowState
@@ -253,4 +255,19 @@ func TestShellOpensAutomationsAndReturns(t *testing.T) {
 	if app.Exists("id:automations") || h.current != 2 {
 		t.Fatalf("still on automations or not selected (current %d)", h.current)
 	}
+}
+
+func (h *fakeHost) Connect()                                {}
+func (h *fakeHost) ProjectBusy(string) bool                 { return false }
+func (h *fakeHost) RenameProject(string, string)            {}
+func (h *fakeHost) ArchiveProject(string)                   {}
+func (h *fakeHost) DeleteProject(string)                    {}
+func (h *fakeHost) ArchiveThread(model.Thread)              {}
+func (h *fakeHost) DeleteThread(model.Thread)               {}
+func (h *fakeHost) DesktopThreadUnread(t model.Thread) bool { return h.unread[t.ID] }
+func (h *fakeHost) MirroredHistory(int) bool                { return true }
+func (h *fakeHost) ReadDesktopThread(t model.Thread) {
+	h.readIDs = append(h.readIDs, t.ID)
+	delete(h.unread, t.ID)
+	uiruntime.Invalidate()
 }
