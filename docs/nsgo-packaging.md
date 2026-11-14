@@ -28,7 +28,7 @@ should use `sign.keystore`, `sign.key_alias`, `NSGO_KEYSTORE_PASSWORD` and
 uninstall or a build signed with its original key. No script installs by default.
 NSGo's `-run -device SERIAL` explicitly installs and starts a selected mobile build.
 
-All package builds retain `-tags nsgo`. `miya.ldflags` supplies
+All package builds use the default NSGo entries without custom build tags. `miya.ldflags` supplies
 `-X miya/internal/selfupdate.Build=miya-release:<version>:end` to the linker.
 The Linux server uses the same version from this file. The mobile entry does not
 link `internal/selfupdate`, so there is no retained selfupdate marker in its binary.
@@ -37,11 +37,8 @@ use integer `build_number` (default 1). CI updates the iOS number from the run n
 
 For a stable local macOS signature set `MIYA_SIGNING_IDENTITY`, or put its single
 line value in `build/nsgo-cache/macos-signing-identity`. These are local overrides;
-shared signing settings belong in `sign`. Existing `.mygo/macos-signing-identity`
-can be copied there manually; it is never read by the new builds. `mygo.json` and
-the MyGo CLI tool declaration were removed. No `.mygo` files were tracked in this
-worktree, and none are needed for packaging. MyGo's library dependency remains for
-the old default entry and integration UI tests until the next migration step.
+shared signing settings belong in `sign`. MyGo's CLI, library dependency, old UI
+entries, configuration and tracked `.mygo` generated artifacts have been removed.
 
 ## Compatibility overlay
 
@@ -49,8 +46,7 @@ The bundle verification used read-only NSGo commit
 `0820d6f731b3078823cf12a4930361c4672d32a7`. Its CLI lacks typed per-platform plist
 values, URL scheme registration, per-platform icons and build numbers, custom iOS
 Keychain groups, legacy Android permission SDK bounds, the `specialUse` foreground
-service subtype, Android application/network-security policy, and universal macOS packaging. It also lacks extra application
-build tags and linker flags.
+service subtype, Android application/network-security policy, and universal macOS packaging. It also lacks extra application linker flags.
 
 `scripts/build-nsgo.sh` invokes `go tool nsgo build` with a Go source overlay made
 by `scripts/packaging/nsgo-overlay.py`. It copies only the affected CLI sources to
@@ -60,8 +56,7 @@ MyGo host. Every source replacement is guarded: a changed upstream anchor aborts
 before packaging rather than silently dropping a property. The hidden directory
 also keeps generated tool sources out of `go build ./...`.
 
-The bridge merges plist dictionaries before signing, adds the configured app tags
-and ldflags, filters resources to the original localization directories, validates
+The bridge merges plist dictionaries before signing, adds the configured ldflags, filters resources to the original localization directories, validates
 requested Keychain groups against the signing profile, and extends NSGo's existing
 binary Android manifest writer. `macos_universal` builds both architectures with
 NSGo, merges every Mach-O (including native libraries) with `lipo`, then uses NSGo's
@@ -111,7 +106,7 @@ Live Activities are now explicitly enabled and packaged as `PlugIns/Widgets.appe
 plus `NSGoActivities.framework`; the committed MyGo config did not declare a widget
 extension or App Group. NSGo needs the new shared group for this extension. Its
 standard extension ID is `<app-id>.widgets`. Existing MyGo native browser Swift
-(`resources/ios/MiyaFiles.swift`) is no longer packaged: it exports MyGo-only
+(`resources/ios/MiyaFiles.swift`) was deleted: it exported MyGo-only
 symbols; the NSGo mobile entry uses NSGo's document/native services. This does not
 remove that source while the old entry remains. Background modes are empty, as
 before. Background Live Activity push delivery still needs the phone protocol

@@ -1,10 +1,9 @@
 # NSGo phone core
 
-`go build -tags nsgo` selects `main_nsgo_mobile.go` on iOS and Android. The
-untagged application still selects `main.go`; `internal/mobile` remains the
-MyGo reference and shares only the framework-free desktop frame/input helper.
-Desktop NSGo builds continue to select `main_nsgo.go`. Android's MyGo JNI
-startup in `main_android.go` is excluded under `nsgo`.
+`go build` selects `main_nsgo_mobile.go` on iOS and Android and
+`main_nsgo.go` on desktop, using only platform constraints. NSGo is the only UI;
+`main.go`, `main_android.go` and the legacy phone implementation are deleted.
+Android network registration is owned by `nsmobile.setupNetwork`.
 
 ## Layout and ownership
 
@@ -27,14 +26,13 @@ startup in `main_android.go` is excluded under `nsgo`.
   presentation, notification and agent catalog packages remain the shared
   sources for protocol types and framework-free helpers.
 
-The client port lifts the original phone core into a reusable package while
-keeping the legacy phone implementation compiling. Runtime fetching lives in
+The client port lifts the original phone core into a reusable package without retaining the legacy phone implementation. Runtime fetching lives in
 `phone/services`, and local notification IDs/targets live in `notification`;
-MyGo retains compatibility entry points for both. To preserve the phone domain
+To preserve the phone domain
 boundary, `SameMessageOrder` moved from `appmodel` to `chat/model`, reference
 title/context formatting moved to `chat/presentation`, and `DesktopRead` and
 its durable unread key moved to `notification`. `appmodel` keeps compatibility
-wrappers/aliases, so existing MyGo callers use the same implementations.
+wrappers/aliases, for shared domain callers.
 
 Pending messages are phone-owned projections. They never enter authoritative
 history, disk caches or subscription fingerprints. Acknowledgements do not
@@ -56,7 +54,7 @@ use phone sheets, with request cards and delegation content shared with desktop
 in `internal/nsrequests`. Voice, push and web services are ported (see the TODO list).
 Remote desktop and multi-desktop management are now ported;
 `phone/client` owns their leases, targets, secure registry and composer sessions.
-`phone/desktopview` shares frame validation and pointer mapping with MyGo;
+`phone/desktopview` owns framework-free frame validation and pointer mapping;
 NSGo updates one retained image node per frame. Saved-password unlock requires
 a native authentication hook. See the TODO for precise platform limits.
 NSGo now supplies mobile Keychain/Keystore credentials, QR scanning and detailed
@@ -123,8 +121,8 @@ go run ./locales/gen -check
 go generate ./locales
 go vet ./internal/nsmobile/... ./internal/phone/... ./internal/apns/...
 go build ./...
-go build -tags nsgo -o /dev/null .
-GOOS=ios GOARCH=arm64 CGO_ENABLED=1 go vet -tags nsgo ./internal/nsmobile/
+go build -o /dev/null .
+GOOS=ios GOARCH=arm64 CGO_ENABLED=1 go vet ./internal/nsmobile/
 go test ./internal/nsmobile/... ./internal/phone/... ./internal/apns/... ./tests/integration/...
 ```
 

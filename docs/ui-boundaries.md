@@ -1,32 +1,32 @@
 # 桌面、手机与控制器边界
 
-根目录的 `main.go` 只选择运行入口，并注入桌面工作区的控制器工厂。原有界面和控制器已拆为独立包，构建入口仍为 `.`。
+根目录的 `main_nsgo.go` / `main_nsgo_mobile.go` 只选择运行入口，并注入桌面工作区的控制器工厂。原有界面和控制器已拆为独立包，构建入口仍为 `.`。
 
 ```mermaid
 flowchart TD
-    main[main.go · 组装入口] --> controller[internal/controller]
-    main --> desktop[internal/ui]
-    main --> mobile[internal/mobile]
-    desktop --> conversation[internal/chat/view]
+    main[NSGo · 平台入口] --> controller[internal/controller]
+    main --> desktop[internal/nsui]
+    main --> mobile[internal/nsmobile]
+    desktop --> conversation[internal/nschat]
     mobile --> conversation
     desktop --> contracts[internal/appmodel · 共享契约]
     controller --> contracts
-    conversation --> widgets[internal/widgets]
+    conversation --> widgets[internal/nswidgets]
     mobile --> widgets
     desktop --> widgets
 ```
 
-`internal/ui.Host` 描述桌面需要的操作，控制器通过结构化接口实现该契约。`Environment` 的工厂由入口注入，桌面包不导入控制器包。窗口可观察状态放在 `appmodel.WindowState` 中，界面通过 `Host.State()` 访问；Agent 后端、运行进程、会话镜像、命令缓存和引用持久化仍由控制器管理。Agent 设置及模型选择通过绑定工作区的统一 Adapter 暴露给界面，详见 [Agent Adapter 契约](agent-adapters.md)。
+`internal/nsui.Host` 描述桌面需要的操作，控制器通过结构化接口实现该契约。`Environment` 的工厂由入口注入，桌面包不导入控制器包。窗口可观察状态放在 `appmodel.WindowState` 中，界面通过 `Host.State()` 访问；Agent 后端、运行进程、会话镜像、命令缓存和引用持久化仍由控制器管理。Agent 设置及模型选择通过绑定工作区的统一 Adapter 暴露给界面，详见 [Agent Adapter 契约](agent-adapters.md)。
 
-`internal/chat/view.View` 负责消息分组、列表、Markdown、工具详情、图片、引用和富文本输入。它只要求读取当前会话、版本和审批以及重新选择会话的少量 `Host` 方法。重试、交接、用户消息编辑、记忆通知、附件粘贴和任务入口通过回调接入。桌面专属的侧栏、工作区、文件面板和设置不在共享视图中。
+`internal/nschat.View` 负责消息分组、列表、Markdown、工具详情、图片、引用和富文本输入。它只要求读取当前会话、版本和审批以及重新选择会话的少量 `Host` 方法。重试、交接、用户消息编辑、记忆通知、附件粘贴和任务入口通过回调接入。桌面专属的侧栏、工作区、文件面板和设置不在共享视图中。
 
-`internal/mobile.App` 拥有独立的 `mobileViewer`，只保存桌面下发的会话快照，不构造桌面 App 或控制器。它通过手机协议执行动作，并与桌面复用共享渲染器。两端的文件和 Web 代理位于 `internal/phone/proxy`，不依赖任一界面包。
+`internal/nsmobile.App` 拥有框架无关的 `phone/client.Client`，只保存桌面下发的会话快照，不构造桌面 App 或控制器。它通过手机协议执行动作，并与桌面复用共享渲染器。两端的文件和 Web 代理位于 `internal/phone/proxy`，不依赖任一界面包。
 
-语音输入的长按、松手、取消、识别状态和草稿插入由共享 Go 界面处理，使用 MyGo 的 `TouchSelection` 与富文本输入拦截，不在 UIKit 中实现业务手势。`internal/voiceinput` 用 Go 完成 Opus 编码、微信输入法协议的密钥交换、加密和云端转写；平台录音桥只提供 16 kHz 单声道 PCM、停止和取消。当前 iOS 通过 AVAudioEngine 采集；Android 后续只需实现相同的录音接口，复用界面、编码和云端协议。未支持的平台明确返回不支持，不回退到本地模型。
+语音输入的长按、松手、取消、识别状态和草稿插入由共享 Go 界面处理，使用 NSGo 的触摸长按和选区输入，不在 UIKit 中实现业务手势。`internal/voiceinput` 用 Go 完成 Opus 编码、微信输入法协议的密钥交换、加密和云端转写；平台录音桥只提供 16 kHz 单声道 PCM、停止和取消。录音通过 NSGo `Scope.RecordAudio` 适配为 PCM，iOS/Android 复用界面、编码和云端协议，仍需设备验证。未支持的平台明确返回不支持，不回退到本地模型。
 
-`internal/widgets` 保存通用控件、主题、图标和设备语言处理。`internal/uiruntime` 保存窗口调度、信号失效通知与退出清理，供窗口和后台使用。各领域的数据和算法直接引用现有领域包，原有根包的兼容别名已删除。
+`internal/nswidgets` 保存通用控件、主题、图标和设备语言处理。`internal/nsuiruntime` 保存窗口调度、信号失效通知与退出清理，供窗口和后台使用。各领域的数据和算法直接引用现有领域包，原有根包的兼容别名已删除。
 
-侧边栏「进行中」「已完成」由 `internal/chat/presentation` 统一筛选、去重并排序，`internal/widgets.SidebarActivity` 共用分组标题和列表结构；桌面和手机只提供各自的会话行、字号和颜色。手机快照的 `completionUnread` 与桌面完成未读状态共用同一来源，不依赖 APNs 注册；新增字段兼容协议 v5 的旧端。
+侧边栏「进行中」「已完成」由 `internal/chat/presentation` 统一筛选、去重并排序，`internal/nswidgets.SidebarActivity` 共用分组标题和列表结构；桌面和手机只提供各自的会话行、字号和颜色。手机快照的 `completionUnread` 与桌面完成未读状态共用同一来源，不依赖 APNs 注册；新增字段兼容协议 v5 的旧端。
 
 MCP 协议和工具适配已统一到 `internal/mcp/`，Controller 通过 Host 接入，详见 [MCP 范围与边界](mcp-boundaries.md)。
 
@@ -36,16 +36,15 @@ MCP 协议和工具适配已统一到 `internal/mcp/`，Controller 通过 Host �
 
 ```sh
 go test ./...
-go test -race ./...
 go test ./tests/integration -run 'TestUIPackageBoundaries|TestViewsDoNotKnowAgents'
-go test -tags miya_ios_input_test ./internal/mobile
+GOOS=ios GOARCH=arm64 CGO_ENABLED=1 go vet ./internal/nsmobile/
 ```
 
-`TestViewsDoNotKnowAgents` 还检查四个视图包和公共 Adapter 包，禁止具体 Agent 分支及原生客户端依赖。
+`TestViewsDoNotKnowAgents` 还检查五个 NSGo 视图包和公共 Adapter 包，禁止具体 Agent 分支及原生客户端依赖。
 
 `TestUIPackageBoundaries` 检查所有平台源文件的直接导入关系，阻止界面重新导入控制器、手机重新依赖桌面，以及控制器反向依赖视图。现有桌面和手机交互、布局、服务、会话引用、审批与并发测试继续运行。
 
-实际窗口验证使用 [独立验证流程](install-and-upgrade.md#独立验证不覆盖已安装应用)，不覆盖已安装应用或切换生产后台。桌面和 iOS 构建脚本沿用原入口；嵌入的图标、Agent 图片及托盘图片随各自所属包保存。
+实际窗口验证使用 [独立验证流程](install-and-upgrade.md#独立验证不覆盖已安装应用)，不覆盖已安装应用或切换生产后台。桌面和手机构建脚本统一使用 NSGo 平台入口；嵌入的图标、Agent 图片及托盘图片随各自所属包保存。
 
 ## 2026-11-06 包拆分验证记录（Adapter 重构前）
 

@@ -130,16 +130,16 @@ flowchart LR
 
 ### 自己编译
 
-需要 `go.mod` 里写的 Go 版本，以及放在相邻目录的 [MyGo](https://github.com/daodao97/mygo)（`../mygo`）。
+需要 `go.mod` 里写的 Go 版本，以及相邻的 `../nsgo-miya` 检出（当前使用包含 Miya 平台服务的本地 NSGo fork，固定版本与发布前置条件见 [迁移记录](docs/nsgo-migration.md) 和 [打包说明](docs/nsgo-packaging.md)）。
 
 ```sh
 git clone https://github.com/daodao97/miya.git
-git clone https://github.com/daodao97/mygo.git
+# 准备 docs/nsgo-migration.md 中已验证的 NSGo fork 到 ../nsgo-miya
 cd miya
 
 ./scripts/build-macos.sh                                  # macOS 桌面
-./scripts/build-ios.sh -ios-team TEAM -ios-device UDID   # iOS 真机
-./scripts/build-android.sh [--install]                    # Android
+./scripts/build-ios.sh -run -device UDID                  # iOS 真机
+./scripts/build-android.sh [-run -device SERIAL]           # Android
 ./scripts/build-server.sh amd64                           # Linux 服务器（arm64 同理）
 ```
 
@@ -164,7 +164,7 @@ cd miya
 
 <div align="center">
 
-用 Go 和 [MyGo](https://github.com/daodao97/mygo) 写的，同一份代码跑在电脑、服务器和手机上。
+用 Go 和 [NSGo](https://github.com/nsgo-dev/nsgo) 写的，同一份代码跑在电脑、服务器和手机上。
 
 用着顺手的话，欢迎点个 ⭐；遇到问题直接提 Issue。
 

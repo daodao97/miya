@@ -89,7 +89,7 @@ scripts/run-isolated.sh stop
 /usr/bin/shasum -a 256 build/Miya-0.1.0-macos_arm64/Miya.app/Contents/MacOS/Miya
 ```
 
-macOS 构建使用 NSGo 项目脚本，由 NSGo 设置 `CGO_ENABLED=0`，保留 `-tags nsgo`。产物目录中的 `0.1.0` 取 `nsgo.yaml` 的版本；版本变动时同步替换以下路径。签名、iOS/APNs/Keychain/Live Activities、Android 及 CI 发布前置条件见 [NSGo 打包](nsgo-packaging.md)。远程桌面的 ScreenCaptureKit、键鼠、窗口和遮屏能力由 Miya 的 `internal/desktopcontrol` 通过 purego 调用，权限请求使用同一套原生实现。应用最低系统版本保持 macOS 13，macOS 14 及以上才启用远程桌面。
+macOS 构建使用 NSGo 项目脚本，由 NSGo 设置 `CGO_ENABLED=0`，使用默认 NSGo 入口，无需构建标签。产物目录中的 `0.1.0` 取 `nsgo.yaml` 的版本；版本变动时同步替换以下路径。签名、iOS/APNs/Keychain/Live Activities、Android 及 CI 发布前置条件见 [NSGo 打包](nsgo-packaging.md)。远程桌面的 ScreenCaptureKit、键鼠、窗口和遮屏能力由 Miya 的 `internal/desktopcontrol` 通过 purego 调用，权限请求使用同一套原生实现。应用最低系统版本保持 macOS 13，macOS 14 及以上才启用远程桌面。
 
 有本机开发签名证书时，用 `MIYA_SIGNING_IDENTITY` 或未跟踪的 `build/nsgo-cache/macos-signing-identity`（单行证书名称或 SHA-1）固定签名身份。同一团队、同一应用标识的稳定签名可避免每次本地重编译都使 TCC 授权失效；从 ad-hoc 迁移时仍需重新授权一次。不要把其他人的证书身份写入共享配置，也不要为了维持权限放宽 designated requirement。没有配置时保持 ad-hoc 构建。
 

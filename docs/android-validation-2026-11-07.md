@@ -1,5 +1,7 @@
 > 本文是初轮基线记录，“未改源码/未收发”等描述仅适用于当时。后续已进行真实试用与源码修复，当前结论和验收矩阵请见 [最新验收报告](android-acceptance-2026-11-07.md)。
 
+> 历史 MyGo 验收记录；旧源码、生成物和工具已在 NSGo 收尾阶段删除。当前构建及验证流程见 [NSGo 打包](nsgo-packaging.md) 和 [手机核心](nsgo-mobile-core.md)。
+
 > 本文记录原始基线，后续补齐与最终实测结果见 [Android 对标验收](android-acceptance-2026-11-07.md)。
 
 # Android 模拟器可用性验证（2026-11-07）
@@ -29,7 +31,7 @@ iOS 对照来自当前实现和既有验收文档（[手机端功能](mobile-fea
 
 | 能力 | Android 结果 | 证据及与 iOS 的差距 |
 | --- | --- | --- |
-| 标准 CLI 构建 | **失败** | `go tool mygo build -platform android/arm64` 返回 unsupported build platform；iOS 有完整打包分支 |
+| 标准 CLI 构建 | **失败** | 当时旧框架的 Android 构建命令 返回 unsupported build platform；iOS 有完整打包分支 |
 | 原始 Miya APK 启动 | **失败** | 手工编译原始 `.so` 并打包后，启动报 `UnsatisfiedLinkError: MygoIme.bindView`；原始动态库无 Android JNI 导出 |
 | 手机端入口 | **未接入** | `main.go:13` 仅 `GOOS == "ios"` 调用 `MobileEntry()`；Android 仍走桌面入口 |
 | 原生渲染 | 有条件通过 | 临时接启动桥后配对页、会话页、中文、Markdown 代码高亮和表格正常显示 |
