@@ -129,6 +129,14 @@ func (m *App) settingsView(c *ui.Context) {
 				m.openOptions(m.composerAgent())
 			}
 		})
+		if m.State.AutomationWebhook {
+			m.loadPhoneWebhook()
+			m.settingsGroup(c.Key("integrations"), tr("Integrations"), "", func() {
+				if m.settingsNavigation(c.Key("webhook"), tr("Miya webhook"), webhookSettingValue(m.Autos.Webhook)).Clicked() {
+					m.Router().Push("/settings/webhook")
+				}
+			})
+		}
 		footer := tr("Get alerts when tasks finish or need confirmation") + "\n" + tr("Also allow Miya notifications in Settings.")
 		m.settingsGroup(c.Key("notifications"), tr("Notifications"), footer, func() {
 			ui.Row(c).FillWidth().MinHeight(52).Padding(4, 16).Gap(16).AlignItems(ui.Center).Children(func() {

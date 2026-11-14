@@ -75,7 +75,7 @@ func (m *App) drawerActivity(c *ui.Context) {
 		return
 	}
 	ui.Column(c).FillWidth().Margin(0, 0, 16, 0).Children(func() {
-		widgets.SidebarActivity(c, running, completed, m.Font(13), m.Pal.muted, m.drawerThread)
+		widgets.SidebarActivity(c, running, completed, m.Font(13), 0, m.Pal.muted, m.drawerThread)
 	})
 }
 

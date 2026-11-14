@@ -27,8 +27,12 @@ func settingsPanes() []settingsPane {
 		{tr("Account"), "user-circle"},
 		{tr("Phone"), "device-mobile"},
 		{tr("Memory"), "bulb"},
+		{tr("Webhook"), "webhook"},
 	}
 }
+
+// webhookSettingsTab is the Webhook pane's place in settingsPanes.
+const webhookSettingsTab = 4
 
 // settingsView lays Settings out like a macOS settings window: a centered
 // toolbar of panes over one centered column of grouped settings.
@@ -43,6 +47,8 @@ func (app *App) settingsView(c *ui.Context) {
 				app.phoneSettings(c)
 			case 3:
 				app.memoryView(c)
+			case webhookSettingsTab:
+				app.webhookSettings(c)
 			default:
 				app.generalSettings(c)
 			}

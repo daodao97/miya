@@ -379,6 +379,12 @@ func TestMobileSharedWebhookURLAndCopyWithoutTasks(t *testing.T) {
 	m.Router().Push("/automations")
 	tt := ui.NewTester(m.ViewRoot, 390, 1000)
 	tt.Frame()
+	if tt.HasText("Copy webhook URL") {
+		t.Fatal("the webhook moved to Settings but still shows on Automations")
+	}
+	m.Router().Push("/settings/webhook")
+	tt.Frame()
+	tt.Frame()
 	for _, text := range []string{"Miya webhook", "Webhook ready", url, "Copy webhook URL", "deploy finished", "No matching automation"} {
 		if !tt.HasText(text) {
 			t.Fatalf("global inbox lacks %q: %q", text, tt.Texts())

@@ -21,7 +21,6 @@ import (
 // automationsUI is the Automations page's state; the automations live in
 // the service, which the page asks through automationCall.
 type automationsUI struct {
-	Webhook  *automation.WebhookView
 	Page     string // "", "detail" or "form"
 	Detail   string // the automation the detail page shows
 	list     []automation.View
@@ -126,20 +125,6 @@ func (app *App) loadAutomations() {
 		return
 	}
 	a.loading = true
-	app.autoCall("automationWebhook", automation.Request{}, func(raw json.RawMessage, err error) {
-		if err != nil {
-			message := err.Error()
-			if strings.Contains(strings.ToLower(message), "unknown operation") || strings.Contains(message, "Unknown automation operation") {
-				message = tr("Waiting for running conversations to finish before the webhook update takes effect.")
-			}
-			a.Webhook = &automation.WebhookView{Enabled: true, Error: message}
-			return
-		}
-		var v automation.WebhookView
-		if json.Unmarshal(raw, &v) == nil {
-			a.Webhook = &v
-		}
-	})
 	app.autoCall("automationList", automation.Request{}, func(raw json.RawMessage, err error) {
 		a.loading, a.loadedAt = false, time.Now()
 		if err != nil {
@@ -216,34 +201,26 @@ func automationSubline(v automation.View) string {
 func (app *App) automationList(c *ui.Context) {
 	a := &app.Autos
 	ui.Row(c).FillWidth().AlignItems(ui.End).Gap(16).Children(func() {
-		ui.Column(c).Grow(1).MinWidth(0).Gap(4).Children(func() {
-			ui.Text(c, tr("Automations")).FontSize(26).FontWeight(600)
-			ui.Text(c, tr("Start a new conversation in the project on schedule, then send the result to your phone.")).TextColor(widgets.Muted)
+		ui.Column(c).Grow(1).MinWidth(0).Gap(6).Children(func() {
+			ui.Text(c, tr("Automations")).FontSize(28).FontWeight(600)
+			ui.Text(c, tr("Start a new conversation in the project on schedule, then send the result to your phone.")).TextColor(widgets.Muted).LineHeight(1.5)
 		})
-		if ui.PrimaryButton(c.Key("new"), tr("New")).Clicked() {
-			app.OpenAutomationForm(nil)
-		}
+		ui.Row(c).Shrink(0).Gap(8).AlignItems(ui.Center).Children(func() {
+			webhook := widgets.Quiet(c.Key("webhook")).Height(32).PaddingX(12).Gap(6).Border(1, widgets.Line).Label(tr("Webhook")).Tooltip(widgets.WebhookHelp())
+			webhook.Children(func() {
+				widgets.Icon(c, "webhook", 15, widgets.Muted)
+				ui.Text(c, tr("Webhook")).FontSize(12)
+			})
+			if webhook.Clicked() {
+				app.ShowWebhookSettings()
+			}
+			if ui.PrimaryButton(c.Key("new"), tr("New")).Clicked() {
+				app.OpenAutomationForm(nil)
+			}
+		})
 	})
 	if a.err != "" {
 		ui.Text(c, a.err).FontSize(12).TextColor(widgets.Failed)
-	}
-	if a.Webhook != nil {
-		widgets.WebhookInbox(c.Key("webhook"), *a.Webhook, func(enabled bool) {
-			action := "disable"
-			if enabled {
-				action = "enable"
-			}
-			app.autoCall("automationWebhook", automation.Request{Action: action}, func(raw json.RawMessage, err error) {
-				if err != nil {
-					a.err = err.Error()
-					return
-				}
-				var v automation.WebhookView
-				if json.Unmarshal(raw, &v) == nil {
-					a.Webhook = &v
-				}
-			})
-		})
 	}
 	switch {
 	case !a.loaded:
@@ -252,31 +229,86 @@ func (app *App) automationList(c *ui.Context) {
 			ui.Text(c, tr("Loading…")).TextColor(widgets.Muted)
 		})
 	case len(a.list) == 0:
-		ui.Column(c).FillWidth().Padding(28).Gap(6).AlignItems(ui.Center).Border(1, widgets.Line).Radius(12).Children(func() {
-			widgets.Icon(c, "clock", 22, widgets.Muted)
-			ui.Text(c, tr("No automations yet")).FontWeight(600)
-			ui.Text(c, tr("Click New to describe a task, or ask an agent to create one in any conversation.")).FontSize(12).TextColor(widgets.Muted)
+		ui.Column(c).FillWidth().Padding(48, 28).Gap(10).AlignItems(ui.Center).Background(widgets.Side).Border(1, widgets.Line).Radius(16).Children(func() {
+			ui.Box(c).Size(48, 48).Radius(14).Background(widgets.Panel).Border(1, widgets.Line).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
+				widgets.Icon(c, "clock", 22, widgets.Muted)
+			})
+			ui.Text(c, tr("No automations yet")).FontSize(15).FontWeight(600).Margin(4, 0, 0, 0)
+			ui.Text(c, tr("Click New to describe a task, or ask an agent to create one in any conversation.")).FontSize(12).TextColor(widgets.Muted).TextAlign(ui.Center)
 		})
 	default:
-		ui.Column(c).FillWidth().Gap(8).Children(func() {
-			for _, v := range a.list {
+		automationOverview(c.Key("overview"), a.list)
+		ui.Column(c).FillWidth().Background(widgets.Panel).Border(1, widgets.Line).Radius(14).Clip().Children(func() {
+			for i, v := range a.list {
+				if i > 0 {
+					ui.Box(c.Key(fmt.Sprint("sep", i))).FillWidth().Padding(0, 0, 0, 68).Children(func() {
+						ui.Box(c).FillWidth().Height(1).Background(widgets.Line)
+					})
+				}
 				app.automationRow(c.Key(v.ID), v)
 			}
 		})
 	}
-	ui.Row(c).FillWidth().Gap(12).Padding(14, 16, 14, 16).Border(1, widgets.Line).Radius(12).AlignItems(ui.Start).Children(func() {
-		widgets.Icon(c, "message-circle", 16, widgets.Ink)
+	ui.Row(c).FillWidth().Gap(10).Padding(12, 14).Background(widgets.Bubble).Radius(12).AlignItems(ui.Start).Children(func() {
+		widgets.Icon(c, "message-circle", 15, widgets.Muted).Margin(1, 0, 0, 0)
 		ui.Text(c, tr("Describe a recurring task in any conversation. It appears here after confirmation. Enabled automations keep running when the window is closed.")).
 			Grow(1).MinWidth(0).FontSize(12).LineHeight(1.6).TextColor(widgets.Muted)
+	})
+}
+
+// automationOverview sums the list up: how many are on, how many run now,
+// and when the next one starts.
+func automationOverview(c *ui.Context, list []automation.View) {
+	enabled, running := 0, 0
+	var next time.Time
+	for _, v := range list {
+		if v.Running {
+			running++
+		}
+		if !v.Enabled {
+			continue
+		}
+		enabled++
+		if !v.Next.IsZero() && (next.IsZero() || v.Next.Before(next)) {
+			next = v.Next
+		}
+	}
+	nextText := "—"
+	if !next.IsZero() {
+		nextText = automation.FormatTime(next)
+	}
+	ui.Row(c).FillWidth().Gap(10).Children(func() {
+		overviewTile(c.Key("enabled"), tr("Enabled"), fmt.Sprintf("%d / %d", enabled, len(list)), widgets.Ink, 0)
+		runningColor := widgets.Muted
+		if running > 0 {
+			runningColor = autoRun
+		}
+		overviewTile(c.Key("running"), tr("Running"), strconv.Itoa(running), runningColor, 0)
+		overviewTile(c.Key("next"), tr("Next run"), nextText, widgets.Ink, 1.6)
+	})
+}
+
+func overviewTile(c *ui.Context, label, value string, color ui.Color, grow float32) {
+	tile := ui.Column(c).Grow(1).MinWidth(0).Gap(4).Padding(12, 14).Background(widgets.Side).Border(1, widgets.Line).Radius(12)
+	if grow > 0 {
+		tile.Grow(grow)
+	}
+	tile.Children(func() {
+		ui.Text(c, label).FontSize(11).TextColor(widgets.Muted).SingleLine()
+		ui.Text(c, value).FontSize(18).FontWeight(600).TextColor(color).SingleLine().Ellipsis("…")
 	})
 }
 
 func (app *App) automationRow(c *ui.Context, v automation.View) {
 	a := &app.Autos
 	last, has := widgets.LastAutomationRun(v)
-	ui.Row(c).FillWidth().Gap(14).Padding(14, 16, 14, 16).AlignItems(ui.Center).Border(1, widgets.Line).Radius(12).Children(func() {
-		autoTile(c, v.Agent, 36)
-		open := widgets.Quiet(c.Key("open")).Grow(1).MinWidth(0).Height(0).MinHeight(40).Padding(0).Column().AlignItems(ui.Start).Justify(ui.Center).Gap(2).Label(v.Name)
+	ui.Row(c).FillWidth().Gap(14).Padding(14, 16).AlignItems(ui.Center).Children(func() {
+		tile := ui.Box(c.Key("tile")).Shrink(0)
+		if !v.Enabled {
+			tile.Opacity(0.45)
+		}
+		tile.Children(func() { autoTile(c, v.Agent, 38) })
+		open := widgets.Quiet(c.Key("open")).Grow(1).MinWidth(0).Height(0).MinHeight(40).Padding(0).Column().AlignItems(ui.Start).Justify(ui.Center).Gap(3).Background(ui.Transparent).Label(v.Name)
 		open.Children(func() {
 			name := ui.Text(c, v.Name).FontSize(14).FontWeight(600).SingleLine().Ellipsis("…")
 			if !v.Enabled {
@@ -287,15 +319,18 @@ func (app *App) automationRow(c *ui.Context, v automation.View) {
 		if open.Clicked() {
 			a.Page, a.Detail, a.confirmDelete = "detail", v.ID, ""
 		}
-		ui.Column(c).Width(150).Shrink(0).Gap(1).Children(func() {
-			ui.Text(c, v.ScheduleText).FontWeight(500).SingleLine().Ellipsis("…")
+		ui.Column(c).Width(170).Shrink(0).Gap(3).Children(func() {
+			ui.Row(c).MinWidth(0).Gap(5).AlignItems(ui.Center).Children(func() {
+				widgets.Icon(c, "clock", 12, widgets.Muted)
+				ui.Text(c, v.ScheduleText).FontSize(12).FontWeight(500).MinWidth(0).SingleLine().Ellipsis("…")
+			})
 			next := nextRunText(v)
 			if v.Enabled && v.Schedule != "" {
 				next = tr("Next ") + next
 			}
-			ui.Text(c, next).FontSize(12).TextColor(widgets.Muted).SingleLine()
+			ui.Text(c, next).FontSize(11).TextColor(widgets.Muted).SingleLine()
 		})
-		ui.Column(c).Width(140).Shrink(0).Children(func() {
+		ui.Column(c).Width(132).Shrink(0).Children(func() {
 			if v.Running {
 				last, has = v.Runs[len(v.Runs)-1], true
 			}
@@ -306,7 +341,7 @@ func (app *App) automationRow(c *ui.Context, v automation.View) {
 			app.toggleAutomation(v.ID, on)
 		}
 		ui.Row(c).Width(64).Shrink(0).Justify(ui.End).Gap(2).Children(func() {
-			if !v.Running && widgets.ToolButton(c.Key("run"), "arrow-right", tr("Run now")).Clicked() {
+			if !v.Running && widgets.ToolButton(c.Key("run"), "player-play", tr("Run now")).Clicked() {
 				app.runAutomationNow(v.ID)
 			}
 			if has && last.Thread != 0 && widgets.ToolButton(c.Key("last"), "message-circle", tr("Open last conversation")).Clicked() {

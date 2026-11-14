@@ -64,7 +64,7 @@ func (app *App) SidebarView(c *ui.Context) {
 func (app *App) sidebarActivity(c *ui.Context) {
 	running, completed := app.SidebarActivityThreads()
 	ui.Column(c).PaddingX(12).Children(func() {
-		widgets.SidebarActivity(c, running, completed, 11, widgets.Faint, app.threadRow)
+		widgets.SidebarActivity(c, running, completed, 11, 8, widgets.Faint, app.threadRow)
 	})
 }
 

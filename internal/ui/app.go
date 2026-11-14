@@ -79,6 +79,7 @@ type App struct {
 	MemoryNotes        map[string]*MemoryNoticeUI
 	MemoryRevisionSeen uint64
 	Autos              automationsUI
+	Webhook            webhookUI
 	Collaborations     widgets.CollaborationUI
 	account            accountView
 	Usage              *DesktopUsage

@@ -164,10 +164,22 @@ func TestSharedWebhookVisibleWithoutAutomations(t *testing.T) {
 	app.ShowAutomations()
 	tt.Frame()
 	tt.Frame()
-	url := "https://tailcat-webhook.daodao973597.workers.dev/push/tcw_" + strings.Repeat("b", 64)
-	app.Autos.Webhook = &automation.WebhookView{Enabled: true, URL: url, Messages: []automation.WebhookMessage{{ID: "msg", At: time.Now(), Data: "deploy finished", Detail: "No matching automation"}}}
+	// The address belongs to Settings; Automations only links to it.
+	if !tt.HasText("No automations yet") || tt.HasText("Copy webhook URL") {
+		t.Fatalf("automations page should link to the webhook, not show it: %q", tt.Texts())
+	}
+	if err := tt.Click("Webhook"); err != nil {
+		t.Fatal(err)
+	}
 	tt.Frame()
-	for _, text := range []string{"Miya webhook", url, "Copy webhook URL", "deploy finished", "No matching automation", "No automations yet"} {
+	tt.Frame()
+	if app.Section != "Settings" {
+		t.Fatalf("webhook link opened %q", app.Section)
+	}
+	url := "https://tailcat-webhook.daodao973597.workers.dev/push/tcw_" + strings.Repeat("b", 64)
+	app.Webhook.View = &automation.WebhookView{Enabled: true, URL: url, Messages: []automation.WebhookMessage{{ID: "msg", At: time.Now(), Data: "deploy finished", Detail: "No matching automation"}}}
+	tt.Frame()
+	for _, text := range []string{"Miya webhook", url, "Copy webhook URL", "deploy finished", "No matching automation"} {
 		if !tt.HasText(text) {
 			t.Fatalf("shared inbox missing %q: %q", text, tt.Texts())
 		}

@@ -194,6 +194,46 @@ func (msgs Messages) WebhookRegistering() string {
 	return Catalog.Format(msgs.locale, "webhookRegistering", nil)
 }
 
+// WebhookPane says "Webhook"
+// in the language the app shows.
+func WebhookPane() string { return In(i18n.Locale()).WebhookPane() }
+
+// WebhookPane says "Webhook"
+// in the language of msgs.
+func (msgs Messages) WebhookPane() string {
+	return Catalog.Format(msgs.locale, "webhookPane", nil)
+}
+
+// NoWebhookMessagesYet says "No messages yet"
+// in the language the app shows.
+func NoWebhookMessagesYet() string { return In(i18n.Locale()).NoWebhookMessagesYet() }
+
+// NoWebhookMessagesYet says "No messages yet"
+// in the language of msgs.
+func (msgs Messages) NoWebhookMessagesYet() string {
+	return Catalog.Format(msgs.locale, "noWebhookMessagesYet", nil)
+}
+
+// Integrations says "Integrations"
+// in the language the app shows.
+func Integrations() string { return In(i18n.Locale()).Integrations() }
+
+// Integrations says "Integrations"
+// in the language of msgs.
+func (msgs Messages) Integrations() string {
+	return Catalog.Format(msgs.locale, "integrations", nil)
+}
+
+// WebhookSettingsHelp says "Webhook address for scripts, CI and other services. Matching automations wake on the messages it receives."
+// in the language the app shows.
+func WebhookSettingsHelp() string { return In(i18n.Locale()).WebhookSettingsHelp() }
+
+// WebhookSettingsHelp says "Webhook address for scripts, CI and other services. Matching automations wake on the messages it receives."
+// in the language of msgs.
+func (msgs Messages) WebhookSettingsHelp() string {
+	return Catalog.Format(msgs.locale, "webhookSettingsHelp", nil)
+}
+
 // BackgroundTasksRunningWaitingForResults9ba31d says "Background tasks running (%d) · Waiting for results"
 // in the language the app shows.
 func BackgroundTasksRunningWaitingForResults9ba31d() string {

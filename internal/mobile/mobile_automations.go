@@ -20,20 +20,23 @@ import (
 )
 
 type mobileAutomations struct {
-	Webhook          *automation.WebhookView
-	Form             mobileAutomationForm
-	List             []automation.View
-	Detail           string
-	Loaded           bool
-	Loading          bool
-	RequestedAt      time.Time
-	Err              string
-	InstructionsOpen bool
-	openRuns         map[string]bool
-	RunRequest       string
-	RunID            string
-	RunRequestedAt   time.Time
-	runErr           string
+	Webhook *automation.WebhookView
+	// WebhookRequestedAt throttles loadPhoneWebhook.
+	WebhookRequestedAt time.Time
+	webhookCopiedAt    time.Time
+	Form               mobileAutomationForm
+	List               []automation.View
+	Detail             string
+	Loaded             bool
+	Loading            bool
+	RequestedAt        time.Time
+	Err                string
+	InstructionsOpen   bool
+	openRuns           map[string]bool
+	RunRequest         string
+	RunID              string
+	RunRequestedAt     time.Time
+	runErr             string
 }
 
 func (m *App) runPhoneAutomation(id string) {
@@ -88,11 +91,7 @@ func (m *App) loadPhoneAutomations() {
 	}
 	m.Autos.Loading, m.Autos.RequestedAt = true, time.Now()
 	conn, gen := m.Conn, m.Generation
-	webhookSupported := m.State.AutomationWebhook
 	go func() {
-		if webhookSupported {
-			_ = conn.Send(remote.Request{Op: "automation-webhook"})
-		}
 		if err := conn.Send(remote.Request{Op: "automations"}); err != nil {
 			m.onMain(gen, func() {
 				if m.Conn == conn {
@@ -142,7 +141,7 @@ func (m *App) automationsPage(c *ui.Context, detail bool) {
 			path = "/automation"
 		}
 		m.navigationBack(c, path)
-		title := "Automations"
+		title := tr("Automations")
 		if detail {
 			title = tr("Automation details")
 		}
@@ -192,9 +191,6 @@ func (m *App) automationsPage(c *ui.Context, detail bool) {
 				ui.Text(c, tr("This automation was deleted")).TextColor(p.muted)
 				return
 			}
-			if a.Webhook != nil {
-				widgets.WebhookInbox(c.Key("webhook"), *a.Webhook, nil)
-			}
 			if len(a.List) == 0 {
 				message := tr("Tap the top-right button to create a task and schedule.")
 				if !m.State.AutomationCreate {
@@ -203,14 +199,9 @@ func (m *App) automationsPage(c *ui.Context, detail bool) {
 				m.automationPhoneEmpty(c, tr("No automations yet"), message)
 				return
 			}
-			ui.Column(c).FillWidth().Children(func() {
-				for i, v := range a.List {
+			ui.Column(c).FillWidth().Gap(12).Children(func() {
+				for _, v := range a.List {
 					m.automationPhoneRow(c.Key(v.ID), v)
-					if i < len(a.List)-1 {
-						ui.Box(c.Key(i)).FillWidth().Padding(0, 0, 0, 48).Children(func() {
-							ui.Box(c).FillWidth().Height(0.5).Background(p.line)
-						})
-					}
 				}
 			})
 		})
@@ -226,35 +217,60 @@ func (m *App) automationPhoneEmpty(c *ui.Context, title, text string) {
 	})
 }
 
+// automationPhoneRow is one automation as a card: who runs it where, when
+// it wakes, and how it last went.
 func (m *App) automationPhoneRow(c *ui.Context, v automation.View) {
 	p := m.Pal
-	b := m.phoneButton(c).FillWidth().Padding(16, 0).Gap(12).Radius(0).Background(ui.Transparent).Label(v.Name)
+	b := m.phoneButton(c).FillWidth().Column().AlignItems(ui.Start).Padding(16).Gap(14).Radius(18).Background(p.surface).Label(v.Name)
+	if b.Pressed() {
+		b.Opacity(0.7)
+	}
+	label, color := tr("Not run yet"), p.muted
+	last, has := widgets.LastAutomationRun(v)
+	switch {
+	case v.Running:
+		label, color = tr("Running"), p.link
+	case !v.Enabled:
+		label = tr("Paused")
+	case has:
+		label, color = automation.ResultLabel(last.Result), m.automationPhoneRunColor(last.Result)
+	}
 	b.Children(func() {
-		ui.Box(c).Size(36, 36).Shrink(0).Radius(10).Background(p.surface).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
-			widgets.Icon(c, "clock", 19, p.muted)
+		ui.Row(c).FillWidth().Gap(12).AlignItems(ui.Center).Children(func() {
+			tile := ui.Box(c).Size(42, 42).Shrink(0).Radius(12).Background(p.Bg).AlignItems(ui.Center).Justify(ui.Center)
+			if !v.Enabled {
+				tile.Opacity(0.5)
+			}
+			tile.Children(func() { widgets.AgentIcon(c, v.Agent, 22) })
+			ui.Column(c).Grow(1).MinWidth(0).Gap(3).Children(func() {
+				name := ui.Text(c, v.Name).FontSize(m.Font(17)).FontWeight(600).MaxLines(2)
+				if !v.Enabled {
+					name.TextColor(p.muted)
+				}
+				ui.Text(c, m.automationPhoneProject(v)+" · "+appmodel.AgentName(v.Agent)).FontSize(m.Font(13)).TextColor(p.muted).MaxLines(1)
+			})
+			widgets.Icon(c, "chevron-right", 13, p.muted)
 		})
-		ui.Column(c).Grow(1).MinWidth(0).Gap(5).Children(func() {
-			ui.Text(c, v.Name).FontSize(m.Font(17)).FontWeight(600).MaxLines(2)
-			ui.Text(c, m.automationPhoneProject(v)+" · "+appmodel.AgentName(v.Agent)).FontSize(m.Font(12)).TextColor(p.muted).MaxLines(2)
-			ui.Text(c, automationPhoneWhen(v)).FontSize(m.Font(13)).TextColor(p.muted)
-			ui.Row(c).FillWidth().Wrap().Gap(8).AlignItems(ui.Center).Children(func() {
-				if v.Enabled {
-					ui.Text(c, automationPhoneNext(v)).FontSize(m.Font(13)).TextColor(p.muted)
+		ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Start).Children(func() {
+			widgets.Icon(c, "clock", 14, p.muted).Margin(2, 0, 0, 0)
+			ui.Text(c, automationPhoneWhen(v)).FontSize(m.Font(14)).LineHeight(1.4).Grow(1).MinWidth(0).MaxLines(3)
+		})
+		ui.Box(c).FillWidth().Height(0.5).Background(p.line)
+		ui.Row(c).FillWidth().Gap(10).AlignItems(ui.Center).Children(func() {
+			next := ""
+			if v.Enabled {
+				next = automationPhoneNext(v)
+			}
+			ui.Text(c, next).FontSize(m.Font(13)).TextColor(p.muted).Grow(1).MinWidth(0).MaxLines(2)
+			ui.Row(c).Shrink(0).Gap(6).Padding(5, 10).Radius(999).Background(p.Bg).AlignItems(ui.Center).Children(func() {
+				if v.Running {
+					ui.Spinner(c).FontSize(m.Font(10))
+				} else {
+					widgets.Dot(c, color, 7)
 				}
-				label, color := tr("Not run yet"), p.muted
-				last, has := widgets.LastAutomationRun(v)
-				switch {
-				case v.Running:
-					label, color = tr("Running"), p.ink
-				case !v.Enabled:
-					label = tr("Paused")
-				case has:
-					label, color = tr("Last run")+automation.ResultLabel(last.Result), m.automationPhoneRunColor(last.Result)
-				}
-				ui.Text(c, label).FontSize(m.Font(12)).TextColor(color)
+				ui.Text(c, label).FontSize(m.Font(12)).FontWeight(500).TextColor(color).SingleLine()
 			})
 		})
-		widgets.Icon(c, "chevron-right", 13, p.muted)
 	})
 	if b.Clicked() {
 		m.Autos.Detail, m.Autos.InstructionsOpen = v.ID, false

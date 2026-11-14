@@ -1,6 +1,7 @@
 # Local build output and MyGo staging files
 /build/
 /.mygo/
+/.nsgo
 /miya
 /Miya
 

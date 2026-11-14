@@ -1177,6 +1177,8 @@ func (m *App) ViewRoot(c *ui.Context) {
 					m.languageSettingsPage(c)
 				case "/settings/voice":
 					m.voiceSettingsPage(c)
+				case "/settings/webhook":
+					m.webhookSettingsPage(c)
 				case "/automation":
 					m.automationsPage(c, true)
 				case "/automation/new":
