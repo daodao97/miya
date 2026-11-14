@@ -52,6 +52,7 @@ func appMain(cx *core.Scope) {
 	b := installBridge(cx)
 	cx.SetTheme(nswidgets.Theme())
 	installPlatformServices(cx)
+	sampleIdle(cx)
 	c := environment.NewWindow()
 	// With the background service running, the service serves phones: a
 	// window only mirrors the current project.

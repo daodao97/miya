@@ -20,7 +20,7 @@ MyGo 是即时模式：`ui.Row(c).Children(func() { ... })` 每帧重建，视�
 
 ## 依赖的 NSGo 检出
 
-Miya 不直接用 `../nsgo`：那里可能正在开发 NSGo 本身（补 Miya 需要的平台能力，之后向上游提 PR），半成品会让 Miya 无法构建。`../nsgo-miya` 是 `git -C ../nsgo worktree add` 建的独立检出，固定在已验证的提交上；NSGo 的改动完成并通过测试后，再把它前移到对应分支或提交。
+Miya 不直接用 `../nsgo`：那里可能正在开发 NSGo 本身（补 Miya 需要的平台能力，之后向上游提 PR），半成品会让 Miya 无法构建。`../nsgo-miya` 是 `git -C ../nsgo worktree add` 建的独立检出，固定在已验证的提交上（当前为 `platform-services` 分支的 `c246c3fc`）；NSGo 的改动完成并通过测试后，再把它前移到对应分支或提交。
 
 ## 参考实现
 
@@ -57,7 +57,9 @@ Miya 不直接用 `../nsgo`：那里可能正在开发 NSGo 本身（补 Miya �
 
 ## 需要 Miya 自己补的平台能力
 
-NSGo 没有直接对应、需要像 `internal/apns`、`internal/desktopcontrol` 那样由 Miya 自持的能力：Keychain（`mygo.Secrets`）、系统空闲时间、网络路径状态、生物识别、扫码、窗口内 WebView 的部分选项。
+已在本地 NSGo 补齐、待向上游提 PR（`../nsgo` 的 `platform-services` 分支，macOS 实现，其他平台返回 `ErrPlatformUnsupported`）：Keychain（`Scope.StoreSecret` / `ReadSecret` / `DeleteSecret`、`ErrSecretNotFound`）、系统空闲时间（`SystemIdleTime`，`nsui` 每 15 秒采样给 `uiruntime.IdleTime`）、网络路径（`ReadNetworkPath` / `ObserveNetworkPath`）、窗口焦点与最小化（`Window.IsFocused` / `IsMinimized`，桥接层镜像为原子值供控制器跨协程读取）。真实的网络切换与窗口焦点切换尚未在真机验证。
+
+仍需补的：生物识别、扫码、窗口内 WebView 的部分选项。
 
 非界面包对 MyGo 的残留依赖（第 5 阶段前处理）：
 

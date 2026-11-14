@@ -31,6 +31,9 @@ type bridge struct {
 
 	// pending coalesces Invalidate calls made between two engine wake-ups.
 	pending atomic.Bool
+	// focused and minimized mirror the window's state for the controller,
+	// which asks from any goroutine; NSGo's signals are the engine's.
+	focused, minimized atomic.Bool
 }
 
 // current is the running bridge. Live reads it; it is set once, as the app
@@ -55,6 +58,14 @@ func (b *bridge) setWindow(w *core.Window) {
 	b.mu.Lock()
 	b.win = w
 	b.mu.Unlock()
+	if w == nil {
+		return
+	}
+	b.cx.Effect(func() {
+		shown := !w.Closed() && w.Visible()
+		b.focused.Store(shown && w.IsFocused())
+		b.minimized.Store(!shown || w.IsMinimized())
+	})
 }
 
 func (b *bridge) window() *core.Window {
@@ -105,17 +116,11 @@ func (b *bridge) Focus() {
 // Restore shows a hidden or minimized window; NSGo's Show does both.
 func (b *bridge) Restore() { b.Show() }
 
-// IsFocused approximates focus by visibility until NSGo reports the key
-// window: notifications are then held back while the window shows.
-func (b *bridge) IsFocused() bool {
-	w := b.window()
-	return w != nil && !w.Closed() && w.Visible()
-}
+// IsFocused reports whether the main window is the key window.
+func (b *bridge) IsFocused() bool { return b.focused.Load() }
 
-func (b *bridge) IsMinimized() bool {
-	w := b.window()
-	return w == nil || w.Closed() || !w.Visible()
-}
+// IsMinimized reports whether the main window is minimized, hidden or gone.
+func (b *bridge) IsMinimized() bool { return b.minimized.Load() }
 
 // Live returns get as a binding that runs again whenever the controller
 // invalidates. Use it for XFunc fields and region conditions that read

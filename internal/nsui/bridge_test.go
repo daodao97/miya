@@ -3,6 +3,7 @@ package nsui
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nsgo-dev/nsgo/core"
 	"github.com/nsgo-dev/nsgo/nsgotest"
@@ -120,5 +121,43 @@ func TestBridgeUpdateRunsOnEngine(t *testing.T) {
 	app.Settle()
 	if got := app.Find("id:current-title").Text; got != "Beta" {
 		t.Fatalf("title = %q, want Beta", got)
+	}
+}
+
+// The controller reads the system's idle time through uiruntime once the
+// platform answers, and the window's focus without touching NSGo's graph.
+func TestPlatformServicesReachController(t *testing.T) {
+	t.Cleanup(func() { uiruntime.IdleTime = nil })
+	uiruntime.IdleTime = nil
+	app := nsgotest.Start(t, func(cx *core.Scope) core.Node {
+		sampleIdle(cx)
+		return core.View{}
+	}, nsgotest.Size(100, 100), nsgotest.Environment(core.Environment{OS: core.OSMacOS}))
+	app.SystemIdle = 90 * time.Second
+	app.Advance(idleEvery)
+	app.Settle()
+	if uiruntime.IdleTime == nil {
+		t.Fatal("idle time not installed")
+	}
+	if d := uiruntime.IdleTime(); d < 90*time.Second {
+		t.Fatalf("idle = %v, want at least 90s", d)
+	}
+}
+
+// Where the platform has no idle clock the user counts as present.
+func TestIdleTimeUnsupportedStaysUnset(t *testing.T) {
+	t.Cleanup(func() { uiruntime.IdleTime = nil })
+	uiruntime.IdleTime = nil
+	app := nsgotest.Start(t, func(cx *core.Scope) core.Node {
+		sampleIdle(cx)
+		return core.View{}
+	}, nsgotest.Size(100, 100), nsgotest.Environment(core.Environment{OS: core.OSLinux}))
+	app.Advance(idleEvery)
+	app.Settle()
+	if uiruntime.IdleTime != nil {
+		t.Fatal("idle time installed on a platform without one")
+	}
+	if uiruntime.Idle() != 0 {
+		t.Fatal("Idle without a platform clock is not zero")
 	}
 }
