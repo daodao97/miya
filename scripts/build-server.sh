@@ -1,15 +1,16 @@
 #!/bin/sh
-# The server never starts MyGo's window backend; no GTK, display or cgo is needed.
+# The server never starts a window backend; no GTK, display or cgo is needed.
 set -eu
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$ROOT"
 ARCH=${1:-amd64}
 case "$ARCH" in amd64|arm64) ;; *) echo 'usage: build-server.sh [amd64|arm64] [output-directory]' >&2; exit 2 ;; esac
 OUT=${2:-"$ROOT/build/server/linux-$ARCH"}
-mkdir -p "$OUT"
+mkdir -p "$OUT" "$ROOT/build/.tmp"
+export TMPDIR="$ROOT/build/.tmp"
 OUT=$(CDPATH= cd -- "$OUT" && pwd)
-RELEASE_VERSION=$(python3 -c 'import json; print(json.load(open("mygo.json"))["version"])')
-CGO_ENABLED=0 GOOS=linux GOARCH="$ARCH" go build -trimpath -ldflags="-s -w -X miya/internal/selfupdate.Build=miya-release:$RELEASE_VERSION:end" -o "$OUT/miya" .
+RELEASE_LDFLAGS=$(python3 -c 'import json; c=json.load(open("nsgo.yaml")); print(c["miya"]["ldflags"].replace("{version}", c["version"]))')
+CGO_ENABLED=0 GOOS=linux GOARCH="$ARCH" go build -tags nsgo -trimpath -ldflags="-s -w $RELEASE_LDFLAGS" -o "$OUT/miya" .
 cp scripts/install-server.sh "$OUT/install-server.sh"
 cp docs/server.md "$OUT/README.md"
 chmod 755 "$OUT/miya" "$OUT/install-server.sh"

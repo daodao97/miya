@@ -1,0 +1,143 @@
+{
+  "name": "Miya",
+  "id": "com.daodao.miya",
+  "version": "0.1.0",
+  "build_number": 1,
+  "icon": {
+    "png": "resources/icon.png"
+  },
+  "apple": {
+    "app_group": "group.com.daodao.miya",
+    "info": {}
+  },
+  "ios": {
+    "remote_notifications": true,
+    "background_modes": []
+  },
+  "live_activities": {
+    "enabled": true,
+    "frequent_updates": false
+  },
+  "android": {
+    "target_sdk": 36,
+    "foreground_service_types": [
+      "specialUse"
+    ],
+    "permissions": [
+      "POST_NOTIFICATIONS",
+      "FOREGROUND_SERVICE",
+      "FOREGROUND_SERVICE_SPECIAL_USE",
+      "CAMERA",
+      "RECORD_AUDIO",
+      "USE_BIOMETRIC",
+      "ACCESS_COARSE_LOCATION",
+      "ACCESS_FINE_LOCATION",
+      "READ_MEDIA_IMAGES",
+      "READ_MEDIA_VISUAL_USER_SELECTED",
+      "READ_EXTERNAL_STORAGE",
+      "WRITE_EXTERNAL_STORAGE"
+    ]
+  },
+  "sign": {},
+  "build": {
+    "output": "build",
+    "installers": false,
+    "jobs": 1,
+    "open": false
+  },
+  "updates": {
+    "channel": "none"
+  },
+  "miya": {
+    "tags": [
+      "nsgo"
+    ],
+    "ldflags": "-X miya/internal/selfupdate.Build=miya-release:{version}:end",
+    "url_schemes": [
+      "miya"
+    ],
+    "resources": [
+      "languages/en.lproj",
+      "languages/zh-Hans.lproj"
+    ],
+    "macos": {
+      "info": {
+        "NSLocalNetworkUsageDescription": "Connect to Miya on your phone over the same Wi-Fi using an encrypted local connection for lower latency.",
+        "CFBundleDevelopmentRegion": "en",
+        "CFBundleLocalizations": [
+          "en",
+          "zh-Hans"
+        ],
+        "LSMinimumSystemVersion": "13.0",
+        "NSPrincipalClass": "NSApplication",
+        "NSSupportsAutomaticGraphicsSwitching": true,
+        "CFBundleInfoDictionaryVersion": "6.0",
+        "CFBundleIconFile": "AppIcon.icns",
+        "NSAppleEventsUsageDescription": "Control terminal applications to start and manage your coding sessions.",
+        "NSAccessibilityUsageDescription": "Control keyboard and pointer input when you use remote desktop.",
+        "NSScreenCaptureUsageDescription": "Share your Mac screen with your paired devices when you use remote desktop."
+      },
+      "entitlements": {},
+      "build_number": "version"
+    },
+    "ios": {
+      "icon": "resources/ios/app-icon.png",
+      "development_team": "XNDA84PBM3",
+      "info": {
+        "NSMicrophoneUsageDescription": "Record your voice while you hold the input to convert it to text using cloud recognition.",
+        "NSFaceIDUsageDescription": "Verify your identity to save or use your Mac login password to unlock remote desktop.",
+        "NSCameraUsageDescription": "Scan the QR code in Miya on your desktop to view conversations.",
+        "NSLocalNetworkUsageDescription": "Connect to Miya on your desktop over the same Wi-Fi using an encrypted local connection for lower latency.",
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true
+        },
+        "CFBundleDevelopmentRegion": "en",
+        "CFBundleLocalizations": [
+          "en",
+          "zh-Hans"
+        ]
+      },
+      "entitlements": {
+        "keychain-access-groups": [
+          "$(AppIdentifierPrefix)*",
+          "com.apple.token"
+        ]
+      }
+    },
+    "android": {
+      "minimum_sdk": 29,
+      "permission_max_sdk": {
+        "android.permission.READ_EXTERNAL_STORAGE": 32,
+        "android.permission.WRITE_EXTERNAL_STORAGE": 28
+      },
+      "foreground_service_subtype": "Keeps the application's own connection open while it is in the background",
+      "app_attributes": {
+        "allowBackup": false,
+        "supportsRtl": true
+      },
+      "activity_attributes": {
+        "launchMode": "singleTask"
+      },
+      "extra_config_changes": [
+        "fontWeightAdjustment"
+      ],
+      "optional_features": [
+        "android.hardware.camera",
+        "android.hardware.microphone"
+      ],
+      "queries": [
+        {
+          "action": "android.media.action.IMAGE_CAPTURE"
+        },
+        {
+          "action": "android.provider.action.PICK_IMAGES"
+        },
+        {
+          "action": "android.intent.action.PICK",
+          "mime_type": "image/*"
+        }
+      ],
+      "network_security_xml": "<network-security-config><base-config cleartextTrafficPermitted=\"false\"/><domain-config cleartextTrafficPermitted=\"true\"><domain includeSubdomains=\"false\">127.0.0.1</domain><domain includeSubdomains=\"false\">localhost</domain></domain-config></network-security-config>"
+    }
+  }
+}

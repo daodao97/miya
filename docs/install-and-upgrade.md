@@ -42,9 +42,9 @@ Miya 使用同一个可执行文件运行不同进程：
 
 ### 发布远程升级包
 
-`scripts/build-macos.sh` 和 `scripts/build-server.sh` 将 `mygo.json` 的应用版本写入后台握手。GitHub 的 Package 工作流在版本标签构建时，把同一版 macOS universal 应用分别列入 arm64 / amd64 更新清单，同时构建两种 Linux 服务包；`scripts/package-update.py` 将产物打包，并合并为 `miya-update.json`。Release 保持草稿，由发布者正常发布后才可被升级入口发现。普通工作流构建、草稿和仅替换本机文件均不发布远程更新。
+`scripts/build-macos.sh` 和 `scripts/build-server.sh` 将 `nsgo.yaml` 的应用版本写入后台握手。GitHub 的 Package 工作流在版本标签构建时，把同一版 macOS universal 应用分别列入 arm64 / amd64 更新清单，同时构建两种 Linux 服务包；`scripts/package-update.py` 将产物打包，并合并为 `miya-update.json`。Release 保持草稿，由发布者正常发布后才可被升级入口发现。普通工作流构建、草稿和仅替换本机文件均不发布远程更新。
 
-手动生成示例（版本必须与构建时的 `mygo.json` 一致）：
+手动生成示例（版本必须与构建时的 `nsgo.yaml` 一致）：
 
 ```sh
 python3 scripts/package-update.py --source build/server/linux-amd64/miya --target linux-amd64 --version 1.2.3 --out build/updates
@@ -63,6 +63,18 @@ scripts/run-isolated.sh status     # 独立后台的 hello 与状态
 scripts/run-isolated.sh stop       # 请求独立后台退出
 ```
 
+可以指定本次检出的独立目录和已构建应用：
+
+```sh
+export MIYA_ISOLATED_DIR="$PWD/build/isolated"
+MIYA_ISOLATED_APP="build/Miya-0.1.0-macos_universal/Miya.app" scripts/run-isolated.sh run --no-build
+scripts/run-isolated.sh status
+# 先正常退出这个独立窗口，再请求独立后台退出，避免窗口重连并重新拉起服务。
+scripts/run-isolated.sh stop
+```
+
+`MIYA_ISOLATED_APP` 接受绝对路径或本检出内的相对路径；默认按版本及本机架构定位 NSGo 产物。`status` 输出协议版本、release、PID、忙碌状态和二进制路径；长目录采用与服务一致的 FNV 短 socket 路径。`stop` 只向该隔离 socket 发正常 `quit`，不会按名字结束进程。屏幕锁定时只能核验进程与服务握手，不能把它报告为界面绘制已验收。
+
 脚本以 `MIYA_ISOLATED_DIR`（默认 `~/Library/Application Support/Miya-dev`）直接运行 `build/` 中的二进制。窗口找不到该目录下的后台，会启动自己的 `-server`。Miya 的设置、对话缓存、项目排序、Claude 历史、手机配对、记忆和 Socket 都写在这个目录，也不安装或删除登录项（[internal/appdir/appdir.go](../internal/appdir/appdir.go) 的 `Isolated`）。Agent 自己的数据（`~/.codex`、`~/.claude`）仍然共享，所以 Codex 和 Claude Code 保持登录；不要在两个应用中同时打开同一个对话。
 
 只设置 `MIYA_DIR` 不会进入隔离模式：服务器部署用它存放服务状态，设置和历史保持在原位置（见 [server.md](server.md)）。
@@ -72,14 +84,14 @@ scripts/run-isolated.sh stop       # 请求独立后台退出
 在仓库根目录执行；以下为 Apple Silicon macOS 的本地安装：
 
 ```sh
-./scripts/build-macos.sh -platform darwin/arm64
-/usr/bin/codesign --verify --deep --strict build/darwin-arm64/Miya.app
-/usr/bin/shasum -a 256 build/darwin-arm64/Miya.app/Contents/MacOS/Miya
+./scripts/build-macos.sh -target macos_arm64
+/usr/bin/codesign --verify --deep --strict build/Miya-0.1.0-macos_arm64/Miya.app
+/usr/bin/shasum -a 256 build/Miya-0.1.0-macos_arm64/Miya.app/Contents/MacOS/Miya
 ```
 
-macOS 构建使用项目脚本，显式设置 `CGO_ENABLED=0`。远程桌面的 ScreenCaptureKit、键鼠、窗口和遮屏能力由 MyGo 的 `plugins/desktopcontrol` 通过 purego 调用，权限请求使用 `plugins/permissionflow`。应用最低系统版本保持 macOS 13，macOS 14 及以上才启用远程桌面。
+macOS 构建使用 NSGo 项目脚本，由 NSGo 设置 `CGO_ENABLED=0`，保留 `-tags nsgo`。产物目录中的 `0.1.0` 取 `nsgo.yaml` 的版本；版本变动时同步替换以下路径。签名、iOS/APNs/Keychain/Live Activities、Android 及 CI 发布前置条件见 [NSGo 打包](nsgo-packaging.md)。远程桌面的 ScreenCaptureKit、键鼠、窗口和遮屏能力由 Miya 的 `internal/desktopcontrol` 通过 purego 调用，权限请求使用同一套原生实现。应用最低系统版本保持 macOS 13，macOS 14 及以上才启用远程桌面。
 
-有本机开发签名证书时，用 `MIYA_SIGNING_IDENTITY` 或未跟踪的 `.mygo/macos-signing-identity`（单行证书名称或 SHA-1）固定签名身份。同一团队、同一应用标识的稳定签名可避免每次本地重编译都使 TCC 授权失效；从 ad-hoc 迁移时仍需重新授权一次。不要把其他人的证书身份写入共享配置，也不要为了维持权限放宽 designated requirement。没有配置时保持 ad-hoc 构建。
+有本机开发签名证书时，用 `MIYA_SIGNING_IDENTITY` 或未跟踪的 `build/nsgo-cache/macos-signing-identity`（单行证书名称或 SHA-1）固定签名身份。同一团队、同一应用标识的稳定签名可避免每次本地重编译都使 TCC 授权失效；从 ad-hoc 迁移时仍需重新授权一次。不要把其他人的证书身份写入共享配置，也不要为了维持权限放宽 designated requirement。没有配置时保持 ad-hoc 构建。
 
 构建需要访问 Go 缓存，安装需要写入 `/Applications`。遇到沙箱拒绝时，为具体构建或安装命令申请权限提升。没有完成构建、验签之前，不替换现有应用。功能变更应已完成对应验证；仅安装同一份已验证源码时无需重复全量测试。
 
@@ -150,7 +162,7 @@ import os
 import subprocess
 from pathlib import Path
 
-source = Path.cwd() / 'build/darwin-arm64/Miya.app'
+source = Path.cwd() / 'build/Miya-0.1.0-macos_arm64/Miya.app'
 target = Path('/Applications/Miya.app')
 stamp = datetime.datetime.now().strftime('%Y%m%d-%H%M%S-%f')
 stage = Path('/Applications/.Miya-install-' + stamp + '.app')
