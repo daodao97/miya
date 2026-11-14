@@ -249,12 +249,27 @@ func ThreadMessageGroups(t model.Thread, groups []MessageGroup) []MessageGroup {
 
 // Group protocol items for presentation without merging or modifying their data.
 // Tool activity belongs to the same response; a user message or new turn separates it.
+// EmptyThought reports whether m is a completed reasoning item with no text
+// to show. One in progress still shows "Thinking…", and one of no known
+// state keeps its place among the activities.
+func EmptyThought(m model.Message) bool {
+	if !strings.EqualFold(m.Kind, "reasoning") || m.Status != "completed" {
+		return false
+	}
+	return strings.TrimSpace(ReasoningContent(m.Content)) == ""
+}
+
 func GroupMessages(messages []model.Message) []MessageGroup {
 	var groups []MessageGroup
 	for _, m := range messages {
 		// Old services appended automatic memory cards without an explicit flag.
 		// Keep those historical records out of both desktop and phone timelines.
 		if m.Role == "memory" && (m.Memory == nil || !m.Memory.Explicit) {
+			continue
+		}
+		// A finished thought with nothing to read, as Claude Code's thinking
+		// that arrives with only its signature, would show an empty "Thought".
+		if EmptyThought(m) {
 			continue
 		}
 		user := m.Role == "user"
