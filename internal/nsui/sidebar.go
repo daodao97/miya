@@ -2,6 +2,7 @@ package nsui
 
 import (
 	"fmt"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -314,6 +315,13 @@ func projectDialog(cx *core.Scope, c Host, expanded *core.Signal[string]) (node 
 	colors := nswidgets.ColorsOf(cx)
 	shown := core.NewSignal(cx, false)
 	name, path, errText := core.NewSignal(cx, ""), core.NewSignal(cx, ""), core.NewSignal(cx, "")
+	pickerOpen := core.NewSignal(cx, false)
+	picker, browse := folderPicker(cx, c, pickerOpen, func(p string) {
+		path.Set(p)
+		if strings.TrimSpace(name.GetUntracked()) == "" {
+			name.Set(filepath.Base(p))
+		}
+	})
 	confirm := func() {
 		n, p := strings.TrimSpace(name.GetUntracked()), strings.TrimSpace(path.GetUntracked())
 		if n == "" {
@@ -336,11 +344,16 @@ func projectDialog(cx *core.Scope, c Host, expanded *core.Signal[string]) (node 
 		errText.Set("")
 		shown.Set(true)
 	}
-	node = ui.Dialog{Open: shown.Get, OnOpenChange: func(o bool, _ base.Reason) { shown.Set(o) }, TestID: "project-dialog",
+	dialog := ui.Dialog{Open: shown.Get, OnOpenChange: func(o bool, _ base.Reason) { shown.Set(o) }, TestID: "project-dialog",
 		Title: tr("Select project"), Description: tr("Add a project name and choose its working folder."),
 		Children: []core.Node{
 			ui.Input{Label: tr("Project name"), Placeholder: tr("My project"), Value: name.Get, OnChange: name.Set},
-			ui.Input{Label: tr("Project folder"), Placeholder: "/path/to/project", Value: path.Get, OnChange: path.Set},
+			core.View{Style: core.Style{Direction: core.Row, Gap: 8, AlignItems: core.AlignEnd}, Children: []core.Node{
+				core.View{Style: core.Style{FlexGrow: 1, MinWidth: core.Pt(0)}, Children: []core.Node{
+					ui.Input{Label: tr("Project folder"), Placeholder: "/path/to/project", Value: path.Get, OnChange: path.Set},
+				}},
+				ui.Button{Text: tr("Browse…"), Variant: ui.ButtonSecondary, TestID: "project-browse", OnPress: func() { browse(path.GetUntracked()) }},
+			}},
 			core.Show{When: func() bool { return errText.Get() != "" }, Then: func(cx *core.Scope) core.Node {
 				return core.Text{TestID: "project-error", ContentFunc: errText.Get, Selectable: core.SelectableOn,
 					StyleFunc: func() core.Style { return core.Style{FontSize: 12, Color: colors.Danger()} }}
@@ -350,5 +363,5 @@ func projectDialog(cx *core.Scope, c Host, expanded *core.Signal[string]) (node 
 			ui.Button{Text: tr("Cancel"), Variant: ui.ButtonSecondary, TestID: "project-cancel", OnPress: func() { shown.Set(false) }},
 			ui.Button{Text: tr("Select project"), TestID: "project-confirm", OnPress: confirm},
 		}}
-	return node, open
+	return core.Group([]core.Node{dialog, picker}), open
 }

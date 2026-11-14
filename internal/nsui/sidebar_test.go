@@ -2,6 +2,7 @@ package nsui
 
 import (
 	"testing"
+	"time"
 
 	"miya/internal/chat/model"
 	projectmodel "miya/internal/project/model"
@@ -60,5 +61,35 @@ func TestProjectDialogNeedsName(t *testing.T) {
 	app.Settle()
 	if app.Exists("id:project-error") || app.Exists("id:project-confirm") || h.state.Cwd != "/workspace" {
 		t.Fatalf("project not opened: cwd %q; texts %q", h.state.Cwd, app.Texts())
+	}
+}
+
+// Browse chooses the folder in the picker and names the project after it.
+func TestProjectDialogBrowses(t *testing.T) {
+	dir := t.TempDir()
+	h := projectHost()
+	h.state.Cwd = dir
+	app := startBridged(t, h)
+	app.Press("label:Select project")
+	app.Settle()
+	app.Press("id:project-browse")
+	loaded := false
+	for range 200 {
+		app.Settle()
+		if app.Exists("label:Choose") && app.Enabled("label:Choose") {
+			loaded = true
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if !loaded {
+		t.Fatalf("picker never loaded; texts %q", app.Texts())
+	}
+	app.Press("label:Choose")
+	app.Settle()
+	app.Press("id:project-confirm")
+	app.Settle()
+	if app.Exists("id:project-error") || app.Exists("id:project-confirm") || h.state.Cwd != dir {
+		t.Fatalf("browsed project not opened: cwd %q; texts %q", h.state.Cwd, app.Texts())
 	}
 }

@@ -20530,6 +20530,66 @@ func (msgs Messages) NsEnterProjectName() string {
 	return Catalog.Format(msgs.locale, "nsEnterProjectName", nil)
 }
 
+// NsPickerIcons says "Icons"
+// in the language the app shows.
+func NsPickerIcons() string { return In(i18n.Locale()).NsPickerIcons() }
+
+// NsPickerIcons says "Icons"
+// in the language of msgs.
+func (msgs Messages) NsPickerIcons() string {
+	return Catalog.Format(msgs.locale, "nsPickerIcons", nil)
+}
+
+// NsPickerList says "List"
+// in the language the app shows.
+func NsPickerList() string { return In(i18n.Locale()).NsPickerList() }
+
+// NsPickerList says "List"
+// in the language of msgs.
+func (msgs Messages) NsPickerList() string {
+	return Catalog.Format(msgs.locale, "nsPickerList", nil)
+}
+
+// NsPickerHidden says "Show hidden files"
+// in the language the app shows.
+func NsPickerHidden() string { return In(i18n.Locale()).NsPickerHidden() }
+
+// NsPickerHidden says "Show hidden files"
+// in the language of msgs.
+func (msgs Messages) NsPickerHidden() string {
+	return Catalog.Format(msgs.locale, "nsPickerHidden", nil)
+}
+
+// NsPickerModified says "Modified"
+// in the language the app shows.
+func NsPickerModified() string { return In(i18n.Locale()).NsPickerModified() }
+
+// NsPickerModified says "Modified"
+// in the language of msgs.
+func (msgs Messages) NsPickerModified() string {
+	return Catalog.Format(msgs.locale, "nsPickerModified", nil)
+}
+
+// NsPickerSize says "Size"
+// in the language the app shows.
+func NsPickerSize() string { return In(i18n.Locale()).NsPickerSize() }
+
+// NsPickerSize says "Size"
+// in the language of msgs.
+func (msgs Messages) NsPickerSize() string {
+	return Catalog.Format(msgs.locale, "nsPickerSize", nil)
+}
+
+// NsPickerAddress says "Folder path"
+// in the language the app shows.
+func NsPickerAddress() string { return In(i18n.Locale()).NsPickerAddress() }
+
+// NsPickerAddress says "Folder path"
+// in the language of msgs.
+func (msgs Messages) NsPickerAddress() string {
+	return Catalog.Format(msgs.locale, "nsPickerAddress", nil)
+}
+
 // NsMenuFile says "File"
 // in the language the app shows.
 func NsMenuFile() string { return In(i18n.Locale()).NsMenuFile() }
