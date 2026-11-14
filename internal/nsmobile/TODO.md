@@ -6,12 +6,49 @@ approval or starts one of these features implicitly.
 
 | Feature | Hook for the next port |
 | --- | --- |
-| Approvals and questions | Replace the desktop-review banner in `composer` with request cards; consume `Client.State.Approvals`. Add `responded` handling to `client.read`. |
 | Remote desktop | Add a destination to `sheetContent` and an action to `conversationMenu`; consume `desktop-open`, `desktop-preview`, and `desktop-action` frames. Own and end leases on Back/background/disconnect. |
 | Multiple desktop management | Add the registry manager and per-desktop composer sessions. The core uses one active link, per-desktop disk caches/options, and reads the old active secure registry when available. |
-| Automations | Add list/detail/create destinations to `sheetContent`; add automation frame handlers to `client.read`. |
-| Memory | Add a memory sheet; use state revisions to invalidate its data and add the memory frame handler. |
-| Delegations | Add agent tags to the reference suggestions and collaboration frame handlers; thread/file references already work. |
+## Ported feature sheets
+
+- Approvals, questions and MCP forms open from conversation request cards.
+  `internal/nsrequests` supplies the same validation, choices, URL confirmation
+  and remembered consent as desktop. Answers survive sheet dismissal and are
+  keyed by request version. Replies require explicit taps, carry fingerprints,
+  disable while pending, and handle acknowledgements, errors and disconnects.
+  Remote desktop preview/control remains a separate port; takeover requests
+  offer only the explicit cancel/continue actions.
+- Delegations use `@` / `#` agent suggestions and More → Agent tasks. The
+  shared NSGo panel provides list/detail, result/source navigation, cancellation,
+  watches, recheck/stop-tracking, delivery resolution and stable mutation retries.
+  Phone RPCs enforce connection ownership and timeouts.
+- Automations have list, detail/run history and draft/create sheets from Home
+  and More. Generated fields, schedule, checks, turn limit, enabled/carry-over/
+  worktree options and run-now use the phone protocol. Uncertain creation
+  retains its original ID and payload across reconnects. Webhook status and
+  recent routing results are read-only, matching the legacy phone scope.
+- Memory has project/user scope, refresh, revision checks and durable source
+  conversation navigation. It remains read-only, matching `internal/mobile`.
+- Sheets own their polling timers; closing stops reads. Capability checks,
+  disconnected/error states and 44-point action targets apply throughout.
+
+Shared framework-free code: memory kind/state/time labels moved from widgets
+into `memory/presentation`; automation run lookup moved out of `mobile` into
+`phone/protocol`; the collaboration user request moved from `appmodel` to
+`delegation` with a compatibility alias. Safe automation cloning is shared by
+desktop and both phone implementations in `automation.Clone`. The feature transport state lives in
+`phone/client`, and the MyGo UI continues compiling.
+
+`features_test.go` covers each sheet with nsgotest, including required answers,
+MCP validation, memory revisions/scopes/source links, automation list/detail/run/
+create retry identity, and delegation list/detail/mutation retry and disconnect.
+Physical-device layout and interaction validation remain outstanding.
+
+Validation (2026-11-14): `gofmt -l .`, localization check/generation, desktop
+vet, `go build ./...`, the NSGo-tagged build, and iOS cross-vet passed. Phone,
+shared-client/protocol, NSGo desktop/chat and automation tests pass. Full
+integration has the pre-existing `TestDesktopPageRendersLiveConnectingAndEnded`
+failure (missing Trackpad). The desktop workspace connection test now waits for
+its asynchronous error result, eliminating a timing failure seen under load.
 
 ## Voice, notifications and web services
 

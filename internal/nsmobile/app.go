@@ -12,6 +12,7 @@ import (
 	"github.com/nsgo-dev/nsgo/ui"
 
 	"miya/internal/chat/model"
+	"miya/internal/nsrequests"
 	"miya/internal/nswidgets"
 	phoneclient "miya/internal/phone/client"
 	"miya/internal/prefs"
@@ -38,6 +39,9 @@ type App struct {
 	fetchRuntime            runtimeFetcher
 	openWebProxy            webProxyOpener
 	webBrowser              bool
+	collaborations          nsrequests.CollaborationUI
+	collaborationOwner      string
+	requestFields           map[string]map[string]string
 }
 
 func NewMobileApp() *App {
@@ -81,6 +85,19 @@ func (m *App) Render(cx *core.Scope) core.Node {
 	m.filesURL = core.NewSignal(cx, "")
 	m.Client.Dispatch = cx.Post
 	m.Client.Changed = m.change
+	// Drop resolved or superseded form values, including secret answers.
+	cx.Effect(func() {
+		m.revision.Get()
+		active := map[string]bool{}
+		for _, a := range m.State.Approvals {
+			active[m.requestFieldKey(a)] = true
+		}
+		for key := range m.requestFields {
+			if !active[key] {
+				delete(m.requestFields, key)
+			}
+		}
+	})
 	cx.SetTheme(nswidgets.Theme())
 	cx.SetLocale(prefs.NormalizeInterfaceLanguage(prefs.Load("interfaceLanguage")))
 	m.setupPush(cx)
@@ -219,9 +236,12 @@ func (m *App) page(cx *core.Scope) core.Node {
 	})
 }
 
-// TODO(automations, memory, remote-desktop, delegations): add
+// TODO(remote-desktop): add
 // owned destinations here alongside their frame handlers in phone/client.
 func (m *App) sheetContent(cx *core.Scope) core.Node {
+	if strings.HasPrefix(m.sheet.Get(), "request:") {
+		return m.requestSheet(cx)
+	}
 	switch m.sheet.Get() {
 	case "web-services":
 		return m.webServicesSheet(cx)
@@ -229,6 +249,12 @@ func (m *App) sheetContent(cx *core.Scope) core.Node {
 		return m.voiceSettings(cx)
 	case "push":
 		return m.pushSettings(cx)
+	case "memory":
+		return m.memorySheet(cx)
+	case "automations", "automation", "automation-new":
+		return m.automationsSheet(cx, m.sheet.Get())
+	case "delegations":
+		return m.delegationsSheet(cx)
 	case "settings":
 		return m.settings(cx)
 	case "language":

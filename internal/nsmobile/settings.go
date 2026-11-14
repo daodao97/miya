@@ -5,18 +5,18 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/nsgo-dev/nsgo/core"
 	"golang.org/x/text/language"
 	"golang.org/x/text/language/display"
 
 	"miya/internal/prefs"
-
-	"github.com/nsgo-dev/nsgo/core"
 )
 
 func (m *App) settings(cx *core.Scope) core.Node {
 	return scroll(text(tr("Settings")),
 		m.button("voice-settings", tr("Voice input"), nil, func() { m.sheet.Set("voice") }),
 		m.button("push-settings", tr("Notifications"), nil, func() { m.sheet.Set("push") }),
+		m.button("memory-settings", tr("Shared memory"), nil, func() { m.sheet.Set("memory") }),
 		m.button("language", tr("Interface language"), nil, func() { m.sheet.Set("language") }),
 		m.button("reconnect", tr("Reconnect"), live(m, func() bool { return m.Link == "" }), func() { m.Connect(m.Link); m.sheet.Set("") }),
 		m.button("add-desktop", tr("Add desktop"), nil, func() { m.sheet.Set("pair") }),

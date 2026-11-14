@@ -53,7 +53,7 @@ func (m *App) sendAutomationForm(op string) {
 			return
 		}
 		if f.CreateKey == "" {
-			a := f.Draft.Automation
+			a := automation.Clone(f.Draft.Automation)
 			a.ID, a.Project, a.Agent, a.Request, a.Enabled = "", f.Project, f.Agent, strings.TrimSpace(f.Request), f.Enabled
 			if err := a.Normalize(); err != nil {
 				f.err = err.Error()

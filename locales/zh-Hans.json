@@ -1944,5 +1944,6 @@
   "nsgoPhoneLiveActivitiesDisabled": "实时活动已关闭",
   "nsgoPhoneLiveActivitiesUnavailable": "此应用构建暂不支持实时活动。",
   "nsgoPhoneWebLoadFailed": "无法加载 Web 服务，请刷新重试。",
-  "nsgoPhoneNoVerifiedService": "此对话暂无已验证的 HTTP 服务。"
+  "nsgoPhoneNoVerifiedService": "此对话暂无已验证的 HTTP 服务。",
+  "requestResolved": "此请求已处理"
 }

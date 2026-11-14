@@ -4,12 +4,12 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/nsgo-dev/nsgo/core"
+
 	"miya/internal/appmodel"
 	"miya/internal/chat/composer"
 	"miya/internal/chat/model"
 	"miya/internal/remote"
-
-	"github.com/nsgo-dev/nsgo/core"
 )
 
 // Native input selections use UTF-16 offsets; composer tokens use bytes.
@@ -57,7 +57,18 @@ func (m *App) references(cx *core.Scope) core.Node {
 		}
 		token := composer.ComposerTokenAt(m.Draft, end)
 		var nodes []core.Node
-		// Agent/delegation tags are intentionally deferred with delegations.
+		if (token.Kind == '#' || token.Kind == '@') && m.State.Collaboration != nil && m.State.Collaboration.Version >= 1 {
+			var enabled []string
+			for _, d := range m.AgentDescriptors() {
+				enabled = append(enabled, d.ID)
+			}
+			for _, choice := range composer.AgentChoices(token.Query, enabled) {
+				nodes = append(nodes, m.button("agent-reference-"+choice.Agent, choice.Name, nil, func() {
+					m.Draft = composer.InsertAgentReference(m.Draft, token, choice.Agent, choice.Name)
+					m.caret = -1
+				}))
+			}
+		}
 		if token.Kind == '@' {
 			if m.State.ReferenceSource != "" {
 				for _, ref := range appmodel.MatchingThreadRefs(m.State.Projects, m.Open, token.Query) {

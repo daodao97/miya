@@ -13,6 +13,7 @@ import (
 	"miya/internal/chat/model"
 	"miya/internal/memory"
 	"miya/internal/memory/manager"
+	memorypresentation "miya/internal/memory/presentation"
 	"miya/internal/nswidgets"
 	svcclient "miya/internal/service/client"
 )
@@ -431,37 +432,6 @@ func (m *settingsMemory) openSource(raw string) {
 	m.err = tr("Source conversation unavailable. The memory retains its original source identity.")
 	m.changed()
 }
-func memoryTime(t time.Time) string {
-	if t.IsZero() {
-		return tr("Not set")
-	}
-	return t.Local().Format("2006-01-02 15:04")
-}
-func memoryKind(s string) string {
-	switch s {
-	case "preference":
-		return tr("Preference")
-	case "fact":
-		return tr("Fact")
-	case "progress":
-		return tr("Progress")
-	}
-	return s
-}
-func memoryState(s string) string {
-	switch s {
-	case "active":
-		return tr("Active")
-	case "expired":
-		return tr("Expired")
-	case "forgotten":
-		return tr("Forgotten")
-	case "promoted":
-		return tr("Promoted")
-	case "superseded":
-		return tr("Updated")
-	case "conflicted":
-		return tr("Conflict · Needs verification")
-	}
-	return s
-}
+func memoryTime(t time.Time) string { return memorypresentation.MemoryTime(t) }
+func memoryKind(s string) string    { return memorypresentation.MemoryKindLabel(s) }
+func memoryState(s string) string   { return memorypresentation.MemoryStateLabel(s) }

@@ -1944,5 +1944,6 @@
   "nsgoPhoneLiveActivitiesDisabled": "Live Activities disabled",
   "nsgoPhoneLiveActivitiesUnavailable": "Live Activities are unavailable in this app build.",
   "nsgoPhoneWebLoadFailed": "Unable to load web services. Refresh to try again.",
-  "nsgoPhoneNoVerifiedService": "No verified HTTP service for this conversation."
+  "nsgoPhoneNoVerifiedService": "No verified HTTP service for this conversation.",
+  "requestResolved": "This request has been resolved"
 }

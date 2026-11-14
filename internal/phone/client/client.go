@@ -18,7 +18,6 @@ import (
 	phonecache "miya/internal/phone/cache"
 	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/remote"
-
 	"miya/locales"
 )
 
@@ -87,6 +86,12 @@ type Client struct {
 	readPending                                                   map[string]uint64
 	CompletionRead, CompletionReceived                            notification.DesktopRead
 	BadgeRevision                                                 uint64
+	Autos                                                         Automations
+	Memories                                                      Memory
+	CollaborationCalls                                            map[string]*CollaborationCall
+	ApprovalPending                                               map[string]string
+	ApprovalErrors                                                map[string]string
+	approvalTimers                                                map[string]*time.Timer
 }
 
 func New() *Client {
@@ -199,6 +204,9 @@ func (m *Client) Connect(raw string) {
 	m.Disconnect()
 	if changed {
 		m.State = phoneproto.State{}
+		m.Autos = Automations{}
+		m.Memories = Memory{}
+		m.ApprovalErrors = nil
 		m.Host = ""
 		m.Home()
 	}
@@ -214,6 +222,8 @@ func (m *Client) Connect(raw string) {
 	go m.Run(ctx, m.Generation, raw, m.Wake)
 }
 func (m *Client) Disconnect() {
+	m.interruptFeatureRequests()
+	m.interruptApprovals()
 	m.Generation++
 	if m.Cancel != nil {
 		m.Cancel()
@@ -237,6 +247,9 @@ func (m *Client) Forget() {
 	m.Disconnect()
 	m.Link, m.Host, m.Status = "", "", ""
 	m.State = phoneproto.State{}
+	m.Autos = Automations{}
+	m.Memories = Memory{}
+	m.ApprovalErrors = nil
 	m.DropDiskCache()
 	m.Home()
 	m.persistPair("")
@@ -299,6 +312,7 @@ func (m *Client) ApplyPhoneState(s phoneproto.State) {
 	}
 	old := m.State.Notifications
 	m.State = s
+	m.reconcileApprovals()
 	m.State.Notifications = old
 	m.ApplyNotifications(s.Notifications)
 	if m.Open != 0 && cur.ServerID != "" {

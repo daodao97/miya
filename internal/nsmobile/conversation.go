@@ -5,16 +5,16 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/nsgo-dev/nsgo/base"
+	"github.com/nsgo-dev/nsgo/core"
+	"github.com/nsgo-dev/nsgo/ui/chat"
+
 	"miya/internal/appmodel"
 	"miya/internal/chat/composer"
 	"miya/internal/chat/model"
 	"miya/internal/nschat"
 	"miya/internal/nswidgets"
 	phoneclient "miya/internal/phone/client"
-
-	"github.com/nsgo-dev/nsgo/base"
-	"github.com/nsgo-dev/nsgo/core"
-	"github.com/nsgo-dev/nsgo/ui/chat"
 )
 
 func (m *App) conversation(cx *core.Scope) core.Node {
@@ -53,9 +53,7 @@ func (m *App) composer(cx *core.Scope, state *chat.ConversationState) core.Node 
 	return column(
 		m.errorText(cx),
 		m.pendingView(cx), m.queueView(cx), m.references(cx),
-		// TODO(approvals): show pending request cards here; the desktop remains
-		// their owner. No automatic response is sent by this surface.
-		core.Show{When: live(m, func() bool { return len(m.State.Approvals) > 0 }), Then: func(cx *core.Scope) core.Node { return text(tr("Review pending approvals on your desktop")) }},
+		m.requestCards(cx),
 		core.Show{When: live(m, func() bool { return len(m.Images) > 0 }), Then: func(cx *core.Scope) core.Node {
 			return core.Scroll{Horizontal: true, Style: core.Style{Height: core.Pt(72)}, Children: []core.Node{row(core.Each(live(m, func() []string { return m.Images }), func(p string) string { return p }, func(cx *core.Scope, p func() string, index func() int) core.Node {
 				return row(core.Image{SourceFunc: func() core.ImageSource { return core.Src(imageURI(p())) }, Label: tr("Image preview"), Style: core.Style{Width: core.Pt(64), Height: core.Pt(64), CornerRadius: 8}},
