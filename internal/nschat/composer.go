@@ -9,7 +9,7 @@ import (
 )
 
 // composer keeps the shared card slots independent of desktop controllers.
-// Unlike chat.Composer it permits attachment-only sends and a disabled editor.
+// chat.Composer has no custom editor slot; this card hosts inline rich atoms.
 func (v View) composer(cx *core.Scope) core.Node {
 	has := func() bool {
 		return strings.TrimSpace(v.Draft()) != "" || v.HasAttachments != nil && v.HasAttachments()
@@ -25,26 +25,21 @@ func (v View) composer(cx *core.Scope) core.Node {
 	if cx.Env().Desktop() {
 		submit = core.SubmitBehaviorSubmit
 	}
-	focused := core.NewSignal(cx, false)
 	height := core.NewSignal(cx, core.Points(48))
-	cx.OnKey("mod+enter", func() {
-		if focused.Get() && v.OnSteer != nil && has() && !disabled() {
-			v.OnSteer()
-		}
-	})
-	children := []core.Node{v.referenceChips(cx, v.Draft, v.OnDraftChange)}
+	children := []core.Node{}
 	if v.Attachments != nil {
 		children = append(children, v.Attachments)
 	}
-	children = append(children, ReferenceInput{ReferenceTitle: v.ReferenceTitle, Input: core.Input{TestID: "composer", Label: tr("Message"), Value: v.Draft, OnChange: v.OnDraftChange,
-		OnFocus: func() { focused.Set(true) }, OnBlur: func() { focused.Set(false) },
+	children = append(children, ReferenceEditor{ReferenceTitle: v.ReferenceTitle, Commands: v.Commands, Files: v.FileReferences, CaptureKeys: v.CaptureKeys, OnKey: v.OnComposerKey, OnEdit: v.OnDraftEdit, OnMove: v.OnComposerMove, Owner: v.ComposerOwner, OnInvalidReference: v.OnInvalidReference, Input: core.Input{TestID: "composer", Label: tr("Message"), Value: v.Draft, OnChange: v.OnDraftChange,
 		OnContentSizeChange: func(s core.Size) { height.Set(min(core.Points(200), max(core.Points(48), s.Height))) },
 		StyleFunc:           func() core.Style { return core.Style{Height: core.Pt(height.Get())} },
 		AutoFocus:           true, Multiline: true, SubmitBehavior: submit, OnSubmit: func(string) {
-			if v.OnComposerSubmit == nil || !v.OnComposerSubmit() {
-				send()
+			send()
+		}, OnPaste: v.OnPaste, Disabled: v.EditorDisabled, ReadonlyFunc: v.EditorReadonly, OnKeyPress: func(key string) {
+			if key == "mod+enter" && v.OnSteer != nil && has() && !disabled() {
+				v.OnSteer()
 			}
-		}, OnPaste: v.OnPaste, Disabled: v.EditorDisabled,
+		},
 		PlaceholderFunc: func() string {
 			if v.Thread().Busy {
 				return tr("Enter to queue, ⌘Enter to steer now")
@@ -82,9 +77,13 @@ func (v View) composer(cx *core.Scope) core.Node {
 			s.Background = colors.Subtle()
 		}
 		return s
-	}, OnFileDragEnter: func() { dragging.Set(true) }, OnFileDragLeave: func() { dragging.Set(false) }, OnFileDrop: func(uris []string) {
+	}, OnFileDragEnter: func() {
+		if (v.EditorDisabled == nil || !v.EditorDisabled()) && (v.EditorReadonly == nil || !v.EditorReadonly()) {
+			dragging.Set(true)
+		}
+	}, OnFileDragLeave: func() { dragging.Set(false) }, OnFileDrop: func(uris []string) {
 		dragging.Set(false)
-		if v.OnDropFiles != nil {
+		if v.OnDropFiles != nil && (v.EditorDisabled == nil || !v.EditorDisabled()) && (v.EditorReadonly == nil || !v.EditorReadonly()) {
 			v.OnDropFiles(uris)
 		}
 	}, Children: children}

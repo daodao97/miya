@@ -66,7 +66,18 @@ func (d *desktopComposer) wire(v *nschat.View) {
 			d.send(true)
 		}
 	}
-	v.OnComposerSubmit = d.complete.submit
+	v.CaptureKeys = Live(d.complete.captureKeys)
+	v.OnComposerKey = d.complete.onKey
+	v.FileReferences = d.complete.files.Get
+	v.OnDraftEdit = d.complete.editAt
+	v.OnComposerMove = d.complete.close
+	v.ComposerOwner = Live(func() string {
+		return fmt.Sprintf("%s:%s:%d", c.State().ReferenceSource, c.State().Cwd, c.Current().ID)
+	})
+	v.Commands = Live(func() []model.ComposerChoice {
+		return c.CurrentAgentControls().Commands(c.State().Cwd, true).Filter("")
+	})
+	v.OnInvalidReference = func() { d.notice.Set(tr("No valid session link in the clipboard")) }
 	v.SendDisabled = Live(d.disabled)
 	v.EditorDisabled = Live(func() bool { t := c.Current(); return t.ReadOnly || t.Loading })
 	v.ComposerVisible = Live(func() bool { return !c.Current().ReadOnly })
