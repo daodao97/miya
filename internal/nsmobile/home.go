@@ -115,15 +115,11 @@ func (m *App) threadRow(cx *core.Scope, t func() model.Thread, prefix string) co
 }
 func (m *App) pairView(cx *core.Scope) core.Node {
 	return scroll(text(tr("Connect to your desktop")), text(tr("Scan on your phone, or paste a desktop connection code")),
-		// TODO(platform): NSGo has no QR scanner; connection-code entry works.
+		m.button("pair-scan", tr("Scan to connect"), live(m, func() bool { return m.scanning }), m.scan),
 		base.Input{Label: tr("Desktop connection code"), Placeholder: tr("Or paste a connection code"), Value: m.pairCode.Get, OnChange: m.pairCode.Set, TestID: "pair-code", NoAutoCorrect: true, AutoCapitalize: core.AutoCapitalizeNone, Style: core.Style{MinHeight: core.Pt(48), FontSize: 16, Padding: core.All(12)}},
 		m.button("paste-code", tr("Paste"), nil, func() { cx.ReadClipboard(func(value string) { m.pairCode.Set(value) }) }),
 		m.button("pair-connect", tr("Connect"), nil, func() {
-			m.Connect(strings.TrimSpace(m.pairCode.Get()))
-			if m.Link != "" {
-				m.sheet.Set("")
-				m.pairCode.Set("")
-			}
+			m.pair(m.pairCode.Get())
 		}),
 		core.Text{TestID: "pair-error", ContentFunc: live(m, func() string { return m.Error + "\n" + m.PersistenceError }), Style: core.Style{FontSize: 14}},
 	)

@@ -5,16 +5,10 @@ import (
 
 	"miya/internal/apns"
 	"miya/internal/notification"
-	phonecache "miya/internal/phone/cache"
-
-	"github.com/nsgo-dev/nsgo/core"
-	"tailscale.com/net/netmon"
 )
 
-// PlatformHooks supplies native services an embedding mobile host can provide
-// before NSGo gains implementations. Install before MobileEntry. NSGo's
-// ReadNetworkPath/ObserveNetworkPath report ErrPlatformUnsupported on phones;
-// the transport still reconnects on timeout and foreground activation.
+// PlatformHooks supplies services that NSGo does not yet expose. Install
+// before MobileEntry. Credentials, QR scanning and paths use NSGo directly.
 var PlatformHooks struct {
 	// RegisterPush asks APNs for an alert device token, in hex, honoring ctx.
 	// NSGo currently has no general remote-notification registration API.
@@ -31,21 +25,8 @@ var PlatformHooks struct {
 	// apns.ActivityManager. An empty DeviceToken unregisters the subscription.
 	// No provider signing keys belong in the phone. There is no default protocol
 	// operation for this yet. The host must serialize registrations/unregisters.
-	RegisterActivity    func(apns.ActivityRegistration)
+	RegisterActivity func(apns.ActivityRegistration)
+	// DesktopAuthenticate must perform fresh biometric/device authentication
+	// before saving or using a desktop password. NSGo has no equivalent API.
 	DesktopAuthenticate func(context.Context) error
-	// NetworkInterfaces supplies Android's native interface snapshot. Android
-	// app UIDs cannot enumerate interfaces using NETLINK_ROUTE.
-	NetworkInterfaces func() ([]netmon.Interface, error)
-	// SecretStore supplies a mobile Keychain/Keystore adapter when available.
-	SecretStore func(*core.Scope) phonecache.SecretStore
-	// PrepareNetwork may warm up iOS local-network access and return a
-	// *remote.PrepareError for a denied/offline path. Nil lets Go's transport
-	// trigger the system network permission normally. It must honor ctx.
-	PrepareNetwork func(ctx context.Context, relayURL string) error
-}
-
-func installNetworkHooks() {
-	if PlatformHooks.NetworkInterfaces != nil {
-		netmon.RegisterInterfaceGetter(PlatformHooks.NetworkInterfaces)
-	}
 }

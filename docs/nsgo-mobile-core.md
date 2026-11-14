@@ -59,13 +59,43 @@ Remote desktop and multi-desktop management are now ported;
 `phone/desktopview` shares frame validation and pointer mapping with MyGo;
 NSGo updates one retained image node per frame. Saved-password unlock requires
 a native authentication hook. See the TODO for precise platform limits.
-The current pinned NSGo has no mobile secure-store or network-path service and
-no QR scanner. General APNs device registration/remote-delivery callbacks and
-Android foreground services need the host hooks documented in TODO.md. NSGo
-Live Activities exist, but require native widget packaging; background activity
-push subscriptions still need a desktop protocol operation. Connection-code pairing is session-only unless a host
-supplies
-a secure-store adapter. No credentials fall back to ordinary files.
+NSGo now supplies mobile Keychain/Keystore credentials, QR scanning and detailed
+network paths. Pairing and the multi-desktop registry persist through the native
+secure store; missing registries migrate the older core singleton keys. The
+adapter retains the existing `Miya` base64 format and can copy accessible raw
+MyGo iOS Keychain items under `com.daodao.miya` before retiring their sources.
+Empty registries/tombstones prevent forgotten desktops returning; failed reads
+block destructive writes until Reload. Credentials never fall back to
+preferences or ordinary files. MyGo Android's private encrypted-file format is
+not exposed by NSGo, and separate app identities do not share credentials.
+
+Scan to connect validates the desktop QR through the same pairing action as
+paste/manual entry. Cancel, invalid codes and camera errors preserve the current
+desktop. Native callbacks cannot replace a subsequently selected desktop.
+Declare `NSCameraUsageDescription` in `apple.info` and `CAMERA` in
+`android.permissions` when packaging; Android embedding hosts also need
+`ACCESS_NETWORK_STATE`.
+
+Detailed paths drive the shared client's existing reconnect wake and live-tunnel
+probe logic. Names and transport kinds form an order-independent path identity,
+including unnamed Android transports. Connection workers read a fresh native
+path before dialing; iOS also makes a cancellable URLSession HEAD to the public
+relay to activate network permissions and VPN/DNS64 routes, as MyGo does.
+Android registers a thread-safe Tailcat/netmon getter before loading credentials
+or connecting. NSGo names are enriched with socket ioctls and real UDP relay
+source addresses, including IPv6, without netlink enumeration or fabricated
+addresses. Non-nil address lists prevent fallback to Android's forbidden
+NETLINK_ROUTE. This is the default path's inventory, with no claim to enumerate
+every interface beneath a VPN. Physical network/permission transitions need
+device verification.
+
+General APNs device registration/remote-delivery callbacks and Android foreground
+services still need host hooks. NSGo Live Activities require widget packaging;
+background activity subscriptions still need a desktop protocol operation.
+Saved-password unlock still requires a fresh successful
+`PlatformHooks.DesktopAuthenticate`; secure storage does not replace biometrics
+or device authentication, which NSGo does not expose. Manual unlock and forgetting
+stored passwords remain available without that hook.
 
 ## Validation
 
@@ -80,15 +110,14 @@ and the new client domain.
 Required checks:
 
 ```sh
-gofmt -l internal/nsmobile internal/phone/client
+gofmt -l .
 go tool mygo i18n check
 go tool mygo generate
-go vet ./internal/nsmobile/...
+go vet ./internal/nsmobile/... ./internal/phone/...
 go build ./...
 go build -tags nsgo -o /dev/null .
-GOOS=ios GOARCH=arm64 CGO_ENABLED=1 go vet -tags nsgo ./internal/nsmobile/...
-go test ./internal/nsmobile/... ./tests/integration/...
-go test ./internal/phone/client/... ./internal/nschat/...
+GOOS=ios GOARCH=arm64 CGO_ENABLED=1 go vet -tags nsgo ./internal/nsmobile/
+go test ./internal/nsmobile/... ./internal/phone/... ./tests/integration/...
 ```
 
 2026-11-14: formatting, localization, both build modes, desktop vet and iOS
@@ -107,3 +136,11 @@ port; these previously polluted its session-result channel. The full
 integration run passes.
 See [TODO.md](../internal/nsmobile/TODO.md) for native APNs/Android hooks, Live Activity packaging and the
 remaining background activity subscription protocol work.
+
+2026-11-14 native-services port: the required checks above pass with the shared
+Go cache, as does Android cross-vet. Headless native-service tests cover QR
+pairing/fallback/cancellation/errors, secure persistence and migration, empty
+Forget tombstones, binary secrets, network changes and canceled/offline preflight.
+No private cache was created. Camera permission/capture, installed-app Keychain
+access groups, Android routing/VPN/IPv6, iOS permission prompts, IPA/APK packaging
+and biometric integration still need device validation.

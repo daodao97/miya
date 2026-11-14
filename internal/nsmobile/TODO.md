@@ -91,7 +91,7 @@ its asynchronous error result, eliminating a timing failure seen under load.
   removes old entries. Project-wide candidate listings, manual ports and the
   background-task details UI remain outside this port.
 
-## Platform gaps in the pinned NSGo checkout
+## Native services and remaining platform gaps
 
 - `core/notifications.go` implements local permission, show/close, badge and
   press APIs. The pinned checkout has **no general APNs alert-device registration
@@ -111,34 +111,50 @@ its asynchronous error result, eliminating a timing failure seen under load.
   This is not a claim of background delivery without a native service.
 
 
-- `Scope.ReadSecret`, `StoreSecret`, and `DeleteSecret` return
-  `ErrPlatformUnsupported` on iOS and Android. `scopeSecrets` preserves that
-  error. Pairing works until process exit; the app shows a persistence warning
-  and never stores connection secrets in a regular file. A native host may
-  supply `PlatformHooks.SecretStore`. Secure values use base64 inside the
-  NSGo credential adapter. The NSGo-specific pairing key is
-  `nsgo-desktop-link`; an empty value records Forget without resurrecting an
-  older MyGo registry entry.
-- Android's legacy `main_android.go` is now excluded under `nsgo`; NSGo
-  owns startup and logging. The old MyGo JNI interface inventory is also
-  excluded. Android app UIDs cannot query `NETLINK_ROUTE`, and the pinned
-  NSGo does not expose an equivalent native inventory. A host can provide
-  `PlatformHooks.NetworkInterfaces` for netmon; actual Android tunnel
-  connectivity needs device validation with that native service.
-- There is no QR scanner API. Pair by pasting a desktop connection code.
-- Network-path observation is macOS-only. Phones retain deadline/backoff,
-  send-triggered retry and foreground reconnect. `PlatformHooks.PrepareNetwork`
-  accepts a cancellable native permission/warm-up adapter; without one, the
-  transport triggers the system permission normally. Detailed offline/denied
-  diagnostics and interface-change probes await native support.
+- Pairings, the multi-desktop registry, tunnel identity and optional desktop
+  passwords now use NSGo's iOS Keychain / Android Keystore through `scopeSecrets`.
+  The existing `Miya` service and base64 encoding are retained. The core migrates
+  `nsgo-desktop-link`, then `desktop-link`, only when `desktops-v1` is missing;
+  an empty registry or singleton tombstone means Forget. Registry writes precede
+  singleton cleanup. Failed/locked reads block registry writes, including a
+  pairing entered during launch, until Reload succeeds. No secrets enter
+  preferences or ordinary files. On iOS, missing items can also migrate raw
+  MyGo entries under `com.daodao.miya`, retiring each source only after a durable
+  NSGo copy. This requires the same installed app's Keychain access group.
+  Android's old MyGo Keystore file format is private to its bridge and cannot
+  be imported through NSGo's secret API; it is not read as plaintext or silently
+  replaced. A different app identity must pair again.
+- Scan to connect uses `mobile.ScanQRCode` on iOS and Android. Successful codes
+  pass the same validation as paste/manual entry; cancellation leaves pairing
+  unchanged and errors keep the fallback available. Late results cannot replace
+  a desktop selected in the meantime. Packaging must declare
+  `apple.info.NSCameraUsageDescription` on iOS and `CAMERA` in
+  `android.permissions`; embedded Android hosts also declare
+  `ACCESS_NETWORK_STATE` (standalone NSGo apps already include it).
+- Detailed network observation tracks availability and the sorted name/kind
+  inventory. The initial report records state; coming online or changing
+  interfaces wakes a waiting reconnect or gives a live tunnel a 20-second
+  read deadline, matching MyGo without tearing down a roaming connection.
+  Each dial first reads the current native path with cancellation/offline
+  handling. On iOS, a bounded URLSession HEAD prepares cellular/local-network
+  permissions and VPN/DNS64 routes before opening Tailcat sockets.
+- Android startup registers Tailcat's interface getter before any connection.
+  It uses NSGo's named default-path inventory, socket ioctls for index/MTU/IPv4,
+  and bounded UDP route selection for real relay source addresses (including
+  IPv6); connecting these UDP sockets sends no packet. Empty address lists stay
+  nonnil so netmon never falls back to forbidden NETLINK_ROUTE. NSGo may report
+  unnamed transports or several transports for one VPN link; these drive path
+  identity but do not invent interfaces. The API describes the default path,
+  not every underlying device interface. Real Android VPN/IPv6 transitions
+  still require device verification.
 - `nschat.View` now accepts a custom composer, remote image resolver and link
   callback. The phone uses native multiline input, with UTF-16 caret offsets
   converted for thread/file/slash suggestions. Rich inline reference chips,
   image pasting, and camera capture are not part of this core.
 
 Physical-device validation, packaging/configuration for the NSGo mobile CLI,
-QR permissions, secure-store migration from the installed MyGo app, and
-network permission prompts still need device-level work. Cross-vet checks Go
+camera permissions, accessible MyGo Keychain migration, Android tunnel routing
+and network permission prompts still need device-level work. Cross-vet checks Go
 code; it does not build an IPA/APK or exercise platform services.
 
 ## Remote desktop platform limits and validation
@@ -155,8 +171,8 @@ code; it does not build an IPA/APK or exercise platform services.
   available. Saving and using a stored password require a fresh successful
   `PlatformHooks.DesktopAuthenticate` call plus secure storage; without a host
   adapter the UI explains the limitation and never bypasses authentication.
-  Existing stored passwords can still be forgotten. Phone secure storage is
-  unsupported by the pinned core unless the host supplies `SecretStore`.
+  Existing stored passwords can still be forgotten. Native secure storage
+  alone does not authenticate the person; `DesktopAuthenticate` remains required.
 - Frames update `SourceFunc` on one image node; unchanged encoded frames skip
   decoding and source replacement. Polling is serialized, input is ordered and
   bounded, and floating previews poll at most once per second. Target revisions
@@ -167,12 +183,23 @@ code; it does not build an IPA/APK or exercise platform services.
   background cleanup and desktop management. Domain tests cover stale leases,
   exact-target resume, registry migration, separate drafts/options, authenticated
   unlock and multi-touch arbitration. Required build/vet/localization checks and
-  the full requested integration suite pass with a worktree-local Go cache
-  (the shared cache returned an invalid standard-library reference).
+  the full requested integration suite pass using the shared Go cache.
 - The old MyGo `Trackpad` test was stale: the focused keyboard deliberately
   hides the floating capsule. The test now dismisses input with `Hide keyboard`
   before switching modes; no MyGo toolbar behavior change was needed.
 
-Physical iOS/Android gesture delivery, hardware keyboards, secure-store/native
-identity adapters, app packaging and real Mac capture remain device validation.
+Physical iOS/Android gesture delivery, hardware keyboards, native
+identity authentication, app packaging and real Mac capture remain device validation.
 No dependency checkout was changed and no build was installed.
+
+## Native-services validation (2026-11-14)
+
+`native_test.go` exercises iOS/Android QR pairing, invalid/canceled/error results,
+manual fallback, stale scan results, secure multi-desktop restore/rename/remove/
+Forget, NSGo singleton and accessible MyGo iOS migration, binary/empty credential
+round trips, missing/locked-store errors, network changes, offline/canceled
+preflight and authoritative Android inventory. These use NSGo's headless native
+service model, not `PlatformHooks`. Formatting, localization check/generation,
+desktop vet, both builds, iOS cross-vet and the full requested phone/integration
+test suite pass. Android cross-vet also passes. All commands use the shared Go
+cache; no private cache, dependency changes, installation or device testing.

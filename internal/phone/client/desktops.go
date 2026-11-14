@@ -129,7 +129,7 @@ func ReadDesktops(store phonecache.SecretStore, notFound error) (MobileDesktops,
 }
 
 func (m *Client) SaveDesktops() {
-	if m.Store == nil || m.desktopLoadFailed {
+	if !m.Loaded || m.Store == nil || m.desktopLoadFailed {
 		return
 	}
 	m.Desktops.Version = 1
@@ -137,7 +137,7 @@ func (m *Client) SaveDesktops() {
 	if err != nil {
 		return
 	}
-	store, revision := m.Store, m.storeRevision.Add(1)
+	store, revision, notFound := m.Store, m.storeRevision.Add(1), m.SecretNotFound
 	go func() {
 		m.storeMu.Lock()
 		defer m.storeMu.Unlock()
@@ -146,7 +146,15 @@ func (m *Client) SaveDesktops() {
 		}
 		err := store.Set(phonecache.DesktopsKey, data)
 		if err == nil {
+			// Leave a tombstone for the older NSGo singleton. Delete the
+			// MyGo singleton only after the registry is durable.
 			err = store.Set("nsgo-desktop-link", nil)
+			if err == nil {
+				err = store.Delete("desktop-link")
+				if errors.Is(err, notFound) {
+					err = nil
+				}
+			}
 		}
 		m.post(func() {
 			if revision == m.storeRevision.Load() {
@@ -239,12 +247,12 @@ func (m *Client) RemoveDesktop(id string) {
 		}
 	}
 	if m.Store != nil {
-		store := m.Store
+		store, notFound := m.Store, m.SecretNotFound
 		go func() {
 			m.storeMu.Lock()
 			err := store.Delete(DesktopUnlockKey(id))
 			m.storeMu.Unlock()
-			if err != nil {
+			if err != nil && !errors.Is(err, notFound) {
 				m.post(func() {
 					m.PersistenceError = tr("Connection removed, but the login password could not be deleted from Keychain")
 				})
