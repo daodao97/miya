@@ -1,0 +1,49 @@
+# Phone follow-ups
+
+The NSGo core deliberately does not expose controls for these pending ports.
+Protocol state is retained where needed; receiving a frame never grants an
+approval or starts one of these features implicitly.
+
+| Feature | Hook for the next port |
+| --- | --- |
+| Approvals and questions | Replace the desktop-review banner in `composer` with request cards; consume `Client.State.Approvals`. Add `responded` handling to `client.read`. |
+| Remote desktop | Add a destination to `sheetContent` and an action to `conversationMenu`; consume `desktop-open`, `desktop-preview`, and `desktop-action` frames. Own and end leases on Back/background/disconnect. |
+| Multiple desktop management | Add the registry manager and per-desktop composer sessions. The core uses one active link, per-desktop disk caches/options, and reads the old active secure registry when available. |
+| Automations | Add list/detail/create destinations to `sheetContent`; add automation frame handlers to `client.read`. |
+| Memory | Add a memory sheet; use state revisions to invalidate its data and add the memory frame handler. |
+| Voice | Add a composer accessory beside photo selection; cancel recording on owner epoch, navigation, background, and disconnect. |
+| Push | Add registration, badge and notification routing to the lifecycle adapter. Read-version acknowledgements already live in `phone/client`; no push registration is sent. Android foreground keep-running belongs here too. |
+| Web services | Add the conversation-menu action and owned WebView/proxy lifecycle. Project files already use an authenticated phone file proxy. |
+| Delegations | Add agent tags to the reference suggestions and collaboration frame handlers; thread/file references already work. |
+
+## Platform gaps in the pinned NSGo checkout
+
+- `Scope.ReadSecret`, `StoreSecret`, and `DeleteSecret` return
+  `ErrPlatformUnsupported` on iOS and Android. `scopeSecrets` preserves that
+  error. Pairing works until process exit; the app shows a persistence warning
+  and never stores connection secrets in a regular file. A native host may
+  supply `PlatformHooks.SecretStore`. Secure values use base64 inside the
+  NSGo credential adapter. The NSGo-specific pairing key is
+  `nsgo-desktop-link`; an empty value records Forget without resurrecting an
+  older MyGo registry entry.
+- Android's legacy `main_android.go` is now excluded under `nsgo`; NSGo
+  owns startup and logging. The old MyGo JNI interface inventory is also
+  excluded. Android app UIDs cannot query `NETLINK_ROUTE`, and the pinned
+  NSGo does not expose an equivalent native inventory. A host can provide
+  `PlatformHooks.NetworkInterfaces` for netmon; actual Android tunnel
+  connectivity needs device validation with that native service.
+- There is no QR scanner API. Pair by pasting a desktop connection code.
+- Network-path observation is macOS-only. Phones retain deadline/backoff,
+  send-triggered retry and foreground reconnect. `PlatformHooks.PrepareNetwork`
+  accepts a cancellable native permission/warm-up adapter; without one, the
+  transport triggers the system permission normally. Detailed offline/denied
+  diagnostics and interface-change probes await native support.
+- `nschat.View` now accepts a custom composer, remote image resolver and link
+  callback. The phone uses native multiline input, with UTF-16 caret offsets
+  converted for thread/file/slash suggestions. Rich inline reference chips,
+  image pasting, and camera capture are not part of this core.
+
+Physical-device validation, packaging/configuration for the NSGo mobile CLI,
+QR permissions, secure-store migration from the installed MyGo app, and
+network permission prompts still need device-level work. Cross-vet checks Go
+code; it does not build an IPA/APK or exercise platform services.

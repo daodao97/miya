@@ -1,18 +1,10 @@
 package appmodel
 
 import (
-	"strconv"
-
 	"miya/internal/chat/model"
 	"miya/internal/notification"
 )
 
-type DesktopRead struct {
-	Key     string `json:"key"`
-	Version int64  `json:"version"`
-}
+type DesktopRead = notification.DesktopRead
 
-// Backend session IDs survive history reloads and reassigned sidebar IDs.
-func DesktopUnreadKey(t model.Thread) string {
-	return (notification.Notice{Thread: strconv.Itoa(t.ID), ServerID: t.ServerID, Agent: model.ThreadAgent(t)}).UnreadKey()
-}
+func DesktopUnreadKey(t model.Thread) string { return notification.DesktopUnreadKey(t) }

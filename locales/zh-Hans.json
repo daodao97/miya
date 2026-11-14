@@ -1,4 +1,10 @@
 {
+  "phoneUnread": "未读",
+  "phoneConnectDesktop": "连接到电脑",
+  "phoneApprovalsOnDesktop": "请在电脑上处理待审批请求",
+  "phoneDisconnect": "断开连接",
+  "phoneForgetDesktop": "忘记电脑",
+  "phoneSecureStoreUnavailable": "安全配对存储不可用，重启后需要重新配对。",
   "searchSettings": "搜索设置",
   "noMatchingSettings": "没有匹配的设置。",
 
