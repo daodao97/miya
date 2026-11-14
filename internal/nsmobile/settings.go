@@ -13,7 +13,9 @@ import (
 )
 
 func (m *App) settings(cx *core.Scope) core.Node {
+	m.refreshDesktopAuthentication()
 	return scroll(text(tr("Settings")),
+		m.desktopAuthenticationStatus(),
 		m.button("voice-settings", tr("Voice input"), nil, func() { m.sheet.Set("voice") }),
 		m.button("push-settings", tr("Notifications"), nil, func() { m.sheet.Set("push") }),
 		m.button("memory-settings", tr("Shared memory"), nil, func() { m.sheet.Set("memory") }),

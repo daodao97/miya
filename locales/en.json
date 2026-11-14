@@ -1955,5 +1955,12 @@
   "nsDesktopRestore": "Restore remote desktop",
   "nsDesktopRightClick": "Right click",
   "nsDesktopSwitchPointer": "Switch control mode",
-  "nsDesktopTab": "Tab"
+  "nsDesktopTab": "Tab",
+  "nsDeviceAuthentication": "Device authentication",
+  "nsAuthenticationFaceID": "Face ID or device passcode",
+  "nsAuthenticationTouchID": "Touch ID or device passcode",
+  "nsAuthenticationFace": "Face recognition or device screen lock",
+  "nsAuthenticationFingerprint": "Fingerprint or device screen lock",
+  "nsAuthenticationScreenLock": "Device screen lock",
+  "nsAuthenticationBiometrics": "Biometrics or device screen lock"
 }

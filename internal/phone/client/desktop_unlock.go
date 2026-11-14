@@ -124,6 +124,10 @@ type desktopUnlockResult struct {
 	SavedChanged, Saved, StorageError bool
 }
 
+// ErrDesktopAuthenticationUnavailable means device owner authentication cannot
+// currently be attempted. The UI must keep manual unlock/forget available.
+var ErrDesktopAuthenticationUnavailable = errors.New("device authentication unavailable")
+
 func (m *Client) authenticateDesktopUnlock(ctx context.Context) error {
 	if m.DesktopAuthenticate != nil {
 		return m.DesktopAuthenticate(ctx)
@@ -132,6 +136,9 @@ func (m *Client) authenticateDesktopUnlock(ctx context.Context) error {
 }
 
 func desktopUnlockAuthenticationError(err error) error {
+	if errors.Is(err, ErrDesktopAuthenticationUnavailable) {
+		return errors.New(tr("Device authentication is unavailable. Check biometrics and your device passcode in system settings, or unlock manually without saving."))
+	}
 	if errors.Is(err, context.DeadlineExceeded) {
 		return errors.New(tr("Identity verification timed out. Try again."))
 	}
