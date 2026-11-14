@@ -1,0 +1,67 @@
+# 迁移到 NSGo
+
+分支 `nsgo` 把 Miya 的界面从 MyGo 迁到 [NSGo](../../nsgo)（模块 `github.com/nsgo-dev/nsgo`，开发期 `replace` 到相邻的 `../nsgo`）。控制器、后台服务、Agent 适配、自动化和手机协议不随界面框架变化，迁移只替换视图层和平台服务。
+
+## 为什么不能只改 import
+
+MyGo 是即时模式：`ui.Row(c).Children(func() { ... })` 每帧重建，视图直接读控制器的 getter。NSGo 是保留模式：组件只运行一次，变化通过信号驱动的绑定（`XFunc` 字段、`Show`/`Each`/`Dynamic` 区域）传到原生视图。两者的组件写法、状态归属和布局 API 都不同，每个视图需要重写。
+
+规模（迁移开始时）：
+
+| 包 | 非测试行数 | 说明 |
+| --- | --- | --- |
+| `internal/ui` | 9.2k | 桌面窗口、侧栏、设置、自动化、托盘 |
+| `internal/mobile` | 10.6k | 手机端 |
+| `internal/desktop` | 2.8k | 远程桌面 |
+| `internal/widgets` | 1.6k | 通用控件、主题、图标 |
+| `internal/chat/view` | 1.2k | 会话视图（桌面和手机共用） |
+| `internal/voiceinput` | 1.1k | 语音输入 |
+| `tests/integration` | 13.8k | 依赖 MyGo 测试器的界面测试 |
+
+## 并存方式
+
+迁移期间两套界面并存，每一步都能构建和发布：
+
+- 默认构建仍是 MyGo 版本（`main.go`，`//go:build !nsgo || ios || android`）。
+- `go build -tags nsgo .` 在桌面平台使用 `main_nsgo.go`，入口 `internal/nsui.DesktopMain`。手机端在迁移完成前继续走 MyGo。
+- `internal/nsui` 不带构建标签，`go build ./...` 和 `go test ./...` 始终编译并测试它，避免新界面腐烂。
+- 包边界测试把 `internal/nsui` 视同其他视图包：不得导入控制器、Agent 实现或旧界面包。
+
+## 桥接层
+
+控制器按即时模式编写：状态是 getter，setter 调用 `uiruntime.Invalidate()` 请求新帧。`internal/nsui/bridge.go` 让控制器原样驱动 NSGo：
+
+- `bridge` 实现 `uiruntime.Window`。`Update(f)` 经 `Scope.Post` 在引擎协程执行 `f`；`Invalidate()` 可从任意协程调用，同一次唤醒内的多次调用合并为一次修订号递增。
+- `Live(getter)` 把 getter 包成绑定：先读修订号信号再读 getter。控制器每次失效后绑定重算，NSGo 只发出实际变化的部分。需要更细粒度时再用 memo 包装。
+- 通知走 NSGo 的 `ShowNotification` / `OnNotificationPress`。空闲时间暂不提供（`uiruntime.IdleTime` 为 nil，视为用户在场）。
+- `IsFocused` 暂以窗口可见近似，等 NSGo 提供 key window 状态后替换。
+
+## 阶段
+
+| 阶段 | 内容 | 完成标准 |
+| --- | --- | --- |
+| 0 · 基础 | 依赖、构建标签入口、桥接层、会话列表骨架 | 两种构建通过；桥接测试（含 `-race`）通过 ✅ |
+| 1 · 主题与控件 | 把 `internal/widgets` 的主题、颜色、图标、按钮、开关、菜单映射到 NSGo 的 `base`/`ui` 组件，新建 `internal/nswidgets` | 控件快照测试 |
+| 2 · 会话视图 | `internal/chat/view` 的消息列表、Markdown、工具详情、图片、引用和富文本输入（NSGo `ui/chat`、`base/richeditor`） | 桌面能完整对话 |
+| 3 · 桌面外壳 | 侧栏、工作区切换、文件面板、命令面板、设置、自动化、托盘、多窗口 | 与 MyGo 版功能对齐，`internal/ui` 的界面测试迁到 nsgotest |
+| 4 · 手机端 | `internal/mobile`、远程桌面、语音输入，接 NSGo 的 iOS/Android 运行时 | 真机验证 |
+| 5 · 收尾 | 删除 MyGo 依赖、旧界面包和构建标签；构建脚本与 CI 改用 `go tool nsgo` | `go list -deps` 不含 `egoist/mygo` |
+
+## 需要 Miya 自己补的平台能力
+
+NSGo 没有直接对应、需要像 `internal/apns`、`internal/desktopcontrol` 那样由 Miya 自持的能力：Keychain（`mygo.Secrets`）、系统空闲时间、网络路径状态、生物识别、扫码、窗口内 WebView 的部分选项。
+
+非界面包对 MyGo 的残留依赖（第 5 阶段前处理）：
+
+- `locales`、`internal/phone/server`：`mygo/i18n` 与 `mygo/locales/zh-Hans`。
+- `internal/desktop`：`mygo/plugins/permissionflow`。
+
+## 验证
+
+```sh
+go build ./... && go build -tags nsgo .
+go test -race ./internal/nsui
+go test ./tests/integration -run 'Boundar|TestViewsDoNotKnowAgents'
+```
+
+实际窗口验证按[独立验证流程](install-and-upgrade.md#独立验证不覆盖已安装应用)进行，不覆盖已安装应用、不切换生产后台。

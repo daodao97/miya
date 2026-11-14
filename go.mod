@@ -7,9 +7,10 @@ replace github.com/egoist/mygo => github.com/daodao97/mygo-mobile v0.0.0-2026111
 require (
 	github.com/coder/websocket v1.8.15
 	github.com/creack/pty v1.1.24
-	github.com/ebitengine/purego v0.11.1
+	github.com/ebitengine/purego v0.11.2
 	github.com/egoist/mygo v0.7.4
 	github.com/klauspost/compress v1.20.0
+	github.com/nsgo-dev/nsgo v0.0.0-00010101000000-000000000000
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	github.com/tailscale/tailcat v0.7.0
 	github.com/thesyncim/gopus v0.2.3
@@ -56,6 +57,7 @@ require (
 	github.com/ulikunitz/xz v0.5.16 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	go.digitalxero.dev/rpm v0.3.4 // indirect
+	go.yaml.in/yaml/v3 v3.0.6 // indirect
 	go4.org/mem v0.0.0-20240501181205-ae6ca9944745 // indirect
 	go4.org/netipx v0.0.0-20260823151212-3075585bcbeb // indirect
 	golang.org/x/crypto v0.57.0 // indirect
@@ -70,3 +72,5 @@ require (
 )
 
 tool github.com/egoist/mygo/cmd/mygo
+
+replace github.com/nsgo-dev/nsgo => ../nsgo

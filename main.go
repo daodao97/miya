@@ -1,3 +1,5 @@
+//go:build !nsgo || ios || android
+
 package main
 
 import (
