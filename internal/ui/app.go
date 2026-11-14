@@ -62,6 +62,7 @@ type App struct {
 	SettingsTab    int
 	settingDrafts  map[string]string
 	ServiceRestart ServiceRestartUI
+	MiyaUpdate     MiyaUpdateUI
 	WorkspaceHub   *DesktopWorkspaces
 
 	// appearance is "", "light" or "dark"; dark and themed the palette applied.
@@ -471,6 +472,7 @@ func (app *App) newThreadIn(p projectmodel.Project) {
 
 // view is the window: the sidebar beside the conversation.
 func (app *App) Render(ctx *ui.Context) {
+	app.activeWorkspaceApp().syncMiyaUpdate(ctx)
 	if !app.Mobile {
 		hub := app.EnsureDesktopWorkspaces()
 		if hub.Active != app {

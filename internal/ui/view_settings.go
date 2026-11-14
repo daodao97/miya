@@ -90,6 +90,7 @@ func (app *App) generalSettings(c *ui.Context) {
 		cc.SelectedPermissionPolicy(), cc.State().SetPermissionPolicy)
 	app.agentSettings(c)
 	app.ServiceSettings(c)
+	app.MiyaUpdateSettings(c)
 }
 
 // permissionList offers the permission policies as a single-choice list,

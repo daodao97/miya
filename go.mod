@@ -14,6 +14,7 @@ require (
 	github.com/tailscale/tailcat v0.7.0
 	github.com/thesyncim/gopus v0.2.3
 	golang.org/x/image v0.46.0
+	golang.org/x/mod v0.41.0
 	golang.org/x/sys v0.48.0
 	golang.org/x/text v0.43.0
 	tailscale.com v1.105.0-pre.0.20261013225543-3c0508fa283f

@@ -8,7 +8,8 @@ case "$ARCH" in amd64|arm64) ;; *) echo 'usage: build-server.sh [amd64|arm64] [o
 OUT=${2:-"$ROOT/build/server/linux-$ARCH"}
 mkdir -p "$OUT"
 OUT=$(CDPATH= cd -- "$OUT" && pwd)
-CGO_ENABLED=0 GOOS=linux GOARCH="$ARCH" go build -trimpath -ldflags='-s -w' -o "$OUT/miya" .
+RELEASE_VERSION=$(python3 -c 'import json; print(json.load(open("mygo.json"))["version"])')
+CGO_ENABLED=0 GOOS=linux GOARCH="$ARCH" go build -trimpath -ldflags="-s -w -X miya/internal/selfupdate.Build=miya-release:$RELEASE_VERSION:end" -o "$OUT/miya" .
 cp scripts/install-server.sh "$OUT/install-server.sh"
 cp docs/server.md "$OUT/README.md"
 chmod 755 "$OUT/miya" "$OUT/install-server.sh"

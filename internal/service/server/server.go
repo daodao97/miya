@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net"
 	"os"
 	"sync"
@@ -13,6 +14,7 @@ import (
 	"miya/internal/async"
 	"miya/internal/chat/model"
 	"miya/internal/remote"
+	"miya/internal/selfupdate"
 	svcproto "miya/internal/service/protocol"
 )
 
@@ -21,15 +23,17 @@ import (
 const serviceIdleTimeout = 10 * time.Minute
 
 type Service struct {
-	host     Host
-	exec     *async.Executor
-	mu       sync.Mutex
-	peers    map[*Peer]bool
-	Dirty    chan struct{}
-	Quit     chan struct{}
-	quitOnce sync.Once
-	exe      string
-	exeTime  time.Time
+	host          Host
+	exec          *async.Executor
+	mu            sync.Mutex
+	peers         map[*Peer]bool
+	Dirty         chan struct{}
+	Quit          chan struct{}
+	quitOnce      sync.Once
+	exe           string
+	exeTime       time.Time
+	Updates       UpdateBackend
+	updateWorking bool
 
 	// Owned by the executor.
 	IdleSince    time.Time
@@ -361,11 +365,15 @@ func New(host Host, ex *async.Executor) *Service {
 }
 func (s *Service) SetExecutable(path string, at time.Time) { s.exe, s.exeTime = path, at }
 func (s *Service) Stop()                                   { s.quitOnce.Do(func() { s.host.ServiceStop(); close(s.Quit) }) }
-func (s *Service) Busy() bool                              { return s.host.ServiceBusy() }
+func (s *Service) Busy() bool {
+	return s.updateWorking || s.Updates != nil && s.Updates.Busy() || s.host.ServiceBusy()
+}
 func (s *Service) Handle(p *Peer, req svcproto.Request) (any, error) {
 	switch req.Op {
 	case "hello":
-		return svcproto.Hello{Version: svcproto.Version, Exe: s.exe, ExeTime: s.exeTime, PID: os.Getpid(), Busy: s.Busy(), Remote: s.Persistent}, nil
+		return svcproto.Hello{Release: selfupdate.Version(), SelfUpdate: s.Updates != nil, Version: svcproto.Version, Exe: s.exe, ExeTime: s.exeTime, PID: os.Getpid(), Busy: s.Busy(), Remote: s.Persistent}, nil
+	case "miyaUpdate":
+		return s.handleUpdate(req.Args)
 	case "state":
 		return s.host.SnapshotState(), nil
 	case "subscribe":
@@ -375,6 +383,9 @@ func (s *Service) Handle(p *Peer, req svcproto.Request) (any, error) {
 		s.MarkDirty()
 		return nil, nil
 	case "quit":
+		if s.updateWorking {
+			return nil, fmt.Errorf("Miya is installing an update; wait for installation to finish")
+		}
 		s.Stop()
 		return nil, nil
 	case "quitWhenIdle":

@@ -103,12 +103,14 @@ type Draft struct {
 }
 
 type Hello struct {
-	Remote  bool      `json:"remote,omitempty"`
-	Version int       `json:"version"`
-	Exe     string    `json:"exe"`
-	ExeTime time.Time `json:"exeTime"`
-	PID     int       `json:"pid"`
-	Busy    bool      `json:"busy"`
+	Release    string    `json:"release,omitempty"`
+	SelfUpdate bool      `json:"selfUpdate,omitempty"`
+	Remote     bool      `json:"remote,omitempty"`
+	Version    int       `json:"version"`
+	Exe        string    `json:"exe"`
+	ExeTime    time.Time `json:"exeTime"`
+	PID        int       `json:"pid"`
+	Busy       bool      `json:"busy"`
 }
 
 type ThreadValue struct {

@@ -87,6 +87,8 @@ jobs:
       - name: Build the app and disk image
         run: |
           out="$RUNNER_TEMP/dist"
+          version=$(python3 -c 'import json; print(json.load(open("mygo.json"))["version"])')
+          export MYGO_LDFLAGS="-X miya/internal/selfupdate.Build=miya-release:$version:end"
           sign=()
           if [ -n "${MIYA_SIGNING_IDENTITY:-}" ]; then sign=(-sign "$MIYA_SIGNING_IDENTITY"); fi
           go tool mygo build -platform darwin/universal "${sign[@]}" -o "$out"
@@ -95,6 +97,20 @@ jobs:
           codesign --verify --deep --strict "$(find "$out" -maxdepth 2 -name '*.app' -print -quit)"
           shasum -a 256 "$dmg"
           echo "DMG=$dmg" >> "$GITHUB_ENV"
+      - name: Package remote desktop updates
+        if: github.ref_type == 'tag'
+        run: |
+          app=$(find "$RUNNER_TEMP/dist" -maxdepth 2 -name '*.app' -print -quit)
+          version=${GITHUB_REF_NAME#v}
+          for arch in arm64 amd64; do
+            python3 scripts/package-update.py --source "$app" --target "darwin-$arch" --version "$version" --out "$RUNNER_TEMP/updates"
+          done
+      - uses: actions/upload-artifact@v4
+        if: github.ref_type == 'tag'
+        with:
+          name: miya-desktop-updates
+          path: ${{ runner.temp }}/updates/*
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
           name: miya-macos
@@ -239,14 +255,43 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  server:
+    name: Linux server
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Set the version from the tag
+        if: github.ref_type == 'tag'
+        run: python3 scripts/ci-config.py --version "$GITHUB_REF_NAME"
+      - name: Build server
+        run: ./scripts/build-server.sh "${{ matrix.arch }}"
+      - name: Package remote server update
+        if: github.ref_type == 'tag'
+        run: python3 scripts/package-update.py --source "build/server/linux-${{ matrix.arch }}/miya" --target "linux-${{ matrix.arch }}" --version "${GITHUB_REF_NAME#v}" --out build/updates
+      - uses: actions/upload-artifact@v4
+        with:
+          name: miya-server-${{ matrix.arch }}
+          path: |
+            build/server/*.tar.gz
+            build/updates/*
+          if-no-files-found: error
+
   release:
     name: Draft release
     if: github.ref_type == 'tag'
-    needs: [macos, ios, android]
+    needs: [macos, ios, android, server]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v5
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
@@ -255,5 +300,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          python3 scripts/package-update.py --merge artifacts --out artifacts
           ls -la artifacts
           gh release create "$GITHUB_REF_NAME" artifacts/* --repo "$GITHUB_REPOSITORY" --draft --generate-notes --title "Miya $GITHUB_REF_NAME"

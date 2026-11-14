@@ -34,6 +34,178 @@ type Messages struct{ locale string }
 // source language.
 func In(locale string) Messages { return Messages{locale} }
 
+// WebhookWaitingForService says "Waiting for running conversations to finish before the webhook update takes effect."
+// in the language the app shows.
+func WebhookWaitingForService() string { return In(i18n.Locale()).WebhookWaitingForService() }
+
+// WebhookWaitingForService says "Waiting for running conversations to finish before the webhook update takes effect."
+// in the language of msgs.
+func (msgs Messages) WebhookWaitingForService() string {
+	return Catalog.Format(msgs.locale, "webhookWaitingForService", nil)
+}
+
+// MiyaWebhook says "Miya webhook"
+// in the language the app shows.
+func MiyaWebhook() string { return In(i18n.Locale()).MiyaWebhook() }
+
+// MiyaWebhook says "Miya webhook"
+// in the language of msgs.
+func (msgs Messages) MiyaWebhook() string {
+	return Catalog.Format(msgs.locale, "miyaWebhook", nil)
+}
+
+// EnableWebhook says "Enable webhook"
+// in the language the app shows.
+func EnableWebhook() string { return In(i18n.Locale()).EnableWebhook() }
+
+// EnableWebhook says "Enable webhook"
+// in the language of msgs.
+func (msgs Messages) EnableWebhook() string {
+	return Catalog.Format(msgs.locale, "enableWebhook", nil)
+}
+
+// SharedWebhookHelp says "Messages are received by Miya and routed to matching automations."
+// in the language the app shows.
+func SharedWebhookHelp() string { return In(i18n.Locale()).SharedWebhookHelp() }
+
+// SharedWebhookHelp says "Messages are received by Miya and routed to matching automations."
+// in the language of msgs.
+func (msgs Messages) SharedWebhookHelp() string {
+	return Catalog.Format(msgs.locale, "sharedWebhookHelp", nil)
+}
+
+// RecentWebhookMessages says "Recent messages"
+// in the language the app shows.
+func RecentWebhookMessages() string { return In(i18n.Locale()).RecentWebhookMessages() }
+
+// RecentWebhookMessages says "Recent messages"
+// in the language of msgs.
+func (msgs Messages) RecentWebhookMessages() string {
+	return Catalog.Format(msgs.locale, "recentWebhookMessages", nil)
+}
+
+// WebhookNoMatchingAutomation says "No matching automation"
+// in the language the app shows.
+func WebhookNoMatchingAutomation() string { return In(i18n.Locale()).WebhookNoMatchingAutomation() }
+
+// WebhookNoMatchingAutomation says "No matching automation"
+// in the language of msgs.
+func (msgs Messages) WebhookNoMatchingAutomation() string {
+	return Catalog.Format(msgs.locale, "webhookNoMatchingAutomation", nil)
+}
+
+// WebhookReceived says "Webhook received"
+// in the language the app shows.
+func WebhookReceived() string { return In(i18n.Locale()).WebhookReceived() }
+
+// WebhookReceived says "Webhook received"
+// in the language of msgs.
+func (msgs Messages) WebhookReceived() string {
+	return Catalog.Format(msgs.locale, "webhookReceived", nil)
+}
+
+// WebhookGathering says "Gathering events"
+// in the language the app shows.
+func WebhookGathering() string { return In(i18n.Locale()).WebhookGathering() }
+
+// WebhookGathering says "Gathering events"
+// in the language of msgs.
+func (msgs Messages) WebhookGathering() string {
+	return Catalog.Format(msgs.locale, "webhookGathering", nil)
+}
+
+// WebhookUsesShared says "Uses the shared Miya webhook"
+// in the language the app shows.
+func WebhookUsesShared() string { return In(i18n.Locale()).WebhookUsesShared() }
+
+// WebhookUsesShared says "Uses the shared Miya webhook"
+// in the language of msgs.
+func (msgs Messages) WebhookUsesShared() string {
+	return Catalog.Format(msgs.locale, "webhookUsesShared", nil)
+}
+
+// WebhookMatching says "Webhook messages matching: "
+// in the language the app shows.
+func WebhookMatching() string { return In(i18n.Locale()).WebhookMatching() }
+
+// WebhookMatching says "Webhook messages matching: "
+// in the language of msgs.
+func (msgs Messages) WebhookMatching() string {
+	return Catalog.Format(msgs.locale, "webhookMatching", nil)
+}
+
+// WebhookTextContains says "text contains %q"
+// in the language the app shows.
+func WebhookTextContains() string { return In(i18n.Locale()).WebhookTextContains() }
+
+// WebhookTextContains says "text contains %q"
+// in the language of msgs.
+func (msgs Messages) WebhookTextContains() string {
+	return Catalog.Format(msgs.locale, "webhookTextContains", nil)
+}
+
+// CopyWebhookURL says "Copy webhook URL"
+// in the language the app shows.
+func CopyWebhookURL() string { return In(i18n.Locale()).CopyWebhookURL() }
+
+// CopyWebhookURL says "Copy webhook URL"
+// in the language of msgs.
+func (msgs Messages) CopyWebhookURL() string {
+	return Catalog.Format(msgs.locale, "copyWebhookURL", nil)
+}
+
+// WebhookPostHelp says "POST text or JSON to this URL while Miya is online."
+// in the language the app shows.
+func WebhookPostHelp() string { return In(i18n.Locale()).WebhookPostHelp() }
+
+// WebhookPostHelp says "POST text or JSON to this URL while Miya is online."
+// in the language of msgs.
+func (msgs Messages) WebhookPostHelp() string {
+	return Catalog.Format(msgs.locale, "webhookPostHelp", nil)
+}
+
+// WebhookUnavailable says "Webhook unavailable: "
+// in the language the app shows.
+func WebhookUnavailable() string { return In(i18n.Locale()).WebhookUnavailable() }
+
+// WebhookUnavailable says "Webhook unavailable: "
+// in the language of msgs.
+func (msgs Messages) WebhookUnavailable() string {
+	return Catalog.Format(msgs.locale, "webhookUnavailable", nil)
+}
+
+// WebhookReady says "Webhook ready"
+// in the language the app shows.
+func WebhookReady() string { return In(i18n.Locale()).WebhookReady() }
+
+// WebhookReady says "Webhook ready"
+// in the language of msgs.
+func (msgs Messages) WebhookReady() string {
+	return Catalog.Format(msgs.locale, "webhookReady", nil)
+}
+
+// WebhookRegistering says "Registering webhook…"
+// in the language the app shows.
+func WebhookRegistering() string { return In(i18n.Locale()).WebhookRegistering() }
+
+// WebhookRegistering says "Registering webhook…"
+// in the language of msgs.
+func (msgs Messages) WebhookRegistering() string {
+	return Catalog.Format(msgs.locale, "webhookRegistering", nil)
+}
+
+// BackgroundTasksRunningWaitingForResults9ba31d says "Background tasks running (%d) · Waiting for results"
+// in the language the app shows.
+func BackgroundTasksRunningWaitingForResults9ba31d() string {
+	return In(i18n.Locale()).BackgroundTasksRunningWaitingForResults9ba31d()
+}
+
+// BackgroundTasksRunningWaitingForResults9ba31d says "Background tasks running (%d) · Waiting for results"
+// in the language of msgs.
+func (msgs Messages) BackgroundTasksRunningWaitingForResults9ba31d() string {
+	return Catalog.Format(msgs.locale, "backgroundTasksRunningWaitingForResults_9ba31d", nil)
+}
+
 // HideKeyboardA4f903 says "Hide keyboard"
 // in the language the app shows.
 func HideKeyboardA4f903() string { return In(i18n.Locale()).HideKeyboardA4f903() }
@@ -20166,4 +20338,154 @@ func QuestionDOfD231e8d() string { return In(i18n.Locale()).QuestionDOfD231e8d()
 // in the language of msgs.
 func (msgs Messages) QuestionDOfD231e8d() string {
 	return Catalog.Format(msgs.locale, "questionDOfD_231e8d", nil)
+}
+
+// MiyaUpdate92243f2fc6 says "The target has reconnected, but the requested Miya version is not running yet."
+// in the language the app shows.
+func MiyaUpdate92243f2fc6() string { return In(i18n.Locale()).MiyaUpdate92243f2fc6() }
+
+// MiyaUpdate92243f2fc6 says "The target has reconnected, but the requested Miya version is not running yet."
+// in the language of msgs.
+func (msgs Messages) MiyaUpdate92243f2fc6() string {
+	return Catalog.Format(msgs.locale, "miyaUpdate_92243f2fc6", nil)
+}
+
+// MiyaUpdateBd88e22ec1 says "Miya on this workspace"
+// in the language the app shows.
+func MiyaUpdateBd88e22ec1() string { return In(i18n.Locale()).MiyaUpdateBd88e22ec1() }
+
+// MiyaUpdateBd88e22ec1 says "Miya on this workspace"
+// in the language of msgs.
+func (msgs Messages) MiyaUpdateBd88e22ec1() string {
+	return Catalog.Format(msgs.locale, "miyaUpdate_bd88e22ec1", nil)
+}
+
+// MiyaUpdate5b923efda6 says "Running version: %s"
+// in the language the app shows.
+func MiyaUpdate5b923efda6() string { return In(i18n.Locale()).MiyaUpdate5b923efda6() }
+
+// MiyaUpdate5b923efda6 says "Running version: %s"
+// in the language of msgs.
+func (msgs Messages) MiyaUpdate5b923efda6() string {
+	return Catalog.Format(msgs.locale, "miyaUpdate_5b923efda6", nil)
+}
+
+// MiyaUpdateAadfbaf7a5 says "Install an updated Miya on the target computer once to enable remote upgrades."
+// in the language the app shows.
+func MiyaUpdateAadfbaf7a5() string { return In(i18n.Locale()).MiyaUpdateAadfbaf7a5() }
+
+// MiyaUpdateAadfbaf7a5 says "Install an updated Miya on the target computer once to enable remote upgrades."
+// in the language of msgs.
+func (msgs Messages) MiyaUpdateAadfbaf7a5() string {
+	return Catalog.Format(msgs.locale, "miyaUpdate_aadfbaf7a5", nil)
+}
+
+// MiyaUpdate21cb957c6f says "Available version: %s"
+// in the language the app shows.
+func MiyaUpdate21cb957c6f() string { return In(i18n.Locale()).MiyaUpdate21cb957c6f() }
+
+// MiyaUpdate21cb957c6f says "Available version: %s"
+// in the language of msgs.
+func (msgs Messages) MiyaUpdate21cb957c6f() string {
+	return Catalog.Format(msgs.locale, "miyaUpdate_21cb957c6f", nil)
+}
+
+// MiyaUpdate5e6c80a89d says "The target downloads and verifies the release, keeps a backup, and restarts after running tasks finish."
+// in the language the app shows.
+func MiyaUpdate5e6c80a89d() string { return In(i18n.Locale()).MiyaUpdate5e6c80a89d() }
+
+// MiyaUpdate5e6c80a89d says "The target downloads and verifies the release, keeps a backup, and restarts after running tasks finish."
+// in the language of msgs.
+func (msgs Messages) MiyaUpdate5e6c80a89d() string {
+	return Catalog.Format(msgs.locale, "miyaUpdate_5e6c80a89d", nil)
+}
+
+// MiyaUpdateC9bd5ec565 says "Upgrade target"
+// in the language the app shows.
+func MiyaUpdateC9bd5ec565() string { return In(i18n.Locale()).MiyaUpdateC9bd5ec565() }
+
+// MiyaUpdateC9bd5ec565 says "Upgrade target"
+// in the language of msgs.
+func (msgs Messages) MiyaUpdateC9bd5ec565() string {
+	return Catalog.Format(msgs.locale, "miyaUpdate_c9bd5ec565", nil)
+}
+
+// MiyaUpdateC8bc57beef says "Checking for Miya updates…"
+// in the language the app shows.
+func MiyaUpdateC8bc57beef() string { return In(i18n.Locale()).MiyaUpdateC8bc57beef() }
+
+// MiyaUpdateC8bc57beef says "Checking for Miya updates…"
+// in the language of msgs.
+func (msgs Messages) MiyaUpdateC8bc57beef() string {
+	return Catalog.Format(msgs.locale, "miyaUpdate_c8bc57beef", nil)
+}
+
+// MiyaUpdate57f76e276c says "Downloading and verifying Miya on the target…"
+// in the language the app shows.
+func MiyaUpdate57f76e276c() string { return In(i18n.Locale()).MiyaUpdate57f76e276c() }
+
+// MiyaUpdate57f76e276c says "Downloading and verifying Miya on the target…"
+// in the language of msgs.
+func (msgs Messages) MiyaUpdate57f76e276c() string {
+	return Catalog.Format(msgs.locale, "miyaUpdate_57f76e276c", nil)
+}
+
+// MiyaUpdate927c112656 says "Update installed. Waiting for tasks to finish and the new background service to reconnect…"
+// in the language the app shows.
+func MiyaUpdate927c112656() string { return In(i18n.Locale()).MiyaUpdate927c112656() }
+
+// MiyaUpdate927c112656 says "Update installed. Waiting for tasks to finish and the new background service to reconnect…"
+// in the language of msgs.
+func (msgs Messages) MiyaUpdate927c112656() string {
+	return Catalog.Format(msgs.locale, "miyaUpdate_927c112656", nil)
+}
+
+// MiyaUpdateF6f04c1051 says "Update installed. Reopen Miya on the target computer to finish switching versions."
+// in the language the app shows.
+func MiyaUpdateF6f04c1051() string { return In(i18n.Locale()).MiyaUpdateF6f04c1051() }
+
+// MiyaUpdateF6f04c1051 says "Update installed. Reopen Miya on the target computer to finish switching versions."
+// in the language of msgs.
+func (msgs Messages) MiyaUpdateF6f04c1051() string {
+	return Catalog.Format(msgs.locale, "miyaUpdate_f6f04c1051", nil)
+}
+
+// MiyaUpdate6262cefc86 says "The target is running the requested Miya version."
+// in the language the app shows.
+func MiyaUpdate6262cefc86() string { return In(i18n.Locale()).MiyaUpdate6262cefc86() }
+
+// MiyaUpdate6262cefc86 says "The target is running the requested Miya version."
+// in the language of msgs.
+func (msgs Messages) MiyaUpdate6262cefc86() string {
+	return Catalog.Format(msgs.locale, "miyaUpdate_6262cefc86", nil)
+}
+
+// MiyaUpdateB3693583c0 says "Miya is up to date on this workspace."
+// in the language the app shows.
+func MiyaUpdateB3693583c0() string { return In(i18n.Locale()).MiyaUpdateB3693583c0() }
+
+// MiyaUpdateB3693583c0 says "Miya is up to date on this workspace."
+// in the language of msgs.
+func (msgs Messages) MiyaUpdateB3693583c0() string {
+	return Catalog.Format(msgs.locale, "miyaUpdate_b3693583c0", nil)
+}
+
+// MiyaUpdate493ab70aef says "Backup on target: %s"
+// in the language the app shows.
+func MiyaUpdate493ab70aef() string { return In(i18n.Locale()).MiyaUpdate493ab70aef() }
+
+// MiyaUpdate493ab70aef says "Backup on target: %s"
+// in the language of msgs.
+func (msgs Messages) MiyaUpdate493ab70aef() string {
+	return Catalog.Format(msgs.locale, "miyaUpdate_493ab70aef", nil)
+}
+
+// MiyaUpdateC6af4c94ac says "Check for Miya updates"
+// in the language the app shows.
+func MiyaUpdateC6af4c94ac() string { return In(i18n.Locale()).MiyaUpdateC6af4c94ac() }
+
+// MiyaUpdateC6af4c94ac says "Check for Miya updates"
+// in the language of msgs.
+func (msgs Messages) MiyaUpdateC6af4c94ac() string {
+	return Catalog.Format(msgs.locale, "miyaUpdate_c6af4c94ac", nil)
 }

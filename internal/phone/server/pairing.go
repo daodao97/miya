@@ -29,10 +29,10 @@ type Host interface {
 // phones connected. Its fields belong to the main thread.
 type Pairing struct {
 	host Host
-	// Service, Terminal and SaveLink are set by a persistent background
-	// service: it then also serves windows and terminals over the bridge,
-	// retries a failed start, and saves the pairing link where a server
-	// deployment finds it. SaveLink returns where it saved the link.
+	// Service and Terminal are set by desktop and persistent background
+	// services to serve windows and terminals over the paired bridge and retry
+	// a failed start. Persistent deployments also set SaveLink, which returns
+	// where it saved their pairing link.
 	Service    func(ctx context.Context, conn *remote.Conn)
 	Terminal   func(ctx context.Context, conn *remote.Conn)
 	SaveLink   func(link string) (path string, err error)

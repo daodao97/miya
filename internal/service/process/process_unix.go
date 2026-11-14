@@ -3,10 +3,14 @@
 package process
 
 import (
+	"context"
 	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -38,6 +42,36 @@ func Spawn(workspace string) error {
 		return err
 	}
 	return cmd.Process.Release()
+}
+
+// SpawnReplacement preserves this service's mode, arguments and environment,
+// using its original installation path after an atomic update.
+func SpawnReplacement(exe string) error {
+	f, err := os.OpenFile(filepath.Join(appdir.Dir(), "service.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	cmd := exec.Command(exe, os.Args[1:]...)
+	cmd.Env = os.Environ()
+	cmd.Stdout, cmd.Stderr = f, f
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	return cmd.Process.Release()
+}
+
+// Supervised checks the unit's actual main PID. INVOCATION_ID alone is not
+// sufficient: a server launched from a systemd-managed shell inherits it too.
+func Supervised() bool {
+	if runtime.GOOS != "linux" || os.Getenv("INVOCATION_ID") == "" {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	data, err := exec.CommandContext(ctx, "systemctl", "--user", "show", "miya.service", "--property=MainPID", "--value").Output()
+	return err == nil && strings.TrimSpace(string(data)) == strconv.Itoa(os.Getpid())
 }
 
 func ExecutableInfo() (string, time.Time) {
