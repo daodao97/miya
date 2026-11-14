@@ -11,6 +11,7 @@ import (
 	"miya/internal/agent/cliupdate"
 	"miya/internal/agent/login"
 	"miya/internal/appmodel"
+	"miya/internal/automation"
 	"miya/internal/chat/model"
 	"miya/internal/memory/manager"
 	"miya/internal/nswidgets"
@@ -23,6 +24,9 @@ import (
 // implements the whole of that.
 type Host interface {
 	requestsHost
+	AutomationOp(op string, r automation.Request) (any, error)
+	EnabledAgents() []string
+	ThreadWithID(id int) model.Thread
 	State() *appmodel.WindowState
 	Current() model.Thread
 	SelectThread(t model.Thread)

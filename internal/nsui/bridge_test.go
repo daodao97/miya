@@ -12,6 +12,7 @@ import (
 	"miya/internal/agent/cliupdate"
 	"miya/internal/agent/login"
 	"miya/internal/appmodel"
+	"miya/internal/automation"
 	"miya/internal/chat/model"
 	"miya/internal/interaction"
 	"miya/internal/memory/manager"
@@ -223,4 +224,33 @@ func (h *fakeHost) ChangeWorkspace(path string) error {
 	h.state.Cwd = path
 	uiruntime.Invalidate()
 	return nil
+}
+func (h *fakeHost) AutomationOp(string, automation.Request) (any, error) { return nil, nil }
+func (h *fakeHost) EnabledAgents() []string                              { return model.Backends }
+func (h *fakeHost) ThreadWithID(id int) model.Thread {
+	for _, t := range h.threads {
+		if t.ID == id {
+			return t
+		}
+	}
+	return model.Thread{}
+}
+
+// The sidebar opens automations; choosing a conversation comes back.
+func TestShellOpensAutomationsAndReturns(t *testing.T) {
+	h := newFakeHost(model.Thread{ID: 1, Title: "Alpha"}, model.Thread{ID: 2, Title: "Beta"})
+	app := startBridged(t, h)
+	app.Press("id:open-automations")
+	app.Settle()
+	if !app.Exists("id:automations") {
+		t.Fatal("automations page not shown")
+	}
+	if got := app.Find("id:current-title").Text; got != "Automations" {
+		t.Fatalf("title = %q, want Automations", got)
+	}
+	app.Press("id:thread-2")
+	app.Settle()
+	if app.Exists("id:automations") || h.current != 2 {
+		t.Fatalf("still on automations or not selected (current %d)", h.current)
+	}
 }

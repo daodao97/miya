@@ -23,6 +23,10 @@ func tr(english string) string { return locales.T(english) }
 // root is the window: the conversations in a sidebar beside the selected
 // one, on an inset card, as Agio's window is.
 func root(cx *core.Scope, c Host) core.Node {
+	// page is the main area: "chat" or "automations". Choosing a
+	// conversation always goes back to chat.
+	page := core.NewSignal(cx, "chat")
+	c = chatHost{Host: c, page: page}
 	st := c.State()
 	threads := Live(func() []model.Thread {
 		if st.Threads == nil {
@@ -85,16 +89,29 @@ func root(cx *core.Scope, c Host) core.Node {
 		Sidebar: []core.Node{core.View{Style: ui.FillRest.Merge(core.Style{Gap: 2}), Children: []core.Node{
 			core.View{Style: core.Style{Padding: core.Symmetric(0, 12), FlexShrink: 0}, Children: []core.Node{
 				ui.SidebarButton{Text: tr("New conversation"), Icon: nswidgets.IconOf("edit"), TestID: "new-thread", OnPress: c.NewThread},
+				ui.SidebarButton{Text: tr("Automations"), Icon: nswidgets.IconOf("clock"), TestID: "open-automations", OnPress: func() { page.Set("automations") }},
 			}},
 			threadSidebar(cx, threads, current, c),
 		}}},
 		Header: []core.Node{core.Text{TestID: "current-title", MaxLines: 1,
-			ContentFunc: func() string { return threadTitle(current()) },
-			Style:       core.Style{FontSize: 13, FontWeight: ui.Semibold, FlexShrink: 1, MinWidth: core.Pt(0)},
-			StyleFunc:   func() core.Style { return core.Style{Color: colors.Ink()} }}},
-		Content: []core.Node{conversation, commandPalette(cx, paletteOpen, func() []paletteEntry {
-			return paletteEntries(cmd, current(), threads(), c.SelectThread, time.Now())
-		}), settingsDialog(cx, c, settingsOpen)},
+			ContentFunc: func() string {
+				if page.Get() == "automations" {
+					return tr("Automations")
+				}
+				return threadTitle(current())
+			},
+			Style:     core.Style{FontSize: 13, FontWeight: ui.Semibold, FlexShrink: 1, MinWidth: core.Pt(0)},
+			StyleFunc: func() core.Style { return core.Style{Color: colors.Ink()} }}},
+		Content: []core.Node{
+			// The conversation stays built while hidden so it keeps its scroll;
+			// automations exist only while shown, so they poll only then.
+			core.View{StyleFunc: func() core.Style {
+				return ui.FillRest.Merge(core.Style{Display: displayIf(page.Get() == "chat")})
+			}, Children: []core.Node{conversation}},
+			core.Show{When: func() bool { return page.Get() == "automations" }, Then: func(cx *core.Scope) core.Node { return automationsPage(cx, c) }},
+			commandPalette(cx, paletteOpen, func() []paletteEntry {
+				return paletteEntries(cmd, current(), threads(), c.SelectThread, time.Now())
+			}), settingsDialog(cx, c, settingsOpen)},
 	}
 }
 
@@ -220,4 +237,20 @@ func threadTitle(t model.Thread) string {
 		return t.Title
 	}
 	return tr("New conversation")
+}
+
+// chatHost returns to the conversation whenever one is chosen or started.
+type chatHost struct {
+	Host
+	page *core.Signal[string]
+}
+
+func (h chatHost) SelectThread(t model.Thread) {
+	h.page.Set("chat")
+	h.Host.SelectThread(t)
+}
+
+func (h chatHost) NewThread() {
+	h.page.Set("chat")
+	h.Host.NewThread()
 }
