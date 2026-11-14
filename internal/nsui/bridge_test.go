@@ -1,6 +1,8 @@
 package nsui
 
 import (
+	"context"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -18,6 +20,7 @@ import (
 	"miya/internal/memory/manager"
 	"miya/internal/nswidgets"
 	projectaccess "miya/internal/project/access"
+	"miya/internal/runtime/tracker"
 	svcproto "miya/internal/service/protocol"
 	"miya/internal/uiruntime"
 )
@@ -42,6 +45,10 @@ type fakeHost struct {
 	memory       *manager.Manager
 	loginCall    func(login.Request) (login.State, error)
 	files        projectaccess.Files
+	readRuntime  func(context.Context, model.ThreadRef, string) (tracker.ConversationRuntime, error)
+	runtimes     *tracker.Manager
+	remoteHost   bool
+	threadRef    func(model.Thread) model.ThreadRef
 }
 
 func newFakeHost(threads ...model.Thread) *fakeHost {
@@ -213,17 +220,37 @@ func (h *fakeHost) UpgradeAgent(string)                                         
 func (h *fakeHost) SelectedPermissionPolicy() string                             { return h.permission }
 func (h *fakeHost) RefreshAccount()                                              { h.refreshes++ }
 func (h *fakeHost) AccountLoginTarget() func(login.Request) (login.State, error) { return h.loginCall }
-func (h *fakeHost) RemoteHost() bool                                             { return false }
+func (h *fakeHost) RemoteHost() bool                                             { return h.remoteHost }
 func (h *fakeHost) AskAccountReset()                                             {}
 func (h *fakeHost) CancelAccountReset()                                          {}
 func (h *fakeHost) ConfirmAccountReset()                                         {}
 func (h *fakeHost) PhoneControls() (svcproto.PhoneStatus, func(string), bool) {
 	return h.phone, func(op string) { h.phoneActions = append(h.phoneActions, op); uiruntime.Invalidate() }, h.phoneOK
 }
-func (h *fakeHost) Memories() *manager.Manager               { return h.memory }
-func (h *fakeHost) AllThreads() []model.Thread               { return h.threads }
-func (h *fakeHost) ThreadRef(t model.Thread) model.ThreadRef { return model.ThreadRef{} }
-func (h *fakeHost) ThreadWorkspace(int) string               { return h.state.Cwd }
+func (h *fakeHost) Memories() *manager.Manager { return h.memory }
+func (h *fakeHost) AllThreads() []model.Thread { return h.threads }
+func (h *fakeHost) ThreadRef(t model.Thread) model.ThreadRef {
+	if h.threadRef != nil {
+		return h.threadRef(t)
+	}
+	if t.ID == 0 {
+		return model.ThreadRef{}
+	}
+	session := t.ServerID
+	if session == "" {
+		session = strconv.Itoa(t.ID)
+	}
+	return model.ThreadRef{Source: "0123456789abcdef0123456789abcdef", Backend: model.ThreadAgent(t), SessionID: session}
+}
+func (h *fakeHost) ReadRuntime(ctx context.Context, ref model.ThreadRef, project string) (tracker.ConversationRuntime, error) {
+	if h.readRuntime != nil {
+		return h.readRuntime(ctx, ref, project)
+	}
+	return tracker.ConversationRuntime{}, nil
+}
+func (h *fakeHost) Runtimes() *tracker.Manager { return h.runtimes }
+
+func (h *fakeHost) ThreadWorkspace(int) string { return h.state.Cwd }
 func (h *fakeHost) ChangeWorkspace(path string) error {
 	h.state.Cwd = path
 	uiruntime.Invalidate()

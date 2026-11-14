@@ -79,3 +79,19 @@ go test ./tests/integration -run 'Boundar|TestViewsDoNotKnowAgents'
 2026-11-14 冒烟：`-tags nsgo` 二进制以 `MIYA_ISOLATED_DIR` 隔离运行，窗口进程正常常驻、无报错，拉起隔离后台并读到 71 个会话，随后正常停止；当时屏幕锁定，截图全黑，界面绘制尚待解锁后截图确认。
 
 实际窗口验证按[独立验证流程](install-and-upgrade.md#独立验证不覆盖已安装应用)进行，不覆盖已安装应用、不切换生产后台。
+
+## 右侧面板（第二次移植）
+
+NSGo 面板按 `model.ThreadRef` 保存各会话的标签、选中项、文件编辑内容与终端；首次发送后草稿面板交给新会话。切换会话不关闭终端，关闭标签或销毁外壳时关闭连接，包括销毁后才返回的异步创建结果。
+
+“后台任务”标签沿用 `ReadRuntime` / `Runtimes`，展示原生任务、系统进程、已验证 HTTP 服务、TCP 端点与观测时间。显示期间每 5 秒刷新；观测失败时保留上次结果，将活跃状态标成待验证，并移除服务入口。服务打开前通过后台 `runtimeValidate` 或本地 `ValidateToken` 再次核验。状态、类型与观测丢失处理共用于 `internal/runtime/presentation`，MyGo 的 widgets 保留转调入口。
+
+镜像窗口的浏览器将 localhost、回环/未指定 IP，以及带 runtime token 的服务交给 `phone/proxy.NewPhoneWebProxy`；公共 URL 直接加载。每次导航、标签关闭与外壳销毁都会释放旧代理。地址栏展示服务地址而非客户端临时代理地址。
+
+HTML 文件仍仅显示源码。已核查当前只读 NSGo 检出：
+
+- `core.WebView` 只有加载/导航状态通知，缺少可以取消的导航回调、请求拦截与 MyGo `PageOptions.Untrusted` 对等选项。
+- `Scope.ProvideAccess` / `Access.WebHosts()` 确实可限制顶层导航；但 `internal/driver.WebConfig.Navigable` 仅比较 hostname，无法限制代理的完整 origin（scheme + host + port），允许 `about:` / `data:` / `blob:`，且不限制 iframe、脚本、图片、fetch 等页内请求。
+- `Access.Allows` 能检查应用设置的初始 source URL，不会对网页后续导航/子请求逐次调用。`NoJavaScript` 也不能替代 origin/请求限制。
+
+因此当前 API 无法忠实实现 MyGo 的不可信工作区预览（工作区文件代理 + 导航前精确 origin 校验）。需要 NSGo 提供等效的不可信页面策略与可取消的精确 origin 导航策略/请求限制之后，才能启用 HTML 预览；本次未修改 NSGo。

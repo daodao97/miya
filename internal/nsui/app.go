@@ -1,6 +1,7 @@
 package nsui
 
 import (
+	"context"
 	"sync"
 
 	"github.com/nsgo-dev/nsgo"
@@ -16,6 +17,7 @@ import (
 	"miya/internal/memory/manager"
 	"miya/internal/nswidgets"
 	projectaccess "miya/internal/project/access"
+	"miya/internal/runtime/tracker"
 	svcclient "miya/internal/service/client"
 	svcproto "miya/internal/service/protocol"
 	"miya/internal/service/workspaces"
@@ -71,6 +73,8 @@ type Host interface {
 	ReadDesktopThread(t model.Thread)
 	MirroredHistory(id int) bool
 	WorkspaceFiles() projectaccess.Files
+	ReadRuntime(ctx context.Context, ref model.ThreadRef, project string) (tracker.ConversationRuntime, error)
+	Runtimes() *tracker.Manager
 }
 
 // Environment supplies controller creation at the executable's composition
