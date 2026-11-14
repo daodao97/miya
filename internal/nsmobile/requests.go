@@ -1,8 +1,6 @@
 package nsmobile
 
 import (
-	"strings"
-
 	"github.com/nsgo-dev/nsgo/core"
 
 	"miya/internal/appmodel"
@@ -43,13 +41,12 @@ func (m *App) RequestError(a interaction.Request) string {
 	return m.Client.RequestError(a)
 }
 func (m *App) requestCards(cx *core.Scope) core.Node {
-	return core.Scroll{Style: core.Style{MaxHeight: core.Pt(180)}, Children: []core.Node{core.Each(live(m, func() []interaction.Request { return m.State.Approvals }), func(a interaction.Request) string { return string(a.ID) }, func(cx *core.Scope, get func() interaction.Request, _ func() int) core.Node {
+	return core.Scroll{Style: core.Style{MaxHeight: core.Pt(180)}, Children: []core.Node{core.Each(live(m, m.ConversationApprovals), func(a interaction.Request) string { return string(a.ID) }, func(cx *core.Scope, get func() interaction.Request, _ func() int) core.Node {
 		id := core.Untracked(cx, func() string { return string(get().ID) })
-		return nsrequests.TouchButton("review-"+id, func() string { a := get(); return m.DescribeApproval(a).Title + " · " + a.AgentName() }, nil, func() { m.sheet.Set("request:" + id) })
+		return nsrequests.TouchButton("review-"+id, func() string { a := get(); return m.DescribeApproval(a).Title + " · " + a.AgentName() }, nil, func() { m.pages.Open("request:" + id) })
 	})}}
 }
-func (m *App) requestSheet(cx *core.Scope) core.Node {
-	id := strings.TrimPrefix(m.sheet.Get(), "request:")
+func (m *App) requestSheet(cx *core.Scope, id string) core.Node {
 	key := core.NewMemo(cx, live(m, func() string {
 		for _, a := range m.State.Approvals {
 			if string(a.ID) == id {

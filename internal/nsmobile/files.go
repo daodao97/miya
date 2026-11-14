@@ -3,6 +3,7 @@ package nsmobile
 import (
 	"net/url"
 
+	"github.com/nsgo-dev/nsgo/base"
 	"github.com/nsgo-dev/nsgo/core"
 
 	"miya/internal/chat/model"
@@ -10,24 +11,49 @@ import (
 	phoneproxy "miya/internal/phone/proxy"
 )
 
-func (m *App) conversationMenu(cx *core.Scope) core.Node {
-	return scroll(
-		m.button("menu-automations", tr("Automations"), nil, func() { m.sheet.Set("automations") }),
-		m.button("menu-memory", tr("Shared memory"), nil, func() { m.sheet.Set("memory") }),
-		m.button("menu-delegations", tr("Agent tasks"), live(m, func() bool { return m.Open == 0 || m.State.Collaboration == nil || m.State.Collaboration.Version < 1 }), func() { m.sheet.Set("delegations") }), text(tr("Conversation actions")),
-		m.button("web-services", tr("Web services"), live(m, func() bool { return !m.Connected || m.Open == 0 || m.Viewer.Current().ServerID == "" }), m.openWebServices),
-		m.button("project-files", tr("Project files"), live(m, func() bool { return !m.Connected || m.ComposerProject() == "" }), func() { m.sheet.Set(""); m.openProjectFile(m.ComposerProject(), "") }),
-		m.button("new-from-menu", tr("New conversation"), nil, func() {
-			project, agent := m.ComposerProject(), m.Agent()
-			m.StartConversation(project, agent)
-			m.Path = "/thread"
-			m.sheet.Set("")
-		}),
-		m.button("handoff", tr("Hand off to a new conversation"), live(m, func() bool { return m.Open == 0 || m.Sending }), func() { m.Handoff(); m.Path = "/thread"; m.sheet.Set("") }),
-		m.button("remote-desktop", tr("Open remote desktop"), live(m, func() bool { return !m.Connected || !m.State.DesktopControl || m.DesktopRequest != "" }), func() { m.closeFileBrowser(); m.sheet.Set(""); m.OpenRemoteDesktop() }),
-		m.errorText(cx),
-		m.button("actions-cancel", tr("Cancel"), nil, func() { m.sheet.Set("") }),
-	)
+// showActions is the conversation actions menu as the system's action sheet
+// (UIAlertController's on iOS), as the old phone app's: the actions
+// available now, then Cancel.
+func (m *App) showActions() {
+	type item struct {
+		label string
+		on    func()
+	}
+	var items []item
+	add := func(ok bool, label string, on func()) {
+		if ok {
+			items = append(items, item{label, on})
+		}
+	}
+	add(true, tr("Automations"), func() { m.pages.Open("automations") })
+	add(true, tr("Shared memory"), func() { m.pages.Open("memory") })
+	add(m.Open != 0 && m.State.Collaboration != nil && m.State.Collaboration.Version >= 1, tr("Agent tasks"), func() { m.pages.Open("delegations") })
+	add(m.Connected && m.Open != 0 && m.Viewer.Current().ServerID != "", tr("Web services"), m.openWebServices)
+	add(m.Connected && m.ComposerProject() != "", tr("Project files"), func() { m.pages.Open(""); m.openProjectFile(m.ComposerProject(), "") })
+	add(true, tr("New conversation"), func() {
+		project, agent := m.ComposerProject(), m.Agent()
+		m.StartConversation(project, agent)
+		m.Path = "/thread"
+		m.pages.Open("")
+	})
+	add(m.Open != 0 && !m.Sending, tr("Hand off to a new conversation"), func() { m.Handoff(); m.Path = "/thread"; m.pages.Open("") })
+	add(m.Connected && m.State.DesktopControl && m.DesktopRequest == "", tr("Open remote desktop"), func() { m.closeFileBrowser(); m.pages.Open(""); m.OpenRemoteDesktop() })
+	actions := make([]core.AlertAction, 0, len(items)+1)
+	for _, it := range items {
+		actions = append(actions, core.AlertAction{Label: it.label})
+	}
+	actions = append(actions, core.AlertAction{Label: tr("Cancel"), Role: core.AlertCancel})
+	m.pages.menu.Set(true)
+	base.ShowAlertDialog(m.cx, base.AlertDialog{Title: tr("Conversation actions"), Presentation: base.AlertPresentActionSheet, Actions: actions}, func(label string) {
+		m.pages.menu.Set(false)
+		for _, it := range items {
+			if it.label == label {
+				m.act(it.on)()
+				return
+			}
+		}
+		m.change()
+	})
 }
 func (m *App) openMessageLink(raw string) {
 	m.act(func() {

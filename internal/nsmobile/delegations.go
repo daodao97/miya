@@ -24,7 +24,7 @@ func (h phoneCollaborationHost) ReadOnly() bool {
 func (h phoneCollaborationHost) OpenReference(raw string) {
 	h.m.OpenReference(raw)
 	if h.m.SendErr == "" {
-		h.m.sheet.Set("")
+		h.m.pages.Open("")
 	}
 	h.m.change()
 }

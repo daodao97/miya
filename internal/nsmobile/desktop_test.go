@@ -175,7 +175,7 @@ func TestDesktopManagerRenamesSwitchesAndRestoresComposer(t *testing.T) {
 	app, m, _ := startPhone(t)
 	m.DialDesktop = func(ctx context.Context, _ string) (*remote.Conn, error) { <-ctx.Done(); return nil, ctx.Err() }
 	a, b := nsDesktopLink(), nsDesktopLink()
-	changePhone(app, m, func() { m.Connect(a); m.Draft = "draft A"; m.Connect(b); m.Draft = "draft B"; m.sheet.Set("desktops") })
+	changePhone(app, m, func() { m.Connect(a); m.Draft = "draft A"; m.Connect(b); m.Draft = "draft B"; m.pages.Open("desktops") })
 	idA, idB := m.Desktops.Items[0].ID, m.Desktops.Items[1].ID
 	app.Clear("id:desktop-name-" + idA)
 	app.Type("id:desktop-name-"+idA, "Office")
@@ -187,7 +187,7 @@ func TestDesktopManagerRenamesSwitchesAndRestoresComposer(t *testing.T) {
 	if m.Link != a || m.Draft != "draft A" {
 		t.Fatal("desktop A draft not restored")
 	}
-	changePhone(app, m, func() { m.sheet.Set("desktops") })
+	changePhone(app, m, func() { m.pages.Open("desktops") })
 	app.Press("id:desktop-remove-" + idB)
 	if len(m.Desktops.Items) != 1 || m.Link != a {
 		t.Fatal("removing inactive desktop changed owner")

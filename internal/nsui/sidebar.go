@@ -231,6 +231,9 @@ func sidebar(cx *core.Scope, c Host, nav shellNav) core.Node {
 		}
 		return items
 	}
+	// The activity sections fold from their titles. Their state outlives
+	// a section that empties and comes back.
+	activityOpen := map[string]*core.Signal[bool]{"running": core.NewSignal(cx, true), "completed": core.NewSignal(cx, true)}
 	sections := func() []ui.SidebarSection {
 		key.Get()
 		var sections []ui.SidebarSection
@@ -254,7 +257,9 @@ func sidebar(cx *core.Scope, c Host, nav shellNav) core.Node {
 				for _, t := range a.threads {
 					items = append(items, threadItem("a:", "activity-", t, d.unread[t.ID], false))
 				}
-				sections = append(sections, ui.SidebarSection{Title: a.title, Items: items, TestID: "activity-" + a.key})
+				open := activityOpen[a.key]
+				sections = append(sections, ui.SidebarSection{Title: a.title, Items: items, TestID: "activity-" + a.key,
+					Collapsible: true, Open: open.Get, OnOpenChange: open.Set})
 			}
 			cwdProject := false
 			var projects []ui.SidebarItem

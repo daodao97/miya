@@ -17,6 +17,6 @@ func (m *App) desktopsView(cx *core.Scope) core.Node {
 						return tr("Current desktop · ") + m.ConnectionLine()
 					}
 					return tr("Saved")
-				})}, base.Input{TestID: "desktop-name-" + d().ID, Label: tr("Desktop name"), Value: name.Get, OnChange: name.Set, Style: core.Style{MinHeight: core.Pt(44)}}, row(m.button("desktop-rename-"+d().ID, tr("Rename"), nil, func() { m.RenameDesktop(d().ID, name.Get()) }), m.button("desktop-switch-"+d().ID, tr("Connect"), nil, func() { m.closeFileBrowser(); m.SwitchDesktop(d().ID); m.sheet.Set("") }), m.button("desktop-remove-"+d().ID, tr("Remove"), nil, func() { m.closeFileBrowser(); m.RemoveDesktop(d().ID) })))
-		}), m.button("desktop-add", tr("Add desktop"), nil, func() { m.sheet.Set("pair") }), m.button("desktops-done", tr("Done"), nil, func() { m.sheet.Set("") }))
+				})}, base.Input{TestID: "desktop-name-" + d().ID, Label: tr("Desktop name"), Value: name.Get, OnChange: name.Set, Style: core.Style{MinHeight: core.Pt(44)}}, row(m.button("desktop-rename-"+d().ID, tr("Rename"), nil, func() { m.RenameDesktop(d().ID, name.Get()) }), m.button("desktop-switch-"+d().ID, tr("Connect"), nil, func() { m.closeFileBrowser(); m.SwitchDesktop(d().ID); m.pages.Open("") }), m.button("desktop-remove-"+d().ID, tr("Remove"), nil, func() { m.closeFileBrowser(); m.RemoveDesktop(d().ID) })))
+		}), m.button("desktop-add", tr("Add desktop"), nil, func() { m.pages.Open("pair") }), m.button("desktops-done", tr("Done"), nil, func() { m.pages.Open("") }))
 }

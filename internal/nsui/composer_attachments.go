@@ -144,11 +144,14 @@ func (d *desktopComposer) stageAttachments(project string, thread int, source st
 	}()
 }
 func (d *desktopComposer) attachmentChips() core.Node {
-	return core.View{TestID: "composer-attachments", Style: core.Style{Direction: core.Row, Wrap: core.Wrap, Gap: 8}, Children: []core.Node{
+	return core.View{TestID: "composer-attachments", Style: core.Style{Direction: core.Row, Wrap: core.Wrap, AlignItems: core.AlignCenter, Gap: 8}, Children: []core.Node{
 		core.Each(Live(d.attachments), func(p string) string { return p }, func(cx *core.Scope, get func() string, _ func() int) core.Node {
 			path := core.Untracked(cx, get)
 			name := filepath.Base(path)
-			var preview []core.Node
+			colors := nswidgets.ColorsOf(cx)
+			frame := func() core.Style { return core.Style{BorderColor: colors.Line(), Background: colors.Panel()} }
+			remove := ui.IconButton{TestID: "remove-attachment-" + path, Label: tr("Remove attachment ") + name, Icon: nswidgets.IconOf("x"),
+				Variant: ui.IconButtonGhost, Size: 18, IconSize: 10, OnPress: func() { d.host.RemoveAttachment(path) }}
 			if strings.HasPrefix(mime.TypeByExtension(filepath.Ext(path)), "image/") {
 				// Newly picked/pasted files belong to this desktop even when
 				// the conversation is mirrored. Only server markers fetch remotely.
@@ -156,10 +159,31 @@ func (d *desktopComposer) attachmentChips() core.Node {
 				if strings.HasPrefix(path, "miya-server:") {
 					src = remoteImageSource(cx, d.host, path)
 				}
-				preview = append(preview, core.Image{SourceFunc: func() core.ImageSource { return core.Src(src()) }, ResizeMode: core.Cover, Label: tr("Image preview"), TestID: "attachment-image-" + path, Style: core.Style{Width: core.Pt(100), Height: core.Pt(75), CornerRadius: 6}})
+				// An image is a framed 64-point tile, its remove button on its
+				// corner and its name in the tooltip.
+				return ui.Tooltip{Text: name, Trigger: core.View{TestID: "attachment-" + path, Label: name,
+					Style:     core.Style{Width: core.Pt(64), Height: core.Pt(64), FlexShrink: 0, CornerRadius: 8, BorderWidth: 1, Overflow: core.Hidden},
+					StyleFunc: frame,
+					Children: []core.Node{
+						core.Image{SourceFunc: func() core.ImageSource { return core.Src(src()) }, ResizeMode: core.Cover, Label: tr("Image preview"), TestID: "attachment-image-" + path,
+							Style: core.Style{Width: core.Pt(62), Height: core.Pt(62)}},
+						core.View{Style: core.Style{Position: core.Absolute, Top: core.Pt(3), Right: core.Pt(3), CornerRadius: 5},
+							StyleFunc: func() core.Style { return core.Style{Background: ui.Alpha(colors.Panel(), 0.9)} },
+							Children:  []core.Node{remove}},
+					}}}
 			}
-			preview = append(preview, core.Text{Content: name, MaxLines: 1, Style: core.Style{FontSize: 11, MaxWidth: core.Pt(180)}}, ui.IconButton{TestID: "remove-attachment-" + path, Label: tr("Remove attachment ") + name, Icon: nswidgets.IconOf("x"), Size: 24, OnPress: func() { d.host.RemoveAttachment(path) }})
-			return core.View{TestID: "attachment-" + path, Style: core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Gap: 4}, Children: preview}
+			// Another file is a chip naming it, cut short to fit.
+			return core.View{TestID: "attachment-" + path,
+				Style: core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Gap: 6, Height: core.Pt(30), MinWidth: core.Pt(0), MaxWidth: core.Pt(240),
+					Padding: core.Edges{Left: 8, Right: 4}, CornerRadius: 7, BorderWidth: 1},
+				StyleFunc: frame,
+				Children: []core.Node{
+					nswidgets.Icon("file", 13, colors.Muted),
+					core.Text{Content: name, MaxLines: 1, StyleFunc: func() core.Style {
+						return core.Style{FontSize: 12, FlexShrink: 1, MinWidth: core.Pt(0), Color: colors.Ink()}
+					}},
+					remove,
+				}}
 		})}}
 }
 func imageDataURI(data []byte) string {

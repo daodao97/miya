@@ -51,10 +51,26 @@ func awaitRequest(t *testing.T, app *nsgotest.App, sent <-chan remote.Request, o
 	return remote.Request{}
 }
 func changePhone(app *nsgotest.App, m *App, f func()) { app.Post(m.act(f)); app.Settle() }
+
+// openPhoneDrawer opens the sidebar from the page's header and lets it
+// settle.
+func openPhoneDrawer(app *nsgotest.App) {
+	app.Press("id:open-sidebar")
+	app.Advance(500 * time.Millisecond)
+}
+
+// goPhoneHome returns to the new-conversation page through the drawer's
+// New thread.
+func goPhoneHome(app *nsgotest.App) {
+	openPhoneDrawer(app)
+	app.Press("id:drawer-new-thread")
+	app.Advance(500 * time.Millisecond)
+}
 func openPhoneThread(t *testing.T, app *nsgotest.App, m *App, sent <-chan remote.Request) {
 	t.Helper()
+	openPhoneDrawer(app)
 	app.Press("id:thread-7")
-	app.Settle()
+	app.Advance(500 * time.Millisecond)
 	r := awaitRequest(t, app, sent, "subscribe")
 	if r.Thread != 7 || r.ServerID != "session" || r.Agent != "codex" || r.Project != "/work" {
 		t.Fatalf("subscribe identity: %#v", r)
@@ -65,7 +81,8 @@ func openPhoneThread(t *testing.T, app *nsgotest.App, m *App, sent <-chan remote
 }
 func TestPhoneHomeListsAndFiltersProjects(t *testing.T) {
 	app, m, _ := startPhone(t)
-	for _, id := range []string{"mobile-home", "project-/work", "thread-7", "new-conversation"} {
+	openPhoneDrawer(app)
+	for _, id := range []string{"mobile-home", "mobile-drawer", "project-/work", "thread-7", "drawer-new-thread", "settings"} {
 		if !app.Exists("id:" + id) {
 			t.Fatalf("missing %s: %q", id, app.Texts())
 		}
@@ -73,12 +90,16 @@ func TestPhoneHomeListsAndFiltersProjects(t *testing.T) {
 	if h := app.Find("id:thread-7").Frame.Size.Height; h < 44 {
 		t.Fatalf("thread touch target = %v", h)
 	}
+	app.Press("id:drawer-search")
 	app.Type("id:home-search", "missing")
 	app.Settle()
-	if app.Exists("id:thread-7") {
+	if app.Exists("id:thread-7") || !strings.Contains(strings.Join(app.Texts(), "\n"), "No matching conversations") {
 		t.Fatal("search did not filter")
 	}
-	app.Clear("id:home-search")
+	app.Press("id:drawer-search")
+	if app.Exists("id:home-search") {
+		t.Fatal("search did not close")
+	}
 	app.Press("id:project-/work")
 	app.Settle()
 	if m.ExpandedProject != "" || app.Exists("id:thread-7") {
@@ -101,7 +122,7 @@ func TestPhoneOpensConversationAndRetainsEditorWhileStreaming(t *testing.T) {
 	if after := app.Find("id:mobile-composer").ID; after != before {
 		t.Fatal("streaming rebuilt the native editor")
 	}
-	app.Press("id:back")
+	goPhoneHome(app)
 	app.Settle()
 	if m.Open != 0 || !app.Exists("id:mobile-home") {
 		t.Fatal("back did not return home")
@@ -136,8 +157,26 @@ func TestPhoneSendAcknowledgementKeepsNextDraft(t *testing.T) {
 }
 func TestPhoneNewConversationSend(t *testing.T) {
 	app, m, sent := startPhone(t)
-	app.Press("id:new-conversation")
-	app.Settle()
+	// Home is the new-conversation page: its composer starts one.
+	for _, id := range []string{"home-title", "pick-project", "agent-codex", "mobile-composer"} {
+		if !app.Exists("id:" + id) {
+			t.Fatalf("home lacks %s", id)
+		}
+	}
+	if app.Exists("id:select-project") {
+		t.Fatal("home repeats the project picker above the composer")
+	}
+	// The composer is the old rounded box, without rows of separate buttons.
+	for _, id := range []string{"add-image", "model-options", "send", "voice-hold"} {
+		if !app.Exists("id:" + id) {
+			t.Fatalf("composer lacks %s", id)
+		}
+	}
+	for _, s := range []string{"Ask for follow-up changes", "Hold to speak", "Steer now"} {
+		if strings.Contains(strings.Join(app.Texts(), "\n"), s) {
+			t.Fatalf("composer still shows %q", s)
+		}
+	}
 	app.Type("id:mobile-composer", "Build this")
 	app.Press("id:send")
 	app.Settle()
@@ -180,7 +219,8 @@ func TestPhoneQueueSteerDeleteDrainAndStop(t *testing.T) {
 		t.Fatal("steer sent as queue")
 	}
 	changePhone(app, m, func() { m.Sent(7, "") })
-	app.Press("id:stop")
+	// With no draft, the busy turn's send button stops it.
+	app.Press("id:send")
 	awaitRequest(t, app, sent, "stop")
 	changePhone(app, m, func() { th := m.Viewer.Current(); th.Busy = false; th.StopRequested = true; m.ShowThread(th) })
 	app.Press("id:drain-queue")
@@ -234,7 +274,7 @@ func TestPhoneModelEffortAndPolicySheets(t *testing.T) {
 	if o.Effort != "low" || o.Policy != "never" {
 		t.Fatalf("message options: %#v", o)
 	}
-	app.Press("id:options-close")
+	app.Press("id:page-back")
 	app.Settle()
 	app.Type("id:mobile-composer", "options")
 	app.Press("id:send")
@@ -265,7 +305,7 @@ func TestPhoneHandoffCarriesDraftAndDurableReference(t *testing.T) {
 	app, m, sent := startPhone(t)
 	openPhoneThread(t, app, m, sent)
 	app.Type("id:mobile-composer", "continue this")
-	app.Press("id:handoff")
+	choosePhoneAction(t, app, "Hand off to a new conversation")
 	app.Settle()
 	if m.Open != 0 || m.Path != "/thread" || !strings.Contains(m.Draft, "continue this") || len(model.ThreadMentions(m.Draft)) == 0 {
 		t.Fatalf("handoff: %q", m.Draft)
@@ -291,4 +331,25 @@ func TestPhoneThreadReferenceSuggestionsUseDurableSource(t *testing.T) {
 	if r.Reference != mentions[0].Ref.URL() {
 		t.Fatal("prefetch used a different identity")
 	}
+}
+
+// choosePhoneAction opens the conversation actions, the system's action
+// sheet, and chooses the action labeled label.
+func choosePhoneAction(t *testing.T, app *nsgotest.App, label string) {
+	t.Helper()
+	app.OnAlert = func(a core.AlertConfig) int {
+		app.OnAlert = nil
+		if a.Title != tr("Conversation actions") || !a.Sheet || a.Actions[len(a.Actions)-1].Role != core.AlertCancel {
+			t.Errorf("actions sheet %#v", a)
+		}
+		for i, b := range a.Actions {
+			if b.Label == label {
+				return i
+			}
+		}
+		t.Errorf("no action %q in %#v", label, a.Actions)
+		return -1
+	}
+	app.Press("id:conversation-actions")
+	app.Settle()
 }

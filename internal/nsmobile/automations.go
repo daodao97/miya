@@ -30,7 +30,7 @@ func (m *App) automationsSheet(cx *core.Scope, page string) core.Node {
 	}
 	nodes = append(nodes,
 		m.button("automations-refresh", tr("Refresh automations"), live(m, func() bool { return !m.Connected || !m.State.Automations || m.Autos.Loading }), m.LoadAutomations),
-		m.button("automation-new", tr("New automation"), live(m, func() bool { return !m.Connected || !m.State.AutomationCreate }), func() { m.OpenAutomationCreate(); m.sheet.Set("automation-new") }),
+		m.button("automation-new", tr("New automation"), live(m, func() bool { return !m.Connected || !m.State.AutomationCreate }), func() { m.OpenAutomationCreate(); m.pages.Open("automation-new") }),
 		core.Text{ContentFunc: live(m, func() string {
 			if !m.Connected {
 				if m.Autos.Loaded {
@@ -79,7 +79,7 @@ func (m *App) automationsSheet(cx *core.Scope, page string) core.Node {
 			}
 		}
 		for _, v := range m.Autos.List {
-			content = append(content, m.button("automation-"+v.ID, v.Name+"\n"+filepath.Base(v.Project)+" · "+model.AgentName(v.Agent)+"\n"+automationWhen(v), nil, func() { m.Autos.Detail = v.ID; m.sheet.Set("automation") }))
+			content = append(content, m.button("automation-"+v.ID, v.Name+"\n"+filepath.Base(v.Project)+" · "+model.AgentName(v.Agent)+"\n"+automationWhen(v), nil, func() { m.Autos.Detail = v.ID; m.pages.Open("automation") }))
 		}
 		return column(content...)
 	}))
@@ -139,7 +139,7 @@ func (m *App) automationDetail(cx *core.Scope, v automation.View) core.Node {
 			}
 		}
 		if t, ok := m.AutomationRunThread(v, r); ok {
-			body = append(body, m.button("automation-conversation-"+strconv.Itoa(i), tr("Open run conversation"), nil, func() { m.OpenThread(t); m.sheet.Set("") }))
+			body = append(body, m.button("automation-conversation-"+strconv.Itoa(i), tr("Open run conversation"), nil, func() { m.OpenThread(t); m.pages.Open("") }))
 		} else if r.Thread != 0 || r.ServerID != "" {
 			body = append(body, text(tr("Conversation unavailable")))
 		}
@@ -155,7 +155,7 @@ func (m *App) automationCreateSheet(cx *core.Scope) core.Node {
 	f := &m.Autos.Form
 	m.pollSheet(cx, func() {
 		if f.Project == "" && m.Autos.Detail != "" {
-			m.sheet.Set("automation")
+			m.pages.Open("automation")
 		}
 	})
 	locked := live(m, func() bool { return f.Pending != "" || f.CreateKey != "" })

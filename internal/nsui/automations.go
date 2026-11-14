@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nsgo-dev/nsgo/base"
 	"github.com/nsgo-dev/nsgo/core"
 	"github.com/nsgo-dev/nsgo/ui"
 
@@ -280,16 +281,27 @@ func autoRunVariant(v automation.View) ui.BadgeVariant {
 }
 
 func (a *automationsState) listView(cx *core.Scope) core.Node {
+	// The webhook folds into one row; its settings and messages open in a
+	// dialog, which outlives the row's rebuilds as the webhook changes.
+	webhookOpen := core.NewSignal(cx, false)
 	return autoColumn(
 		autoRow(autoHeading(tr("Automations")), ui.Button{TestID: "automation-new", Text: tr("New"), Icon: nswidgets.IconOf("plus"), OnPress: func() { a.openForm(nil) }},
 			autoButton("automations-refresh", "Refresh", a.refresh)),
 		autoMuted(cx, tr("Start a new conversation in the project on schedule, then send the result to your phone.")),
 		core.Dynamic(func(cx *core.Scope) core.Node {
 			if v := a.webhook.Get(); v != nil {
-				return a.inbox(cx, *v)
+				return a.inboxRow(cx, *v, func() { webhookOpen.Set(true) })
 			}
 			return core.Group(nil)
 		}),
+		ui.Dialog{Title: tr("Miya webhook"), TestID: "automation-webhook-dialog", Open: webhookOpen.Get, OnOpenChange: func(o bool, _ base.Reason) { webhookOpen.Set(o) },
+			Style: core.Style{Width: core.Pt(560)},
+			Children: []core.Node{core.Dynamic(func(cx *core.Scope) core.Node {
+				if v := a.webhook.Get(); v != nil {
+					return a.inbox(cx, *v)
+				}
+				return core.Group(nil)
+			})}},
 		core.Show{When: func() bool { return !a.loaded.Get() && a.listErr.Get() == "" }, Then: func(cx *core.Scope) core.Node { return autoMuted(cx, tr("Loading…")) }},
 		core.Show{When: func() bool { return a.loaded.Get() && len(a.list.Get()) == 0 }, Then: func(cx *core.Scope) core.Node {
 			return autoCard(cx, autoText(tr("No automations yet")), autoMuted(cx, tr("Click New to describe a task, or ask an agent to create one in any conversation.")))
@@ -326,9 +338,24 @@ func (a *automationsState) listView(cx *core.Scope) core.Node {
 	)
 }
 
+// inboxRow is the webhook folded to its name and state; pressing it opens
+// the dialog with the rest.
+func (a *automationsState) inboxRow(cx *core.Scope, v automation.WebhookView, open func()) core.Node {
+	colors := nswidgets.ColorsOf(cx)
+	return core.View{TestID: "automation-webhook-open", Role: core.RoleButton, Label: tr("Miya webhook"), OnPress: func(core.PressEvent) { open() },
+		StyleFunc: nswidgets.CardStyle(cx), Children: []core.Node{
+			core.View{Style: core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Gap: 12, MinWidth: core.Pt(0)}, Children: []core.Node{
+				core.View{Style: core.Style{FlexGrow: 1, FlexShrink: 1, MinWidth: core.Pt(0)}, Children: []core.Node{autoText(tr("Miya webhook"))}},
+				autoMuted(cx, v.Status()),
+				nswidgets.Icon("chevron-right", 14, colors.Faint),
+			}},
+		}}
+}
+
+// inbox is the webhook's switch, address and recent messages.
 func (a *automationsState) inbox(cx *core.Scope, v automation.WebhookView) core.Node {
 	children := []core.Node{
-		autoRow(autoText(tr("Miya webhook")), ui.Switch{TestID: "automation-webhook", Label: tr("Enable webhook"), Checked: func() bool { return v.Enabled }, OnChange: func(on bool) {
+		autoRow(autoText(tr("Enable webhook")), ui.Switch{TestID: "automation-webhook", Label: tr("Enable webhook"), Checked: func() bool { return v.Enabled }, OnChange: func(on bool) {
 			action := "disable"
 			if on {
 				action = "enable"
@@ -354,5 +381,5 @@ func (a *automationsState) inbox(cx *core.Scope, v automation.WebhookView) core.
 		m := v.Messages[i]
 		children = append(children, autoColumn(autoMuted(cx, automation.FormatTime(m.At)), autoText(textutil.ClipRunes(m.Data, 200)), autoMuted(cx, automation.WebhookDeliveryText(m))))
 	}
-	return autoCard(cx, children...)
+	return autoColumn(children...)
 }

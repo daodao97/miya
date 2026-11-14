@@ -95,7 +95,7 @@ func TestPhoneVoiceAutoSendAndCancellation(t *testing.T) {
 			case "system":
 				finger.Cancel()
 			case "navigation":
-				app.Press("id:back")
+				goPhoneHome(app)
 			case "disconnect":
 				changePhone(app, m, m.Disconnect)
 			case "background":
@@ -161,6 +161,7 @@ func TestPhonePushRegistrationRoutingAndBadges(t *testing.T) {
 	var registrations atomic.Int32
 	PlatformHooks.RegisterPush = func(context.Context) (string, error) { registrations.Add(1); return strings.Repeat("a", 64), nil }
 	app, m, sent := startPhone(t)
+	openPhoneDrawer(app)
 	app.Press("id:settings")
 	app.Press("id:push-settings")
 	app.Press("id:push-authorize")
@@ -172,7 +173,7 @@ func TestPhonePushRegistrationRoutingAndBadges(t *testing.T) {
 	if registration.Token != strings.Repeat("a", 64) || len(registration.ID) != 32 || registration.Live || registration.Disabled || registrations.Load() != 1 {
 		t.Fatalf("registration %#v", registration)
 	}
-	app.Press("id:push-done")
+	changePhone(app, m, func() { m.pages.Open("") })
 	openPhoneThread(t, app, m, sent)
 	changePhone(app, m, func() {
 		m.showLiveNotice(notification.LiveMessage{ID: "current", Title: "Done", Data: map[string]string{"thread": "999", "serverId": "session", "agent": "codex", "project": "/work"}})
@@ -181,7 +182,7 @@ func TestPhonePushRegistrationRoutingAndBadges(t *testing.T) {
 	if len(app.Notifications) != 0 || app.Badge != 2 {
 		t.Fatalf("foreground/badge: %v %d", app.Notifications, app.Badge)
 	}
-	app.Press("id:back")
+	goPhoneHome(app)
 	changePhone(app, m, func() {
 		m.showLiveNotice(notification.LiveMessage{ID: "done", Title: "Done", Data: map[string]string{"thread": "999", "serverId": "session", "agent": "codex", "project": "/work"}})
 	})
@@ -196,7 +197,8 @@ func TestPhonePushRegistrationRoutingAndBadges(t *testing.T) {
 	if m.SendErr != tr("Select the desktop for this notification") {
 		t.Fatal("foreign desktop was not rejected")
 	}
-	app.Press("id:back")
+	goPhoneHome(app)
+	openPhoneDrawer(app)
 	app.Press("id:settings")
 	app.Press("id:push-settings")
 	app.Press("id:push-disable")
@@ -208,6 +210,7 @@ func TestPhonePushRegistrationRoutingAndBadges(t *testing.T) {
 func TestPhonePushDeniedAndMissingNativeRegistration(t *testing.T) {
 	app, m, sent := startPhone(t)
 	app.NotificationAnswer = core.NotificationsDenied
+	openPhoneDrawer(app)
 	app.Press("id:settings")
 	app.Press("id:push-settings")
 	app.Press("id:push-authorize")
@@ -245,8 +248,7 @@ func TestPhoneWebServiceSheetOwnsVerifiedProxy(t *testing.T) {
 					return "http://127.0.0.1:12345/auth/", func() { closed = true }, nil
 				}
 			})
-			app.Press("id:conversation-actions")
-			app.Press("id:web-services")
+			choosePhoneAction(t, app, "Web services")
 			app.WaitFor("id:web-service-3000", time.Second)
 			app.Press("id:web-service-3000")
 			if app.Find("id:web-service-webview") == nil {
@@ -281,8 +283,7 @@ func TestPhoneWebServicesRejectStaleResultsAndClearFailedRefresh(t *testing.T) {
 			return tracker.ConversationRuntime{View: rt.View{Key: tracker.KeyOf(ref)}, Services: []webservice.Service{{Host: "127.0.0.1", Port: 8080, RuntimeToken: "token"}}}, nil
 		}
 	})
-	app.Press("id:conversation-actions")
-	app.Press("id:web-services")
+	choosePhoneAction(t, app, "Web services")
 	app.WaitFor("id:web-service-8080", time.Second)
 	fail = true
 	app.Press("id:refresh-web")
@@ -309,7 +310,7 @@ func TestPhoneWebServicesRejectStaleResultsAndClearFailedRefresh(t *testing.T) {
 	app.Press("id:web-done")
 	close(release)
 	app.Settle()
-	if m.web != nil || m.sheet.Get() != "" {
+	if m.web != nil || m.pages.Top() != "" {
 		t.Fatal("stale result reopened sheet")
 	}
 }
@@ -321,6 +322,7 @@ func TestPhoneAndroidPushUsesLiveConnectionAndOptionalForegroundLease(t *testing
 	PlatformHooks.KeepRunning = func(string) func() { return func() { released.Add(1) } }
 	app, m, sent := startPhone(t)
 	app.SetEnvironment(core.Environment{OS: core.OSAndroid, Idiom: core.IdiomPhone, Lifecycle: core.LifecycleActive})
+	openPhoneDrawer(app)
 	app.Press("id:settings")
 	app.Press("id:push-settings")
 	app.Press("id:push-authorize")
@@ -353,6 +355,7 @@ func TestPhonePushRegistrationErrorCanRetry(t *testing.T) {
 		return strings.Repeat("b", 64), nil
 	}
 	app, m, sent := startPhone(t)
+	openPhoneDrawer(app)
 	app.Press("id:settings")
 	app.Press("id:push-settings")
 	app.Press("id:push-authorize")

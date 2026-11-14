@@ -103,11 +103,11 @@ func TestNativeQRPairingPersistsMultipleDesktops(t *testing.T) {
 				t.Fatal("scan was not completed")
 			}
 			awaitRegistry(t, app, 1)
-			changePhone(app, m, func() { m.sheet.Set("pair") })
+			changePhone(app, m, func() { m.pages.Open("pair") })
 			app.Type("id:pair-code", second)
 			app.Press("id:pair-connect")
 			app.Settle()
-			if m.Link != second || m.sheet.Get() != "" {
+			if m.Link != second || m.pages.Top() != "" {
 				t.Fatal("manual fallback did not pair")
 			}
 			saved := awaitRegistry(t, app, 2)
@@ -166,10 +166,10 @@ func TestNativeQRRejectsInvalidCancelAndCameraFailure(t *testing.T) {
 	}
 	// Invalid Add desktop input must keep the sheet and existing desktop.
 	first := nativeLink()
-	changePhone(app, m, func() { m.pair(first); m.sheet.Set("pair"); m.pairCode.Set("invalid") })
+	changePhone(app, m, func() { m.pair(first); m.pages.Open("pair"); m.pairCode.Set("invalid") })
 	app.Press("id:pair-connect")
 	app.Settle()
-	if m.Link != first || m.sheet.Get() != "pair" || m.pairCode.Get() != "invalid" {
+	if m.Link != first || m.pages.Top() != "pair" || m.pairCode.Get() != "invalid" {
 		t.Fatal("invalid code dismissed pairing or replaced desktop")
 	}
 	// A late native result cannot replace a desktop selected during the scan.

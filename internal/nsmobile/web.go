@@ -32,7 +32,7 @@ func (m *App) openWebServices() {
 	m.closeWebServices()
 	t := m.Viewer.Current()
 	m.web = &webServices{owner: m.composerOwner(), conn: m.Conn, ref: model.ThreadRef{Source: m.State.ReferenceSource, Backend: model.ThreadAgent(t), SessionID: t.ServerID}}
-	m.sheet.Set("web-services")
+	m.pages.Open("web-services")
 	m.refreshWebServices(m.web)
 }
 func (m *App) closeWebServices() {
@@ -41,13 +41,13 @@ func (m *App) closeWebServices() {
 			s.cancel()
 		}
 		m.web = nil
-		if m.sheet != nil && m.sheet.Get() == "web-services" {
-			m.sheet.Set("")
+		if m.pages != nil && m.pages.Top() == "web-services" {
+			m.pages.Open("")
 		}
 	}
 }
 func (m *App) webValid(s *webServices) bool {
-	return m.web == s && s.owner == m.composerOwner() && s.conn == m.Conn && m.Connected && m.sheet.Get() == "web-services"
+	return m.web == s && s.owner == m.composerOwner() && s.conn == m.Conn && m.Connected && m.pages.Top() == "web-services"
 }
 func (m *App) refreshWebServices(s *webServices) {
 	if !m.webValid(s) || s.loading {
@@ -126,7 +126,7 @@ func (m *App) openWebService(s *webServices, service webservice.Service) {
 	m.closeFiles, m.webBrowser = close, true
 	m.filesURL.Set(raw)
 	m.closeWebServices()
-	m.sheet.Set("")
+	m.pages.Open("")
 }
 func (m *App) webServicesSheet(cx *core.Scope) core.Node {
 	s := m.web
@@ -139,7 +139,7 @@ func (m *App) webServicesSheet(cx *core.Scope) core.Node {
 			cx.Post(m.act(func() {
 				if m.web == s {
 					m.closeWebServices()
-					m.sheet.Set("")
+					m.pages.Open("")
 				}
 			}))
 		}
@@ -177,5 +177,5 @@ func (m *App) webServicesSheet(cx *core.Scope) core.Node {
 			v := service()
 			return m.button("web-service-"+strconv.Itoa(v.Port), tr("Open ")+"http://"+net.JoinHostPort(v.Host, strconv.Itoa(v.Port)), live(m, func() bool { return s.loading || !m.State.WebPorts }), func() { m.openWebService(s, service()) })
 		}),
-		m.button("web-done", tr("Done"), nil, func() { m.closeWebServices(); m.sheet.Set("") }))
+		m.button("web-done", tr("Done"), nil, func() { m.closeWebServices(); m.pages.Open("") }))
 }

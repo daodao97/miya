@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -66,6 +67,30 @@ func AttachmentDisplay(text string, paths []string) (string, []string) {
 // retain image URLs, which need to become local paths again.
 func MessageAttachments(m model.Message) []string {
 	paths := append([]string(nil), m.Attachments...)
+	for _, src := range imagePaths(m) {
+		if !slices.Contains(paths, src) {
+			paths = append(paths, src)
+		}
+	}
+	return paths
+}
+
+// MessageFiles are the attachments a prompt shows as files: its images show
+// as images instead.
+func MessageFiles(m model.Message) []string {
+	images := imagePaths(m)
+	var files []string
+	for _, p := range m.Attachments {
+		if !slices.Contains(images, p) && !slices.Contains(files, p) {
+			files = append(files, p)
+		}
+	}
+	return files
+}
+
+// imagePaths are the local paths of a message's images.
+func imagePaths(m model.Message) []string {
+	var paths []string
 	for _, src := range m.Images {
 		if strings.HasPrefix(src, "data:") {
 			src = ImageSource(src)
@@ -77,14 +102,7 @@ func MessageAttachments(m model.Message) []string {
 			}
 			src = u.Path
 		}
-		if !filepath.IsAbs(src) {
-			continue
-		}
-		found := false
-		for _, path := range paths {
-			found = found || path == src
-		}
-		if !found {
+		if filepath.IsAbs(src) {
 			paths = append(paths, src)
 		}
 	}

@@ -25,26 +25,35 @@ func tr(s string) string { return locales.T(s) }
 
 type App struct {
 	*phoneclient.Client
-	cx                      *core.Scope
-	revision                *core.Signal[uint64]
-	sheet, search, pairCode *core.Signal[string]
-	scanning                bool
-	optionsAgent            string
-	filesURL                *core.Signal[string]
-	closeFiles              func()
-	caret, anchor           int
-	voice                   *phoneVoice
-	voiceStart              voiceStart
-	voiceAutoSend           bool
-	push                    phonePush
-	web                     *webServices
-	fetchRuntime            runtimeFetcher
-	openWebProxy            webProxyOpener
-	webBrowser              bool
-	collaborations          nsrequests.CollaborationUI
-	collaborationOwner      string
-	requestFields           map[string]map[string]string
-	authentication          desktopAuthentication
+	cx               *core.Scope
+	revision         *core.Signal[uint64]
+	search, pairCode *core.Signal[string]
+	pages            *pageStack
+	// The drawer: whether it is open, how far it is out, whether it
+	// searches, the animation settling it, and whether it has unfolded the
+	// selected project yet.
+	drawerOpen, drawerSearching, drawerActive *core.Signal[bool]
+	drawerPos                                 *core.AnimatedValue
+	drawerRun                                 *core.AnimationRun
+	drawerAt                                  float64
+	drawerExpanded                            bool
+	scanning                                  bool
+	optionsAgent                              string
+	filesURL                                  *core.Signal[string]
+	closeFiles                                func()
+	caret, anchor                             int
+	voice                                     *phoneVoice
+	voiceStart                                voiceStart
+	voiceAutoSend                             bool
+	push                                      phonePush
+	web                                       *webServices
+	fetchRuntime                              runtimeFetcher
+	openWebProxy                              webProxyOpener
+	webBrowser                                bool
+	collaborations                            nsrequests.CollaborationUI
+	collaborationOwner                        string
+	requestFields                             map[string]map[string]string
+	authentication                            desktopAuthentication
 }
 
 func NewMobileApp() *App {
@@ -74,7 +83,12 @@ func (m *App) act(f func()) func() { return func() { f(); m.change() } }
 func (m *App) Render(cx *core.Scope) core.Node {
 	m.cx = cx
 	m.revision = core.NewSignal(cx, uint64(0))
-	m.sheet = core.NewSignal(cx, "")
+	m.pages = newPages(cx)
+	m.pages.actions = m.showActions
+	m.drawerOpen = core.NewSignal(cx, false)
+	m.drawerSearching = core.NewSignal(cx, false)
+	m.drawerActive = core.NewSignal(cx, false)
+	m.drawerPos = core.NewAnimatedValue(cx, 0)
 	m.search = core.NewSignal(cx, "")
 	m.pairCode = core.NewSignal(cx, "")
 	m.filesURL = core.NewSignal(cx, "")
@@ -150,10 +164,13 @@ func (m *App) Render(cx *core.Scope) core.Node {
 		}
 	})
 	cx.OnBackPress(func() bool {
-		if m.sheet.Get() != "" {
-			m.closeWebServices()
-			m.sheet.Set("")
+		if m.drawerOpen.Get() {
+			m.drawerOpen.Set(false)
 			return true
+		}
+		// A pushed page is the stack's to pop; its OnDismiss releases it.
+		if m.pages.Depth() > 0 {
+			return false
 		}
 		if m.filesURL.Get() != "" {
 			m.closeFileBrowser()
@@ -205,11 +222,8 @@ func (m *App) root(cx *core.Scope) core.Node {
 		}
 		return core.Style{Width: core.Pct(100), Height: core.Pct(100), Padding: safe, Background: colors.Canvas(), Color: colors.Ink(), MinHeight: core.Pt(0)}
 	}, Children: []core.Node{
-		m.page(cx),
+		m.stack(cx),
 		m.desktopFloat(cx),
-		ui.Sheet{Open: func() bool { return m.sheet.Get() != "" }, OnClose: func() { m.closeWebServices(); m.sheet.Set("") }, Children: []core.Node{
-			core.Dynamic(func(cx *core.Scope) core.Node { return m.sheetContent(cx) }),
-		}},
 	}}
 }
 func (m *App) page(cx *core.Scope) core.Node {
@@ -244,43 +258,4 @@ func (m *App) page(cx *core.Scope) core.Node {
 			return m.home(cx)
 		}
 	})
-}
-
-// sheetContent shows the open sheet: feature sheets keep their
-// owned destinations here alongside their frame handlers in phone/client.
-func (m *App) sheetContent(cx *core.Scope) core.Node {
-	if strings.HasPrefix(m.sheet.Get(), "request:") {
-		return m.requestSheet(cx)
-	}
-	switch m.sheet.Get() {
-	case "web-services":
-		return m.webServicesSheet(cx)
-	case "voice":
-		return m.voiceSettings(cx)
-	case "push":
-		return m.pushSettings(cx)
-	case "memory":
-		return m.memorySheet(cx)
-	case "automations", "automation", "automation-new":
-		return m.automationsSheet(cx, m.sheet.Get())
-	case "delegations":
-		return m.delegationsSheet(cx)
-	case "desktops":
-		return m.desktopsView(cx)
-	case "settings":
-		return m.settings(cx)
-	case "language":
-		return m.languageSettings(cx)
-	case "projects":
-		return m.projects(cx)
-	case "options", "agent", "model", "effort", "policy":
-		return m.options(cx, m.sheet.Get())
-	case "actions":
-		return m.conversationMenu(cx)
-	case "quota":
-		return m.quotas(cx)
-	case "pair":
-		return m.pairView(cx)
-	}
-	return core.View{}
 }

@@ -102,6 +102,7 @@ func TestPhoneQuestionsAndFormValidation(t *testing.T) {
 func TestPhoneMemoryScopeRevisionAndSource(t *testing.T) {
 	app, m, sent := startPhone(t)
 	changePhone(app, m, func() { m.State.Memory = true; m.State.MemoryRevision = 3 })
+	openPhoneDrawer(app)
 	app.Press("id:memory")
 	r := awaitRequest(t, app, sent, "memory")
 	if r.Project != "/work" || r.MemoryScope != "project" {
@@ -138,13 +139,14 @@ func TestPhoneMemoryScopeRevisionAndSource(t *testing.T) {
 	})
 	app.Press("id:memory-source-m1-0")
 	app.Settle()
-	if m.Open != 7 || m.sheet.Get() != "" {
+	if m.Open != 7 || m.pages.Top() != "" {
 		t.Fatal("source did not navigate")
 	}
 }
 func TestPhoneAutomationListDetailRunAndCreateRetry(t *testing.T) {
 	app, m, sent := startPhone(t)
 	changePhone(app, m, func() { m.State.Automations = true; m.State.AutomationRun = true; m.State.AutomationCreate = true })
+	openPhoneDrawer(app)
 	app.Press("id:automations")
 	awaitRequest(t, app, sent, "automations")
 	v := automation.View{Automation: automation.Automation{ID: "a1", Name: "Review issues", Agent: "codex", Project: "/work", Schedule: "0 9 * * *", Instructions: "Review all issues", Enabled: true}, Runs: []automation.Run{{ServerID: "session", Thread: 999, Summary: "Checked", Result: automation.Passed}}}
@@ -204,9 +206,7 @@ func TestPhoneDelegationsTagsListDetailAndRetry(t *testing.T) {
 	if !strings.Contains(m.Draft, "codex") {
 		t.Fatalf("agent reference %q", m.Draft)
 	}
-	app.Press("id:conversation-actions")
-	app.Settle()
-	app.Press("id:menu-delegations")
+	choosePhoneAction(t, app, "Agent tasks")
 	list := awaitRequest(t, app, sent, "collaboration")
 	var req appmodel.CollaborationRequest
 	_ = json.Unmarshal(list.Collaboration, &req)

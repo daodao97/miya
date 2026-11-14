@@ -2,117 +2,103 @@ package nsmobile
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/nsgo-dev/nsgo/base"
 	"github.com/nsgo-dev/nsgo/core"
+	"github.com/nsgo-dev/nsgo/ui"
+	"github.com/nsgo-dev/nsgo/ui/chat"
 
 	"miya/internal/chat/model"
-	msgfmt "miya/internal/chat/presentation"
 	"miya/internal/nswidgets"
-	"miya/internal/textutil"
 )
 
+// home is the page a new conversation starts from, as the old phone app's:
+// the agent, "Let’s build", the project it starts in and the agents to
+// choose from, over the composer. The first send opens the conversation.
+// The projects and their conversations are in the drawer.
 func (m *App) home(cx *core.Scope) core.Node {
-	return core.View{TestID: "mobile-home", Style: core.Style{FlexGrow: 1, MinHeight: core.Pt(0)}, Children: []core.Node{
-		m.toolbar(func() string { return "Miya" }, false),
-		m.errorText(cx),
-		m.button("desktop-manager", tr("Desktops"), nil, func() { m.sheet.Set("desktops") }),
-		nswidgets.MutedText(cx, live(m, func() string { return textutil.FirstNonEmpty(m.ConnectionLine(), m.Host, tr("Connected")) })),
-		base.Input{Label: tr("Search conversations"), Placeholder: tr("Search conversations"), Value: m.search.Get, OnChange: m.search.Set, TestID: "home-search", Style: core.Style{MinHeight: core.Pt(44), Padding: core.All(12), FontSize: 16}},
-		scroll(
-			m.button("new-conversation", tr("New conversation"), live(m, func() bool { return len(m.State.Projects) == 0 }), func() { m.StartConversation(m.SelectedProject().Path, m.Agent()); m.Path = "/thread" }),
-			core.Show{When: live(m, func() bool { return len(m.State.Projects) == 0 }), Then: func(cx *core.Scope) core.Node { return text(tr("No projects on this desktop yet")) }},
-			core.Dynamic(func(cx *core.Scope) core.Node {
-				// Activity is derived from the same framework-free presentation rules
-				// as the desktop, including unread completion versions.
-				return m.activity(cx)
-			}),
-			core.Each(live(m, func() []model.ProjectSnapshot { return m.State.Projects }), func(p model.ProjectSnapshot) string { return p.Path }, func(cx *core.Scope, p func() model.ProjectSnapshot, _ func() int) core.Node {
-				return m.projectRow(cx, p)
-			}),
-			m.button("automations", tr("Automations"), nil, func() { m.sheet.Set("automations") }),
-			m.button("memory", tr("Shared memory"), nil, func() { m.sheet.Set("memory") }),
-			m.button("quota", tr("Usage"), nil, func() { m.sheet.Set("quota") }),
-		),
+	noProjects := core.NewMemo(cx, live(m, func() bool { return len(m.State.Projects) == 0 }))
+	connected := core.NewMemo(cx, live(m, func() bool { return m.Connected }))
+	state := chat.NewConversationState(cx)
+	return core.View{TestID: "mobile-home", Style: core.Style{FlexGrow: 1, FlexShrink: 1, MinHeight: core.Pt(0)}, Children: []core.Node{
+		m.homeHeader(cx),
+		core.Show{When: noProjects.Get, Then: func(cx *core.Scope) core.Node {
+			return core.View{Style: core.Style{FlexGrow: 1, FlexShrink: 1, MinHeight: core.Pt(0), AlignItems: core.AlignCenter, JustifyContent: core.JustifyCenter, Padding: core.All(24)}, Children: []core.Node{
+				core.Show{When: connected.Get, Then: func(cx *core.Scope) core.Node {
+					return nswidgets.MutedText(cx, func() string { return tr("No projects on this desktop yet") })
+				}, Else: func(cx *core.Scope) core.Node { return ui.Spinner{} }},
+			}}
+		}},
+		core.Show{When: func() bool { return !noProjects.Get() }, Then: func(cx *core.Scope) core.Node {
+			return core.View{Style: core.Style{FlexGrow: 1, FlexShrink: 1, MinHeight: core.Pt(0)}, Children: []core.Node{
+				m.homeIntro(cx),
+				core.View{Style: core.Style{FlexShrink: 0, Padding: core.Edges{Top: 6, Left: 12, Right: 12, Bottom: 10}}, Children: []core.Node{m.composer(cx, state)}},
+			}}
+		}},
 	}}
 }
-func (m *App) activity(cx *core.Scope) core.Node {
-	m.revision.Get()
-	running, completed := m.SidebarActivityThreads()
-	var nodes []core.Node
-	for _, t := range append(running, completed...) {
-		nodes = append(nodes, m.threadRow(cx, func() model.Thread { return t }, "activity-"))
-	}
-	if len(nodes) == 0 {
-		return core.View{}
-	}
-	return column(append([]core.Node{text(tr("Activity"))}, nodes...)...)
-}
-func (m *App) projectRow(cx *core.Scope, p func() model.ProjectSnapshot) core.Node {
-	path := core.Untracked(cx, func() string { return p().Path })
-	return column(
-		core.View{TestID: "project-" + path, Role: core.RoleButton, Label: tr("Project ") + core.Untracked(cx, func() string { return p().Name }),
-			Style: core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Gap: 10, MinHeight: core.Pt(48), Padding: core.All(8)},
-			OnPress: func(core.PressEvent) {
-				m.act(func() {
-					m.Selected = path
-					if m.ExpandedProject == path {
-						m.ExpandedProject = ""
-					} else {
-						m.ExpandedProject = path
-					}
-				})()
-			},
-			Children: []core.Node{nswidgets.Icon("folder", 20, nil), core.Text{ContentFunc: func() string { return p().Name }, Style: core.Style{FontSize: 18, FontWeight: 600}}}},
-		core.Show{When: live(m, func() bool { return m.ExpandedProject == path || strings.TrimSpace(m.search.Get()) != "" }), Then: func(cx *core.Scope) core.Node {
-			return column(
-				core.Each(func() []model.Thread {
-					m.revision.Get()
-					q := strings.ToLower(strings.TrimSpace(m.search.Get()))
-					threads := p().Threads
-					if q != "" {
-						var found []model.Thread
-						for _, t := range threads {
-							if strings.Contains(strings.ToLower(t.Title), q) {
-								found = append(found, t)
-							}
-						}
-						return found
-					}
-					return msgfmt.DisplayedThreads(threads, m.ThreadListExpanded[path])
-				}, func(t model.Thread) int { return t.ID }, func(cx *core.Scope, t func() model.Thread, _ func() int) core.Node {
-					return m.threadRow(cx, t, "thread-")
-				}),
-				core.Show{When: live(m, func() bool { return len(p().Threads) > msgfmt.CollapsedThreadCount }), Then: func(cx *core.Scope) core.Node {
-					return m.button("more-"+path, tr("Expand"), nil, func() { m.ThreadListExpanded[path] = !m.ThreadListExpanded[path] })
+
+// homeIntro is the scrolling part of the new-conversation page.
+func (m *App) homeIntro(cx *core.Scope) core.Node {
+	colors := nswidgets.ColorsOf(cx)
+	agent := core.NewMemo(cx, live(m, m.Agent))
+	// The agents change rarely; their pills are built again only then.
+	agents := core.NewMemo(cx, live(m, func() string {
+		var b strings.Builder
+		for _, d := range m.AgentDescriptors() {
+			b.WriteString(d.ID + "\x00" + d.Name + "\x01")
+		}
+		return b.String()
+	}))
+	return core.Scroll{Style: core.Style{FlexGrow: 1, FlexShrink: 1, MinHeight: core.Pt(0), Width: core.Pct(100)}, Children: []core.Node{
+		core.View{Style: core.Style{Width: core.Pct(100), MinHeight: core.Pt(220), AlignItems: core.AlignCenter, JustifyContent: core.JustifyCenter, Gap: 14, Padding: core.All(24)}, Children: []core.Node{
+			core.Dynamic(func(cx *core.Scope) core.Node { return nswidgets.AgentIcon(agent.Get(), 46) }),
+			core.Text{TestID: "home-title", Content: tr("Let’s build"), Style: core.Style{FontSize: 28, FontWeight: 600}},
+			core.View{TestID: "pick-project", Role: core.RoleButton, Label: tr("Select project"),
+				OnPress: func(core.PressEvent) { m.act(func() { m.pages.Open("projects") })() },
+				Style:   core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Gap: 8, MinHeight: core.Pt(44), MaxWidth: core.Pct(100), MinWidth: core.Pt(0)},
+				Children: []core.Node{
+					core.Text{TestID: "home-project", ContentFunc: live(m, func() string { return m.SelectedProject().Name }), MaxLines: 1, StyleFunc: func() core.Style {
+						return core.Style{FontSize: 24, Color: colors.Muted(), FlexShrink: 1, MinWidth: core.Pt(0)}
+					}},
+					nswidgets.Icon("chevron-down", 16, colors.Muted),
 				}},
-				m.button("new-"+path, tr("New conversation"), nil, func() { m.StartConversation(path, m.Agent()); m.Path = "/thread" }),
-			)
+			core.Dynamic(func(cx *core.Scope) core.Node {
+				agents.Get()
+				var pills []core.Node
+				for _, d := range core.Untracked(cx, m.AgentDescriptors) {
+					pills = append(pills, m.agentPill(cx, d.ID, d.Name, agent.Get))
+				}
+				return core.View{Style: core.Style{Direction: core.Row, Wrap: core.Wrap, JustifyContent: core.JustifyCenter, Gap: 8, Width: core.Pct(100)}, Children: pills}
+			}),
 		}},
-	)
+	}}
 }
-func (m *App) threadRow(cx *core.Scope, t func() model.Thread, prefix string) core.Node {
-	id := core.Untracked(cx, func() int { return t().ID })
-	return core.View{TestID: prefix + strconv.Itoa(id), Role: core.RoleButton, Label: core.Untracked(cx, func() string { return textutil.FirstNonEmpty(t().Title, tr("Untitled conversation")) }),
-		Style:   core.Style{MinHeight: core.Pt(48), Direction: core.Row, AlignItems: core.AlignCenter, Padding: core.All(8), Gap: 10},
-		OnPress: func(core.PressEvent) { m.act(func() { m.OpenThread(t()) })() }, Children: []core.Node{
-			nswidgets.AgentIcon(core.Untracked(cx, func() string { return model.ThreadAgent(t()) }), 20),
-			core.Text{ContentFunc: func() string {
-				return msgfmt.NativeText(textutil.FirstNonEmpty(t().Title, tr("Untitled conversation")))
-			}, MaxLines: 2, Style: core.Style{FlexGrow: 1, FlexShrink: 1, MinWidth: core.Pt(0), FontSize: 16}},
-			core.Text{ContentFunc: live(m, func() string {
-				if t().Busy {
-					return tr("Running")
-				}
-				if m.CompletionUnread(t()) {
-					return tr("Unread")
-				}
-				return ""
-			}), Style: core.Style{FontSize: 13}},
-		}}
+
+// agentPill chooses the agent a new conversation starts with; the chosen
+// one is filled with the ink.
+func (m *App) agentPill(cx *core.Scope, id, name string, current func() string) core.Node {
+	colors := nswidgets.ColorsOf(cx)
+	chosen := func() bool { return current() == id }
+	return core.View{TestID: "agent-" + id, Role: core.RoleButton, Label: name,
+		OnPress: func(core.PressEvent) { m.act(func() { m.NewAgent = id })() },
+		StyleFunc: func() core.Style {
+			st := core.Style{MinHeight: core.Pt(44), Padding: core.Symmetric(10, 16), CornerRadius: 22, JustifyContent: core.JustifyCenter, Background: colors.Bubble()}
+			if chosen() {
+				st.Background = colors.Ink()
+			}
+			return st
+		},
+		Children: []core.Node{core.Text{Content: name, MaxLines: 1, StyleFunc: func() core.Style {
+			c := colors.Ink()
+			if chosen() {
+				c = colors.Canvas()
+			}
+			return core.Style{FontSize: 14, FontWeight: 500, Color: c}
+		}}}}
 }
+
 func (m *App) pairView(cx *core.Scope) core.Node {
 	return scroll(text(tr("Connect to your desktop")), text(tr("Scan on your phone, or paste a desktop connection code")),
 		m.button("pair-scan", tr("Scan to connect"), live(m, func() bool { return m.scanning }), m.scan),
@@ -150,10 +136,11 @@ func (m *App) projects(cx *core.Scope) core.Node {
 	return scroll(text(tr("Select project")), core.Each(live(m, func() []model.ProjectSnapshot { return m.State.Projects }), func(p model.ProjectSnapshot) string { return p.Path }, func(cx *core.Scope, p func() model.ProjectSnapshot, _ func() int) core.Node {
 		return m.button("select-"+p().Path, p().Name, nil, func() {
 			m.Selected = p().Path
+			m.ExpandedProject = p().Path
 			if m.NewProject != "" {
 				m.NewProject = p().Path
 			}
-			m.sheet.Set("")
+			m.pages.Open("")
 		})
 	}))
 }

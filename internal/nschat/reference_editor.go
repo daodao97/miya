@@ -184,7 +184,12 @@ func (r ReferenceEditor) Render(cx *core.Scope) core.Node {
 	}
 	s.UpdateState(keyed)
 	styles := func() re.Styles {
-		colors := re.Styles{Content: core.Style{FontSize: 13, LineHeight: 20, Color: nswidgets.ColorsOf(cx).Ink()}, Marks: map[string]core.Style{}}
+		// The rich editor draws its own caret and selection and has no
+		// defaults for them: unset, they are transparent.
+		colors := re.Styles{Content: core.Style{FontSize: 13, LineHeight: 20, Color: nswidgets.ColorsOf(cx).Ink()},
+			Caret:     core.Style{Background: nswidgets.ColorsOf(cx).Ink(), CornerRadius: 1},
+			Selection: core.Style{Background: cx.Palette().Selection},
+			Marks:     map[string]core.Style{}}
 		for _, kind := range []string{"reference", "file", "command"} {
 			colors.Marks[kind] = core.Style{Color: nswidgets.ColorsOf(cx).Link(), Background: nswidgets.ColorsOf(cx).Subtle(), CornerRadius: 5, FontWeight: 500}
 		}
@@ -232,7 +237,10 @@ func (r ReferenceEditor) Render(cx *core.Scope) core.Node {
 		return nil
 	}})
 
-	root.Children = append(root.Children, core.Show{When: func() bool { return in.Value != nil && in.Value() == "" }, Then: func(*core.Scope) core.Node {
+	// An input method's unconfirmed text is not in the value yet; the
+	// placeholder must not show under it.
+	composing := core.NewSignal(cx, false)
+	root.Children = append(root.Children, core.Show{When: func() bool { return in.Value != nil && in.Value() == "" && !composing.Get() }, Then: func(*core.Scope) core.Node {
 		return core.Text{Content: in.Placeholder, ContentFunc: in.PlaceholderFunc, PointerEvents: core.PointerEventsNone, Style: core.Style{Position: core.Absolute, Top: core.Pt(4), Left: core.Pt(4), FontSize: 13, Color: cx.Palette().TextMuted}}
 	}})
 
@@ -245,6 +253,13 @@ func (r ReferenceEditor) Render(cx *core.Scope) core.Node {
 			})
 			sink.ReadonlyFunc = func() bool { return in.Readonly || in.ReadonlyFunc != nil && in.ReadonlyFunc() }
 			sink.Disabled = in.Disabled
+			compositionChange := sink.OnCompositionChange
+			sink.OnCompositionChange = func(c core.Composition) {
+				composing.Set(c.Composing)
+				if compositionChange != nil {
+					compositionChange(c)
+				}
+			}
 			root.Children[i] = sink
 		}
 	}

@@ -137,7 +137,7 @@ func root(cx *core.Scope, c Host, sidebarFooter ...core.Node) core.Node {
 	})
 
 	var messagePanel *panel
-	panelNode := filePanel(cx, c, panelOpen, func(p *panel) { messagePanel = p })
+	panelHead, panelNode := filePanel(cx, c, panelOpen, func(p *panel) { messagePanel = p })
 	conversation.OnLink = func(raw string) {
 		if _, ok := model.ParseThreadURL(raw); ok {
 			openCollaborationThread(c, raw, desktopComposer.notice)
@@ -155,7 +155,7 @@ func root(cx *core.Scope, c Host, sidebarFooter ...core.Node) core.Node {
 		Open: open.Get, OnOpenChange: open.Set, ToggleLabel: tr("Toggle sidebar"),
 		Width: width.Get, OnWidthChange: width.Set, ResizeLabel: tr("Resize sidebar"),
 		DefaultWidth: 260, MinWidth: 220, MaxWidth: 420,
-		Right: []core.Node{panelNode}, RightOpen: panelOpen.Get, OnRightOpenChange: panelOpen.Set,
+		Right: []core.Node{panelNode}, RightHeader: []core.Node{panelHead}, RightOpen: panelOpen.Get, OnRightOpenChange: panelOpen.Set,
 		RightToggleLabel: tr("Show / Hide right panel"), RightResizeLabel: tr("Resize right panel"),
 		RightWidth: panelWidth.Get, OnRightWidthChange: panelWidth.Set, RightDefaultWidth: 460, RightMinWidth: 320, RightMaxWidth: 960,
 		Sidebar: []core.Node{sidebar(cx, c, shellNav{page: page, expanded: expanded, settings: cmd.openSettings, project: openProject, usage: func() { usage.openSettings("usage") }, footer: sidebarFooter})},

@@ -8,6 +8,8 @@ import (
 
 	"github.com/nsgo-dev/nsgo/core"
 	"github.com/nsgo-dev/nsgo/microphone"
+	"github.com/nsgo-dev/nsgo/ui"
+	"miya/internal/nswidgets"
 	"miya/internal/prefs"
 	"miya/internal/voiceinput"
 )
@@ -36,10 +38,10 @@ func (m *App) composerOwner() composerOwner {
 	return composerOwner{m.Link, m.ComposerProject(), m.Agent(), m.Path, m.Generation, m.ComposerEpoch()}
 }
 func (m *App) voiceValid(v *phoneVoice) bool {
-	return m.voice == v && v.owner == m.composerOwner() && m.Connected && m.Path == "/thread" && m.sheet.Get() == ""
+	return m.voice == v && v.owner == m.composerOwner() && m.Connected && m.Path == "/thread" && m.pages.Top() == ""
 }
 func (m *App) beginVoice() {
-	if m.voice != nil || m.Sending || !m.Connected || m.Path != "/thread" || m.sheet.Get() != "" {
+	if m.voice != nil || m.Sending || !m.Connected || m.Path != "/thread" || m.pages.Top() != "" {
 		return
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -169,96 +171,99 @@ func (m *App) finishVoice(v *phoneVoice, r voiceinput.Result) {
 		m.Send()
 	}
 }
-func (m *App) voiceAccessory(cx *core.Scope) core.Node {
+
+// voiceHold makes child, the send button, also the push-to-talk control, as
+// the old app's long press on the composer was: a finger held there 350ms
+// while no reply runs records, lifting it finishes and sliding 60 points
+// away cancels. quiet keeps the press that ends a recording from sending.
+func (m *App) voiceHold(cx *core.Scope, quiet *time.Time, child core.Node) core.Node {
 	var stop func() bool
-	var down, touch bool
 	var origin core.Point
-	cancelHold := func() {
+	stopTimer := func() {
 		if stop != nil {
 			stop()
 			stop = nil
 		}
-		down = false
 	}
-	begin := func() {
-		if down {
-			return
+	finish := func(end func()) {
+		stopTimer()
+		if m.voice != nil {
+			*quiet = time.Now().Add(400 * time.Millisecond)
+			end()
+			m.change()
 		}
-		down = true
-		stop = cx.AfterFunc(350*time.Millisecond, m.act(m.beginVoice))
 	}
-	release := func() { cancelHold(); m.endVoice(); m.change() }
-	cancel := func() { cancelHold(); m.cancelVoice(); m.change() }
-	cx.Cleanup(func() { cancelHold(); m.cancelVoice() })
-	return column(core.View{TestID: "voice-hold", Label: tr("Hold to speak"), Role: core.RoleButton,
-		Style:       core.Style{MinHeight: core.Pt(44), Padding: core.All(10)},
-		Disabled:    live(m, func() bool { return !m.Connected || m.Sending }),
-		OnPressDown: func(core.PressEvent) { begin() }, OnPressUp: func(core.PressEvent) {
-			if !touch {
-				release()
-			}
-		},
+	cx.Cleanup(func() { stopTimer(); m.cancelVoice() })
+	return core.View{TestID: "voice-hold", Style: core.Style{FlexShrink: 0},
 		OnTouch: func(e core.TouchEvent) {
 			switch e.Phase {
 			case core.TouchStart:
 				if len(e.Touches) != 1 {
-					cancel()
+					finish(m.cancelVoice)
 					return
 				}
-				touch = true
 				origin = e.Touches[0].PagePosition
-				begin()
+				stopTimer()
+				if m.Connected && !m.Sending && !m.Viewer.Current().Busy {
+					stop = cx.AfterFunc(350*time.Millisecond, func() {
+						stop = nil
+						m.beginVoice()
+						m.change()
+					})
+				}
 			case core.TouchMove:
 				for _, t := range e.Touches {
-					dx, dy := t.PagePosition.X-origin.X, t.PagePosition.Y-origin.Y
-					if dx*dx+dy*dy > 60*60 {
-						cancel()
+					if dx, dy := t.PagePosition.X-origin.X, t.PagePosition.Y-origin.Y; dx*dx+dy*dy > 60*60 {
+						finish(m.cancelVoice)
 					}
 				}
 			case core.TouchEnd:
-				release()
-				touch = false
+				finish(m.endVoice)
 			case core.TouchCancel:
-				cancel()
-				touch = false
+				finish(m.cancelVoice)
 			}
 		},
-		Responder: &core.Responder{Claims: []core.TouchClaim{{}}, Keep: true, OnTerminate: func(core.ResponderEvent) { cancel(); touch = false }},
-		Children:  []core.Node{text(tr("Hold to speak"))}},
-		core.Show{When: live(m, func() bool { return m.voice != nil }), Then: func(cx *core.Scope) core.Node {
-			return column(core.Text{TestID: "voice-status", ContentFunc: live(m, func() string {
-				if v := m.voice; v != nil {
-					if v.released {
-						if v.autoSend {
-							return tr("Recognizing… Will send when ready")
-						}
+		Children: []core.Node{child}}
+}
+
+// voiceStatus sits above the composer while a recording runs.
+func (m *App) voiceStatus(cx *core.Scope) core.Node {
+	return core.Show{When: live(m, func() bool { return m.voice != nil }), Then: func(cx *core.Scope) core.Node {
+		colors := nswidgets.ColorsOf(cx)
+		return core.View{Style: core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Gap: 8, Padding: core.Edges{Left: 8, Right: 4}}, Children: []core.Node{
+			core.View{Style: core.Style{FlexGrow: 1, FlexShrink: 1, MinWidth: core.Pt(0), Gap: 2}, Children: []core.Node{
+				core.Text{TestID: "voice-status", ContentFunc: live(m, func() string {
+					v := m.voice
+					switch {
+					case v == nil:
+						return ""
+					case v.released && v.autoSend:
+						return tr("Recognizing… Will send when ready")
+					case v.released:
 						return tr("Recognizing…")
-					}
-					if v.autoSend {
+					case v.autoSend:
 						return tr("Listening… Release to send")
 					}
 					return tr("Listening… Release to finish")
-				}
-				return ""
-			})}, text(tr("Slide away to cancel")), m.button("voice-cancel", tr("Cancel voice input"), nil, cancel))
-		}})
+				}), StyleFunc: func() core.Style { return core.Style{FontSize: 15, FontWeight: 500, Color: colors.Ink()} }},
+				core.Text{Content: tr("Slide away to cancel"), StyleFunc: func() core.Style { return core.Style{FontSize: 13, Color: colors.Muted()} }},
+			}},
+			m.round(cx, "voice-cancel", tr("Cancel voice input"), "x", 44, m.cancelVoice),
+		}}
+	}}
 }
+
 func (m *App) voiceSettings(cx *core.Scope) core.Node {
-	return scroll(text(tr("Voice input")), text(tr("Hold the microphone button to speak. Release to insert text, or enable automatic sending.")),
-		core.View{TestID: "voice-auto-send", Role: core.RoleButton, Label: tr("Send when done speaking"), OnPress: func(core.PressEvent) {
-			m.voiceAutoSend = !m.voiceAutoSend
+	return m.groupedPage(cx, m.group(cx, "", groupedFooter(cx, "", func() string {
+		return tr("Hold the microphone button to speak. Release to insert text, or enable automatic sending.")
+	}), gRow{Label: tr("Send when done speaking"), Switch: &ui.Switch{TestID: "voice-auto-send", Label: tr("Send when done speaking"),
+		Checked: live(m, func() bool { return m.voiceAutoSend }), OnChange: func(on bool) {
+			m.voiceAutoSend = on
 			value := "off"
-			if m.voiceAutoSend {
+			if on {
 				value = "on"
 			}
 			prefs.Save("phone-voice-auto-send", value)
 			m.change()
-		}, Style: core.Style{MinHeight: core.Pt(44)}, Children: []core.Node{core.Text{ContentFunc: live(m, func() string {
-			s := tr("Send when done speaking")
-			if m.voiceAutoSend {
-				s = "✓ " + s
-			}
-			return s
-		})}}},
-		m.button("voice-done", tr("Done"), nil, func() { m.sheet.Set("") }))
+		}}}))
 }

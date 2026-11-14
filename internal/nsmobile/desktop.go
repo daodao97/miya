@@ -282,7 +282,15 @@ func (m *App) desktopPreviews(cx *core.Scope) core.Node {
 		case 2:
 			return m.desktopPreviewCards(cx)
 		default:
-			return core.Show{When: live(m, func() bool { return len(m.State.Approvals) > 0 }), Then: func(*core.Scope) core.Node {
+			// Only a request for the desktop opens it, not every approval.
+			return core.Show{When: live(m, func() bool {
+				for _, a := range m.ConversationApprovals() {
+					if a.Kind() == interaction.DesktopControl {
+						return true
+					}
+				}
+				return false
+			}), Then: func(*core.Scope) core.Node {
 				return m.button("desktop-preview-open", tr("Open remote desktop"), live(m, func() bool { return !m.Connected || m.DesktopRequest != "" }), m.OpenRemoteDesktop)
 			}}
 		}
@@ -291,7 +299,7 @@ func (m *App) desktopPreviews(cx *core.Scope) core.Node {
 func (m *App) desktopPreviewCards(cx *core.Scope) core.Node {
 	return core.Each(live(m, func() []interaction.Request {
 		var requests []interaction.Request
-		for _, a := range m.State.Approvals {
+		for _, a := range m.ConversationApprovals() {
 			if a.Kind() == interaction.DesktopControl {
 				requests = append(requests, a)
 			}

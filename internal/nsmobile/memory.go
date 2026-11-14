@@ -55,7 +55,7 @@ func (m *App) memorySheet(cx *core.Scope) core.Node {
 					children = append(children, text(src.Quote))
 					if ref, ok := model.ParseThreadURL(src.Thread); ok {
 						if t, _, found := m.ReferenceThread(ref); found {
-							children = append(children, m.button(fmt.Sprintf("memory-source-%s-%d", e.ID, i), tr("Source conversation"), nil, func() { m.OpenThread(t); m.sheet.Set("") }))
+							children = append(children, m.button(fmt.Sprintf("memory-source-%s-%d", e.ID, i), tr("Source conversation"), nil, func() { m.OpenThread(t); m.pages.Open("") }))
 						}
 					}
 				}

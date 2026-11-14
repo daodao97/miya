@@ -32,6 +32,7 @@ func TestNativePushRegistrationRotationAndPresentation(t *testing.T) {
 			return nil
 		}
 	})
+	openPhoneDrawer(app)
 	app.Press("id:settings")
 	app.Press("id:push-settings")
 	app.Press("id:push-authorize")
@@ -46,7 +47,7 @@ func TestNativePushRegistrationRotationAndPresentation(t *testing.T) {
 			t.Fatal("bad APNs registration", string(r.Push))
 		}
 	}
-	app.Press("id:push-done")
+	changePhone(app, m, func() { m.pages.Open("") })
 	openPhoneThread(t, app, m, sent)
 	payload, _ := json.Marshal(apns.Payload{ID: "notice", Title: "Done", Body: "Result", Data: map[string]string{"serverId": "session", "agent": "codex", "project": "/work"}})
 	emit(nativemobile.NotificationEvent{Kind: nativemobile.NotificationReceived, Remote: true, Payload: payload})
@@ -54,7 +55,7 @@ func TestNativePushRegistrationRotationAndPresentation(t *testing.T) {
 	if len(app.Notifications) != 0 {
 		t.Fatal("open conversation presented")
 	}
-	app.Press("id:back")
+	goPhoneHome(app)
 	emit(nativemobile.NotificationEvent{Kind: nativemobile.NotificationReceived, Remote: true, Payload: payload})
 	app.Settle()
 	if len(app.Notifications) != 1 {
@@ -359,6 +360,7 @@ func TestNativeAndroidLiveRegistrationDoesNotSubmitFCMToken(t *testing.T) {
 			return nil
 		}
 	})
+	openPhoneDrawer(app)
 	app.Press("id:settings")
 	app.Press("id:push-settings")
 	app.Press("id:push-authorize")

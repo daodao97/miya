@@ -2,6 +2,7 @@ package nsmobile
 
 import (
 	"strconv"
+	"strings"
 	"time"
 	"unicode"
 
@@ -10,32 +11,81 @@ import (
 	"golang.org/x/text/language/display"
 
 	"miya/internal/prefs"
+	"miya/internal/textutil"
 )
 
+// settings is the old phone app's grouped settings list.
 func (m *App) settings(cx *core.Scope) core.Node {
 	m.refreshDesktopAuthentication()
-	return scroll(text(tr("Settings")),
-		m.desktopAuthenticationStatus(),
-		m.button("voice-settings", tr("Voice input"), nil, func() { m.sheet.Set("voice") }),
-		m.button("push-settings", tr("Notifications"), nil, func() { m.sheet.Set("push") }),
-		m.button("memory-settings", tr("Shared memory"), nil, func() { m.sheet.Set("memory") }),
-		m.button("language", tr("Interface language"), nil, func() { m.sheet.Set("language") }),
-		m.button("reconnect", tr("Reconnect"), live(m, func() bool { return m.Link == "" }), func() { m.Connect(m.Link); m.sheet.Set("") }),
-		m.button("add-desktop", tr("Add desktop"), nil, func() { m.sheet.Set("pair") }),
-		m.button("message-options", tr("Model and permissions"), nil, func() { m.optionsAgent = m.Agent(); m.sheet.Set("options") }),
-		m.button("read-all", tr("Mark all as read"), live(m, func() bool { return !m.Connected || len(m.State.Notifications.Unread) == 0 }), m.MarkAllRead),
-		m.button("disconnect", tr("Disconnect"), nil, func() { m.CloseDesktopPage(false); m.Disconnect(); m.sheet.Set("") }),
-		m.button("forget", tr("Forget desktop"), nil, func() { m.Forget(); m.sheet.Set("") }),
-		core.Text{ContentFunc: live(m, func() string { return m.Error + "\n" + m.PersistenceError })},
+	unread := live(m, func() int { return len(m.State.Notifications.Unread) })
+	return m.groupedPage(cx,
+		m.group(cx, tr("General"), nil,
+			gRow{ID: "language", Label: tr("Interface language"), Value: func() string { return languageName(currentLanguage()) }, Chevron: true, Press: func() { m.pages.Open("language") }},
+			gRow{ID: "voice-settings", Label: tr("Voice input"), Chevron: true, Press: func() { m.pages.Open("voice") }},
+		),
+		m.group(cx, tr("Desktop connections"), groupedFooter(cx, "", live(m, m.ConnectionLine)),
+			gRow{ID: "manage-desktops", Label: tr("Manage desktops"), Value: live(m, func() string {
+				return textutil.FirstNonEmpty(strings.TrimSuffix(m.DesktopName(), ".local"), tr("Desktop"))
+			}), Chevron: true, Press: func() { m.pages.Open("desktops") }},
+			gRow{ID: "reconnect", Label: tr("Reconnect"), Action: true, Disabled: live(m, func() bool { return m.Link == "" }), Press: func() { m.Connect(m.Link); m.pages.Open("") }},
+			gRow{ID: "add-desktop", Label: tr("Add desktop"), Action: true, Press: func() { m.pages.Open("pair") }},
+		),
+		m.group(cx, tr("Conversations"), nil,
+			gRow{ID: "message-options", Label: tr("Model and permissions"), Chevron: true, Press: func() { m.optionsAgent = m.Agent(); m.pages.Open("options") }},
+			gRow{ID: "memory-settings", Label: tr("Shared memory"), Chevron: true, Press: func() { m.pages.Open("memory") }},
+		),
+		m.group(cx, tr("Notifications"), groupedFooter(cx, "", func() string { return tr("Get alerts when tasks finish or need confirmation") }),
+			gRow{ID: "push-settings", Label: tr("Mobile notifications"), Chevron: true, Press: func() { m.pages.Open("push") }},
+			gRow{ID: "read-all", Label: tr("Mark all as read"), Action: true, Value: func() string { return strconv.Itoa(unread()) },
+				Disabled: live(m, func() bool { return !m.Connected || len(m.State.Notifications.Unread) == 0 }), Press: m.MarkAllRead},
+		),
+		m.group(cx, "", nil,
+			gRow{Label: tr("Device authentication"), ValueID: "desktop-authentication-status", Value: live(m, m.desktopAuthenticationLabel)},
+		),
+		m.group(cx, "", groupedFooter(cx, "settings-error", live(m, func() string { return strings.TrimSpace(m.Error + "\n" + m.PersistenceError) })),
+			gRow{ID: "disconnect", Label: tr("Disconnect"), Destructive: true, Press: func() { m.CloseDesktopPage(false); m.Disconnect(); m.pages.Open("") }},
+			gRow{ID: "forget", Label: tr("Forget desktop"), Destructive: true, Press: func() { m.Forget(); m.pages.Open("") }},
+		),
 	)
 }
-func (m *App) languageSettings(cx *core.Scope) core.Node {
-	var nodes = []core.Node{text(tr("Interface language"))}
-	for _, choice := range []struct{ tag, label string }{{"", tr("Follow system")}, {"zh-Hans", display.Self.Name(language.SimplifiedChinese)}, {"en", display.Self.Name(language.English)}} {
-		nodes = append(nodes, m.button("language-"+choice.tag, choice.label, nil, func() { prefs.Save("interfaceLanguage", choice.tag); cx.SetLocale(choice.tag); m.sheet.Set("settings") }))
-	}
-	return scroll(nodes...)
+
+func currentLanguage() string {
+	return prefs.NormalizeInterfaceLanguage(prefs.Load("interfaceLanguage"))
 }
+
+func languageName(tag string) string {
+	switch tag {
+	case "zh-Hans":
+		return display.Self.Name(language.SimplifiedChinese)
+	case "en":
+		return display.Self.Name(language.English)
+	}
+	return tr("Follow system")
+}
+
+func (m *App) languageSettings(cx *core.Scope) core.Node {
+	current := currentLanguage()
+	var rows []gRow
+	for _, tag := range []string{"", "zh-Hans", "en"} {
+		rows = append(rows, gRow{ID: "language-" + tag, Label: languageName(tag), Checked: func() bool { return tag == current }, Press: func() {
+			prefs.Save("interfaceLanguage", tag)
+			cx.SetLocale(tag)
+			m.pages.Open("settings")
+		}})
+	}
+	return m.groupedPage(cx, m.group(cx, "", nil, rows...))
+}
+
+func policyChoices() []struct{ value, label, detail string } {
+	return []struct{ value, label, detail string }{
+		{"on-request", tr("Ask when needed"), tr("Confirm sensitive actions yourself")},
+		{"on-failure", tr("Automatic approval"), tr("Automatic approval handles requests and asks you when needed")},
+		{"never", tr("Full access"), tr("Allow the agent to act without asking")},
+	}
+}
+
+// options are the conversation settings and their choice pages: grouped
+// rows, the chosen one checked, as the old phone app's.
 func (m *App) options(cx *core.Scope, page string) core.Node {
 	return core.Dynamic(func(cx *core.Scope) core.Node {
 		m.revision.Get()
@@ -45,58 +95,80 @@ func (m *App) options(cx *core.Scope, page string) core.Node {
 		}
 		opts := m.SendOptions(agent)
 		available := m.AgentOptions(agent)
-		nodes := []core.Node{text(tr("Conversation settings"))}
-		choice := func(id, label string, selected bool, press func()) core.Node {
-			if selected {
-				label = "✓ " + label
-			}
-			return m.button(id, label, nil, press)
+		text := func(s string) func() string { return func() string { return s } }
+		choice := func(id, label, detail string, selected bool, press func()) gRow {
+			return gRow{ID: id, Label: label, Detail: detail, Checked: func() bool { return selected }, Press: press}
 		}
+		var groups []core.Node
 		switch page {
 		case "options":
-			nodes = append(nodes, text(tr("Applies to new messages sent from your phone. Desktop defaults are unchanged.")),
-				m.button("pick-agent", tr("Agent"), live(m, func() bool { return m.Open != 0 }), func() { m.sheet.Set("agent") }),
-				m.button("pick-model", tr("Model")+": "+opts.Model, nil, func() { m.sheet.Set("model") }),
-				m.button("pick-effort", tr("Reasoning effort")+": "+effortLabel(opts.Effort), nil, func() { m.sheet.Set("effort") }),
-				m.button("pick-policy", tr("Permission mode"), nil, func() { m.sheet.Set("policy") }),
-				m.button("reset-options", tr("Use desktop defaults"), nil, func() { delete(m.Options, agent); m.SaveOptions() }))
+			model := textutil.FirstNonEmpty(opts.Model, tr("Model default"))
+			for _, v := range available.Models {
+				if v.Value == opts.Model {
+					model = textutil.FirstNonEmpty(v.Label, model)
+					break
+				}
+			}
+			policy := opts.Policy
+			for _, p := range policyChoices() {
+				if p.value == opts.Policy {
+					policy = p.label
+				}
+			}
+			groups = append(groups,
+				m.group(cx, m.agentName(agent), groupedFooter(cx, "", text(tr("Applies to new messages sent from your phone. Desktop defaults are unchanged."))),
+					gRow{ID: "pick-agent", Label: tr("Agent"), Value: text(m.agentName(agent)), Chevron: true, Disabled: live(m, func() bool { return m.Open != 0 }), Press: func() { m.pages.Open("agent") }},
+					gRow{ID: "pick-model", Label: tr("Model"), Value: text(model), Chevron: true, Press: func() { m.pages.Open("model") }},
+					gRow{ID: "pick-effort", Label: tr("Reasoning effort"), Value: text(effortLabel(opts.Effort)), Chevron: true, Press: func() { m.pages.Open("effort") }},
+					gRow{ID: "pick-policy", Label: tr("Permission mode"), Value: text(policy), Chevron: true, Press: func() { m.pages.Open("policy") }},
+				),
+				m.group(cx, "", nil, gRow{ID: "reset-options", Label: tr("Use desktop defaults"), Action: true, Press: func() { delete(m.Options, agent); m.SaveOptions() }}),
+			)
 		case "agent":
+			var rows []gRow
 			for _, d := range m.AgentDescriptors() {
-				nodes = append(nodes, choice("agent-"+d.ID, d.Name, d.ID == agent, func() { m.NewAgent = d.ID; m.optionsAgent = d.ID; m.sheet.Set("options") }))
+				rows = append(rows, choice("agent-"+d.ID, d.Name, "", d.ID == agent, func() { m.NewAgent = d.ID; m.optionsAgent = d.ID; m.pages.Open("options") }))
 			}
+			groups = append(groups, m.group(cx, "", nil, rows...))
 		case "model":
-			if len(available.Models) == 0 {
-				nodes = append(nodes, text(tr("Connect to your desktop to select a model")))
-			}
-			for _, model := range available.Models {
-				nodes = append(nodes, choice("model-"+model.Value, model.Label, model.Value == opts.Model, func() {
-					opts.Model, opts.Effort = model.Value, model.DefaultEffort
+			var rows []gRow
+			for _, v := range available.Models {
+				rows = append(rows, choice("model-"+v.Value, v.Label, "", v.Value == opts.Model, func() {
+					opts.Model, opts.Effort = v.Value, v.DefaultEffort
 					m.SetOptions(agent, opts)
-					m.sheet.Set("options")
+					m.pages.Open("options")
 				}))
+			}
+			if len(rows) == 0 {
+				groups = append(groups, groupedFooter(cx, "", text(tr("Connect to your desktop to select a model"))))
+			} else {
+				groups = append(groups, m.group(cx, "", nil, rows...))
 			}
 		case "effort":
 			efforts := []string{""}
-			for _, model := range available.Models {
-				if model.Value == opts.Model {
-					for _, v := range model.Efforts {
-						if v != "" {
-							efforts = append(efforts, v)
+			for _, v := range available.Models {
+				if v.Value == opts.Model {
+					for _, e := range v.Efforts {
+						if e != "" {
+							efforts = append(efforts, e)
 						}
 					}
 					break
 				}
 			}
+			var rows []gRow
 			for i, effort := range efforts {
-				nodes = append(nodes, choice("effort-"+strconv.Itoa(i), effortLabel(effort), effort == opts.Effort, func() { opts.Effort = effort; m.SetOptions(agent, opts); m.sheet.Set("options") }))
+				rows = append(rows, choice("effort-"+strconv.Itoa(i), effortLabel(effort), "", effort == opts.Effort, func() { opts.Effort = effort; m.SetOptions(agent, opts); m.pages.Open("options") }))
 			}
+			groups = append(groups, m.group(cx, "", nil, rows...))
 		case "policy":
-			for _, policy := range []struct{ value, label, detail string }{{"on-request", tr("Ask when needed"), tr("Confirm sensitive actions yourself")}, {"on-failure", tr("Automatic approval"), tr("Automatic approval handles requests and asks you when needed")}, {"never", tr("Full access"), tr("Allow the agent to act without asking")}} {
-				nodes = append(nodes, choice("policy-"+policy.value, policy.label+"\n"+policy.detail, policy.value == opts.Policy, func() { opts.Policy = policy.value; m.SetOptions(agent, opts); m.sheet.Set("options") }))
+			var rows []gRow
+			for _, p := range policyChoices() {
+				rows = append(rows, choice("policy-"+p.value, p.label, p.detail, p.value == opts.Policy, func() { opts.Policy = p.value; m.SetOptions(agent, opts); m.pages.Open("options") }))
 			}
+			groups = append(groups, m.group(cx, "", nil, rows...))
 		}
-		nodes = append(nodes, m.button("options-close", tr("Done"), nil, func() { m.sheet.Set("") }))
-		return scroll(nodes...)
+		return m.groupedPage(cx, groups...)
 	})
 }
 func effortLabel(effort string) string {

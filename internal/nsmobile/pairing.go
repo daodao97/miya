@@ -16,7 +16,7 @@ func (m *App) pair(raw string) {
 		return
 	}
 	m.Connect(raw)
-	m.sheet.Set("")
+	m.pages.Open("")
 	m.pairCode.Set("")
 }
 
@@ -27,10 +27,10 @@ func (m *App) scan() {
 	m.scanning, m.Error = true, ""
 	// Native completion may outlive the pairing sheet. It cannot replace a
 	// desktop selected in the meantime or pair after the app backgrounds.
-	generation, sheet := m.Generation, m.sheet.Get()
+	generation, sheet := m.Generation, m.pages.Top()
 	mobile.ScanQRCode(m.cx, func(code string, ok bool, err error) {
 		m.scanning = false
-		if generation != m.Generation || sheet != m.sheet.Get() || m.cx.Env().Lifecycle() == core.LifecycleBackground {
+		if generation != m.Generation || sheet != m.pages.Top() || m.cx.Env().Lifecycle() == core.LifecycleBackground {
 			m.change()
 			return
 		}

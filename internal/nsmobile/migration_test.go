@@ -67,9 +67,16 @@ func TestMigratedSheetsReturnToConversationWithoutLosingDraft(t *testing.T) {
 	app.Type("id:mobile-composer", "keep this draft")
 	before := app.Find("id:mobile-composer").ID
 	for _, sheet := range []string{"actions", "options", "settings", "language", "desktops", "memory", "automations", "quota"} {
-		changePhone(app, m, func() { m.sheet.Set(sheet) })
-		app.Back()
-		if m.sheet.Get() != "" || m.Open != 7 || m.Draft != "keep this draft" || app.Find("id:mobile-composer").ID != before {
+		changePhone(app, m, func() { m.pages.Open(sheet) })
+		if sheet == "actions" {
+			// The system's action sheet takes back itself: its Cancel.
+			actions := app.Alerts()[0].Actions
+			app.Answer(len(actions) - 1)
+			app.Settle()
+		} else {
+			app.Back()
+		}
+		if m.pages.Top() != "" || m.Open != 7 || m.Draft != "keep this draft" || app.Find("id:mobile-composer").ID != before {
 			t.Fatalf("sheet %s changed conversation", sheet)
 		}
 	}
@@ -83,6 +90,7 @@ func TestMigratedHomeSearchAcrossCollapsedProjectsAndPagination(t *testing.T) {
 		}
 		m.State.Projects = append(m.State.Projects, model.ProjectSnapshot{Name: "Other", Path: "/other", Threads: []model.Thread{{ID: 40, ServerID: "other", Title: "Hidden project task"}}})
 	})
+	openPhoneDrawer(app)
 	if app.Exists("id:thread-7") {
 		t.Fatal("collapsed list did not limit old conversations")
 	}
@@ -90,6 +98,7 @@ func TestMigratedHomeSearchAcrossCollapsedProjectsAndPagination(t *testing.T) {
 	if !app.Exists("id:thread-7") {
 		t.Fatal("expand did not show older conversation")
 	}
+	app.Press("id:drawer-search")
 	app.Type("id:home-search", "hidden project")
 	if !app.Exists("id:thread-40") || app.Exists("id:thread-7") {
 		t.Fatal("search did not include collapsed project")
@@ -107,6 +116,7 @@ func TestMigratedHomeActivityAndLargeTextTargets(t *testing.T) {
 	})
 	app.Resize(320, 750)
 	app.SetEnvironment(core.Environment{OS: core.OSIOS, Idiom: core.IdiomPhone, SafeArea: core.Edges{Top: 47, Bottom: 34}, FontScale: 1.8})
+	openPhoneDrawer(app)
 	v := app.Find("id:activity-9")
 	if v.Frame.Size.Height < 44 || v.Frame.Size.Width > 320 {
 		t.Fatalf("activity target %+v", v.Frame)
@@ -215,7 +225,7 @@ func TestMigratedUnreadRevisionAndNotificationIdentity(t *testing.T) {
 
 func TestMigratedManualDisconnectEndsDesktopLease(t *testing.T) {
 	app, m, p, _ := startDesktop(t, "live")
-	changePhone(app, m, func() { p.Floating = true; m.Path = "/thread"; m.sheet.Set("settings") })
+	changePhone(app, m, func() { p.Floating = true; m.Path = "/thread"; m.pages.Open("settings") })
 	app.Press("id:disconnect")
 	if m.DesktopPage != nil || p.Ctx.Err() == nil {
 		t.Fatal("manual disconnect retained resumable desktop lease")
@@ -228,6 +238,7 @@ func TestMigratedQuotaInspectionDoesNotChangeAgent(t *testing.T) {
 		m.State.Agent = model.AgentClaude
 		m.State.Quotas = []phoneproto.AgentQuota{{Agent: model.AgentCodex, Windows: []phoneproto.QuotaWindow{{Label: "Weekly", UsedPercent: 81}}}}
 	})
+	openPhoneDrawer(app)
 	app.Press("id:quota")
 	if !strings.Contains(phoneTexts(app), "81% used") || !strings.Contains(phoneTexts(app), "Weekly") {
 		t.Fatal(phoneTexts(app))

@@ -9,6 +9,7 @@ import (
 
 	"github.com/nsgo-dev/nsgo/core"
 	nativemobile "github.com/nsgo-dev/nsgo/mobile"
+	"github.com/nsgo-dev/nsgo/ui"
 	"github.com/nsgo-dev/nsgo/widget"
 	"miya/internal/apns"
 	"miya/internal/chat/model"
@@ -327,7 +328,7 @@ func (m *App) openPendingNotification() {
 				m.cancelVoice()
 				m.closeWebServices()
 				m.closeFileBrowser()
-				m.sheet.Set("")
+				m.pages.Open("")
 				m.OpenThread(t)
 				m.change()
 				return
@@ -475,38 +476,32 @@ func (m *App) closePush() {
 	m.OnLiveNotification, m.OnPushResult = nil, nil
 }
 func (m *App) pushSettings(cx *core.Scope) core.Node {
-	return scroll(text(tr("Notifications")),
-		m.button("push-authorize", tr("Enable mobile notifications"), nil, func() { m.push.disabled = false; prefs.Save("phone-notifications", "on"); m.requestPush(true) }),
-		m.button("push-disable", tr("Disable notifications"), nil, func() {
-			m.push.disabled = true
-			m.push.requestSeq++
-			if m.push.cancel != nil {
-				m.push.cancel()
-				m.push.cancel = nil
-			}
-			m.push.requesting = false
-			prefs.Save("phone-notifications", "off")
-			m.syncPush()
-			m.endActivity()
-			for _, id := range m.push.shown {
-				cx.CloseNotification(id)
-			}
-		}),
-		m.button("live-activities", tr("Live Activities"), nil, func() {
-			m.push.activities = !m.push.activities
-			v := "off"
-			if m.push.activities {
-				v = "on"
-			}
-			prefs.Save("nsgo-phone-live-activities", v)
-		}),
-		core.Text{TestID: "push-status", ContentFunc: live(m, func() string {
+	disable := func() {
+		m.push.disabled = true
+		m.push.requestSeq++
+		if m.push.cancel != nil {
+			m.push.cancel()
+			m.push.cancel = nil
+		}
+		m.push.requesting = false
+		prefs.Save("phone-notifications", "off")
+		m.syncPush()
+		m.endActivity()
+		for _, id := range m.push.shown {
+			cx.CloseNotification(id)
+		}
+	}
+	return m.groupedPage(cx,
+		m.group(cx, "", groupedFooter(cx, "push-status", live(m, func() string {
 			if m.push.disabled {
 				return tr("Notifications disabled")
 			}
 			return m.push.err
-		})},
-		core.Text{ContentFunc: live(m, func() string {
+		})),
+			gRow{ID: "push-authorize", Label: tr("Enable mobile notifications"), Action: true, Press: func() { m.push.disabled = false; prefs.Save("phone-notifications", "on"); m.requestPush(true) }},
+			gRow{ID: "push-disable", Label: tr("Disable notifications"), Destructive: true, Press: disable},
+		),
+		m.group(cx, "", groupedFooter(cx, "", live(m, func() string {
 			if m.push.activities {
 				if m.cx.Env().OS() != core.OSIOS || !m.push.services.activitiesEnabled() {
 					return tr("Live Activities are unavailable in this app build.")
@@ -514,6 +509,17 @@ func (m *App) pushSettings(cx *core.Scope) core.Node {
 				return tr("Live Activities enabled")
 			}
 			return tr("Live Activities disabled")
-		})},
-		m.button("push-done", tr("Done"), nil, func() { m.sheet.Set("") }))
+		})),
+			gRow{Label: tr("Live Activities"), Switch: &ui.Switch{TestID: "live-activities", Label: tr("Live Activities"),
+				Checked: live(m, func() bool { return m.push.activities }), OnChange: func(on bool) {
+					m.push.activities = on
+					v := "off"
+					if on {
+						v = "on"
+					}
+					prefs.Save("nsgo-phone-live-activities", v)
+					m.change()
+				}}},
+		),
+	)
 }

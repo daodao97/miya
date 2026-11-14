@@ -127,6 +127,8 @@ func TestAutomationsListAndInbox(t *testing.T) {
 	h := newAutomationFake()
 	app := startAutomations(t, h)
 	app.WaitFor("id:automation-open-daily", 2*time.Second)
+	app.WaitFor("id:automation-webhook-open", 2*time.Second)
+	app.Press("id:automation-webhook-open")
 	app.WaitFor("id:automation-webhook", 2*time.Second)
 	texts := strings.Join(app.Texts(), "\n")
 	for _, want := range []string{"Daily checks", "Issue opened", "https://example.test/inbox"} {
@@ -150,6 +152,8 @@ func TestAutomationsToggle(t *testing.T) {
 func TestAutomationsWebhookSwitch(t *testing.T) {
 	h := newAutomationFake()
 	app := startAutomations(t, h)
+	app.WaitFor("id:automation-webhook-open", 2*time.Second)
+	app.Press("id:automation-webhook-open")
 	app.WaitFor("id:automation-webhook", 2*time.Second)
 	app.Press("id:automation-webhook")
 	waitAutomationCall(app, h, "automationWebhook", func(r automation.Request) bool { return r.Action == "disable" })
@@ -285,7 +289,7 @@ func TestAutomationsEmptyListStillShowsInbox(t *testing.T) {
 	h := newAutomationFake()
 	h.views = nil
 	app := startAutomations(t, h)
-	app.WaitFor("id:automation-webhook", time.Second)
+	app.WaitFor("id:automation-webhook-open", time.Second)
 	app.WaitUntil(time.Second, func() bool { return strings.Contains(strings.Join(app.Texts(), "\n"), tr("No automations yet")) })
 }
 

@@ -7,7 +7,7 @@ import (
 )
 
 func (m *App) sheetBack(id, title, to string) core.Node {
-	return m.button(id, title, nil, func() { m.sheet.Set(to) })
+	return m.button(id, title, nil, func() { m.pages.Open(to) })
 }
 
 // A sheet owns its polling timer. Closing it stops reads without discarding

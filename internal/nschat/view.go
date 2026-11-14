@@ -369,7 +369,7 @@ func (v View) userMessage(cx *core.Scope, m func() model.Message) core.Node {
 	// only when the list does.
 	files := core.NewMemo(cx, func() string {
 		msg := m()
-		return strings.Join(msg.Images, "\x00") + "\x01" + strings.Join(msgfmt.MessageAttachments(msg), "\x00")
+		return strings.Join(msg.Images, "\x00") + "\x01" + strings.Join(msgfmt.MessageFiles(msg), "\x00")
 	})
 	return chat.Message{Outgoing: true, Children: []core.Node{
 		v.referenceChips(cx, func() string { return msgfmt.Message(m()).Content }, nil),
@@ -386,30 +386,35 @@ func (v View) userMessage(cx *core.Scope, m func() model.Message) core.Node {
 	}}
 }
 
-// attachments are a prompt's images as thumbnails and its files as chips.
+// attachments are a prompt's images as framed thumbnails and its other
+// files as chips naming them.
 func (v View) attachments(cx *core.Scope, m model.Message) core.Node {
-	paths := msgfmt.MessageAttachments(m)
+	paths := msgfmt.MessageFiles(m)
 	if len(m.Images) == 0 && len(paths) == 0 {
 		return core.Group(nil)
 	}
+	colors := nswidgets.ColorsOf(cx)
 	var items []core.Node
 	for i, src := range m.Images {
 		source := func() string { return imageURI(src) }
 		if v.ImageSource != nil {
 			source = v.ImageSource(cx, src)
 		}
-		items = append(items, core.Image{SourceFunc: func() core.ImageSource {
-			// A source not resolved yet shows nothing rather than a broken path.
-			if s := source(); s != "" {
-				return core.Src(imageURI(s))
-			}
-			return core.ImageSource{}
-		}, ResizeMode: core.Cover, Label: tr("Image preview"),
-			TestID: "image-" + strconv.Itoa(m.ID) + "-" + strconv.Itoa(i),
-			Style:  core.Style{Width: core.Pt(80), Height: core.Pt(80), CornerRadius: 8, FlexShrink: 0}})
+		// The frame keeps a light image apart from the page and clips it.
+		items = append(items, core.View{Style: core.Style{Width: core.Pt(80), Height: core.Pt(80), FlexShrink: 0, CornerRadius: 8, BorderWidth: 1, Overflow: core.Hidden},
+			StyleFunc: func() core.Style { return core.Style{BorderColor: colors.Line(), Background: colors.Panel()} },
+			Children: []core.Node{core.Image{SourceFunc: func() core.ImageSource {
+				// A source not resolved yet shows nothing rather than a broken path.
+				if s := source(); s != "" {
+					return core.Src(imageURI(s))
+				}
+				return core.ImageSource{}
+			}, ResizeMode: core.Cover, Label: tr("Image preview"),
+				TestID: "image-" + strconv.Itoa(m.ID) + "-" + strconv.Itoa(i),
+				Style:  core.Style{Width: core.Pt(78), Height: core.Pt(78)}}}})
 	}
 	for _, p := range paths {
-		items = append(items, chat.Attachment{Label: filepath.Base(p), Detail: filepath.Dir(p)})
+		items = append(items, chat.Attachment{Label: filepath.Base(p)})
 	}
 	return core.View{Style: core.Style{Direction: core.Row, Wrap: core.Wrap, Gap: 8, JustifyContent: core.JustifyEnd}, Children: items}
 }

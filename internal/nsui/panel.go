@@ -161,7 +161,7 @@ type panel struct {
 
 // filePanel keeps each conversation's state for the life of the shell. Switching
 // views disposes their bindings, but leaves terminal connections and tab state alive.
-func filePanel(cx *core.Scope, c Host, open *core.Signal[bool], onCurrent ...func(*panel)) core.Node {
+func filePanel(cx *core.Scope, c Host, open *core.Signal[bool], onCurrent ...func(*panel)) (head, body core.Node) {
 	ctx := cx.Context()
 	panels := map[model.ThreadRef]*panel{}
 	// A thread has no stable ref until its backend session starts. Keep its
@@ -241,12 +241,21 @@ func filePanel(cx *core.Scope, c Host, open *core.Signal[bool], onCurrent ...fun
 			}
 		}
 	})
-	return core.Dynamic(func(cx *core.Scope) core.Node {
+	// The tabs go in the shell's header row over the panel, level with the
+	// conversation's title; the panel's surface fills the rest.
+	head = core.Dynamic(func(cx *core.Scope) core.Node {
+		if p := shown.Get(); p != nil {
+			return p.header(cx)
+		}
+		return core.Group(nil)
+	})
+	body = core.Dynamic(func(cx *core.Scope) core.Node {
 		if p := shown.Get(); p != nil {
 			return p.view(cx)
 		}
 		return core.Group(nil)
 	})
+	return head, body
 }
 
 func newPanel(cx *core.Scope, ctx context.Context, c Host, open *core.Signal[bool]) *panel {
@@ -279,7 +288,6 @@ func (p *panel) view(cx *core.Scope) core.Node {
 		return nil
 	})
 	return core.View{TestID: "file-panel", Style: ui.FillRest.Merge(core.Style{Width: core.Pct(100)}), Children: []core.Node{
-		p.header(cx),
 		core.Dynamic(func(cx *core.Scope) core.Node {
 			s := active.Get()
 			if s == nil {
@@ -437,7 +445,7 @@ func (p *panel) header(cx *core.Scope) core.Node {
 			Checked:  func() bool { p.surfaces.Get(); return k.single() && p.find(k) != nil },
 			OnSelect: func() { p.openSurface(k) }})
 	}
-	return core.View{Label: tr("Right panel tabs"), Style: core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Gap: 4, Height: core.Pt(44), FlexShrink: 0, Padding: core.Symmetric(0, 8)}, Children: []core.Node{
+	return core.View{Label: tr("Right panel tabs"), Style: core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Gap: 4, FlexGrow: 1, FlexShrink: 1, MinWidth: core.Pt(0), Height: core.Pct(100)}, Children: []core.Node{
 		core.View{Style: core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Gap: 4, FlexGrow: 1, FlexShrink: 1, MinWidth: core.Pt(0)}, Children: []core.Node{
 			core.Each(p.surfaces.Get, func(s *surface) int { return s.id }, func(cx *core.Scope, get func() *surface, _ func() int) core.Node {
 				return p.tab(cx, core.Untracked(cx, get))

@@ -215,7 +215,7 @@ func TestNativeDesktopAuthenticationAvailabilityUI(t *testing.T) {
 			if len(app.QueryMounted("id:desktop-forget-password")) != 1 {
 				t.Fatal("forget must remain available in desktop options")
 			}
-			changePhone(app, m, func() { m.sheet.Set("settings") })
+			changePhone(app, m, func() { m.pages.Open("settings") })
 			if !strings.Contains(strings.Join(app.Texts(), " "), tc.label) {
 				t.Fatal("settings lost availability/type", app.Texts())
 			}
