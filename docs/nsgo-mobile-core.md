@@ -81,8 +81,8 @@ Required checks:
 
 ```sh
 gofmt -l internal/nsmobile internal/phone/client
-go tool mygo i18n check
-go tool mygo generate
+go run ./locales/gen -check
+go generate ./locales
 go vet ./internal/nsmobile/...
 go build ./...
 go build -tags nsgo -o /dev/null .
