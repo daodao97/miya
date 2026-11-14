@@ -9,6 +9,7 @@ import (
 	"github.com/nsgo-dev/nsgo/nsgotest"
 
 	"miya/internal/appmodel"
+	"miya/internal/automation"
 	"miya/internal/chat/model"
 	"miya/internal/nswidgets"
 	"miya/internal/uiruntime"
@@ -160,4 +161,16 @@ func TestIdleTimeUnsupportedStaysUnset(t *testing.T) {
 	if uiruntime.Idle() != 0 {
 		t.Fatal("Idle without a platform clock is not zero")
 	}
+}
+
+func (h *fakeHost) AutomationOp(string, automation.Request) (any, error) { return nil, nil }
+func (h *fakeHost) EnabledAgents() []string                              { return model.Backends }
+func (h *fakeHost) ChangeWorkspace(path string) error                    { h.state.Cwd = path; return nil }
+func (h *fakeHost) ThreadWithID(id int) model.Thread {
+	for _, t := range h.threads {
+		if t.ID == id {
+			return t
+		}
+	}
+	return model.Thread{}
 }

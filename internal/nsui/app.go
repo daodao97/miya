@@ -8,6 +8,7 @@ import (
 	"github.com/nsgo-dev/nsgo/desktop"
 
 	"miya/internal/appmodel"
+	"miya/internal/automation"
 	"miya/internal/chat/model"
 	"miya/internal/nswidgets"
 	"miya/internal/uiruntime"
@@ -17,6 +18,10 @@ import (
 // toward internal/ui.Host as views move over; the controller already
 // implements the whole of that.
 type Host interface {
+	AutomationOp(op string, r automation.Request) (any, error)
+	EnabledAgents() []string
+	ChangeWorkspace(path string) error
+	ThreadWithID(id int) model.Thread
 	State() *appmodel.WindowState
 	Current() model.Thread
 	SelectThread(t model.Thread)
