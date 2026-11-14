@@ -1925,5 +1925,7 @@
   "nsSettingsMenu": "Settings…",
   "nsSteerRunningTurn": "Steer the running turn…",
   "nsToggleSidebar": "Toggle sidebar",
-  "nsMenuView": "View"
+  "nsMenuView": "View",
+  "nsComposerStatus": "Model: %s · Thinking: %s · Permissions: %s · Tokens: %d",
+  "nsComposerUnknownCommand": "Unknown command. Type / to choose a supported command."
 }

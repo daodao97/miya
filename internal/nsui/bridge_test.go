@@ -9,6 +9,7 @@ import (
 	"github.com/nsgo-dev/nsgo/nsgotest"
 
 	"miya/internal/agent"
+	agentmeta "miya/internal/agent/catalog"
 	"miya/internal/agent/cliupdate"
 	"miya/internal/agent/login"
 	"miya/internal/appmodel"
@@ -25,6 +26,21 @@ import (
 // fakeHost holds controller state as the controller does: plain fields,
 // changed on the UI thread, followed by uiruntime.Invalidate.
 type fakeHost struct {
+	collaborationCall func(appmodel.CollaborationRequest) (any, error)
+	draft             string
+	attachments       []string
+	controls          fakeControls
+	sent              []bool
+	rewound           struct {
+		threadID, messageID int
+		text                string
+	}
+	prefetched    []model.ThreadRef
+	refs          map[int]model.ThreadRef
+	canRewind     bool
+	queuedActions []string
+	collab        *model.CollaborationStatus
+
 	answered     []interaction.Response
 	unread       map[int]bool
 	readIDs      []int
@@ -46,6 +62,11 @@ type fakeHost struct {
 
 func newFakeHost(threads ...model.Thread) *fakeHost {
 	h := &fakeHost{threads: threads, current: threads[0].ID}
+	h.state.Draft = func() string { return h.draft }
+	h.state.Attachments = func() []string { return append([]string(nil), h.attachments...) }
+	h.state.Active = func() int { return h.current }
+	h.state.SetAgent = func(v string) { h.controls.id = v; uiruntime.Invalidate() }
+	h.state.ReferenceSource = "local"
 	h.state.Ready = func() bool { return true }
 	h.state.Cwd = "/workspace"
 	h.state.SetPermissionPolicy = func(v string) { h.permission = v; uiruntime.Invalidate() }
@@ -56,10 +77,21 @@ func newFakeHost(threads ...model.Thread) *fakeHost {
 func (h *fakeHost) State() *appmodel.WindowState              { return &h.state }
 func (h *fakeHost) EnsurePhoneHost()                          {}
 func (h *fakeHost) RetryResponse(appmodel.RetryRequest) error { return nil }
-func (h *fakeHost) RememberDraft(string)                      {}
-func (h *fakeHost) SendDraft(bool) int                        { return 0 }
-func (h *fakeHost) Stop()                                     {}
-func (h *fakeHost) NewThread()                                {}
+func (h *fakeHost) RememberDraft(v string)                    { h.draft = v; uiruntime.Invalidate() }
+func (h *fakeHost) SendDraft(steer bool) int {
+	h.sent = append(h.sent, steer)
+	h.draft = ""
+	h.attachments = nil
+	uiruntime.Invalidate()
+	return h.current
+}
+func (h *fakeHost) Stop() {}
+func (h *fakeHost) NewThread() {
+	h.current = 0
+	h.draft = ""
+	h.attachments = nil
+	uiruntime.Invalidate()
+}
 func (h *fakeHost) DescribeApproval(a interaction.Request) appmodel.ApprovalView {
 	return appmodel.ApprovalView{Title: "Run a command", Icon: "terminal-2", Code: a.Command}
 }
@@ -222,7 +254,7 @@ func (h *fakeHost) PhoneControls() (svcproto.PhoneStatus, func(string), bool) {
 }
 func (h *fakeHost) Memories() *manager.Manager               { return h.memory }
 func (h *fakeHost) AllThreads() []model.Thread               { return h.threads }
-func (h *fakeHost) ThreadRef(t model.Thread) model.ThreadRef { return model.ThreadRef{} }
+func (h *fakeHost) ThreadRef(t model.Thread) model.ThreadRef { return h.refs[t.ID] }
 func (h *fakeHost) ThreadWorkspace(int) string               { return h.state.Cwd }
 func (h *fakeHost) ChangeWorkspace(path string) error {
 	h.state.Cwd = path
@@ -283,3 +315,86 @@ func (h *fakeHost) ReadDesktopThread(t model.Thread) {
 func (h *fakeHost) ThreadRefProjects() []model.ProjectSnapshot {
 	return []model.ProjectSnapshot{{Name: "workspace", Path: h.state.Cwd, Threads: h.threads}}
 }
+func (h *fakeHost) AddAttachments(paths []string) {
+	h.attachments = append(h.attachments, paths...)
+	uiruntime.Invalidate()
+}
+func (h *fakeHost) RemoveAttachment(path string) {
+	var keep []string
+	for _, p := range h.attachments {
+		if p != path {
+			keep = append(keep, p)
+		}
+	}
+	h.attachments = keep
+	uiruntime.Invalidate()
+}
+func (h *fakeHost) BackendReady() bool { return true }
+func (h *fakeHost) CurrentAgent() string {
+	if h.controls.id != "" {
+		return h.controls.id
+	}
+	return model.AgentCodex
+}
+func (h *fakeHost) CurrentAgentControls() agent.Controls    { return &h.controls }
+func (h *fakeHost) AgentSpeedBadge(string) string           { return "" }
+func (h *fakeHost) CurrentPermissionPolicy() string         { return h.permission }
+func (h *fakeHost) SetCurrentPermissionPolicy(v string)     { h.permission = v; uiruntime.Invalidate() }
+func (h *fakeHost) Resume(model.Thread, *model.SendRequest) {}
+func (h *fakeHost) RemoveQueued(threadID, queuedID int) {
+	for i := range h.threads {
+		if h.threads[i].ID != threadID {
+			continue
+		}
+		var keep []model.QueuedMessage
+		for _, q := range h.threads[i].Queue {
+			if q.ID != queuedID {
+				keep = append(keep, q)
+			}
+		}
+		h.threads[i].Queue = keep
+	}
+	uiruntime.Invalidate()
+}
+func (h *fakeHost) ResumeQueue(int)                            { h.queuedActions = append(h.queuedActions, "resume") }
+func (h *fakeHost) SteerQueued(int, int)                       { h.queuedActions = append(h.queuedActions, "steer") }
+func (h *fakeHost) CanRewind(model.Thread, model.Message) bool { return h.canRewind }
+func (h *fakeHost) Rewind(t, m int, text string) {
+	h.rewound.threadID = t
+	h.rewound.messageID = m
+	h.rewound.text = text
+}
+func (h *fakeHost) PrefetchReference(ref model.ThreadRef)                 { h.prefetched = append(h.prefetched, ref) }
+func (h *fakeHost) SavedReferenceTitle(model.ThreadRef) (string, bool)    { return "", false }
+func (h *fakeHost) RunThreadCommand(string) string                        { return "" }
+func (h *fakeHost) TaskAction(int, string, string) string                 { return "" }
+func (h *fakeHost) TaskWaitingApproval(model.Thread) bool                 { return false }
+func (h *fakeHost) CollaborationCapabilities() *model.CollaborationStatus { return h.collab }
+func (h *fakeHost) CollaborationUserOp(r appmodel.CollaborationRequest) (any, error) {
+	if h.collaborationCall != nil {
+		return h.collaborationCall(r)
+	}
+	return map[string]any{"tasks": []any{}}, nil
+}
+
+type fakeControls struct {
+	id, model, effort, problem string
+	reconnect                  bool
+}
+
+func (f *fakeControls) Name() string { return model.AgentName(f.id) }
+func (f *fakeControls) Commands(string, bool) agent.CommandCatalog {
+	return agent.DefaultCommands(model.AgentCodex)
+}
+func (f *fakeControls) Caps() agentmeta.Capabilities {
+	return agentmeta.Capabilities{Models: true, Effort: true}
+}
+func (f *fakeControls) Problem() (string, bool)    { return f.problem, f.reconnect }
+func (f *fakeControls) Reconnect()                 { f.problem = ""; uiruntime.Invalidate() }
+func (f *fakeControls) ModelChoices() []string     { return []string{"default", "fast"} }
+func (f *fakeControls) ModelLabel(s string) string { return s }
+func (f *fakeControls) EffortChoices() []string    { return []string{"", "high"} }
+func (f *fakeControls) Model() string              { return f.model }
+func (f *fakeControls) Effort() string             { return f.effort }
+func (f *fakeControls) SetModel(s string)          { f.model = s; uiruntime.Invalidate() }
+func (f *fakeControls) SetEffort(s string)         { f.effort = s; uiruntime.Invalidate() }

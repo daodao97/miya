@@ -20659,3 +20659,23 @@ func NsMenuView() string { return In(i18n.Locale()).NsMenuView() }
 func (msgs Messages) NsMenuView() string {
 	return Catalog.Format(msgs.locale, "nsMenuView", nil)
 }
+
+// NsComposerStatus says "Model: %s · Thinking: %s · Permissions: %s · Tokens: %d"
+// in the language the app shows.
+func NsComposerStatus() string { return In(i18n.Locale()).NsComposerStatus() }
+
+// NsComposerStatus says "Model: %s · Thinking: %s · Permissions: %s · Tokens: %d"
+// in the language of msgs.
+func (msgs Messages) NsComposerStatus() string {
+	return Catalog.Format(msgs.locale, "nsComposerStatus", nil)
+}
+
+// NsComposerUnknownCommand says "Unknown command. Type / to choose a supported command."
+// in the language the app shows.
+func NsComposerUnknownCommand() string { return In(i18n.Locale()).NsComposerUnknownCommand() }
+
+// NsComposerUnknownCommand says "Unknown command. Type / to choose a supported command."
+// in the language of msgs.
+func (msgs Messages) NsComposerUnknownCommand() string {
+	return Catalog.Format(msgs.locale, "nsComposerUnknownCommand", nil)
+}

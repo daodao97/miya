@@ -27,6 +27,28 @@ import (
 // implements the whole of that.
 type Host interface {
 	requestsHost
+	AddAttachments(paths []string)
+	RemoveAttachment(path string)
+	BackendReady() bool
+	CurrentAgent() string
+	CurrentAgentControls() agent.Controls
+	AgentSpeedBadge(agent string) string
+	CurrentPermissionPolicy() string
+	SetCurrentPermissionPolicy(policy string)
+	Resume(t model.Thread, after *model.SendRequest)
+	RemoveQueued(threadID int, queuedID int)
+	ResumeQueue(id int)
+	SteerQueued(threadID int, queuedID int)
+	CanRewind(t model.Thread, m model.Message) bool
+	Rewind(threadID int, messageID int, text string)
+	PrefetchReference(ref model.ThreadRef)
+	ThreadRefProjects() []model.ProjectSnapshot
+	SavedReferenceTitle(ref model.ThreadRef) (string, bool)
+	RunThreadCommand(command string) string
+	TaskAction(threadID int, taskID string, action string) string
+	TaskWaitingApproval(t model.Thread) bool
+	CollaborationCapabilities() *model.CollaborationStatus
+	CollaborationUserOp(r appmodel.CollaborationRequest) (any, error)
 	AutomationOp(op string, r automation.Request) (any, error)
 	EnabledAgents() []string
 	ThreadWithID(id int) model.Thread
@@ -70,7 +92,6 @@ type Host interface {
 	DesktopThreadUnread(t model.Thread) bool
 	ReadDesktopThread(t model.Thread)
 	MirroredHistory(id int) bool
-	ThreadRefProjects() []model.ProjectSnapshot
 	WorkspaceFiles() projectaccess.Files
 }
 
