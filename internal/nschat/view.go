@@ -43,6 +43,10 @@ type View struct {
 	OnSend        func()
 	OnStop        func()
 	SendDisabled  func() bool
+	// Composer overrides the default composer for surfaces with phone controls.
+	Composer core.Node
+	// OnLink handles thread and desktop-file references in the owning surface.
+	OnLink func(string)
 	// Requests are the pending approvals and questions, above the composer.
 	Requests core.Node
 	// Above contains app-owned status, suggestions and notices. Accessory and
@@ -113,7 +117,9 @@ func (v View) Render(cx *core.Scope) core.Node {
 	if v.Requests != nil {
 		floating = append(floating, v.Requests)
 	}
-	if v.Draft != nil {
+	if v.Composer != nil {
+		floating = append(floating, v.Composer)
+	} else if v.Draft != nil {
 		floating = append(floating, core.Show{When: func() bool { return v.ComposerVisible == nil || v.ComposerVisible() }, Then: func(cx *core.Scope) core.Node { return v.composer(cx) }})
 	}
 	return chat.FloatingConversation{State: v.State, JumpLabel: tr("↓ Latest"), TestID: v.TestID,
@@ -316,7 +322,13 @@ func (v View) attachments(cx *core.Scope, m model.Message) core.Node {
 		if v.ImageSource != nil {
 			source = v.ImageSource(cx, src)
 		}
-		items = append(items, core.Image{SourceFunc: func() core.ImageSource { return core.Src(source()) }, ResizeMode: core.Cover, Label: tr("Image preview"),
+		items = append(items, core.Image{SourceFunc: func() core.ImageSource {
+			// A source not resolved yet shows nothing rather than a broken path.
+			if s := source(); s != "" {
+				return core.Src(imageURI(s))
+			}
+			return core.ImageSource{}
+		}, ResizeMode: core.Cover, Label: tr("Image preview"),
 			TestID: "image-" + strconv.Itoa(m.ID) + "-" + strconv.Itoa(i),
 			Style:  core.Style{Width: core.Pt(80), Height: core.Pt(80), CornerRadius: 8, FlexShrink: 0}})
 	}
@@ -348,7 +360,7 @@ func (v View) assistant(cx *core.Scope, m func() model.Message) core.Node {
 	id := "reply-" + idOf(cx, m)
 	content := func() string { return model.ImagePlaceholder.ReplaceAllString(msgfmt.Message(m()).Content, "") }
 	return core.Dynamic(func(cx *core.Scope) core.Node {
-		return ui.TextView{TestID: id, MarkdownFunc: content, OnLinkPress: openLink(cx),
+		return ui.TextView{TestID: id, MarkdownFunc: content, OnLinkPress: v.openLink(cx),
 			Options: textview.Options{Streaming: streaming.Get()}, Selectable: true, NoCodeBlockScrollbar: true}
 	})
 }
@@ -402,13 +414,13 @@ func (v View) activity(cx *core.Scope, m func() model.Message) core.Node {
 				// An adapter leaves the content empty when the list says it all.
 				children = append(children, core.Show{When: func() bool { return strings.TrimSpace(msgfmt.Message(m()).Content) != "" },
 					Then: func(cx *core.Scope) core.Node {
-						return detail(cx, func() model.MessagePresentation { return msgfmt.Message(m()) })
+						return detailWithLink(cx, func() model.MessagePresentation { return msgfmt.Message(m()) }, v.openLink(cx))
 					}})
 				return core.View{Style: core.Style{Gap: 8, MinWidth: core.Pt(0)}, Children: children}
 			}
 		case hasBody:
 			a.Content = func(cx *core.Scope) core.Node {
-				return detail(cx, func() model.MessagePresentation { return msgfmt.Message(m()) })
+				return detailWithLink(cx, func() model.MessagePresentation { return msgfmt.Message(m()) }, v.openLink(cx))
 			}
 			a.Mono = len(p.Plan) == 0 && (p.Format == "" || p.Format == "text")
 		}
@@ -428,6 +440,10 @@ func status(s string) chat.Status {
 
 // detail is an activity's expanded body by its format.
 func detail(cx *core.Scope, p func() model.MessagePresentation) core.Node {
+	return detailWithLink(cx, p, openLink(cx))
+}
+
+func detailWithLink(cx *core.Scope, p func() model.MessagePresentation, onLink func(textview.LinkPressEvent)) core.Node {
 	colors := nswidgets.ColorsOf(cx)
 	format := core.NewMemo(cx, func() string {
 		pp := p()
@@ -454,7 +470,7 @@ func detail(cx *core.Scope, p func() model.MessagePresentation) core.Node {
 				return strings.TrimSuffix(b.String(), "\n")
 			}}
 		case "markdown":
-			return ui.TextView{MarkdownFunc: func() string { return p().Content }, Selectable: true, OnLinkPress: openLink(cx)}
+			return ui.TextView{MarkdownFunc: func() string { return p().Content }, Selectable: true, OnLinkPress: onLink}
 		case "diff":
 			return diff.DiffView{Patch: func() string { return p().Content }, Unified: true, Selectable: true}
 		case "files":
@@ -486,4 +502,11 @@ func idOf(cx *core.Scope, m func() model.Message) string {
 // openLink opens a link a reply holds with the system.
 func openLink(cx *core.Scope) func(textview.LinkPressEvent) {
 	return func(e textview.LinkPressEvent) { cx.OpenURL(e.URL, nil) }
+}
+
+func (v View) openLink(cx *core.Scope) func(textview.LinkPressEvent) {
+	if v.OnLink == nil {
+		return openLink(cx)
+	}
+	return func(e textview.LinkPressEvent) { v.OnLink(e.URL) }
 }

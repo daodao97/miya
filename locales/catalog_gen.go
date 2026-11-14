@@ -34,6 +34,66 @@ type Messages struct{ locale string }
 // source language.
 func In(locale string) Messages { return Messages{locale} }
 
+// PhoneUnread says "Unread"
+// in the language the app shows.
+func PhoneUnread() string { return In(i18n.Locale()).PhoneUnread() }
+
+// PhoneUnread says "Unread"
+// in the language of msgs.
+func (msgs Messages) PhoneUnread() string {
+	return Catalog.Format(msgs.locale, "phoneUnread", nil)
+}
+
+// PhoneConnectDesktop says "Connect to your desktop"
+// in the language the app shows.
+func PhoneConnectDesktop() string { return In(i18n.Locale()).PhoneConnectDesktop() }
+
+// PhoneConnectDesktop says "Connect to your desktop"
+// in the language of msgs.
+func (msgs Messages) PhoneConnectDesktop() string {
+	return Catalog.Format(msgs.locale, "phoneConnectDesktop", nil)
+}
+
+// PhoneApprovalsOnDesktop says "Review pending approvals on your desktop"
+// in the language the app shows.
+func PhoneApprovalsOnDesktop() string { return In(i18n.Locale()).PhoneApprovalsOnDesktop() }
+
+// PhoneApprovalsOnDesktop says "Review pending approvals on your desktop"
+// in the language of msgs.
+func (msgs Messages) PhoneApprovalsOnDesktop() string {
+	return Catalog.Format(msgs.locale, "phoneApprovalsOnDesktop", nil)
+}
+
+// PhoneDisconnect says "Disconnect"
+// in the language the app shows.
+func PhoneDisconnect() string { return In(i18n.Locale()).PhoneDisconnect() }
+
+// PhoneDisconnect says "Disconnect"
+// in the language of msgs.
+func (msgs Messages) PhoneDisconnect() string {
+	return Catalog.Format(msgs.locale, "phoneDisconnect", nil)
+}
+
+// PhoneForgetDesktop says "Forget desktop"
+// in the language the app shows.
+func PhoneForgetDesktop() string { return In(i18n.Locale()).PhoneForgetDesktop() }
+
+// PhoneForgetDesktop says "Forget desktop"
+// in the language of msgs.
+func (msgs Messages) PhoneForgetDesktop() string {
+	return Catalog.Format(msgs.locale, "phoneForgetDesktop", nil)
+}
+
+// PhoneSecureStoreUnavailable says "Secure pairing storage is unavailable. Pair again after restarting."
+// in the language the app shows.
+func PhoneSecureStoreUnavailable() string { return In(i18n.Locale()).PhoneSecureStoreUnavailable() }
+
+// PhoneSecureStoreUnavailable says "Secure pairing storage is unavailable. Pair again after restarting."
+// in the language of msgs.
+func (msgs Messages) PhoneSecureStoreUnavailable() string {
+	return Catalog.Format(msgs.locale, "phoneSecureStoreUnavailable", nil)
+}
+
 // SearchSettings says "Search settings"
 // in the language the app shows.
 func SearchSettings() string { return In(i18n.Locale()).SearchSettings() }

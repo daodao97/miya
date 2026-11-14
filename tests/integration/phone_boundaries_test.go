@@ -12,13 +12,14 @@ import (
 
 func TestPhonePackageBoundaries(t *testing.T) {
 	for root, forbidden := range map[string][]string{
-		"phone":          {"controller", "ui", "mobile", "appmodel", "chat/view", "widgets"},
+		"phone":          {"controller", "ui", "mobile", "appmodel", "chat/view", "widgets", "nsui", "nschat", "nswidgets", "nsmobile"},
 		"phone/protocol": {"phone/server", "phone/cache", "phone/proxy", "phone/transfer"},
 		"phone/transfer": {"phone/server", "phone/cache", "phone/proxy", "phone/protocol"},
 		"phone/server":   {"phone/cache", "phone/proxy"},
 		"phone/cache":    {"phone/server", "phone/proxy"},
 		"phone/proxy":    {"phone/server", "phone/cache"},
 		"mobile":         {"phone/server"},
+		"nsmobile":       {"phone/server"},
 		"chat/model":     {"phone"},
 		"appmodel":       {"phone"},
 	} {

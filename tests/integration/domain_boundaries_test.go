@@ -53,13 +53,13 @@ func TestUITransitiveDependenciesStayProviderNeutral(t *testing.T) {
 			}
 		}
 	}
-	for _, root := range []string{"miya/internal/ui", "miya/internal/mobile", "miya/internal/chat/view", "miya/internal/nsui", "miya/internal/nschat", "miya/internal/nswidgets"} {
+	for _, root := range []string{"miya/internal/ui", "miya/internal/mobile", "miya/internal/chat/view", "miya/internal/nsui", "miya/internal/nsmobile", "miya/internal/nschat", "miya/internal/nswidgets"} {
 		visit(root, nil)
 	}
 }
 
 func TestSharedDomainPackagesDoNotImportAgentImplementations(t *testing.T) {
-	for _, root := range []string{"chat/model", "chat/presentation", "chat/text", "chat/subagent", "agent/account", "agent/quota", "agent/catalog", "service/server", "service/client", "service/protocol", "service/process", "service/workspaces", "project/model", "project/files", "project/git", "project/registry", "project/access", "agent/policy", "runtime"} {
+	for _, root := range []string{"phone/client", "chat/model", "chat/presentation", "chat/text", "chat/subagent", "agent/account", "agent/quota", "agent/catalog", "service/server", "service/client", "service/protocol", "service/process", "service/workspaces", "project/model", "project/files", "project/git", "project/registry", "project/access", "agent/policy", "runtime"} {
 		err := filepath.WalkDir(filepath.Join("internal", root), func(path string, entry fs.DirEntry, err error) error {
 			if err != nil {
 				return err
@@ -76,7 +76,7 @@ func TestSharedDomainPackagesDoNotImportAgentImplementations(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				for _, blocked := range []string{"miya/internal/agent/codex", "miya/internal/agent/claude", "miya/internal/agent/integrations", "miya/internal/controller", "miya/internal/ui", "miya/internal/mobile", "miya/internal/nsui", "miya/internal/nschat", "miya/internal/nswidgets"} {
+				for _, blocked := range []string{"miya/internal/agent/codex", "miya/internal/agent/claude", "miya/internal/agent/integrations", "miya/internal/controller", "miya/internal/ui", "miya/internal/mobile", "miya/internal/nsui", "miya/internal/nsmobile", "miya/internal/nschat", "miya/internal/nswidgets"} {
 					if name == blocked || strings.HasPrefix(name, blocked+"/") {
 						t.Errorf("%s imports implementation %s", path, name)
 					}

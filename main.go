@@ -1,4 +1,4 @@
-//go:build !nsgo || ios || android
+//go:build !nsgo
 
 package main
 

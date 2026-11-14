@@ -219,3 +219,34 @@ func TestSubAgentLine(t *testing.T) {
 		t.Error("markers")
 	}
 }
+
+// A phone resolves desktop images asynchronously without changing the source
+// carried by synchronized history or rebuilding the image's native view.
+func TestPhoneImageResolverUpdatesTheExistingImage(t *testing.T) {
+	var path *core.Signal[string]
+	th := model.Thread{ID: 7, Messages: []model.Message{{ID: 1, Role: "user", Content: "Photo", Images: []string{"file:///desktop/photo.jpg"}}}}
+	app := nsgotest.Start(t, func(cx *core.Scope) core.Node {
+		cx.SetTheme(nswidgets.Theme())
+		path = core.NewSignal(cx, "")
+		return View{Thread: func() model.Thread { return th }, ImageSource: func(_ *core.Scope, src string) func() string {
+			if src != "file:///desktop/photo.jpg" {
+				t.Errorf("unexpected source %q", src)
+			}
+			return path.Get
+		}}
+	}, nsgotest.Size(390, 844))
+	before := app.Find("id:image-1-0")
+	if before.Image.Source.URI != "" {
+		t.Fatal("phone opened desktop filesystem path")
+	}
+	id := before.ID
+	app.Post(func() { path.Set("/phone/cache/photo.jpg") })
+	app.Settle()
+	after := app.Find("id:image-1-0")
+	if after.ID != id || after.Image.Source.URI != "file:///phone/cache/photo.jpg" {
+		t.Fatalf("resolved image: id %d source %q", after.ID, after.Image.Source.URI)
+	}
+	if th.Messages[0].Images[0] != "file:///desktop/photo.jpg" {
+		t.Fatal("resolver changed synchronized history")
+	}
+}

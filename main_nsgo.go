@@ -1,7 +1,7 @@
 //go:build nsgo && !ios && !android
 
 // The desktop app on NSGo, built with -tags nsgo while the migration runs;
-// see docs/nsgo-migration.md. Phones keep the MyGo entry in main.go.
+// see docs/nsgo-migration.md. Phones use main_nsgo_mobile.go.
 package main
 
 import (

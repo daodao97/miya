@@ -1,4 +1,10 @@
 {
+  "phoneUnread": "Unread",
+  "phoneConnectDesktop": "Connect to your desktop",
+  "phoneApprovalsOnDesktop": "Review pending approvals on your desktop",
+  "phoneDisconnect": "Disconnect",
+  "phoneForgetDesktop": "Forget desktop",
+  "phoneSecureStoreUnavailable": "Secure pairing storage is unavailable. Pair again after restarting.",
   "searchSettings": "Search settings",
   "noMatchingSettings": "No matching settings.",
 
