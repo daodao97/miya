@@ -21,6 +21,11 @@ import (
 
 type mobileAutomations struct {
 	Webhook *automation.WebhookView
+	// Briefing is the daily briefing's setting and BriefingTime the time
+	// being typed; BriefingRequestedAt throttles loadPhoneBriefing.
+	Briefing            *automation.BriefingView
+	BriefingTime        string
+	BriefingRequestedAt time.Time
 	// WebhookRequestedAt throttles loadPhoneWebhook.
 	WebhookRequestedAt time.Time
 	webhookCopiedAt    time.Time
@@ -205,6 +210,7 @@ func (m *App) automationsPage(c *ui.Context, detail bool) {
 					m.automationPhoneRow(c.Key(v.ID), v)
 				}
 			})
+			m.automationPhoneBriefing(c.Key("briefing"))
 		})
 	})
 }

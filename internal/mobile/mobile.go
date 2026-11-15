@@ -662,6 +662,9 @@ func (m *App) read(gen int, conn *remote.Conn) (greeted bool, err error) {
 		case "memory":
 			data, message := f.Data, f.Error
 			m.onMain(gen, func() { m.ReceiveMemory(data, message) })
+		case "automation-briefing":
+			data, message := f.Data, f.Error
+			m.onMain(gen, func() { m.ReceiveBriefing(data, message) })
 		case "automation-webhook":
 			data, message := f.Data, f.Error
 			m.onMain(gen, func() {
