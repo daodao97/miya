@@ -75,6 +75,9 @@ func decide(access Access, dir string, ask Ask) (Answer, string) {
 	if strings.HasPrefix(ask.Tool, "mcp__miya__") {
 		return Answer{Decided: true, Allow: true}, what
 	}
+	if access == AccessRead && ask.Tool == "Bash" && readOnlyCommand(bashCommand(ask)) {
+		return Answer{Decided: true, Allow: true}, what
+	}
 	switch {
 	case local && access != AccessRead:
 		return Answer{Decided: true, Allow: true}, what
@@ -312,10 +315,29 @@ func isWriteMethod(m string) bool {
 	return false
 }
 
-// stripWrappers drops the assignments and wrappers before a command.
+// stripWrappers drops the assignments and wrappers before a command, and
+// sees through rtk, the output filter some setups put in front of every
+// command: rtk git push is git push.
 func stripWrappers(words []string) []string {
-	for len(words) > 0 && (wrappers[words[0]] || isAssignment(words[0]) || strings.HasPrefix(words[0], "-") && len(words) > 1) {
+	for {
+		for len(words) > 0 && (wrappers[words[0]] || isAssignment(words[0]) || strings.HasPrefix(words[0], "-") && len(words) > 1) {
+			words = words[1:]
+		}
+		if len(words) == 0 || filepath.Base(strings.Trim(words[0], `"'`)) != "rtk" {
+			return words
+		}
 		words = words[1:]
+		for len(words) > 1 && strings.HasPrefix(words[0], "-") {
+			words = words[1:]
+		}
+		if len(words) == 0 {
+			return words
+		}
+		switch words[0] {
+		case "proxy", "err", "test", "summary":
+			words = words[1:]
+		case "read", "smart", "json", "log":
+			words = append([]string{"cat"}, words[1:]...)
+		}
 	}
-	return words
 }

@@ -97,6 +97,8 @@ func TestDecideByAccess(t *testing.T) {
 		{"report under read", AccessRead, report, want{true, true}},
 		{"edit under read", AccessRead, edit, want{true, false}},
 		{"command under read", AccessRead, tests, want{true, false}},
+		{"read-only command under read", AccessRead, claudeAsk("Bash", map[string]string{"command": "git log --oneline -3"}), want{true, true}},
+		{"push under read", AccessRead, push, want{true, false}},
 		{"edit under external", AccessExternal, edit, want{true, true}},
 		{"push under external waits", AccessExternal, push, want{false, false}},
 	}

@@ -70,10 +70,12 @@ func PermissionMode(policy string) string {
 		return "bypassPermissions"
 	case "on-failure":
 		return "auto"
-	// An automation's access level: read plans without touching files; edit
-	// takes file edits and asks for anything else, which Miya answers.
+	// An automation's access level. Read asks for everything, and Miya
+	// allows only read-only commands: plan mode would send Bash to a safety
+	// check that is unavailable here and refuse even git log. Edit takes
+	// file edits and asks for anything else, which Miya answers.
 	case agentpolicy.Read:
-		return "plan"
+		return "manual"
 	case agentpolicy.Edit:
 		return "acceptEdits"
 	default:

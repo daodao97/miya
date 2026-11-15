@@ -1,6 +1,13 @@
 # 对外动作审查（P1 详细设计）
 
-状态：实施步骤 1 到 4 已完成（2026-11-15），尚未在真机上验证。2026-11-15。上层规划见 `docs/personal-agent.md` 的 P1。
+状态：实施步骤 1 到 4 已完成（2026-11-15）。2026-11-15。上层规划见 `docs/personal-agent.md` 的 P1。
+
+**实机验证（2026-11-15，隔离实例，Claude Code 2.1.325，本机测试仓库加本地 bare 远端）：**
+
+- `external`：Claude 把「改 README、提交、`git push`」写成一条命令，Miya 生成审查并拒绝，仓库和远端都没变；批准一次后自动化被唤醒，新运行原样重试，许可放行，推送成功。
+- `read`：`git log`、`cat` 照常执行，追加文件被 Miya 拒绝并记录。最初 `read` 用 Claude 的 `plan` 模式，结果 Bash 被送去一个本会话不可用的安全检查，连 `git log` 都被 Claude 自己拒绝、根本不到 Miya，所以改成 `manual`，由 Miya 按只读命令白名单放行。
+- `edit`：改文件和本地提交放行，`git push` 被拒绝并记录，远端没变。
+- 本机的 Claude 有 rtk 钩子，把命令改写成 `rtk git log`、`rtk read`、`rtk git push`。分类时把 rtk 当作包装去掉，否则 `rtk git push` 会被当成本地命令放行。
 
 ## Abstract / 摘要
 
@@ -36,7 +43,7 @@
 | 值 | 含义 | Claude Code | Codex |
 | --- | --- | --- | --- |
 | `""` | 跟随窗口里的权限选择（旧行为，已有自动化保持不变） | 同现在 | 同现在 |
-| `read` | 只读，不改文件 | `plan` | 沙箱 `read-only`，审批 `on-request` |
+| `read` | 只读，不改文件 | `manual`，Miya 只放行只读命令 | 沙箱 `read-only`，审批 `on-request` |
 | `edit` | 可以改项目文件、跑本地命令、在本地提交 | `acceptEdits` | 沙箱 `workspace-write`（不联网），审批 `on-request` |
 | `external` | 同 `edit`，对外动作逐次审查 | `acceptEdits` | 同 `edit` |
 
@@ -122,7 +129,7 @@
 
 ## Implementation / 实施步骤
 
-1. 访问级别：`Automation.Access`，权限映射（Codex `read-only` 档、Claude `plan`/`acceptEdits`），提交运行时带上；MCP 和编辑页可设；整理一句话默认 `edit`。
+1. 访问级别：`Automation.Access`，权限映射（Codex `read-only` 档、Claude `manual`/`acceptEdits`），提交运行时带上；MCP 和编辑页可设；整理一句话默认 `edit`。
 2. 无人值守答复：识别自动化运行的审批请求，许可匹配，本地动作放行，`read`/`edit` 拒绝并记进运行记录。
 3. 审查记录和许可：`external` 生成审查记录、拒绝并说明；批准、拒绝、过期；`review` 唤醒；许可匹配和撤销。
 4. 界面：「需要你处理」里的审查卡片，桌面和手机的批准、拒绝，详情页的许可列表。
@@ -131,7 +138,7 @@
 
 | 场景 | 验收标准 |
 | --- | --- |
-| `read` 的自动化试图改文件 | 被拒绝（Claude `plan` 模式或 Codex 只读沙箱），运行记录写明被拒绝的动作，运行不卡住 |
+| `read` 的自动化试图改文件 | 被拒绝（Claude 由 Miya 拒绝，Codex 由只读沙箱挡住），运行记录写明被拒绝的动作，运行不卡住 |
 | `edit` 的自动化执行 `git push` | Miya 当场拒绝，运行继续或结束，不等人 |
 | `external` 的自动化执行 `git push` | 生成审查记录并推送；这次运行结束，不占用 CLI |
 | 3 小时后批准「只这一次」 | 自动化被唤醒，重试的同一命令自动放行；再推第二次时重新审查 |
