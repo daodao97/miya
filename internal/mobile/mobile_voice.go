@@ -185,30 +185,71 @@ func (m *App) voicePage() bool {
 	return m.Loaded && m.Link != "" && (path == "/" || path == "/thread")
 }
 
+// voiceStatus shows what is being recognized in a large card over the dimmed
+// page, so the words can be read at a glance while the finger stays on the
+// input. The touch stays captured by the input, so the overlay never takes
+// the release.
 func (m *App) voiceStatus(c *ui.Context) {
-	if v := m.voice; v != nil {
-		ui.Row(c).FillWidth().PaddingX(8).Gap(8).AlignItems(ui.Center).Children(func() {
-			label := tr("Listening… Release to finish")
-			if v.autoSend {
-				label = tr("Listening… Release to send")
-			}
-			if v.released {
-				label = tr("Recognizing…")
-				if v.autoSend {
-					label = tr("Recognizing… Will send when ready")
-				}
-			}
-			ui.Column(c).Grow(1).MinWidth(0).Gap(4).Children(func() {
-				ui.Text(c, label).FontSize(m.Font(13)).TextColor(m.Pal.link)
-				if v.partial != "" {
-					ui.Text(c, v.partial).FontSize(m.Font(14)).Wrap().MaxHeight(64)
+	v := m.voice
+	if v == nil {
+		return
+	}
+	p := m.Pal
+	label := tr("Listening… Release to finish")
+	if v.autoSend {
+		label = tr("Listening… Release to send")
+	}
+	if v.released {
+		label = tr("Recognizing…")
+		if v.autoSend {
+			label = tr("Recognizing… Will send when ready")
+		}
+	}
+	root := c.Root().Bounds()
+	safe := safeAreaOf(c)
+	scrim := ui.RGBA(0, 0, 0, 0.35)
+	if m.Dark {
+		scrim = ui.RGBA(0, 0, 0, 0.6)
+	}
+	ui.Overlay(c, func() {
+		ui.Column(c.Key("voice-overlay")).Absolute().Left(0).Top(0).Width(root.W).Height(root.H).
+			Padding(safe.Top+24, safe.Right+24, safe.Bottom+24, safe.Left+24).
+			Background(scrim).PassThrough().AlignItems(ui.Center).Justify(ui.Center).Children(func() {
+			card := ui.Column(c.Key("voice-card")).FillWidth().MaxWidth(440).Padding(18, 20, 14, 20).Gap(14).
+				Background(p.Bg).Border(1, p.line).Radius(26).Shadow(0, 12, 32, 0, ui.RGBA(0, 0, 0, 0.25))
+			card.Children(func() {
+				ui.Row(c).FillWidth().Gap(10).AlignItems(ui.Center).Children(func() {
+					badge := p.link
+					if v.released {
+						badge = p.muted
+					}
+					ui.Row(c).Size(28, 28).Shrink(0).Radius(14).Background(badge.Alpha(0.15)).Justify(ui.Center).AlignItems(ui.Center).Children(func() {
+						widgets.Icon(c, "microphone", 16, badge)
+					})
+					ui.Text(c, label).FontSize(m.Font(13)).TextColor(p.muted).Grow(1).MinWidth(0).Wrap()
+				})
+				// The newest words stay in view: a long dictation overflows
+				// upward and is clipped at the top.
+				body := ui.Column(c.Key("voice-text")).FillWidth().MinHeight(m.Font(22) * 1.5).MaxHeight(max(120, root.H*0.4)).Clip().Justify(ui.End)
+				body.Children(func() {
+					if v.partial != "" {
+						ui.Text(c, v.partial).FontSize(m.Font(22)).FontWeight(500).TextColor(p.ink).FillWidth().Wrap()
+					} else {
+						ui.Text(c, "…").FontSize(m.Font(22)).TextColor(p.muted)
+					}
+				})
+				if v.released {
+					ui.Row(c).FillWidth().Justify(ui.End).Children(func() {
+						if m.phoneButton(c.Key("voice-cancel")).MinHeight(44).Label(tr("Cancel voice input")).Children(func() {
+							ui.Text(c, tr("Cancel")).FontSize(m.Font(15)).TextColor(p.link)
+						}).Clicked() {
+							m.cancelVoice()
+						}
+					})
 				}
 			})
-			if m.phoneButton(c.Key("voice-cancel")).Label(tr("Cancel voice input")).Children(func() { ui.Text(c, tr("Cancel")).FontSize(m.Font(13)) }).Clicked() {
-				m.cancelVoice()
-			}
 		})
-	}
+	})
 }
 
 func (m *App) voiceSettings(c *ui.Context) {
