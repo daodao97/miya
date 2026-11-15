@@ -182,3 +182,30 @@ func TestReviewApprovedForTheProject(t *testing.T) {
 		t.Fatal("allowed after revoking")
 	}
 }
+
+// A decision made while a run is in progress waits for it, and then wakes
+// the automation even if it is paused: the person answered it.
+func TestReviewDecidedDuringARunWakesAPausedAutomation(t *testing.T) {
+	w := newWakeHarness(t)
+	a := externalAutomation(w)
+	thread := w.startIngress(a.ID)
+	i, _ := w.rn.Store.Find(a.ID)
+	w.rn.Store.Automations[i].Enabled = false
+	w.rn.Unattended(thread, bash("git push origin main"))
+	id := w.rn.Store.PendingReviews(a.ID)[0].ID
+	if err := w.rn.DecideReview(id, true, ScopeOnce, ""); err != nil {
+		t.Fatal(err)
+	}
+	if last := w.rn.Store.Wakes[a.ID][len(w.rn.Store.Wakes[a.ID])-1]; last.Outcome != WakeQueued {
+		t.Fatalf("decision during a run: %+v", last)
+	}
+	w.endRun(a.ID)
+	w.now = w.now.Add(time.Minute)
+	w.rn.Tick()
+	if w.rn.Active[a.ID] == nil {
+		t.Fatalf("the queued decision did not start a run: %+v", w.rn.Store.Wakes[a.ID])
+	}
+	if text := w.h.sent[len(w.h.sent)-1].Text; !strings.Contains(text, "approved once") {
+		t.Fatalf("the run was not told:\n%s", text)
+	}
+}

@@ -298,7 +298,9 @@ func (rn *Runner) tickWakes(now time.Time) {
 		}
 		delete(w.queued, id)
 		i, ok := rn.Store.Find(id)
-		if !ok || !rn.Store.Automations[i].Enabled {
+		// A paused automation still takes what a person sent it, as Wake
+		// does: a manual run, or the decision on a review.
+		if !ok || !rn.Store.Automations[i].Enabled && ev.Source != SourceManual && ev.Source != SourceReview {
 			continue
 		}
 		if ev.Count > 1 {
