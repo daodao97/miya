@@ -86,7 +86,7 @@ func (rn *Runner) worktreeReady(id string, r *ActiveRun, w worktree.Worktree, er
 	rn.Store.UpdateRun(id, r.started, func(run *Run) { run.Worktree, run.WorktreeState = &w, WorktreeActive })
 	rn.host.AddWorkspace(w.Dir)
 	a := rn.Store.Automations[i]
-	thread := rn.Submit(model.SendRequest{Agent: a.Agent, Project: w.Dir, Text: rn.runText(a, prev, r.ev) + worktreeNote(w), MemoryControl: true})
+	thread := rn.Submit(model.SendRequest{Agent: a.Agent, Project: w.Dir, Text: rn.runText(a, prev, r.ev) + worktreeNote(w), Policy: a.Access.Policy(), MemoryControl: true})
 	if thread == 0 {
 		rn.finish(id, Failed, model.AgentName(a.Agent)+" is not ready")
 		return

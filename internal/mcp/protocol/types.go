@@ -83,15 +83,19 @@ type Error struct {
 }
 
 type AutomationArgs struct {
-	ID           string `json:"id,omitempty"`
-	Name         string `json:"name,omitempty"`
-	Schedule     string `json:"schedule,omitempty"`
-	Instructions string `json:"instructions,omitempty"`
-	Check        string `json:"check,omitempty"`
-	Rounds       int    `json:"rounds,omitempty"`
-	Agent        string `json:"agent,omitempty"`
-	Enabled      *bool  `json:"enabled,omitempty"`
-	Worktree     *bool  `json:"worktree,omitempty"`
+	ID             string  `json:"id,omitempty"`
+	Name           string  `json:"name,omitempty"`
+	Schedule       string  `json:"schedule,omitempty"`
+	Instructions   string  `json:"instructions,omitempty"`
+	Check          string  `json:"check,omitempty"`
+	Rounds         int     `json:"rounds,omitempty"`
+	Agent          string  `json:"agent,omitempty"`
+	Enabled        *bool   `json:"enabled,omitempty"`
+	Worktree       *bool   `json:"worktree,omitempty"`
+	StallAfter     *int    `json:"stallAfter,omitempty"`
+	NotifyEveryRun *bool   `json:"notifyEveryRun,omitempty"`
+	Recheck        *bool   `json:"recheck,omitempty"`
+	Access         *string `json:"access,omitempty"`
 	// Triggers and Policy are automation.Trigger and automation.WakePolicy
 	// values, decoded where the automations are.
 	Triggers json.RawMessage `json:"triggers,omitempty"`

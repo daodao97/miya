@@ -548,6 +548,33 @@ func (app *App) automationDetail(c *ui.Context) {
 		}
 		ui.Text(c, tr("Otherwise a run that passes with nothing new stays in the history without a notification")).FontSize(12).TextColor(widgets.Muted)
 	})
+	ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
+		values := []automation.Access{"", automation.AccessRead, automation.AccessEdit, automation.AccessExternal}
+		names := make([]string, len(values))
+		selected := ""
+		for i, a := range values {
+			names[i] = automationAccessLabel(a)
+			if a == v.Access {
+				selected = names[i]
+			}
+		}
+		if ui.Select(c.Key("access"), &selected, names).Label(tr("Access")).FontSize(12).Shrink(0).Changed() {
+			for i, name := range names {
+				if name != selected || values[i] == v.Access {
+					continue
+				}
+				next := v.Automation
+				next.Access = values[i]
+				app.autoCall("automationSave", automation.Request{Automation: &next}, func(_ json.RawMessage, err error) {
+					if err != nil {
+						app.Autos.err = err.Error()
+					}
+					app.loadAutomations()
+				})
+			}
+		}
+		ui.Text(c, tr("What runs may do without you. Outside actions include git push, opening pull requests, sending messages and network writes")).FontSize(12).TextColor(widgets.Muted)
+	})
 	if v.Worktree && v.Check != "" {
 		ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
 			recheck := v.Recheck
@@ -1206,4 +1233,17 @@ func (app *App) briefingSetting(c *ui.Context) {
 		}
 		ui.Text(c, tr("One notice a day with the last 24 hours of runs and what needs you; nothing on a day with nothing to say")).FontSize(12).TextColor(widgets.Muted).Grow(1).MinWidth(0)
 	})
+}
+
+// automationAccessLabel names an access level in the picker.
+func automationAccessLabel(a automation.Access) string {
+	switch a {
+	case automation.AccessRead:
+		return tr("Read only")
+	case automation.AccessEdit:
+		return tr("Edit; refuse outside actions")
+	case automation.AccessExternal:
+		return tr("Edit; review outside actions")
+	}
+	return tr("Follow the window's permission")
 }

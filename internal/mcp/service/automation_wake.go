@@ -42,6 +42,18 @@ func applyWakeArgs(a, old *automation.Automation, args mcpproto.AutomationArgs) 
 		}
 		a.Policy = p
 	}
+	if args.StallAfter != nil {
+		a.StallAfter = *args.StallAfter
+	}
+	if args.NotifyEveryRun != nil {
+		a.NotifyEveryRun = *args.NotifyEveryRun
+	}
+	if args.Recheck != nil {
+		a.Recheck = *args.Recheck
+	}
+	if args.Access != nil {
+		a.Access = automation.Access(strings.TrimSpace(*args.Access))
+	}
 	return nil
 }
 

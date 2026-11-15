@@ -109,6 +109,10 @@ func (rn *Runner) CardDetail(a Automation, now time.Time) string {
 		"Agent: "+model.AgentName(a.Agent),
 		"Completion check: "+CheckText(a),
 		"Runs in: "+WhereText(a),
+		"May: "+AccessText(a.Access),
+		"Notifies: "+notifyText(a),
+		"Stalls: "+stallText(a),
+		"Recheck: "+recheckText(a),
 		"Instructions: "+a.Instructions,
 	), "\n")
 }
@@ -128,6 +132,10 @@ func (rn *Runner) Diff(old, next Automation) string {
 	add("Agent", model.AgentName(old.Agent), model.AgentName(next.Agent))
 	add("Completion check", CheckText(old), CheckText(next))
 	add("Runs in", WhereText(old), WhereText(next))
+	add("May", AccessText(old.Access), AccessText(next.Access))
+	add("Notifies", notifyText(old), notifyText(next))
+	add("Stalls", stallText(old), stallText(next))
+	add("Recheck", recheckText(old), recheckText(next))
 	add("Instructions", old.Instructions, next.Instructions)
 	return strings.Join(lines, "\n")
 }

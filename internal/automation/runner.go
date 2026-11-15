@@ -265,7 +265,7 @@ func (rn *Runner) startRun(id string, ev WakeEvent) error {
 	} else if a.Worktree {
 		rn.startInWorktree(a, run, prev, ev)
 		return nil
-	} else if thread = rn.Submit(model.SendRequest{Agent: a.Agent, Project: a.Project, Text: rn.runText(a, prev, ev), MemoryControl: true}); thread == 0 {
+	} else if thread = rn.Submit(model.SendRequest{Agent: a.Agent, Project: a.Project, Text: rn.runText(a, prev, ev), Policy: a.Access.Policy(), MemoryControl: true}); thread == 0 {
 		run.Result, run.Summary, run.Finished = Failed, model.AgentName(a.Agent)+" is not ready", now
 	}
 	rn.Store.AddRun(id, run)

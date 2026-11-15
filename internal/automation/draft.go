@@ -123,7 +123,7 @@ func DraftFor(ctx context.Context, generate DraftGenerator, project, request str
 // FromDraft checks what the agent made and fills the rest.
 func FromDraft(d Draft, agent, project, request string) (Automation, bool, error) {
 	a := Automation{Name: d.Name, Project: project, Agent: agent, Request: strings.TrimSpace(request),
-		Instructions: d.Instructions, Schedule: d.Schedule, Check: d.Check, Rounds: d.Rounds}
+		Instructions: d.Instructions, Schedule: d.Schedule, Check: d.Check, Rounds: d.Rounds, Access: AccessEdit}
 	a.Check = stripProjectCd(a.Check, project)
 	trigger, condition := draftTrigger(d)
 	timeMissing := d.TimeMissing || strings.TrimSpace(d.Schedule) == ""

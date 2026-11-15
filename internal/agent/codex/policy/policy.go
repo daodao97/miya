@@ -18,8 +18,11 @@ func ApprovalForPolicy(policy string) string {
 }
 
 func SandboxForPolicy(policy string) string {
-	if policy == "never" {
+	switch policy {
+	case "never":
 		return "danger-full-access"
+	case agentpolicy.Read:
+		return "read-only"
 	}
 	return "workspace-write"
 }
@@ -32,8 +35,11 @@ func ReviewerForPolicy(policy string) string {
 }
 
 func TurnSandboxForPolicy(policy string) map[string]any {
-	if policy == "never" {
+	switch policy {
+	case "never":
 		return map[string]any{"type": "dangerFullAccess"}
+	case agentpolicy.Read:
+		return map[string]any{"type": "readOnly"}
 	}
 	return map[string]any{"type": "workspaceWrite", "networkAccess": false}
 }

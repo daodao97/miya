@@ -70,6 +70,12 @@ func PermissionMode(policy string) string {
 		return "bypassPermissions"
 	case "on-failure":
 		return "auto"
+	// An automation's access level: read plans without touching files; edit
+	// takes file edits and asks for anything else, which Miya answers.
+	case agentpolicy.Read:
+		return "plan"
+	case agentpolicy.Edit:
+		return "acceptEdits"
 	default:
 		return "manual"
 	}

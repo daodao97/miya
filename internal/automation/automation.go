@@ -63,6 +63,9 @@ type Automation struct {
 	// Recheck runs Check again, for a Worktree run that passed and left
 	// changes, in a clean checkout of what a merge would bring (worktree.go).
 	Recheck bool `json:"recheck,omitempty"`
+	// Access is what its runs may do (docs/action-review.md): read, edit or
+	// external. Empty follows the permission picked in the window, as before.
+	Access Access `json:"access,omitempty"`
 }
 
 // Run is one run of an automation.
@@ -200,6 +203,9 @@ func (a *Automation) Normalize() error {
 	}
 	if a.ID == "" {
 		a.ID = NewID()
+	}
+	if err := a.Access.valid(); err != nil {
+		return err
 	}
 	if err := a.normalizeTriggers(); err != nil {
 		return err

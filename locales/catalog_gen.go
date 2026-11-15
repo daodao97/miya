@@ -2924,6 +2924,66 @@ func (msgs Messages) AutomationNotifyEveryRunHelp() string {
 	return Catalog.Format(msgs.locale, "automationNotifyEveryRunHelp", nil)
 }
 
+// AutomationAccess says "Access"
+// in the language the app shows.
+func AutomationAccess() string { return In(i18n.Locale()).AutomationAccess() }
+
+// AutomationAccess says "Access"
+// in the language of msgs.
+func (msgs Messages) AutomationAccess() string {
+	return Catalog.Format(msgs.locale, "automationAccess", nil)
+}
+
+// AutomationAccessHelp says "What runs may do without you. Outside actions include git push, opening pull requests, sending messages and network w…"
+// in the language the app shows.
+func AutomationAccessHelp() string { return In(i18n.Locale()).AutomationAccessHelp() }
+
+// AutomationAccessHelp says "What runs may do without you. Outside actions include git push, opening pull requests, sending messages and network w…"
+// in the language of msgs.
+func (msgs Messages) AutomationAccessHelp() string {
+	return Catalog.Format(msgs.locale, "automationAccessHelp", nil)
+}
+
+// AutomationAccessWindow says "Follow the window's permission"
+// in the language the app shows.
+func AutomationAccessWindow() string { return In(i18n.Locale()).AutomationAccessWindow() }
+
+// AutomationAccessWindow says "Follow the window's permission"
+// in the language of msgs.
+func (msgs Messages) AutomationAccessWindow() string {
+	return Catalog.Format(msgs.locale, "automationAccessWindow", nil)
+}
+
+// AutomationAccessRead says "Read only"
+// in the language the app shows.
+func AutomationAccessRead() string { return In(i18n.Locale()).AutomationAccessRead() }
+
+// AutomationAccessRead says "Read only"
+// in the language of msgs.
+func (msgs Messages) AutomationAccessRead() string {
+	return Catalog.Format(msgs.locale, "automationAccessRead", nil)
+}
+
+// AutomationAccessEdit says "Edit; refuse outside actions"
+// in the language the app shows.
+func AutomationAccessEdit() string { return In(i18n.Locale()).AutomationAccessEdit() }
+
+// AutomationAccessEdit says "Edit; refuse outside actions"
+// in the language of msgs.
+func (msgs Messages) AutomationAccessEdit() string {
+	return Catalog.Format(msgs.locale, "automationAccessEdit", nil)
+}
+
+// AutomationAccessExternal says "Edit; review outside actions"
+// in the language the app shows.
+func AutomationAccessExternal() string { return In(i18n.Locale()).AutomationAccessExternal() }
+
+// AutomationAccessExternal says "Edit; review outside actions"
+// in the language of msgs.
+func (msgs Messages) AutomationAccessExternal() string {
+	return Catalog.Format(msgs.locale, "automationAccessExternal", nil)
+}
+
 // AutomationStalled says "Stalled"
 // in the language the app shows.
 func AutomationStalled() string { return In(i18n.Locale()).AutomationStalled() }

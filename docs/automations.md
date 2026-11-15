@@ -200,6 +200,19 @@ curl --fail-with-body -X POST '<自动化首页的 Miya Webhook 地址>' \
 
 限制：临时检出里没有 git 忽略的文件，例如已安装的依赖（`node_modules`）和构建缓存，需要它们的检查会在复核时失败，这类项目不要打开复核，或者在检查命令里先装依赖。默认关闭。
 
+## 访问级别
+
+`access` 决定运行在无人值守时能做什么，详细设计见 `docs/action-review.md`：
+
+- `read`：只读，不改文件。Claude Code 用 `plan` 模式，Codex 用只读沙箱。
+- `edit`：可以改项目文件、跑本地命令。Claude Code 用 `acceptEdits`，Codex 用不联网的 `workspace-write` 沙箱。
+- `external`：同 `edit`，对外动作逐次交给人审查。
+- 为空：跟随窗口里的权限选择，即以前的行为。已有自动化保持为空。
+
+整理一句话或由 Agent 新建的自动化默认 `edit`。设了访问级别的运行不会以「完全放开」运行，也不受窗口权限选择影响；同一运行的后续轮次沿用这个级别。详情页可以修改，修改需要确认。
+
+当前版本只实现了级别到 CLI 权限的映射：超出级别的审批请求仍然显示为待审批，等人处理。由 Miya 当场拒绝、以及 `external` 的审查记录和许可，按 `docs/action-review.md` 的实施步骤 2、3 实现。
+
 ## 后台服务
 
 有启用的自动化时，后台服务不会因为没有窗口而空闲退出。同时在 `~/Library/LaunchAgents/com.daodao.miya.service.plist` 安装一个登录时启动服务的任务；没有启用的自动化时卸载。这个任务只负责启动服务，服务自己的单实例锁保证只有一个在运行；没有设 `KeepAlive`，应用更新时替换服务不会和它冲突。
