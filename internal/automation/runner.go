@@ -400,11 +400,13 @@ func (rn *Runner) finish(id, result, summary string) {
 		if result == Passed && x.Report != nil && !x.Report.Auto {
 			x.Summary = textutil.ClipRunes(textutil.FirstLine(x.Report.Summary), 200)
 		}
+		x.Unchanged = foundNothingNew(*x, rn.Store.previousReport(id, x.Started))
 		run = *x
 	})
 	rn.Persist()
 	rn.reprobe(id, run)
 	if i, ok := rn.Store.Find(id); ok {
+		rn.afterProgress(rn.Store.Automations[i], run)
 		defer rn.afterRun(rn.Store.Automations[i], run)
 	}
 	if run.Worktree != nil {

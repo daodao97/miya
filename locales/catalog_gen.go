@@ -2644,6 +2644,46 @@ func (msgs Messages) CheckFailed35010c() string {
 	return Catalog.Format(msgs.locale, "checkFailed_35010c", nil)
 }
 
+// AutomationStalled says "Stalled"
+// in the language the app shows.
+func AutomationStalled() string { return In(i18n.Locale()).AutomationStalled() }
+
+// AutomationStalled says "Stalled"
+// in the language of msgs.
+func (msgs Messages) AutomationStalled() string {
+	return Catalog.Format(msgs.locale, "automationStalled", nil)
+}
+
+// AutomationStalledRuns says "%d runs in a row found nothing new."
+// in the language the app shows.
+func AutomationStalledRuns() string { return In(i18n.Locale()).AutomationStalledRuns() }
+
+// AutomationStalledRuns says "%d runs in a row found nothing new."
+// in the language of msgs.
+func (msgs Messages) AutomationStalledRuns() string {
+	return Catalog.Format(msgs.locale, "automationStalledRuns", nil)
+}
+
+// AutomationStalledSince says "Stalled since "
+// in the language the app shows.
+func AutomationStalledSince() string { return In(i18n.Locale()).AutomationStalledSince() }
+
+// AutomationStalledSince says "Stalled since "
+// in the language of msgs.
+func (msgs Messages) AutomationStalledSince() string {
+	return Catalog.Format(msgs.locale, "automationStalledSince", nil)
+}
+
+// AutomationStalledWaits says "Triggered runs wait until you edit it or run it now."
+// in the language the app shows.
+func AutomationStalledWaits() string { return In(i18n.Locale()).AutomationStalledWaits() }
+
+// AutomationStalledWaits says "Triggered runs wait until you edit it or run it now."
+// in the language of msgs.
+func (msgs Messages) AutomationStalledWaits() string {
+	return Catalog.Format(msgs.locale, "automationStalledWaits", nil)
+}
+
 // TriggerFailuresInARow says "%d in a row"
 // in the language the app shows.
 func TriggerFailuresInARow() string { return In(i18n.Locale()).TriggerFailuresInARow() }

@@ -33,6 +33,8 @@ type View struct {
 	// WakeURLs are where its ingress triggers are woken over HTTP, by
 	// trigger ID, while the local wake endpoint listens.
 	WakeURLs map[string]string `json:"wakeURLs,omitempty"`
+	// Stalled is since when its triggered runs wait for a person.
+	Stalled time.Time `json:"stalled,omitzero"`
 }
 
 type Request struct {
@@ -153,6 +155,8 @@ func (rn *Runner) SaveWithID(a Automation, createID string) (Automation, error) 
 			a.Due = now
 		}
 		rn.keepTriggerStates(old, a)
+		// Editing it is a person looking at it.
+		delete(rn.Store.Stalled, a.ID)
 		rn.Store.Automations[i] = a
 	} else {
 		rn.Store.Automations = append(rn.Store.Automations, a)

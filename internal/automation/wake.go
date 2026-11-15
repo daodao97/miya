@@ -157,6 +157,20 @@ func (rn *Runner) deliver(a Automation, ev WakeEvent, gated bool) (Wake, error) 
 		if n := rn.triggeredRuns(a.ID, now.Add(-24*time.Hour)); n >= a.Policy.MaxPerDay {
 			return rn.record(a.ID, ev, WakeHeld, fmt.Sprintf("Reached %d triggered runs in 24 hours", n)), nil
 		}
+		if since, stalled := rn.Store.Stalled[a.ID]; stalled {
+			return rn.record(a.ID, ev, WakeHeld, "Stalled since "+FormatTime(since)+": waiting for a person"), nil
+		}
+		// A wake that brings data has something new to look at; one without
+		// waits longer after runs that found nothing new.
+		if ev.Data == "" {
+			if until, n := rn.backoffUntil(a); now.Before(until) {
+				return rn.record(a.ID, ev, WakeHeld, fmt.Sprintf("Backing off until %s: the last %d triggered runs found nothing new", FormatTime(until), n)), nil
+			}
+		}
+	}
+	if ev.Source == SourceManual {
+		// Running it now is a person looking at it.
+		rn.unstall(a.ID)
 	}
 	_, running := rn.Active[a.ID]
 	if running || w.gating[a.ID] {

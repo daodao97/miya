@@ -53,6 +53,10 @@ type Automation struct {
 	// Worktree runs each run in a new Git worktree on its own branch, so
 	// that it cannot collide with edits in the project (worktree.go).
 	Worktree bool `json:"worktree,omitempty"`
+	// StallAfter, when set, stops the runs triggers start once that many
+	// runs in a row found nothing new, until a person edits the automation
+	// or runs it now (progress.go).
+	StallAfter int `json:"stallAfter,omitempty"`
 }
 
 // Run is one run of an automation.
@@ -77,6 +81,9 @@ type Run struct {
 	WakeAfter   string `json:"wakeAfter,omitempty"`
 	// Report is the run\'s structured result.
 	Report *Report `json:"report,omitempty"`
+	// Unchanged marks a run whose result said the same as the run before
+	// (progress.go).
+	Unchanged bool `json:"unchanged,omitempty"`
 	// Worktree is where a run of a Worktree automation worked, and
 	// WorktreeState what became of it.
 	Worktree      *worktree.Worktree `json:"worktree,omitempty"`
@@ -145,6 +152,11 @@ func (a *Automation) Normalize() error {
 	if err := a.normalizeTriggers(); err != nil {
 		return err
 	}
+	a.StallAfter = min(max(a.StallAfter, 0), maxStallAfter)
+	if a.StallAfter == 1 {
+		// One run alike is not yet a stall.
+		a.StallAfter = 2
+	}
 	if a.Check == "" {
 		a.Rounds = 1
 	} else {
@@ -185,6 +197,8 @@ type Store struct {
 	Triggers map[string]TriggerState `json:"triggers,omitempty"`
 	// Wakes is what became of each automation's latest wakes.
 	Wakes map[string][]Wake `json:"wakes,omitempty"`
+	// Stalled is since when each stalled automation has stalled.
+	Stalled map[string]time.Time `json:"stalled,omitempty"`
 }
 
 // TriggerState is what a trigger has seen.
@@ -229,6 +243,7 @@ func (s *Store) AddWake(id string, w Wake) {
 func (s *Store) Forget(id string) {
 	delete(s.Runs, id)
 	delete(s.Wakes, id)
+	delete(s.Stalled, id)
 	for k := range s.Triggers {
 		if strings.HasPrefix(k, id+"/") {
 			delete(s.Triggers, k)

@@ -42,6 +42,7 @@ var automationToolProps = map[string]any{
 	"rounds":       map[string]any{"type": "integer", "minimum": 1, "maximum": 5, "description": "Most rounds when check fails (default 3; 1 without check)"},
 	"agent":        map[string]any{"type": "string", "enum": model.Backends, "description": "Agent that runs it (default: this conversation's)"},
 	"worktree":     map[string]any{"type": "boolean", "description": "Run each run in a separate Git worktree on its own branch, so it cannot collide with edits in the project; the user merges or discards its changes afterwards. Use for automations that change code"},
+	"stallAfter":   map[string]any{"type": "integer", "minimum": 0, "maximum": 10, "description": "Optional, for an automation that pushes one thing forward (fix CI, land a migration): after this many runs in a row whose reported results are the same as the run before, Miya stops the runs triggers start and tells the user, until they edit it or use Run now. 0 or unset never stops it"},
 }
 
 func init() {

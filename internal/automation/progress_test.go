@@ -1,0 +1,147 @@
+package automation
+
+import (
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestFoundNothingNewComparesWhatWasFound(t *testing.T) {
+	prev := &Report{Summary: "Two issues open", Findings: []string{"#12 stale", "#9 needs repro"}, Metrics: []Metric{{Name: "open", Value: "2"}}}
+	same := Report{Summary: "Still two open issues", Findings: []string{"#9 needs repro", " #12 stale "}, Metrics: []Metric{{Name: "open", Value: "2"}}}
+	cases := []struct {
+		name string
+		run  Run
+		prev *Report
+		want bool
+	}{
+		{"same findings, other words", Run{Result: Passed, Report: &same}, prev, true},
+		{"a metric moved", Run{Result: Passed, Report: &Report{Findings: same.Findings, Metrics: []Metric{{Name: "open", Value: "3"}}}}, prev, false},
+		{"a finding is new", Run{Result: Passed, Report: &Report{Findings: append([]string{"#14 new"}, same.Findings...), Metrics: same.Metrics}}, prev, false},
+		{"needs the person", Run{Result: Passed, Report: &Report{Findings: same.Findings, Metrics: same.Metrics, NeedsUser: true}}, prev, false},
+		{"made by Miya", Run{Result: Passed, Report: &Report{Findings: same.Findings, Metrics: same.Metrics, Auto: true}}, prev, false},
+		{"failed", Run{Result: Failed, Report: &same}, prev, false},
+		{"nothing before", Run{Result: Passed, Report: &same}, nil, false},
+		{"no result", Run{Result: Passed}, prev, false},
+	}
+	for _, tc := range cases {
+		if got := foundNothingNew(tc.run, tc.prev); got != tc.want {
+			t.Fatalf("%s: got %v", tc.name, got)
+		}
+	}
+}
+
+// runIngress starts a run of a with an ingress wake that brings data,
+// lets it report findings, and ends it.
+func (w *wakeHarness) runIngress(id, data string, findings ...string) {
+	w.t.Helper()
+	wk, err := w.rn.Ingress(id, "", "", false, data, "")
+	if err != nil || wk.Outcome != WakeStarted {
+		w.t.Fatalf("not started: %+v %v", wk, err)
+	}
+	w.rn.Store.UpdateLastRun(id, func(r *Run) { r.Report = &Report{Summary: "checked", Findings: findings} })
+	w.endRun(id)
+}
+
+func (w *wakeHarness) lastRun(id string) Run {
+	runs := w.rn.Store.Runs[id]
+	return runs[len(runs)-1]
+}
+
+// Wakes that bring nothing new wait longer after triggered runs that found
+// nothing new; wakes that bring data still start runs.
+func TestTriggeredRunsBackOffWhenNothingIsNew(t *testing.T) {
+	w := newWakeHarness(t)
+	a := w.add(ingressAutomation(WakePolicy{}))
+	w.runIngress(a.ID, "", "#12 stale")
+	w.now = w.now.Add(time.Minute)
+	w.runIngress(a.ID, "", "#12 stale")
+	if !w.lastRun(a.ID).Unchanged {
+		t.Fatalf("the second run with the same findings: %+v", w.lastRun(a.ID))
+	}
+	w.now = w.now.Add(time.Minute)
+	// One run alike is not enough to back off.
+	w.runIngress(a.ID, "", "#12 stale")
+	last := w.now
+	w.now = w.now.Add(5 * time.Minute)
+	if wk, _ := w.rn.Ingress(a.ID, "", "", false, "", ""); wk.Outcome != WakeHeld || !strings.Contains(wk.Detail, "Backing off") || !strings.Contains(wk.Detail, "last 2") {
+		t.Fatalf("no backoff after two runs alike: %+v", wk)
+	}
+	// Data is something new to look at.
+	w.runIngress(a.ID, "issue #15 opened", "#12 stale")
+	last = w.now
+	// Three alike in a row: the wait doubles from 10 minutes to 20.
+	w.now = last.Add(15 * time.Minute)
+	if wk, _ := w.rn.Ingress(a.ID, "", "", false, "", ""); wk.Outcome != WakeHeld {
+		t.Fatalf("the wait did not grow: %+v", wk)
+	}
+	w.now = last.Add(21 * time.Minute)
+	w.runIngress(a.ID, "", "#12 stale", "#16 new")
+	if w.lastRun(a.ID).Unchanged {
+		t.Fatal("a run with a new finding counted as nothing new")
+	}
+	// Something new ends the backoff.
+	w.now = w.now.Add(time.Minute)
+	if wk, _ := w.rn.Ingress(a.ID, "", "", false, "", ""); wk.Outcome != WakeStarted {
+		t.Fatalf("still backing off after a change: %+v", wk)
+	}
+}
+
+// StallAfter runs in a row that find nothing new stop triggered runs, with
+// one notice, until the person edits the automation or runs it now.
+func TestStallStopsTriggeredRunsUntilAPersonLooks(t *testing.T) {
+	w := newWakeHarness(t)
+	auto := ingressAutomation(WakePolicy{})
+	auto.StallAfter = 3
+	a := w.add(auto)
+	for i := 0; i < 4; i++ {
+		w.now = w.now.Add(time.Minute)
+		w.runIngress(a.ID, "ping", "CI still red: TestFlaky")
+	}
+	if _, stalled := w.rn.Store.Stalled[a.ID]; !stalled {
+		t.Fatalf("not stalled after 3 runs alike: %+v", w.rn.Store.Runs[a.ID])
+	}
+	stalls := 0
+	for _, n := range w.h.notices {
+		if strings.HasPrefix(n.ID, "miya-auto-stall-") {
+			stalls++
+		}
+	}
+	if stalls != 1 {
+		t.Fatalf("stall notices: %d", stalls)
+	}
+	if v := w.rn.View(a, w.now); v.Stalled.IsZero() {
+		t.Fatal("the view does not show the stall")
+	}
+	w.now = w.now.Add(time.Minute)
+	if wk, _ := w.rn.Ingress(a.ID, "", "", false, "ping", ""); wk.Outcome != WakeHeld || !strings.Contains(wk.Detail, "Stalled") {
+		t.Fatalf("a stalled automation started a triggered run: %+v", wk)
+	}
+	// Run now is a person looking.
+	if wk, err := w.rn.Wake(WakeEvent{Automation: a.ID, Source: SourceManual}); err != nil || wk.Outcome != WakeStarted {
+		t.Fatalf("run now: %+v %v", wk, err)
+	}
+	if _, stalled := w.rn.Store.Stalled[a.ID]; stalled {
+		t.Fatal("run now did not end the stall")
+	}
+	w.endRun(a.ID)
+	// Editing it ends a stall too.
+	w.rn.Store.Stalled = map[string]time.Time{a.ID: w.now}
+	edited := w.rn.Store.Automations[0]
+	edited.Instructions = "Fix the flaky test, or skip it with a note"
+	if _, err := w.rn.Save(edited); err != nil {
+		t.Fatal(err)
+	}
+	if _, stalled := w.rn.Store.Stalled[a.ID]; stalled {
+		t.Fatal("editing did not end the stall")
+	}
+	// Without StallAfter, runs alike never stall it.
+	plain := w.add(ingressAutomation(WakePolicy{}))
+	for i := 0; i < 5; i++ {
+		w.now = w.now.Add(time.Minute)
+		w.runIngress(plain.ID, "ping", "same")
+	}
+	if _, stalled := w.rn.Store.Stalled[plain.ID]; stalled {
+		t.Fatal("stalled without StallAfter")
+	}
+}
