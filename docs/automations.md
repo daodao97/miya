@@ -227,6 +227,8 @@ Automations 页面（`view_automations.go`）有三个画面：
 
 ## 运行结果
 
+每次运行记下谁说它做完了（`verdict`）：配置了检查命令且最后一轮通过是「已由检查验证」（`verified`）；检查到最后一轮仍失败是 `check_failed`，运行记为失败；没有检查命令、只是对话正常结束是「未验证：没有检查命令」（`unchecked`）。agent 在 `report_result` 里怎么说不算结论。桌面和手机的运行记录都显示这一项；推送文案不加，避免没有检查的自动化每条通知都带一句。
+
 每次运行结束都会留下一份结构化结果，存在这次运行的记录里，和对话是否还在无关（`internal/automation/report.go`）。
 
 - 运行时发出的消息是指令，加上一段说明：结束前调用 miya 的 `report_result` 工具上报 `summary`（总结）、`findings`（要点）、`metrics`（指标，含名称、数值、单位）、`artifacts`（产出文件或链接）、`needs_user`（是否需要人处理）。多次调用以最后一次为准；不是自动化运行的对话调用会报错。Claude Code 调用它不需要确认。

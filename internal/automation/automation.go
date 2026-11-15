@@ -90,6 +90,11 @@ type Run struct {
 	// Quiet marks a run that ended without a notification, as it passed
 	// with nothing new.
 	Quiet bool `json:"quiet,omitempty"`
+	// Verdict is who says the run's work is done: VerdictVerified when the
+	// check command passed, VerdictCheckFailed when it did not after the
+	// last round, VerdictUnchecked when there is no check and only the
+	// conversation ended. What the agent reports is no verdict.
+	Verdict string `json:"verdict,omitempty"`
 	// Worktree is where a run of a Worktree automation worked, and
 	// WorktreeState what became of it.
 	Worktree      *worktree.Worktree `json:"worktree,omitempty"`
@@ -97,6 +102,24 @@ type Run struct {
 	Changes       worktree.Changes   `json:"changes,omitzero"`
 	// WorktreeError is why the last merge or discard failed.
 	WorktreeError string `json:"worktreeError,omitempty"`
+}
+
+// A run's verdict is one of these.
+const (
+	VerdictVerified    = "verified"
+	VerdictCheckFailed = "check_failed"
+	VerdictUnchecked   = "unchecked"
+)
+
+// VerdictLabel says in a few words who says a run's work is done.
+func VerdictLabel(v string) string {
+	switch v {
+	case VerdictVerified:
+		return tr(" · Verified by the check")
+	case VerdictUnchecked:
+		return tr(" · Not verified: no check command")
+	}
+	return ""
 }
 
 // A run's result is one of these.

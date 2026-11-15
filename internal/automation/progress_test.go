@@ -264,3 +264,30 @@ func TestRunAfterQuietRunsIsToldWhatWasReported(t *testing.T) {
 		t.Fatalf("told again although the previous run notified:\n%s", last)
 	}
 }
+
+// A run's verdict comes from the check command Miya ran, not from what the
+// agent reported.
+func TestRunVerdictComesFromTheCheck(t *testing.T) {
+	w := newWakeHarness(t)
+	pass := true
+	w.rn.Check = func(string, string) (bool, string) { return pass, "FAIL TestFlaky" }
+	checked := ingressAutomation(WakePolicy{})
+	checked.Check, checked.Rounds = "go test ./...", 1
+	a := w.add(checked)
+	w.runIngress(a.ID, "ping", "all green")
+	if r := w.lastRun(a.ID); r.Result != Passed || r.Verdict != VerdictVerified {
+		t.Fatalf("check passed: %+v", r)
+	}
+	// The agent says it is done; the check says otherwise.
+	pass = false
+	w.now = w.now.Add(time.Minute)
+	w.runIngress(a.ID, "ping", "all green")
+	if r := w.lastRun(a.ID); r.Result != Failed || r.Verdict != VerdictCheckFailed {
+		t.Fatalf("check failed: %+v", r)
+	}
+	plain := w.add(ingressAutomation(WakePolicy{}))
+	w.runIngress(plain.ID, "ping", "done")
+	if r := w.lastRun(plain.ID); r.Result != Passed || r.Verdict != VerdictUnchecked || VerdictLabel(r.Verdict) == "" {
+		t.Fatalf("no check: %+v", r)
+	}
+}

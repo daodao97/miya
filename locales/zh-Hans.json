@@ -246,6 +246,8 @@
   "checkCommandOptional_cbd4ef": "检查命令（可选）",
   "checkFailedRoundDDOutputFrom_691f46": "检查未通过（第 %d/%d 轮）：`%s` 的输出如下，请修复后结束这一轮。\n\n```\n%s\n```",
   "checkFailed_35010c": "检查未通过：",
+  "automationVerified": " · 已由检查验证",
+  "automationUnverified": " · 未验证：没有检查命令",
   "automationQuietRun": " · 没有新发现，未通知",
   "automationNotifyEveryRun": "每次运行都通知",
   "automationNotifyEveryRunHelp": "关闭时，通过且没有新发现的运行只留在记录里，不发通知",

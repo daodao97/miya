@@ -2644,6 +2644,26 @@ func (msgs Messages) CheckFailed35010c() string {
 	return Catalog.Format(msgs.locale, "checkFailed_35010c", nil)
 }
 
+// AutomationVerified says " · Verified by the check"
+// in the language the app shows.
+func AutomationVerified() string { return In(i18n.Locale()).AutomationVerified() }
+
+// AutomationVerified says " · Verified by the check"
+// in the language of msgs.
+func (msgs Messages) AutomationVerified() string {
+	return Catalog.Format(msgs.locale, "automationVerified", nil)
+}
+
+// AutomationUnverified says " · Not verified: no check command"
+// in the language the app shows.
+func AutomationUnverified() string { return In(i18n.Locale()).AutomationUnverified() }
+
+// AutomationUnverified says " · Not verified: no check command"
+// in the language of msgs.
+func (msgs Messages) AutomationUnverified() string {
+	return Catalog.Format(msgs.locale, "automationUnverified", nil)
+}
+
 // AutomationQuietRun says " · Nothing new, not notified"
 // in the language the app shows.
 func AutomationQuietRun() string { return In(i18n.Locale()).AutomationQuietRun() }

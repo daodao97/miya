@@ -335,6 +335,7 @@ func (rn *Runner) advance(id string, r *ActiveRun) {
 	case status != subagent.Completed:
 		rn.finish(id, Failed, textutil.FirstNonEmpty(t.Status, "No response received"))
 	case a.Check == "":
+		rn.updateRun(id, r, func(run *Run) { run.Verdict = VerdictUnchecked })
 		rn.finish(id, Passed, reply)
 	default:
 		r.checking = true
@@ -359,12 +360,14 @@ func (rn *Runner) afterCheck(id string, r *ActiveRun, passed bool, output, reply
 	a := rn.Store.Automations[i]
 	switch {
 	case passed:
+		rn.updateRun(id, r, func(run *Run) { run.Verdict = VerdictVerified })
 		rn.finish(id, Passed, reply)
 		return
 	case !a.Enabled && !r.allowPaused:
 		rn.finish(id, Interrupted, "Automation paused")
 		return
 	case r.round >= a.Rounds:
+		rn.updateRun(id, r, func(run *Run) { run.Verdict = VerdictCheckFailed })
 		rn.finish(id, Failed, "Check failed: "+textutil.LastLine(output))
 		return
 	}
