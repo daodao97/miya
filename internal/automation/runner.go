@@ -232,6 +232,7 @@ func (rn *Runner) Tick() {
 		rn.Persist()
 	}
 	rn.tickWakes(now)
+	rn.tickBriefing(now)
 }
 
 // StartRun starts a run now: a new conversation in the automation's

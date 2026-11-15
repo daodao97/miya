@@ -228,6 +228,10 @@ type Store struct {
 	Wakes map[string][]Wake `json:"wakes,omitempty"`
 	// Stalled is since when each stalled automation has stalled.
 	Stalled map[string]time.Time `json:"stalled,omitempty"`
+	// Briefing is when the daily briefing comes, as 15:04, and BriefedAt
+	// when the latest one was due and looked at (briefing.go).
+	Briefing  string    `json:"briefing,omitempty"`
+	BriefedAt time.Time `json:"briefedAt,omitzero"`
 }
 
 // TriggerState is what a trigger has seen.

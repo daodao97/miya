@@ -2644,6 +2644,96 @@ func (msgs Messages) CheckFailed35010c() string {
 	return Catalog.Format(msgs.locale, "checkFailed_35010c", nil)
 }
 
+// AutomationBriefingTitle says "Miya · Daily briefing"
+// in the language the app shows.
+func AutomationBriefingTitle() string { return In(i18n.Locale()).AutomationBriefingTitle() }
+
+// AutomationBriefingTitle says "Miya · Daily briefing"
+// in the language of msgs.
+func (msgs Messages) AutomationBriefingTitle() string {
+	return Catalog.Format(msgs.locale, "automationBriefingTitle", nil)
+}
+
+// AutomationBriefingRuns says "%d runs in the last 24 hours: %d passed, %d failed."
+// in the language the app shows.
+func AutomationBriefingRuns() string { return In(i18n.Locale()).AutomationBriefingRuns() }
+
+// AutomationBriefingRuns says "%d runs in the last 24 hours: %d passed, %d failed."
+// in the language of msgs.
+func (msgs Messages) AutomationBriefingRuns() string {
+	return Catalog.Format(msgs.locale, "automationBriefingRuns", nil)
+}
+
+// AutomationBriefingQuiet says "%d found nothing new."
+// in the language the app shows.
+func AutomationBriefingQuiet() string { return In(i18n.Locale()).AutomationBriefingQuiet() }
+
+// AutomationBriefingQuiet says "%d found nothing new."
+// in the language of msgs.
+func (msgs Messages) AutomationBriefingQuiet() string {
+	return Catalog.Format(msgs.locale, "automationBriefingQuiet", nil)
+}
+
+// AutomationBriefingNeedsYou says "Needs you:"
+// in the language the app shows.
+func AutomationBriefingNeedsYou() string { return In(i18n.Locale()).AutomationBriefingNeedsYou() }
+
+// AutomationBriefingNeedsYou says "Needs you:"
+// in the language of msgs.
+func (msgs Messages) AutomationBriefingNeedsYou() string {
+	return Catalog.Format(msgs.locale, "automationBriefingNeedsYou", nil)
+}
+
+// AutomationBriefingMore says "and %d more"
+// in the language the app shows.
+func AutomationBriefingMore() string { return In(i18n.Locale()).AutomationBriefingMore() }
+
+// AutomationBriefingMore says "and %d more"
+// in the language of msgs.
+func (msgs Messages) AutomationBriefingMore() string {
+	return Catalog.Format(msgs.locale, "automationBriefingMore", nil)
+}
+
+// AutomationBriefingSetting says "Daily briefing"
+// in the language the app shows.
+func AutomationBriefingSetting() string { return In(i18n.Locale()).AutomationBriefingSetting() }
+
+// AutomationBriefingSetting says "Daily briefing"
+// in the language of msgs.
+func (msgs Messages) AutomationBriefingSetting() string {
+	return Catalog.Format(msgs.locale, "automationBriefingSetting", nil)
+}
+
+// AutomationBriefingTime says "Briefing time"
+// in the language the app shows.
+func AutomationBriefingTime() string { return In(i18n.Locale()).AutomationBriefingTime() }
+
+// AutomationBriefingTime says "Briefing time"
+// in the language of msgs.
+func (msgs Messages) AutomationBriefingTime() string {
+	return Catalog.Format(msgs.locale, "automationBriefingTime", nil)
+}
+
+// AutomationBriefingHelp says "One notice a day with the last 24 hours of runs and what needs you; nothing on a day with nothing to say"
+// in the language the app shows.
+func AutomationBriefingHelp() string { return In(i18n.Locale()).AutomationBriefingHelp() }
+
+// AutomationBriefingHelp says "One notice a day with the last 24 hours of runs and what needs you; nothing on a day with nothing to say"
+// in the language of msgs.
+func (msgs Messages) AutomationBriefingHelp() string {
+	return Catalog.Format(msgs.locale, "automationBriefingHelp", nil)
+}
+
+// AutomationBriefingBadTime says "Write the time as HH:MM, for example 09:00"
+// in the language the app shows.
+func AutomationBriefingBadTime() string { return In(i18n.Locale()).AutomationBriefingBadTime() }
+
+// AutomationBriefingBadTime says "Write the time as HH:MM, for example 09:00"
+// in the language of msgs.
+func (msgs Messages) AutomationBriefingBadTime() string {
+	return Catalog.Format(msgs.locale, "automationBriefingBadTime", nil)
+}
+
 // AutomationAttentionMerge says "Changes waiting to merge"
 // in the language the app shows.
 func AutomationAttentionMerge() string { return In(i18n.Locale()).AutomationAttentionMerge() }

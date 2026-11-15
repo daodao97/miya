@@ -18,7 +18,7 @@ import (
 )
 
 var automationOps = map[string]bool{"automationList": true, "automationDraft": true, "automationSave": true,
-	"automationToggle": true, "automationDelete": true, "automationRunNow": true, "automationWorktree": true, "automationWake": true, "automationWebhook": true}
+	"automationToggle": true, "automationDelete": true, "automationRunNow": true, "automationWorktree": true, "automationWake": true, "automationWebhook": true, "automationBriefing": true}
 
 // automationCall runs an operation where the automations are, decoding its
 // reply into out. A window's call waits for the service: make it off the
@@ -71,6 +71,11 @@ func (c *Controller) AutomationOp(op string, r automation.Request) (any, error) 
 			return nil, errors.New("Unknown webhook action")
 		}
 		return s.WebhookView(), nil
+	case "automationBriefing":
+		if r.Action == "set" {
+			return s.SetBriefing(r.Data)
+		}
+		return s.BriefingView(), nil
 	case "automationDraft":
 		return c.prepareAutomationDraft(c.Ctx, r)
 	case "automationSave":

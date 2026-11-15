@@ -30,6 +30,10 @@ type automationsUI struct {
 	err      string
 	// confirmDelete is the automation whose delete button was pressed once.
 	confirmDelete string
+	// briefing is the daily briefing's setting and briefingTime the time
+	// being typed.
+	briefing     *automation.BriefingView
+	briefingTime string
 	// openReports flips a run\'s result open or shut, by its start.
 	openReports map[int64]bool
 
@@ -135,6 +139,25 @@ func (app *App) loadAutomations() {
 		_ = json.Unmarshal(raw, &list)
 		a.list, a.loaded, a.err = list, true, ""
 	})
+	if a.briefing == nil {
+		app.briefingCall("", "")
+	}
+}
+
+// briefingCall reads the daily briefing's setting, or with action set
+// changes it to at.
+func (app *App) briefingCall(action, at string) {
+	a := &app.Autos
+	app.autoCall("automationBriefing", automation.Request{Action: action, Data: at}, func(raw json.RawMessage, err error) {
+		if err != nil {
+			a.err = err.Error()
+			return
+		}
+		var v automation.BriefingView
+		if json.Unmarshal(raw, &v) == nil {
+			a.briefing, a.briefingTime = &v, v.Time
+		}
+	})
 }
 
 func (app *App) automationsView(c *ui.Context) {
@@ -239,6 +262,7 @@ func (app *App) automationList(c *ui.Context) {
 	default:
 		app.automationAttention(c.Key("attention"), a.list)
 		automationOverview(c.Key("overview"), a.list)
+		app.briefingSetting(c.Key("briefing"))
 		ui.Column(c).FillWidth().Background(widgets.Panel).Border(1, widgets.Line).Radius(14).Clip().Children(func() {
 			for i, v := range a.list {
 				if i > 0 {
@@ -1140,5 +1164,30 @@ func (app *App) automationAttention(c *ui.Context, list []automation.View) {
 				a.Page, a.Detail, a.confirmDelete = "detail", it.ID, ""
 			}
 		}
+	})
+}
+
+// briefingSetting turns the daily briefing on or off and sets its time.
+func (app *App) briefingSetting(c *ui.Context) {
+	a := &app.Autos
+	if a.briefing == nil {
+		return
+	}
+	ui.Row(c).FillWidth().Gap(10).AlignItems(ui.Center).Children(func() {
+		on := a.briefing.Time != ""
+		if ui.Switch(c.Key("on"), &on).Label(tr("Daily briefing")).Shrink(0).Changed() {
+			at := ""
+			if on {
+				at = textutil.FirstNonEmpty(a.briefingTime, "09:00")
+			}
+			app.briefingCall("set", at)
+		}
+		if on {
+			ui.TextInput(c.Key("time"), &a.briefingTime).Label(tr("Briefing time")).Placeholder("09:00").Width(90).FontSize(12)
+			if a.briefingTime != a.briefing.Time && ui.Button(c.Key("save"), tr("Save")).Clicked() {
+				app.briefingCall("set", a.briefingTime)
+			}
+		}
+		ui.Text(c, tr("One notice a day with the last 24 hours of runs and what needs you; nothing on a day with nothing to say")).FontSize(12).TextColor(widgets.Muted).Grow(1).MinWidth(0)
 	})
 }
