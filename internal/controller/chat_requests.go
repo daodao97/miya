@@ -67,6 +67,10 @@ func (c *Controller) AskUser(caller model.Thread, reason, detail string) (json.R
 
 func (c *Controller) respondMiya(a codex.Approval, result any) {
 	c.removeRequest(a.ID)
+	if id, ok := reviewOfApproval(a); ok {
+		c.answerReview(id, result)
+		return
+	}
 	ch := c.miyaPending[string(a.ID)]
 	delete(c.miyaPending, string(a.ID))
 	if ch == nil {
@@ -135,6 +139,11 @@ func (c *Controller) ThreadAwaitsUser(t model.Thread) bool {
 		return false
 	}
 	for _, a := range c.Approvals() {
+		// A review does not hold up the run that asked: it already ended
+		// the call, and the decision comes as a new wake.
+		if _, review := reviewOfApproval(a); review {
+			continue
+		}
 		if at, ok := c.approvalThread(a); ok && at.ID == t.ID {
 			return true
 		}

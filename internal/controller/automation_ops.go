@@ -192,6 +192,7 @@ func (h automationHost) AddWorkspace(path string) {
 func (h automationHost) RemoveWorkspace(path string) { h.c.removeProject(path, false) }
 
 func (h automationHost) Changed() {
+	h.c.syncReviewApprovals()
 	if h.c.Revision != nil {
 		h.c.SetRevision(h.c.Revision() + 1)
 	}
@@ -201,6 +202,8 @@ func (h automationHost) Changed() {
 // every automation.TickInterval from now on.
 func (c *Controller) StartAutomations(path string, schedule bool) {
 	c.Auto = automation.NewRunner(automationHost{c}, path)
+	// Reviews still waiting from before wait among the approvals again.
+	c.syncReviewApprovals()
 	done := make(<-chan struct{})
 	if c.Ctx != nil {
 		done = c.Ctx.Done()

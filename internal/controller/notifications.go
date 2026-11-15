@@ -49,6 +49,10 @@ func (c *Controller) installApprovalNotifications() {
 			if previous[string(a.ID)] {
 				continue
 			}
+			// A review sent its own notice when it was made.
+			if _, review := reviewOfApproval(a); review {
+				continue
+			}
 			// Claude Code's approvals and background projects' too.
 			if t, ok := c.approvalThread(a); ok {
 				sum := sha256.Sum256(append([]byte(a.ThreadID), a.ID...))
