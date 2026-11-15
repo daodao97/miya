@@ -60,6 +60,9 @@ type Automation struct {
 	// NotifyEveryRun notifies each run that ends; without it a run that
 	// passes with nothing new is kept in the history quietly (progress.go).
 	NotifyEveryRun bool `json:"notifyEveryRun,omitempty"`
+	// Recheck runs Check again, for a Worktree run that passed and left
+	// changes, in a clean checkout of what a merge would bring (worktree.go).
+	Recheck bool `json:"recheck,omitempty"`
 }
 
 // Run is one run of an automation.
@@ -95,6 +98,11 @@ type Run struct {
 	// last round, VerdictUnchecked when there is no check and only the
 	// conversation ended. What the agent reports is no verdict.
 	Verdict string `json:"verdict,omitempty"`
+	// Recheck is what running the check again in a clean checkout found,
+	// RecheckPassed or RecheckFailed, and RecheckOutput the end of what a
+	// failed one printed.
+	Recheck       string `json:"recheck,omitempty"`
+	RecheckOutput string `json:"recheckOutput,omitempty"`
 	// Worktree is where a run of a Worktree automation worked, and
 	// WorktreeState what became of it.
 	Worktree      *worktree.Worktree `json:"worktree,omitempty"`
@@ -103,6 +111,12 @@ type Run struct {
 	// WorktreeError is why the last merge or discard failed.
 	WorktreeError string `json:"worktreeError,omitempty"`
 }
+
+// A run's recheck is one of these.
+const (
+	RecheckPassed = "passed"
+	RecheckFailed = "failed"
+)
 
 // A run's verdict is one of these.
 const (

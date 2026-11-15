@@ -213,3 +213,20 @@ func (w Worktree) Remove(ctx context.Context, keepBranch bool) error {
 	_, err := git(ctx, w.Repo, "branch", "-D", w.Branch)
 	return err
 }
+
+// Snapshot commits what is left in the worktree and checks its branch out,
+// detached, into dir: what a merge would bring, without the files git
+// ignores. RemoveCheckout removes it again.
+func (w Worktree) Snapshot(ctx context.Context, dir, message string) error {
+	if err := w.Commit(ctx, message); err != nil {
+		return err
+	}
+	_, err := git(ctx, w.Repo, "worktree", "add", "--detach", dir, w.Branch)
+	return err
+}
+
+// RemoveCheckout removes a checkout Snapshot made.
+func (w Worktree) RemoveCheckout(ctx context.Context, dir string) {
+	_, _ = git(ctx, w.Repo, "worktree", "remove", "--force", dir)
+	_, _ = git(ctx, w.Repo, "worktree", "prune")
+}

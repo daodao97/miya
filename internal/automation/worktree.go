@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"time"
 
 	"miya/internal/appdir"
 	"miya/internal/chat/model"
 	"miya/internal/project/worktree"
+	"miya/internal/textutil"
 )
 
 // A worktree run's WorktreeState is one of these.
@@ -98,11 +100,18 @@ func (rn *Runner) worktreeReady(id string, r *ActiveRun, w worktree.Worktree, er
 // With notice, the run's notification follows, saying which.
 func (rn *Runner) settle(id string, started time.Time, notice bool) {
 	var w *worktree.Worktree
-	rn.Store.UpdateRun(id, started, func(run *Run) { w = run.Worktree })
+	result := ""
+	rn.Store.UpdateRun(id, started, func(run *Run) { w, result = run.Worktree, run.Result })
 	if w == nil {
 		return
 	}
 	wt := *w
+	// A passing run's changes are checked again where only they are, when
+	// the automation asks for it.
+	command, check := "", rn.Check
+	if i, ok := rn.Store.Find(id); ok && rn.Store.Automations[i].Recheck && result == Passed {
+		command = rn.Store.Automations[i].Check
+	}
 	rn.Background(func() func() {
 		ctx := context.Background()
 		gone := !wt.Exists()
@@ -114,10 +123,18 @@ func (rn *Runner) settle(id string, started time.Time, notice bool) {
 				removed = wt.Remove(ctx, false) == nil
 			}
 		}
+		recheck, recheckOut := "", ""
+		if !gone && !removed && err == nil && command != "" {
+			recheck, recheckOut = recheckWorktree(ctx, wt, command, check)
+			if c, e := wt.Changes(ctx); e == nil {
+				changes = c
+			}
+		}
 		return func() {
 			var run Run
 			rn.Store.UpdateRun(id, started, func(x *Run) {
 				x.Changes = changes
+				x.Recheck, x.RecheckOutput = recheck, recheckOut
 				switch {
 				case gone:
 					x.WorktreeState = WorktreeDiscarded
@@ -208,7 +225,14 @@ func WorktreeLabel(run Run) string {
 	case WorktreeActive:
 		return fmt.Sprintf(tr("Working on branch %s"), run.Worktree.Branch)
 	case WorktreeKept:
-		return fmt.Sprintf(tr("Changes on branch %s"), run.Worktree.Branch)
+		label := fmt.Sprintf(tr("Changes on branch %s"), run.Worktree.Branch)
+		switch run.Recheck {
+		case RecheckPassed:
+			label += tr(" · Rechecked in a clean checkout")
+		case RecheckFailed:
+			label += tr(" · Recheck in a clean checkout failed")
+		}
+		return label
 	case WorktreeCleaned:
 		return tr("No changes; worktree removed")
 	case WorktreeMerged:
@@ -234,4 +258,20 @@ func Workspace(project string, run Run) string {
 // discard.
 func WorktreePending(run Run) bool {
 	return run.Worktree != nil && run.WorktreeState == WorktreeKept
+}
+
+// recheckWorktree runs command in a clean checkout of what merging wt would
+// bring, and says whether it passed, with the end of its output when not.
+// Files git ignores, dependencies installed in the worktree among them,
+// are not there.
+func recheckWorktree(ctx context.Context, wt worktree.Worktree, command string, check func(dir, command string) (bool, string)) (string, string) {
+	dir := filepath.Join(os.TempDir(), "miya-recheck-"+NewID())
+	if err := wt.Snapshot(ctx, dir, "Miya automation: changes to recheck"); err != nil {
+		return RecheckFailed, "Could not check out the changes: " + err.Error()
+	}
+	defer wt.RemoveCheckout(context.Background(), dir)
+	if passed, out := check(dir, command); !passed {
+		return RecheckFailed, textutil.ClipRunes(out, 2000)
+	}
+	return RecheckPassed, ""
 }

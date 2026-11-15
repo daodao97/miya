@@ -45,6 +45,7 @@ var automationToolProps = map[string]any{
 	"worktree":       map[string]any{"type": "boolean", "description": "Run each run in a separate Git worktree on its own branch, so it cannot collide with edits in the project; the user merges or discards its changes afterwards. Use for automations that change code"},
 	"stallAfter":     map[string]any{"type": "integer", "minimum": 0, "maximum": 10, "description": "Optional, for an automation that pushes one thing forward (fix CI, land a migration): after this many runs in a row whose reported results are the same as the run before, Miya stops the runs triggers start and tells the user, until they edit it or use Run now. 0 or unset never stops it"},
 	"notifyEveryRun": map[string]any{"type": "boolean", "description": "Notify the user after every run. By default a run that passes with nothing new (the same reported result as the run before, or an empty one) is kept in the history without a notification; a run that fails, needs the user or leaves worktree changes always notifies"},
+	"recheck":        map[string]any{"type": "boolean", "description": "With worktree and check: before the user merges, Miya runs the check again in a clean checkout of only the changes, and says if it fails. Files git ignores (installed dependencies, build caches) are not in that checkout, so use it when the check runs without them"},
 }
 
 func init() {

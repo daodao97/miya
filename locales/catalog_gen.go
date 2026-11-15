@@ -2644,6 +2644,56 @@ func (msgs Messages) CheckFailed35010c() string {
 	return Catalog.Format(msgs.locale, "checkFailed_35010c", nil)
 }
 
+// AutomationRechecked says " · Rechecked in a clean checkout"
+// in the language the app shows.
+func AutomationRechecked() string { return In(i18n.Locale()).AutomationRechecked() }
+
+// AutomationRechecked says " · Rechecked in a clean checkout"
+// in the language of msgs.
+func (msgs Messages) AutomationRechecked() string {
+	return Catalog.Format(msgs.locale, "automationRechecked", nil)
+}
+
+// AutomationRecheckFailed says " · Recheck in a clean checkout failed"
+// in the language the app shows.
+func AutomationRecheckFailed() string { return In(i18n.Locale()).AutomationRecheckFailed() }
+
+// AutomationRecheckFailed says " · Recheck in a clean checkout failed"
+// in the language of msgs.
+func (msgs Messages) AutomationRecheckFailed() string {
+	return Catalog.Format(msgs.locale, "automationRecheckFailed", nil)
+}
+
+// AutomationAttentionRecheck says "Recheck failed"
+// in the language the app shows.
+func AutomationAttentionRecheck() string { return In(i18n.Locale()).AutomationAttentionRecheck() }
+
+// AutomationAttentionRecheck says "Recheck failed"
+// in the language of msgs.
+func (msgs Messages) AutomationAttentionRecheck() string {
+	return Catalog.Format(msgs.locale, "automationAttentionRecheck", nil)
+}
+
+// AutomationRecheckSwitch says "Recheck in a clean checkout"
+// in the language the app shows.
+func AutomationRecheckSwitch() string { return In(i18n.Locale()).AutomationRecheckSwitch() }
+
+// AutomationRecheckSwitch says "Recheck in a clean checkout"
+// in the language of msgs.
+func (msgs Messages) AutomationRecheckSwitch() string {
+	return Catalog.Format(msgs.locale, "automationRecheckSwitch", nil)
+}
+
+// AutomationRecheckHelp says "Before you merge, run the check again on only the changes; files git ignores, such as installed dependencies, are not…"
+// in the language the app shows.
+func AutomationRecheckHelp() string { return In(i18n.Locale()).AutomationRecheckHelp() }
+
+// AutomationRecheckHelp says "Before you merge, run the check again on only the changes; files git ignores, such as installed dependencies, are not…"
+// in the language of msgs.
+func (msgs Messages) AutomationRecheckHelp() string {
+	return Catalog.Format(msgs.locale, "automationRecheckHelp", nil)
+}
+
 // AutomationCovered says " · Covered %d of %d"
 // in the language the app shows.
 func AutomationCovered() string { return In(i18n.Locale()).AutomationCovered() }

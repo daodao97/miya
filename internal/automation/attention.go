@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -27,10 +28,11 @@ const (
 	AttentionTrigger   = "trigger"
 	AttentionPartial   = "partial"
 	AttentionSilent    = "silent"
+	AttentionRecheck   = "recheck"
 )
 
 // attentionRank orders kinds by how soon they need the person.
-var attentionRank = map[string]int{AttentionStalled: 0, AttentionNeedsUser: 0, AttentionMerge: 1, AttentionFailed: 1, AttentionPartial: 1, AttentionTrigger: 2, AttentionSilent: 2}
+var attentionRank = map[string]int{AttentionStalled: 0, AttentionNeedsUser: 0, AttentionRecheck: 0, AttentionMerge: 1, AttentionFailed: 1, AttentionPartial: 1, AttentionTrigger: 2, AttentionSilent: 2}
 
 // AttentionLabel says a kind in a few words.
 func AttentionLabel(kind string) string {
@@ -45,6 +47,8 @@ func AttentionLabel(kind string) string {
 		return tr("Last run failed")
 	case AttentionTrigger:
 		return tr("Trigger check failing")
+	case AttentionRecheck:
+		return tr("Recheck failed")
 	case AttentionPartial:
 		return tr("Covered only part")
 	case AttentionSilent:
@@ -86,6 +90,8 @@ func NeedsAttentionAt(views []View, now time.Time) []Attention {
 			switch {
 			case r.Report != nil && r.Report.NeedsUser:
 				add(AttentionNeedsUser, r.Summary, at)
+			case WorktreePending(r) && r.Recheck == RecheckFailed:
+				add(AttentionRecheck, textOr(lastLine(r.RecheckOutput), WorktreeLabel(r)), at)
 			case WorktreePending(r) && !r.Changes.Empty():
 				add(AttentionMerge, WorktreeLabel(r), at)
 			case r.Result == Failed:
@@ -126,4 +132,10 @@ func NeedsAttentionAt(views []View, now time.Time) []Attention {
 		return b.At.Compare(a.At)
 	})
 	return out
+}
+
+// lastLine is the last non-empty line of s.
+func lastLine(s string) string {
+	lines := strings.Split(strings.TrimSpace(s), "\n")
+	return strings.TrimSpace(lines[len(lines)-1])
 }

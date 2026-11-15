@@ -548,6 +548,22 @@ func (app *App) automationDetail(c *ui.Context) {
 		}
 		ui.Text(c, tr("Otherwise a run that passes with nothing new stays in the history without a notification")).FontSize(12).TextColor(widgets.Muted)
 	})
+	if v.Worktree && v.Check != "" {
+		ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
+			recheck := v.Recheck
+			if ui.Switch(c.Key("recheck"), &recheck).Label(tr("Recheck in a clean checkout")).Shrink(0).Changed() {
+				next := v.Automation
+				next.Recheck = recheck
+				app.autoCall("automationSave", automation.Request{Automation: &next}, func(_ json.RawMessage, err error) {
+					if err != nil {
+						app.Autos.err = err.Error()
+					}
+					app.loadAutomations()
+				})
+			}
+			ui.Text(c, tr("Before you merge, run the check again on only the changes; files git ignores, such as installed dependencies, are not there")).FontSize(12).TextColor(widgets.Muted)
+		})
+	}
 	ui.Row(c).FillWidth().AlignItems(ui.End).Margin(8, 0, 0, 0).Children(func() {
 		ui.Text(c, tr("Run history")).FontWeight(600).Grow(1)
 		ui.Text(c, fmt.Sprintf(tr("Last %d runs"), automation.RunHistory)).FontSize(12).TextColor(widgets.Muted)
