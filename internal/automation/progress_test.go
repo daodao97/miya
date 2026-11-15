@@ -230,6 +230,7 @@ func TestQuietRunRules(t *testing.T) {
 		{"empty result made by Miya", Automation{}, Run{Result: Passed, Report: &Report{Summary: "done", Auto: true}}, false},
 		{"changes wait in a worktree", Automation{}, Run{Result: Passed, Report: same, Unchanged: true, Worktree: kept, WorktreeState: WorktreeKept, Changes: worktree.Changes{Commits: 1}}, false},
 		{"worktree cleaned", Automation{}, Run{Result: Passed, Report: same, Unchanged: true, Worktree: kept, WorktreeState: WorktreeCleaned}, true},
+		{"refused an action", Automation{}, Run{Result: Passed, Report: same, Unchanged: true, Refused: []string{"git push"}}, false},
 		{"every run", Automation{NotifyEveryRun: true}, Run{Result: Passed, Report: same, Unchanged: true}, false},
 	}
 	for _, tc := range cases {

@@ -280,6 +280,7 @@
   "automationAccessRead": "Read only",
   "automationAccessEdit": "Edit; refuse outside actions",
   "automationAccessExternal": "Edit; review outside actions",
+  "automationRefusedLabel": " · Refused %d actions",
   "automationStalled": "Stalled",
   "automationStalledRuns": "%d runs in a row found nothing new.",
   "automationStalledSince": "Stalled since ",

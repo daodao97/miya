@@ -2984,6 +2984,16 @@ func (msgs Messages) AutomationAccessExternal() string {
 	return Catalog.Format(msgs.locale, "automationAccessExternal", nil)
 }
 
+// AutomationRefusedLabel says " · Refused %d actions"
+// in the language the app shows.
+func AutomationRefusedLabel() string { return In(i18n.Locale()).AutomationRefusedLabel() }
+
+// AutomationRefusedLabel says " · Refused %d actions"
+// in the language of msgs.
+func (msgs Messages) AutomationRefusedLabel() string {
+	return Catalog.Format(msgs.locale, "automationRefusedLabel", nil)
+}
+
 // AutomationStalled says "Stalled"
 // in the language the app shows.
 func AutomationStalled() string { return In(i18n.Locale()).AutomationStalled() }

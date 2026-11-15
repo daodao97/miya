@@ -168,7 +168,7 @@ func nothingReported(r *Report) bool {
 // left no changes waiting in a worktree. NotifyEveryRun keeps every run
 // loud.
 func quietRun(a Automation, run Run) bool {
-	if a.NotifyEveryRun || run.Result != Passed || run.Report != nil && (run.Report.NeedsUser || run.Report.Coverage.Partial()) {
+	if a.NotifyEveryRun || run.Result != Passed || len(run.Refused) > 0 || run.Report != nil && (run.Report.NeedsUser || run.Report.Coverage.Partial()) {
 		return false
 	}
 	if run.Worktree != nil && run.WorktreeState == WorktreeKept && !run.Changes.Empty() {

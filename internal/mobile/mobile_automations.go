@@ -437,7 +437,7 @@ func (m *App) automationPhoneRun(c *ui.Context, v automation.View, r automation.
 			if r.Rounds > 1 {
 				meta += fmt.Sprintf(tr(" · Turn %d/%d"), max(r.Round, 1), r.Rounds)
 			}
-			meta += automation.VerdictLabel(r.Verdict) + automation.CoverageLabel(r)
+			meta += automation.VerdictLabel(r.Verdict) + automation.CoverageLabel(r) + automation.RefusedLabel(r)
 			if r.Quiet {
 				meta += tr(" · Nothing new, not notified")
 			}

@@ -73,10 +73,13 @@ type Run struct {
 	Started  time.Time `json:"started"`
 	Finished time.Time `json:"finished,omitzero"`
 	Thread   int       `json:"thread,omitempty"`
-	ServerID string    `json:"serverId,omitempty"`
-	Round    int       `json:"round,omitempty"`
-	Rounds   int       `json:"rounds,omitempty"`
-	Result   string    `json:"result"`
+	// Refused are the actions Miya refused for the run's access level
+	// (unattended.go).
+	Refused  []string `json:"refused,omitempty"`
+	ServerID string   `json:"serverId,omitempty"`
+	Round    int      `json:"round,omitempty"`
+	Rounds   int      `json:"rounds,omitempty"`
+	Result   string   `json:"result"`
 	// Summary is the first line of the agent's last reply, or why the run
 	// ended.
 	Summary string `json:"summary,omitempty"`
@@ -146,6 +149,14 @@ func CoverageLabel(r Run) string {
 		return ""
 	}
 	return fmt.Sprintf(tr(" · Covered %d of %d"), r.Report.Coverage.Included, r.Report.Coverage.Expected)
+}
+
+// RefusedLabel says how many actions Miya refused for the run's access level.
+func RefusedLabel(r Run) string {
+	if len(r.Refused) == 0 {
+		return ""
+	}
+	return fmt.Sprintf(tr(" · Refused %d actions"), len(r.Refused))
 }
 
 // A run's result is one of these.

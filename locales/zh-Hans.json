@@ -280,6 +280,7 @@
   "automationAccessRead": "只读",
   "automationAccessEdit": "可改文件，拒绝对外动作",
   "automationAccessExternal": "可改文件，对外动作先审查",
+  "automationRefusedLabel": " · 拒绝了 %d 个动作",
   "automationStalled": "已停滞",
   "automationStalledRuns": "连续 %d 次运行没有新发现。",
   "automationStalledSince": "停滞于 ",

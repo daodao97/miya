@@ -646,7 +646,7 @@ func (app *App) runRow(c *ui.Context, v automation.View, r automation.Run, runni
 		if !r.Finished.IsZero() {
 			meta += fmt.Sprintf(tr(" · %d minutes"), max(int(r.Finished.Sub(r.Started).Minutes()+0.5), 1))
 		}
-		meta += automation.VerdictLabel(r.Verdict) + automation.CoverageLabel(r)
+		meta += automation.VerdictLabel(r.Verdict) + automation.CoverageLabel(r) + automation.RefusedLabel(r)
 		if r.Quiet {
 			meta += tr(" · Nothing new, not notified")
 		}
