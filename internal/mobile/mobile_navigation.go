@@ -6,6 +6,7 @@ import (
 
 	"miya/internal/chat/model"
 	msgfmt "miya/internal/chat/presentation"
+	webservice "miya/internal/runtime/web"
 	"miya/internal/widgets"
 )
 
@@ -52,6 +53,10 @@ func (m *App) openMessageLink(link string) {
 			return
 		}
 		m.openProjectFile(project, file)
+		return
+	}
+	if port, path, ok := webservice.LocalLink(link); ok {
+		m.openLocalWebLink(port, path)
 		return
 	}
 	if ui.SafeToOpen(link) {

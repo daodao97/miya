@@ -155,3 +155,35 @@ func ValidHost(host, token string) bool {
 	ip := net.ParseIP(host)
 	return token != "" && ip != nil && !ip.IsUnspecified() && !ip.IsMulticast()
 }
+
+// LocalLink recognizes plain-HTTP links to this desktop's loopback services.
+// A phone cannot reach them on its own loopback, so it opens them through the
+// paired tunnel instead. The returned path keeps the query and fragment.
+func LocalLink(raw string) (int, string, bool) {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || !strings.EqualFold(u.Scheme, "http") || u.User != nil || u.Opaque != "" {
+		return 0, "", false
+	}
+	if host := u.Hostname(); !localWebHost(host) && host != "0.0.0.0" {
+		return 0, "", false
+	}
+	value := u.Port()
+	if value == "" {
+		value = "80"
+	}
+	port, err := ParsePort(value)
+	if err != nil {
+		return 0, "", false
+	}
+	path := u.EscapedPath()
+	if path == "" {
+		path = "/"
+	}
+	if u.RawQuery != "" {
+		path += "?" + u.RawQuery
+	}
+	if u.Fragment != "" {
+		path += "#" + u.EscapedFragment()
+	}
+	return port, path, true
+}

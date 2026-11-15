@@ -1,6 +1,7 @@
 package mobile
 
 import (
+	"net/url"
 	"strings"
 	"time"
 
@@ -18,6 +19,11 @@ func (m *App) openWebPort(port int) {
 }
 
 func (m *App) openWebService(service webservice.Service) {
+	m.openWebServiceAt(service, "")
+}
+
+// path is where the in-app browser lands after the proxy's bootstrap page.
+func (m *App) openWebServiceAt(service webservice.Service, path string) {
 	if !m.Connected || m.Conn == nil || m.FilesCancel != nil || !m.State.WebPorts {
 		return
 	}
@@ -26,7 +32,23 @@ func (m *App) openWebService(service webservice.Service) {
 		go mygo.Dialog.Message(mygo.MessageOptions{Parent: m.win, Title: tr("Unable to open web service"), Message: err.Error()})
 		return
 	}
+	if path != "" && path != "/" {
+		proxy.URL += "?path=" + url.QueryEscape(path)
+	}
 	m.openFileBrowser(proxy, tr("Unable to open web service"))
+}
+
+// Loopback links in messages name the desktop, not the phone, so they open
+// through the paired tunnel instead of the phone's own browser.
+func (m *App) openLocalWebLink(port int, path string) {
+	switch {
+	case !m.Connected || m.Conn == nil:
+		m.SendErr = tr("Connect to your desktop to open web services.")
+	case !m.State.WebPorts:
+		m.SendErr = tr("Update Miya on your desktop first. If the background service is busy, it will update when idle.")
+	default:
+		m.openWebServiceAt(webservice.Service{Port: port}, path)
+	}
 }
 
 func (m *App) webPage(c *ui.Context) {
