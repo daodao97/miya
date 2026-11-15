@@ -87,7 +87,7 @@ func (rn *Runner) tickBriefing(now time.Time) {
 // BriefingText sums up the runs that ended after since and what waits for
 // the person now; ok is false when there is nothing to say.
 func (rn *Runner) BriefingText(since, now time.Time) (string, bool) {
-	total, passed, failed, quiet := 0, 0, 0, 0
+	total, passed, failed, quiet, partial := 0, 0, 0, 0, 0
 	views := make([]View, 0, len(rn.Store.Automations))
 	for _, a := range rn.Store.Automations {
 		views = append(views, rn.View(a, now))
@@ -96,6 +96,9 @@ func (rn *Runner) BriefingText(since, now time.Time) (string, bool) {
 				continue
 			}
 			total++
+			if r.Report != nil && r.Report.Coverage.Partial() {
+				partial++
+			}
 			switch r.Result {
 			case Passed:
 				passed++
@@ -107,7 +110,7 @@ func (rn *Runner) BriefingText(since, now time.Time) (string, bool) {
 			}
 		}
 	}
-	waiting := NeedsAttention(views)
+	waiting := NeedsAttentionAt(views, now)
 	if total == 0 && len(waiting) == 0 {
 		return "", false
 	}
@@ -115,6 +118,9 @@ func (rn *Runner) BriefingText(since, now time.Time) (string, bool) {
 	fmt.Fprintf(&b, tr("%d runs in the last 24 hours: %d passed, %d failed."), total, passed, failed)
 	if quiet > 0 {
 		b.WriteString(" " + fmt.Sprintf(tr("%d found nothing new."), quiet))
+	}
+	if partial > 0 {
+		b.WriteString(" " + fmt.Sprintf(tr("%d covered only part of what they should."), partial))
 	}
 	if len(waiting) > 0 {
 		b.WriteString("\n" + tr("Needs you:"))

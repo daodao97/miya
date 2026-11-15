@@ -68,6 +68,9 @@ type Condition struct {
 	// prints nothing as a failed check rather than as something it found: a
 	// source that stopped answering often looks like that.
 	EmptyIsError bool `json:"emptyIsError,omitempty"`
+	// SilentHours, for a line command, is how long it may print nothing
+	// before the pages say it may have stopped producing.
+	SilentHours int `json:"silentHours,omitempty"`
 	// Probe, Path and BelowGB are how conditions were written before
 	// recipes; normalize turns them into a recipe and its parameters.
 	Probe   string  `json:"probe,omitempty"`
@@ -119,8 +122,10 @@ func (c *Condition) normalize() error {
 	}
 	if c.When == WhenLine {
 		c.EveryMinutes, c.RepeatHours, c.EmptyIsError = 0, 0, false
+		c.SilentHours = min(max(c.SilentHours, 0), 24*30)
 		return nil
 	}
+	c.SilentHours = 0
 	if c.EveryMinutes <= 0 {
 		c.EveryMinutes = defaultProbeEvery
 	}

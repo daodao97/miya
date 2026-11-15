@@ -122,6 +122,15 @@ func VerdictLabel(v string) string {
 	return ""
 }
 
+// CoverageLabel says how much of what it should look at a run covered,
+// when its result says.
+func CoverageLabel(r Run) string {
+	if r.Report == nil || r.Report.Coverage == nil {
+		return ""
+	}
+	return fmt.Sprintf(tr(" · Covered %d of %d"), r.Report.Coverage.Included, r.Report.Coverage.Expected)
+}
+
 // A run's result is one of these.
 const (
 	Running     = "running"

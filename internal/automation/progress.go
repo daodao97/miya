@@ -48,7 +48,13 @@ func sameReport(a, b Report) bool {
 		}
 		return set(out)
 	}
-	return a.NeedsUser == b.NeedsUser && slices.Equal(set(a.Findings), set(b.Findings)) &&
+	cover := func(c *Coverage) string {
+		if c == nil {
+			return ""
+		}
+		return c.Text()
+	}
+	return a.NeedsUser == b.NeedsUser && cover(a.Coverage) == cover(b.Coverage) && slices.Equal(set(a.Findings), set(b.Findings)) &&
 		slices.Equal(metrics(a.Metrics), metrics(b.Metrics)) && slices.Equal(set(a.Artifacts), set(b.Artifacts))
 }
 
@@ -162,7 +168,7 @@ func nothingReported(r *Report) bool {
 // left no changes waiting in a worktree. NotifyEveryRun keeps every run
 // loud.
 func quietRun(a Automation, run Run) bool {
-	if a.NotifyEveryRun || run.Result != Passed || run.Report != nil && run.Report.NeedsUser {
+	if a.NotifyEveryRun || run.Result != Passed || run.Report != nil && (run.Report.NeedsUser || run.Report.Coverage.Partial()) {
 		return false
 	}
 	if run.Worktree != nil && run.WorktreeState == WorktreeKept && !run.Changes.Empty() {

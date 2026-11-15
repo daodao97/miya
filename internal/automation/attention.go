@@ -2,6 +2,7 @@ package automation
 
 import (
 	"cmp"
+	"fmt"
 	"slices"
 	"time"
 )
@@ -24,10 +25,12 @@ const (
 	AttentionMerge     = "merge"
 	AttentionFailed    = "failed"
 	AttentionTrigger   = "trigger"
+	AttentionPartial   = "partial"
+	AttentionSilent    = "silent"
 )
 
 // attentionRank orders kinds by how soon they need the person.
-var attentionRank = map[string]int{AttentionStalled: 0, AttentionNeedsUser: 0, AttentionMerge: 1, AttentionFailed: 1, AttentionTrigger: 2}
+var attentionRank = map[string]int{AttentionStalled: 0, AttentionNeedsUser: 0, AttentionMerge: 1, AttentionFailed: 1, AttentionPartial: 1, AttentionTrigger: 2, AttentionSilent: 2}
 
 // AttentionLabel says a kind in a few words.
 func AttentionLabel(kind string) string {
@@ -42,6 +45,10 @@ func AttentionLabel(kind string) string {
 		return tr("Last run failed")
 	case AttentionTrigger:
 		return tr("Trigger check failing")
+	case AttentionPartial:
+		return tr("Covered only part")
+	case AttentionSilent:
+		return tr("Trigger has gone quiet")
 	}
 	return kind
 }
@@ -60,7 +67,12 @@ func latestFinished(v View) (Run, bool) {
 // pressing first and, among those alike, newest first: a stall, a latest
 // run that needs the person, failed or left changes to merge, and an
 // enabled trigger whose check keeps failing.
-func NeedsAttention(views []View) []Attention {
+func NeedsAttention(views []View) []Attention { return NeedsAttentionAt(views, time.Now()) }
+
+// NeedsAttentionAt is NeedsAttention as of now; a command that keeps
+// running and has printed nothing for longer than its SilentHours is
+// listed too.
+func NeedsAttentionAt(views []View, now time.Time) []Attention {
 	var out []Attention
 	for _, v := range views {
 		add := func(kind, detail string, at time.Time) {
@@ -78,12 +90,31 @@ func NeedsAttention(views []View) []Attention {
 				add(AttentionMerge, WorktreeLabel(r), at)
 			case r.Result == Failed:
 				add(AttentionFailed, r.Summary, at)
+			case r.Report != nil && r.Report.Coverage.Partial():
+				add(AttentionPartial, r.Report.Coverage.Text(), at)
 			}
 		}
 		if v.Enabled {
 			for _, t := range v.Triggers {
-				if st := v.TriggerStates[t.ID]; !t.Disabled && st.Errors >= probeErrorNotice {
-					add(AttentionTrigger, textOr(v.TriggerTexts[t.ID], DescribeTrigger(t, nil))+": "+st.Error, st.LastProbe)
+				st := v.TriggerStates[t.ID]
+				if t.Disabled {
+					continue
+				}
+				text := textOr(v.TriggerTexts[t.ID], DescribeTrigger(t, nil))
+				if st.Errors >= probeErrorNotice {
+					add(AttentionTrigger, text+": "+st.Error, st.LastProbe)
+					continue
+				}
+				// Silence counts from the last line, or from when the command
+				// started when it never printed one.
+				if c := t.Condition; c != nil && c.When == WhenLine && c.SilentHours > 0 {
+					since := st.LastSuccess
+					if since.IsZero() {
+						since = st.LastProbe
+					}
+					if !since.IsZero() && now.Sub(since) > time.Duration(c.SilentHours)*time.Hour {
+						add(AttentionSilent, text+": "+fmt.Sprintf(tr("nothing printed since %s"), FormatTime(since)), since)
+					}
 				}
 			}
 		}

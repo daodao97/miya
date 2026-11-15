@@ -2644,6 +2644,56 @@ func (msgs Messages) CheckFailed35010c() string {
 	return Catalog.Format(msgs.locale, "checkFailed_35010c", nil)
 }
 
+// AutomationCovered says " · Covered %d of %d"
+// in the language the app shows.
+func AutomationCovered() string { return In(i18n.Locale()).AutomationCovered() }
+
+// AutomationCovered says " · Covered %d of %d"
+// in the language of msgs.
+func (msgs Messages) AutomationCovered() string {
+	return Catalog.Format(msgs.locale, "automationCovered", nil)
+}
+
+// AutomationAttentionPartial says "Covered only part"
+// in the language the app shows.
+func AutomationAttentionPartial() string { return In(i18n.Locale()).AutomationAttentionPartial() }
+
+// AutomationAttentionPartial says "Covered only part"
+// in the language of msgs.
+func (msgs Messages) AutomationAttentionPartial() string {
+	return Catalog.Format(msgs.locale, "automationAttentionPartial", nil)
+}
+
+// AutomationAttentionSilent says "Trigger has gone quiet"
+// in the language the app shows.
+func AutomationAttentionSilent() string { return In(i18n.Locale()).AutomationAttentionSilent() }
+
+// AutomationAttentionSilent says "Trigger has gone quiet"
+// in the language of msgs.
+func (msgs Messages) AutomationAttentionSilent() string {
+	return Catalog.Format(msgs.locale, "automationAttentionSilent", nil)
+}
+
+// AutomationSilentSince says "nothing printed since %s"
+// in the language the app shows.
+func AutomationSilentSince() string { return In(i18n.Locale()).AutomationSilentSince() }
+
+// AutomationSilentSince says "nothing printed since %s"
+// in the language of msgs.
+func (msgs Messages) AutomationSilentSince() string {
+	return Catalog.Format(msgs.locale, "automationSilentSince", nil)
+}
+
+// AutomationBriefingPartial says "%d covered only part of what they should."
+// in the language the app shows.
+func AutomationBriefingPartial() string { return In(i18n.Locale()).AutomationBriefingPartial() }
+
+// AutomationBriefingPartial says "%d covered only part of what they should."
+// in the language of msgs.
+func (msgs Messages) AutomationBriefingPartial() string {
+	return Catalog.Format(msgs.locale, "automationBriefingPartial", nil)
+}
+
 // AutomationBriefingTitle says "Miya · Daily briefing"
 // in the language the app shows.
 func AutomationBriefingTitle() string { return In(i18n.Locale()).AutomationBriefingTitle() }
