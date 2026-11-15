@@ -35,6 +35,10 @@ type View struct {
 	WakeURLs map[string]string `json:"wakeURLs,omitempty"`
 	// Stalled is since when its triggered runs wait for a person.
 	Stalled time.Time `json:"stalled,omitzero"`
+	// Reviews wait for the person; Grants are what the person allowed and
+	// has not revoked (review.go).
+	Reviews []Review `json:"reviews,omitempty"`
+	Grants  []Grant  `json:"grants,omitempty"`
 }
 
 type Request struct {
@@ -53,6 +57,11 @@ type Request struct {
 	Trigger string `json:"trigger,omitempty"`
 	Data    string `json:"data,omitempty"`
 	Dedupe  string `json:"dedupe,omitempty"`
+	// Review, Scope and Note decide on a review, with Action approve,
+	// deny or revoke.
+	Review string `json:"review,omitempty"`
+	Scope  string `json:"scope,omitempty"`
+	Note   string `json:"note,omitempty"`
 }
 
 func ViewOf(a Automation, runs []Run, running bool, now time.Time) View {

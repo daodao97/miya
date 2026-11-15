@@ -18,6 +18,8 @@ type Attention struct {
 	Kind   string
 	Detail string
 	At     time.Time
+	// Review is the review a review item is about.
+	Review string
 }
 
 const (
@@ -29,10 +31,11 @@ const (
 	AttentionPartial   = "partial"
 	AttentionSilent    = "silent"
 	AttentionRecheck   = "recheck"
+	AttentionReview    = "review"
 )
 
 // attentionRank orders kinds by how soon they need the person.
-var attentionRank = map[string]int{AttentionStalled: 0, AttentionNeedsUser: 0, AttentionRecheck: 0, AttentionMerge: 1, AttentionFailed: 1, AttentionPartial: 1, AttentionTrigger: 2, AttentionSilent: 2}
+var attentionRank = map[string]int{AttentionStalled: 0, AttentionNeedsUser: 0, AttentionRecheck: 0, AttentionReview: 0, AttentionMerge: 1, AttentionFailed: 1, AttentionPartial: 1, AttentionTrigger: 2, AttentionSilent: 2}
 
 // AttentionLabel says a kind in a few words.
 func AttentionLabel(kind string) string {
@@ -49,6 +52,8 @@ func AttentionLabel(kind string) string {
 		return tr("Trigger check failing")
 	case AttentionRecheck:
 		return tr("Recheck failed")
+	case AttentionReview:
+		return tr("Waiting for your review")
 	case AttentionPartial:
 		return tr("Covered only part")
 	case AttentionSilent:
@@ -84,6 +89,9 @@ func NeedsAttentionAt(views []View, now time.Time) []Attention {
 		}
 		if !v.Stalled.IsZero() {
 			add(AttentionStalled, FormatTime(v.Stalled), v.Stalled)
+		}
+		for _, r := range v.Reviews {
+			out = append(out, Attention{ID: v.ID, Name: v.Name, Project: v.Project, Kind: AttentionReview, Detail: r.Action, At: r.Requested, Review: r.ID})
 		}
 		if r, ok := latestFinished(v); ok && !v.Running {
 			at := r.Finished

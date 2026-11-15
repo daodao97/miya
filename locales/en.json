@@ -281,6 +281,8 @@
   "automationAccessEdit": "Edit; refuse outside actions",
   "automationAccessExternal": "Edit; review outside actions",
   "automationRefusedLabel": " · Refused %d actions",
+  "automationReviewWaiting": "Waiting for your review",
+  "automationReviewSource": "Review",
   "automationStalled": "Stalled",
   "automationStalledRuns": "%d runs in a row found nothing new.",
   "automationStalledSince": "Stalled since ",

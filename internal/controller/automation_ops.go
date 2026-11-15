@@ -18,7 +18,7 @@ import (
 )
 
 var automationOps = map[string]bool{"automationList": true, "automationDraft": true, "automationSave": true,
-	"automationToggle": true, "automationDelete": true, "automationRunNow": true, "automationWorktree": true, "automationWake": true, "automationWebhook": true, "automationBriefing": true}
+	"automationToggle": true, "automationDelete": true, "automationRunNow": true, "automationWorktree": true, "automationWake": true, "automationWebhook": true, "automationBriefing": true, "automationReview": true}
 
 // automationCall runs an operation where the automations are, decoding its
 // reply into out. A window's call waits for the service: make it off the
@@ -110,6 +110,15 @@ func (c *Controller) AutomationOp(op string, r automation.Request) (any, error) 
 		return c.Auto.Ingress(r.ID, r.Trigger, "", false, r.Data, r.Dedupe)
 	case "automationWorktree":
 		return nil, c.Auto.WorktreeAction(r.ID, r.Started, r.Action)
+	case "automationReview":
+		switch r.Action {
+		case "approve", "deny":
+			return nil, c.Auto.DecideReview(r.Review, r.Action == "approve", r.Scope, r.Note)
+		case "revoke":
+			c.Auto.RevokeGrant(r.Review)
+			return nil, nil
+		}
+		return nil, errors.New("Unknown review action")
 	}
 	return nil, errors.New("Unknown automation operation: " + op)
 }

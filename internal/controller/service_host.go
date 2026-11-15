@@ -137,7 +137,7 @@ func (c *Controller) ServiceRequest(req svcproto.Request) (any, error) {
 			return nil, err
 		}
 		return c.Memories().Op(req.Op, r)
-	case "automationList", "automationDraft", "automationSave", "automationToggle", "automationDelete", "automationRunNow", "automationWorktree", "automationWake", "automationWebhook", "automationBriefing":
+	case "automationList", "automationDraft", "automationSave", "automationToggle", "automationDelete", "automationRunNow", "automationWorktree", "automationWake", "automationWebhook", "automationBriefing", "automationReview":
 		var r automation.Request
 		if err := arg(&r); err != nil {
 			return nil, err

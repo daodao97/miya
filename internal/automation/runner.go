@@ -212,6 +212,7 @@ func (rn *Runner) Tick() {
 	for id, r := range rn.Active {
 		rn.advance(id, r)
 	}
+	rn.expireReviews(rn.Now())
 	now := rn.Now()
 	changed := false
 	for i := range rn.Store.Automations {

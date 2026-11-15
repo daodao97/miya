@@ -2994,6 +2994,26 @@ func (msgs Messages) AutomationRefusedLabel() string {
 	return Catalog.Format(msgs.locale, "automationRefusedLabel", nil)
 }
 
+// AutomationReviewWaiting says "Waiting for your review"
+// in the language the app shows.
+func AutomationReviewWaiting() string { return In(i18n.Locale()).AutomationReviewWaiting() }
+
+// AutomationReviewWaiting says "Waiting for your review"
+// in the language of msgs.
+func (msgs Messages) AutomationReviewWaiting() string {
+	return Catalog.Format(msgs.locale, "automationReviewWaiting", nil)
+}
+
+// AutomationReviewSource says "Review"
+// in the language the app shows.
+func AutomationReviewSource() string { return In(i18n.Locale()).AutomationReviewSource() }
+
+// AutomationReviewSource says "Review"
+// in the language of msgs.
+func (msgs Messages) AutomationReviewSource() string {
+	return Catalog.Format(msgs.locale, "automationReviewSource", nil)
+}
+
 // AutomationStalled says "Stalled"
 // in the language the app shows.
 func AutomationStalled() string { return In(i18n.Locale()).AutomationStalled() }

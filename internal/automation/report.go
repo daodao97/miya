@@ -199,6 +199,7 @@ func ReportedNote(told Run) string {
 // last told when quiet runs came after it.
 func (rn *Runner) runText(a Automation, prev *Run, ev WakeEvent) string {
 	msg := RunMessage(a, prev, ev)
+	msg += rn.reviewNote(a.ID)
 	if a.NoCarryOver {
 		return msg
 	}

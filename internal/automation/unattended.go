@@ -50,6 +50,9 @@ func (rn *Runner) Unattended(thread int, ask Ask) Answer {
 		a := rn.Store.Automations[i]
 		dir := textutil.FirstNonEmpty(r.dir, a.Project)
 		answer, what := decide(a.Access, dir, ask)
+		if !answer.Decided && a.Access == AccessExternal && what != "" {
+			return rn.review(a, r, dir, what)
+		}
 		if answer.Decided && !answer.Allow {
 			rn.updateRun(id, r, func(run *Run) {
 				if len(run.Refused) < maxRefused {
@@ -78,8 +81,7 @@ func decide(access Access, dir string, ask Ask) (Answer, string) {
 	case local:
 		return Answer{Decided: true, Message: fmt.Sprintf("Miya refused %s: this automation is read only (access: read). Do not try another way to change anything. Report what you found with report_result, and set needs_user if a change should be made.", what)}, what
 	case access == AccessExternal:
-		// Review comes with docs/action-review.md step 3; until then a
-		// person answers as before.
+		// Unattended sends it for review.
 		return Answer{}, what
 	}
 	return Answer{Decided: true, Message: fmt.Sprintf("Miya refused %s: this automation may not act outside the project (access: %s). Do not try another way to do it. Finish the work that does not depend on it, and set needs_user in report_result with what should be done.", what, access)}, what
@@ -179,9 +181,7 @@ var ghReads = map[string][]string{
 }
 
 func outsideWords(words []string) bool {
-	for len(words) > 0 && (wrappers[words[0]] || isAssignment(words[0]) || strings.HasPrefix(words[0], "-") && len(words) > 1) {
-		words = words[1:]
-	}
+	words = stripWrappers(words)
 	if len(words) == 0 {
 		return false
 	}
@@ -310,4 +310,12 @@ func isWriteMethod(m string) bool {
 		return true
 	}
 	return false
+}
+
+// stripWrappers drops the assignments and wrappers before a command.
+func stripWrappers(words []string) []string {
+	for len(words) > 0 && (wrappers[words[0]] || isAssignment(words[0]) || strings.HasPrefix(words[0], "-") && len(words) > 1) {
+		words = words[1:]
+	}
+	return words
 }

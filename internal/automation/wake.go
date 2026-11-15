@@ -53,7 +53,7 @@ func (rn *Runner) wakes() *wakeState {
 // triggered reports whether a source is one of the triggers, which the
 // policy holds back; schedules and Run now are not held back.
 func triggered(source string) bool {
-	return source != SourceSchedule && source != SourceManual && source != ""
+	return source != SourceSchedule && source != SourceManual && source != SourceReview && source != ""
 }
 
 func clipData(s string) string {
@@ -89,7 +89,7 @@ func (rn *Runner) Wake(ev WakeEvent) (Wake, error) {
 			return rn.record(a.ID, ev, WakeDropped, "The trigger is off"), errors.New("The trigger is off")
 		}
 	}
-	if !a.Enabled && ev.Source != SourceManual {
+	if !a.Enabled && ev.Source != SourceManual && ev.Source != SourceReview {
 		return rn.record(a.ID, ev, WakeDropped, "The automation is paused"), errors.New("The automation is paused")
 	}
 	if ev.Dedupe != "" {
@@ -174,7 +174,7 @@ func (rn *Runner) deliver(a Automation, ev WakeEvent, gated bool) (Wake, error) 
 	}
 	_, running := rn.Active[a.ID]
 	if running || w.gating[a.ID] {
-		if a.Policy.Queue && ev.Source != SourceManual {
+		if (a.Policy.Queue || ev.Source == SourceReview) && ev.Source != SourceManual {
 			if q, waiting := w.queued[a.ID]; waiting {
 				q.Count = max(q.Count, 1) + 1
 				if ev.Data != "" {
@@ -195,7 +195,7 @@ func (rn *Runner) deliver(a Automation, ev WakeEvent, gated bool) (Wake, error) 
 		}
 		return wk, nil
 	}
-	if g := a.Policy.Gate; g != nil && !gated && ev.Source != SourceManual {
+	if g := a.Policy.Gate; g != nil && !gated && ev.Source != SourceManual && ev.Source != SourceReview {
 		w.gating[a.ID] = true
 		gate, dir, probe := *g, a.Project, rn.Probe
 		rn.Background(func() func() {

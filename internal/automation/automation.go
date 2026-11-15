@@ -272,6 +272,10 @@ type Store struct {
 	// when the latest one was due and looked at (briefing.go).
 	Briefing  string    `json:"briefing,omitempty"`
 	BriefedAt time.Time `json:"briefedAt,omitzero"`
+	// Reviews are the actions automations sent to the person, Grants what
+	// the person allowed (review.go).
+	Reviews []Review `json:"reviews,omitempty"`
+	Grants  []Grant  `json:"grants,omitempty"`
 }
 
 // TriggerState is what a trigger has seen.
