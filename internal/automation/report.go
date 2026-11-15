@@ -140,3 +140,38 @@ func RunMessage(a Automation, prev *Run, ev WakeEvent) string {
 	}
 	return b.String()
 }
+
+// lastNotified is the latest finished run of an automation that told the
+// person how it ended.
+func (s Store) lastNotified(id string) *Run {
+	runs := s.Runs[id]
+	for i := len(runs) - 1; i >= 0; i-- {
+		if r := runs[i]; r.Result != Running && r.Result != Skipped && !r.Quiet {
+			return &r
+		}
+	}
+	return nil
+}
+
+// ReportedNote says what the person was last told about an automation, so
+// that a run after quiet ones does not tell it again.
+func ReportedNote(told Run) string {
+	what := "Summary: " + told.Summary
+	if told.Report != nil {
+		what = FormatReport(*told.Report)
+	}
+	return fmt.Sprintf("\n\nThe user was last notified about this automation after the run of %s, which said:\n%s\nLater runs found nothing new and were not notified. Do not report again what that notice already said; report what is new since.", FormatTime(told.Started), what)
+}
+
+// runText is the message a run sends: RunMessage, and what the person was
+// last told when quiet runs came after it.
+func (rn *Runner) runText(a Automation, prev *Run, ev WakeEvent) string {
+	msg := RunMessage(a, prev, ev)
+	if a.NoCarryOver {
+		return msg
+	}
+	if told := rn.Store.lastNotified(a.ID); told != nil && (prev == nil || !told.Started.Equal(prev.Started)) {
+		msg += ReportedNote(*told)
+	}
+	return msg
+}

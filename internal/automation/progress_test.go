@@ -238,3 +238,29 @@ func TestQuietRunRules(t *testing.T) {
 		}
 	}
 }
+
+// A run after quiet ones is told what the person last heard, and not
+// again once the previous run itself notified.
+func TestRunAfterQuietRunsIsToldWhatWasReported(t *testing.T) {
+	w := newWakeHarness(t)
+	a := w.add(ingressAutomation(WakePolicy{}))
+	w.runIngress(a.ID, "ping", "#12 stale")
+	w.now = w.now.Add(time.Minute)
+	w.runIngress(a.ID, "ping", "#12 stale")
+	if !w.lastRun(a.ID).Quiet {
+		t.Fatal("the second run was not quiet")
+	}
+	w.now = w.now.Add(time.Minute)
+	w.runIngress(a.ID, "ping", "#12 stale", "#16 new")
+	last := w.h.sent[len(w.h.sent)-1].Text
+	if !strings.Contains(last, "last notified") || !strings.Contains(last, "#12 stale") {
+		t.Fatalf("the run after a quiet one was not told what was reported:\n%s", last)
+	}
+	// The run before this one notified: its result is already the previous
+	// result, and nothing more is added.
+	w.now = w.now.Add(time.Minute)
+	w.runIngress(a.ID, "ping", "#16 new")
+	if last := w.h.sent[len(w.h.sent)-1].Text; strings.Contains(last, "last notified") {
+		t.Fatalf("told again although the previous run notified:\n%s", last)
+	}
+}
