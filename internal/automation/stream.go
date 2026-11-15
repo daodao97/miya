@@ -286,7 +286,7 @@ func (rn *Runner) afterLine(id, tid string, ev StreamEvent) {
 		st.Met, st.Error = true, ""
 	default:
 		st.Met, st.Error, st.Errors = true, "", 0
-		st.Value, st.LastFired = textutil.ClipRunes(textutil.FirstLine(ev.Line), 200), now
+		st.Value, st.LastFired, st.LastSuccess = textutil.ClipRunes(textutil.FirstLine(ev.Line), 200), now, now
 	}
 	rn.Store.Triggers[key] = st
 	rn.Persist()

@@ -181,7 +181,10 @@ func draftTrigger(d Draft) (*Trigger, bool) {
 			}
 		}
 		r, _ := FindRecipe(name)
-		return &Trigger{Kind: TriggerCondition, Condition: &Condition{Recipe: name, Params: params}}, r.When == "" || r.When == WhenSuccess
+		// What a change is made of must be there: an empty answer is a source
+		// that stopped answering, not a change.
+		cond := &Condition{Recipe: name, Params: params, EmptyIsError: r.When == WhenChanged}
+		return &Trigger{Kind: TriggerCondition, Condition: cond}, r.When == "" || r.When == WhenSuccess
 	case draftCommand:
 		if command == "" {
 			return nil, false
@@ -192,7 +195,7 @@ func draftTrigger(d Draft) (*Trigger, bool) {
 		}
 		// A change or a line is an event, not a state a schedule could
 		// wait for.
-		return &Trigger{Kind: TriggerCondition, Condition: &Condition{Command: command, When: when}}, when == WhenSuccess
+		return &Trigger{Kind: TriggerCondition, Condition: &Condition{Command: command, When: when, EmptyIsError: when == WhenChanged}}, when == WhenSuccess
 	case draftFile:
 		if path == "" {
 			return nil, false

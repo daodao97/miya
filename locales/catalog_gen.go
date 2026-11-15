@@ -2644,6 +2644,36 @@ func (msgs Messages) CheckFailed35010c() string {
 	return Catalog.Format(msgs.locale, "checkFailed_35010c", nil)
 }
 
+// TriggerFailuresInARow says "%d in a row"
+// in the language the app shows.
+func TriggerFailuresInARow() string { return In(i18n.Locale()).TriggerFailuresInARow() }
+
+// TriggerFailuresInARow says "%d in a row"
+// in the language of msgs.
+func (msgs Messages) TriggerFailuresInARow() string {
+	return Catalog.Format(msgs.locale, "triggerFailuresInARow", nil)
+}
+
+// TriggerNeverSucceeded says "Never succeeded"
+// in the language the app shows.
+func TriggerNeverSucceeded() string { return In(i18n.Locale()).TriggerNeverSucceeded() }
+
+// TriggerNeverSucceeded says "Never succeeded"
+// in the language of msgs.
+func (msgs Messages) TriggerNeverSucceeded() string {
+	return Catalog.Format(msgs.locale, "triggerNeverSucceeded", nil)
+}
+
+// TriggerLastSucceeded says "Last succeeded "
+// in the language the app shows.
+func TriggerLastSucceeded() string { return In(i18n.Locale()).TriggerLastSucceeded() }
+
+// TriggerLastSucceeded says "Last succeeded "
+// in the language of msgs.
+func (msgs Messages) TriggerLastSucceeded() string {
+	return Catalog.Format(msgs.locale, "triggerLastSucceeded", nil)
+}
+
 // CheckLastResetResult5854a7 says "Check last reset result"
 // in the language the app shows.
 func CheckLastResetResult5854a7() string { return In(i18n.Locale()).CheckLastResetResult5854a7() }

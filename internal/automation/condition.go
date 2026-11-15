@@ -64,6 +64,10 @@ type Condition struct {
 	// RepeatHours is how long a condition that stays met waits before it
 	// wakes the automation again.
 	RepeatHours int `json:"repeatHours,omitempty"`
+	// EmptyIsError counts a success or changed command that succeeds but
+	// prints nothing as a failed check rather than as something it found: a
+	// source that stopped answering often looks like that.
+	EmptyIsError bool `json:"emptyIsError,omitempty"`
 	// Probe, Path and BelowGB are how conditions were written before
 	// recipes; normalize turns them into a recipe and its parameters.
 	Probe   string  `json:"probe,omitempty"`
@@ -114,7 +118,7 @@ func (c *Condition) normalize() error {
 		return fmt.Errorf("Unknown rule %q: use success, changed or line", c.When)
 	}
 	if c.When == WhenLine {
-		c.EveryMinutes, c.RepeatHours = 0, 0
+		c.EveryMinutes, c.RepeatHours, c.EmptyIsError = 0, 0, false
 		return nil
 	}
 	if c.EveryMinutes <= 0 {
@@ -162,6 +166,10 @@ type ProbeResult struct {
 	Err    string
 }
 
+// emptyOutputError is why a check of a condition with EmptyIsError failed
+// when its command succeeded without printing anything.
+const emptyOutputError = "the command succeeded but printed nothing"
+
 // probeTimeout bounds a success or changed command.
 const probeTimeout = 30 * time.Second
 
@@ -208,6 +216,9 @@ func runProbe(c Condition, dir string) ProbeResult {
 			why := textutil.FirstNonEmpty(textutil.FirstLine(strings.TrimSpace(string(exit.Stderr))), value, err.Error())
 			return ProbeResult{Err: textutil.ClipRunes(fmt.Sprintf("the command failed (%v): %s", err, why), 300)}
 		}
+	}
+	if c.EmptyIsError && !failed && text == "" {
+		return ProbeResult{Err: emptyOutputError}
 	}
 	if c.When == WhenChanged {
 		return ProbeResult{Value: value, Output: clipData(text)}

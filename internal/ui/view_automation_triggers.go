@@ -53,7 +53,14 @@ func triggerState(t automation.Trigger, st automation.TriggerState, ok bool) str
 	case !ok:
 		return tr("Not checked yet")
 	case st.Error != "":
-		return tr("Check failed: ") + st.Error
+		text := tr("Check failed: ") + st.Error
+		if st.Errors > 1 {
+			text += " · " + fmt.Sprintf(tr("%d in a row"), st.Errors)
+		}
+		if st.LastSuccess.IsZero() {
+			return text + " · " + tr("Never succeeded")
+		}
+		return text + " · " + tr("Last succeeded ") + automation.FormatTime(st.LastSuccess)
 	case t.Kind != automation.TriggerCondition:
 		return tr("Watching")
 	}

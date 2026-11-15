@@ -364,7 +364,7 @@ func (rn *Runner) afterProbe(id, tid string, res ProbeResult) {
 		}
 		return
 	}
-	st.Errors, st.Error, st.Met, st.Value = 0, "", res.Met, res.Value
+	st.Errors, st.Error, st.Met, st.Value, st.LastSuccess = 0, "", res.Met, res.Value, now
 	if t.Condition.When == WhenChanged {
 		// Each change wakes it, with what the command printed as the run's
 		// data. The first look only remembers what is there.

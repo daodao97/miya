@@ -197,10 +197,15 @@ type TriggerState struct {
 	// it found, Error why it could not, and Errors how many probes in a
 	// row could not.
 	LastProbe time.Time `json:"lastProbe,omitzero"`
-	Met       bool      `json:"met,omitempty"`
-	Value     string    `json:"value,omitempty"`
-	Error     string    `json:"error,omitempty"`
-	Errors    int       `json:"errors,omitempty"`
+	// LastSuccess is when a probe last found something out, or a command
+	// that keeps running last printed a line. A probe that keeps failing
+	// moves LastProbe on but not LastSuccess, so the pages can say how old
+	// what the trigger knows is.
+	LastSuccess time.Time `json:"lastSuccess,omitzero"`
+	Met         bool      `json:"met,omitempty"`
+	Value       string    `json:"value,omitempty"`
+	Error       string    `json:"error,omitempty"`
+	Errors      int       `json:"errors,omitempty"`
 	// Fingerprint identifies what a file trigger last saw.
 	Fingerprint string `json:"fingerprint,omitempty"`
 }
