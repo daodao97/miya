@@ -137,6 +137,7 @@ func cloneSnapshot(s Snapshot) Snapshot {
 	}
 	for id, t := range out.Tasks {
 		t.Result.Artifacts = slices.Clone(t.Result.Artifacts)
+		t.Refused = slices.Clone(t.Refused)
 		out.Tasks[id] = t
 	}
 	for id, d := range out.Deliveries {
@@ -586,4 +587,23 @@ func (m *Manager) ClaimQueued() ([]Task, error) {
 		out = append(out, t)
 	}
 	return out, nil
+}
+
+// MaxRefused is how many refused actions a task keeps.
+const MaxRefused = 20
+
+// RecordRefused notes an action Miya refused a running task.
+func (m *Manager) RecordRefused(id, what string) error {
+	return m.change(func(s *Snapshot) error {
+		t, ok := s.Tasks[id]
+		if !ok {
+			return errCode("TASK_NOT_FOUND", "Unknown execution")
+		}
+		if Terminal(t.State) || len(t.Refused) >= MaxRefused || slices.Contains(t.Refused, what) {
+			return nil
+		}
+		t.Refused = append(t.Refused, what)
+		s.Tasks[id] = t
+		return nil
+	})
 }

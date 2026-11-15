@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	agentpolicy "miya/internal/agent/policy"
+	"miya/internal/textutil"
 	"slices"
 	"strings"
 
@@ -76,6 +78,9 @@ func (c *Controller) prepareDelegation(caller model.Thread, a coordinator.Args) 
 	if a.Notify != "" && a.Notify != "none" && a.Notify != "on_finish" {
 		return dg.StartInput{}, errors.New("INVALID_ARGUMENT: Unsupported notification selection")
 	}
+	if err := c.checkDelegationAccess(caller, a); err != nil {
+		return dg.StartInput{}, err
+	}
 	text := a.Task
 	if a.Context == "caller_summary" {
 		if !caller.HistoryLoaded {
@@ -98,7 +103,7 @@ func (c *Controller) prepareDelegation(caller model.Thread, a coordinator.Args) 
 	if target.ID != 0 {
 		workspace = c.ThreadWorkspace(target.ID)
 	}
-	in := dg.StartInput{From: from, RequestID: a.RequestID, Target: a.Thread, Agent: agent, Workspace: workspace, Title: a.Title, Prompt: a.Task, Context: a.Context, Snapshot: expanded, Requested: dg.Config{Model: a.Model, Effort: a.Effort}, Effective: dg.Config{Model: model, Effort: effort, Policy: c.permissionForThread(target)}, Notify: a.Notify != "none", PreviousTaskID: a.PreviousTaskID}
+	in := dg.StartInput{From: from, RequestID: a.RequestID, Target: a.Thread, Agent: agent, Workspace: workspace, Title: a.Title, Prompt: a.Task, Context: a.Context, Snapshot: expanded, Requested: dg.Config{Model: a.Model, Effort: a.Effort, Policy: a.Access}, Effective: dg.Config{Model: model, Effort: effort, Policy: textutil.FirstNonEmpty(a.Access, c.permissionForThread(target))}, Notify: a.Notify != "none", PreviousTaskID: a.PreviousTaskID}
 	if caller.ExecutionID != "" && strings.HasPrefix(caller.ExecutionID, "task-") {
 		in.ParentTaskID = caller.ExecutionID
 	}
@@ -131,4 +136,28 @@ func (c *Controller) ManagedEvent(id string, event dg.Event) {
 
 func (c *Controller) managedEventWithOutcome(id string, event dg.Event, saveOutcome bool) {
 	c.Collaboration.Observe(id, event, saveOutcome)
+}
+
+// checkDelegationAccess validates the access level a task asks for. It only
+// narrows what the delegating conversation may do: edit needs a caller that
+// takes edits without asking the person (docs/delegation-access.md).
+func (c *Controller) checkDelegationAccess(caller model.Thread, a coordinator.Args) error {
+	switch a.Access {
+	case "":
+		return nil
+	case agentpolicy.Read, agentpolicy.Edit:
+	default:
+		return errors.New("INVALID_ARGUMENT: access must be read or edit")
+	}
+	if a.Thread != "" {
+		return errors.New("INVALID_ARGUMENT: access applies to a new conversation; omit thread_id or access")
+	}
+	if a.Access == agentpolicy.Edit {
+		switch c.permissionForThread(caller) {
+		case "on-failure", "never", agentpolicy.Edit:
+		default:
+			return errors.New("ACCESS_DENIED: This conversation needs the person's approval for edits, so it cannot delegate edit access. Delegate with access read and make the changes here, or ask the person to change the permission choice")
+		}
+	}
+	return nil
 }

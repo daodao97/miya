@@ -97,11 +97,15 @@ type Task struct {
 	Progress         string          `json:"progress,omitempty"`
 	RecheckError     string          `json:"recheck_error,omitempty"`
 	Result           Result          `json:"result"`
-	Revision         uint64          `json:"revision"`
-	LastSequence     uint64          `json:"last_sequence,omitempty"`
-	CreatedAt        time.Time       `json:"created_at"`
-	StartedAt        time.Time       `json:"started_at,omitempty"`
-	FinishedAt       time.Time       `json:"finished_at,omitempty"`
+	// Refused are actions outside the workspace Miya refused a task with an
+	// access level, for the delegating conversation to take up
+	// (docs/delegation-access.md).
+	Refused      []string  `json:"refused,omitempty"`
+	Revision     uint64    `json:"revision"`
+	LastSequence uint64    `json:"last_sequence,omitempty"`
+	CreatedAt    time.Time `json:"created_at"`
+	StartedAt    time.Time `json:"started_at,omitempty"`
+	FinishedAt   time.Time `json:"finished_at,omitempty"`
 }
 
 type Event struct {

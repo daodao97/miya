@@ -285,6 +285,12 @@ func (m *Manager) NotificationText(d Delivery) string {
 	for _, id := range d.TaskIDs {
 		t := s.Tasks[id]
 		fmt.Fprintf(&b, "- %s: %s (task_id: %s, session: %s)\n", t.Title, t.State, id, t.Target)
+		if len(t.Refused) > 0 {
+			b.WriteString("  Miya refused these actions, which the task's access level does not allow; if the user's task needs them, do them here, where the user approves them:\n")
+			for _, r := range t.Refused {
+				fmt.Fprintf(&b, "  - %s\n", r)
+			}
+		}
 	}
 	return b.String()
 }

@@ -471,3 +471,13 @@ func (s *Coordinator) Observe(id string, event dg.Event, saveOutcome bool) {
 		s.Tick()
 	})
 }
+
+// TaskOfThread is the task running in conversation id, if any.
+func (s *Coordinator) TaskOfThread(id int) string {
+	for task, e := range s.Executions {
+		if e != nil && e.Thread == id {
+			return task
+		}
+	}
+	return ""
+}
