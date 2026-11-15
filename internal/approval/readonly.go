@@ -1,7 +1,6 @@
-package automation
+package approval
 
 import (
-	"encoding/json"
 	"path/filepath"
 	"strings"
 )
@@ -28,19 +27,10 @@ var readOnlySubcommands = map[string][]string{
 	"go":  {"list", "version", "env", "doc"},
 }
 
-// bashCommand is the command of a Claude Bash request.
-func bashCommand(ask Ask) string {
-	var in struct {
-		Command string `json:"command"`
-	}
-	_ = json.Unmarshal(ask.Input, &in)
-	return in.Command
-}
-
-// readOnlyCommand reports whether every part of a shell command only reads:
+// ReadOnlyCommand reports whether every part of a shell command only reads:
 // programs that read, without redirecting output into a file. It errs
 // toward no; a read automation is refused what it is not sure of.
-func readOnlyCommand(command string) bool {
+func ReadOnlyCommand(command string) bool {
 	if strings.TrimSpace(command) == "" || strings.ContainsAny(command, ">") || OutsideCommand(command) {
 		return false
 	}

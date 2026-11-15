@@ -1,9 +1,12 @@
 package controller
 
 import (
+	"encoding/json"
+
 	"miya/internal/agent"
 	codex "miya/internal/agent/codex/native"
 	"miya/internal/automation"
+	"miya/internal/chat/model"
 	"miya/internal/interaction"
 	"miya/internal/textutil"
 )
@@ -32,24 +35,30 @@ func (c *Controller) setAgentApprovals(v []interaction.Request) {
 	c.syncReviewApprovals()
 }
 
-// answerUnattended answers a, when its automation run decides it, and
-// reports whether it did.
+// answerUnattended answers a, when its automation run decides it or, in an
+// ordinary conversation, a grant for its project allows it, and reports
+// whether it did.
 func (c *Controller) answerUnattended(a interaction.Request) bool {
 	if a.Kind() != interaction.Approval {
 		return false
 	}
 	t, ok := c.approvalThread(a)
-	if !ok || t.Automation == "" {
+	if !ok {
 		return false
+	}
+	if t.Automation == "" {
+		return c.projectGrantAllows(a, t) && c.respondUnattended(a, automation.Answer{Decided: true, Allow: true})
 	}
 	ask := automation.Ask{Command: textutil.FirstNonEmpty(a.Command, a.GrantRoot, a.Reason, a.Method)}
 	if claudeApproval(a) {
 		ask = automation.Ask{Tool: a.Command, Input: a.Payload}
 	}
 	answer := c.Auto.Unattended(t.ID, ask)
-	if !answer.Decided {
-		return false
-	}
+	return answer.Decided && c.respondUnattended(a, answer)
+}
+
+// respondUnattended sends answer to the agent that asked a.
+func (c *Controller) respondUnattended(a interaction.Request, answer automation.Answer) bool {
 	responder, ok := c.ApprovalOwner(a).(agent.LegacyResponder)
 	if !ok {
 		return false
@@ -69,4 +78,21 @@ func (c *Controller) answerUnattended(a interaction.Request) bool {
 		responder.RespondNative(a, codex.EncodeResponse(a, interaction.Response{Action: action}))
 	}
 	return true
+}
+
+// projectGrantAllows reports whether a grant for the project of t, an
+// ordinary conversation, allows the command a asks to run.
+func (c *Controller) projectGrantAllows(a interaction.Request, t model.Thread) bool {
+	command := a.Command
+	if claudeApproval(a) {
+		if a.Command != "Bash" {
+			return false
+		}
+		var in struct {
+			Command string `json:"command"`
+		}
+		_ = json.Unmarshal(a.Payload, &in)
+		command = in.Command
+	}
+	return c.Auto.ProjectAllows(c.ThreadWorkspace(t.ID), command)
 }

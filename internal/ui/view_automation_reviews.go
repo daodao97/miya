@@ -54,6 +54,14 @@ func (app *App) automationReviews(c *ui.Context, v automation.View) {
 					}).Clicked() {
 						call(r.ID, "approve", automation.ScopeKind)
 					}
+					if r.Project != "" {
+						project := fmt.Sprintf(tr("Approve all %s in this project for 7 days"), r.Key)
+						if widgets.Quiet(c.Key("project")).PaddingX(8).Label(project).Children(func() {
+							ui.Text(c, project).FontSize(12)
+						}).Clicked() {
+							call(r.ID, "approve", automation.ScopeProject)
+						}
+					}
 				}
 				if ui.PrimaryButton(c.Key("once"), tr("Approve once")).Clicked() {
 					call(r.ID, "approve", automation.ScopeOnce)
@@ -70,6 +78,9 @@ func (app *App) automationReviews(c *ui.Context, v automation.View) {
 			text := fmt.Sprintf(tr("Allowed %s until %s"), g.Key, automation.FormatTime(g.Expires))
 			if g.Scope == automation.ScopeOnce {
 				text = fmt.Sprintf(tr("Allowed once until %s: %s"), automation.FormatTime(g.Expires), g.Action)
+			}
+			if g.Scope == automation.ScopeProject {
+				text = fmt.Sprintf(tr("Allowed %s in %s until %s"), g.Key, g.Project, automation.FormatTime(g.Expires))
 			}
 			ui.Row(c.Key("grant:" + g.Review)).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
 				ui.Text(c, text).FontSize(12).Grow(1).MinWidth(0).SingleLine().Ellipsis("…")

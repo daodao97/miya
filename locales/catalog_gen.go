@@ -3054,6 +3054,18 @@ func (msgs Messages) AutomationReviewApproveKind() string {
 	return Catalog.Format(msgs.locale, "automationReviewApproveKind", nil)
 }
 
+// AutomationReviewApproveProject says "Approve all %s in this project for 7 days"
+// in the language the app shows.
+func AutomationReviewApproveProject() string {
+	return In(i18n.Locale()).AutomationReviewApproveProject()
+}
+
+// AutomationReviewApproveProject says "Approve all %s in this project for 7 days"
+// in the language of msgs.
+func (msgs Messages) AutomationReviewApproveProject() string {
+	return Catalog.Format(msgs.locale, "automationReviewApproveProject", nil)
+}
+
 // AutomationReviewApproveOnce says "Approve once"
 // in the language the app shows.
 func AutomationReviewApproveOnce() string { return In(i18n.Locale()).AutomationReviewApproveOnce() }
@@ -3082,6 +3094,16 @@ func AutomationGrantKind() string { return In(i18n.Locale()).AutomationGrantKind
 // in the language of msgs.
 func (msgs Messages) AutomationGrantKind() string {
 	return Catalog.Format(msgs.locale, "automationGrantKind", nil)
+}
+
+// AutomationGrantProject says "Allowed %s in %s until %s"
+// in the language the app shows.
+func AutomationGrantProject() string { return In(i18n.Locale()).AutomationGrantProject() }
+
+// AutomationGrantProject says "Allowed %s in %s until %s"
+// in the language of msgs.
+func (msgs Messages) AutomationGrantProject() string {
+	return Catalog.Format(msgs.locale, "automationGrantProject", nil)
 }
 
 // AutomationGrantOnce says "Allowed once until %s: %s"

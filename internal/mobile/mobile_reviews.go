@@ -85,6 +85,9 @@ func (m *App) automationPhoneReviews(c *ui.Context, v automation.View) {
 				if m.pill(c, "kind", fmt.Sprintf(tr("Approve all %s for 7 days"), r.Key), false).Disabled(!can).Clicked() {
 					m.sendPhoneReview(r.ID, "approve", automation.ScopeKind, *note)
 				}
+				if r.Project != "" && m.pill(c, "project", fmt.Sprintf(tr("Approve all %s in this project for 7 days"), r.Key), false).Disabled(!can).Clicked() {
+					m.sendPhoneReview(r.ID, "approve", automation.ScopeProject, *note)
+				}
 			}
 		})
 	}
@@ -97,6 +100,9 @@ func (m *App) automationPhoneReviews(c *ui.Context, v automation.View) {
 			text := fmt.Sprintf(tr("Allowed %s until %s"), g.Key, automation.FormatTime(g.Expires))
 			if g.Scope == automation.ScopeOnce {
 				text = fmt.Sprintf(tr("Allowed once until %s: %s"), automation.FormatTime(g.Expires), g.Action)
+			}
+			if g.Scope == automation.ScopeProject {
+				text = fmt.Sprintf(tr("Allowed %s in %s until %s"), g.Key, g.Project, automation.FormatTime(g.Expires))
 			}
 			ui.Row(c.Key("grant:" + g.Review)).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
 				ui.Text(c, text).Grow(1).MinWidth(0).FontSize(m.Font(14)).Wrap()

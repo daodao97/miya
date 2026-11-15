@@ -89,3 +89,35 @@ func TestRequestSentForReviewKeepsItsCard(t *testing.T) {
 		t.Fatalf("approvals after a request sent for review: %+v", cards)
 	}
 }
+
+// A grant for a project allows the same kind of action in an ordinary
+// conversation there; another kind, another project or a local command
+// still waits for the person.
+func TestProjectGrantAllowsOrdinaryConversations(t *testing.T) {
+	dir := t.TempDir()
+	c := &Controller{Cwd: dir}
+	c.Threads, c.SetThreads = uiruntime.CreateSignal([]model.Thread{{ID: 2, ServerID: "t2"}})
+	c.Auto = automation.NewRunner(automationHost{c}, filepath.Join(t.TempDir(), "automations.json"))
+	c.Auto.Store.Grants = []automation.Grant{{Automation: "a1", Review: "r1", Scope: automation.ScopeProject, Key: "git push", Project: dir, Expires: time.Now().Add(time.Hour)}}
+	claude := func(command string) interaction.Request {
+		id, _ := json.Marshal("claude:2:x")
+		payload, _ := json.Marshal(map[string]string{"command": command})
+		return interaction.Request{ID: id, Agent: model.AgentClaude, Command: "Bash", Payload: payload}
+	}
+	thread := c.ThreadWithID(2)
+	if !c.projectGrantAllows(claude("rtk git push origin main"), thread) {
+		t.Fatal("a push in the granted project waits")
+	}
+	if !c.projectGrantAllows(interaction.Request{Agent: model.AgentCodex, Command: "git push"}, thread) {
+		t.Fatal("a Codex push in the granted project waits")
+	}
+	for _, command := range []string{"gh pr create --fill", "rm -rf build", "git status"} {
+		if c.projectGrantAllows(claude(command), thread) {
+			t.Fatalf("%s was allowed", command)
+		}
+	}
+	c.Cwd = t.TempDir()
+	if c.projectGrantAllows(claude("git push"), thread) {
+		t.Fatal("allowed in another project")
+	}
+}

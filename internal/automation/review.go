@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"miya/internal/approval"
 	"miya/internal/notification"
 	"miya/internal/textutil"
 )
@@ -28,6 +29,9 @@ const (
 	ScopeOnce = "once"
 	// ScopeKind allows actions of the same kind for a week.
 	ScopeKind = "kind"
+	// ScopeProject allows actions of the same kind for a week in every
+	// conversation in the automation's project, ordinary ones included.
+	ScopeProject = "project"
 )
 
 const (
@@ -49,6 +53,9 @@ type Review struct {
 	Action string `json:"action"`
 	Key    string `json:"key,omitempty"`
 	Dir    string `json:"dir,omitempty"`
+	// Project is the automation's project, which a ScopeProject approval
+	// covers.
+	Project string `json:"project,omitempty"`
 	// Instructions are the automation's instructions when it asked, to
 	// hold the action against.
 	Instructions string    `json:"instructions,omitempty"`
@@ -68,44 +75,20 @@ type Grant struct {
 	Review     string `json:"review"`
 	Scope      string `json:"scope"`
 	// Action is the one action a ScopeOnce grant allows; Key the kind a
-	// ScopeKind grant allows.
-	Action  string    `json:"action,omitempty"`
-	Key     string    `json:"key,omitempty"`
+	// ScopeKind or ScopeProject grant allows.
+	Action string `json:"action,omitempty"`
+	Key    string `json:"key,omitempty"`
+	// Project is where a ScopeProject grant allows its kind.
+	Project string    `json:"project,omitempty"`
 	Expires time.Time `json:"expires"`
-}
-
-// ActionKey is the kind of an action: the program and subcommand of its
-// first part that reaches outside, such as "git push" or "gh pr create".
-// An action it cannot read is its own kind.
-func ActionKey(action string) string {
-	for _, segment := range splitShell(action) {
-		words := strings.Fields(segment)
-		if !outsideWords(words) {
-			continue
-		}
-		words = stripWrappers(words)
-		program := filepath.Base(strings.Trim(words[0], `"'`))
-		n := 1
-		switch {
-		case program == "gh":
-			n = 2
-		case alwaysOutside[program] || program == "curl" || program == "wget" || program == "rsync":
-			n = 0
-		case program == "bash" || program == "sh" || program == "zsh" || program == "eval":
-			return strings.TrimSpace(action)
-		}
-		sub := subcommands(words[1:], map[string]bool{"-C": true, "-c": true, "--git-dir": true, "--work-tree": true, "-R": true, "--repo": true})
-		return strings.Join(append([]string{program}, sub[:min(n, len(sub))]...), " ")
-	}
-	return strings.TrimSpace(action)
 }
 
 // review answers an outside action of an external automation: a grant
 // allows it; otherwise it goes to the person, and this call is refused.
 func (rn *Runner) review(a Automation, r *ActiveRun, dir, action string) Answer {
 	now := rn.Now()
-	key := ActionKey(action)
-	if rn.useGrant(a.ID, action, key, now) {
+	key := approval.ActionKey(action)
+	if rn.useGrant(a.ID, a.Project, action, key, now) {
 		return Answer{Decided: true, Allow: true}
 	}
 	id := ""
@@ -116,7 +99,7 @@ func (rn *Runner) review(a Automation, r *ActiveRun, dir, action string) Answer 
 	}
 	if id == "" {
 		id = NewID()
-		rn.Store.Reviews = append(rn.Store.Reviews, Review{ID: id, Automation: a.ID, Run: r.started, Thread: r.Thread, Action: action, Key: key, Dir: dir,
+		rn.Store.Reviews = append(rn.Store.Reviews, Review{ID: id, Automation: a.ID, Run: r.started, Thread: r.Thread, Action: action, Key: key, Dir: dir, Project: a.Project,
 			Instructions: a.Instructions, Requested: now, State: ReviewPending})
 		rn.trimReviews()
 		rn.Persist()
@@ -126,16 +109,20 @@ func (rn *Runner) review(a Automation, r *ActiveRun, dir, action string) Answer 
 	return Answer{Decided: true, Message: fmt.Sprintf("Miya sent this action to the user for review as #%s; it did not run. Do not try another way to do it. Finish the work that does not depend on it, then end this run, saying in report_result what waits for review. When the user decides, Miya starts a new run of this automation with the decision; if it is approved, run the same command again then.", id)}
 }
 
-// useGrant reports whether a grant allows action, using up a one-time one
-// and dropping expired ones.
-func (rn *Runner) useGrant(id, action, key string, now time.Time) bool {
+// useGrant reports whether a grant allows action to automation id, or to a
+// conversation in project, using up a one-time one and dropping expired
+// ones. Only a ScopeProject grant reaches past its automation.
+func (rn *Runner) useGrant(id, project, action, key string, now time.Time) bool {
 	kept := rn.Store.Grants[:0]
 	allowed := false
 	for _, g := range rn.Store.Grants {
 		if now.After(g.Expires) {
 			continue
 		}
-		if !allowed && g.Automation == id {
+		if !allowed && g.Scope == ScopeProject && project != "" && g.Key == key && samePath(g.Project, project) {
+			allowed = true
+		}
+		if !allowed && id != "" && g.Automation == id {
 			if g.Scope == ScopeOnce && g.Action == action {
 				allowed = true
 				continue
@@ -168,13 +155,19 @@ func (rn *Runner) DecideReview(id string, approve bool, scope, note string) erro
 	now := rn.Now()
 	r.State, r.Decided, r.Note = ReviewDenied, now, strings.TrimSpace(note)
 	if approve {
-		if scope != ScopeKind {
+		if scope == ScopeProject && r.Project == "" {
+			scope = ScopeKind
+		}
+		if scope != ScopeKind && scope != ScopeProject {
 			scope = ScopeOnce
 		}
 		r.State, r.Scope = ReviewApproved, scope
 		g := Grant{Automation: r.Automation, Review: r.ID, Scope: scope, Action: r.Action, Expires: now.Add(onceGrant)}
-		if scope == ScopeKind {
+		if scope != ScopeOnce {
 			g = Grant{Automation: r.Automation, Review: r.ID, Scope: scope, Key: r.Key, Expires: now.Add(kindGrant)}
+		}
+		if scope == ScopeProject {
+			g.Project = r.Project
 		}
 		rn.Store.Grants = append(rn.Store.Grants, g)
 	}
@@ -280,6 +273,8 @@ func (rn *Runner) reviewNote(id string) string {
 		r.Delivered = true
 		fmt.Fprintf(&b, "\n- #%s `%s`: ", r.ID, r.Action)
 		switch {
+		case r.State == ReviewApproved && r.Scope == ScopeProject:
+			fmt.Fprintf(&b, "approved, with actions of the same kind (%s) in this project for 7 days. Run it again now; Miya will allow it.", r.Key)
 		case r.State == ReviewApproved && r.Scope == ScopeKind:
 			fmt.Fprintf(&b, "approved, with actions of the same kind (%s) for 7 days. Run it again now; Miya will allow it.", r.Key)
 		case r.State == ReviewApproved:
@@ -297,4 +292,18 @@ func (rn *Runner) reviewNote(id string) string {
 		return ""
 	}
 	return "\n\nThe user decided on actions this automation sent for review:" + b.String()
+}
+
+// ProjectAllows reports whether a grant for project allows a command an
+// ordinary conversation there asks to run. Only commands that reach outside
+// are looked up: anything else is the person's to answer as before.
+func (rn *Runner) ProjectAllows(project, command string) bool {
+	if project == "" || !approval.OutsideCommand(command) {
+		return false
+	}
+	return rn.useGrant("", project, command, approval.ActionKey(command), rn.Now())
+}
+
+func samePath(a, b string) bool {
+	return a != "" && filepath.Clean(a) == filepath.Clean(b)
 }

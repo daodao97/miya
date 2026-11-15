@@ -152,19 +152,33 @@ func TestReviewDeniedAndExpired(t *testing.T) {
 	}
 }
 
-func TestActionKey(t *testing.T) {
-	cases := map[string]string{
-		"git push origin main":           "git push",
-		"go test ./... && git -C x push": "git push",
-		"gh pr create --fill":            "gh pr create",
-		"gh -R o/r issue comment 3":      "gh issue comment",
-		"curl -X POST https://x":         "curl",
-		"ssh host deploy":                "ssh",
-		"Edit /etc/hosts":                "Edit /etc/hosts",
+// Approving for the project grants the kind to every conversation in the
+// automation's project, and to nothing elsewhere.
+func TestReviewApprovedForTheProject(t *testing.T) {
+	w := newWakeHarness(t)
+	a := externalAutomation(w)
+	thread := w.startIngress(a.ID)
+	w.rn.Unattended(thread, bash("git push origin miya/deps"))
+	r := w.rn.Store.PendingReviews(a.ID)[0]
+	if r.Project != a.Project || a.Project == "" {
+		t.Fatalf("review project %q, automation's %q", r.Project, a.Project)
 	}
-	for in, want := range cases {
-		if got := ActionKey(in); got != want {
-			t.Errorf("%q: %q", in, got)
-		}
+	if err := w.rn.DecideReview(r.ID, true, ScopeProject, ""); err != nil {
+		t.Fatal(err)
+	}
+	if g := w.rn.Store.GrantsOf(a.ID, w.now); len(g) != 1 || g[0].Scope != ScopeProject || g[0].Project != a.Project || g[0].Key != "git push" {
+		t.Fatalf("grants: %+v", g)
+	}
+	if !w.rn.ProjectAllows(a.Project, "git push origin main") || !w.rn.ProjectAllows(a.Project+"/", "git push") {
+		t.Fatal("a push in the project was not allowed")
+	}
+	if w.rn.ProjectAllows(a.Project, "gh pr create") || w.rn.ProjectAllows(a.Project, "git status") || w.rn.ProjectAllows(t.TempDir(), "git push") {
+		t.Fatal("a grant reached past its kind or project")
+	}
+	if got := w.rn.Unattended(thread, bash("git push origin other")); !got.Allow {
+		t.Fatalf("the automation itself: %+v", got)
+	}
+	if !w.rn.RevokeGrant(r.ID) || w.rn.ProjectAllows(a.Project, "git push") {
+		t.Fatal("allowed after revoking")
 	}
 }
