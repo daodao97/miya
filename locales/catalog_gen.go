@@ -34,6 +34,138 @@ type Messages struct{ locale string }
 // source language.
 func In(locale string) Messages { return Messages{locale} }
 
+// AgentInstall says "Install"
+// in the language the app shows.
+func AgentInstall() string { return In(i18n.Locale()).AgentInstall() }
+
+// AgentInstall says "Install"
+// in the language of msgs.
+func (msgs Messages) AgentInstall() string {
+	return Catalog.Format(msgs.locale, "agentInstall", nil)
+}
+
+// AgentEnvironment says "Agent environment"
+// in the language the app shows.
+func AgentEnvironment() string { return In(i18n.Locale()).AgentEnvironment() }
+
+// AgentEnvironment says "Agent environment"
+// in the language of msgs.
+func (msgs Messages) AgentEnvironment() string {
+	return Catalog.Format(msgs.locale, "agentEnvironment", nil)
+}
+
+// AgentEnvironmentHelp says "Agents are installed and run in the selected environment. Windows and WSL keep separate sign-ins."
+// in the language the app shows.
+func AgentEnvironmentHelp() string { return In(i18n.Locale()).AgentEnvironmentHelp() }
+
+// AgentEnvironmentHelp says "Agents are installed and run in the selected environment. Windows and WSL keep separate sign-ins."
+// in the language of msgs.
+func (msgs Messages) AgentEnvironmentHelp() string {
+	return Catalog.Format(msgs.locale, "agentEnvironmentHelp", nil)
+}
+
+// RunAgentsInWSL says "Run agents in WSL"
+// in the language the app shows.
+func RunAgentsInWSL() string { return In(i18n.Locale()).RunAgentsInWSL() }
+
+// RunAgentsInWSL says "Run agents in WSL"
+// in the language of msgs.
+func (msgs Messages) RunAgentsInWSL() string {
+	return Catalog.Format(msgs.locale, "runAgentsInWSL", nil)
+}
+
+// WslDistribution says "WSL distribution"
+// in the language the app shows.
+func WslDistribution() string { return In(i18n.Locale()).WslDistribution() }
+
+// WslDistribution says "WSL distribution"
+// in the language of msgs.
+func (msgs Messages) WslDistribution() string {
+	return Catalog.Format(msgs.locale, "wslDistribution", nil)
+}
+
+// DefaultWSLDistribution says "Default distribution"
+// in the language the app shows.
+func DefaultWSLDistribution() string { return In(i18n.Locale()).DefaultWSLDistribution() }
+
+// DefaultWSLDistribution says "Default distribution"
+// in the language of msgs.
+func (msgs Messages) DefaultWSLDistribution() string {
+	return Catalog.Format(msgs.locale, "defaultWSLDistribution", nil)
+}
+
+// WslDistributionHelp says "Use a distribution already installed in WSL, such as Ubuntu."
+// in the language the app shows.
+func WslDistributionHelp() string { return In(i18n.Locale()).WslDistributionHelp() }
+
+// WslDistributionHelp says "Use a distribution already installed in WSL, such as Ubuntu."
+// in the language of msgs.
+func (msgs Messages) WslDistributionHelp() string {
+	return Catalog.Format(msgs.locale, "wslDistributionHelp", nil)
+}
+
+// AgentEnvironmentBusy says "Finish running tasks before changing the agent environment."
+// in the language the app shows.
+func AgentEnvironmentBusy() string { return In(i18n.Locale()).AgentEnvironmentBusy() }
+
+// AgentEnvironmentBusy says "Finish running tasks before changing the agent environment."
+// in the language of msgs.
+func (msgs Messages) AgentEnvironmentBusy() string {
+	return Catalog.Format(msgs.locale, "agentEnvironmentBusy", nil)
+}
+
+// AgentInstalling says "Installing…"
+// in the language the app shows.
+func AgentInstalling() string { return In(i18n.Locale()).AgentInstalling() }
+
+// AgentInstalling says "Installing…"
+// in the language of msgs.
+func (msgs Messages) AgentInstalling() string {
+	return Catalog.Format(msgs.locale, "agentInstalling", nil)
+}
+
+// AgentInstallCommand says "Install command: %s"
+// in the language the app shows.
+func AgentInstallCommand() string { return In(i18n.Locale()).AgentInstallCommand() }
+
+// AgentInstallCommand says "Install command: %s"
+// in the language of msgs.
+func (msgs Messages) AgentInstallCommand() string {
+	return Catalog.Format(msgs.locale, "agentInstallCommand", nil)
+}
+
+// AgentNeedsNode says "Install Node.js and npm in the selected environment first"
+// in the language the app shows.
+func AgentNeedsNode() string { return In(i18n.Locale()).AgentNeedsNode() }
+
+// AgentNeedsNode says "Install Node.js and npm in the selected environment first"
+// in the language of msgs.
+func (msgs Messages) AgentNeedsNode() string {
+	return Catalog.Format(msgs.locale, "agentNeedsNode", nil)
+}
+
+// AgentInstallVerificationFailed says "The installer finished, but the installed CLI could not be verified"
+// in the language the app shows.
+func AgentInstallVerificationFailed() string {
+	return In(i18n.Locale()).AgentInstallVerificationFailed()
+}
+
+// AgentInstallVerificationFailed says "The installer finished, but the installed CLI could not be verified"
+// in the language of msgs.
+func (msgs Messages) AgentInstallVerificationFailed() string {
+	return Catalog.Format(msgs.locale, "agentInstallVerificationFailed", nil)
+}
+
+// AgentCustomCLIInstall says "Install the CLI configured in the launch command, then check again"
+// in the language the app shows.
+func AgentCustomCLIInstall() string { return In(i18n.Locale()).AgentCustomCLIInstall() }
+
+// AgentCustomCLIInstall says "Install the CLI configured in the launch command, then check again"
+// in the language of msgs.
+func (msgs Messages) AgentCustomCLIInstall() string {
+	return Catalog.Format(msgs.locale, "agentCustomCLIInstall", nil)
+}
+
 // WebhookWaitingForService says "Waiting for running conversations to finish before the webhook update takes effect."
 // in the language the app shows.
 func WebhookWaitingForService() string { return In(i18n.Locale()).WebhookWaitingForService() }
@@ -20528,4 +20660,204 @@ func MiyaUpdateC6af4c94ac() string { return In(i18n.Locale()).MiyaUpdateC6af4c94
 // in the language of msgs.
 func (msgs Messages) MiyaUpdateC6af4c94ac() string {
 	return Catalog.Format(msgs.locale, "miyaUpdate_c6af4c94ac", nil)
+}
+
+// ProvidersTitle says "Model providers"
+// in the language the app shows.
+func ProvidersTitle() string { return In(i18n.Locale()).ProvidersTitle() }
+
+// ProvidersTitle says "Model providers"
+// in the language of msgs.
+func (msgs Messages) ProvidersTitle() string {
+	return Catalog.Format(msgs.locale, "providersTitle", nil)
+}
+
+// ProvidersHelp says "A provider reaches only the agents Miya starts, appended to their launch command; the CLIs' own configuration and sig…"
+// in the language the app shows.
+func ProvidersHelp() string { return In(i18n.Locale()).ProvidersHelp() }
+
+// ProvidersHelp says "A provider reaches only the agents Miya starts, appended to their launch command; the CLIs' own configuration and sig…"
+// in the language of msgs.
+func (msgs Messages) ProvidersHelp() string {
+	return Catalog.Format(msgs.locale, "providersHelp", nil)
+}
+
+// ProvidersNone says "No providers yet. Add an API key and base URL to use them in Claude Code, Codex or Pi."
+// in the language the app shows.
+func ProvidersNone() string { return In(i18n.Locale()).ProvidersNone() }
+
+// ProvidersNone says "No providers yet. Add an API key and base URL to use them in Claude Code, Codex or Pi."
+// in the language of msgs.
+func (msgs Messages) ProvidersNone() string {
+	return Catalog.Format(msgs.locale, "providersNone", nil)
+}
+
+// ProviderAdd says "Add provider"
+// in the language the app shows.
+func ProviderAdd() string { return In(i18n.Locale()).ProviderAdd() }
+
+// ProviderAdd says "Add provider"
+// in the language of msgs.
+func (msgs Messages) ProviderAdd() string {
+	return Catalog.Format(msgs.locale, "providerAdd", nil)
+}
+
+// ProviderEdit says "Edit provider"
+// in the language the app shows.
+func ProviderEdit() string { return In(i18n.Locale()).ProviderEdit() }
+
+// ProviderEdit says "Edit provider"
+// in the language of msgs.
+func (msgs Messages) ProviderEdit() string {
+	return Catalog.Format(msgs.locale, "providerEdit", nil)
+}
+
+// ProviderApiResponses says "OpenAI Responses"
+// in the language the app shows.
+func ProviderApiResponses() string { return In(i18n.Locale()).ProviderApiResponses() }
+
+// ProviderApiResponses says "OpenAI Responses"
+// in the language of msgs.
+func (msgs Messages) ProviderApiResponses() string {
+	return Catalog.Format(msgs.locale, "providerApiResponses", nil)
+}
+
+// ProviderApiChat says "OpenAI Chat Completions"
+// in the language the app shows.
+func ProviderApiChat() string { return In(i18n.Locale()).ProviderApiChat() }
+
+// ProviderApiChat says "OpenAI Chat Completions"
+// in the language of msgs.
+func (msgs Messages) ProviderApiChat() string {
+	return Catalog.Format(msgs.locale, "providerApiChat", nil)
+}
+
+// ProviderApiAnthropic says "Anthropic Messages"
+// in the language the app shows.
+func ProviderApiAnthropic() string { return In(i18n.Locale()).ProviderApiAnthropic() }
+
+// ProviderApiAnthropic says "Anthropic Messages"
+// in the language of msgs.
+func (msgs Messages) ProviderApiAnthropic() string {
+	return Catalog.Format(msgs.locale, "providerApiAnthropic", nil)
+}
+
+// ProviderBaseURL says "Base URL"
+// in the language the app shows.
+func ProviderBaseURL() string { return In(i18n.Locale()).ProviderBaseURL() }
+
+// ProviderBaseURL says "Base URL"
+// in the language of msgs.
+func (msgs Messages) ProviderBaseURL() string {
+	return Catalog.Format(msgs.locale, "providerBaseURL", nil)
+}
+
+// ProviderApisHelp says "Turn on each API the provider serves, with its base URL."
+// in the language the app shows.
+func ProviderApisHelp() string { return In(i18n.Locale()).ProviderApisHelp() }
+
+// ProviderApisHelp says "Turn on each API the provider serves, with its base URL."
+// in the language of msgs.
+func (msgs Messages) ProviderApisHelp() string {
+	return Catalog.Format(msgs.locale, "providerApisHelp", nil)
+}
+
+// ProviderAPIKey says "API key"
+// in the language the app shows.
+func ProviderAPIKey() string { return In(i18n.Locale()).ProviderAPIKey() }
+
+// ProviderAPIKey says "API key"
+// in the language of msgs.
+func (msgs Messages) ProviderAPIKey() string {
+	return Catalog.Format(msgs.locale, "providerAPIKey", nil)
+}
+
+// ProviderModels says "Models"
+// in the language the app shows.
+func ProviderModels() string { return In(i18n.Locale()).ProviderModels() }
+
+// ProviderModels says "Models"
+// in the language of msgs.
+func (msgs Messages) ProviderModels() string {
+	return Catalog.Format(msgs.locale, "providerModels", nil)
+}
+
+// ProviderNamePlaceholder says "My provider"
+// in the language the app shows.
+func ProviderNamePlaceholder() string { return In(i18n.Locale()).ProviderNamePlaceholder() }
+
+// ProviderNamePlaceholder says "My provider"
+// in the language of msgs.
+func (msgs Messages) ProviderNamePlaceholder() string {
+	return Catalog.Format(msgs.locale, "providerNamePlaceholder", nil)
+}
+
+// ProviderKeepKey says "Leave blank to keep ••••%s"
+// in the language the app shows.
+func ProviderKeepKey() string { return In(i18n.Locale()).ProviderKeepKey() }
+
+// ProviderKeepKey says "Leave blank to keep ••••%s"
+// in the language of msgs.
+func (msgs Messages) ProviderKeepKey() string {
+	return Catalog.Format(msgs.locale, "providerKeepKey", nil)
+}
+
+// ProviderModelsPlaceholder says "One model ID per line; the first is the default"
+// in the language the app shows.
+func ProviderModelsPlaceholder() string { return In(i18n.Locale()).ProviderModelsPlaceholder() }
+
+// ProviderModelsPlaceholder says "One model ID per line; the first is the default"
+// in the language of msgs.
+func (msgs Messages) ProviderModelsPlaceholder() string {
+	return Catalog.Format(msgs.locale, "providerModelsPlaceholder", nil)
+}
+
+// ProviderFetchModels says "Fetch models"
+// in the language the app shows.
+func ProviderFetchModels() string { return In(i18n.Locale()).ProviderFetchModels() }
+
+// ProviderFetchModels says "Fetch models"
+// in the language of msgs.
+func (msgs Messages) ProviderFetchModels() string {
+	return Catalog.Format(msgs.locale, "providerFetchModels", nil)
+}
+
+// ProviderFetching says "Fetching…"
+// in the language the app shows.
+func ProviderFetching() string { return In(i18n.Locale()).ProviderFetching() }
+
+// ProviderFetching says "Fetching…"
+// in the language of msgs.
+func (msgs Messages) ProviderFetching() string {
+	return Catalog.Format(msgs.locale, "providerFetching", nil)
+}
+
+// ProviderNoModelsListed says "The provider answered but listed no models; enter them by hand."
+// in the language the app shows.
+func ProviderNoModelsListed() string { return In(i18n.Locale()).ProviderNoModelsListed() }
+
+// ProviderNoModelsListed says "The provider answered but listed no models; enter them by hand."
+// in the language of msgs.
+func (msgs Messages) ProviderNoModelsListed() string {
+	return Catalog.Format(msgs.locale, "providerNoModelsListed", nil)
+}
+
+// ProviderModelsFound says "Connected. %d models found; remove the ones you don't use."
+// in the language the app shows.
+func ProviderModelsFound() string { return In(i18n.Locale()).ProviderModelsFound() }
+
+// ProviderModelsFound says "Connected. %d models found; remove the ones you don't use."
+// in the language of msgs.
+func (msgs Messages) ProviderModelsFound() string {
+	return Catalog.Format(msgs.locale, "providerModelsFound", nil)
+}
+
+// ProviderNeedsModels says "%s uses this provider, which lists no models; add at least one."
+// in the language the app shows.
+func ProviderNeedsModels() string { return In(i18n.Locale()).ProviderNeedsModels() }
+
+// ProviderNeedsModels says "%s uses this provider, which lists no models; add at least one."
+// in the language of msgs.
+func (msgs Messages) ProviderNeedsModels() string {
+	return Catalog.Format(msgs.locale, "providerNeedsModels", nil)
 }

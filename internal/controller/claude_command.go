@@ -20,7 +20,7 @@ func (c *Controller) applyClaudeCommand(line string) {
 		c.ClaudeBinary, c.ClaudeError = "", err.Error()
 	}
 	if c.Memories().Engine != nil {
-		c.Memories().Engine.Configure(claude.CLI{Binary: c.ClaudeBinary, Args: append([]string(nil), c.ClaudeArgs...), Env: append([]string(nil), c.ClaudeEnv...)})
+		c.Memories().Engine.Configure(c.claudeCLI())
 	}
 	// Sessions live where the command's Claude Code keeps them.
 	transcript.ConfigOverride = ""

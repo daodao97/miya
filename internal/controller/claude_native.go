@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"miya/internal/processenv"
 	"path/filepath"
 	"sort"
 
@@ -23,13 +24,14 @@ func (c *Controller) LoadClaudeSessionsSync() {
 }
 
 func (c *Controller) loadClaudeSessionsAt(cwd string) {
+	environment := processenv.AgentWSL()
 	{
 		sessions := transcript.List(cwd)
 		if len(sessions) == 0 {
 			return
 		}
 		c.Dispatch(func() {
-			if c.Cwd != cwd {
+			if c.Cwd != cwd || environment != processenv.AgentWSL() {
 				return
 			}
 			items := append([]model.Thread(nil), c.Threads()...)

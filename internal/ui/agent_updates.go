@@ -28,7 +28,11 @@ func (app *App) agentUpdateStatus(c *ui.Context, info cliupdate.Info) {
 	if info.Previous != "" && info.Previous != info.Version && info.Error == "" {
 		ui.Text(c, tr("New agent processes will use the updated CLI. Existing sessions keep running.")).FontSize(11).TextColor(widgets.Muted)
 	}
-	if info.Command != "" && (info.Update || info.Error != "") {
-		ui.Text(c, fmt.Sprintf(tr("Update command: %s"), info.Command)).FontSize(11).Font(widgets.MonoFont).TextColor(widgets.Muted).Selectable()
+	if info.Command != "" && (info.Update || info.Install || info.Error != "") {
+		label := tr("Update command: %s")
+		if info.Install {
+			label = tr("Install command: %s")
+		}
+		ui.Text(c, fmt.Sprintf(label, info.Command)).FontSize(11).Font(widgets.MonoFont).TextColor(widgets.Muted).Selectable()
 	}
 }

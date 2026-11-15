@@ -13,8 +13,10 @@ import (
 
 type updateSettingsHost struct {
 	desktopui.Host
-	info     map[string]cliupdate.Info
-	upgrades []string
+	info         map[string]cliupdate.Info
+	upgrades     []string
+	environment  cliupdate.Environment
+	environments []string
 }
 
 func (h *updateSettingsHost) EnsureAgentUpdates()                     {}
@@ -28,8 +30,19 @@ func (h *updateSettingsHost) AgentUpdateBusy() bool {
 	}
 	return false
 }
+func (h *updateSettingsHost) AgentEnvironment() cliupdate.Environment { return h.environment }
+func (h *updateSettingsHost) SetAgentEnvironment(value string) {
+	h.environments = append(h.environments, value)
+	h.environment.WSL = value
+}
 func (h *updateSettingsHost) Agents() []agent.Availability {
-	return []agent.Availability{{ID: "codex", Name: "Codex", Path: "/tools/codex", Enabled: true}, {ID: "pi", Name: "Pi", Path: "/tools/pi"}}
+	agents := []agent.Availability{{ID: "codex", Name: "Codex", Path: "/tools/codex", Enabled: true}, {ID: "pi", Name: "Pi", Path: "/tools/pi"}}
+	for i := range agents {
+		if h.info[agents[i].ID].Install {
+			agents[i].Path = ""
+		}
+	}
+	return agents
 }
 func (h *updateSettingsHost) UpgradeAgent(id string) {
 	h.upgrades = append(h.upgrades, id)
@@ -80,6 +93,7 @@ func TestAgentUpdateStateMirrorsServiceHost(t *testing.T) {
 	info := cliupdate.Info{Path: "/remote/bin/codex", Version: "1.2.3", Latest: "1.3.0", Update: true, Updating: true}
 	state := c.SnapshotState()
 	state.AgentUpdates = map[string]cliupdate.Info{"codex": info}
+	state.AgentEnvironment = cliupdate.Environment{Platform: "windows", WSL: "Ubuntu", Busy: true}
 	mirror := controller.NewMirrorController()
 	defer mirror.Cancel()
 	mirror.Remote = svcclient.NewClosedClient()
@@ -87,10 +101,41 @@ func TestAgentUpdateStateMirrorsServiceHost(t *testing.T) {
 	if path, _ := mirror.AgentInstall("codex"); path != info.Path {
 		t.Fatalf("window inspected its local CLI instead of service host: %q", path)
 	}
+	if mirror.AgentEnvironment() != state.AgentEnvironment {
+		t.Fatal("WSL environment not mirrored")
+	}
 	if mirror.AgentUpdates()["codex"] != info || !mirror.AgentUpdateBusy() {
 		t.Fatal("upgrade state not mirrored")
 	}
 	if got := mirror.SnapshotState().AgentUpdates["codex"]; got != info {
 		t.Fatalf("snapshot lost upgrade state: %+v", got)
+	}
+}
+
+func TestAgentSettingsInstallButtonAndWSLEnvironment(t *testing.T) {
+	app, _ := testApp(t)
+	h := &updateSettingsHost{Host: app.C, environment: cliupdate.Environment{Platform: "windows"}, info: map[string]cliupdate.Info{
+		"codex": {Version: "1.2.3"},
+		"pi":    {Install: true, Command: "npm install -g --prefix owned pi"},
+	}}
+	app.C = h
+	tt := ui.NewTester(app.Render, 1180, 1800)
+	if err := tt.Click("Settings"); err != nil {
+		t.Fatal(err)
+	}
+	if !tt.HasText("Install command: npm install -g --prefix owned pi") {
+		t.Fatal(tt.Texts())
+	}
+	if err := tt.Click("Run agents in WSL"); err != nil {
+		t.Fatal(err)
+	}
+	if len(h.environments) != 1 || h.environments[0] != "*" || !tt.HasText("Use a distribution already installed in WSL, such as Ubuntu.") {
+		t.Fatalf("WSL selection not saved: %v / %v", h.environments, tt.Texts())
+	}
+	if err := tt.Click("Install"); err != nil {
+		t.Fatal(err)
+	}
+	if len(h.upgrades) != 1 || h.upgrades[0] != "pi" || !tt.HasText("Installing…") {
+		t.Fatalf("installation not started: %v / %v", h.upgrades, tt.Texts())
 	}
 }

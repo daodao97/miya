@@ -64,7 +64,7 @@ type claudeAgentHost struct{ agentWorkspace }
 
 func (h claudeAgentHost) Snapshot() claudeagent.State {
 	c := h.Controller
-	return claudeagent.State{Binary: c.ClaudeBinary, Error: c.ClaudeError, Command: c.ClaudeCommand, Model: c.ClaudeModel, Effort: c.ClaudeEffort, DefaultModel: c.claudeDefaultModel, Models: c.claudeModels, Args: c.ClaudeArgs, Env: c.ClaudeEnv}
+	return claudeagent.State{Binary: c.ClaudeBinary, Error: c.ClaudeError, Command: c.ClaudeCommand, Model: c.ClaudeModel, Effort: c.ClaudeEffort, DefaultModel: c.claudeDefaultModel, Models: c.claudeModels, Args: c.claudeLaunchArgs(), Env: c.ClaudeEnv}
 }
 func (h claudeAgentHost) Run(id int) *claude.Client           { return h.ClaudeRuns[id] }
 func (h claudeAgentHost) Discover()                           { h.loadClaudeSessions() }

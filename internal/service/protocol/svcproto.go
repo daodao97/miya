@@ -13,6 +13,7 @@ import (
 
 	"miya/internal/agent/account"
 	"miya/internal/agent/cliupdate"
+	"miya/internal/agent/provider"
 	"miya/internal/appdir"
 	"miya/internal/chat/model"
 	"miya/internal/interaction"
@@ -72,8 +73,14 @@ type State struct {
 	PiEnv              []string                   `json:"piEnv,omitempty"`
 	PiModel            string                     `json:"piModel,omitempty"`
 	PiEffort           string                     `json:"piEffort,omitempty"`
+	// Providers are those configured in Miya, never their keys, and
+	// ProviderUse the one each agent uses.
+	Providers     []provider.View   `json:"providers,omitempty"`
+	ProviderUse   map[string]string `json:"providerUse,omitempty"`
+	ProviderError string            `json:"providerError,omitempty"`
 	// AgentUpdates is discovered and executed on the service host.
-	AgentUpdates map[string]cliupdate.Info `json:"agentUpdates,omitempty"`
+	AgentUpdates     map[string]cliupdate.Info `json:"agentUpdates,omitempty"`
+	AgentEnvironment cliupdate.Environment     `json:"agentEnvironment,omitempty"`
 	// AgentEnabled holds the agents the user turned on or off.
 	AgentEnabled map[string]bool     `json:"agentEnabled,omitempty"`
 	Account      account.Display     `json:"account"`

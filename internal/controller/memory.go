@@ -1,7 +1,6 @@
 package controller
 
 import (
-	claude "miya/internal/agent/claude/native"
 	"miya/internal/agent/integrations"
 	"miya/internal/chat/model"
 	"miya/internal/memory"
@@ -10,7 +9,7 @@ import (
 )
 
 func NewMemoryEngine(c *Controller) *extractor.Engine {
-	cfg := claude.CLI{Binary: c.ClaudeBinary, Args: append([]string(nil), c.ClaudeArgs...), Env: append([]string(nil), c.ClaudeEnv...)}
+	cfg := c.claudeCLI()
 	return extractor.NewEngine(c.parentContext(), c.Memories().Store, cfg, c.MemorySaved)
 }
 

@@ -7,8 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"miya/internal/processenv"
 	"os"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -49,7 +49,7 @@ func readCodex(ctx context.Context, binary, home string) (quota.Reading, error) 
 func withCodex(ctx context.Context, binary, home string, run func(*codexRPC) error) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, binary, "app-server", "--listen", "stdio://")
+	cmd := processenv.CommandContext(ctx, binary, "app-server", "--listen", "stdio://")
 	cmd.Env, cmd.Dir, cmd.Stderr = cli.CommandEnv("codex", home, binary), os.TempDir(), io.Discard
 	cmd.WaitDelay = time.Second
 	cli.IsolateReader(cmd)
@@ -62,6 +62,7 @@ func withCodex(ctx context.Context, binary, home string, run func(*codexRPC) err
 	if err != nil {
 		return err
 	}
+	processenv.Prepare(cmd)
 	if err = cmd.Start(); err != nil {
 		return errors.New("Unable to start the Codex usage reader")
 	}

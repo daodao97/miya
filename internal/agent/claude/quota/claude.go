@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"miya/internal/processenv"
 	"os"
-	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
@@ -27,12 +27,13 @@ func readClaude(ctx context.Context, binary, home string) ([]quota.Window, error
 		return nil, errors.New("Unable to create the usage directory")
 	}
 	defer os.RemoveAll(dir)
-	cmd := exec.CommandContext(ctx, binary, claudeArgs...)
+	cmd := processenv.CommandContext(ctx, binary, claudeArgs...)
 	cmd.Dir, cmd.Env, cmd.Stderr = dir, cli.CommandEnv("claude", home, binary), io.Discard
 	cmd.WaitDelay = time.Second
 	cli.IsolateReader(cmd)
 	var out limitedBuffer
 	cmd.Stdout = &out
+	processenv.Prepare(cmd)
 	if err := cmd.Run(); err != nil {
 		return nil, errors.New("Failed to read Claude usage. Check CLI sign-in.")
 	}

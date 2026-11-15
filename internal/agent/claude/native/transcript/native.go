@@ -20,6 +20,7 @@ import (
 	"miya/internal/chat/subagent"
 	chattext "miya/internal/chat/text"
 	"miya/internal/memory"
+	"miya/internal/processenv"
 	"miya/internal/textutil"
 	"miya/locales"
 )
@@ -30,6 +31,14 @@ const SummaryReadLimit = 256 << 10
 var ConfigOverride string
 
 func ConfigDir() string {
+	if processenv.AgentWSL() != "" {
+		override := ConfigOverride
+		if override == "" {
+			override = os.Getenv("CLAUDE_CONFIG_DIR")
+		}
+		dir, _ := processenv.WSLConfigDir("claude", override)
+		return dir
+	}
 	if ConfigOverride != "" {
 		return ConfigOverride
 	}
@@ -46,6 +55,7 @@ func ConfigDir() string {
 // claudeProjectDir is where Claude Code keeps a working directory's sessions:
 // its path with every character but letters and digits made a dash.
 func ProjectDir(cwd string) string {
+	cwd = processenv.WSLProjectPath(cwd)
 	root := ConfigDir()
 	if root == "" || cwd == "" {
 		return ""
@@ -244,7 +254,7 @@ func List(cwd string) []Session {
 		}
 		s, ok := Summarize(path)
 		// The directory name is lossy: two folders can share it.
-		if !ok || s.Cwd != "" && filepath.Clean(s.Cwd) != filepath.Clean(cwd) {
+		if !ok || s.Cwd != "" && filepath.Clean(s.Cwd) != filepath.Clean(processenv.WSLProjectPath(cwd)) {
 			continue
 		}
 		out = append(out, s)

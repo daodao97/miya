@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"miya/internal/processenv"
 	"net/url"
 	"os"
 	"os/exec"
@@ -35,7 +36,7 @@ func (p Provider) command(ctx context.Context, args ...string) (*exec.Cmd, error
 	if err != nil {
 		return nil, err
 	}
-	cmd := exec.CommandContext(ctx, binary, args...)
+	cmd := processenv.CommandContext(ctx, binary, args...)
 	cmd.Env, cmd.Dir, cmd.Stderr = cli.CommandEnv("claude", home, binary), os.TempDir(), io.Discard
 	cmd.WaitDelay = time.Second
 	cli.IsolateReader(cmd)
@@ -49,6 +50,7 @@ func (p Provider) Check(ctx context.Context) (login.Identity, error) {
 	}
 	var out bytes.Buffer
 	cmd.Stdout = &out
+	processenv.Prepare(cmd)
 	err = cmd.Run()
 	var status struct {
 		LoggedIn     *bool  `json:"loggedIn"`
@@ -137,6 +139,7 @@ func start(cmd *exec.Cmd, dir string) (*flow, error) {
 		in.Close()
 		return nil, err
 	}
+	processenv.Prepare(cmd)
 	if err = cmd.Start(); err != nil {
 		in.Close()
 		out.Close()

@@ -13,7 +13,6 @@ import (
 	"io"
 	"mime"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -173,6 +172,7 @@ func Input(text string, paths []string) (string, []Image, error) {
 
 // Client is one running pi process.
 type Client struct {
+	binary    string
 	pid       int
 	epoch     string
 	in        io.WriteCloser
@@ -197,9 +197,13 @@ func Start(parent context.Context, o Options, onEvent func(Event), onDone func(e
 	if err != nil {
 		return nil, fmt.Errorf("prepare pi system prompt: %w", err)
 	}
+	o.Binary, err = processenv.PinWSL(parent, o.Binary)
+	if err != nil {
+		return nil, err
+	}
 	ctx, cancel := context.WithCancel(parent)
 	args, env := launch(o)
-	cmd := exec.CommandContext(ctx, o.Binary, args...)
+	cmd := processenv.CommandContext(ctx, o.Binary, args...)
 	cmd.Dir = o.Cwd
 	cmd.Env = processenv.Environ(o.Binary, env...)
 	configureProcess(cmd)
@@ -217,12 +221,13 @@ func Start(parent context.Context, o Options, onEvent func(Event), onDone func(e
 	}
 	stderr := &tail{max: 4096}
 	cmd.Stderr = stderr
+	processenv.Prepare(cmd)
 	if err = cmd.Start(); err != nil {
 		in.Close()
 		cancel()
 		return nil, err
 	}
-	c := &Client{pid: cmd.Process.Pid, epoch: fmt.Sprintf("pi:%d:%d", cmd.Process.Pid, time.Now().UnixNano()), in: in, cancel: cancel, done: make(chan struct{}), pending: map[string]chan Event{}}
+	c := &Client{binary: o.Binary, pid: cmd.Process.Pid, epoch: fmt.Sprintf("pi:%d:%d", cmd.Process.Pid, time.Now().UnixNano()), in: in, cancel: cancel, done: make(chan struct{}), pending: map[string]chan Event{}}
 	go func() {
 		defer close(c.done)
 		defer cancel()
@@ -266,6 +271,12 @@ func launch(o Options) (args, env []string) {
 		if o.Provider.Bearer {
 			env = append(env, "MIYA_PI_BEARER=1")
 		}
+		if o.Provider.API != "" {
+			env = append(env, "MIYA_PI_API="+o.Provider.API)
+		}
+		if o.Provider.Name != "" {
+			env = append(env, "MIYA_PI_NAME="+o.Provider.Name)
+		}
 	}
 	if o.Model != "" {
 		args = append(args, "--model", o.Model)
@@ -281,7 +292,7 @@ func launch(o Options) (args, env []string) {
 
 func (c *Client) receive(line []byte, onEvent func(Event)) {
 	var e Event
-	if json.Unmarshal(line, &e) != nil {
+	if json.Unmarshal(processenv.ProtocolPaths(line, c.binary, false), &e) != nil {
 		return
 	}
 	switch e.Type {
@@ -327,6 +338,7 @@ func (c *Client) write(v any) error {
 	}
 	c.writeMu.Lock()
 	defer c.writeMu.Unlock()
+	data = processenv.ProtocolPaths(data, c.binary, true)
 	_, err = c.in.Write(append(data, '\n'))
 	return err
 }

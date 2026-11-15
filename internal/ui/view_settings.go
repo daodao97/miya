@@ -13,6 +13,7 @@ import (
 	"miya/internal/agent/account"
 	"miya/internal/agent/login"
 	tokenusage "miya/internal/chat/usage"
+	"miya/internal/processenv"
 	svcclient "miya/internal/service/client"
 	"miya/internal/textutil"
 	"miya/internal/widgets"
@@ -95,6 +96,7 @@ func (app *App) generalSettings(c *ui.Context) {
 		tr("Change them for the current conversation from the composer."),
 		cc.SelectedPermissionPolicy(), cc.State().SetPermissionPolicy)
 	app.agentSettings(c)
+	app.providerSettings(c.Key("model-providers"))
 	app.ServiceSettings(c)
 	app.MiyaUpdateSettings(c)
 }
@@ -458,6 +460,7 @@ func (app *App) agentSettings(c *ui.Context) {
 // agentSwitches lists every agent, one row each, with whether its CLI is
 // installed and a switch for offering it to new conversations.
 func (app *App) agentSwitches(c *ui.Context) {
+	app.agentEnvironmentSettings(c.Key("environment"))
 	app.C.EnsureAgentUpdates()
 	updates := app.C.AgentUpdates()
 	updating := app.C.AgentUpdateBusy()
@@ -479,19 +482,25 @@ func (app *App) agentSwitches(c *ui.Context) {
 				ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
 					ui.Text(c, a.Name).FontSize(13).TextColor(widgets.Ink)
 					if a.Installed() {
-						ui.Text(c, a.Path).TextColor(widgets.Muted).FontSize(11).Font(widgets.MonoFont).SingleLine().Ellipsis("…").Selectable()
+						ui.Text(c, processenv.DisplayBinary(a.Path)).TextColor(widgets.Muted).FontSize(11).Font(widgets.MonoFont).SingleLine().Ellipsis("…").Selectable()
 					} else {
 						ui.Text(c, textutil.FirstNonEmpty(a.Problem, tr("Not installed"))).TextColor(widgets.Danger).FontSize(11).Selectable()
 					}
 					app.agentUpdateStatus(c, updates[a.ID])
 				})
 				info := updates[a.ID]
-				if info.Update || info.Updating {
+				if info.Update || info.Install || info.Updating {
 					label := fmt.Sprintf(tr("Update to %s"), info.Latest)
+					if info.Install {
+						label = tr("Install")
+					}
 					if info.Updating {
 						label = tr("Updating…")
+						if info.Install {
+							label = tr("Installing…")
+						}
 					}
-					if widgets.SmallButton(c.Key("upgrade"), label, updating || info.Checking).Clicked() {
+					if widgets.SmallButton(c.Key("upgrade"), label, updating || info.Checking || (info.Install && info.Command == "")).Clicked() {
 						app.C.UpgradeAgent(a.ID)
 					}
 				}

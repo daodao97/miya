@@ -332,7 +332,9 @@ func (c *Controller) ApplyState(s svcproto.State) {
 	}
 	c.Pi.Command, c.Pi.Error, c.Pi.Binary, c.Pi.Args, c.Pi.Env = s.PiCommand, s.PiError, s.PiBinary, s.PiArgs, s.PiEnv
 	c.Pi.Model, c.Pi.Effort = s.PiModel, s.PiEffort
+	c.Providers.views, c.Providers.use, c.Providers.err = s.Providers, s.ProviderUse, s.ProviderError
 	c.agentUpdates = s.AgentUpdates
+	c.agentEnvironment = s.AgentEnvironment
 	c.agents = agentSwitches{}
 	for id, on := range s.AgentEnabled {
 		c.agents[id] = on

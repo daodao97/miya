@@ -93,12 +93,15 @@ type Controller struct {
 	ClaudeRuns map[int]*claude.Client
 	// Pi is the pi agent's command, choices and running processes.
 	Pi piState
+	// Providers are the model providers configured in Miya.
+	Providers providerState
 	// agents records which agents the user turned on or off, and installs
 	// caches whether their CLIs are installed.
-	agents         agentSwitches
-	installs       map[string]agentInstall
-	agentUpdates   map[string]cliupdate.Info
-	agentUpdatesAt time.Time
+	agents           agentSwitches
+	installs         map[string]agentInstall
+	agentUpdates     map[string]cliupdate.Info
+	agentUpdatesAt   time.Time
+	agentEnvironment cliupdate.Environment
 	// claudeCmdCache keeps Claude Code\'s slash commands, by project.
 	ClaudeCmdCache    map[string]ClaudeCommandList
 	claudeCmdLoading  map[string]bool
@@ -184,6 +187,7 @@ func newChatController() *Controller {
 	c.claudeDefaultModel = prefs.Load("claudeDefaultModel")
 	c.claudeModels = loadClaudeModels()
 	c.loadPiSettings()
+	c.loadProviders()
 	c.agents = loadAgentSwitches()
 	c.Draft, c.SetDraft = uiruntime.CreateSignal("")
 	c.Model, c.SetModel = uiruntime.CreateSignal("")
@@ -584,6 +588,8 @@ func (c *Controller) Connect() {
 	c.Connecting = true
 	c.connectionID++
 	generation, cwd := c.connectionID, c.Cwd
+	launch := c.codexLaunch()
+	c.Providers.codexApplied, c.Providers.codexStale = launchKey(launch), false
 	if c.connectionCancel != nil {
 		c.connectionCancel()
 	}
@@ -593,7 +599,7 @@ func (c *Controller) Connect() {
 	c.SetHistoryStatus("Loading conversations…")
 	go func() {
 		ctx, done := context.WithTimeout(connectionCtx, 15*time.Second)
-		client, err := codex.Start(ctx, "", cwd, mcpconfig.CodexArgs(cwd)...)
+		client, err := codex.StartWithEnv(ctx, "", cwd, append(os.Environ(), launch.Env...), append(mcpconfig.CodexArgs(cwd), launch.Args...)...)
 		done()
 		if err != nil {
 			c.Dispatch(func() {
@@ -632,6 +638,9 @@ func (c *Controller) Connect() {
 			c.Dispatch(func() {
 				if c.Client == client && c.connectionID == generation {
 					c.Handle(f)
+					if f.Method == "turn/completed" {
+						c.codexTurnSettled()
+					}
 				}
 			})
 		}
@@ -785,6 +794,9 @@ func (c *Controller) loadModels(ctx context.Context, client *codex.Client, gener
 		c.Dispatch(func() {
 			if c.Client != client || c.connectionID != generation {
 				return
+			}
+			if list, ok := c.codexProviderModels(); ok {
+				models.Data = list
 			}
 			c.SetModels(models.Data)
 			selected := config.Config.Model

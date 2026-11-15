@@ -61,6 +61,7 @@ type App struct {
 	formErrors     map[string]string
 	SettingsTab    int
 	settingDrafts  map[string]string
+	providerEdit   providerEditor
 	ServiceRestart ServiceRestartUI
 	MiyaUpdate     MiyaUpdateUI
 	WorkspaceHub   *DesktopWorkspaces

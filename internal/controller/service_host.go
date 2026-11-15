@@ -9,6 +9,7 @@ import (
 
 	"miya/internal/agent/login"
 	agentpolicy "miya/internal/agent/policy"
+	"miya/internal/agent/provider"
 	"miya/internal/appdir"
 	"miya/internal/appmodel"
 	"miya/internal/async"
@@ -61,6 +62,28 @@ func (c *Controller) ServiceRequest(req svcproto.Request) (any, error) {
 		}
 		run := c.AccountLoginTarget()
 		return async.Reply(func() (any, error) { return run(r) }), nil
+	case "providerSave":
+		var e provider.Edit
+		if err := arg(&e); err != nil {
+			return nil, err
+		}
+		return nil, c.SaveProvider(e)
+	case "providerDelete":
+		_ = arg(&value)
+		return nil, c.DeleteProvider(value)
+	case "providerUse":
+		var u provider.Use
+		if err := arg(&u); err != nil {
+			return nil, err
+		}
+		return nil, c.UseProvider(u)
+	case "providerModels":
+		var e provider.Edit
+		if err := arg(&e); err != nil {
+			return nil, err
+		}
+		p := c.providerToFetch(e)
+		return async.Reply(func() (any, error) { return provider.FetchModels(context.Background(), p) }), nil
 	case "host":
 		var r svcproto.HostRequest
 		if err := arg(&r); err != nil {
@@ -276,6 +299,12 @@ func (c *Controller) ServiceRequest(req svcproto.Request) (any, error) {
 		}
 		_ = arg(&a)
 		c.SetAgentEnabled(a.ID, a.Enabled)
+	case "agentEnvironment":
+		var value string
+		if err := arg(&value); err != nil {
+			return nil, err
+		}
+		c.SetAgentEnvironment(value)
 	case "checkAgentUpdates":
 		c.CheckAgentUpdates()
 	case "upgradeAgent":
@@ -397,7 +426,8 @@ func (c *Controller) SnapshotState() svcproto.State {
 		Status: c.Status(), HistoryStatus: c.HistoryStatus(), Ready: c.Ready(),
 		Models: snapshotModels(c.Models()), Model: c.Model(), Effort: c.Effort(), PermissionPolicy: c.PermissionPolicy(), Locale: c.Locale(),
 		ClaudeCommand: c.ClaudeCommand, ClaudeError: c.ClaudeError, ClaudeBinary: c.ClaudeBinary, ClaudeArgs: c.ClaudeArgs, ClaudeEnv: c.ClaudeEnv, ClaudeModel: c.ClaudeModel, ClaudeEffort: c.ClaudeEffort, ClaudeDefaultModel: c.claudeDefaultModel, ClaudeModels: snapshotClaudeModels(c.claudeModels),
-		PiCommand: c.Pi.Command, PiError: c.Pi.Error, PiBinary: c.Pi.Binary, PiArgs: c.Pi.Args, PiEnv: c.Pi.Env, PiModel: c.Pi.Model, PiEffort: c.Pi.Effort, AgentEnabled: c.AgentSwitches(), AgentUpdates: c.AgentUpdates(),
+		PiCommand: c.Pi.Command, PiError: c.Pi.Error, PiBinary: c.Pi.Binary, PiArgs: c.Pi.Args, PiEnv: c.Pi.Env, PiModel: c.Pi.Model, PiEffort: c.Pi.Effort, AgentEnabled: c.AgentSwitches(), AgentUpdates: c.AgentUpdates(), AgentEnvironment: c.AgentEnvironment(),
+		Providers: c.ProviderViews(), ProviderUse: c.ProviderUse(), ProviderError: c.ProviderError(),
 		Account: c.AccountState, AccountReset: c.AccountReset, QuotaLimits: c.QuotaLimits, QuotaStatus: c.quotaStatus,
 		Phone: DesktopPhone.Status(),
 	}

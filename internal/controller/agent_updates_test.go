@@ -149,3 +149,30 @@ func TestAgentUpdateCheckRunningAtCloseDispatchesNothing(t *testing.T) {
 		t.Fatal("a check canceled by close was dispatched")
 	}
 }
+
+func TestAgentInstallationSerializesAndRefreshesLaunchCommand(t *testing.T) {
+	c, q, bin := updateTestController(t)
+	c.Pi.Binary = ""
+	c.agentUpdates = map[string]cliupdate.Info{catalog.Pi: {Install: true, Command: "install fixture"}}
+	c.UpgradeAgentCLI = func(_ context.Context, id, path string, _ []string) cliupdate.Info {
+		if id != catalog.Pi || path != "" {
+			t.Errorf("wrong installation: %q %q", id, path)
+		}
+		return cliupdate.Info{Path: bin, Version: "1.3.0"}
+	}
+	// The launch command is resolved after installation. It names the fixture
+	// rather than relying on any agent installed on the developer's machine.
+	c.Pi.Command = bin
+	c.UpgradeAgent(catalog.Pi)
+	if !c.AgentUpdateBusy() || !c.agentUpdates[catalog.Pi].Install {
+		t.Fatal("installation not kept busy")
+	}
+	c.UpgradeAgent(catalog.Pi)
+	finishAgentCheck(t, q)
+	if c.AgentUpdateBusy() || c.Pi.Binary != bin || c.agentUpdates[catalog.Pi].Version != "1.3.0" {
+		t.Fatalf("new CLI not adopted: %+v / %s", c.agentUpdates[catalog.Pi], c.Pi.Binary)
+	}
+	if len(q) != 0 {
+		t.Fatal("installation ran twice")
+	}
+}

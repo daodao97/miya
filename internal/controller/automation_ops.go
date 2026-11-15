@@ -6,7 +6,6 @@ import (
 	"errors"
 	"strings"
 
-	claude "miya/internal/agent/claude/native"
 	"miya/internal/agent/integrations"
 	"miya/internal/appmodel"
 	"miya/internal/async"
@@ -123,7 +122,7 @@ func (c *Controller) prepareAutomationDraft(ctx context.Context, r automation.Re
 	if agent == "" {
 		return nil, errors.New("Agent must be codex or claude-code")
 	}
-	cfg, now := claude.CLI{Binary: c.ClaudeBinary, Args: c.ClaudeArgs, Env: c.ClaudeEnv}, c.Auto.Now()
+	cfg, now := c.claudeCLI(), c.Auto.Now()
 	return async.Reply(func() (any, error) {
 		d, err := integrations.DraftAutomation(ctx, cfg, agent, project, request, now)
 		if err != nil {

@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"os/exec"
 	"time"
 
 	"miya/internal/processenv"
@@ -56,7 +55,7 @@ func ReadCatalog(ctx context.Context, binary string, args, env []string, cwd str
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	a := append(append([]string(nil), args...), "--print", "--verbose", "--input-format", "stream-json", "--output-format", "stream-json", "--permission-mode", "default")
-	cmd := exec.CommandContext(ctx, binary, a...)
+	cmd := processenv.CommandContext(ctx, binary, a...)
 	cmd.Dir = cwd
 	cmd.Env = processenv.Environ(binary, env...)
 	configureProcess(cmd)
@@ -70,6 +69,7 @@ func ReadCatalog(ctx context.Context, binary string, args, env []string, cwd str
 		return Catalog{}, err
 	}
 	cmd.Stderr = io.Discard
+	processenv.Prepare(cmd)
 	if err := cmd.Start(); err != nil {
 		return Catalog{}, err
 	}

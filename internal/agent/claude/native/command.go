@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"miya/internal/appdir"
@@ -55,7 +56,9 @@ func splitWords(s string) ([]string, error) {
 	open := false
 	quote := rune(0)
 	escaped := false
-	for _, r := range s {
+	windowsPaths := runtime.GOOS == "windows" && processenv.AgentWSL() == ""
+	runes := []rune(s)
+	for i, r := range runes {
 		switch {
 		case escaped:
 			b.WriteRune(r)
@@ -71,12 +74,21 @@ func splitWords(s string) ([]string, error) {
 			case '"':
 				quote = 0
 			case '\\':
-				escaped = true
+				if windowsPaths && (i+1 == len(runes) || runes[i+1] != '"') {
+					b.WriteRune(r)
+				} else {
+					escaped = true
+				}
 			default:
 				b.WriteRune(r)
 			}
 		case r == '\\':
-			escaped, open = true, true
+			if windowsPaths {
+				b.WriteRune(r)
+				open = true
+			} else {
+				escaped, open = true, true
+			}
 		case r == '\'' || r == '"':
 			quote, open = r, true
 		case r == ' ' || r == '\t' || r == '\n' || r == '\r':
@@ -132,13 +144,16 @@ func expandHome(w string) string {
 // resolve finds an executable by its path, on PATH, or where installers put
 // it, as an app started from the Finder has a short PATH.
 func resolve(name string) (string, error) {
+	if processenv.AgentWSL() != "" {
+		return processenv.AgentBinary(name)
+	}
 	if strings.ContainsRune(name, filepath.Separator) {
 		if executable(name) {
 			return name, nil
 		}
 		return "", fmt.Errorf("Executable %s not found", name)
 	}
-	if p, err := processenv.LookPath(name); err == nil {
+	if p, err := processenv.AgentBinary(name); err == nil {
 		return p, nil
 	}
 	if name == "claude" {
@@ -152,7 +167,7 @@ func resolve(name string) (string, error) {
 
 func executable(p string) bool {
 	st, err := os.Stat(p)
-	return err == nil && !st.IsDir() && st.Mode()&0o111 != 0
+	return err == nil && !st.IsDir() && (runtime.GOOS == "windows" || st.Mode()&0o111 != 0)
 }
 
 // The command that starts Claude Code: claude by default, or one with

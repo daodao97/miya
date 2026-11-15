@@ -11,11 +11,18 @@ import (
 // GUI launches have a smaller PATH than login shells. Probe ordinary install
 // locations without sourcing shell startup files or invoking a shell.
 func FindBinary(name string) (string, error) {
-	return processenv.LookPath(name)
+	return processenv.AgentBinary(name)
 }
 
 func CommandEnv(agent, dir, binary string) []string {
 	key := configEnv(agent)
+	if processenv.IsWSL(binary) {
+		overrides := []string{"DISABLE_TELEMETRY=1", "DISABLE_ERROR_REPORTING=1", "DISABLE_AUTOUPDATER=1"}
+		if dir != "" {
+			overrides = append(overrides, key+"="+dir)
+		}
+		return processenv.Environ(binary, overrides...)
+	}
 	var env []string
 	for _, e := range os.Environ() {
 		name, _, _ := strings.Cut(e, "=")
@@ -39,6 +46,9 @@ func configEnv(agent string) string {
 	return ""
 }
 func ConfigDir(agent string) (string, error) {
+	if processenv.AgentWSL() != "" {
+		return processenv.WSLConfigDir(agent, os.Getenv(configEnv(agent)))
+	}
 	if dir := os.Getenv(configEnv(agent)); dir != "" {
 		return dir, nil
 	}

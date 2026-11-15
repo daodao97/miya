@@ -10,6 +10,7 @@ import (
 	claude "miya/internal/agent/claude/native"
 	codex "miya/internal/agent/codex/native"
 	"miya/internal/prefs"
+	"miya/internal/processenv"
 	"miya/internal/uiruntime"
 )
 
@@ -56,6 +57,13 @@ type agentInstall struct {
 // one for it, otherwise by its executable on PATH or in the usual install
 // directories.
 func (c *Controller) AgentInstall(id string) (path, problem string) {
+	if info, ok := c.agentUpdates[id]; ok && info.Install {
+		return "", ""
+	}
+	return c.agentBinary(id)
+}
+
+func (c *Controller) agentBinary(id string) (path, problem string) {
 	if c.Remote != nil {
 		if info, ok := c.agentUpdates[id]; ok {
 			return info.Path, ""
@@ -125,6 +133,9 @@ func (c *Controller) AgentEnabled(id string) bool {
 		return false
 	}
 	if d.OptIn {
+		if processenv.AgentWSL() != "" && c.Remote == nil {
+			return c.agentUpdates[id].Version != "" && !c.agentUpdates[id].Install
+		}
 		path, _ := c.AgentInstall(id)
 		return path != ""
 	}

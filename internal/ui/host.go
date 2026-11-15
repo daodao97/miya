@@ -6,6 +6,7 @@ import (
 	"miya/internal/agent"
 	"miya/internal/agent/cliupdate"
 	"miya/internal/agent/login"
+	"miya/internal/agent/provider"
 	"miya/internal/agent/quota"
 	"miya/internal/appmodel"
 	"miya/internal/automation"
@@ -34,6 +35,16 @@ type Host interface {
 	AgentUpdates() map[string]cliupdate.Info
 	AgentUpdateBusy() bool
 	UpgradeAgent(string)
+	AgentEnvironment() cliupdate.Environment
+	SetAgentEnvironment(string)
+	// Model providers configured in Miya, and the one each agent uses.
+	ProviderViews() []provider.View
+	ProviderUse() map[string]string
+	ProviderError() string
+	SaveProvider(provider.Edit) error
+	DeleteProvider(id string) error
+	EnableProvider(agent, id string, on bool) error
+	ProviderModelsFetch(provider.Edit) func(context.Context) ([]string, error)
 	AgentSpeedBadge(agent string) string
 	AllThreads() []model.Thread
 	ApprovalDetail(a interaction.Request) string
