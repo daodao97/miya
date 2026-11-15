@@ -199,6 +199,7 @@ func (m *App) automationsPage(c *ui.Context, detail bool) {
 				m.automationPhoneEmpty(c, tr("No automations yet"), message)
 				return
 			}
+			m.automationPhoneAttention(c.Key("attention"), a.List)
 			ui.Column(c).FillWidth().Gap(12).Children(func() {
 				for _, v := range a.List {
 					m.automationPhoneRow(c.Key(v.ID), v)
@@ -536,4 +537,33 @@ func automationPhoneWhen(v automation.View) string {
 		return v.ScheduleText
 	}
 	return automation.DescribeCron(v.Schedule)
+}
+
+// automationPhoneAttention lists what the automations wait for the person
+// about, above the list; each opens its automation.
+func (m *App) automationPhoneAttention(c *ui.Context, list []automation.View) {
+	items := automation.NeedsAttention(list)
+	if len(items) == 0 {
+		return
+	}
+	p := m.Pal
+	ui.Column(c).FillWidth().Padding(14, 16).Gap(10).Radius(18).Background(p.surface).Children(func() {
+		ui.Text(c, tr("Needs you")+" · "+fmt.Sprint(len(items))).FontSize(m.Font(13)).FontWeight(600).TextColor(p.warn)
+		for i, it := range items {
+			b := m.phoneButton(c.Key(fmt.Sprint(i, it.ID, it.Kind))).FillWidth().Column().AlignItems(ui.Start).Padding(0).Gap(2).Background(ui.Transparent).Label(it.Name)
+			if b.Pressed() {
+				b.Opacity(0.7)
+			}
+			b.Children(func() {
+				ui.Text(c, it.Name+" · "+automation.AttentionLabel(it.Kind)).FontSize(m.Font(15)).FontWeight(500).MaxLines(1)
+				if it.Detail != "" {
+					ui.Text(c, it.Detail).FontSize(m.Font(13)).TextColor(p.muted).MaxLines(2)
+				}
+			})
+			if b.Clicked() {
+				m.Autos.Detail = it.ID
+				m.Router().Push("/automation")
+			}
+		}
+	})
 }

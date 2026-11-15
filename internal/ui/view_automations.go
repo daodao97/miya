@@ -237,6 +237,7 @@ func (app *App) automationList(c *ui.Context) {
 			ui.Text(c, tr("Click New to describe a task, or ask an agent to create one in any conversation.")).FontSize(12).TextColor(widgets.Muted).TextAlign(ui.Center)
 		})
 	default:
+		app.automationAttention(c.Key("attention"), a.list)
 		automationOverview(c.Key("overview"), a.list)
 		ui.Column(c).FillWidth().Background(widgets.Panel).Border(1, widgets.Line).Radius(14).Clip().Children(func() {
 			for i, v := range a.list {
@@ -1106,5 +1107,38 @@ func (app *App) reportView(c *ui.Context, r automation.Run, latest bool) {
 				ui.Text(c, tr("Artifacts: ")+strings.Join(rep.Artifacts, ", ")).FontSize(12).TextColor(widgets.Muted).Selectable()
 			}
 		})
+	})
+}
+
+// automationAttention lists, across all automations, what waits for the
+// person, most pressing first; each opens its automation.
+func (app *App) automationAttention(c *ui.Context, list []automation.View) {
+	items := automation.NeedsAttention(list)
+	if len(items) == 0 {
+		return
+	}
+	a := &app.Autos
+	ui.Column(c).FillWidth().Gap(2).Padding(12, 8, 8, 8).Background(widgets.Panel).Border(1, widgets.Line).Radius(14).Children(func() {
+		ui.Row(c).Gap(8).Padding(0, 8, 6, 8).AlignItems(ui.Center).Children(func() {
+			widgets.Icon(c, "alert-circle", 15, autoBad)
+			ui.Text(c, tr("Needs you")).FontSize(13).FontWeight(600)
+			ui.Text(c, fmt.Sprint(len(items))).FontSize(12).TextColor(widgets.Muted)
+		})
+		for i, it := range items {
+			row := widgets.Quiet(c.Key(fmt.Sprint(i, it.ID, it.Kind))).FillWidth().Height(0).MinHeight(44).Padding(6, 8, 6, 8).Gap(10).AlignItems(ui.Center).Label(it.Name)
+			row.Children(func() {
+				ui.Column(c).Grow(1).MinWidth(0).Gap(1).Children(func() {
+					ui.Text(c, it.Name+" · "+automation.AttentionLabel(it.Kind)).FontSize(13).FontWeight(500).SingleLine().Ellipsis("…")
+					if it.Detail != "" {
+						ui.Text(c, it.Detail).FontSize(12).TextColor(widgets.Muted).SingleLine().Ellipsis("…")
+					}
+				})
+				ui.Text(c, filepath.Base(it.Project)).FontSize(12).TextColor(widgets.Muted).Shrink(0)
+				widgets.Icon(c, "arrow-right", 12, widgets.Muted)
+			})
+			if row.Clicked() {
+				a.Page, a.Detail, a.confirmDelete = "detail", it.ID, ""
+			}
+		}
 	})
 }

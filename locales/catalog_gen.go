@@ -2644,6 +2644,46 @@ func (msgs Messages) CheckFailed35010c() string {
 	return Catalog.Format(msgs.locale, "checkFailed_35010c", nil)
 }
 
+// AutomationAttentionMerge says "Changes waiting to merge"
+// in the language the app shows.
+func AutomationAttentionMerge() string { return In(i18n.Locale()).AutomationAttentionMerge() }
+
+// AutomationAttentionMerge says "Changes waiting to merge"
+// in the language of msgs.
+func (msgs Messages) AutomationAttentionMerge() string {
+	return Catalog.Format(msgs.locale, "automationAttentionMerge", nil)
+}
+
+// AutomationAttentionFailed says "Last run failed"
+// in the language the app shows.
+func AutomationAttentionFailed() string { return In(i18n.Locale()).AutomationAttentionFailed() }
+
+// AutomationAttentionFailed says "Last run failed"
+// in the language of msgs.
+func (msgs Messages) AutomationAttentionFailed() string {
+	return Catalog.Format(msgs.locale, "automationAttentionFailed", nil)
+}
+
+// AutomationAttentionTrigger says "Trigger check failing"
+// in the language the app shows.
+func AutomationAttentionTrigger() string { return In(i18n.Locale()).AutomationAttentionTrigger() }
+
+// AutomationAttentionTrigger says "Trigger check failing"
+// in the language of msgs.
+func (msgs Messages) AutomationAttentionTrigger() string {
+	return Catalog.Format(msgs.locale, "automationAttentionTrigger", nil)
+}
+
+// AutomationNeedsYou says "Needs you"
+// in the language the app shows.
+func AutomationNeedsYou() string { return In(i18n.Locale()).AutomationNeedsYou() }
+
+// AutomationNeedsYou says "Needs you"
+// in the language of msgs.
+func (msgs Messages) AutomationNeedsYou() string {
+	return Catalog.Format(msgs.locale, "automationNeedsYou", nil)
+}
+
 // AutomationVerified says " · Verified by the check"
 // in the language the app shows.
 func AutomationVerified() string { return In(i18n.Locale()).AutomationVerified() }
