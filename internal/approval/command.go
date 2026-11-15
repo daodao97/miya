@@ -18,8 +18,8 @@ func ActionKey(action string) string {
 		if !outsideWords(words) {
 			continue
 		}
-		words = stripWrappers(words)
-		program := filepath.Base(strings.Trim(words[0], `"'`))
+		words = stripWrappers(unquote(words))
+		program := filepath.Base(words[0])
 		n := 1
 		switch {
 		case program == "gh":
@@ -35,15 +35,17 @@ func ActionKey(action string) string {
 	return strings.TrimSpace(action)
 }
 
-// OutsidePart is the first part of a shell command that may act outside
-// the computer, as OutsideCommand reads it, or "" when none does.
+// OutsidePart is the parts of a shell command that may act outside the
+// computer, as OutsideCommand reads them, joined by " && ", or "" when
+// none does.
 func OutsidePart(command string) string {
+	var parts []string
 	for _, segment := range splitShell(command) {
 		if outsideWords(strings.Fields(segment)) {
-			return strings.TrimSpace(segment)
+			parts = append(parts, trimStray(strings.TrimSpace(segment)))
 		}
 	}
-	return ""
+	return strings.Join(parts, " && ")
 }
 
 // OutsideCommand reports whether a shell command may act outside the
@@ -51,12 +53,7 @@ func OutsidePart(command string) string {
 // send messages or write over the network. It errs toward outside, and is
 // no security boundary: a command can hide what it does.
 func OutsideCommand(command string) bool {
-	for _, segment := range splitShell(command) {
-		if outsideWords(strings.Fields(segment)) {
-			return true
-		}
-	}
-	return false
+	return OutsidePart(command) != ""
 }
 
 // splitShell splits a command line at the operators that start another
@@ -64,6 +61,31 @@ func OutsideCommand(command string) bool {
 func splitShell(command string) []string {
 	replacer := strings.NewReplacer("\n", ";", "&&", ";", "||", ";", "|", ";", "&", ";", "$(", ";", "`", ";", "(", ";", ")", ";", "{", ";", "}", ";")
 	return strings.Split(replacer.Replace(command), ";")
+}
+
+// unquote trims the quotes around each word and drops words left empty.
+// splitShell does not read quotes, so a segment cut from inside a quoted
+// command keeps a stray one: in bash -c "git add . && git push" the second
+// segment is git push", which must still read as git push.
+func unquote(words []string) []string {
+	out := make([]string, 0, len(words))
+	for _, w := range words {
+		if w = strings.Trim(w, `"'`); w != "" {
+			out = append(out, w)
+		}
+	}
+	return out
+}
+
+// trimStray drops a quote left unmatched at either end of a segment
+// splitShell cut from inside a quoted command.
+func trimStray(s string) string {
+	for _, q := range []string{`"`, `'`} {
+		if strings.Count(s, q)%2 == 1 {
+			s = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(s, q), q))
+		}
+	}
+	return s
 }
 
 // wrappers run the command that follows them.
@@ -105,11 +127,11 @@ var ghReads = map[string][]string{
 }
 
 func outsideWords(words []string) bool {
-	words = stripWrappers(words)
+	words = stripWrappers(unquote(words))
 	if len(words) == 0 {
 		return false
 	}
-	program := filepath.Base(strings.Trim(words[0], `"'`))
+	program := filepath.Base(words[0])
 	args := words[1:]
 	switch program {
 	case "bash", "sh", "zsh", "dash", "fish", "eval":

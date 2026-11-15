@@ -137,10 +137,15 @@ func (c *Controller) delegatedAnswer(a interaction.Request, t model.Thread) auto
 	if local && access == agentpolicy.Edit {
 		return automation.Answer{Decided: true, Allow: true}
 	}
-	// For a command that runs more than one thing, name the part that
-	// reaches outside: it is what the delegating conversation should do.
-	if part := approval.OutsidePart(approval.BashCommand(ask)); ask.Tool == "Bash" && part != "" && part != strings.TrimSpace(what) {
-		what = fmt.Sprintf("%s (nothing else in that command ran)", part)
+	// For a command that runs more than one thing, name the parts that
+	// reach outside: they are what the delegating conversation should do.
+	// Clip them, not the note after them, to fit the record.
+	command := ask.Command // a Codex request; empty for Claude's tools
+	if ask.Tool == "Bash" {
+		command = approval.BashCommand(ask)
+	}
+	if part := approval.OutsidePart(command); part != "" && part != strings.TrimSpace(what) {
+		what = textutil.ClipRunes(part, 160) + " (nothing else in that command ran)"
 	}
 	if c.Collaboration.Manager != nil {
 		_ = c.Collaboration.Manager.RecordRefused(task, textutil.ClipRunes(what, 200))

@@ -29,6 +29,8 @@ func TestOutsideCommand(t *testing.T) {
 		"terraform apply",
 		"lark-cli im +send",
 		"bash -c 'git push'",
+		`bash -c "git add . && git push"`,
+		"sh -c 'cd x; git push origin main'",
 		"echo $(git push)",
 		"sudo git push",
 	}
@@ -64,13 +66,14 @@ func TestOutsideCommand(t *testing.T) {
 
 func TestActionKey(t *testing.T) {
 	cases := map[string]string{
-		"git push origin main":           "git push",
-		"go test ./... && git -C x push": "git push",
-		"gh pr create --fill":            "gh pr create",
-		"gh -R o/r issue comment 3":      "gh issue comment",
-		"curl -X POST https://x":         "curl",
-		"ssh host deploy":                "ssh",
-		"Edit /etc/hosts":                "Edit /etc/hosts",
+		"git push origin main":            "git push",
+		"go test ./... && git -C x push":  "git push",
+		"gh pr create --fill":             "gh pr create",
+		"gh -R o/r issue comment 3":       "gh issue comment",
+		"curl -X POST https://x":          "curl",
+		"ssh host deploy":                 "ssh",
+		"Edit /etc/hosts":                 "Edit /etc/hosts",
+		`bash -c "git add . && git push"`: "git push",
 	}
 	for in, want := range cases {
 		if got := ActionKey(in); got != want {
@@ -82,8 +85,10 @@ func TestActionKey(t *testing.T) {
 func TestOutsidePart(t *testing.T) {
 	for in, want := range map[string]string{
 		"echo x >> README.md && git commit -am x && rtk git push origin HEAD:main": "rtk git push origin HEAD:main",
-		"go test ./... | tail -3": "",
-		"gh pr create --fill":     "gh pr create --fill",
+		"go test ./... | tail -3":                             "",
+		"gh pr create --fill":                                 "gh pr create --fill",
+		"git commit -am x && git push && gh pr create --fill": "git push && gh pr create --fill",
+		`bash -c "git add . && git push origin main"`:         "git push origin main",
 	} {
 		if got := OutsidePart(in); got != want {
 			t.Errorf("OutsidePart(%q) = %q, want %q", in, got, want)
