@@ -3014,6 +3014,116 @@ func (msgs Messages) AutomationReviewSource() string {
 	return Catalog.Format(msgs.locale, "automationReviewSource", nil)
 }
 
+// AutomationReviewRunsIn says "Runs in %s"
+// in the language the app shows.
+func AutomationReviewRunsIn() string { return In(i18n.Locale()).AutomationReviewRunsIn() }
+
+// AutomationReviewRunsIn says "Runs in %s"
+// in the language of msgs.
+func (msgs Messages) AutomationReviewRunsIn() string {
+	return Catalog.Format(msgs.locale, "automationReviewRunsIn", nil)
+}
+
+// AutomationReviewInstructions says "Its instructions: %s"
+// in the language the app shows.
+func AutomationReviewInstructions() string { return In(i18n.Locale()).AutomationReviewInstructions() }
+
+// AutomationReviewInstructions says "Its instructions: %s"
+// in the language of msgs.
+func (msgs Messages) AutomationReviewInstructions() string {
+	return Catalog.Format(msgs.locale, "automationReviewInstructions", nil)
+}
+
+// AutomationReviewDeny says "Deny"
+// in the language the app shows.
+func AutomationReviewDeny() string { return In(i18n.Locale()).AutomationReviewDeny() }
+
+// AutomationReviewDeny says "Deny"
+// in the language of msgs.
+func (msgs Messages) AutomationReviewDeny() string {
+	return Catalog.Format(msgs.locale, "automationReviewDeny", nil)
+}
+
+// AutomationReviewApproveKind says "Approve all %s for 7 days"
+// in the language the app shows.
+func AutomationReviewApproveKind() string { return In(i18n.Locale()).AutomationReviewApproveKind() }
+
+// AutomationReviewApproveKind says "Approve all %s for 7 days"
+// in the language of msgs.
+func (msgs Messages) AutomationReviewApproveKind() string {
+	return Catalog.Format(msgs.locale, "automationReviewApproveKind", nil)
+}
+
+// AutomationReviewApproveOnce says "Approve once"
+// in the language the app shows.
+func AutomationReviewApproveOnce() string { return In(i18n.Locale()).AutomationReviewApproveOnce() }
+
+// AutomationReviewApproveOnce says "Approve once"
+// in the language of msgs.
+func (msgs Messages) AutomationReviewApproveOnce() string {
+	return Catalog.Format(msgs.locale, "automationReviewApproveOnce", nil)
+}
+
+// AutomationGrants says "Allowed actions"
+// in the language the app shows.
+func AutomationGrants() string { return In(i18n.Locale()).AutomationGrants() }
+
+// AutomationGrants says "Allowed actions"
+// in the language of msgs.
+func (msgs Messages) AutomationGrants() string {
+	return Catalog.Format(msgs.locale, "automationGrants", nil)
+}
+
+// AutomationGrantKind says "Allowed %s until %s"
+// in the language the app shows.
+func AutomationGrantKind() string { return In(i18n.Locale()).AutomationGrantKind() }
+
+// AutomationGrantKind says "Allowed %s until %s"
+// in the language of msgs.
+func (msgs Messages) AutomationGrantKind() string {
+	return Catalog.Format(msgs.locale, "automationGrantKind", nil)
+}
+
+// AutomationGrantOnce says "Allowed once until %s: %s"
+// in the language the app shows.
+func AutomationGrantOnce() string { return In(i18n.Locale()).AutomationGrantOnce() }
+
+// AutomationGrantOnce says "Allowed once until %s: %s"
+// in the language of msgs.
+func (msgs Messages) AutomationGrantOnce() string {
+	return Catalog.Format(msgs.locale, "automationGrantOnce", nil)
+}
+
+// AutomationGrantRevoke says "Revoke"
+// in the language the app shows.
+func AutomationGrantRevoke() string { return In(i18n.Locale()).AutomationGrantRevoke() }
+
+// AutomationGrantRevoke says "Revoke"
+// in the language of msgs.
+func (msgs Messages) AutomationGrantRevoke() string {
+	return Catalog.Format(msgs.locale, "automationGrantRevoke", nil)
+}
+
+// AutomationReviewNote says "Note to the automation (optional)"
+// in the language the app shows.
+func AutomationReviewNote() string { return In(i18n.Locale()).AutomationReviewNote() }
+
+// AutomationReviewNote says "Note to the automation (optional)"
+// in the language of msgs.
+func (msgs Messages) AutomationReviewNote() string {
+	return Catalog.Format(msgs.locale, "automationReviewNote", nil)
+}
+
+// AutomationReviewSendFailed says "Could not send the decision: "
+// in the language the app shows.
+func AutomationReviewSendFailed() string { return In(i18n.Locale()).AutomationReviewSendFailed() }
+
+// AutomationReviewSendFailed says "Could not send the decision: "
+// in the language of msgs.
+func (msgs Messages) AutomationReviewSendFailed() string {
+	return Catalog.Format(msgs.locale, "automationReviewSendFailed", nil)
+}
+
 // AutomationStalled says "Stalled"
 // in the language the app shows.
 func AutomationStalled() string { return In(i18n.Locale()).AutomationStalled() }

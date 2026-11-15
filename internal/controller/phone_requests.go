@@ -68,6 +68,7 @@ var phoneRequests = map[string]func(*phoneSession, remote.Request) bool{
 	"automations":         (*phoneSession).onAutomations,
 	"automation-webhook":  (*phoneSession).onAutomationWebhook,
 	"automation-briefing": (*phoneSession).onAutomationBriefing,
+	"automation-review":   (*phoneSession).onAutomationReview,
 	"quota":               (*phoneSession).onQuota,
 	"push":                (*phoneSession).onPush,
 	"read":                (*phoneSession).onRead,
@@ -518,6 +519,26 @@ func (ps *phoneSession) onAutomationWebhook(r remote.Request) bool {
 		if err == nil {
 			frame.Data, err = json.Marshal(result)
 		}
+		if err != nil {
+			frame.Error = err.Error()
+		}
+		return frame
+	})
+	return ok && ps.send(frame)
+}
+
+// onAutomationReview approves, denies or revokes for a phone, and answers
+// with the automations as they are after it.
+func (ps *phoneSession) onAutomationReview(r remote.Request) bool {
+	var req automation.Request
+	if len(r.Automation) > 0 {
+		_ = json.Unmarshal(r.Automation, &req)
+	}
+	frame, ok := async.OnMain(ps.ctx, ps.c.Dispatch, func() remote.Frame {
+		_, err := ps.c.AutomationOp("automationReview", automation.Request{Review: req.Review, Action: req.Action, Scope: req.Scope, Note: req.Note})
+		list, _ := ps.c.AutomationOp("automationList", automation.Request{})
+		frame := remote.Frame{Type: "automation-review"}
+		frame.Data, _ = json.Marshal(list)
 		if err != nil {
 			frame.Error = err.Error()
 		}

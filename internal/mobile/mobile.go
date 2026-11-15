@@ -685,6 +685,9 @@ func (m *App) read(gen int, conn *remote.Conn) (greeted bool, err error) {
 		case "automation-run":
 			data, message := f.Data, f.Error
 			m.onMain(gen, func() { m.ReceiveAutomationRun(data, message) })
+		case "automation-review":
+			data, message := f.Data, f.Error
+			m.onMain(gen, func() { m.ReceiveAutomationReview(data, message) })
 		case "automation-draft", "automation-create":
 			op, data, message := f.Type, f.Data, f.Error
 			m.onMain(gen, func() { m.ReceiveAutomationForm(op, data, message) })

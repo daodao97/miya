@@ -52,6 +52,7 @@ func (c *Controller) PhoneSnapshot() phoneproto.State {
 	s.AutomationCreate = c.Auto != nil
 	s.AutomationWebhook = c.Auto != nil
 	s.AutomationBriefing = c.Auto != nil
+	s.AutomationReview = c.Auto != nil
 	if c.Agent != nil {
 		s.Agent = c.Agent()
 	}

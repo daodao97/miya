@@ -42,6 +42,10 @@ type mobileAutomations struct {
 	RunID              string
 	RunRequestedAt     time.Time
 	runErr             string
+	// ReviewBusy marks a review decision on its way; reviewNotes hold what
+	// the person types to go with each.
+	ReviewBusy  bool
+	reviewNotes map[string]*string
 }
 
 func (m *App) runPhoneAutomation(id string) {
@@ -88,6 +92,7 @@ func (m *App) interruptAutomationRequest() {
 	if m.Autos.RunRequest != "" {
 		m.Autos.RunRequest, m.Autos.runErr = "", tr("Disconnected. Refresh to check run status.")
 	}
+	m.Autos.ReviewBusy = false
 }
 
 func (m *App) loadPhoneAutomations() {
@@ -387,6 +392,7 @@ func (m *App) automationPhoneDetail(c *ui.Context, v automation.View) {
 	})
 	ui.Box(c).FillWidth().Height(0.5).Margin(8, 0, 0, 0).Background(p.line)
 
+	m.automationPhoneReviews(c.Key("reviews"), v)
 	ui.Row(c).FillWidth().Gap(8).Margin(8, 0, 0, 0).AlignItems(ui.Center).Children(func() {
 		ui.Text(c, tr("Run history")).Grow(1).FontSize(m.Font(16)).FontWeight(600)
 		if len(v.Runs) > 0 {

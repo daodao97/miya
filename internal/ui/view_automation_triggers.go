@@ -81,6 +81,7 @@ func triggerState(t automation.Trigger, st automation.TriggerState, ok bool) str
 // triggersView lists how an automation wakes besides its schedule, with
 // what each trigger saw, a switch for each, and the latest wakes.
 func (app *App) triggersView(c *ui.Context, v automation.View) {
+	app.automationReviews(c, v)
 	if !v.Stalled.IsZero() {
 		ui.Row(c.Key("stalled")).FillWidth().Gap(8).Padding(10, 12, 10, 12).Border(1, widgets.Line).Radius(10).AlignItems(ui.Center).Children(func() {
 			widgets.Icon(c, "player-pause", 14, widgets.Muted)

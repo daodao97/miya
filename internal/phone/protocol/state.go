@@ -30,11 +30,14 @@ type State struct {
 	AutomationWebhook bool                       `json:"automationWebhook,omitempty"`
 	// AutomationBriefing says the desktop reads and sets the daily briefing
 	// through automation-briefing.
-	AutomationBriefing bool                    `json:"automationBriefing,omitempty"`
-	Automations        bool                    `json:"automations,omitempty"`
-	AutomationRun      bool                    `json:"automationRun,omitempty"`
-	AutomationCreate   bool                    `json:"automationCreate,omitempty"`
-	Projects           []model.ProjectSnapshot `json:"projects"`
+	AutomationBriefing bool `json:"automationBriefing,omitempty"`
+	// AutomationReview says the desktop decides on reviews and revokes
+	// grants from a phone (docs/action-review.md).
+	AutomationReview bool                    `json:"automationReview,omitempty"`
+	Automations      bool                    `json:"automations,omitempty"`
+	AutomationRun    bool                    `json:"automationRun,omitempty"`
+	AutomationCreate bool                    `json:"automationCreate,omitempty"`
+	Projects         []model.ProjectSnapshot `json:"projects"`
 	// An empty map is authoritative; nil means an older desktop that only
 	// provides per-phone push unread state.
 	CompletionUnread map[string]int64        `json:"completionUnread"`
