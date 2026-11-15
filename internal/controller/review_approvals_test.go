@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"testing"
 	"time"
@@ -66,5 +67,25 @@ func TestReviewsWaitAmongApprovals(t *testing.T) {
 	}
 	if left := c.Approvals(); len(left) != 0 {
 		t.Fatalf("decided on the page, still a card: %+v", left)
+	}
+}
+
+// A Claude request from an external automation's run becomes a review, and
+// its card stays among the approvals once the agent's own list is set.
+func TestRequestSentForReviewKeepsItsCard(t *testing.T) {
+	c := &Controller{}
+	c.Approvals, c.SetApprovals = uiruntime.CreateSignal([]codex.Approval{})
+	c.Threads, c.SetThreads = uiruntime.CreateSignal([]model.Thread{{ID: 1, ServerID: "t1", Automation: "a1"}})
+	c.Status, c.SetStatus = uiruntime.CreateSignal("")
+	dir := t.TempDir()
+	c.Auto = automation.NewRunner(automationHost{c}, filepath.Join(t.TempDir(), "automations.json"))
+	c.Auto.Store.Automations = []automation.Automation{{ID: "a1", Name: "Deps", Project: dir, Instructions: "push it", Access: automation.AccessExternal, Rounds: 1}}
+	c.Auto.Active["a1"] = &automation.ActiveRun{Thread: 1}
+	id, _ := json.Marshal("claude:1:r1")
+	ask := interaction.Request{ID: id, Method: "claude/permission", Agent: model.AgentClaude, ThreadID: "t1", Command: "Bash", Payload: json.RawMessage(`{"command":"git push origin main"}`)}
+	c.setAgentApprovals(append(c.Approvals(), ask))
+	cards := c.Approvals()
+	if len(cards) != 1 || cards[0].Method != "miya/review" || cards[0].Command != "git push origin main" {
+		t.Fatalf("approvals after a request sent for review: %+v", cards)
 	}
 }

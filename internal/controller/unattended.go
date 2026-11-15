@@ -28,6 +28,8 @@ func (c *Controller) setAgentApprovals(v []interaction.Request) {
 		kept = append(kept, a)
 	}
 	c.SetApprovals(kept)
+	// A request sent for review made a card while kept was built.
+	c.syncReviewApprovals()
 }
 
 // answerUnattended answers a, when its automation run decides it, and
