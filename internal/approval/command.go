@@ -35,6 +35,17 @@ func ActionKey(action string) string {
 	return strings.TrimSpace(action)
 }
 
+// OutsidePart is the first part of a shell command that may act outside
+// the computer, as OutsideCommand reads it, or "" when none does.
+func OutsidePart(command string) string {
+	for _, segment := range splitShell(command) {
+		if outsideWords(strings.Fields(segment)) {
+			return strings.TrimSpace(segment)
+		}
+	}
+	return ""
+}
+
 // OutsideCommand reports whether a shell command may act outside the
 // computer: push, publish, open or comment on pull requests and issues,
 // send messages or write over the network. It errs toward outside, and is

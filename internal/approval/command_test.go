@@ -78,3 +78,15 @@ func TestActionKey(t *testing.T) {
 		}
 	}
 }
+
+func TestOutsidePart(t *testing.T) {
+	for in, want := range map[string]string{
+		"echo x >> README.md && git commit -am x && rtk git push origin HEAD:main": "rtk git push origin HEAD:main",
+		"go test ./... | tail -3": "",
+		"gh pr create --fill":     "gh pr create --fill",
+	} {
+		if got := OutsidePart(in); got != want {
+			t.Errorf("OutsidePart(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

@@ -66,6 +66,7 @@ func TestDelegatedTaskRequestsAreAnswered(t *testing.T) {
 		{"edit pushes", edit, bash("rtk git push origin main"), false, "outside the workspace"},
 		{"edit writes elsewhere", edit, claude("Write", map[string]string{"file_path": "/etc/hosts"}), false, "outside the workspace"},
 		{"edit Codex request", edit, interaction.Request{Agent: model.AgentCodex, Command: "curl https://x"}, false, "outside the workspace"},
+		{"edit commits and pushes in one go", edit, bash("echo x >> README.md && git commit -am x && git push origin HEAD:main"), false, "git push origin HEAD:main (nothing else in that command ran)"},
 		{"read reads", read, bash("git log --oneline -3"), true, ""},
 		{"read writes", read, claude("Write", map[string]string{"file_path": filepath.Join(dir, "a.go")}), false, "read only"},
 		{"read runs a command", read, bash("go test ./..."), false, "read only"},
