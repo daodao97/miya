@@ -422,7 +422,17 @@ func (rn *Runner) finish(id, result, summary string) {
 // notice tells the phone how a run ended, once per run; the conversation's
 // own completion notices stay quiet for automations.
 func (rn *Runner) notice(a Automation, run Run) {
+	if quietRun(a, run) {
+		// Kept in the history; nothing on the phone.
+		rn.Store.UpdateRun(a.ID, run.Started, func(x *Run) { x.Quiet = true })
+		rn.Persist()
+		rn.host.Changed()
+		return
+	}
 	title := a.Name + " · " + ResultLabel(run.Result)
+	if run.Report != nil && run.Report.NeedsUser {
+		title = a.Name + " · " + tr("Needs your attention")
+	}
 	if run.Rounds > 1 {
 		title += fmt.Sprintf("(round %d/%d)", run.Round, run.Rounds)
 	}

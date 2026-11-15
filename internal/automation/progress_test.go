@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"miya/internal/project/worktree"
 )
 
 func TestFoundNothingNewComparesWhatWasFound(t *testing.T) {
@@ -143,5 +145,96 @@ func TestStallStopsTriggeredRunsUntilAPersonLooks(t *testing.T) {
 	}
 	if _, stalled := w.rn.Store.Stalled[plain.ID]; stalled {
 		t.Fatal("stalled without StallAfter")
+	}
+}
+
+// runNotices are the notices of a's runs.
+func (w *wakeHarness) runNotices(id string) []string {
+	var titles []string
+	for _, n := range w.h.notices {
+		if strings.HasPrefix(n.ID, "miya-auto-"+id+"-") {
+			titles = append(titles, n.Title)
+		}
+	}
+	return titles
+}
+
+// A run that passes with nothing new stays in the history without a
+// notice; one that needs the person, or any run of an automation that asks
+// for every run, still notifies.
+func TestRunsWithNothingNewAreQuiet(t *testing.T) {
+	w := newWakeHarness(t)
+	a := w.add(ingressAutomation(WakePolicy{}))
+	w.runIngress(a.ID, "ping", "#12 stale")
+	if n := len(w.runNotices(a.ID)); n != 1 || w.lastRun(a.ID).Quiet {
+		t.Fatalf("the first run with a finding: %d notices, %+v", n, w.lastRun(a.ID))
+	}
+	w.now = w.now.Add(time.Minute)
+	w.runIngress(a.ID, "ping", "#12 stale")
+	if n := len(w.runNotices(a.ID)); n != 1 || !w.lastRun(a.ID).Quiet {
+		t.Fatalf("a run with nothing new: %d notices, %+v", n, w.lastRun(a.ID))
+	}
+	// The same findings, but now it needs the person.
+	w.now = w.now.Add(time.Minute)
+	if wk, err := w.rn.Ingress(a.ID, "", "", false, "ping", ""); err != nil || wk.Outcome != WakeStarted {
+		t.Fatalf("%+v %v", wk, err)
+	}
+	w.rn.Store.UpdateLastRun(a.ID, func(r *Run) {
+		r.Report = &Report{Summary: "blocked", Findings: []string{"#12 stale"}, NeedsUser: true}
+	})
+	w.endRun(a.ID)
+	if titles := w.runNotices(a.ID); len(titles) != 2 || !strings.Contains(titles[1], "Needs your attention") || w.lastRun(a.ID).Quiet {
+		t.Fatalf("a run that needs the person: %q", titles)
+	}
+
+	// A result with nothing in it is quiet from the first run.
+	empty := w.add(ingressAutomation(WakePolicy{}))
+	w.runIngress(empty.ID, "ping")
+	if n := len(w.runNotices(empty.ID)); n != 0 || !w.lastRun(empty.ID).Quiet {
+		t.Fatalf("an empty result: %d notices", n)
+	}
+	// Without a result of its own the run is not judged quiet.
+	w.now = w.now.Add(time.Minute)
+	if _, err := w.rn.Ingress(empty.ID, "", "", false, "ping", ""); err != nil {
+		t.Fatal(err)
+	}
+	w.endRun(empty.ID)
+	if n := len(w.runNotices(empty.ID)); n != 1 {
+		t.Fatalf("a run without a result: %d notices", n)
+	}
+
+	every := ingressAutomation(WakePolicy{})
+	every.NotifyEveryRun = true
+	loud := w.add(every)
+	for i := 0; i < 3; i++ {
+		w.now = w.now.Add(time.Minute)
+		w.runIngress(loud.ID, "ping", "same")
+	}
+	if n := len(w.runNotices(loud.ID)); n != 3 {
+		t.Fatalf("notify every run: %d notices", n)
+	}
+}
+
+func TestQuietRunRules(t *testing.T) {
+	same := &Report{Summary: "ok", Findings: []string{"x"}}
+	kept := &worktree.Worktree{Dir: "/tmp/wt"}
+	cases := []struct {
+		name string
+		a    Automation
+		run  Run
+		want bool
+	}{
+		{"unchanged", Automation{}, Run{Result: Passed, Report: same, Unchanged: true}, true},
+		{"failed though unchanged", Automation{}, Run{Result: Failed, Report: same, Unchanged: true}, false},
+		{"interrupted", Automation{}, Run{Result: Interrupted, Report: &Report{Summary: "stopped"}}, false},
+		{"empty result made by Miya", Automation{}, Run{Result: Passed, Report: &Report{Summary: "done", Auto: true}}, false},
+		{"changes wait in a worktree", Automation{}, Run{Result: Passed, Report: same, Unchanged: true, Worktree: kept, WorktreeState: WorktreeKept, Changes: worktree.Changes{Commits: 1}}, false},
+		{"worktree cleaned", Automation{}, Run{Result: Passed, Report: same, Unchanged: true, Worktree: kept, WorktreeState: WorktreeCleaned}, true},
+		{"every run", Automation{NotifyEveryRun: true}, Run{Result: Passed, Report: same, Unchanged: true}, false},
+	}
+	for _, tc := range cases {
+		if got := quietRun(tc.a, tc.run); got != tc.want {
+			t.Fatalf("%s: got %v", tc.name, got)
+		}
 	}
 }

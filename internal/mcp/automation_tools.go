@@ -37,12 +37,13 @@ var automationToolProps = map[string]any{
 	"policy": map[string]any{"type": "object", "description": "Holds back triggered wakes: queue (keep one wake that comes while running), debounceSeconds, cooldownMinutes, maxPerDay (default 24), gate (a condition as in triggers, of a recipe or a success command, checked on every wake; the run starts only when met)",
 		"properties": map[string]any{"queue": map[string]any{"type": "boolean"}, "debounceSeconds": map[string]any{"type": "integer"},
 			"cooldownMinutes": map[string]any{"type": "integer"}, "maxPerDay": map[string]any{"type": "integer"}, "gate": map[string]any{"type": "object"}}},
-	"instructions": map[string]any{"type": "string", "description": "First message each run sends to a coding agent: what to do, when it is done, and to reply that there is nothing to report when so"},
-	"check":        map[string]any{"type": "string", "description": "Optional shell command run in the project after each round; exit 0 passes, otherwise its output starts another round"},
-	"rounds":       map[string]any{"type": "integer", "minimum": 1, "maximum": 5, "description": "Most rounds when check fails (default 3; 1 without check)"},
-	"agent":        map[string]any{"type": "string", "enum": model.Backends, "description": "Agent that runs it (default: this conversation's)"},
-	"worktree":     map[string]any{"type": "boolean", "description": "Run each run in a separate Git worktree on its own branch, so it cannot collide with edits in the project; the user merges or discards its changes afterwards. Use for automations that change code"},
-	"stallAfter":   map[string]any{"type": "integer", "minimum": 0, "maximum": 10, "description": "Optional, for an automation that pushes one thing forward (fix CI, land a migration): after this many runs in a row whose reported results are the same as the run before, Miya stops the runs triggers start and tells the user, until they edit it or use Run now. 0 or unset never stops it"},
+	"instructions":   map[string]any{"type": "string", "description": "First message each run sends to a coding agent: what to do, when it is done, and to reply that there is nothing to report when so"},
+	"check":          map[string]any{"type": "string", "description": "Optional shell command run in the project after each round; exit 0 passes, otherwise its output starts another round"},
+	"rounds":         map[string]any{"type": "integer", "minimum": 1, "maximum": 5, "description": "Most rounds when check fails (default 3; 1 without check)"},
+	"agent":          map[string]any{"type": "string", "enum": model.Backends, "description": "Agent that runs it (default: this conversation's)"},
+	"worktree":       map[string]any{"type": "boolean", "description": "Run each run in a separate Git worktree on its own branch, so it cannot collide with edits in the project; the user merges or discards its changes afterwards. Use for automations that change code"},
+	"stallAfter":     map[string]any{"type": "integer", "minimum": 0, "maximum": 10, "description": "Optional, for an automation that pushes one thing forward (fix CI, land a migration): after this many runs in a row whose reported results are the same as the run before, Miya stops the runs triggers start and tells the user, until they edit it or use Run now. 0 or unset never stops it"},
+	"notifyEveryRun": map[string]any{"type": "boolean", "description": "Notify the user after every run. By default a run that passes with nothing new (the same reported result as the run before, or an empty one) is kept in the history without a notification; a run that fails, needs the user or leaves worktree changes always notifies"},
 }
 
 func init() {

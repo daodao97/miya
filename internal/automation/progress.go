@@ -150,3 +150,23 @@ func (rn *Runner) unstall(id string) {
 		rn.host.Changed()
 	}
 }
+
+// nothingReported reports whether the agent itself reported a result with
+// nothing in it: no findings, metrics or artifacts, and no need of anyone.
+func nothingReported(r *Report) bool {
+	return r != nil && !r.Auto && !r.NeedsUser && len(r.Findings) == 0 && len(r.Metrics) == 0 && len(r.Artifacts) == 0
+}
+
+// quietRun reports whether a run that ended needs no notification: it
+// passed with nothing new, or with nothing found at all, needs no one, and
+// left no changes waiting in a worktree. NotifyEveryRun keeps every run
+// loud.
+func quietRun(a Automation, run Run) bool {
+	if a.NotifyEveryRun || run.Result != Passed || run.Report != nil && run.Report.NeedsUser {
+		return false
+	}
+	if run.Worktree != nil && run.WorktreeState == WorktreeKept && !run.Changes.Empty() {
+		return false
+	}
+	return run.Unchanged || nothingReported(run.Report)
+}

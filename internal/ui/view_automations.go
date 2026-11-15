@@ -509,6 +509,20 @@ func (app *App) automationDetail(c *ui.Context) {
 		}
 		ui.Text(c, tr("Each run works on its own Git branch, so it cannot collide with your edits; merge or discard its changes afterwards")).FontSize(12).TextColor(widgets.Muted)
 	})
+	ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
+		every := v.NotifyEveryRun
+		if ui.Switch(c.Key("notify-every"), &every).Label(tr("Notify every run")).Shrink(0).Changed() {
+			next := v.Automation
+			next.NotifyEveryRun = every
+			app.autoCall("automationSave", automation.Request{Automation: &next}, func(_ json.RawMessage, err error) {
+				if err != nil {
+					app.Autos.err = err.Error()
+				}
+				app.loadAutomations()
+			})
+		}
+		ui.Text(c, tr("Otherwise a run that passes with nothing new stays in the history without a notification")).FontSize(12).TextColor(widgets.Muted)
+	})
 	ui.Row(c).FillWidth().AlignItems(ui.End).Margin(8, 0, 0, 0).Children(func() {
 		ui.Text(c, tr("Run history")).FontWeight(600).Grow(1)
 		ui.Text(c, fmt.Sprintf(tr("Last %d runs"), automation.RunHistory)).FontSize(12).TextColor(widgets.Muted)
@@ -563,6 +577,9 @@ func (app *App) runRow(c *ui.Context, v automation.View, r automation.Run, runni
 		meta += fmt.Sprintf(tr(" · %s · Turn %d/%d"), automation.ResultLabel(r.Result), max(r.Round, 1), max(r.Rounds, 1))
 		if !r.Finished.IsZero() {
 			meta += fmt.Sprintf(tr(" · %d minutes"), max(int(r.Finished.Sub(r.Started).Minutes()+0.5), 1))
+		}
+		if r.Quiet {
+			meta += tr(" · Nothing new, not notified")
 		}
 	}
 	// The caller keys each row.

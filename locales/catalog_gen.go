@@ -2644,6 +2644,36 @@ func (msgs Messages) CheckFailed35010c() string {
 	return Catalog.Format(msgs.locale, "checkFailed_35010c", nil)
 }
 
+// AutomationQuietRun says " · Nothing new, not notified"
+// in the language the app shows.
+func AutomationQuietRun() string { return In(i18n.Locale()).AutomationQuietRun() }
+
+// AutomationQuietRun says " · Nothing new, not notified"
+// in the language of msgs.
+func (msgs Messages) AutomationQuietRun() string {
+	return Catalog.Format(msgs.locale, "automationQuietRun", nil)
+}
+
+// AutomationNotifyEveryRun says "Notify every run"
+// in the language the app shows.
+func AutomationNotifyEveryRun() string { return In(i18n.Locale()).AutomationNotifyEveryRun() }
+
+// AutomationNotifyEveryRun says "Notify every run"
+// in the language of msgs.
+func (msgs Messages) AutomationNotifyEveryRun() string {
+	return Catalog.Format(msgs.locale, "automationNotifyEveryRun", nil)
+}
+
+// AutomationNotifyEveryRunHelp says "Otherwise a run that passes with nothing new stays in the history without a notification"
+// in the language the app shows.
+func AutomationNotifyEveryRunHelp() string { return In(i18n.Locale()).AutomationNotifyEveryRunHelp() }
+
+// AutomationNotifyEveryRunHelp says "Otherwise a run that passes with nothing new stays in the history without a notification"
+// in the language of msgs.
+func (msgs Messages) AutomationNotifyEveryRunHelp() string {
+	return Catalog.Format(msgs.locale, "automationNotifyEveryRunHelp", nil)
+}
+
 // AutomationStalled says "Stalled"
 // in the language the app shows.
 func AutomationStalled() string { return In(i18n.Locale()).AutomationStalled() }

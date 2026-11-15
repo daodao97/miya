@@ -57,6 +57,9 @@ type Automation struct {
 	// runs in a row found nothing new, until a person edits the automation
 	// or runs it now (progress.go).
 	StallAfter int `json:"stallAfter,omitempty"`
+	// NotifyEveryRun notifies each run that ends; without it a run that
+	// passes with nothing new is kept in the history quietly (progress.go).
+	NotifyEveryRun bool `json:"notifyEveryRun,omitempty"`
 }
 
 // Run is one run of an automation.
@@ -84,6 +87,9 @@ type Run struct {
 	// Unchanged marks a run whose result said the same as the run before
 	// (progress.go).
 	Unchanged bool `json:"unchanged,omitempty"`
+	// Quiet marks a run that ended without a notification, as it passed
+	// with nothing new.
+	Quiet bool `json:"quiet,omitempty"`
 	// Worktree is where a run of a Worktree automation worked, and
 	// WorktreeState what became of it.
 	Worktree      *worktree.Worktree `json:"worktree,omitempty"`

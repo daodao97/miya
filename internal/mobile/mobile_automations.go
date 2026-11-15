@@ -430,6 +430,9 @@ func (m *App) automationPhoneRun(c *ui.Context, v automation.View, r automation.
 			if r.Rounds > 1 {
 				meta += fmt.Sprintf(tr(" · Turn %d/%d"), max(r.Round, 1), r.Rounds)
 			}
+			if r.Quiet {
+				meta += tr(" · Nothing new, not notified")
+			}
 			ui.Text(c, meta).Grow(1).MinWidth(0).FontSize(m.Font(13)).TextColor(p.muted)
 			label := automation.ResultLabel(r.Result)
 			if running {
