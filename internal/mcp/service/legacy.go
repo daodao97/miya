@@ -24,17 +24,24 @@ func (api *Service) LegacyDelegate(r mcpproto.Request, caller model.Thread) (any
 		Agent          string `json:"agent"`
 		Thread         string `json:"thread_id"`
 		IncludeContext *bool  `json:"include_context"`
+		Model          string `json:"model"`
+		Effort         string `json:"effort"`
 	}
 	if err := json.Unmarshal(r.Arguments, &raw); err != nil {
 		return nil, err
 	}
-	a := coordinator.Args{RequestID: textutil.NewID(), Agent: raw.Agent, Thread: raw.Thread, Task: raw.Task, Context: "caller_summary", Notify: "none"}
+	a := coordinator.Args{RequestID: textutil.NewID(), Agent: raw.Agent, Thread: raw.Thread, Task: raw.Task, Context: "caller_summary", Notify: "none", Model: raw.Model, Effort: raw.Effort}
 	if raw.IncludeContext != nil && !*raw.IncludeContext {
 		a.Context = "none"
 	}
 	in, err := c.PrepareDelegation(caller, a)
 	if err != nil {
 		return nil, err
+	}
+	// A new conversation from delegate runs with full permission, so it
+	// never waits on an approval card; an existing one keeps its own choice.
+	if raw.Thread == "" {
+		in.Effective.Policy = DelegatePolicy
 	}
 	s := c.Collaboration()
 	return async.Reply(func() (any, error) {

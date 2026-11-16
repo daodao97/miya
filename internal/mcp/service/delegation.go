@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -10,6 +11,10 @@ import (
 	mcpproto "miya/internal/mcp/protocol"
 	"miya/internal/textutil"
 )
+
+// DelegatePolicy is the permission of a new conversation the delegate tool
+// opens: full permission, so its approvals never wait on a person.
+const DelegatePolicy = "never"
 
 func (api *Service) Delegate(r mcpproto.Request) (mcpproto.DelegateResult, error) {
 	c := api.host
@@ -49,7 +54,18 @@ func (api *Service) Delegate(r mcpproto.Request) (mcpproto.DelegateResult, error
 		}
 		text += "\n\n" + model.ReferenceText(ref, c.ThreadTitle(caller))
 	}
-	id := c.Submit(model.SendRequest{ThreadID: r.Thread, Agent: agent, Project: c.ThreadWorkspace(caller.ID), Text: text, MemoryControl: true})
+	var opts struct {
+		Model  string `json:"model"`
+		Effort string `json:"effort"`
+	}
+	if len(r.Arguments) > 0 {
+		_ = json.Unmarshal(r.Arguments, &opts)
+	}
+	req := model.SendRequest{ThreadID: r.Thread, Agent: agent, Project: c.ThreadWorkspace(caller.ID), Text: text, MemoryControl: true, Model: opts.Model, Effort: opts.Effort}
+	if r.Thread == 0 {
+		req.Policy = DelegatePolicy
+	}
+	id := c.Submit(req)
 	if id == 0 {
 		return mcpproto.DelegateResult{}, errors.New(textutil.FirstNonEmpty(c.LastSubmitError(), "Handoff failed: the target agent is not ready, or the conversation is read-only"))
 	}
