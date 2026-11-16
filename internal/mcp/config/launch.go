@@ -47,11 +47,17 @@ func CodexArgs(cwd string) []string {
 	for i, a := range args {
 		quoted[i] = TomlString(a)
 	}
-	return []string{
+	out := []string{
 		"-c", "mcp_servers.miya.command=" + TomlString(exe),
 		"-c", "mcp_servers.miya.args=[" + strings.Join(quoted, ",") + "]",
 		"-c", "mcp_servers.miya.tool_timeout_sec=1500",
 	}
+	// The read-only tools run without asking, as Claude Code's --allowedTools
+	// lets them; the others ask as any tool does.
+	for _, tool := range ReadOnlyTools {
+		out = append(out, "-c", "mcp_servers.miya.tools."+tool+".approval_mode=\"approve\"")
+	}
+	return out
 }
 
 func Command() (string, bool) {

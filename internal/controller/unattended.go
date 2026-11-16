@@ -12,6 +12,7 @@ import (
 	"miya/internal/automation"
 	"miya/internal/chat/model"
 	"miya/internal/interaction"
+	mcpaccess "miya/internal/mcp/access"
 	"miya/internal/textutil"
 )
 
@@ -43,7 +44,8 @@ func (c *Controller) setAgentApprovals(v []interaction.Request) {
 // ordinary conversation, a grant for its project allows it, and reports
 // whether it did.
 func (c *Controller) answerUnattended(a interaction.Request) bool {
-	if a.Kind() != interaction.Approval {
+	_, miyaTool := mcpaccess.MiyaTool(a)
+	if a.Kind() != interaction.Approval && !miyaTool {
 		return false
 	}
 	t, ok := c.approvalThread(a)
@@ -51,7 +53,7 @@ func (c *Controller) answerUnattended(a interaction.Request) bool {
 		return false
 	}
 	if t.Automation == "" {
-		if c.projectGrantAllows(a, t) {
+		if !miyaTool && c.projectGrantAllows(a, t) {
 			return c.respondUnattended(a, automation.Answer{Decided: true, Allow: true})
 		}
 		answer := c.delegatedAnswer(a, t)
@@ -60,11 +62,7 @@ func (c *Controller) answerUnattended(a interaction.Request) bool {
 	if c.Auto == nil {
 		return false
 	}
-	ask := automation.Ask{Command: textutil.FirstNonEmpty(a.Command, a.GrantRoot, a.Reason, a.Method)}
-	if claudeApproval(a) {
-		ask = automation.Ask{Tool: a.Command, Input: a.Payload}
-	}
-	answer := c.Auto.Unattended(t.ID, ask)
+	answer := c.Auto.Unattended(t.ID, askOf(a))
 	return answer.Decided && c.respondUnattended(a, answer)
 }
 
@@ -86,7 +84,12 @@ func (c *Controller) respondUnattended(a interaction.Request, answer automation.
 		responder.RespondNative(a, map[string]string{"decision": decision, "message": answer.Message})
 	} else {
 		// Codex's reply carries no reason; the run's record keeps it.
-		responder.RespondNative(a, codex.EncodeResponse(a, interaction.Response{Action: action}))
+		r := interaction.Response{Action: action}
+		if a.Kind() == interaction.Form && answer.Allow {
+			// Confirms the form, which has no fields.
+			r.Content = map[string]any{}
+		}
+		responder.RespondNative(a, codex.EncodeResponse(a, r))
 	}
 	return true
 }
@@ -108,8 +111,12 @@ func (c *Controller) projectGrantAllows(a interaction.Request, t model.Thread) b
 	return c.Auto != nil && c.Auto.ProjectAllows(c.ThreadWorkspace(t.ID), command)
 }
 
-// askOf is a as the approval rules read it.
+// askOf is a as the approval rules read it. Codex asking before one of
+// Miya's own tools runs reads as Claude asking for that tool.
 func askOf(a interaction.Request) approval.Request {
+	if tool, ok := mcpaccess.MiyaTool(a); ok {
+		return approval.Request{Tool: "mcp__miya__" + tool}
+	}
 	if claudeApproval(a) {
 		return approval.Request{Tool: a.Command, Input: a.Payload}
 	}

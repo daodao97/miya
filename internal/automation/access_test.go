@@ -50,3 +50,15 @@ func TestDiffShowsEverySetting(t *testing.T) {
 		}
 	}
 }
+
+// A full-access automation runs with full access; no lower level does.
+func TestAccessPolicy(t *testing.T) {
+	for access, want := range map[Access]string{AccessFull: "never", AccessExternal: "edit", AccessEdit: "edit", AccessRead: "read", "": ""} {
+		if got := access.Policy(); got != want {
+			t.Errorf("%q runs with %q, want %q", access, got, want)
+		}
+		if err := access.valid(); err != nil {
+			t.Errorf("%q: %v", access, err)
+		}
+	}
+}

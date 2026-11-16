@@ -48,10 +48,14 @@
 | `read` | 只读，不改文件 | `manual`，Miya 只放行只读命令 | 沙箱 `read-only`，审批 `on-request` |
 | `edit` | 可以改项目文件、跑本地命令、在本地提交 | `acceptEdits` | 沙箱 `workspace-write`（不联网），审批 `on-request` |
 | `external` | 同 `edit`，对外动作逐次审查 | `acceptEdits` | 同 `edit` |
+| `full` | 完全自动，从不等人（2026-11-16 加入） | `bypassPermissions` | 沙箱 `danger-full-access`，审批 `never` |
 
 - 整理一句话新建的自动化默认 `edit`；已有自动化保持 `""`，在编辑页可以改。
 - 选了 `read`、`edit`、`external` 的自动化，运行时不再看窗口的全局选择，也不会以 `never`（完全放开）运行。
 - `external` 和 `edit` 给 CLI 的配置相同，区别只在 Miya 怎么答复审批请求（见下）。
+- `full` 给人明确要它独立完成、包括对外动作的自动化（例如按授权查库并发通知的监控）。CLI 以完全放开运行；仍偶尔冒出的请求（如 MCP 工具确认）由 Miya 直接放行，运行从不等人。
+- Miya 自己的只读工具（`report_result`、`list_tasks` 等）在两个 CLI 里都不询问：Claude 用 `--allowedTools`，Codex 用 `mcp_servers.miya.tools.<tool>.approval_mode="approve"`。自动化运行里 Codex 询问 Miya 其它工具的表单，按 Claude 的 `mcp__miya__*` 规则由 Miya 答复。
+- Codex 0.169 起命令审批参数带 `kind`（`command`、`stdin`），与 Miya 请求的 `kind` 字段同名；解码时清掉，请求类别只按 method 判断，否则审批不被识别，自动化、委派和项目许可都会退回等人。
 
 ### 无人值守时的审批答复
 

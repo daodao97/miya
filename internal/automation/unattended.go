@@ -61,6 +61,10 @@ func (rn *Runner) Unattended(thread int, ask Ask) Answer {
 // dir, and says what was asked for.
 func decide(access Access, dir string, ask Ask) (Answer, string) {
 	local, what := approval.Classify(dir, ask)
+	if access == AccessFull {
+		// Runs with full access rarely ask; what still does goes on.
+		return Answer{Decided: true, Allow: true}, what
+	}
 	if ask.Tool == "ExitPlanMode" && access == AccessRead {
 		return Answer{Decided: true, Message: "This automation is read only (access: read), so there is no plan to carry out. Report what you found with report_result, and set needs_user if a change should be made."}, "leave plan mode"
 	}

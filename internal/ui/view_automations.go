@@ -549,7 +549,7 @@ func (app *App) automationDetail(c *ui.Context) {
 		ui.Text(c, tr("Otherwise a run that passes with nothing new stays in the history without a notification")).FontSize(12).TextColor(widgets.Muted)
 	})
 	ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
-		values := []automation.Access{"", automation.AccessRead, automation.AccessEdit, automation.AccessExternal}
+		values := []automation.Access{"", automation.AccessRead, automation.AccessEdit, automation.AccessExternal, automation.AccessFull}
 		names := make([]string, len(values))
 		selected := ""
 		for i, a := range values {
@@ -1244,6 +1244,8 @@ func automationAccessLabel(a automation.Access) string {
 		return tr("Edit; refuse outside actions")
 	case automation.AccessExternal:
 		return tr("Edit; review outside actions")
+	case automation.AccessFull:
+		return tr("Full access; never ask")
 	}
 	return tr("Follow the window's permission")
 }

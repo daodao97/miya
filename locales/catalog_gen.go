@@ -2984,6 +2984,16 @@ func (msgs Messages) AutomationAccessExternal() string {
 	return Catalog.Format(msgs.locale, "automationAccessExternal", nil)
 }
 
+// AutomationAccessFull says "Full access; never ask"
+// in the language the app shows.
+func AutomationAccessFull() string { return In(i18n.Locale()).AutomationAccessFull() }
+
+// AutomationAccessFull says "Full access; never ask"
+// in the language of msgs.
+func (msgs Messages) AutomationAccessFull() string {
+	return Catalog.Format(msgs.locale, "automationAccessFull", nil)
+}
+
 // AutomationRefusedLabel says " · Refused %d actions"
 // in the language the app shows.
 func AutomationRefusedLabel() string { return In(i18n.Locale()).AutomationRefusedLabel() }

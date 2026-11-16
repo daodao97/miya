@@ -16,6 +16,10 @@ func (b Adapter) HandleRequest(f codex.Frame) {
 			go c.Snapshot().Client.Reject(f.ID, "Malformed server request")
 			return
 		}
+		// Codex's own "kind" (a command approval's "command" or "stdin")
+		// lands in Category, whose tag it shares; Miya's kind of request
+		// follows from the method.
+		a.Category = ""
 		a.ID = f.ID
 		a.Method = f.Method
 		a.Payload = f.Params

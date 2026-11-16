@@ -280,6 +280,7 @@
   "automationAccessRead": "Read only",
   "automationAccessEdit": "Edit; refuse outside actions",
   "automationAccessExternal": "Edit; review outside actions",
+  "automationAccessFull": "Full access; never ask",
   "automationRefusedLabel": " · Refused %d actions",
   "automationReviewWaiting": "Waiting for your review",
   "automationReviewSource": "Review",

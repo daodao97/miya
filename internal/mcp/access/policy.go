@@ -11,6 +11,22 @@ import (
 
 var ComputerUseAccessPrompt = regexp.MustCompile(`^Allow Computer Use to use "([^"\r\n]+)"\?$`)
 
+// MiyaToolPrompt is how Codex asks before a tool of the miya MCP server runs.
+var MiyaToolPrompt = regexp.MustCompile(`^Allow the miya MCP server to run tool "([^"\r\n]+)"\?$`)
+
+// MiyaTool is the miya tool a, a Codex form, asks to run, when it is that
+// question.
+func MiyaTool(a interaction.Request) (string, bool) {
+	if a.Method != "mcpServer/elicitation/request" || a.ServerName != "miya" || (a.Mode != "" && a.Mode != "form") {
+		return "", false
+	}
+	m := MiyaToolPrompt.FindStringSubmatch(a.Message)
+	if m == nil {
+		return "", false
+	}
+	return m[1], true
+}
+
 func Accepted() map[string]any {
 	return map[string]any{"action": "accept", "content": map[string]any{}}
 }

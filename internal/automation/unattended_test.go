@@ -29,6 +29,9 @@ func TestDecideByAccess(t *testing.T) {
 		want   want
 	}{
 		{"edit in project", AccessEdit, edit, want{true, true}},
+		{"push under full", AccessFull, push, want{true, true}},
+		{"codex escalation under full", AccessFull, codex, want{true, true}},
+		{"edit outside project under full", AccessFull, escape, want{true, true}},
 		{"edit outside project", AccessEdit, escape, want{true, false}},
 		{"local command", AccessEdit, tests, want{true, true}},
 		{"push under edit", AccessEdit, push, want{true, false}},

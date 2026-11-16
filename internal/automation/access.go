@@ -20,12 +20,18 @@ const (
 	// AccessExternal is AccessEdit, with each outside action sent to a
 	// person for review.
 	AccessExternal Access = "external"
+	// AccessFull runs with full access and never waits for a person: the
+	// person chose this automation to act on its own.
+	AccessFull Access = "full"
 )
 
-// Policy is the permission policy its runs are sent with: never full
-// access, so every request beyond it reaches Miya.
+// Policy is the permission policy its runs are sent with. Only AccessFull
+// runs with full access; below it every request beyond the level reaches
+// Miya.
 func (a Access) Policy() string {
 	switch a {
+	case AccessFull:
+		return "never"
 	case AccessRead:
 		return agentpolicy.Read
 	case AccessEdit, AccessExternal:
@@ -36,10 +42,10 @@ func (a Access) Policy() string {
 
 func (a Access) valid() error {
 	switch a {
-	case "", AccessRead, AccessEdit, AccessExternal:
+	case "", AccessRead, AccessEdit, AccessExternal, AccessFull:
 		return nil
 	}
-	return fmt.Errorf("Unknown access %q: use read, edit or external", string(a))
+	return fmt.Errorf("Unknown access %q: use read, edit, external or full", string(a))
 }
 
 // AccessText says what an automation's runs may do, for cards and diffs.
@@ -51,6 +57,8 @@ func AccessText(a Access) string {
 		return "edit project files; actions that reach outside are refused"
 	case AccessExternal:
 		return "edit project files; each action that reaches outside waits for your review"
+	case AccessFull:
+		return "full access; runs never wait for you"
 	}
 	return "the permission picked in the window"
 }
