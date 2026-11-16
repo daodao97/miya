@@ -13,7 +13,10 @@ func CompleteClaudeTiming(t *model.Thread) {
 		if m.Role == "user" {
 			break
 		}
-		if t.StartedAtMs > 0 {
+		// Claude Code resumes a response when background work reports back,
+		// with no new request. Each segment restarts the thread's clock; keep
+		// the earlier segments' start so the response reports its whole time.
+		if t.StartedAtMs > 0 && (m.StartedAtMs == 0 || t.StartedAtMs < m.StartedAtMs) {
 			m.StartedAtMs = t.StartedAtMs
 		}
 		m.CompletedAtMs = t.CompletedAtMs

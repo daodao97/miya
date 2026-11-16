@@ -173,7 +173,10 @@ func (app *View) MessageList(c *ui.Context, t model.Thread) {
 				})
 			})
 		}
-		if len(t.BackgroundTasks) > 0 {
+		// While the turn runs, the message list already shows the live tool
+		// cards and the working label. Only after the reply ends does the
+		// remaining background work need its own line.
+		if len(t.BackgroundTasks) > 0 && !t.Busy {
 			ui.Row(c.Key("background-tasks")).FillWidth().Justify(ui.Center).Padding(4, app.listPadding()).Children(func() {
 				ui.Column(c).FillWidth().MaxWidth(744).Gap(4).Children(func() {
 					widgets.WorkingLabel(c, "clock", fmt.Sprintf(tr("Background tasks running (%d) · Waiting for results"), len(t.BackgroundTasks)))

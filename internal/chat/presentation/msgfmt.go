@@ -393,9 +393,10 @@ func ThreadWorkingLabel(t model.Thread) string {
 		return label
 	}
 	if t.StartedAtMs > 0 {
-		elapsed := time.Now().UnixMilli() - t.StartedAtMs
-		label := tr("Working for ") + FormatElapsed(elapsed)
-		if rate := ThreadTokenRateLabel(t, elapsed); rate != "" {
+		now := time.Now().UnixMilli()
+		label := tr("Working for ") + FormatElapsed(now-responseStartMs(t))
+		// Output tokens restart with each segment, so the rate does too.
+		if rate := ThreadTokenRateLabel(t, now-t.StartedAtMs); rate != "" {
 			label += " · " + rate
 		}
 		return label
@@ -404,6 +405,19 @@ func ThreadWorkingLabel(t model.Thread) string {
 		return tr(t.Status)
 	}
 	return tr("Waiting for agent…")
+}
+
+// A response can run in several segments: Claude Code resumes it when
+// background work reports back, without a new request. Each segment restarts
+// the thread's clock, so use the earliest start since the request.
+func responseStartMs(t model.Thread) int64 {
+	start := t.StartedAtMs
+	for i := len(t.Messages) - 1; i >= 0 && t.Messages[i].Role != "user"; i-- {
+		if s := t.Messages[i].StartedAtMs; s > 0 && s < start {
+			start = s
+		}
+	}
+	return start
 }
 
 var reconnectAttempt = regexp.MustCompile(`\b\d+\s*/\s*\d+\b`)
