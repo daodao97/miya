@@ -1851,7 +1851,7 @@ func (m *App) composer(c *ui.Context, agent string, busy bool) {
 			})
 			ui.Row(c.Key("right-tools")).Absolute().Right(6).Bottom(6).Width(right - 8).MinHeight(44).Gap(8).AlignItems(ui.Center).Children(func() {
 				if steerAvailable {
-					b := m.phoneButton(c.Key("steer")).Size(64, 44).Padding(0).Justify(ui.Center).Label(tr("Steer now")).Disabled(m.Sending || m.voice != nil)
+					b := m.phoneButton(c.Key("steer")).KeepFocus().Size(64, 44).Padding(0).Justify(ui.Center).Label(tr("Steer now")).Disabled(m.Sending || m.voice != nil)
 					b.Children(func() { ui.Text(c, tr("Steer")).FontSize(m.Font(12)).TextColor(p.ink) })
 					if b.Clicked() {
 						m.sendDraft(true)
@@ -1873,7 +1873,10 @@ func (m *App) composer(c *ui.Context, agent string, busy bool) {
 				} else if canSend {
 					bg, fg = p.ink, p.Bg
 				}
-				b := m.phoneButton(c.Key("send")).Size(44, 44).Shrink(0).Padding(0).Radius(22).Background(bg).Justify(ui.Center).Label(label).Disabled(m.voice != nil || m.Sending)
+				// KeepFocus: a tap must not take the focus from the editor, which
+				// would close the keyboard and move the button from under the
+				// finger before it lifts, and the tap would send nothing.
+				b := m.phoneButton(c.Key("send")).KeepFocus().Size(44, 44).Shrink(0).Padding(0).Radius(22).Background(bg).Justify(ui.Center).Label(label).Disabled(m.voice != nil || m.Sending)
 				b.Children(func() {
 					if m.Sending {
 						ui.Spinner(c).FontSize(m.Font(12)).TextColor(fg)

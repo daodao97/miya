@@ -45,3 +45,42 @@ func TestComposerKeepsFocusAsKeyboardRises(t *testing.T) {
 		}
 	}
 }
+
+// A tap on Send with the keyboard up sends at once: the editor keeps the
+// focus, so the keyboard stays and the button does not move from under the
+// finger before it lifts.
+func TestComposerSendKeepsKeyboard(t *testing.T) {
+	m := testMobileApp()
+	th := m.State.Projects[0].Threads[0]
+	th.Messages = []model.Message{{ID: 1, Content: "hello"}}
+	m.State.Projects[0].Threads[0] = th
+	m.OpenThread(th)
+	m.ShowThread(th)
+	m.Viewer.SetThreads([]model.Thread{th})
+	m.Viewer.SetActive(th.ID)
+	m.Draft = "hi"
+	tt := ui.NewTester(m.ViewRoot, 390, 844)
+	setSafeInsets(tt, safeInsets{Top: 59, Bottom: 34})
+	b, _ := tt.Find("Message")
+	tt.FingerDown(b.X+b.W/2, b.Y+b.H/2)
+	tt.FingerUp(b.X+b.W/2, b.Y+b.H/2)
+	setSafeInsets(tt, safeInsets{Top: 59, Bottom: 374})
+	send, ok := tt.Find("Send")
+	if !ok {
+		t.Fatal("no Send button")
+	}
+	x, y := send.X+send.W/2, send.Y+send.H/2
+	tt.FingerDown(x, y)
+	if _, active := tt.TextCaret(); !active || !tt.Focused("Message") {
+		// What a phone does as the input ends: the keyboard goes.
+		setSafeInsets(tt, safeInsets{Top: 59, Bottom: 34})
+	}
+	tt.FingerUp(x, y)
+	tt.Frame()
+	if m.SendErr == "" {
+		t.Fatal("the tap on Send sent nothing")
+	}
+	if _, active := tt.TextCaret(); !active || !tt.Focused("Message") {
+		t.Fatal("Send took the focus from the editor")
+	}
+}
