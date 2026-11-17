@@ -9,6 +9,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"miya/internal/chat/model"
+	"miya/internal/remote"
 )
 
 // The keyboard rising must not give the composer another identity, even for
@@ -46,41 +47,55 @@ func TestComposerKeepsFocusAsKeyboardRises(t *testing.T) {
 	}
 }
 
-// A tap on Send with the keyboard up sends at once: the editor keeps the
-// focus, so the keyboard stays and the button does not move from under the
-// finger before it lifts.
-func TestComposerSendKeepsKeyboard(t *testing.T) {
-	m := testMobileApp()
-	th := m.State.Projects[0].Threads[0]
-	th.Messages = []model.Message{{ID: 1, Content: "hello"}}
-	m.State.Projects[0].Threads[0] = th
-	m.OpenThread(th)
-	m.ShowThread(th)
-	m.Viewer.SetThreads([]model.Thread{th})
-	m.Viewer.SetActive(th.ID)
-	m.Draft = "hi"
-	tt := ui.NewTester(m.ViewRoot, 390, 844)
-	setSafeInsets(tt, safeInsets{Top: 59, Bottom: 34})
-	b, _ := tt.Find("Message")
-	tt.FingerDown(b.X+b.W/2, b.Y+b.H/2)
-	tt.FingerUp(b.X+b.W/2, b.Y+b.H/2)
-	setSafeInsets(tt, safeInsets{Top: 59, Bottom: 374})
-	send, ok := tt.Find("Send")
-	if !ok {
-		t.Fatal("no Send button")
-	}
-	x, y := send.X+send.W/2, send.Y+send.H/2
-	tt.FingerDown(x, y)
-	if _, active := tt.TextCaret(); !active || !tt.Focused("Message") {
-		// What a phone does as the input ends: the keyboard goes.
+// A tap on Send with the keyboard up sends at once, the button not moving
+// from under the finger, and puts the keyboard away once the message went; a
+// send that fails keeps the keyboard, to try again.
+func TestComposerSendPutsKeyboardAway(t *testing.T) {
+	for _, connected := range []bool{true, false} {
+		m := testMobileApp()
+		th := m.State.Projects[0].Threads[0]
+		th.Messages = []model.Message{{ID: 1, Content: "hello"}}
+		m.State.Projects[0].Threads[0] = th
+		m.OpenThread(th)
+		m.ShowThread(th)
+		m.Viewer.SetThreads([]model.Thread{th})
+		m.Viewer.SetActive(th.ID)
+		if connected {
+			m.Conn = &remote.Conn{}
+		}
+		m.Draft = "hi"
+		tt := ui.NewTester(m.ViewRoot, 390, 844)
 		setSafeInsets(tt, safeInsets{Top: 59, Bottom: 34})
-	}
-	tt.FingerUp(x, y)
-	tt.Frame()
-	if m.SendErr == "" {
-		t.Fatal("the tap on Send sent nothing")
-	}
-	if _, active := tt.TextCaret(); !active || !tt.Focused("Message") {
-		t.Fatal("Send took the focus from the editor")
+		b, _ := tt.Find("Message")
+		tt.FingerDown(b.X+b.W/2, b.Y+b.H/2)
+		tt.FingerUp(b.X+b.W/2, b.Y+b.H/2)
+		setSafeInsets(tt, safeInsets{Top: 59, Bottom: 374})
+		send, ok := tt.Find("Send")
+		if !ok {
+			t.Fatal("no Send button")
+		}
+		x, y := send.X+send.W/2, send.Y+send.H/2
+		tt.FingerDown(x, y)
+		if _, active := tt.TextCaret(); !active || !tt.Focused("Message") {
+			t.Fatalf("connected=%v: pressing Send took the focus", connected)
+		}
+		tt.FingerUp(x, y)
+		tt.Frame()
+		_, active := tt.TextCaret()
+		if connected {
+			if m.SendErr != "" || m.Draft != "" {
+				t.Fatalf("the tap on Send sent nothing: err %q, draft %q", m.SendErr, m.Draft)
+			}
+			if active || tt.Focused("Message") {
+				t.Fatal("the keyboard stayed after the message went")
+			}
+		} else {
+			if m.SendErr == "" {
+				t.Fatal("sending without a connection reported nothing")
+			}
+			if !active || !tt.Focused("Message") {
+				t.Fatal("a send that failed put the keyboard away")
+			}
+		}
 	}
 }

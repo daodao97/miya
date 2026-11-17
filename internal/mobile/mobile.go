@@ -1854,7 +1854,7 @@ func (m *App) composer(c *ui.Context, agent string, busy bool) {
 					b := m.phoneButton(c.Key("steer")).KeepFocus().Size(64, 44).Padding(0).Justify(ui.Center).Label(tr("Steer now")).Disabled(m.Sending || m.voice != nil)
 					b.Children(func() { ui.Text(c, tr("Steer")).FontSize(m.Font(12)).TextColor(p.ink) })
 					if b.Clicked() {
-						m.sendDraft(true)
+						m.sendFromComposer(c, true)
 					}
 				}
 				if showEffort {
@@ -1888,12 +1888,24 @@ func (m *App) composer(c *ui.Context, agent string, busy bool) {
 					if busy && !hasDraft {
 						m.stop()
 					} else if canSend {
-						m.Send()
+						m.sendFromComposer(c, false)
 					}
 				}
 			})
 		})
 	})
+}
+
+// sendFromComposer sends the draft from the composer's button, and puts the
+// keyboard away once it went, as chat apps do; a send that fails keeps it, to
+// try again. The button keeps the editor's focus as it is pressed, for the
+// keyboard not to move it from under the finger before it lifts.
+func (m *App) sendFromComposer(c *ui.Context, steer bool) {
+	m.SendErr = ""
+	m.sendDraft(steer)
+	if m.SendErr == "" {
+		c.Blur()
+	}
 }
 
 // addPhotos picks photos from the library with the system picker, which
