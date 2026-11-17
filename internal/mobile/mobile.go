@@ -126,16 +126,17 @@ type App struct {
 	Collaborations     widgets.CollaborationUI
 	CollaborationCalls map[string]*MobileCollaborationCall
 	// selected is the phone's workspace for new conversations.
-	Selected           string
-	ExpandedProject    string
-	projectsExpanded   bool
-	ThreadListExpanded map[string]bool
-	DrawerSearch       bool
-	DrawerQuery        string
-	Menu               bool
-	QuotaOpen          bool
-	quotaAgent         string
-	quotaDrawerShown   bool
+	Selected            string
+	ExpandedProject     string
+	projectsExpanded    bool
+	ThreadListExpanded  map[string]bool
+	AutomationRunsShown map[string]bool // projects whose settled automation runs are listed
+	DrawerSearch        bool
+	DrawerQuery         string
+	Menu                bool
+	QuotaOpen           bool
+	quotaAgent          string
+	quotaDrawerShown    bool
 	// drawerOffset is where the list page's row rests or is dragged to:
 	// 0 closed, drawerW open.
 	DrawerOffset   ui.Point

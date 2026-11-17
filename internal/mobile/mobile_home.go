@@ -1,6 +1,7 @@
 package mobile
 
 import (
+	"fmt"
 	"github.com/egoist/mygo/ui"
 
 	"miya/internal/appmodel"
@@ -116,11 +117,16 @@ func (m *App) drawerProject(c *ui.Context, project model.ProjectSnapshot) {
 			if len(project.Threads) == 0 {
 				ui.Text(c, tr("No conversations yet")).Padding(8, 0).FontSize(m.Font(14)).TextColor(p.muted)
 			}
+			// Settled automation runs wait behind one row, as on the desktop.
+			threads, runs := msgfmt.SplitAutomationThreads(project.Threads, func(t model.Thread) bool {
+				return t.ID == m.Open || t.Busy || m.completionUnread(t)
+			})
+			defer m.drawerAutomationRuns(c, project.Path, runs)
 			more := m.ThreadListExpanded[project.Path]
-			for _, thread := range msgfmt.DisplayedThreads(project.Threads, more) {
+			for _, thread := range msgfmt.DisplayedThreads(threads, more) {
 				m.drawerThread(c.Key(thread.ID), thread)
 			}
-			if len(project.Threads) > msgfmt.CollapsedThreadCount {
+			if len(threads) > msgfmt.CollapsedThreadCount {
 				label := tr("Expand")
 				if more {
 					label = tr("Collapse")
@@ -136,6 +142,38 @@ func (m *App) drawerProject(c *ui.Context, project model.ProjectSnapshot) {
 			}
 		})
 	})
+}
+
+// drawerAutomationRuns is the row that lists a project's settled automation
+// runs on demand.
+func (m *App) drawerAutomationRuns(c *ui.Context, project string, runs []model.Thread) {
+	if len(runs) == 0 {
+		return
+	}
+	p := m.Pal
+	shown := m.AutomationRunsShown[project]
+	label := fmt.Sprintf(tr("Automation runs (%d)"), len(runs))
+	button := m.phoneButton(c.Key("automation-runs")).FillWidth().MinHeight(44).Padding(0).Gap(8).Radius(10).Role(ui.RoleDisclosure).Expanded(shown).Label(label)
+	button.Children(func() {
+		widgets.Icon(c, "clock", 16, p.muted)
+		ui.Text(c, label).FontSize(m.Font(15)).TextColor(p.muted).Grow(1).MinWidth(0).SingleLine().Ellipsis("…")
+		glyph := "chevron-right"
+		if shown {
+			glyph = "chevron-down"
+		}
+		widgets.Icon(c, glyph, 12, p.muted)
+	})
+	if button.Clicked() {
+		if m.AutomationRunsShown == nil {
+			m.AutomationRunsShown = map[string]bool{}
+		}
+		m.AutomationRunsShown[project] = !shown
+	}
+	if shown {
+		for _, thread := range msgfmt.DisplayedThreads(runs, true) {
+			m.drawerThread(c.Key(thread.ID), thread)
+		}
+	}
 }
 
 func (m *App) drawerThread(c *ui.Context, thread model.Thread) {

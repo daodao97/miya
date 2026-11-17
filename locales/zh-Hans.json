@@ -281,6 +281,7 @@
   "automationAccessEdit": "可改文件，拒绝对外动作",
   "automationAccessExternal": "可改文件，对外动作先审查",
   "automationAccessFull": "完全自动，从不询问",
+  "automationRunsInProject": "自动化对话（%d）",
   "automationRefusedLabel": " · 拒绝了 %d 个动作",
   "automationReviewWaiting": "等待你审查",
   "automationReviewSource": "审查",

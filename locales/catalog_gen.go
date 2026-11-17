@@ -2994,6 +2994,16 @@ func (msgs Messages) AutomationAccessFull() string {
 	return Catalog.Format(msgs.locale, "automationAccessFull", nil)
 }
 
+// AutomationRunsInProject says "Automation runs (%d)"
+// in the language the app shows.
+func AutomationRunsInProject() string { return In(i18n.Locale()).AutomationRunsInProject() }
+
+// AutomationRunsInProject says "Automation runs (%d)"
+// in the language of msgs.
+func (msgs Messages) AutomationRunsInProject() string {
+	return Catalog.Format(msgs.locale, "automationRunsInProject", nil)
+}
+
 // AutomationRefusedLabel says " · Refused %d actions"
 // in the language the app shows.
 func AutomationRefusedLabel() string { return In(i18n.Locale()).AutomationRefusedLabel() }

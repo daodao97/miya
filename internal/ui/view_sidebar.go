@@ -1,6 +1,7 @@
 package desktopui
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 
@@ -136,6 +137,14 @@ func (app *App) projectSection(c *ui.Context, p projectmodel.Project) {
 					app.C.Connect()
 				}
 			}
+			// Settled automation runs stay out of the list, behind one row: the
+			// Automations page lists them, and they would push out the
+			// conversations the person started.
+			active := app.C.State().Active()
+			threads, runs := msgfmt.SplitAutomationThreads(threads, func(t model.Thread) bool {
+				return t.ID == active || t.Busy || app.C.DesktopThreadUnread(t)
+			})
+			defer app.automationRuns(c, p, runs)
 			expanded := app.threadListExpanded[p.Path]
 			for _, t := range msgfmt.DisplayedThreads(threads, expanded) {
 				app.threadRow(c.Key(t.ID), t)
@@ -151,6 +160,33 @@ func (app *App) projectSection(c *ui.Context, p projectmodel.Project) {
 			}
 		})
 	})
+}
+
+// automationRuns is the row that lists a project's settled automation runs
+// on demand.
+func (app *App) automationRuns(c *ui.Context, p projectmodel.Project, runs []model.Thread) {
+	if len(runs) == 0 {
+		return
+	}
+	shown := app.automationRunsShown[p.Path]
+	row := widgets.Quiet(c.Key("automation-runs")).Gap(6)
+	row.Children(func() {
+		widgets.Icon(c, "clock", 12, widgets.Faint)
+		ui.Text(c, fmt.Sprintf(tr("Automation runs (%d)"), len(runs))).TextColor(widgets.Muted).FontSize(12)
+		symbol := "chevron-right"
+		if shown {
+			symbol = "chevron-down"
+		}
+		widgets.Icon(c, symbol, 12, widgets.Faint)
+	})
+	if row.Clicked() {
+		app.automationRunsShown[p.Path] = !shown
+	}
+	if shown {
+		for _, t := range msgfmt.DisplayedThreads(runs, true) {
+			app.threadRow(c.Key(t.ID), t)
+		}
+	}
 }
 
 // projectRow shows a project, with its actions while the pointer is on it.

@@ -54,6 +54,7 @@ type App struct {
 	projectBrowseLoading                bool
 	projectDirectories                  []svcproto.HostEntry
 	threadListExpanded                  map[string]bool
+	automationRunsShown                 map[string]bool      // projects whose settled automation runs are listed
 	desktopReadIntent                   appmodel.DesktopRead // a completed result the user chose to view
 
 	answers        map[string]map[string]string // question answers, by approval ID
@@ -102,19 +103,20 @@ func newChatApp() *App {
 
 func NewChatAppWithController(c Host) *App {
 	app := &App{
-		C:                  c,
-		View:               conversation.NewConversationView(c),
-		Sidebar:            true,
-		Workspace:          c.State().Cwd,
-		ProjectName:        filepath.Base(c.State().Cwd),
-		ProjectPath:        c.State().Cwd,
-		ExpandedProject:    c.State().Cwd,
-		threadListExpanded: map[string]bool{},
-		answers:            map[string]map[string]string{},
-		forms:              map[string]map[string]string{},
-		formErrors:         map[string]string{},
-		settingDrafts:      map[string]string{},
-		Appearance:         prefs.NormalizeAppearance(prefs.Load("appearance")),
+		C:                   c,
+		View:                conversation.NewConversationView(c),
+		Sidebar:             true,
+		Workspace:           c.State().Cwd,
+		ProjectName:         filepath.Base(c.State().Cwd),
+		ProjectPath:         c.State().Cwd,
+		ExpandedProject:     c.State().Cwd,
+		threadListExpanded:  map[string]bool{},
+		automationRunsShown: map[string]bool{},
+		answers:             map[string]map[string]string{},
+		forms:               map[string]map[string]string{},
+		formErrors:          map[string]string{},
+		settingDrafts:       map[string]string{},
+		Appearance:          prefs.NormalizeAppearance(prefs.Load("appearance")),
 	}
 	app.ResolveTitle = app.desktopReferenceTitle
 	app.OnRetry = func(req appmodel.RetryRequest) {

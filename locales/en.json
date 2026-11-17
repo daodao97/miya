@@ -281,6 +281,7 @@
   "automationAccessEdit": "Edit; refuse outside actions",
   "automationAccessExternal": "Edit; review outside actions",
   "automationAccessFull": "Full access; never ask",
+  "automationRunsInProject": "Automation runs (%d)",
   "automationRefusedLabel": " · Refused %d actions",
   "automationReviewWaiting": "Waiting for your review",
   "automationReviewSource": "Review",

@@ -211,6 +211,21 @@ func DisplayedThreads(all []model.Thread, expanded bool) []model.Thread {
 	return all[:CollapsedThreadCount]
 }
 
+// SplitAutomationThreads sets apart the automation runs that need no
+// attention from a project's other conversations. The Automations page
+// lists every run, so the project list keeps only the runs keep says still
+// matter: running, unread or open.
+func SplitAutomationThreads(all []model.Thread, keep func(model.Thread) bool) (threads, runs []model.Thread) {
+	for _, t := range all {
+		if t.Automation != "" && !keep(t) {
+			runs = append(runs, t)
+		} else {
+			threads = append(threads, t)
+		}
+	}
+	return threads, runs
+}
+
 func ThreadMessageGroups(t model.Thread, groups []MessageGroup) []MessageGroup {
 	if !t.Busy {
 		// Older services recorded completion only on the thread. Recover its
