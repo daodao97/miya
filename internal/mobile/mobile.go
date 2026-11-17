@@ -1768,7 +1768,10 @@ func (m *App) composer(c *ui.Context, agent string, busy bool) {
 	if len(m.Outbox) > 0 || m.View.TurnStatusVisible(m.Viewer.Current()) {
 		topPadding = 0
 	}
-	ui.Column(c).FillWidth().Padding(topPadding, 12, 10, 12).Gap(6).Children(func() {
+	// Keyed: what comes before it in the bar (the turn's status, approvals)
+	// comes and goes, and must not move the editor to another identity, which
+	// would take its focus and close the keyboard.
+	ui.Column(c.Key("composer-column")).FillWidth().Padding(topPadding, 12, 10, 12).Gap(6).Children(func() {
 		m.voiceStatus(c)
 		if m.SendErr != "" {
 			ui.Text(c, m.SendErr).FontSize(m.Font(13)).TextColor(widgets.Danger).Margin(0, 8)
