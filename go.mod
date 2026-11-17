@@ -2,7 +2,7 @@ module miya
 
 go 1.27.3
 
-replace github.com/egoist/mygo => github.com/daodao97/mygo-mobile v0.0.0-20261115141150-94c501f07973
+replace github.com/egoist/mygo => github.com/daodao97/mygo-mobile v0.0.0-20261117181034-64153fc431c1
 
 require (
 	github.com/coder/websocket v1.8.15
@@ -22,7 +22,6 @@ require (
 
 require (
 	filippo.io/edwards25519 v1.2.0 // indirect
-	github.com/Heyana/typesetting-go v0.3.5-heyana.4 // indirect
 	github.com/ProtonMail/go-crypto v1.4.1 // indirect
 	github.com/akutz/memconn v0.1.0 // indirect
 	github.com/anmitsu/go-shlex v0.0.0-20200514113438-38f4b401e2be // indirect
@@ -32,6 +31,7 @@ require (
 	github.com/fxamacker/cbor/v2 v2.9.3 // indirect
 	github.com/gaissmai/bart v0.29.0 // indirect
 	github.com/go-json-experiment/json v0.0.0-20260820222146-c27c302e5fc3 // indirect
+	github.com/go-text/typesetting v0.3.5 // indirect
 	github.com/godbus/dbus/v5 v5.2.2 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/google/btree v1.1.3 // indirect
