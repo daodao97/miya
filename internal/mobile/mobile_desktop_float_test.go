@@ -46,13 +46,13 @@ func TestDesktopFloatTouchDoesNotScrollUnderneath(t *testing.T) {
 	}
 	closeRect, _ := tt.Find("End remote desktop")
 	x, y := r.X+30, r.Y+30
-	tt.Press(x, y)
+	tt.FingerDown(x, y)
 	tt.Frame()
 	// Move the float completely away from the original contact point,
 	// then reverse direction while the same contact still owns it.
 	for _, d := range []float32{30, 100, 220, 280, 200} {
 		tt.Advance(16 * time.Millisecond)
-		tt.Move(x-60, y-d)
+		tt.FingerMove(x-60, y-d)
 		tt.Frame()
 		got, found := tt.Find(label)
 		if !found || math.Abs(float64(got.Y-(r.Y-d))) > 1 {
@@ -67,18 +67,20 @@ func TestDesktopFloatTouchDoesNotScrollUnderneath(t *testing.T) {
 			t.Fatalf("float drag reached messages: scroll %v -> %v, clicks=%v", before, scroll.Y, clicks)
 		}
 	}
-	tt.Release(x-60, y-200)
+	tt.FingerUp(x-60, y-200)
 	tt.Frame()
 	tt.Advance(time.Second)
 	if scroll.Y != before || clicks != 0 || !p.Floating || len(p.Queue) != 0 {
 		t.Fatal("release leaked a scroll, click or remote input", scroll.Y, clicks, p.Floating, p.Queue)
 	}
 	// The list outside the float must still accept normal touch scrolling.
-	tt.Press(5, 200)
+	tt.FingerDown(5, 200)
 	tt.Frame()
-	tt.Move(5, 100)
+	tt.FingerMove(5, 190) // past the slop, where a pan starts
 	tt.Frame()
-	tt.Release(5, 100)
+	tt.FingerMove(5, 100)
+	tt.Frame()
+	tt.FingerUp(5, 100)
 	tt.Frame()
 	if scroll.Y <= before {
 		t.Fatal("float blocked scrolling outside its bounds", before, scroll.Y, scroll.MaxY, r)
@@ -86,8 +88,8 @@ func TestDesktopFloatTouchDoesNotScrollUnderneath(t *testing.T) {
 	cancelBefore := scroll.Y
 	tt.Frame()
 	r, _ = tt.Find(label)
-	tt.Press(r.X+30, r.Y+30)
-	tt.Move(r.X+60, r.Y-100)
+	tt.FingerDown(r.X+30, r.Y+30)
+	tt.FingerMove(r.X+60, r.Y-100)
 	tt.Frame()
 	tt.CancelPress()
 	tt.Advance(time.Second)

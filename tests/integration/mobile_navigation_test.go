@@ -28,7 +28,7 @@ func TestMobileDrawerDestinationsReturnToDrawer(t *testing.T) {
 					t.Fatal(err)
 				}
 				tt.Advance(time.Second)
-				if m.Router().Path() != destination.path || m.Menu || m.Router().InteractiveBack {
+				if m.Router().Path() != destination.path || m.Menu || !m.Router().DisableBackGesture {
 					t.Fatal("drawer destination should own its drawer and edge gesture")
 				}
 				m.Draft = "保留当前页面的草稿"
@@ -77,13 +77,13 @@ func TestMobileDrawerChildPagesReturnToTheirParent(t *testing.T) {
 			if err := tt.Click(destination.child); err != nil {
 				t.Fatal(err)
 			}
-			if m.Router().Path() != destination.childPath || !m.Router().InteractiveBack || tt.HasText("Open sidebar") {
+			if m.Router().Path() != destination.childPath || m.Router().DisableBackGesture || tt.HasText("Open sidebar") {
 				t.Fatal("a child page should use ordinary back navigation")
 			}
 			if err := tt.Click("Back"); err != nil {
 				t.Fatal(err)
 			}
-			if m.Router().Path() != destination.path || m.Menu || m.Router().InteractiveBack {
+			if m.Router().Path() != destination.path || m.Menu || !m.Router().DisableBackGesture {
 				t.Fatal("a child page should return to its parent without opening the drawer")
 			}
 			openMobileDrawer(t, tt)

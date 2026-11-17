@@ -10,6 +10,8 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/plugins/browser"
 
+	"miya/internal/mobile/miyanative"
+
 	phoneproxy "miya/internal/phone/proxy"
 )
 
@@ -72,7 +74,12 @@ func (m *App) openFileBrowser(proxy *phoneproxy.PhoneFileProxy, errorTitle strin
 	m.filesProxy, m.FilesCancel = proxy, cancel
 	gen := m.Generation
 	go func() {
-		err := browser.Open(ctx, proxy.URL)
+		// Miya's own sheet on iOS, which downloads and previews files; the
+		// system's browser elsewhere.
+		err := miyanative.OpenFiles(ctx, proxy.URL)
+		if errors.Is(err, errors.ErrUnsupported) {
+			err = browser.Open(ctx, proxy.URL)
+		}
 		proxy.Close()
 		m.onMain(gen, func() {
 			m.filesProxy, m.FilesCancel = nil, nil

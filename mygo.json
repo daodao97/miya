@@ -13,12 +13,9 @@
     "miya"
   ],
   "ios": {
-    "capabilities": [
-      "camera",
-      "microphone",
-      "biometrics"
-    ],
-    "minimumSystemVersion": "15.0",
+    "minimumSystemVersion": "17.0",
+    "team": "XNDA84PBM3",
+    "buildNumber": "1",
     "infoPlist": {
       "NSMicrophoneUsageDescription": "Record your voice while you hold the input to convert it to text using cloud recognition.",
       "NSFaceIDUsageDescription": "Verify your identity to save or use your Mac login password to unlock remote desktop.",
@@ -27,24 +24,6 @@
       "NSAppTransportSecurity": {
         "NSAllowsLocalNetworking": true
       }
-    },
-    "buildNumber": "1",
-    "developmentTeam": "XNDA84PBM3",
-    "entitlements": {
-      "keychain-access-groups": [
-        "$(AppIdentifierPrefix)*",
-        "com.apple.token"
-      ]
-    },
-    "pushNotifications": true,
-    "native": {
-      "sources": [
-        "resources/ios/MiyaFiles.swift"
-      ],
-      "frameworks": [
-        "WebKit",
-        "QuickLook"
-      ]
     }
   },
   "i18n": {

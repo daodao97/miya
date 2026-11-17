@@ -434,7 +434,7 @@ func TestMobileDesktopManagerSharesDrawerBackBehavior(t *testing.T) {
 		t.Fatal(err)
 	}
 	openMobileDrawer(t, tt)
-	if m.Router().Path() != "/desktops" || !m.Menu || m.Router().InteractiveBack {
+	if m.Router().Path() != "/desktops" || !m.Menu || !m.Router().DisableBackGesture {
 		t.Fatal("desktop manager should return to the drawer")
 	}
 }

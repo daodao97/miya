@@ -1,6 +1,6 @@
 #!/bin/bash
-# Build the actual Miya entry point with MyGo's Android host. This creates
-# a locally debug-signed APK; distribution signing is a separate release step.
+# Build Miya for Android (arm64) with MyGo's Android host, which the CLI
+# embeds. Without android.keystore in mygo.json the APK is debug-signed.
 # Usage: scripts/build-android.sh [--install] [--identifier ID]
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd -P)
@@ -15,91 +15,46 @@ while [ $# -gt 0 ]; do
     esac
 done
 export PATH="/opt/homebrew/bin:$PATH"
-NDK_VERSION="${ANDROID_NDK_VERSION:-28.2.13676358}"
-case "$(uname -s)" in
-    Darwin) HOST_TAG=darwin-x86_64; SDK_DEFAULT="$HOME/Library/Android/sdk" ;;
-    Linux) HOST_TAG=linux-x86_64; SDK_DEFAULT="$HOME/Android/Sdk" ;;
-    *) echo "Android build script currently supports macOS/Linux hosts" >&2; exit 2 ;;
-esac
-SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$SDK_DEFAULT}}"
-# go list -m reports no directory for a module that is not in the cache yet.
-go mod download github.com/egoist/mygo
-MYGO_ROOT=$(go list -m -f '{{.Dir}}' github.com/egoist/mygo)
-test -d "$MYGO_ROOT/android" || { echo "MyGo's Android host not found (module dir: '$MYGO_ROOT')" >&2; exit 1; }
-HB_ROOT="${MYGO_HB_ANDROID:-$MYGO_ROOT/third_party/hb-build/src/lib/android}"
-export CC="${MYGO_ANDROID_CC:-$SDK/ndk/$NDK_VERSION/toolchains/llvm/prebuilt/$HOST_TAG/bin/aarch64-linux-android29-clang}"
-test -x "$CC" || { echo "Android NDK compiler not found: $CC" >&2; exit 1; }
-test -f "$HB_ROOT/lib/libharfbuzz.a" || { echo "HarfBuzz for Android not found in $HB_ROOT; set MYGO_HB_ANDROID" >&2; exit 1; }
-export CGO_CFLAGS="${CGO_CFLAGS:-} -I$HB_ROOT/include/harfbuzz -I$HB_ROOT/include/freetype2"
-export CGO_LDFLAGS="${CGO_LDFLAGS:-} -L$HB_ROOT/lib -lharfbuzz -lfreetype -lm -llog"
-if [ -z "${JAVA_HOME:-}" ]; then
-    if [ "$(uname -s)" = Darwin ]; then
-        export JAVA_HOME=$(/usr/libexec/java_home -v 17)
-    fi
+if [ -z "${JAVA_HOME:-}" ] && [ "$(uname -s)" = Darwin ]; then
+    export JAVA_HOME=$(/usr/libexec/java_home -v 17)
 fi
-STAGE="$ROOT/.mygo/android-build"
-OUT="$ROOT/build/android-arm64"
-mkdir -p "$STAGE" "$OUT"
-python3 - "$MYGO_ROOT" "$STAGE" "$APP_ID" <<'PY'
-import json, re, shutil, sys, xml.etree.ElementTree as ET
+# MyGo runs go list where the config is, so it must stay inside the module.
+mkdir -p "$ROOT/.mygo"
+STAGE=$(mktemp -d "$ROOT/.mygo/android-config-XXXXXX")
+trap 'rm -rf "$STAGE"' EXIT
+python3 - "$ROOT" "$STAGE" "$APP_ID" <<'PY'
+import json, re, sys
 from pathlib import Path
-framework, stage, override = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3]
-config = json.loads(Path('mygo.json').read_text())
-identifier = override or config['identifier']
-if not re.fullmatch(r'[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+', identifier):
-    raise SystemExit('Invalid Android application identifier')
-version = config['version']
-if not re.fullmatch(r'[0-9][A-Za-z0-9.+-]*', version):
-    raise SystemExit('Invalid Android application version')
-host = stage / 'host'
-shutil.copytree(framework / 'android', host, dirs_exist_ok=True,
-                ignore=shutil.ignore_patterns('build', '.gradle', '.kotlin', 'jniLibs', 'local.properties'))
-# MyGo may come from the read-only module cache; Gradle writes inside the copy.
-import os, stat
-for top, dirs, files in os.walk(host):
-    for name in [top] + [os.path.join(top, f) for f in files]:
-        if not os.path.islink(name):
-            os.chmod(name, os.stat(name).st_mode | stat.S_IWUSR)
-p = host / 'app/build.gradle'
-text = p.read_text().replace("applicationId 'org.mygo.host'", f"applicationId '{identifier}'")
-text = text.replace("versionName '1.0'", f"versionName '{version}'")
-# MyGo's NDK font matcher requires API 29. Do not advertise API 24 while
-# linking Android 29 symbols into the native library.
-text = text.replace('minSdk 24', 'minSdk 29')
-p.write_text(text)
-ET.register_namespace('android', 'http://schemas.android.com/apk/res/android')
-android = '{http://schemas.android.com/apk/res/android}'
-p = host / 'app/src/main/AndroidManifest.xml'
-tree = ET.parse(p)
-app = tree.getroot().find('application')
-app.set(android + 'label', config['name'])
-app.set(android + 'icon', '@drawable/miya_icon')
-activity = app.find('activity')
-for scheme in config.get('urlSchemes', []):
-    if not re.fullmatch(r'[a-z][a-z0-9+.-]*', scheme):
-        raise SystemExit('Invalid URL scheme')
-    intent = ET.SubElement(activity, 'intent-filter')
-    ET.SubElement(intent, 'action', {android + 'name': 'android.intent.action.VIEW'})
-    for category in ['DEFAULT', 'BROWSABLE']:
-        ET.SubElement(intent, 'category', {android + 'name': 'android.intent.category.' + category})
-    ET.SubElement(intent, 'data', {android + 'scheme': scheme})
-tree.write(p, encoding='utf-8', xml_declaration=True)
-icons = host / 'app/src/main/res/drawable'
-icons.mkdir(exist_ok=True)
-shutil.copyfile('resources/icon.png', icons / 'miya_icon.png')
-(stage / 'identifier').write_text(identifier)
+root, stage, override = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3]
+config = json.loads((root / 'mygo.json').read_text())
+if override:
+    if not re.fullmatch(r'[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+', override):
+        raise SystemExit('Invalid Android application identifier')
+    config['identifier'] = override
+config['main'] = str(root / config.get('main', '.'))
+config['out'] = str(root / config.get('out', 'build'))
+config['icon'] = str(root / 'resources/icon.png')
+for key in ('bindings', 'frontendDist'):
+    if config.get(key):
+        config[key] = str(root / config[key])
+config['resources'] = [str(root / p) for p in config.get('resources', [])]
+(stage / 'mygo.json').write_text(json.dumps(config, indent=2) + '\n')
+(stage / 'resources').symlink_to(root / 'resources', target_is_directory=True)
+if config.get('i18n'):
+    locale_dir = Path(config['i18n'].get('dir', 'locales'))
+    locale_stage = stage / locale_dir
+    if not locale_stage.exists():
+        locale_stage.parent.mkdir(parents=True, exist_ok=True)
+        locale_stage.symlink_to(root / locale_dir, target_is_directory=True)
+(stage / 'identifier').write_text(config['identifier'])
 PY
-printf 'sdk.dir=%s\n' "$SDK" > "$STAGE/host/local.properties"
-mkdir -p "$STAGE/host/app/src/main/jniLibs/arm64-v8a"
-GOOS=android GOARCH=arm64 CGO_ENABLED=1 go build -trimpath -buildmode=c-shared \
-    -o "$STAGE/host/app/src/main/jniLibs/arm64-v8a/libmygo.so" .
-# Module zips do not keep the executable bit.
-chmod +x "$STAGE/host/gradlew"
-"$STAGE/host/gradlew" -p "$STAGE/host" :app:assembleDebug --console=plain
-cp "$STAGE/host/app/build/outputs/apk/debug/app-debug.apk" "$OUT/Miya.apk"
-echo "Built: $OUT/Miya.apk"
+IDENTIFIER=$(cat "$STAGE/identifier")
+go tool mygo build -platform android/arm64 "$STAGE"
+APK=$(ls -t "$ROOT"/build/android*/*.apk 2>/dev/null | head -1)
+test -n "$APK" || { echo "No APK found under build/" >&2; exit 1; }
+echo "Built: $APK"
 if [ "$INSTALL" -eq 1 ]; then
-    "$SDK/platform-tools/adb" install -r "$OUT/Miya.apk"
-    IDENTIFIER=$(cat "$STAGE/identifier")
-    "$SDK/platform-tools/adb" shell am start -W -n "$IDENTIFIER/org.mygo.MygoActivity"
+    SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Library/Android/sdk}}"
+    "$SDK/platform-tools/adb" install -r "$APK"
+    "$SDK/platform-tools/adb" shell monkey -p "$IDENTIFIER" -c android.intent.category.LAUNCHER 1 >/dev/null
 fi

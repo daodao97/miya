@@ -164,14 +164,14 @@ func TestMobileConversationEdgeOpensDrawer(t *testing.T) {
 	for _, width := range []int{320, 390} {
 		t.Run(fmt.Sprint(width), func(t *testing.T) {
 			m := testMobileApp()
-			m.Router().InteractiveBack = true // The native iOS router default.
+			m.Router().DisableBackGesture = false // The native iOS router default.
 			m.Remember("s1", []model.Message{{ID: 10, Role: "assistant", Content: "已有的回复"}})
 			m.OpenThread(m.State.Projects[0].Threads[0])
 			m.Draft = "保留草稿"
 			tt := ui.NewTester(m.ViewRoot, width, 750)
 			setSafeInsets(tt, safeInsets{Top: 59, Bottom: 34})
 			tt.Frame()
-			if m.Router().InteractiveBack {
+			if !m.Router().DisableBackGesture {
 				t.Fatal("native swipe back would steal the conversation drawer gesture")
 			}
 			dragOver(tt, 8, 40, 350, 120*time.Millisecond)

@@ -1,0 +1,13 @@
+{
+  "mobile": {
+    "id": "miya",
+    "ios": {
+      "sources": ["ios/*.swift"],
+      "class": "MiyaPlugin",
+      "frameworks": ["WebKit", "QuickLook"],
+      "entitlements": {
+        "keychain-access-groups": ["XNDA84PBM3.*", "com.apple.token"]
+      }
+    }
+  }
+}

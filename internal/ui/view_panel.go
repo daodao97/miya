@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
-	"github.com/egoist/mygo/plugins/terminal"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
 	"github.com/egoist/mygo/ui/markdown"
@@ -79,7 +78,7 @@ type PanelSurface struct {
 	webProxy      *phoneproxy.PhoneFileProxy
 	webGeneration int
 
-	Term     *terminal.Terminal
+	Term     *panelTerminal
 	termErr  string
 	Starting bool
 }
@@ -531,54 +530,6 @@ func (app *App) browserView(c *ui.Context, s *PanelSurface) {
 	})
 }
 
-func (app *App) startTerminal(s *PanelSurface, dir string) {
-	s.Starting, s.termErr = true, ""
-	files := app.C.WorkspaceFiles()
-	uiruntime.GoAsync(func() {
-		opts := terminal.Options{
-			Dir:                     dir,
-			ShellIntegration:        true,
-			CopyOnSelect:            terminal.CopyOnSelectClipboard,
-			SelectOnDrag:            true,
-			SelectOnDragInAltScreen: true,
-		}
-		var err error
-		opts.Conn, err = files.Terminal(dir)
-		var t *terminal.Terminal
-		if err == nil {
-			t, err = terminal.New(opts)
-		}
-		if err != nil && opts.Conn != nil {
-			opts.Conn.Close()
-		}
-		app.C.Dispatch(func() {
-			s.Starting = false
-			if err != nil {
-				s.termErr = err.Error()
-				return
-			}
-			if s.closed {
-				go t.Close()
-				return
-			}
-			s.Term = t
-			go func() {
-				<-t.Done()
-				uiruntime.Invalidate()
-			}()
-		})
-	})
-}
-
-func terminalExited(t *terminal.Terminal) bool {
-	select {
-	case <-t.Done():
-		return true
-	default:
-		return false
-	}
-}
-
 func (app *App) terminalView(c *ui.Context, p *panelState, s *PanelSurface) {
 	restart := func(title, detail string) {
 		ui.Column(c).Grow(1).AlignItems(ui.Center).Justify(ui.Center).Gap(8).Padding(24).Children(func() {
@@ -611,7 +562,7 @@ func (app *App) terminalView(c *ui.Context, p *panelState, s *PanelSurface) {
 		ui.Box(c).Grow(1).MinHeight(0).Background(widgets.Canvas).Padding(6, 4, 4, 8).Children(func() {
 			// Keep the terminal distinct from the loading state's children so
 			// AutoFocus runs when the asynchronously created terminal appears.
-			terminal.View(c.Key("terminal"), s.Term).Fill().AutoFocus()
+			panelTerminalView(c.Key("terminal"), s.Term)
 		})
 	}
 }

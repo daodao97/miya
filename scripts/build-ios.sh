@@ -3,7 +3,8 @@
 # from `go run ./scripts/ios-icon`). MyGo shares one icon setting across
 # platforms; an isolated config keeps the desktop's rounded icon as it is.
 #
-#   ./scripts/build-ios.sh -ios-team TEAM -ios-device UDID
+#   ./scripts/build-ios.sh            # a signed .ipa (team: mygo.json ios.team)
+# To install on a device during development: go tool mygo dev -platform ios -device UDID
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd -P)
 cd "$ROOT"

@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -379,15 +378,20 @@ func TestDesktopUnlockIOSAuthenticationCapability(t *testing.T) {
 	}
 	var config struct {
 		IOS struct {
-			Capabilities []string       `json:"capabilities"`
-			InfoPlist    map[string]any `json:"infoPlist"`
+			InfoPlist map[string]any `json:"infoPlist"`
 		} `json:"ios"`
 	}
 	if err := json.Unmarshal(data, &config); err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Contains(config.IOS.Capabilities, "biometrics") {
-		t.Fatal("remote unlock requires the native iOS biometrics capability")
+	// MyGo links LocalAuthentication through the biometrics plugin the
+	// phone imports (its mygo-plugin.json), not a capability in mygo.json.
+	source, err := os.ReadFile("internal/mobile/mobile_desktop_unlock.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(source), `"github.com/egoist/mygo/plugins/biometrics"`) {
+		t.Fatal("remote unlock requires the biometrics plugin")
 	}
 	purpose, _ := config.IOS.InfoPlist["NSFaceIDUsageDescription"].(string)
 	if strings.TrimSpace(purpose) == "" {

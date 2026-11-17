@@ -158,14 +158,17 @@ func TestVoiceHoldOnlyBeforeComposerFocus(t *testing.T) {
 	tt.UsePointer(ui.PointerTouch, 1)
 	hold := func() {
 		t.Helper()
+		// A frame between touches, as there always is on a device: the view
+		// asks for the hold (TouchSelection) as its focus is then.
+		tt.Frame()
 		bounds, ok := tt.Find("Message")
 		if !ok {
 			t.Fatal("missing composer")
 		}
 		x, y := bounds.X+bounds.W/2, bounds.Y+bounds.H/2
-		tt.Press(x, y)
+		tt.FingerDown(x, y)
 		tt.Advance(time.Second)
-		tt.Release(x, y)
+		tt.FingerUp(x, y)
 	}
 	hold()
 	if starts != 1 || m.voice == nil || !f.stopped || tt.Focused("Message") {

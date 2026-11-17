@@ -19,14 +19,35 @@ private func miyaText(_ key: String) -> String {
     return bundle.localizedString(forKey: key, value: key, table: nil)
 }
 
-@_silgen_name("goIOSSystemResult") private func filesResult(_ token: UInt64, _ value: UnsafePointer<CChar>, _ code: Int32, _ message: UnsafePointer<CChar>)
+/// Miya's native code (miyanative): its file and web service viewer.
+final class MiyaPlugin: MyGoPlugin {
+    func call(_ method: String, _ args: [String: Any], _ reply: @escaping PluginReply) {
+        let id = (args["id"] as? NSNumber)?.int64Value ?? 0
+        switch method {
+        case "openFiles":
+            guard let raw = args["url"] as? String, let url = URL(string: raw), ["http", "https"].contains(url.scheme ?? "") else {
+                reply(.failure(PluginFailure("Invalid", "Invalid file URL")))
+                return
+            }
+            guard MiyaFiles.sessions.isEmpty else {
+                reply(.failure(PluginFailure("Busy", "Another presentation is active")))
+                return
+            }
+            MiyaFiles.open(id, url) { reply(.success(nil)) }
+        case "closeFiles":
+            MiyaFiles.sessions[id]?.close()
+            reply(.success(nil))
+        default:
+            reply(.failure(PluginFailure("NoMethod", method)))
+        }
+    }
+}
 
-// Miya's file and Web service viewer implements MyGo's optional in-app browser hook.
 // It has an isolated web data store and no JavaScript-to-native app bridge.
-@MainActor private final class MiyaFiles: UIViewController, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, QLPreviewControllerDataSource, UIAdaptivePresentationControllerDelegate {
-    static var sessions: [UInt64: MiyaFiles] = [:]
-    static var canceled: Set<UInt64> = []
-    let token: UInt64
+private final class MiyaFiles: UIViewController, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, QLPreviewControllerDataSource, UIAdaptivePresentationControllerDelegate {
+    static var sessions: [Int64: MiyaFiles] = [:]
+    let id: Int64
+    let done: () -> Void
     let initial: URL
     let cache: URL
     var isWebService: Bool { initial.path.hasPrefix("/.miya-web-open/") }
@@ -39,8 +60,8 @@ private func miyaText(_ key: String) -> String {
     var save: UIBarButtonItem!
     var finished = false
 
-    init(_ token: UInt64, _ url: URL) {
-        self.token = token; initial = url
+    init(_ id: Int64, _ url: URL, done: @escaping () -> Void) {
+        self.id = id; self.done = done; initial = url
         cache = FileManager.default.temporaryDirectory.appendingPathComponent("miya-files-" + UUID().uuidString, isDirectory: true)
         super.init(nibName: nil, bundle: nil)
     }
@@ -149,18 +170,14 @@ private func miyaText(_ key: String) -> String {
         web?.stopLoading()
         for (download, _) in downloads.values { download.cancel { _ in } }; downloads.removeAll()
         let complete = { [self] in
-            Self.sessions.removeValue(forKey: token)
+            Self.sessions.removeValue(forKey: id)
             try? FileManager.default.removeItem(at: cache)
-            "null".withCString { value in "".withCString { filesResult(token, value, 0, $0) } }
+            done()
         }
         if dismiss { navigationController?.dismiss(animated: true, completion: complete) } else { complete() }
     }
-    static func open(_ token: UInt64, _ json: String) {
-        if canceled.remove(token) != nil { return }
-        guard let data = json.data(using: .utf8), let raw = try? JSONDecoder().decode(String.self, from: data), let url = URL(string: raw), ["http", "https"].contains(url.scheme ?? "") else { fail(token, "Invalid file URL"); return }
-        let windows = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.filter { $0.activationState == .foregroundActive }.flatMap { $0.windows }
-        guard let root = windows.first(where: { $0.isKeyWindow })?.rootViewController, root.presentedViewController == nil else { fail(token, "Another presentation is active"); return }
-        let viewer = MiyaFiles(token, url)
+    static func open(_ id: Int64, _ url: URL, done: @escaping () -> Void) {
+        let viewer = MiyaFiles(id, url, done: done)
         let navigation = UINavigationController(rootViewController: viewer)
         navigation.modalPresentationStyle = .pageSheet
         if let sheet = navigation.sheetPresentationController {
@@ -170,20 +187,8 @@ private func miyaText(_ key: String) -> String {
             sheet.prefersScrollingExpandsWhenScrolledToEdge = true
             sheet.prefersEdgeAttachedInCompactHeight = true
         }
-        sessions[token] = viewer
-        root.present(navigation, animated: true)
+        sessions[id] = viewer
         navigation.presentationController?.delegate = viewer
-    }
-    static func fail(_ token: UInt64, _ message: String) { "null".withCString { value in message.withCString { filesResult(token, value, 2, $0) } } }
-}
-
-@_cdecl("mygo_swift_browser_open") func miyaFileBrowserOpen(_ token: UInt64, _ json: UnsafePointer<CChar>) {
-    let value = String(cString: json)
-    Task { @MainActor in MiyaFiles.open(token, value) }
-}
-@_cdecl("mygo_swift_browser_cancel") func miyaFileBrowserCancel(_ token: UInt64) {
-    Task { @MainActor in
-        if let viewer = MiyaFiles.sessions[token] { viewer.close() }
-        else { if MiyaFiles.canceled.count > 128 { MiyaFiles.canceled.removeAll() }; MiyaFiles.canceled.insert(token); MiyaFiles.fail(token, "Canceled") }
+        PluginHost.present(navigation)
     }
 }

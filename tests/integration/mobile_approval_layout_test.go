@@ -129,13 +129,15 @@ func TestMobileAuthorizationInputRemainsVisibleWhenKeyboardShrinksPage(t *testin
 		t.Fatal(err)
 	}
 	tt.Type("test-code")
-	// UIKit progressively shortens the content viewport as its keyboard rises.
+	// The keyboard rises as the window's bottom inset, which Miya's views pad
+	// by themselves (mygo.WindowOptions.ExtendIntoSafeArea).
+	tt.SetExtendIntoSafeArea(true)
 	for _, height := range []int{700, 600, 510, 440} {
-		tt.SetSize(390, height)
+		tt.SetInsets(0, 0, float32(844-height), 0)
 		tt.Frame()
 		field, ok := tt.Find("Authorization code")
 		footer, _ := tt.Find("Confirm")
-		if !ok || field.H < 43.99 || field.Y < 64 || field.Y+field.H > footer.Y-8 || !tt.Focused("Authorization code") {
+		if !ok || field.H < 43.99 || field.Y < 64 || field.Y+field.H > footer.Y-8 || footer.Y+footer.H > float32(height)+0.5 || !tt.Focused("Authorization code") {
 			t.Fatalf("keyboard left the focused authorization field under the action bar at height %d: field=%v footer=%v", height, field, footer)
 		}
 		caret, active := tt.TextCaret()
@@ -147,7 +149,7 @@ func TestMobileAuthorizationInputRemainsVisibleWhenKeyboardShrinksPage(t *testin
 	if m.FieldsFor(a)["code"] != "test-code-after-keyboard" {
 		t.Fatal("keyboard viewport changes lost the authorization input")
 	}
-	tt.SetSize(390, 844)
+	tt.SetInsets(0, 0, 0, 0)
 	field, ok := tt.Find("Authorization code")
 	if !ok || field.H < 44 || !tt.Focused("Authorization code") {
 		t.Fatalf("dismissing the keyboard lost the input: %v", field)

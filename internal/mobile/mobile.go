@@ -1162,7 +1162,7 @@ func (m *App) ViewRoot(c *ui.Context) {
 		default:
 			// Drawer destinations share the edge gesture; child pages pop.
 			// Remote gestures own the desktop page edges; leave with its back button.
-			m.Router().InteractiveBack = !mobilePageHasDrawer(m.Router().Path()) && m.Router().Path() != "/desktop"
+			m.Router().DisableBackGesture = mobilePageHasDrawer(m.Router().Path()) || m.Router().Path() == "/desktop"
 			transition := m.Router().Transition
 			instant := m.instantNavigation
 			m.instantNavigation = false
@@ -1519,9 +1519,9 @@ func (m *App) drawerContent(c *ui.Context) {
 	m.drawerQuotas(c.Key("drawer-quotas"))
 
 	// Reserve touch drags before the conversation buttons take their presses.
-	// TouchScroll replays stationary taps to the buttons and sends swipes as
-	// precise scrolls; vertical scrolls continue to the list normally.
-	ui.Scroll(c.Key("drawer-projects")).FillWidth().Grow(1).MinHeight(0).TouchScroll().HandleInput(func(ev ui.InputEvent) bool {
+	// A finger's pan comes to this handler first, as a precise scroll;
+	// stationary taps press the buttons, and vertical scrolls go on to the list.
+	ui.Scroll(c.Key("drawer-projects")).FillWidth().Grow(1).MinHeight(0).HandleInput(func(ev ui.InputEvent) bool {
 		if ev.Kind == ui.InputScroll && ev.Precise && !ev.Momentum && ev.DX > 8 && ev.DX > max(ev.DY, -ev.DY) {
 			m.Menu = false
 			return true

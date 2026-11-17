@@ -966,8 +966,9 @@ var desktopModifiers = []desktopKeyDef{{"command", "⌘", "⌘"}, {"control", "�
 func (m *App) desktopLiveView(c *ui.Context, p *MobileDesktopPage) {
 	pal := m.Pal
 	vp := ui.Column(c.Key("desktop-viewport")).FillWidth().Grow(1).MinHeight(0).Clip().Background(pal.Bg).Label(tr("Live Mac screen. Tap, swipe, or pinch to zoom."))
-	if !p.Trackpad && p.TouchMode == 0 {
-		vp.TouchScroll()
+	if p.Trackpad || p.TouchMode != 0 {
+		// A finger drives the pointer rather than panning the screen.
+		vp.TouchPointer()
 	}
 	if b := vp.Bounds(); b.W > 0 && b.H > 0 {
 		p.View = ui.Rect{W: b.W, H: b.H}
