@@ -20,6 +20,11 @@ config = json.loads((root / 'mygo.json').read_text())
 config['main'] = str(root / config.get('main', '.'))
 config['out'] = str(root / config.get('out', 'build'))
 config['icon'] = str(root / 'resources/ios/app-icon.png')
+# MIYA_IOS_DISTRIBUTION=development signs for the team's devices, to install
+# on a phone (xcrun devicectl device install app).
+import os
+if os.environ.get('MIYA_IOS_DISTRIBUTION'):
+    config.setdefault('ios', {})['distribution'] = os.environ['MIYA_IOS_DISTRIBUTION']
 for key in ('bindings', 'frontendDist'):
     if config.get(key):
         config[key] = str(root / config[key])
