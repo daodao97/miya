@@ -4,12 +4,14 @@ package integration
 
 import (
 	"fmt"
+	"path/filepath"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
 
 	"miya/internal/chat/model"
 	"miya/internal/remote"
+	"miya/internal/uiruntime"
 )
 
 // The keyboard rising must not give the composer another identity, even for
@@ -60,10 +62,17 @@ func TestComposerSendPutsKeyboardAway(t *testing.T) {
 		m.ShowThread(th)
 		m.Viewer.SetThreads([]model.Thread{th})
 		m.Viewer.SetActive(th.ID)
-		if connected {
-			m.Conn = &remote.Conn{}
-		}
 		m.Draft = "hi"
+		if connected {
+			// As TestSendButtonShowsMessageBeforeAsyncImageFailure: the send
+			// goes, and its missing image fails before the transport, whose
+			// answer is held back.
+			m.Conn = &remote.Conn{}
+			m.Images = []string{filepath.Join(t.TempDir(), "missing.png")}
+			old := uiruntime.RunOnMain
+			uiruntime.RunOnMain = func(func()) {}
+			t.Cleanup(func() { uiruntime.RunOnMain = old })
+		}
 		tt := ui.NewTester(m.ViewRoot, 390, 844)
 		setSafeInsets(tt, safeInsets{Top: 59, Bottom: 34})
 		b, _ := tt.Find("Message")
