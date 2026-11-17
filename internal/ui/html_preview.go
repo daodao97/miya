@@ -3,6 +3,7 @@ package desktopui
 import (
 	"net/url"
 	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/egoist/mygo"
@@ -15,6 +16,19 @@ import (
 func isHTMLFile(rel string) bool {
 	ext := path.Ext(rel)
 	return strings.EqualFold(ext, ".html") || strings.EqualFold(ext, ".htm")
+}
+
+func localHTMLPreviewPath(root, rel string) (string, string) {
+	if filepath.IsLocal(rel) {
+		return root, filepath.ToSlash(filepath.Clean(rel))
+	}
+	// Message links can open a file outside the workspace. Give that file
+	// its own directory as the asset root: browsers collapse ../ in URLs.
+	file := rel
+	if !filepath.IsAbs(file) {
+		file = filepath.Join(root, file)
+	}
+	return filepath.Dir(file), filepath.Base(file)
 }
 
 func (ed *fileEditor) closeHTMLPreview() {
@@ -55,7 +69,9 @@ func (app *App) startHTMLPreview(p *panelState, rel string, ed *fileEditor) *Pan
 		}
 		proxy, err = phoneproxy.NewPhoneFileProxy(cl.Wire(), p.Cwd)
 	} else {
-		proxy, err = phoneproxy.NewLocalFileProxy(p.Cwd)
+		var root string
+		root, rel = localHTMLPreviewPath(p.Cwd, rel)
+		proxy, err = phoneproxy.NewLocalFileProxy(root)
 	}
 	if err != nil {
 		s.webErr = err.Error()
@@ -63,6 +79,13 @@ func (app *App) startHTMLPreview(p *panelState, rel string, ed *fileEditor) *Pan
 	}
 	s.webProxy = proxy
 	proxy.SetPreview(rel, ed.State.Buffer.String())
+	web.Page().OnDidFailLoad(func(err *mygo.LoadError) {
+		app.C.Dispatch(func() {
+			if !s.closed {
+				s.webErr = err.Description
+			}
+		})
+	})
 	// The bootstrap redirects before the first document commits, so an
 	// untrusted page needs an explicit origin for that initial navigation.
 	origin, _ := url.Parse(proxy.URL)
