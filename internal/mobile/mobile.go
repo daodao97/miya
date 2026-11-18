@@ -433,6 +433,9 @@ func (m *App) Connect(link string) {
 // the target needed to reopen the view when the paired connection returns.
 func (m *App) enterBackground(preserveBrowser bool) {
 	m.background = true
+	// Pushes set the icon's badge while the app is away: the next unread
+	// state the desktop sends sets it again, even if the count is unchanged.
+	m.badgeApplied = -1
 	m.cancelVoice()
 	m.FlushCache(true)
 	m.suspendDesktopPage()
