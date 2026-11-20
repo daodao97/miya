@@ -3,6 +3,7 @@ package mobile
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -15,11 +16,23 @@ import (
 // sendPhoneReview approves, denies or revokes on the desktop
 // (docs/action-review.md); the reply brings the automations back.
 func (m *App) sendPhoneReview(review, action, scope, note string) {
+	m.sendPhoneAutomation(automation.Request{Review: review, Action: action, Scope: scope, Note: note})
+}
+
+// sendPhoneHandled tells the desktop the person dealt with what a run
+// asked of them.
+func (m *App) sendPhoneHandled(id string, started time.Time) {
+	m.sendPhoneAutomation(automation.Request{ID: id, Started: started, Action: "handled"})
+}
+
+// sendPhoneAutomation sends one decision on an automation to the desktop
+// at a time.
+func (m *App) sendPhoneAutomation(req automation.Request) {
 	a := &m.Autos
 	if a.ReviewBusy || !m.Connected || m.Conn == nil || !m.State.AutomationReview {
 		return
 	}
-	body, _ := json.Marshal(automation.Request{Review: review, Action: action, Scope: scope, Note: note})
+	body, _ := json.Marshal(req)
 	a.ReviewBusy = true
 	conn, gen := m.Conn, m.Generation
 	go func() {

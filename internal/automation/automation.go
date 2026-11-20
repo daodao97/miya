@@ -93,6 +93,9 @@ type Run struct {
 	WakeAfter   string `json:"wakeAfter,omitempty"`
 	// Report is the run\'s structured result.
 	Report *Report `json:"report,omitempty"`
+	// Handled is when the person said they dealt with what the run
+	// asked of them; the run then no longer waits for them.
+	Handled time.Time `json:"handled,omitzero"`
 	// Unchanged marks a run whose result said the same as the run before
 	// (progress.go).
 	Unchanged bool `json:"unchanged,omitempty"`

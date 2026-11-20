@@ -49,3 +49,25 @@ func TestNeedsAttentionListsWhatWaitsForThePerson(t *testing.T) {
 		t.Fatalf("details: %+v", got)
 	}
 }
+
+func TestNeedsAttentionSkipsHandledRuns(t *testing.T) {
+	now := atLocal("2026-11-15 10:00")
+	run := Run{Started: now.Add(-2 * time.Hour), Finished: now.Add(-time.Hour), Result: Passed, Summary: "reconciled",
+		Report: &Report{Summary: "reconciled", NeedsUser: true, UserAction: "Send the feedback files upstream"}}
+	views := []View{{Automation: Automation{ID: "a", Name: "Recon", Enabled: true}, Runs: []Run{run}}}
+	got := NeedsAttentionAt(views, now)
+	if len(got) != 1 || got[0].Detail != "Send the feedback files upstream" || !got[0].Run.Equal(run.Started) {
+		t.Fatalf("got %+v", got)
+	}
+	views[0].Runs[0].Handled = now
+	if got := NeedsAttentionAt(views, now); len(got) != 0 {
+		t.Fatalf("handled run still listed: %+v", got)
+	}
+}
+
+func TestReportUserActionImpliesNeedsUser(t *testing.T) {
+	r := Report{Summary: "s", UserAction: "  Check the containers  "}.Cleaned()
+	if !r.NeedsUser || r.UserAction != "Check the containers" {
+		t.Fatalf("got %+v", r)
+	}
+}

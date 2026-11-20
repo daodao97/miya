@@ -114,6 +114,8 @@ func (c *Controller) AutomationOp(op string, r automation.Request) (any, error) 
 		switch r.Action {
 		case "approve", "deny":
 			return nil, c.Auto.DecideReview(r.Review, r.Action == "approve", r.Scope, r.Note)
+		case "handled":
+			return nil, c.Auto.MarkHandled(r.ID, r.Started)
 		case "revoke":
 			c.Auto.RevokeGrant(r.Review)
 			return nil, nil

@@ -449,6 +449,9 @@ func (rn *Runner) notice(a Automation, run Run) {
 // changes are.
 func noticeBody(a Automation, run Run) string {
 	body := textutil.FirstNonEmpty(run.Summary, a.Name)
+	if run.Report != nil && run.Report.UserAction != "" {
+		body = run.Report.UserAction + "\n" + body
+	}
 	if label := WorktreeLabel(run); label != "" {
 		body += "\n" + label
 	}

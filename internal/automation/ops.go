@@ -58,7 +58,8 @@ type Request struct {
 	Data    string `json:"data,omitempty"`
 	Dedupe  string `json:"dedupe,omitempty"`
 	// Review, Scope and Note decide on a review, with Action approve,
-	// deny or revoke.
+	// deny or revoke, or with Action handled, ID and Started mark what a
+	// finished run asked of the person as dealt with.
 	Review string `json:"review,omitempty"`
 	Scope  string `json:"scope,omitempty"`
 	Note   string `json:"note,omitempty"`

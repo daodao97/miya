@@ -1192,20 +1192,32 @@ func (app *App) automationAttention(c *ui.Context, list []automation.View) {
 			ui.Text(c, fmt.Sprint(len(items))).FontSize(12).TextColor(widgets.Muted)
 		})
 		for i, it := range items {
-			row := widgets.Quiet(c.Key(fmt.Sprint(i, it.ID, it.Kind))).FillWidth().Height(0).MinHeight(44).Padding(6, 8, 6, 8).Gap(10).AlignItems(ui.Center).Label(it.Name)
-			row.Children(func() {
-				ui.Column(c).Grow(1).MinWidth(0).Gap(1).Children(func() {
-					ui.Text(c, it.Name+" · "+automation.AttentionLabel(it.Kind)).FontSize(13).FontWeight(500).SingleLine().Ellipsis("…")
-					if it.Detail != "" {
-						ui.Text(c, it.Detail).FontSize(12).TextColor(widgets.Muted).SingleLine().Ellipsis("…")
-					}
+			ui.Row(c.Key(fmt.Sprint("item", i, it.ID, it.Kind))).FillWidth().Gap(4).AlignItems(ui.Center).Children(func() {
+				row := widgets.Quiet(c.Key(fmt.Sprint(i, it.ID, it.Kind))).Grow(1).MinWidth(0).Height(0).MinHeight(44).Padding(6, 8, 6, 8).Gap(10).AlignItems(ui.Center).Label(it.Name)
+				row.Children(func() {
+					ui.Column(c).Grow(1).MinWidth(0).Gap(1).Children(func() {
+						ui.Text(c, it.Name+" · "+automation.AttentionLabel(it.Kind)).FontSize(13).FontWeight(500).SingleLine().Ellipsis("…")
+						if it.Detail != "" {
+							ui.Text(c, it.Detail).FontSize(12).TextColor(widgets.Muted).SingleLine().Ellipsis("…")
+						}
+					})
+					ui.Text(c, filepath.Base(it.Project)).FontSize(12).TextColor(widgets.Muted).Shrink(0)
+					widgets.Icon(c, "arrow-right", 12, widgets.Muted)
 				})
-				ui.Text(c, filepath.Base(it.Project)).FontSize(12).TextColor(widgets.Muted).Shrink(0)
-				widgets.Icon(c, "arrow-right", 12, widgets.Muted)
+				if row.Clicked() {
+					a.Page, a.Detail, a.confirmDelete = "detail", it.ID, ""
+				}
+				if !it.Run.IsZero() && widgets.Quiet(c.Key(fmt.Sprint("handled", i, it.ID))).PaddingX(8).Label(tr("Mark handled")).Children(func() {
+					ui.Text(c, tr("Mark handled")).FontSize(12)
+				}).Clicked() {
+					app.autoCall("automationReview", automation.Request{ID: it.ID, Started: it.Run, Action: "handled"}, func(_ json.RawMessage, err error) {
+						if err != nil {
+							app.Autos.err = err.Error()
+						}
+						app.loadAutomations()
+					})
+				}
 			})
-			if row.Clicked() {
-				a.Page, a.Detail, a.confirmDelete = "detail", it.ID, ""
-			}
 		}
 	})
 }

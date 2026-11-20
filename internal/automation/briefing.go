@@ -3,6 +3,7 @@ package automation
 import (
 	"errors"
 	"fmt"
+	"miya/internal/textutil"
 	"strings"
 	"time"
 
@@ -129,7 +130,11 @@ func (rn *Runner) BriefingText(since, now time.Time) (string, bool) {
 				b.WriteString("\n" + fmt.Sprintf(tr("and %d more"), len(waiting)-i))
 				break
 			}
-			b.WriteString("\n- " + w.Name + " · " + AttentionLabel(w.Kind))
+			line := "\n- " + w.Name + " · " + AttentionLabel(w.Kind)
+			if w.Kind == AttentionNeedsUser && w.Detail != "" {
+				line += ": " + textutil.ClipRunes(textutil.FirstLine(w.Detail), 120)
+			}
+			b.WriteString(line)
 		}
 	}
 	return b.String(), true

@@ -527,15 +527,15 @@ func (ps *phoneSession) onAutomationWebhook(r remote.Request) bool {
 	return ok && ps.send(frame)
 }
 
-// onAutomationReview approves, denies or revokes for a phone, and answers
-// with the automations as they are after it.
+// onAutomationReview approves, denies, revokes or marks a run handled for
+// a phone, and answers with the automations as they are after it.
 func (ps *phoneSession) onAutomationReview(r remote.Request) bool {
 	var req automation.Request
 	if len(r.Automation) > 0 {
 		_ = json.Unmarshal(r.Automation, &req)
 	}
 	frame, ok := async.OnMain(ps.ctx, ps.c.Dispatch, func() remote.Frame {
-		_, err := ps.c.AutomationOp("automationReview", automation.Request{Review: req.Review, Action: req.Action, Scope: req.Scope, Note: req.Note})
+		_, err := ps.c.AutomationOp("automationReview", automation.Request{ID: req.ID, Started: req.Started, Review: req.Review, Action: req.Action, Scope: req.Scope, Note: req.Note})
 		list, _ := ps.c.AutomationOp("automationList", automation.Request{})
 		frame := remote.Frame{Type: "automation-review"}
 		frame.Data, _ = json.Marshal(list)

@@ -576,6 +576,15 @@ func (m *App) automationPhoneAttention(c *ui.Context, list []automation.View) {
 				m.Autos.Detail = it.ID
 				m.Router().Push("/automation")
 			}
+			if !it.Run.IsZero() && m.State.AutomationReview {
+				h := m.phoneButton(c.Key(fmt.Sprint("handled", i, it.ID))).Padding(0).Background(ui.Transparent).Label(tr("Mark handled"))
+				h.Children(func() {
+					ui.Text(c, tr("Mark handled")).FontSize(m.Font(13)).TextColor(p.warn)
+				})
+				if h.Clicked() {
+					m.sendPhoneHandled(it.ID, it.Run)
+				}
+			}
 		}
 	})
 }

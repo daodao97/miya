@@ -2,6 +2,7 @@ package automation
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -20,6 +21,9 @@ type Attention struct {
 	At     time.Time
 	// Review is the review a review item is about.
 	Review string
+	// Run is when the run an item is about started; such an item can be
+	// marked handled.
+	Run time.Time
 }
 
 const (
@@ -94,18 +98,22 @@ func NeedsAttentionAt(views []View, now time.Time) []Attention {
 			out = append(out, Attention{ID: v.ID, Name: v.Name, Project: v.Project, Kind: AttentionReview, Detail: r.Action, At: r.Requested, Review: r.ID})
 		}
 		if r, ok := latestFinished(v); ok && !v.Running {
-			at := r.Finished
+			at, handled := r.Finished, !r.Handled.IsZero()
+			// What a run asked of the person can be marked handled.
+			addRun := func(kind, detail string) {
+				out = append(out, Attention{ID: v.ID, Name: v.Name, Project: v.Project, Kind: kind, Detail: detail, At: at, Run: r.Started})
+			}
 			switch {
-			case r.Report != nil && r.Report.NeedsUser:
-				add(AttentionNeedsUser, r.Summary, at)
+			case r.Report != nil && r.Report.NeedsUser && !handled:
+				addRun(AttentionNeedsUser, textOr(r.Report.UserAction, r.Summary))
 			case WorktreePending(r) && r.Recheck == RecheckFailed:
 				add(AttentionRecheck, textOr(lastLine(r.RecheckOutput), WorktreeLabel(r)), at)
 			case WorktreePending(r) && !r.Changes.Empty():
 				add(AttentionMerge, WorktreeLabel(r), at)
-			case r.Result == Failed:
-				add(AttentionFailed, r.Summary, at)
-			case r.Report != nil && r.Report.Coverage.Partial():
-				add(AttentionPartial, r.Report.Coverage.Text(), at)
+			case r.Result == Failed && !handled:
+				addRun(AttentionFailed, r.Summary)
+			case r.Report != nil && r.Report.Coverage.Partial() && !handled:
+				addRun(AttentionPartial, r.Report.Coverage.Text())
 			}
 		}
 		if v.Enabled {
@@ -146,4 +154,19 @@ func NeedsAttentionAt(views []View, now time.Time) []Attention {
 func lastLine(s string) string {
 	lines := strings.Split(strings.TrimSpace(s), "\n")
 	return strings.TrimSpace(lines[len(lines)-1])
+}
+
+// MarkHandled records that the person dealt with what a finished run
+// asked of them, so that it no longer waits for them.
+func (rn *Runner) MarkHandled(id string, started time.Time) error {
+	if r := rn.Active[id]; r != nil && r.started.Equal(started) {
+		return errors.New("The run has not finished")
+	}
+	now := rn.Now()
+	if !rn.Store.UpdateRun(id, started, func(run *Run) { run.Handled = now }) {
+		return errors.New("Run not found")
+	}
+	rn.Persist()
+	rn.host.Changed()
+	return nil
 }

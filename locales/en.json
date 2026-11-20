@@ -2003,5 +2003,6 @@
   "providerFetching": "Fetching…",
   "providerNoModelsListed": "The provider answered but listed no models; enter them by hand.",
   "providerModelsFound": "Connected. %d models found; remove the ones you don't use.",
-  "providerNeedsModels": "%s uses this provider, which lists no models; add at least one."
+  "providerNeedsModels": "%s uses this provider, which lists no models; add at least one.",
+  "markHandled_68d012": "Mark handled"
 }

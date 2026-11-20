@@ -21453,3 +21453,13 @@ func ProviderNeedsModels() string { return In(i18n.Locale()).ProviderNeedsModels
 func (msgs Messages) ProviderNeedsModels() string {
 	return Catalog.Format(msgs.locale, "providerNeedsModels", nil)
 }
+
+// MarkHandled68d012 says "Mark handled"
+// in the language the app shows.
+func MarkHandled68d012() string { return In(i18n.Locale()).MarkHandled68d012() }
+
+// MarkHandled68d012 says "Mark handled"
+// in the language of msgs.
+func (msgs Messages) MarkHandled68d012() string {
+	return Catalog.Format(msgs.locale, "markHandled_68d012", nil)
+}

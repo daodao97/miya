@@ -2003,5 +2003,6 @@
   "providerFetching": "正在获取…",
   "providerNoModelsListed": "Provider 已响应，但没有列出模型，请手动填写。",
   "providerModelsFound": "连接成功，找到 %d 个模型；可删除不需要的。",
-  "providerNeedsModels": "%s 正在使用此 Provider，但它没有列出模型；请至少添加一个。"
+  "providerNeedsModels": "%s 正在使用此 Provider，但它没有列出模型；请至少添加一个。",
+  "markHandled_68d012": "标为已处理"
 }

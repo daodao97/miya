@@ -20,6 +20,9 @@ type Report struct {
 	Metrics   []Metric `json:"metrics,omitempty"`
 	Artifacts []string `json:"artifacts,omitempty"`
 	NeedsUser bool     `json:"needs_user,omitempty"`
+	// UserAction says in a line what the person should do; a result
+	// that has one needs the person.
+	UserAction string `json:"user_action,omitempty"`
 	// Coverage says how much of what the run should have looked at it did.
 	Coverage *Coverage `json:"coverage,omitempty"`
 	// Auto marks a result Miya made because the agent reported none.
@@ -94,7 +97,7 @@ func (r Report) Cleaned() Report {
 		}
 		return out
 	}
-	out := Report{Summary: textutil.ClipRunes(strings.TrimSpace(r.Summary), ReportSummaryLimit), Findings: list(r.Findings), Artifacts: list(r.Artifacts), NeedsUser: r.NeedsUser, Auto: r.Auto}
+	out := Report{Summary: textutil.ClipRunes(strings.TrimSpace(r.Summary), ReportSummaryLimit), Findings: list(r.Findings), Artifacts: list(r.Artifacts), NeedsUser: r.NeedsUser || strings.TrimSpace(r.UserAction) != "", UserAction: textutil.ClipRunes(strings.TrimSpace(r.UserAction), ReportItemLimit), Auto: r.Auto}
 	if c := r.Coverage; c != nil && c.Expected > 0 {
 		missing := list(c.Missing)
 		if len(missing) > 10 {
@@ -143,7 +146,9 @@ func FormatReport(r Report) string {
 	if r.Coverage != nil {
 		b.WriteString("Coverage: " + r.Coverage.Text() + "\n")
 	}
-	if r.NeedsUser {
+	if r.UserAction != "" {
+		b.WriteString("User action: " + r.UserAction + "\n")
+	} else if r.NeedsUser {
 		b.WriteString("User action was required.\n")
 	}
 	return strings.TrimRight(b.String(), "\n")
@@ -166,7 +171,7 @@ func RunMessage(a Automation, prev *Run, ev WakeEvent) string {
 		}
 		b.WriteString("\n")
 	}
-	fmt.Fprintf(&b, "This is Miya automation \"%s\". Before finishing, call Miya's report_result tool with this run's result: summary (one or two sentences), findings (key conclusions), metrics (each with name, value, unit), artifacts (output files or links), needs_user (whether user action is required), and, when the run should look at a known set (repositories, sources, pages), coverage with expected, included and missing.", a.Name)
+	fmt.Fprintf(&b, "This is Miya automation \"%s\". Before finishing, call Miya's report_result tool with this run's result: summary (one or two sentences), findings (key conclusions), metrics (each with name, value, unit), artifacts (output files or links), needs_user and user_action only when the user must do something (user_action is one line saying exactly what; it is what the user sees), and, when the run should look at a known set (repositories, sources, pages), coverage with expected, included and missing.", a.Name)
 	if prev != nil && prev.Report != nil {
 		fmt.Fprintf(&b, "\n\nResults from the previous run (%s) follow. Compare them with this run and identify new, removed, and significantly changed items:\n%s", FormatTime(prev.Started), FormatReport(*prev.Report))
 	}

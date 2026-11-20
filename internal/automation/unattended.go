@@ -66,7 +66,7 @@ func decide(access Access, dir string, ask Ask) (Answer, string) {
 		return Answer{Decided: true, Allow: true}, what
 	}
 	if ask.Tool == "ExitPlanMode" && access == AccessRead {
-		return Answer{Decided: true, Message: "This automation is read only (access: read), so there is no plan to carry out. Report what you found with report_result, and set needs_user if a change should be made."}, "leave plan mode"
+		return Answer{Decided: true, Message: "This automation is read only (access: read), so there is no plan to carry out. Report what you found with report_result, and if a change should be made, set needs_user with user_action saying which."}, "leave plan mode"
 	}
 	if strings.HasPrefix(ask.Tool, "mcp__miya__") {
 		return Answer{Decided: true, Allow: true}, what
@@ -78,10 +78,10 @@ func decide(access Access, dir string, ask Ask) (Answer, string) {
 	case local && access != AccessRead:
 		return Answer{Decided: true, Allow: true}, what
 	case local:
-		return Answer{Decided: true, Message: fmt.Sprintf("Miya refused %s: this automation is read only (access: read). Do not try another way to change anything. Report what you found with report_result, and set needs_user if a change should be made.", what)}, what
+		return Answer{Decided: true, Message: fmt.Sprintf("Miya refused %s: this automation is read only (access: read). Do not try another way to change anything. Report what you found with report_result, and if a change should be made, set needs_user with user_action saying which.", what)}, what
 	case access == AccessExternal:
 		// Unattended sends it for review.
 		return Answer{}, what
 	}
-	return Answer{Decided: true, Message: fmt.Sprintf("Miya refused %s: this automation may not act outside the project (access: %s). Do not try another way to do it. Finish the work that does not depend on it, and set needs_user in report_result with what should be done.", what, access)}, what
+	return Answer{Decided: true, Message: fmt.Sprintf("Miya refused %s: this automation may not act outside the project (access: %s). Do not try another way to do it. Finish the work that does not depend on it, and set needs_user in report_result with user_action saying what should be done.", what, access)}, what
 }

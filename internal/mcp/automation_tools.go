@@ -104,8 +104,9 @@ func init() {
 				"value": map[string]any{"type": []string{"string", "number"}},
 				"unit":  map[string]any{"type": "string"},
 			}, "required": []string{"name", "value"}}},
-			"artifacts":  map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Files or links produced"},
-			"needs_user": map[string]any{"type": "boolean", "description": "Whether the user needs to act on this result"},
+			"artifacts":   map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Files or links produced"},
+			"needs_user":  map[string]any{"type": "boolean", "description": "Whether the user must do something about this result; give user_action with it"},
+			"user_action": map[string]any{"type": "string", "description": "When the user must act: one line saying exactly what they should do. It is shown in Needs you, the notification and the daily briefing in place of the summary, and implies needs_user"},
 			"coverage": map[string]any{"type": "object", "description": "When the run should look at a known set (repositories, sources, pages): how many it should have, how many it did, and what is missing and why. A run that covered only part always notifies the user", "properties": map[string]any{
 				"expected": map[string]any{"type": "integer"},
 				"included": map[string]any{"type": "integer"},
