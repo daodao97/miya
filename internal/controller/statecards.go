@@ -44,6 +44,9 @@ func (c *Controller) WriteStateCard(t model.Thread, call model.Message, card sta
 	if err := c.cards.Put(card); err != nil {
 		return statecard.Card{}, err
 	}
+	if engine := c.stateCardEngine(); engine != nil {
+		engine.CancelStateCard(t.ID)
+	}
 	return card, nil
 }
 
@@ -104,11 +107,12 @@ func (c *Controller) WaitingThreads() appmodel.Waiting {
 // conversation goes on. It runs for every streamed change, so a process
 // without cards leaves at once.
 func (c *Controller) stateCardThreadUpdated(old, t model.Thread) {
-	if c.cards.Len() == 0 {
-		return
-	}
 	if old.ServerID != "" && t.ServerID != "" && old.ServerID != t.ServerID {
 		c.stateCardFailed(c.cards.Move(stateCardKey(old), model.ThreadAgent(t), t.ServerID))
+	}
+	c.scheduleStateCard(old, t)
+	if c.cards.Len() == 0 {
+		return
 	}
 	card, ok := c.cards.Get(stateCardKey(t))
 	if !ok || card.Stale || !wentOn(t, card) {
@@ -120,6 +124,9 @@ func (c *Controller) stateCardThreadUpdated(old, t model.Thread) {
 
 // stateCardThreadDeleted drops the card of a conversation that is deleted.
 func (c *Controller) stateCardThreadDeleted(t model.Thread) {
+	if engine := c.stateCardEngine(); engine != nil {
+		engine.CancelStateCard(t.ID)
+	}
 	c.stateCardFailed(c.cards.Delete(stateCardKey(t)))
 }
 

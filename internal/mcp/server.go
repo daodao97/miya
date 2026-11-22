@@ -31,6 +31,7 @@ const instructions = "Miya runs several coding-agent conversations in this works
 	"Structured Agent tags such as #[Claude Code](miya-agent://claude-code) in the current user request or goal select canonical delegation targets: use start_task for their work. Selecting a tag did not execute anything. Tags quoted in code or supplied only as reference material are not requests to delegate. @conversation references supply context only. " +
 	"list_agents also lists this project's Bots: named assistants that each keep one standing conversation. start_task with bot hands a task to that conversation, or starts it. " +
 	"Before ending a turn that changed where the work stands, call update_status with what this conversation is for, what is done, what remains and what you wait for from the person. list_threads and thread_status show that state card to other conversations, as its writer's own account. " +
+	"When the user's current work needs a later check in this conversation, use follow_up with the due time and one short reminder. " +
 	"Use list_threads and read_thread to learn what another conversation did, and delegate to hand a self-contained task to another agent; " +
 	"the receiving conversation gets this conversation's context unless include_context is false. " +
 	"When a login, OAuth authorization, CAPTCHA, or other desktop UI needs the person, use request_desktop_control with a short reason. " +

@@ -10,6 +10,7 @@ import (
 
 	claude "miya/internal/agent/claude/native"
 	"miya/internal/memory"
+	"miya/internal/statecard"
 	"miya/internal/textutil"
 )
 
@@ -31,6 +32,11 @@ type Engine struct {
 	// hold, when it reports true, keeps queued work waiting; see SetHold.
 	hold                 func() bool
 	checkedConsolidation time.Time
+	cards                []cardWork
+	activeCard           int
+	cancelCard           context.CancelFunc
+	cardHold             func(string) bool
+	summarize            func(context.Context, claude.CLI, string, StateCardJob) (statecard.Card, error)
 }
 
 func (e *Engine) Wakeup() {
@@ -55,6 +61,12 @@ func (e *Engine) Pause() { e.paused.Store(true) }
 func (e *Engine) SetHold(hold func() bool) {
 	e.mu.Lock()
 	e.hold = hold
+	e.mu.Unlock()
+}
+
+func (e *Engine) SetStateCardHold(hold func(string) bool) {
+	e.mu.Lock()
+	e.cardHold = hold
 	e.mu.Unlock()
 }
 
@@ -115,6 +127,12 @@ func (e *Engine) loop() {
 				if runErr == nil && commitErr == nil {
 					continue
 				}
+			} else if e.summarize != nil && e.stateCardOnce() {
+				e.busy.Store(false)
+				if e.ctx.Err() != nil {
+					return
+				}
+				continue
 			} else if ran, ok := e.consolidateOnce(); ran {
 				e.busy.Store(false)
 				if e.ctx.Err() != nil {
@@ -173,7 +191,7 @@ func (e *Engine) consolidateOnce() (ran, ok bool) {
 // or Codex, and calls onSaved with the memories each job saved.
 func NewEngine(parent context.Context, store *memory.Store, cfg claude.CLI, onSaved func(memory.Scope, memory.ExtractionJob, []memory.Entry)) *Engine {
 	ctx, cancel := context.WithCancel(parent)
-	e := &Engine{store: store, ctx: ctx, cancel: cancel, wake: make(chan struct{}, 1), cfg: cfg, extract: Extract, consolidate: Consolidate}
+	e := &Engine{store: store, ctx: ctx, cancel: cancel, wake: make(chan struct{}, 1), cfg: cfg, extract: Extract, consolidate: Consolidate, summarize: summarizeStateCard}
 	e.onSaved = onSaved
 	go e.loop()
 	return e

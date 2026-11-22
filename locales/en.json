@@ -1,4 +1,8 @@
 {
+  "cancelFollowUp_0c021b": "Cancel follow-up",
+  "dismissFollowUp_d55ce5": "Dismiss follow-up",
+  "due_c50447": "Due ",
+  "followUp_a931af": "Follow-up",
   "activityEditedOne": "Edited 1 file",
   "activityEditedMany": "Edited %d files",
   "activityReadOne": "Read 1 file",

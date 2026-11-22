@@ -3,19 +3,74 @@ package integration
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	claude "miya/internal/agent/claude/native"
 	"miya/internal/appmodel"
 	"miya/internal/chat/model"
 	"miya/internal/controller"
 	mcpserver "miya/internal/mcp"
 	mcpproto "miya/internal/mcp/protocol"
+	"miya/internal/memory"
+	"miya/internal/memory/extractor"
 	svcclient "miya/internal/service/client"
 	"miya/internal/statecard"
 )
+
+func TestStateCardBackfillAfterABackgroundProjectTurn(t *testing.T) {
+	f := newServiceFixture(t)
+	project := t.TempDir()
+	scope, err := memory.ProjectScope(project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bin := filepath.Join(t.TempDir(), "summarize")
+	if err := os.WriteFile(bin, []byte(`#!/bin/sh
+input=$(cat)
+case "$input" in
+  *"核对发布清单"*) ;;
+  *) exit 1 ;;
+esac
+printf '%s\n' '{"structured_output":{"purpose":"核对发布清单","done":["检查版本号"],"remaining":["验证安装包"],"references":[]}}'
+`), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.C.Memories().Store.Configure(scope, memory.Settings{AutoExtract: true}); err != nil {
+		t.Fatal(err)
+	}
+	var id int
+	f.serv.Do(func() {
+		engine := f.C.Memories().Engine.(*extractor.Engine)
+		engine.Configure(claude.CLI{Binary: bin})
+		engine.SetStateCardHold(nil)
+		id = f.C.NextID()
+		f.C.AddThread(project, model.Thread{ID: id, Agent: model.AgentClaude, ServerID: "backfill-session", Busy: true})
+		f.C.Update(id, func(th *model.Thread) {
+			th.Messages = []model.Message{
+				{ID: f.C.NextID(), Role: "user", Content: "核对发布清单", SentAtMs: time.Now().UnixMilli()},
+				{ID: f.C.NextID(), Role: "assistant", Content: "已检查版本号，还要验证安装包", ItemID: "reply"},
+			}
+			th.Busy = false
+		})
+	})
+	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+		var card statecard.Card
+		f.serv.Do(func() { card, _ = f.C.StateCard(f.C.ThreadWithID(id)) })
+		if card.Purpose == "" {
+			continue
+		}
+		if card.Author != statecard.AuthorBackground || card.Stale || card.Waiting() ||
+			len(card.Remaining) != 1 || card.Remaining[0] != "验证安装包" {
+			t.Fatalf("backfill = %+v", card)
+		}
+		return
+	}
+	t.Fatal("the service did not backfill the conversation's card")
+}
 
 // stateCardHost is a controller that keeps state cards, in a directory of
 // the test.

@@ -45,6 +45,8 @@ func TaskStatusBar(c *ui.Context, t model.Thread, approval bool, p TaskPalette, 
 								kind := tr("Goal")
 								if task.Kind == "loop" {
 									kind = tr("Loop")
+								} else if task.Kind == "follow_up" {
+									kind = tr("Follow-up")
 								}
 								ui.Text(c, kind+" · "+label).FontSize(12).FontWeight(600).TextColor(p.Ink).Shrink(0)
 								ui.Text(c, msgfmt.NativeText(task.Title)).FontSize(12).TextColor(p.Ink).SingleLine().Ellipsis("…").Tooltip(task.Title).Grow(1).MinWidth(0)
@@ -67,7 +69,13 @@ func TaskStatusBar(c *ui.Context, t model.Thread, approval bool, p TaskPalette, 
 								action(task.ID, command)
 							}
 						}
-						if task.Kind == "goal" {
+						if task.Kind == "follow_up" {
+							if task.Status == "blocked" {
+								button(tr("Dismiss follow-up"), "dismiss", "trash-2")
+							} else {
+								button(tr("Cancel follow-up"), "cancel", "x")
+							}
+						} else if task.Kind == "goal" {
 							switch task.Status {
 							case "active":
 								button(tr("Pause goal"), "pause", "player-pause")

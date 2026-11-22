@@ -69,7 +69,7 @@ func Command() (string, bool) {
 }
 
 // miyaReadOnlyTools are the miya tools an agent may call without asking.
-var ReadOnlyTools = []string{"list_threads", "read_thread", "thread_status", "list_agents", "read_task", "wait_task", "list_tasks", "list_automations", "report_result", "search_memory", "runtime_info", "request_desktop_control", "update_status"}
+var ReadOnlyTools = []string{"list_threads", "read_thread", "thread_status", "list_agents", "read_task", "wait_task", "list_tasks", "list_automations", "report_result", "search_memory", "runtime_info", "request_desktop_control", "update_status", "follow_up"}
 
 // tomlString quotes s as a TOML basic string, whose escapes JSON's are.
 func TomlString(s string) string {

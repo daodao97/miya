@@ -14,6 +14,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 )
 
 type Options struct {
@@ -88,8 +89,9 @@ func (m *Manager) Paused(ref string) bool    { return m.view.Load().Paused[ref] 
 func (m *Manager) PendingReceivers() []string {
 	seen := map[string]bool{}
 	var refs []string
-	for _, d := range m.view.Load().Deliveries {
-		if d.State == NotifyPending && d.Resolution == "" && !seen[d.Notify] {
+	view, now := m.view.Load(), m.now()
+	for _, d := range view.Deliveries {
+		if deliveryDue(d, now, view.Paused[d.Notify]) && !seen[d.Notify] {
 			refs = append(refs, d.Notify)
 			seen[d.Notify] = true
 		}
@@ -324,6 +326,15 @@ func validateSnapshot(s Snapshot) error {
 		}
 		if id != d.ID || !deliveryIDPattern.MatchString(id) || !d.State.validDelivery() || d.CreatedAt.IsZero() || d.Attempts < 0 {
 			return fmt.Errorf("invalid delivery identity")
+		}
+		if d.IsFollowUp() {
+			if _, ok := referenceSource(d.Notify); !ok || len(d.TaskIDs) != 0 ||
+				d.FollowUpNote == "" || utf8.RuneCountInString(d.FollowUpNote) > MaxFollowUpNote ||
+				!d.FollowUpAt.After(d.CreatedAt) || d.FollowUpAt.After(d.CreatedAt.Add(MaxFollowUpDelay)) {
+				return fmt.Errorf("invalid follow-up delivery")
+			}
+		} else if d.FollowUpNote != "" {
+			return fmt.Errorf("invalid follow-up note")
 		}
 		seen := map[string]bool{}
 		for _, taskID := range d.TaskIDs {

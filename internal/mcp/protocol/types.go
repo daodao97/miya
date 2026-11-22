@@ -5,10 +5,22 @@ package protocol
 
 import (
 	"encoding/json"
+	"time"
 
 	"miya/internal/automation"
 	"miya/internal/statecard"
 )
+
+type FollowUpArgs struct {
+	At   string `json:"at"`
+	Note string `json:"note"`
+}
+
+type FollowUpResult struct {
+	ID    string    `json:"id"`
+	At    time.Time `json:"at"`
+	State string    `json:"state"`
+}
 
 // CallerUnknown is the service's answer while the calling conversation
 // has not shown its tool call yet; the call is tried again shortly.

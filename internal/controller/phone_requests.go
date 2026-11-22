@@ -420,14 +420,26 @@ func (ps *phoneSession) onStop(r remote.Request) bool {
 
 // onTask answers a phone's "task" request; false ends the connection.
 func (ps *phoneSession) onTask(r remote.Request) bool {
-	message, _ := async.OnMain(ps.ctx, ps.c.Dispatch, func() string {
+	answer, ok := async.OnMain(ps.ctx, ps.c.Dispatch, func() any {
 		t := ps.c.PhoneThreadFor(r)
 		if !t.Found {
 			return "Conversation is no longer on the desktop"
 		}
 		id, action, _ := strings.Cut(r.Text, " ")
-		return ps.c.TaskAction(t.Thread.ID, id, action)
+		return ps.c.prepareTaskAction(t.Thread.ID, id, action)
 	})
+	if !ok {
+		return false
+	}
+	message, _ := answer.(string)
+	if wait, ok := answer.(async.Reply); ok {
+		value, err := wait()
+		if err != nil {
+			message = err.Error()
+		} else {
+			message, _ = value.(string)
+		}
+	}
 	if !ps.send(remote.Frame{Type: "action", Thread: r.Thread, Error: message}) {
 		return false
 	}

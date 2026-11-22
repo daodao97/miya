@@ -4,6 +4,7 @@ import (
 	"errors"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"miya/internal/chat/model"
 	"miya/internal/statecard"
@@ -23,6 +24,49 @@ func TestStateCardsAreKeptOnlyWhereTheyWereStarted(t *testing.T) {
 	}
 	c.stateCardThreadUpdated(th, th)
 	c.stateCardThreadDeleted(th)
+}
+
+func TestBackfilledStateCardLosesToNewActivityAndAgentUpdates(t *testing.T) {
+	c := &Controller{}
+	c.StartStateCards(t.TempDir())
+	thread := model.Thread{
+		ID: 7, Agent: model.AgentClaude, ServerID: "session-a",
+		Messages: []model.Message{
+			{ID: 1, Role: "user", Content: "修复登录"},
+			{ID: 2, Role: "assistant", Content: "还需要验证迁移", ItemID: "answer"},
+		},
+	}
+	c.Threads = func() []model.Thread { return []model.Thread{thread} }
+	version := stateCardVersion(thread)
+	card := statecard.Card{Purpose: "修复登录", Remaining: []string{"验证迁移"}}
+	thread.Busy = true
+	c.saveBackfilledStateCard(thread.ID, version, card)
+	thread.Busy = false
+	thread.LastActivityAt++
+	c.saveBackfilledStateCard(thread.ID, version, card)
+	if _, ok := c.StateCard(thread); ok {
+		t.Fatal("saved a card for a superseded conversation snapshot")
+	}
+
+	version = stateCardVersion(thread)
+	c.saveBackfilledStateCard(thread.ID, version, card)
+	got, ok := c.StateCard(thread)
+	if !ok || got.Author != statecard.AuthorBackground || got.Item != "answer" || got.Waiting() {
+		t.Fatalf("background card = %+v, found %v", got, ok)
+	}
+	_, err := c.WriteStateCard(thread, model.Message{ItemID: "update"}, statecard.Card{Purpose: "校验登录迁移"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.saveBackfilledStateCard(thread.ID, version, card)
+	got, _ = c.StateCard(thread)
+	if got.Author != statecard.AuthorAgent || got.Purpose != "校验登录迁移" {
+		t.Fatalf("late background result replaced the agent's card: %+v", got)
+	}
+	thread.Messages = append(thread.Messages, model.Message{ID: 3, Role: "user", SentAtMs: time.Now().Add(time.Second).UnixMilli()})
+	if stale, _ := c.StateCard(thread); !stale.Stale {
+		t.Fatal("new user message did not mark the card stale")
+	}
 }
 
 func TestStateCardIsDroppedWithItsConversation(t *testing.T) {

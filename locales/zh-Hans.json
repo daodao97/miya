@@ -1,4 +1,8 @@
 {
+  "cancelFollowUp_0c021b": "取消跟进",
+  "dismissFollowUp_d55ce5": "关闭跟进记录",
+  "due_c50447": "到期时间 ",
+  "followUp_a931af": "跟进",
   "activityEditedOne": "已编辑 1 个文件",
   "activityEditedMany": "已编辑 %d 个文件",
   "activityReadOne": "读取 1 个文件",

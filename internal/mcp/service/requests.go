@@ -34,6 +34,9 @@ func (api *Service) Handle(op string, r mcpproto.Request) (any, error) {
 	if op == "mcpRuntime" {
 		return api.Runtime(r)
 	}
+	if op == "mcpFollowUp" {
+		return api.followUp(r)
+	}
 	if r.Reference != "" {
 		ref, ok := model.ParseThreadURL(r.Reference)
 		if !ok || ref.Source != c.ReferenceSource() {

@@ -47,7 +47,9 @@ func TaskDetail(task model.ThreadTask) string {
 	if task.Schedule != "" {
 		parts = append(parts, task.Schedule)
 	}
-	if task.NextRunAtMs > time.Now().UnixMilli() && (task.Status == "waiting" || task.Status == "active") {
+	if task.Kind == "follow_up" && task.NextRunAtMs > 0 {
+		parts = append(parts, tr("Due ")+time.UnixMilli(task.NextRunAtMs).Format("01-02 15:04:05"))
+	} else if task.NextRunAtMs > time.Now().UnixMilli() && (task.Status == "waiting" || task.Status == "active") {
 		parts = append(parts, tr("Next ")+time.UnixMilli(task.NextRunAtMs).Format("01-02 15:04:05"))
 	}
 	if task.TokenBudget != nil {

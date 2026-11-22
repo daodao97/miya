@@ -34,6 +34,46 @@ type Messages struct{ locale string }
 // source language.
 func In(locale string) Messages { return Messages{locale} }
 
+// CancelFollowUp0c021b says "Cancel follow-up"
+// in the language the app shows.
+func CancelFollowUp0c021b() string { return In(i18n.Locale()).CancelFollowUp0c021b() }
+
+// CancelFollowUp0c021b says "Cancel follow-up"
+// in the language of msgs.
+func (msgs Messages) CancelFollowUp0c021b() string {
+	return Catalog.Format(msgs.locale, "cancelFollowUp_0c021b", nil)
+}
+
+// DismissFollowUpD55ce5 says "Dismiss follow-up"
+// in the language the app shows.
+func DismissFollowUpD55ce5() string { return In(i18n.Locale()).DismissFollowUpD55ce5() }
+
+// DismissFollowUpD55ce5 says "Dismiss follow-up"
+// in the language of msgs.
+func (msgs Messages) DismissFollowUpD55ce5() string {
+	return Catalog.Format(msgs.locale, "dismissFollowUp_d55ce5", nil)
+}
+
+// DueC50447 says "Due "
+// in the language the app shows.
+func DueC50447() string { return In(i18n.Locale()).DueC50447() }
+
+// DueC50447 says "Due "
+// in the language of msgs.
+func (msgs Messages) DueC50447() string {
+	return Catalog.Format(msgs.locale, "due_c50447", nil)
+}
+
+// FollowUpA931af says "Follow-up"
+// in the language the app shows.
+func FollowUpA931af() string { return In(i18n.Locale()).FollowUpA931af() }
+
+// FollowUpA931af says "Follow-up"
+// in the language of msgs.
+func (msgs Messages) FollowUpA931af() string {
+	return Catalog.Format(msgs.locale, "followUp_a931af", nil)
+}
+
 // ActivityEditedOne says "Edited 1 file"
 // in the language the app shows.
 func ActivityEditedOne() string { return In(i18n.Locale()).ActivityEditedOne() }

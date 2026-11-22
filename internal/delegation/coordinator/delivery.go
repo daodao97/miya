@@ -13,7 +13,7 @@ func (s *Coordinator) deliverPending() {
 	for _, notify := range s.Manager.PendingReceivers() {
 		value, err := s.OnMain(func() (any, error) {
 			t, ok := s.host.ThreadByRef(notify)
-			return ok && !s.IsPaused(notify) && !t.Busy && !t.Loading && !t.ReadOnly && !t.TaskPending && !s.host.TargetUnavailable(t) && len(t.Queue) == 0 && s.Reservation(t.ID) == "" && !s.host.AwaitsUser(t) && s.host.Agent(model.ThreadAgent(t)).Ready, nil
+			return ok && s.idleReceiver(t), nil
 		})
 		if err != nil || !value.(bool) {
 			continue
@@ -24,7 +24,7 @@ func (s *Coordinator) deliverPending() {
 		}
 		_, err = s.OnMain(func() (any, error) {
 			t, ok := s.host.ThreadByRef(notify)
-			if !ok || s.IsPaused(notify) || t.Busy || t.Loading || t.ReadOnly || t.TaskPending || s.host.TargetUnavailable(t) || len(t.Queue) > 0 || s.Reservation(t.ID) != "" || s.host.AwaitsUser(t) || !s.host.Agent(model.ThreadAgent(t)).Ready {
+			if !ok || !s.allowsDelivery(d) || !s.idleReceiver(t) {
 				return nil, errors.New("Receiving conversation is not idle")
 			}
 			if s.Reservations == nil {
@@ -35,7 +35,11 @@ func (s *Coordinator) deliverPending() {
 				s.Executions = map[string]*Execution{}
 			}
 			s.Executions[d.ID] = &Execution{Thread: t.ID, Pending: map[string]dg.Event{}}
-			id := s.host.Submit(model.SendRequest{ExecutionID: d.ID, Origin: "delegation_notice", ThreadID: t.ID, Text: s.Manager.NotificationText(d), Model: t.LaunchModel, Effort: t.LaunchEffort, Policy: s.host.Permission(t), ExplicitSettings: true, KeepSessionSettings: true, MemoryControl: true})
+			origin := "delegation_notice"
+			if d.IsFollowUp() {
+				origin = "follow_up"
+			}
+			id := s.host.Submit(model.SendRequest{ExecutionID: d.ID, Origin: origin, ThreadID: t.ID, Text: s.Manager.NotificationText(d), Model: t.LaunchModel, Effort: t.LaunchEffort, Policy: s.host.Permission(t), ExplicitSettings: true, KeepSessionSettings: true, MemoryControl: true})
 			if id == 0 {
 				return nil, errors.New("Notification was rejected before native submission")
 			}
@@ -47,4 +51,16 @@ func (s *Coordinator) deliverPending() {
 			}
 		}
 	}
+}
+
+func (s *Coordinator) idleReceiver(t model.Thread) bool {
+	return !t.Busy && !t.Loading && !t.ReadOnly && !t.TaskPending && !s.host.TargetUnavailable(t) &&
+		len(t.Queue) == 0 && s.Reservation(t.ID) == "" && !s.host.AwaitsUser(t) && s.host.Agent(model.ThreadAgent(t)).Ready
+}
+
+func (s *Coordinator) allowsDelivery(d dg.Delivery) bool {
+	if d.IsFollowUp() {
+		return s.stoppingFollowUps[d.Notify] == 0 && !s.cancellingFollowUp[d.ID]
+	}
+	return !s.IsPaused(d.Notify)
 }

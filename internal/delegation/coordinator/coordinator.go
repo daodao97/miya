@@ -50,10 +50,12 @@ type Coordinator struct {
 	cleanupError   atomic.Pointer[string]
 	// Main-thread owned: the conversation each execution reserved, the
 	// executions in progress, and the receivers whose delivery is paused.
-	Reservations map[int]string
-	Executions   map[string]*Execution
-	pausedRefs   map[string]bool
-	pauseGen     map[string]uint64
+	Reservations       map[int]string
+	Executions         map[string]*Execution
+	pausedRefs         map[string]bool
+	pauseGen           map[string]uint64
+	stoppingFollowUps  map[string]uint64
+	cancellingFollowUp map[string]bool
 }
 
 // A window has no collaboration, so these read nothing on a nil state.
@@ -385,34 +387,26 @@ func (s *Coordinator) BindExecution(ctx context.Context, id, target, epoch strin
 			return fmt.Errorf("STORAGE_UNAVAILABLE: %s", err)
 		}
 		d, ok := s.Manager.Delivery(id)
-		if !ok || d.Notify != target || d.State != dg.NotifySubmitting {
+		if !ok || d.Notify != target || d.State != dg.NotifySubmitting || d.Resolution != "" {
 			return errors.New("Notification target does not match its persisted receiver")
 		}
-		var allowed bool
-		_, err := s.OnMain(func() (any, error) {
+		inputAllowed := func() (any, error) {
+			d, live := s.Manager.Delivery(id)
 			t, found := s.host.ThreadByRef(target)
-			allowed = found && !s.IsPaused(target) && s.Reservation(t.ID) == id && t.ExecutionID == id && !t.StopRequested
+			if !live || d.State != dg.NotifySubmitting || d.Resolution != "" || !found ||
+				!s.allowsDelivery(d) || s.Reservation(t.ID) != id || t.ExecutionID != id || t.StopRequested {
+				return nil, ErrPaused
+			}
 			return nil, nil
-		})
-		if err != nil {
+		}
+		if _, err := s.OnMain(inputAllowed); err != nil {
 			return err
 		}
-		if !allowed {
-			return ErrPaused
-		}
-		_, err = s.Call(func() (any, error) { return nil, s.Manager.BeginDeliveryInput(id) })
-		if err != nil {
+		if _, err := s.Call(func() (any, error) { return nil, s.Manager.BeginDeliveryInput(id) }); err != nil {
 			return err
 		}
 		// Stop may have arrived while the input intent was syncing.
-		_, err = s.OnMain(func() (any, error) {
-			t, found := s.host.ThreadByRef(target)
-			allowed = found && !s.IsPaused(target) && s.Reservation(t.ID) == id && t.ExecutionID == id && !t.StopRequested
-			return nil, nil
-		})
-		if err == nil && !allowed {
-			err = ErrPaused
-		}
+		_, err := s.OnMain(inputAllowed)
 		return err
 	}
 	done := make(chan error, 1)

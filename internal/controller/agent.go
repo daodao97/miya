@@ -207,6 +207,9 @@ func (c *Controller) AddThread(project string, t model.Thread) {
 		c.ProjectCache = map[string][]model.Thread{}
 	}
 	c.ProjectCache[project] = append([]model.Thread{t}, c.ProjectCache[project]...)
+	if t.Busy {
+		c.updateForegroundPressure(c.Threads())
+	}
 	if c.Revision != nil {
 		c.SetRevision(c.Revision() + 1)
 	}

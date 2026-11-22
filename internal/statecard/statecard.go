@@ -35,6 +35,9 @@ const (
 // AuthorAgent marks a card the working agent wrote about its own conversation.
 const AuthorAgent = "agent"
 
+// AuthorBackground marks a card Miya produced from the conversation transcript.
+const AuthorBackground = "background"
+
 // ErrNoStore answers a write where no background service keeps the cards.
 var ErrNoStore = errors.New("State cards require the Miya background service")
 
@@ -299,6 +302,9 @@ func (s *Store) write(c Card) error {
 // Line is the card in one line, for a list of conversations.
 func Line(c Card) string {
 	parts := []string{c.Purpose}
+	if c.Author == AuthorBackground {
+		parts = append(parts, "Summarized by Miya, unverified")
+	}
 	if len(c.Remaining) == 0 {
 		parts = append(parts, "Nothing remaining")
 	} else {

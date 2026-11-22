@@ -24,18 +24,7 @@ func (c *Controller) InstallNotifications() {
 			previous[t.ID] = t
 		}
 		set(next)
-		if c.Pressure != nil {
-			// The person's own conversations: not an automation's, not one
-			// another conversation delegated work to.
-			foreground := false
-			for _, t := range next {
-				if t.Busy && t.Automation == "" && c.DelegationParent[t.ID] == 0 {
-					foreground = true
-					break
-				}
-			}
-			c.Pressure.SetForeground(foreground)
-		}
+		c.updateForegroundPressure(next)
 		for _, t := range next {
 			if old, ok := previous[t.ID]; ok {
 				c.RecordDesktopCompletion(old, t)
@@ -48,6 +37,30 @@ func (c *Controller) InstallNotifications() {
 			}
 		}
 	}
+}
+
+func (c *Controller) updateForegroundPressure(current []model.Thread) {
+	if c.Pressure == nil {
+		return
+	}
+	running := func(threads []model.Thread) bool {
+		for _, t := range threads {
+			if t.Busy && t.Automation == "" && c.DelegationParent[t.ID] == 0 {
+				return true
+			}
+		}
+		return false
+	}
+	foreground := running(current)
+	for path, threads := range c.ProjectCache {
+		if foreground {
+			break
+		}
+		if path != c.Cwd {
+			foreground = running(threads)
+		}
+	}
+	c.Pressure.SetForeground(foreground)
 }
 
 func (c *Controller) installApprovalNotifications() {

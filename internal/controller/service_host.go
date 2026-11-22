@@ -247,7 +247,7 @@ func (c *Controller) ServiceRequest(req svcproto.Request) (any, error) {
 		if err := json.Unmarshal(req.Args, &a); err != nil {
 			return nil, err
 		}
-		return c.TaskAction(a.Thread, a.Task, a.Action), nil
+		return c.prepareTaskAction(a.Thread, a.Task, a.Action), nil
 	case "command":
 		var a svcproto.Command
 		_ = arg(&a)
@@ -419,8 +419,12 @@ func (c *Controller) ServicePause() {
 		c.Memories().Engine.Pause()
 	}
 }
-func (c *Controller) ServiceKeepAlive() bool { return DesktopPhone.Connected() || c.Auto.Enabled() }
+func (c *Controller) ServiceKeepAlive() bool {
+	return DesktopPhone.Connected() || c.Auto.Enabled() ||
+		c.Collaboration != nil && c.Collaboration.Manager != nil && c.Collaboration.Manager.HasPendingFollowUps()
+}
 func (c *Controller) SnapshotState() svcproto.State {
+	followUps := c.followUpTasks()
 	busy := make(map[string]bool)
 	for _, p := range c.Projects() {
 		if c.ProjectBusy(p.Path) {
@@ -432,7 +436,7 @@ func (c *Controller) SnapshotState() svcproto.State {
 		draft := t.Draft
 		t = model.ListThread(t)
 		t.Draft = draft
-		threads[i] = t
+		threads[i] = c.withFollowUps(t, followUps)
 	}
 	projectThreads := make(map[string][]model.Thread, len(c.ProjectCache))
 	for path, cached := range c.ProjectCache {
@@ -443,7 +447,7 @@ func (c *Controller) SnapshotState() svcproto.State {
 		for i, t := range cached {
 			t = model.ListThread(t)
 			t.Queue = nil
-			items[i] = t
+			items[i] = c.withFollowUps(t, followUps)
 		}
 		projectThreads[path] = items
 	}

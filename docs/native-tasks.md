@@ -1,6 +1,6 @@
 # 会话任务状态栏
 
-桌面和手机的输入框上方统一显示 Codex Goal 与 Claude Code Loop。状态来自各自的原生协议，通过 Miya 后台服务同步；切换项目或关闭窗口不会停止后台正在执行的任务。
+桌面和手机的输入框上方显示 Codex Goal、Claude Code Loop 和 Miya 跟进计时器。Goal 和 Loop 的状态来自原生协议，跟进计时器由 Miya 后台保存。切换项目或关闭窗口后，后台仍可执行任务。
 
 会话工作期间，状态栏还会列出仍在运行的子 Agent（Claude Code 的 Task/Agent、Codex 的协作 Agent 等，统一来自消息上的 SubAgent），显示名称、步数和最新进度，不随消息列表滚动消失。子 Agent 结束后对应行随即移除；主 Agent 停止工作后不再列出，避免只有启动快照、没有终态回报的子 Agent 长期残留。完整记录仍在消息列表里。
 
@@ -37,21 +37,22 @@ Miya 调用 app-server 的 `thread/goal/get`、`set`、`clear`，以 `origin: us
 
 Loop 仍遵循 Claude 的会话生命周期和过期规则。服务退出或进程异常后，内存任务结束；原生持久任务能否恢复由 Claude Code 管理。Miya 不把 Loop 转换为 Automations。
 
-## 和计划中的跟进计时器的关系
+## Miya 跟进计时器
 
-`follow_up` 是计划中的 MCP 工具（`docs/personal-agent.md` 的 P1.5），还没有实现。它和上面两种原生任务各管一件事，互不转换：
+Agent 可以通过 MCP 工具 `follow_up` 给当前会话登记一次跟进。`at` 是带时区的 RFC 3339 时间，`note` 是一句最多 400 字符的说明。每个会话最多有三个待处理跟进，最远可以设到 30 天后。
 
-| | Goal / Loop | `follow_up`（计划中） |
+| | Goal / Loop | `follow_up` |
 | --- | --- | --- |
 | 谁发起 | 用户用 `/goal`、`/loop` | 对话里的 Agent 自己 |
 | 做什么 | 持续推进一个目标，或反复执行同一段提示 | 一次性：到期时把一句说明作为新消息交回同一个对话 |
 | 谁保存 | CLI 自己；Miya 只读取和显示 | Miya 后台，落盘 |
-| 服务或进程退出后 | Loop 的内存任务结束，能否恢复由 Claude Code 决定 | 还在，到期照常投递 |
+| 服务或进程退出后 | Loop 的内存任务结束，能否恢复由 Claude Code 决定 | 未发送的跟进由后台恢复，在到期且会话空闲后投递 |
 | 适用的 Agent | Goal 只有 Codex，Loop 只有 Claude Code | 所有 Agent |
 
 - 用户要的反复检查（「每 5 分钟看一次部署」）用 Loop。Agent 自己说「稍后再看」，而这件事可能要跨过进程退出或后台重启，用 `follow_up`。
 - Claude Code 在 Loop 里用 `ScheduleWakeup` 给自己排下一次，这仍然是 Loop 的一部分，Miya 不把它改写成 `follow_up`。
-- 还没到期的跟进和 Loop 一样列在这个状态栏里，显示到期时间和那句说明，可以取消；用户停止对话时一并取消。
+- 待处理的跟进列在任务栏里，显示到期时间和说明。用户可以逐项取消。停止、归档或删除会话时，后台取消该会话的跟进。关闭窗口后，待投递的跟进会让后台保持运行。
+- Miya 和委派完成通知共用投递机制。已确认发送的跟进从任务栏消失。如果后台重启后无法确认 Agent 是否已收到跟进，任务栏会显示「需要处理」，用户可以关闭这条记录。
 - 要长期按时间或条件反复运行、并且不依赖某个对话还开着的事，是 Automations（`docs/automations.md`），不是这两者。
 
 ## 验证

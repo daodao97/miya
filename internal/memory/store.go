@@ -253,6 +253,21 @@ func (s *Store) List(scope Scope) ([]Entry, Settings, uint64, error) {
 	sort.SliceStable(out, func(i, j int) bool { return out[i].UpdatedAt.After(out[j].UpdatedAt) })
 	return out, d.Settings, d.Revision, nil
 }
+
+// AutomaticExtractor returns the provider the user enabled for background
+// transcript processing, if the project and session still allow it.
+func (s *Store) AutomaticExtractor(scope Scope, session string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	d, err := s.load(scope)
+	if err != nil {
+		return "", err
+	}
+	if d.Settings.Disabled || !d.Settings.AutoExtract || d.DisabledSessions[session] {
+		return "", nil
+	}
+	return d.Settings.ExtractionAgent(), nil
+}
 func (s *Store) Configure(scope Scope, settings Settings) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

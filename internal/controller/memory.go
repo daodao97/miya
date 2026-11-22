@@ -13,6 +13,7 @@ func NewMemoryEngine(c *Controller) *extractor.Engine {
 	e := extractor.NewEngine(c.parentContext(), c.Memories().Store, cfg, c.MemorySaved)
 	// Memory work waits while the person's own conversations run.
 	e.SetHold(c.Pressure.Waiting)
+	e.SetStateCardHold(func(agent string) bool { return c.Pressure.Agent(agent) != "" })
 	return e
 }
 

@@ -150,7 +150,11 @@ type Delivery struct {
 	SubmissionPhase  SubmissionPhase `json:"submission_phase,omitempty"`
 	Resolution       string          `json:"resolution,omitempty"`
 	ResolutionReason string          `json:"resolution_reason,omitempty"`
+	FollowUpAt       time.Time       `json:"follow_up_at,omitzero"`
+	FollowUpNote     string          `json:"follow_up_note,omitempty"`
 }
+
+func (d Delivery) IsFollowUp() bool { return !d.FollowUpAt.IsZero() }
 
 // Operation receipts survive later state changes. Retrying an old watch must
 // not reactivate it after a newer unwatch has committed.

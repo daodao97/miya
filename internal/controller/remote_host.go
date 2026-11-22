@@ -41,6 +41,10 @@ const (
 )
 
 func (c *Controller) PhoneSnapshot() phoneproto.State {
+	return c.phoneSnapshot(c.followUpTasks())
+}
+
+func (c *Controller) phoneSnapshot(followUps map[string][]model.ThreadTask) phoneproto.State {
 	s := phoneproto.State{DesktopControl: desktop.Available(), ReferenceSource: c.ReferenceSource, MemoryRevision: c.MemoryRevision, Memory: c.Memories().Store != nil, Files: true, WebPorts: true, WebServices: true, Runtime: true, FileReferences: true, Automations: c.Auto != nil, Status: c.Status(), Approvals: c.Approvals(), Agents: c.phoneAgentOptions(), Quotas: c.PhoneQuotas()}
 	s.CompletionUnread = make(map[string]int64, len(c.DesktopUnread))
 	for key, version := range c.DesktopUnread {
@@ -88,7 +92,7 @@ func (c *Controller) PhoneSnapshot() phoneproto.State {
 		}
 		pp := model.ProjectSnapshot{Name: p.Name, Path: p.Path, Current: p.Path == c.Cwd, Threads: make([]model.Thread, 0, len(threads))}
 		for _, t := range threads {
-			pp.Threads = append(pp.Threads, model.ListThread(t))
+			pp.Threads = append(pp.Threads, c.withFollowUps(model.ListThread(t), followUps))
 		}
 		pp.Threads = msgfmt.DisplayedThreads(pp.Threads, true)
 		s.Projects = append(s.Projects, pp)
@@ -321,13 +325,15 @@ func (c *Controller) ServePhoneConnection(ctx context.Context, conn phoneConnect
 		want := ps.sub
 		ref := ps.subscription
 		s, ok := async.OnMain(ctx, c.Dispatch, func() snapshot {
-			v := snapshot{state: c.PhoneSnapshot(), revision: c.Revision(),
+			followUps := c.followUpTasks()
+			v := snapshot{state: c.phoneSnapshot(followUps), revision: c.Revision(),
 				loading: c.Connecting || !c.Ready() || c.HistoryStatus() == "Loading conversations…"}
 			if ps.deviceID != "" && c.Push != nil {
 				v.state.Notifications = c.Push.State(ps.deviceID)
 			}
 			if want != 0 || ref.ServerID != "" {
 				v.t = c.PhoneThreadFor(ref)
+				v.t.Thread = c.withFollowUps(v.t.Thread, followUps)
 			}
 			return v
 		})

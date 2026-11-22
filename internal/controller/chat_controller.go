@@ -353,8 +353,11 @@ func (c *Controller) removeThreadLocal(id int, serverID string) {
 	if c.ProjectCache != nil && project != "" {
 		c.ProjectCache[project] = withoutThread(c.ProjectCache[project])
 	}
-	if project != c.Cwd && c.Revision != nil {
-		c.SetRevision(c.Revision() + 1)
+	if project != c.Cwd {
+		c.updateForegroundPressure(c.Threads())
+		if c.Revision != nil {
+			c.SetRevision(c.Revision() + 1)
+		}
 	}
 	threadlist.Persist(c.ProjectCache)
 	c.RefreshProjectOrder()
@@ -365,6 +368,7 @@ func (c *Controller) ArchiveThread(t model.Thread) {
 		c.forward("archive", t.ID)
 		return
 	}
+	c.stopFollowUps(t)
 	c.BackendOf(t).Archive(t)
 }
 
@@ -375,6 +379,7 @@ func (c *Controller) DeleteThread(t model.Thread) {
 		c.forward("delete", t.ID)
 		return
 	}
+	c.stopFollowUps(t)
 	c.stateCardThreadDeleted(t)
 	c.BackendOf(t).Delete(t)
 }
@@ -494,6 +499,7 @@ func (c *Controller) Update(id int, fn func(*model.Thread)) {
 			}
 			notification.UpdateCompletionBody(old, &items[i])
 			if old.ServerID != items[i].ServerID && old.ServerID != "" {
+				c.stopFollowUps(old)
 				c.rememberForkedReference(old, c.Cwd)
 			}
 			c.botThreadUpdated(old, items[i], c.Cwd)
@@ -545,11 +551,15 @@ func (c *Controller) Update(id int, fn func(*model.Thread)) {
 			}
 			notification.UpdateCompletionBody(old, &items[i])
 			if old.ServerID != items[i].ServerID && old.ServerID != "" {
+				c.stopFollowUps(old)
 				c.rememberForkedReference(old, path)
 			}
 			c.botThreadUpdated(old, items[i], path)
 			c.stateCardThreadUpdated(old, items[i])
 			c.ProjectCache[path] = items
+			if old.Busy != items[i].Busy {
+				c.updateForegroundPressure(c.Threads())
+			}
 			c.RecordDesktopCompletion(old, items[i])
 			if threadlist.MetaOf(items[i]) != threadlist.MetaOf(old) {
 				c.RefreshProjectOrder()
@@ -1058,6 +1068,7 @@ func (c *Controller) StopThread(id int) {
 		return
 	}
 	t := c.ThreadWithID(id)
+	c.stopFollowUps(t)
 	if c.Collaboration != nil {
 		ref := c.ThreadRef(t).URL()
 		if ref != "" {
