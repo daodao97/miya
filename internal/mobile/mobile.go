@@ -1563,13 +1563,6 @@ func (m *App) drawerContent(c *ui.Context) {
 				}
 				return
 			}
-			if m.phoneButton(c.Key("memory")).FillWidth().MinHeight(48).Padding(0).Gap(12).Label(tr("Shared memory")).Children(func() {
-				widgets.Icon(c, "stack-2", 21, p.ink)
-				ui.Text(c, tr("Shared memory")).FontSize(m.Font(17))
-			}).Clicked() {
-				m.Memories.RequestedAt = time.Time{}
-				m.OpenDrawerPage("/memory")
-			}
 			automations := m.phoneButton(c.Key("automations")).FillWidth().MinHeight(48).Padding(0).Gap(12).Radius(12).Label(tr("Automations"))
 			automations.Children(func() {
 				widgets.Icon(c, "clock", 21, p.ink)

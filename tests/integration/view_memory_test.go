@@ -175,9 +175,10 @@ func TestMobileMemoryReadOnlyPageAndDesktopIsolation(t *testing.T) {
 	tt := ui.NewTester(m.ViewRoot, 390, 844)
 	tt.Frame()
 	openMobileDrawer(t, tt)
-	if err := tt.Click("Shared memory"); err != nil {
-		t.Fatal(err)
+	if _, ok := tt.Find("Shared memory"); ok {
+		t.Fatal("shared memory is still available in the drawer")
 	}
+	m.OpenDrawerPage("/memory")
 	tt.Frame()
 	for _, want := range []string{"Shared memory", "本周暂缓手机协议升级", "Current project", "User preferences"} {
 		if !tt.HasText(want) {

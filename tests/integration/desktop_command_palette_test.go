@@ -13,7 +13,7 @@ import (
 func TestDesktopCommandPaletteCommandsAndSidebar(t *testing.T) {
 	app, tt := testApp(t)
 	app.Appearance = "light"
-	if tt.HasText("Search conversations") || tt.HasText("Skills") {
+	if tt.HasText("Search conversations") || tt.HasText("Skills") || tt.HasText("Memory") || tt.HasText("Shared memory") {
 		t.Fatal("removed sidebar entries are still visible")
 	}
 	app.C.(*controller.Controller).RememberDraft("Keep my draft")
