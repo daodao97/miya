@@ -45,7 +45,11 @@ func (c *Controller) CollaborationUserOp(r appmodel.CollaborationRequest) (any, 
 	}
 	switch r.Operation {
 	case "list_agents":
-		return c.agentList(), nil
+		project := ""
+		if found {
+			project = c.ThreadWorkspace(caller.ID)
+		}
+		return c.agentList(project), nil
 	case "list_tasks":
 		if r.From != "" && !found {
 			return nil, errors.New("THREAD_NOT_FOUND: Initiating conversation is unavailable")

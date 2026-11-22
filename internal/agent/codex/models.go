@@ -4,6 +4,7 @@ import (
 	"slices"
 
 	"miya/internal/agent"
+	native "miya/internal/agent/codex/native"
 	"miya/internal/textutil"
 )
 
@@ -46,22 +47,30 @@ func (b Adapter) SetModel(v string) { b.host.SelectModel(v) }
 func (b Adapter) SetEffort(v string) { b.host.SelectEffort(v) }
 
 func (b Adapter) ModelOptions() []agent.ModelOption {
-	c := b.host
+	state := b.host.Snapshot()
 	choices := []string{}
-	if c.Snapshot().ModelsKnown {
+	defaultModel := ""
+	if state.ModelsKnown {
 		choices = b.ModelChoices()
-	} else if b.Model() != "" {
-		choices = append(choices, b.Model())
+		if len(state.Models) > 0 {
+			defaultModel = state.Models[0].Model
+			if i := slices.IndexFunc(state.Models, func(m native.Model) bool { return m.IsDefault }); i >= 0 {
+				defaultModel = state.Models[i].Model
+			}
+		}
+	} else if state.Model != "" {
+		choices = append(choices, state.Model)
 	}
 	if !slices.Contains(choices, "") {
 		choices = append([]string{""}, choices...)
 	}
 	var out []agent.ModelOption
 	for _, value := range choices {
-		option := agent.ModelOption{Value: value, Label: b.ModelLabel(value)}
-		if c.Snapshot().ModelsKnown {
-			for _, m := range c.Snapshot().Models {
-				if m.Model == value || value == "" && m.IsDefault {
+		resolved := textutil.FirstNonEmpty(value, defaultModel)
+		option := agent.ModelOption{Value: value, Label: b.ModelLabel(resolved)}
+		if state.ModelsKnown {
+			for _, m := range state.Models {
+				if m.Model == resolved {
 					option.DefaultEffort = m.DefaultReasoningEffort
 					for _, e := range m.SupportedReasoningEfforts {
 						option.Efforts = append(option.Efforts, e.ReasoningEffort)
@@ -70,9 +79,9 @@ func (b Adapter) ModelOptions() []agent.ModelOption {
 				}
 			}
 		}
-		if len(option.Efforts) == 0 && value == b.Model() && b.Effort() != "" {
-			option.Efforts = []string{b.Effort()}
-			option.DefaultEffort = b.Effort()
+		if len(option.Efforts) == 0 && value == state.Model && state.Effort != "" {
+			option.Efforts = []string{state.Effort}
+			option.DefaultEffort = state.Effort
 		}
 		out = append(out, option)
 	}

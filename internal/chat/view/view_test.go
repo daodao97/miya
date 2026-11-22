@@ -1,6 +1,7 @@
 package view
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -58,7 +59,7 @@ func TestActivityRunsOnlyExpandManually(t *testing.T) {
 				}
 			}
 			assertVisible(false)
-			if err := tt.Click("2 activities"); err != nil {
+			if err := tt.Click("Ran 1 command · 1 running"); err != nil {
 				t.Fatal(err)
 			}
 			assertVisible(true)
@@ -70,7 +71,7 @@ func TestActivityRunsOnlyExpandManually(t *testing.T) {
 			host.thread.Busy = false
 			tt.Frame()
 			assertVisible(true)
-			if err := tt.Click("2 activities"); err != nil {
+			if err := tt.Click("Ran 2 commands"); err != nil {
 				t.Fatal(err)
 			}
 			assertVisible(false)
@@ -79,11 +80,11 @@ func TestActivityRunsOnlyExpandManually(t *testing.T) {
 			host.thread.Messages[2].Agents = []model.SubAgent{{ID: "agent", Status: "running"}}
 			tt.Frame()
 			assertVisible(false)
-			if err := tt.Click("2 activities · 1 Running"); err != nil {
+			if err := tt.Click("Ran 2 commands · 1 Running"); err != nil {
 				t.Fatal(err)
 			}
 			assertVisible(true)
-			if err := tt.Click("2 activities · 1 Running"); err != nil {
+			if err := tt.Click("Ran 2 commands · 1 Running"); err != nil {
 				t.Fatal(err)
 			}
 			assertVisible(false)
@@ -93,6 +94,52 @@ func TestActivityRunsOnlyExpandManually(t *testing.T) {
 			tt.Frame()
 			assertVisible(false)
 		})
+	}
+}
+
+func TestActivitySummaryFitsNarrowConversation(t *testing.T) {
+	var changes, exploration model.Activity
+	if err := json.Unmarshal([]byte(`{"changes":[{"path":"a.go","diff":"+one\n+two\n+three\n+four\n+five\n+six\n+seven\n+eight"},{"path":"b.go","diff":"-old"}]}`), &changes); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal([]byte(`{"commandActions":[{"type":"read","path":"a.go"},{"type":"read","path":"b.go"},{"type":"search","query":"TODO"}]}`), &exploration); err != nil {
+		t.Fatal(err)
+	}
+	host := &snapshotHost{thread: model.Thread{ID: 1}}
+	v := NewConversationView(host)
+	v.Mobile = true
+	messages := []model.Message{
+		{ID: 1, Role: "assistant", Content: "Checking the files."},
+		{ID: 2, Role: "tool", Kind: "fileChange", Status: "completed", Item: &changes},
+		{ID: 3, Role: "tool", Kind: "commandExecution", Status: "completed", Item: &exploration},
+		{ID: 4, Role: "tool", Kind: "claudeTool", Status: "completed", Content: "Read\n{\"file_path\":\"a.go\"}"},
+		{ID: 5, Role: "tool", Kind: "claudeTool", Status: "completed", Content: "Bash\n{\"command\":\"go test\"}"},
+		{ID: 6, Role: "assistant", Content: "Tests passed."},
+		{ID: 7, Role: "tool", Kind: "diff", Content: "+turn-wide\n+stats"},
+	}
+	const width = 250
+	tt := ui.NewTester(func(c *ui.Context) { v.GroupView(c, msgfmt.GroupMessages(messages)[0]) }, width, 400)
+	const label = "Edited 2 files · Read 2 files · 1 search · Ran 1 command"
+	header, ok := tt.Find(label)
+	if !ok || header.H < 44 || header.W > width {
+		t.Fatalf("summary does not fit the phone: %v, texts: %v", header, tt.Texts())
+	}
+	for _, stat := range []string{"+8", "−1"} {
+		r, ok := tt.Find(stat)
+		if !ok || r.X < 0 || r.X+r.W > width || r.Y < header.Y || r.Y+r.H > header.Y+header.H {
+			t.Fatalf("%s outside summary: %v, header: %v", stat, r, header)
+		}
+	}
+	before, _ := tt.Find("Checking the files.")
+	after, _ := tt.Find("Tests passed.")
+	if before.Y+before.H > header.Y || header.Y+header.H > after.Y || tt.HasText("Ran go test") {
+		t.Fatalf("collapsed summary did not stay between replies: %v", tt.Texts())
+	}
+	if err := tt.Click(label); err != nil {
+		t.Fatal(err)
+	}
+	if !tt.HasText("Ran go test") {
+		t.Fatalf("tool detail did not expand: %v", tt.Texts())
 	}
 }
 

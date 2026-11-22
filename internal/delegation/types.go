@@ -44,9 +44,13 @@ type Config struct {
 }
 
 type StartInput struct {
-	From           string `json:"from"`
-	RequestID      string `json:"request_id"`
-	Target         string `json:"target,omitempty"`
+	From      string `json:"from"`
+	RequestID string `json:"request_id"`
+	Target    string `json:"target,omitempty"`
+	// Bot is the Bot the caller named, as written. BotID is the Bot that name
+	// meant when the task was accepted; it is not part of the request.
+	Bot            string `json:"bot,omitempty"`
+	BotID          string `json:"bot_id,omitempty"`
 	ParentTaskID   string `json:"parent_task_id,omitempty"`
 	PreviousTaskID string `json:"previous_task_id,omitempty"`
 	Agent          string `json:"agent"`
@@ -70,11 +74,14 @@ type Result struct {
 }
 
 type Task struct {
-	ID               string          `json:"task_id"`
-	RequestID        string          `json:"request_id"`
-	RequestHash      string          `json:"request_hash"`
-	From             string          `json:"from"`
-	Target           string          `json:"thread,omitempty"`
+	ID          string `json:"task_id"`
+	RequestID   string `json:"request_id"`
+	RequestHash string `json:"request_hash"`
+	From        string `json:"from"`
+	Target      string `json:"thread,omitempty"`
+	// Bot is the ID of the Bot whose standing conversation the task goes to
+	// or, as a new session, starts (docs/personal-agent.md, P4).
+	Bot              string          `json:"bot,omitempty"`
 	NewSession       bool            `json:"new_session"`
 	ParentTaskID     string          `json:"parent_task_id,omitempty"`
 	PreviousTaskID   string          `json:"previous_task_id,omitempty"`

@@ -12,6 +12,7 @@ import (
 	"miya/internal/delegation/coordinator"
 	"miya/internal/interaction"
 	"miya/internal/memory/manager"
+	"miya/internal/statecard"
 )
 
 type Host interface {
@@ -38,7 +39,7 @@ type Host interface {
 	Collaboration() *coordinator.Coordinator
 	StartCollaboration(model.Thread, string, coordinator.Args) (any, error)
 	PrepareDelegation(model.Thread, coordinator.Args) (dg.StartInput, error)
-	AgentList() map[string]any
+	AgentList(model.Thread) map[string]any
 	Automations() *automation.Runner
 	AutomationOp(string, automation.Request) (any, error)
 	AskUser(model.Thread, string, string) (json.RawMessage, chan bool)
@@ -47,6 +48,10 @@ type Host interface {
 	Dispatch(func())
 	Approvals() []interaction.Request
 	SetApprovals([]interaction.Request)
+	// StateCard is a conversation's state card; WriteStateCard saves the one
+	// the conversation's own tool call wrote.
+	StateCard(model.Thread) (statecard.Card, bool)
+	WriteStateCard(model.Thread, model.Message, statecard.Card) (statecard.Card, error)
 }
 
 type Service struct{ host Host }

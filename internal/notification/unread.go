@@ -21,6 +21,11 @@ type Unread struct {
 	Project  string `json:"project,omitempty"`
 	NoticeID string `json:"noticeId"`
 	Version  uint64 `json:"version"`
+	// Category is set for a learnable notice; Banner and Silenced say whether
+	// it alerted or arrived as a badge by a learned rule.
+	Category string `json:"category,omitempty"`
+	Banner   bool   `json:"banner,omitempty"`
+	Silenced bool   `json:"silenced,omitempty"`
 }
 type PhoneState struct {
 	Revision uint64   `json:"revision"`
@@ -88,6 +93,7 @@ func (h *Hub) MarkRead(id, key string, version uint64) PhoneState {
 	defer h.mu.Unlock()
 	d := h.unreadDeviceLocked(id)
 	if u, ok := d.Threads[key]; ok && version != 0 && u.Version <= version {
+		h.reactLocked(u, true)
 		delete(d.Threads, key)
 		d.Revision++
 		h.persistUnreadLocked()
@@ -137,6 +143,7 @@ func (h *Hub) MarkAllRead(id string, version uint64) PhoneState {
 	changed := false
 	for key, u := range d.Threads {
 		if version != 0 && u.Version <= version {
+			h.reactLocked(u, false)
 			delete(d.Threads, key)
 			changed = true
 		}

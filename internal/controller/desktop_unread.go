@@ -91,6 +91,11 @@ func (c *Controller) ReadDesktopThread(t model.Thread) {
 }
 
 func (c *Controller) MarkDesktopRead(read appmodel.DesktopRead) {
+	// Reading it here is opening it: clearing the phone's badge later is not
+	// a dismissal that teaches the phone to stay quiet.
+	if c.Push != nil {
+		c.Push.NoteOpenedElsewhere(read.Key)
+	}
 	// A delayed acknowledgement must not clear a newer completed turn.
 	if version := c.DesktopUnread[read.Key]; version > 0 && read.Version >= version {
 		delete(c.DesktopUnread, read.Key)

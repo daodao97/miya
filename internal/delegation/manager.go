@@ -419,6 +419,7 @@ func requestHash(in StartInput) string {
 	in.Effective = Config{}
 	in.Snapshot = ""
 	in.ParentTaskID = ""
+	in.BotID = ""
 	data, _ := json.Marshal(in)
 	return digest(data)
 }
@@ -511,6 +512,14 @@ func (m *Manager) Create(in StartInput) (Task, error) {
 				}
 			}
 		}
+		if in.BotID != "" && in.Target == "" {
+			// A Bot has one standing conversation: one task starts it.
+			for _, t := range s.Tasks {
+				if t.Bot == in.BotID && t.NewSession && !Terminal(t.State) {
+					return errCode("THREAD_BUSY", "Another task is starting this Bot's conversation")
+				}
+			}
+		}
 		if in.PreviousTaskID != "" {
 			p, ok := s.Tasks[in.PreviousTaskID]
 			if !ok || !canAccess(*s, in.From, p) || in.Target == "" || p.Target != in.Target {
@@ -533,7 +542,7 @@ func (m *Manager) Create(in StartInput) (Task, error) {
 		if len(runes) > 120 {
 			title = string(runes[:120])
 		}
-		t := Task{ID: id, RequestID: in.RequestID, RequestHash: hash, From: in.From, Target: in.Target, NewSession: in.Target == "", ParentTaskID: in.ParentTaskID, PreviousTaskID: in.PreviousTaskID, Depth: depth, Agent: in.Agent, Workspace: in.Workspace, Title: title, Prompt: in.Prompt, Snapshot: in.Snapshot, Config: in.Effective, Requested: in.Requested, State: state, SubmissionPhase: PhasePrepared, Result: Result{Availability: ResultPending}, CreatedAt: m.now()}
+		t := Task{ID: id, RequestID: in.RequestID, RequestHash: hash, From: in.From, Target: in.Target, Bot: in.BotID, NewSession: in.Target == "", ParentTaskID: in.ParentTaskID, PreviousTaskID: in.PreviousTaskID, Depth: depth, Agent: in.Agent, Workspace: in.Workspace, Title: title, Prompt: in.Prompt, Snapshot: in.Snapshot, Config: in.Effective, Requested: in.Requested, State: state, SubmissionPhase: PhasePrepared, Result: Result{Availability: ResultPending}, CreatedAt: m.now()}
 		s.Tasks[id] = t
 		if in.Notify {
 			s.Watches[watchKey(id, in.From)] = Watch{id, in.From, NotifyWatching}

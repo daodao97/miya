@@ -86,10 +86,12 @@ type App struct {
 	PushDisabled, pushRequesting bool
 	// pushLive: Android receives notifications over the paired connection,
 	// kept open in the background by keepRunning (mygo.Power.KeepRunning).
-	pushLive            bool
-	keepRunning         func()
-	liveShown           map[string]*mygo.Notification
-	pushOpen            int
+	pushLive    bool
+	keepRunning func()
+	liveShown   map[string]*mygo.Notification
+	pushOpen    int
+	// pendingNotification: a notification tapped before loadSaved finished.
+	pendingNotification map[string]string
 	win                 *mygo.Window
 	DesktopAuthenticate func(context.Context) error
 	Store               phonecache.SecretStore
@@ -117,6 +119,7 @@ type App struct {
 	themed            bool
 	textScale         float32
 	instantNavigation bool
+	lastNavLocation   string
 
 	Loaded             bool
 	Link, Host         string
@@ -354,23 +357,34 @@ func (m *App) loadSaved() {
 			phonecache.MigrateOptions(dataDir, item.Link)
 		}
 	}
-	uiruntime.RunOnMain(func() {
-		m.Loaded = true
-		m.pushID = pushID
-		m.DataDir = dataDir
-		m.desktopLoadFailed = desktopErr != nil
-		if desktopErr != nil {
-			m.desktopError, m.err = desktopErr.Error(), desktopErr.Error()
-			return
-		}
-		m.desktopError = ""
-		m.restoreDesktops(saved)
-		if item, ok := m.Desktops.find(m.Desktops.Active); ok && m.Link == "" {
-			m.Connect(item.Link)
-		}
-		m.SaveDesktops()
-		m.requestPush()
-	})
+	uiruntime.RunOnMain(func() { m.finishLoad(saved, pushID, dataDir, desktopErr) })
+}
+
+// finishLoad applies what loadSaved read, on the main thread, and connects to
+// the active desktop. A notification tapped before (the one that launched the
+// app) opens once connected: connecting resets the desktop state, and only the
+// saved desktops tell which desktop the notification names.
+func (m *App) finishLoad(saved MobileDesktops, pushID, dataDir string, desktopErr error) {
+	m.Loaded = true
+	m.pushID = pushID
+	m.DataDir = dataDir
+	m.desktopLoadFailed = desktopErr != nil
+	pending := m.pendingNotification
+	m.pendingNotification = nil
+	if desktopErr != nil {
+		m.desktopError, m.err = desktopErr.Error(), desktopErr.Error()
+		return
+	}
+	m.desktopError = ""
+	m.restoreDesktops(saved)
+	if item, ok := m.Desktops.find(m.Desktops.Active); ok && m.Link == "" {
+		m.Connect(item.Link)
+	}
+	m.SaveDesktops()
+	if pending != nil {
+		m.OpenNotification(pending)
+	}
+	m.requestPush()
 }
 
 // onMain runs f on the main thread unless a newer connection replaced gen.
@@ -1163,16 +1177,20 @@ func (m *App) ViewRoot(c *ui.Context) {
 		case m.Link == "":
 			m.pairView(c)
 		default:
+			nav := m.Router()
+			path, location := nav.Path(), nav.Location()
 			// Drawer destinations share the edge gesture; child pages pop.
 			// Remote gestures own the desktop page edges; leave with its back button.
-			m.Router().DisableBackGesture = mobilePageHasDrawer(m.Router().Path()) || m.Router().Path() == "/desktop"
-			transition := m.Router().Transition
-			instant := m.instantNavigation
-			m.instantNavigation = false
-			if instant {
-				m.Router().Transition = ui.TransitionNone
+			nav.DisableBackGesture = mobilePageHasDrawer(path) || path == "/desktop"
+			transition := nav.Transition
+			if m.instantNavigation {
+				nav.Transition = ui.TransitionNone
+			} else if runtime.GOOS == "ios" && transition == ui.TransitionStack && !nav.DisableBackGesture && location == m.lastNavLocation {
+				// MyGo registers edge back in Auto mode. Stack still sets the slide direction when the route changes.
+				nav.Transition = ui.TransitionAuto
 			}
-			m.Router().View(c, func(page *ui.Route) {
+			m.lastNavLocation, m.instantNavigation = location, false
+			nav.View(c, func(page *ui.Route) {
 				page.Page().Background(p.Bg).Padding(safe.Top, safe.Right, safe.Bottom, safe.Left)
 				if mobileSettingsPage(page.Path()) {
 					page.Page().Background(m.settingsBackground())
@@ -1214,7 +1232,7 @@ func (m *App) ViewRoot(c *ui.Context) {
 					m.listPage(c, "/")
 				}
 			})
-			m.Router().Transition = transition
+			nav.Transition = transition
 			// Leaving the remote desktop page ends its lease.
 			// Push and Back update the path at once, so this runs as the page is left.
 			// A floating session keeps its lease until closed or restored.
@@ -1395,8 +1413,11 @@ func (m *App) listPage(c *ui.Context, path string) {
 	ui.Box(c.Key("drawer-clip")).Fill().Clip().Children(func() {
 		row := ui.Row(c.Key("drawer-row")).Width(w+screen).Shrink(0).FillHeight().Margin(0, 0, 0, -w).AlignItems(ui.Stretch).Background(p.Drawer)
 		row.Draggable(&m.DrawerOffset, ui.DraggableOptions{
-			Axis:      ui.Horizontal,
-			Bounds:    &ui.Rect{W: w},
+			Axis:   ui.Horizontal,
+			Bounds: &ui.Rect{W: w},
+			// Shown within its bounds: a throw's spring overshoots its rest,
+			// which swung the page far past the left edge as the drawer closed.
+			Rigid:     true,
 			Snap:      ui.Nearest(ui.Point{}, ui.Point{X: w}),
 			Animation: drawerMotion,
 		})
@@ -1791,7 +1812,11 @@ func (m *App) composer(c *ui.Context, agent string, busy bool) {
 		// A little translucent: what scrolls under the composer shows through.
 		ui.Column(c.Key("composer-box")).FillWidth().Padding(6, 6, 6, 10).Background(p.surface.Alpha(0.85)).Radius(26).Children(func() {
 			opts := m.SendOptions(agent)
-			effort := strings.ToUpper(textutil.FirstNonEmpty(opts.Effort, tr("Default")))
+			selected := mobileSelectedModel(m.agentOptions(agent), opts.Model)
+			effort := textutil.FirstNonEmpty(opts.Effort, selected.DefaultEffort)
+			if effort != "" {
+				effort = strings.ToUpper(mobileEffortLabel(effort))
+			}
 			hasDraft := strings.TrimSpace(m.Draft) != "" || len(m.Images) > 0
 			steerAvailable := busy && hasDraft
 			showEffort := effort != "" && c.Root().Bounds().W >= 360 && m.textScale <= 1.3 && !steerAvailable
@@ -1821,10 +1846,7 @@ func (m *App) composer(c *ui.Context, agent string, busy bool) {
 				area.MinHeight(0).Justify(ui.Start).Padding(4, 8, 54, 4)
 			}
 			area.Children(func() {
-				placeholder := appmodel.AgentName(agent)
-				if opts.Model != "" {
-					placeholder = opts.Model
-				}
+				placeholder := textutil.FirstNonEmpty(mobileModelLabel(selected), appmodel.AgentName(agent))
 				inputWidth := width
 				if expanded {
 					inputWidth = c.Root().Bounds().W - safe.Left - safe.Right - 24 - 28

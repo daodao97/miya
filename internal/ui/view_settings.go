@@ -29,11 +29,14 @@ func settingsPanes() []settingsPane {
 		{tr("Phone"), "device-mobile"},
 		{tr("Memory"), "bulb"},
 		{tr("Webhook"), "webhook"},
+		{tr("Remote Control"), "device-desktop"},
 	}
 }
 
-// webhookSettingsTab is the Webhook pane's place in settingsPanes.
-const webhookSettingsTab = 4
+const (
+	webhookSettingsTab       = 4
+	remoteControlSettingsTab = 5
+)
 
 // settingsView lays Settings out like a macOS settings window: a centered
 // toolbar of panes over one centered column of grouped settings.
@@ -50,6 +53,8 @@ func (app *App) settingsView(c *ui.Context) {
 				app.memoryView(c)
 			case webhookSettingsTab:
 				app.webhookSettings(c)
+			case remoteControlSettingsTab:
+				app.remoteControlSettings(c)
 			default:
 				app.generalSettings(c)
 			}
@@ -60,7 +65,7 @@ func (app *App) settingsView(c *ui.Context) {
 // settingsToolbar is the row of panes: an icon over its name, the chosen
 // one on a soft fill, as in Safari's and Mail's settings.
 func (app *App) settingsToolbar(c *ui.Context) {
-	ui.Row(c).Gap(2).Padding(3).Role(ui.RoleTabList).Children(func() {
+	ui.Row(c).Wrap().Justify(ui.Center).Gap(2).Padding(3).Role(ui.RoleTabList).Children(func() {
 		for i, pane := range settingsPanes() {
 			i, pane := i, pane
 			chosen := app.SettingsTab == i
@@ -92,6 +97,7 @@ func (app *App) generalSettings(c *ui.Context) {
 		func() { widgets.LanguageSettings(c) },
 		func() { app.appearanceSettings(c) })
 	widgets.NotificationSettings(c, false)
+	app.notificationPolicySettings(c)
 	permissionList(c.Key("default-permissions"), tr("Default permissions for new conversations"),
 		tr("Change them for the current conversation from the composer."),
 		cc.SelectedPermissionPolicy(), cc.State().SetPermissionPolicy)

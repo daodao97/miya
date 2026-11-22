@@ -10,6 +10,7 @@ import (
 	"miya/internal/agent/quota"
 	"miya/internal/appmodel"
 	"miya/internal/automation"
+	"miya/internal/bot"
 	"miya/internal/chat/model"
 	conversation "miya/internal/chat/view"
 	"miya/internal/interaction"
@@ -55,6 +56,14 @@ type Host interface {
 	AttachService(cl *svcclient.Client, st svcproto.State)
 	AutomationOp(op string, r automation.Request) (any, error)
 	BackendReady() bool
+	// Bots are the named assistants. BotThread is a Bot's standing
+	// conversation among the loaded ones; CurrentBot is the Bot whose
+	// conversation is open, or the one the empty conversation is for.
+	Bots() []bot.Bot
+	BotOp(op string, r bot.Request) (bot.Bot, error)
+	BotThread(b bot.Bot) model.Thread
+	CurrentBot() (bot.Bot, bool)
+	SetDraftBot(id string)
 	CanRewind(t model.Thread, m model.Message) bool
 	CancelAccountReset()
 	ChangeWorkspace(path string) error
@@ -70,6 +79,7 @@ type Host interface {
 	DeleteProject(path string)
 	DeleteThread(t model.Thread)
 	DesktopThreadUnread(t model.Thread) bool
+	WaitingThreads() appmodel.Waiting
 	Dispatch(f func())
 	EnsurePhoneHost()
 	Memories() *manager.Manager

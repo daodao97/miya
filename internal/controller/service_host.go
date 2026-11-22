@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"miya/internal/agent/catalog"
+	"miya/internal/agent/integrations"
+	"miya/internal/pressure"
 	"path/filepath"
 	"time"
 
@@ -14,7 +17,9 @@ import (
 	"miya/internal/appmodel"
 	"miya/internal/async"
 	"miya/internal/automation"
+	"miya/internal/bot"
 	"miya/internal/chat/model"
+	"miya/internal/desktop"
 	mcpproto "miya/internal/mcp/protocol"
 	"miya/internal/memory"
 	"miya/internal/memory/manager"
@@ -23,6 +28,7 @@ import (
 	webservice "miya/internal/runtime/web"
 	svcproto "miya/internal/service/protocol"
 	serviceserver "miya/internal/service/server"
+	"miya/internal/statecard"
 	"miya/internal/uiruntime"
 )
 
@@ -31,10 +37,23 @@ func NewService(c *Controller, ex *async.Executor) *serviceserver.Service {
 	c.Memories().Store = memory.New(filepath.Join(appdir.Dir(), "memory"))
 	s := serviceserver.New(c, ex)
 	c.Push = notification.NewHub()
+	c.Pressure = pressure.New(integrations.Quotas().Read, func(agent string) string {
+		// No guess for an agent the catalog does not know; "" is the default.
+		d, ok := catalog.Lookup(agent)
+		if agent == "" {
+			d, ok = catalog.Default(), true
+		}
+		if !ok {
+			return ""
+		}
+		return d.UsageID
+	})
 	c.Run = ex.Push
 	c.OnDraftReturned = s.DraftReturned
 	c.Memories().Engine = NewMemoryEngine(c)
 	c.Collaboration = NewCollaboration(c, filepath.Join(appdir.Dir(), "delegations"))
+	c.StartBots(bot.Path())
+	c.StartStateCards(statecard.Dir())
 	return s
 }
 
@@ -55,6 +74,8 @@ func (c *Controller) ServiceRequest(req svcproto.Request) (any, error) {
 	var id int
 	var value string
 	switch req.Op {
+	case desktop.PermissionStatusOp:
+		return async.Reply(func() (any, error) { return desktop.CheckPermissions(), nil }), nil
 	case "accountLogin":
 		var r login.Request
 		if err := arg(&r); err != nil {
@@ -119,6 +140,12 @@ func (c *Controller) ServiceRequest(req svcproto.Request) (any, error) {
 			return nil, err
 		}
 		return c.PrepareRuntime(r.Ref, r.Project)
+	case "notificationPolicy", "notificationQuietHours", "notificationRuleForget":
+		var r notification.PolicyRequest
+		if err := arg(&r); err != nil {
+			return nil, err
+		}
+		return c.NotificationPolicyOp(req.Op, r)
 	case "desktop-read":
 		var read appmodel.DesktopRead
 		if err := arg(&read); err != nil {
@@ -143,6 +170,12 @@ func (c *Controller) ServiceRequest(req svcproto.Request) (any, error) {
 			return nil, err
 		}
 		return c.AutomationOp(req.Op, r)
+	case "botSave", "botDelete", "botReset":
+		var r bot.Request
+		if err := arg(&r); err != nil {
+			return nil, err
+		}
+		return c.BotOp(req.Op, r)
 	case "prefetch":
 		var ref model.ThreadRef
 		if err := arg(&ref); err != nil {
@@ -422,6 +455,8 @@ func (c *Controller) SnapshotState() svcproto.State {
 		ProjectBusy:     busy,
 		ProjectThreads:  projectThreads,
 		DesktopUnread:   c.DesktopUnread,
+		Waiting:         c.WaitingThreads(),
+		Bots:            c.Bots(),
 		Cwd:             c.Cwd, Projects: c.Projects(), Threads: threads, Approvals: c.Approvals(),
 		Status: c.Status(), HistoryStatus: c.HistoryStatus(), Ready: c.Ready(),
 		Models: snapshotModels(c.Models()), Model: c.Model(), Effort: c.Effort(), PermissionPolicy: c.PermissionPolicy(), Locale: c.Locale(),

@@ -52,7 +52,9 @@ func (h mcpHost) StartCollaboration(t model.Thread, name string, a coordinator.A
 func (h mcpHost) PrepareDelegation(t model.Thread, a coordinator.Args) (delegation.StartInput, error) {
 	return h.prepareDelegation(t, a)
 }
-func (h mcpHost) AgentList() map[string]any                      { return h.agentList() }
+func (h mcpHost) AgentList(t model.Thread) map[string]any {
+	return h.agentList(h.ThreadWorkspace(t.ID))
+}
 func (h mcpHost) Automations() *automation.Runner                { return h.Auto }
 func (h mcpHost) WaitUser(id json.RawMessage, ch chan bool) bool { return h.waitUser(id, ch) }
 func (h mcpHost) OnMain(f func() (any, error)) (any, error)      { return h.onMain(f) }

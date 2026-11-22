@@ -15,6 +15,7 @@ import (
 	"miya/internal/agent/cliupdate"
 	"miya/internal/agent/provider"
 	"miya/internal/appdir"
+	"miya/internal/bot"
 	"miya/internal/chat/model"
 	"miya/internal/interaction"
 	projectmodel "miya/internal/project/model"
@@ -91,6 +92,15 @@ type State struct {
 
 	ProjectThreads map[string][]model.Thread `json:"projectThreads,omitempty"`
 	DesktopUnread  map[string]int64          `json:"desktopUnread,omitempty"`
+
+	// Waiting are the conversations that wait for the person, by the key of
+	// DesktopUnread, each with what it waits for (docs/personal-agent.md,
+	// P1.5).
+	Waiting map[string]string `json:"waiting,omitempty"`
+
+	// Bots are the named assistants (docs/personal-agent.md, P4), each with
+	// its standing conversation's session.
+	Bots []bot.Bot `json:"bots,omitempty"`
 }
 
 // ThreadMessages updates a conversation's messages: Order lists them all by

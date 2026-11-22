@@ -22,6 +22,10 @@ import (
 // Query the installed CLI rather than assuming its feature registry. All known
 // optional capabilities are disabled for the isolated extraction process.
 func codexExtractionOverrides(ctx context.Context, bin, directory string) ([]string, error) {
+	return codexOverrides(ctx, bin, directory, memoryExtractionSystem)
+}
+
+func codexOverrides(ctx context.Context, bin, directory, system string) ([]string, error) {
 	features, err := codexExtractionCommand(ctx, bin, directory, "features", "list")
 	if err != nil {
 		return nil, fmt.Errorf("Unable to verify Codex extraction isolation settings: %w", err)
@@ -30,7 +34,7 @@ func codexExtractionOverrides(ctx context.Context, bin, directory string) ([]str
 	if err != nil {
 		return nil, fmt.Errorf("Unable to verify Codex MCP isolation settings: %w", err)
 	}
-	overrides := []string{"web_search=\"disabled\"", "tools.view_image=false", "project_doc_max_bytes=0", "skills.include_instructions=false", "skills.bundled.enabled=false", "agents.enabled=false", "approval_policy=\"never\"", "developer_instructions=" + strconv.Quote(memoryExtractionSystem), "user_instructions=\"\""}
+	overrides := []string{"web_search=\"disabled\"", "tools.view_image=false", "project_doc_max_bytes=0", "skills.include_instructions=false", "skills.bundled.enabled=false", "agents.enabled=false", "approval_policy=\"never\"", "developer_instructions=" + strconv.Quote(system), "user_instructions=\"\""}
 	seen := map[string]bool{}
 	for _, line := range strings.Split(string(features), "\n") {
 		fields := strings.Fields(line)
@@ -162,6 +166,20 @@ func codexExtractionArgs(directory string, overrides []string) []string {
 }
 
 func WithCodex(ctx context.Context, job memory.ExtractionJob) ([]memory.Candidate, error) {
+	input, err := job.InputJSON()
+	if err != nil {
+		return nil, err
+	}
+	raw, err := runCodex(ctx, memoryExtractionSchema, memoryExtractionSystem, input, "extraction")
+	if err != nil {
+		return nil, err
+	}
+	return decodeMemoryCandidates(raw)
+}
+
+// runCodex makes one isolated Codex call with the given output schema and
+// instructions and returns its final structured message.
+func runCodex(ctx context.Context, schema, system string, input []byte, what string) ([]byte, error) {
 	bin, err := codex.Binary()
 	if err != nil {
 		return nil, errors.New("Codex extractor unavailable")
@@ -171,15 +189,11 @@ func WithCodex(ctx context.Context, job memory.ExtractionJob) ([]memory.Candidat
 		return nil, err
 	}
 	defer os.RemoveAll(dir)
-	overrides, err := codexExtractionOverrides(ctx, bin, dir)
+	overrides, err := codexOverrides(ctx, bin, dir, system)
 	if err != nil {
 		return nil, err
 	}
-	if err = os.WriteFile(filepath.Join(dir, "schema.json"), []byte(memoryExtractionSchema), 0600); err != nil {
-		return nil, err
-	}
-	input, err := job.InputJSON()
-	if err != nil {
+	if err = os.WriteFile(filepath.Join(dir, "schema.json"), []byte(schema), 0600); err != nil {
 		return nil, err
 	}
 	cmd := exec.CommandContext(ctx, bin, codexExtractionArgs(dir, overrides)...)
@@ -191,21 +205,21 @@ func WithCodex(ctx context.Context, job memory.ExtractionJob) ([]memory.Candidat
 	cmd.Stdout = &out
 	cmd.Stderr = &stderr
 	if err = cmd.Run(); err != nil {
-		return nil, fmt.Errorf("Codex extraction failed: %w", codexCommandError(err, stderr.Bytes()))
+		return nil, fmt.Errorf("Codex %s failed: %w", what, codexCommandError(err, stderr.Bytes()))
 	}
 	if err = validateCodexExtractionEvents(out.Bytes()); err != nil {
 		return nil, err
 	}
 	file, err := os.Open(filepath.Join(dir, "result.json"))
 	if err != nil {
-		return nil, errors.New("Codex returned no extraction result")
+		return nil, fmt.Errorf("Codex returned no %s result", what)
 	}
 	defer file.Close()
 	raw, err := io.ReadAll(io.LimitReader(file, 1<<20+1))
 	if err != nil || len(raw) > 1<<20 {
-		return nil, errors.New("Codex extraction result exceeds the limit")
+		return nil, fmt.Errorf("Codex %s result exceeds the limit", what)
 	}
-	return decodeMemoryCandidates(raw)
+	return raw, nil
 }
 
 func validateCodexExtractionEvents(raw []byte) error {

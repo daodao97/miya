@@ -46,6 +46,30 @@ final class MiyaInputTests: XCTestCase {
         XCTAssertEqual(field.value as? String, "Xdescription")
     }
 
+    func testConversationSettingsEdgeBack() {
+        let (app, field) = openComposer("keep this draft", focus: false)
+        let settings = action("Model settings", "模型设置", in: app)
+        let model = action("Model", "模型", in: app)
+        let effort = action("Reasoning effort", "推理强度", in: app)
+        settings.tap()
+        XCTAssertTrue(effort.waitForExistence(timeout: 5))
+        effort.tap()
+        XCTAssertTrue(model.waitForNonExistence(timeout: 5))
+
+        let edge = app.coordinate(withNormalizedOffset: CGVector(dx: 0.025, dy: 0.38))
+        func swipeBack(to x: CGFloat) {
+            let end = app.coordinate(withNormalizedOffset: CGVector(dx: x, dy: 0.38))
+            edge.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.3)
+        }
+        swipeBack(to: 0.22)
+        XCTAssertFalse(model.exists, "A short swipe should leave the effort picker open")
+        swipeBack(to: 0.82)
+        XCTAssertTrue(model.waitForExistence(timeout: 5))
+        swipeBack(to: 0.82)
+        XCTAssertTrue(settings.waitForExistence(timeout: 5))
+        XCTAssertEqual(field.value as? String, "keep this draft")
+    }
+
     func testActualComposerNativePaste() {
         let sample = "description"
         let (app, field) = openComposer(sample)

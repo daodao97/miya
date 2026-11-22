@@ -400,6 +400,13 @@ func (m *App) desktopForNotification(target remote.Request) string {
 }
 
 func (m *App) OpenNotification(data map[string]string) {
+	if !m.Loaded {
+		// The tap that launched the app comes before the saved desktops are
+		// read, and connecting to them resets the desktop state: finishLoad
+		// opens it.
+		m.pendingNotification = data
+		return
+	}
 	target := notificationTarget(data)
 	id := ""
 	if _, ok := m.Desktops.find(data["desktop"]); ok {

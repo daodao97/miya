@@ -78,6 +78,8 @@ func (api *Service) Handle(op string, r mcpproto.Request) (any, error) {
 		return api.Delegate(r)
 	case "mcpReportResult":
 		return api.reportResult(r)
+	case "mcpStateCard":
+		return api.StateCard(r)
 	case "mcpAutomationList", "mcpAutomationCreate", "mcpAutomationUpdate", "mcpAutomationWake":
 		return api.automation(op, r)
 	}

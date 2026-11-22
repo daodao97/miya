@@ -64,6 +64,7 @@ type App struct {
 	settingDrafts  map[string]string
 	providerEdit   providerEditor
 	ServiceRestart ServiceRestartUI
+	remoteControl  *remoteControlUI
 	MiyaUpdate     MiyaUpdateUI
 	WorkspaceHub   *DesktopWorkspaces
 
@@ -81,7 +82,9 @@ type App struct {
 	MemoryNotes        map[string]*MemoryNoticeUI
 	MemoryRevisionSeen uint64
 	Autos              automationsUI
+	NotifPolicy        notificationPolicyUI
 	Webhook            webhookUI
+	Bots               botsUI
 	Collaborations     widgets.CollaborationUI
 	account            accountView
 	Usage              *DesktopUsage
@@ -513,6 +516,7 @@ func (app *App) Render(ctx *ui.Context) {
 		}
 	})
 	app.projectDialogView(ctx)
+	app.botDialogView(ctx.Key("bot-dialog"))
 	if app.WorkspaceHub != nil {
 		app.WorkspaceHub.dialog(ctx)
 	}

@@ -30,6 +30,8 @@ func MemoryStateLabel(state string) string {
 		return tr("Updated")
 	case "conflicted":
 		return tr("Conflict · Needs verification")
+	case "merged":
+		return tr("Merged into another memory")
 	}
 	return state
 }

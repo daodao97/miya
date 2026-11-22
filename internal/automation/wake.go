@@ -166,6 +166,12 @@ func (rn *Runner) deliver(a Automation, ev WakeEvent, gated bool) (Wake, error) 
 			if until, n := rn.backoffUntil(a); now.Before(until) {
 				return rn.record(a.ID, ev, WakeHeld, fmt.Sprintf("Backing off until %s: the last %d triggered runs found nothing new", FormatTime(until), n)), nil
 			}
+			// Near a subscription's limit, leave what is left to the person.
+			if rn.Hold != nil {
+				if why := rn.Hold(a.Agent); why != "" {
+					return rn.record(a.ID, ev, WakeHeld, "Holding off: "+why), nil
+				}
+			}
 		}
 	}
 	if ev.Source == SourceManual {
@@ -376,7 +382,7 @@ func (rn *Runner) afterProbe(id, tid string, res ProbeResult) {
 		rn.Persist()
 		rn.host.Changed()
 		if st.Errors == probeErrorNotice {
-			rn.host.Deliver(notification.Notice{ID: "miya-auto-probe-" + key, Title: a.Name + " · " + tr("Condition check failing"), Body: st.Error})
+			rn.host.Deliver(notification.Notice{ID: "miya-auto-probe-" + key, Title: a.Name + " · " + tr("Condition check failing"), Body: st.Error, Category: "probe:" + a.ID, Topic: a.Name})
 		}
 		return
 	}

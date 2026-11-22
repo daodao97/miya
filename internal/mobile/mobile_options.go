@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"unicode"
 
 	"github.com/egoist/mygo/ui"
@@ -14,6 +16,7 @@ import (
 	"miya/internal/remote"
 	"miya/internal/textutil"
 	"miya/internal/widgets"
+	"miya/locales"
 )
 
 func (m *App) agentOptions(agent string) phoneproto.AgentOptions {
@@ -73,18 +76,35 @@ func (m *App) setOptions(agent string, o remote.SendOptions) {
 
 func (m *App) openOptions(agent string) { m.optionsAgent = agent; m.Router().Push("/options") }
 
+func mobileSelectedModel(a phoneproto.AgentOptions, value string) phoneproto.ModelOption {
+	for _, option := range a.Models {
+		if option.Value == value {
+			return option
+		}
+	}
+	return phoneproto.ModelOption{Value: value}
+}
+
+func mobileModelLabel(option phoneproto.ModelOption) string {
+	if option.Value != "" {
+		return textutil.FirstNonEmpty(option.Label, option.Value)
+	}
+	// Older desktops may localize the placeholder or prefix before sending it.
+	switch option.Label {
+	case "Default model", locales.TextIn("zh-Hans", "Default model"):
+		return ""
+	}
+	return strings.TrimPrefix(strings.TrimPrefix(option.Label, "Default · "), locales.TextIn("zh-Hans", "Default · "))
+}
+
 func (m *App) optionsView(c *ui.Context) {
 	agent := m.optionsAgent
-	a, o := m.agentOptions(agent), m.SendOptions(agent)
+	o := m.SendOptions(agent)
+	selected := mobileSelectedModel(m.agentOptions(agent), o.Model)
 	m.settingsHeader(c, "/options", tr("Conversation settings"))
 	m.settingsBody(c, func() {
-		label := textutil.FirstNonEmpty(o.Model, tr("Model default"))
-		for _, model := range a.Models {
-			if model.Value == o.Model {
-				label = textutil.FirstNonEmpty(model.Label, label)
-				break
-			}
-		}
+		label := textutil.FirstNonEmpty(mobileModelLabel(selected), tr("Not set"))
+		effort := textutil.FirstNonEmpty(o.Effort, selected.DefaultEffort)
 		policy := o.Policy
 		for _, choice := range mobilePermissionChoices() {
 			if choice.value == o.Policy {
@@ -97,7 +117,7 @@ func (m *App) optionsView(c *ui.Context) {
 				m.Router().Push("/options/model")
 			}
 			m.settingsSeparator(c)
-			if m.settingsNavigation(c.Key("effort"), tr("Reasoning effort"), mobileEffortLabel(o.Effort)).Clicked() {
+			if m.settingsNavigation(c.Key("effort"), tr("Reasoning effort"), mobileEffortLabel(effort)).Clicked() {
 				m.Router().Push("/options/effort")
 			}
 			m.settingsSeparator(c)
@@ -119,7 +139,9 @@ func (m *App) optionsView(c *ui.Context) {
 func mobileEffortLabel(effort string) string {
 	switch effort {
 	case "":
-		return tr("Model default")
+		return tr("Not set")
+	case "off":
+		return tr("Off")
 	case "xhigh":
 		return tr("Extra high")
 	case "max":
@@ -151,22 +173,32 @@ func (m *App) optionChoice(c *ui.Context, label, detail string, selected bool) u
 func (m *App) modelOptionsView(c *ui.Context) {
 	agent := m.optionsAgent
 	a, o := m.agentOptions(agent), m.SendOptions(agent)
+	defaultLabel := mobileModelLabel(mobileSelectedModel(a, ""))
+	// Keep the current choice checked when the inherited and explicit labels match.
+	showInherited := o.Model == "" || mobileModelLabel(mobileSelectedModel(a, o.Model)) != defaultLabel
 	m.settingsHeader(c, "/options/model", tr("Model"))
 	m.settingsBody(c, func() {
 		m.settingsGroup(c, "", "", func() {
 			ui.Column(c).FillWidth().Role(ui.RoleRadioGroup).Label(tr("Model")).Children(func() {
-				for i, model := range a.Models {
-					if i > 0 {
-						m.settingsSeparator(c.Key("divider:" + model.Value))
+				shown := false
+				for _, option := range a.Models {
+					label := mobileModelLabel(option)
+					if defaultLabel != "" && label == defaultLabel && (option.Value == "") != showInherited {
+						continue
 					}
-					row := m.optionChoice(c.Key("model:"+model.Value), model.Label, "", model.Value == o.Model).Label(tr("Model ") + model.Label)
+					label = textutil.FirstNonEmpty(label, tr("Not set"))
+					if shown {
+						m.settingsSeparator(c.Key("divider:" + option.Value))
+					}
+					shown = true
+					row := m.optionChoice(c.Key("model:"+option.Value), label, "", option.Value == o.Model).Label(tr("Model ") + label)
 					if row.Clicked() {
-						o.Model, o.Effort = model.Value, model.DefaultEffort
+						o.Model, o.Effort = option.Value, option.DefaultEffort
 						m.setOptions(agent, o)
 						m.Router().Back()
 					}
 				}
-				if len(a.Models) == 0 {
+				if !shown {
 					ui.Text(c, tr("Connect to your desktop to select a model")).FontSize(m.Font(15)).Padding(16).TextColor(m.Pal.muted).Wrap()
 				}
 			})
@@ -176,18 +208,21 @@ func (m *App) modelOptionsView(c *ui.Context) {
 
 func (m *App) effortOptionsView(c *ui.Context) {
 	agent := m.optionsAgent
-	a, o := m.agentOptions(agent), m.SendOptions(agent)
-	choices := []string{""}
-	for _, model := range a.Models {
-		if model.Value == o.Model {
-			for _, effort := range model.Efforts {
-				if effort != "" {
-					choices = append(choices, effort)
-				}
-			}
-			break
+	o := m.SendOptions(agent)
+	selected := mobileSelectedModel(m.agentOptions(agent), o.Model)
+	defaultEffort := selected.DefaultEffort
+	// The inherited effort and its explicit equivalent share a row.
+	showInherited := defaultEffort == "" || o.Effort != defaultEffort || !slices.Contains(selected.Efforts, defaultEffort)
+	var choices []string
+	if showInherited {
+		choices = append(choices, "")
+	}
+	for _, effort := range selected.Efforts {
+		if effort != "" && (!showInherited || effort != defaultEffort) {
+			choices = append(choices, effort)
 		}
 	}
+	currentEffort := textutil.FirstNonEmpty(o.Effort, defaultEffort)
 	m.settingsHeader(c, "/options/effort", tr("Reasoning effort"))
 	m.settingsBody(c, func() {
 		m.settingsGroup(c, "", "", func() {
@@ -196,8 +231,9 @@ func (m *App) effortOptionsView(c *ui.Context) {
 					if i > 0 {
 						m.settingsSeparator(c.Key("divider:" + effort))
 					}
-					label := mobileEffortLabel(effort)
-					row := m.optionChoice(c.Key("effort:"+effort), label, "", effort == o.Effort).Label(tr("Effort ") + label)
+					effectiveEffort := textutil.FirstNonEmpty(effort, defaultEffort)
+					label := mobileEffortLabel(effectiveEffort)
+					row := m.optionChoice(c.Key("effort:"+effort), label, "", effectiveEffort == currentEffort).Label(tr("Effort ") + label)
 					if row.Clicked() {
 						o.Effort = effort
 						m.setOptions(agent, o)

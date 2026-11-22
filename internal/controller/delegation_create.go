@@ -29,7 +29,15 @@ func (c *Controller) startCollaboration(caller model.Thread, name string, a coor
 		if name == "send_thread" {
 			agent = previous.Agent
 		}
-		in := dg.StartInput{From: from, RequestID: a.RequestID, Target: a.Thread, ParentTaskID: previous.ParentTaskID, PreviousTaskID: a.PreviousTaskID, Agent: model.NormalizeAgentID(agent), Workspace: previous.Workspace, Title: a.Title, Prompt: a.Task, Context: a.Context, Snapshot: previous.Snapshot, Requested: dg.Config{Model: a.Model, Effort: a.Effort}, Effective: previous.Config, Notify: a.Notify == "on_finish"}
+		target := a.Thread
+		if a.Bot != "" {
+			// The Bot's agent and conversation were settled at the first acceptance.
+			agent = previous.Agent
+			if !previous.NewSession {
+				target = previous.Target
+			}
+		}
+		in := dg.StartInput{From: from, RequestID: a.RequestID, Target: target, Bot: botKey(a.Bot), ParentTaskID: previous.ParentTaskID, PreviousTaskID: a.PreviousTaskID, Agent: model.NormalizeAgentID(agent), Workspace: previous.Workspace, Title: a.Title, Prompt: a.Task, Context: a.Context, Snapshot: previous.Snapshot, Requested: dg.Config{Model: a.Model, Effort: a.Effort}, Effective: previous.Config, Notify: a.Notify == "on_finish"}
 		// An omitted default belongs to the first acceptance, including tasks
 		// accepted before automatic completion became the default.
 		if a.Notify == "" {

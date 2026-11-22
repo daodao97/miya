@@ -3,7 +3,9 @@ package service
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	mcpproto "miya/internal/mcp/protocol"
 	"miya/internal/memory"
@@ -59,7 +61,15 @@ func (api *Service) Memory(r mcpproto.Request) (any, error) {
 		}
 		switch r.Tool {
 		case "search_memory":
-			entries, err := store.Search(project, a.Query, a.TaskKey, 5)
+			if len(a.Alternates) > memory.MaxAlternates {
+				return nil, fmt.Errorf("alternates accepts at most %d wordings", memory.MaxAlternates)
+			}
+			for _, alt := range a.Alternates {
+				if utf8.RuneCountInString(alt) > 200 {
+					return nil, errors.New("Each alternate wording must be at most 200 characters")
+				}
+			}
+			entries, err := store.Search(project, a.Query, a.TaskKey, 5, a.Alternates...)
 			if err != nil {
 				return nil, err
 			}

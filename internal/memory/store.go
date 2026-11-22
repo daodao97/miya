@@ -31,6 +31,7 @@ type document struct {
 	Injections       []Injection              `json:"injections,omitempty"`
 	Jobs             []ExtractionJob          `json:"jobs,omitempty"`
 	DisabledSessions map[string]bool          `json:"disabledSessions,omitempty"`
+	Consolidation    consolidation            `json:"consolidation,omitzero"`
 }
 type cached struct {
 	doc document
@@ -109,9 +110,12 @@ func validateDocument(d document) error {
 		}
 		seen[e.ID] = e.Version
 		switch e.State {
-		case EntryActive, EntrySuperseded, EntryForgotten, EntryPromoted, EntryConflicted:
+		case EntryActive, EntrySuperseded, EntryForgotten, EntryPromoted, EntryConflicted, EntryMerged:
 		default:
 			return errors.New("Unknown memory status")
+		}
+		if (e.State == EntryMerged) != (e.MergedInto != "") {
+			return errors.New("Only a merged memory names the memory it was merged into")
 		}
 		if e.State != EntryForgotten {
 			if err := validate(Mutation{ID: e.ID, Version: e.Version, Kind: e.Kind, Content: e.Content, TaskKey: e.TaskKey, Sources: e.Sources, ObservedAt: e.ObservedAt, ValidUntil: e.ValidUntil}, d.Scope); err != nil {
@@ -355,6 +359,15 @@ func (s *Store) forgetIn(d *document, scope Scope, i int) Entry {
 	d.Entries = append(keep, e)
 	d.Tombstones = append(d.Tombstones, mark)
 	scrubForgottenJobs(d, id, mark.Sources, s.now())
+	// Entries merged into this one hold the same fact; forgetting it must not
+	// leave their bodies behind.
+	for _, other := range latest(*d) {
+		if other.State == EntryMerged && other.MergedInto == id {
+			if j, ok := find(*d, other.ID); ok {
+				s.forgetIn(d, scope, j)
+			}
+		}
+	}
 	return e
 }
 

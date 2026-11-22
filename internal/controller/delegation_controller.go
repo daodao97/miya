@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"miya/internal/appmodel"
+	"miya/internal/bot"
 	"miya/internal/chat/model"
 	dg "miya/internal/delegation"
 	"miya/internal/delegation/coordinator"
@@ -32,6 +33,15 @@ func (c *Controller) prepareDelegation(caller model.Thread, a coordinator.Args) 
 	from := c.ThreadRef(caller).URL()
 	if from == "" {
 		return dg.StartInput{}, errors.New("CALLER_UNAVAILABLE: The initiating session is not created yet")
+	}
+	var standing bot.Bot
+	if a.Bot != "" {
+		// The task goes to the Bot's standing conversation, or starts it.
+		b, ref, err := c.delegationBot(caller, a)
+		if err != nil {
+			return dg.StartInput{}, err
+		}
+		standing, a.Agent, a.Thread = b, b.Agent, ref
 	}
 	agent := a.Agent
 	if agent == "" {
@@ -93,6 +103,9 @@ func (c *Controller) prepareDelegation(caller model.Thread, a coordinator.Args) 
 		return dg.StartInput{}, err
 	}
 	model, effort := a.Model, a.Effort
+	if standing.ID != "" {
+		model, effort = standing.Model, standing.Effort
+	}
 	if model == "" {
 		model = b.Model
 	}
@@ -103,7 +116,12 @@ func (c *Controller) prepareDelegation(caller model.Thread, a coordinator.Args) 
 	if target.ID != 0 {
 		workspace = c.ThreadWorkspace(target.ID)
 	}
-	in := dg.StartInput{From: from, RequestID: a.RequestID, Target: a.Thread, Agent: agent, Workspace: workspace, Title: a.Title, Prompt: a.Task, Context: a.Context, Snapshot: expanded, Requested: dg.Config{Model: a.Model, Effort: a.Effort, Policy: a.Access}, Effective: dg.Config{Model: model, Effort: effort, Policy: textutil.FirstNonEmpty(a.Access, c.permissionForThread(target))}, Notify: a.Notify != "none", PreviousTaskID: a.PreviousTaskID}
+	policy := textutil.FirstNonEmpty(a.Access, c.permissionForThread(target))
+	if own := botPolicy(standing); own != "" && target.ID == 0 {
+		// The conversation a Bot's first task starts gets the Bot's access.
+		policy = own
+	}
+	in := dg.StartInput{From: from, RequestID: a.RequestID, Target: a.Thread, Bot: botKey(a.Bot), BotID: standing.ID, Agent: agent, Workspace: workspace, Title: a.Title, Prompt: a.Task, Context: a.Context, Snapshot: expanded, Requested: dg.Config{Model: a.Model, Effort: a.Effort, Policy: a.Access}, Effective: dg.Config{Model: model, Effort: effort, Policy: policy}, Notify: a.Notify != "none", PreviousTaskID: a.PreviousTaskID}
 	if caller.ExecutionID != "" && strings.HasPrefix(caller.ExecutionID, "task-") {
 		in.ParentTaskID = caller.ExecutionID
 	}

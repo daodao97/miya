@@ -96,7 +96,7 @@ func (s *Store) Prepare(project Scope, session, epoch, query, task string) (Prep
 	if err != nil || d.Settings.Disabled || !d.Settings.AutoInject || session == "" || d.DisabledSessions[session] {
 		return Prepared{}, err
 	}
-	entries, err := s.search(project, query, task, 5)
+	entries, err := s.search(project, []string{query}, task, 5)
 	if err != nil {
 		return Prepared{}, err
 	}

@@ -156,14 +156,21 @@ func TestDesktopPageRendersLiveConnectingAndEnded(t *testing.T) {
 	if tt.HasText("Send") {
 		t.Fatal("keyboard should start hidden on the full desktop")
 	}
+	const trackpadControl = "Switch control mode, currently Trackpad"
+	if _, ok := tt.Find(trackpadControl); !ok {
+		t.Fatal("trackpad control should be visible before opening the keyboard")
+	}
 	if err := tt.Click("Keyboard"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	for _, s := range []string{"Remote desktop", "Trackpad", "Send", "Return", "Esc", "More", "Connected · Full desktop"} {
+	for _, s := range []string{"Remote desktop", "Send", "Return", "Esc", "More", "Connected · Full desktop"} {
 		if !tt.HasText(s) {
 			t.Fatal("live page missing", s)
 		}
+	}
+	if _, ok := tt.Find(trackpadControl); ok {
+		t.Fatal("trackpad control should be hidden while the keyboard is open")
 	}
 	if err := tt.Click("More"); err != nil {
 		t.Fatal(err)
@@ -172,7 +179,11 @@ func TestDesktopPageRendersLiveConnectingAndEnded(t *testing.T) {
 	if !tt.HasText("⌘") || tt.HasText("Move screen") {
 		t.Fatal("more keys did not open")
 	}
-	if err := tt.Click("Switch control mode, currently Trackpad"); err != nil {
+	if err := tt.Click("Hide keyboard"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if err := tt.Click(trackpadControl); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()

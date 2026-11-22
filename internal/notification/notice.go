@@ -13,8 +13,14 @@ import (
 	"miya/locales"
 )
 
-// Notice is one notification about a conversation.
-type Notice struct{ ID, Thread, Title, Body, ServerID, Agent, Project string }
+// Notice is one notification about a conversation. Category groups notices
+// the person can learn to receive quietly (see LearnAfter); Topic is the
+// project or automation name it is about. Urgent notices always alert.
+type Notice struct {
+	ID, Thread, Title, Body, ServerID, Agent, Project string
+	Category, Topic                                   string
+	Urgent                                            bool
+}
 
 // Completion is the notice for a conversation that just finished, if it
 // finished on its own.
@@ -26,7 +32,7 @@ func Completion(old, next model.Thread) (Notice, bool) {
 	if next.Status != "" {
 		title = tr("Miya · Failed")
 	}
-	return Notice{ID: fmt.Sprintf("miya-%d-%d", next.ID, next.CompletedAtMs), Thread: strconv.Itoa(next.ID), Title: title, Body: CompletionBody(old, next)}, true
+	return Notice{ID: fmt.Sprintf("miya-%d-%d", next.ID, next.CompletedAtMs), Thread: strconv.Itoa(next.ID), Title: title, Body: CompletionBody(old, next), Urgent: next.Status != ""}, true
 }
 
 // InProject names the conversation's project in place of Miya at the start

@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"log"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -23,6 +24,18 @@ func (c *Controller) InstallNotifications() {
 			previous[t.ID] = t
 		}
 		set(next)
+		if c.Pressure != nil {
+			// The person's own conversations: not an automation's, not one
+			// another conversation delegated work to.
+			foreground := false
+			for _, t := range next {
+				if t.Busy && t.Automation == "" && c.DelegationParent[t.ID] == 0 {
+					foreground = true
+					break
+				}
+			}
+			c.Pressure.SetForeground(foreground)
+		}
 		for _, t := range next {
 			if old, ok := previous[t.ID]; ok {
 				c.RecordDesktopCompletion(old, t)
@@ -68,9 +81,20 @@ func (c *Controller) deliverNotice(n notification.Notice, kind string) {
 	if prefs.Load("notifications-"+kind) == "off" {
 		return
 	}
+	if kind == "waiting" {
+		n.Urgent = true
+	}
 	if id, err := strconv.Atoi(n.Thread); err == nil {
 		if target := c.phoneThread(id); target.Found {
 			n.ServerID, n.Agent, n.Project = target.Thread.ServerID, model.ThreadAgent(target.Thread), target.cwd
+		}
+	}
+	// A conversation's completions learn per project; automations name their
+	// own categories.
+	if kind == "completion" && n.Category == "" && n.Thread != "" {
+		n.Category = "completion:" + n.Project
+		if n.Project != "" {
+			n.Topic = filepath.Base(filepath.Clean(n.Project))
 		}
 	}
 	n.InProject(n.Project)

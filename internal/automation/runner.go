@@ -65,6 +65,9 @@ type Runner struct {
 	WorktreeRoot string
 	// Probe probes a condition off the host's thread; replaced in tests.
 	Probe func(c Condition, dir string) ProbeResult
+	// Hold says why an agent's triggered runs should wait, "" when they
+	// may start; nil never holds.
+	Hold func(agent string) string
 	// Stream keeps a line trigger's command running until ctx ends and
 	// reports what it does; replaced in tests.
 	Stream func(ctx context.Context, dir string, c Condition, emit func(StreamEvent))
@@ -442,7 +445,8 @@ func (rn *Runner) notice(a Automation, run Run) {
 		title += fmt.Sprintf("(round %d/%d)", run.Round, run.Rounds)
 	}
 	rn.host.Deliver(notification.Notice{ID: fmt.Sprintf("miya-auto-%s-%d", a.ID, run.Started.Unix()), Thread: strconv.Itoa(run.Thread),
-		Title: title, Body: noticeBody(a, run)})
+		Title: title, Body: noticeBody(a, run), Category: "automation:" + a.ID, Topic: a.Name,
+		Urgent: run.Result == Failed || run.Report != nil && run.Report.NeedsUser})
 }
 
 // noticeBody is the run's summary and, for a worktree run, where its

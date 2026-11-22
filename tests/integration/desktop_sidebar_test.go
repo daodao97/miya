@@ -35,7 +35,7 @@ func TestSidebarActivityAcrossProjects(t *testing.T) {
 		},
 	}
 	c.DesktopUnread[appmodel.DesktopUnreadKey(c.ProjectCache["/other"][1])] = 100
-	running, completed := app.SidebarActivityThreads()
+	_, running, completed := app.SidebarActivityThreads()
 	if len(running) != 2 || running[0].ID != 10 || running[1].ID != 1 {
 		t.Fatalf("wrong running conversations: %+v", running)
 	}

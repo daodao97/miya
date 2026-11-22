@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -19,6 +20,59 @@ import (
 	"miya/internal/remote"
 	"miya/internal/widgets"
 )
+
+func TestMobileShowsInheritedModelAndEffortByName(t *testing.T) {
+	var models []codex.Model
+	if err := json.Unmarshal([]byte(`[
+		{"model":"gpt-other"},
+		{"model":"gpt-test","isDefault":true,"defaultReasoningEffort":"medium","supportedReasoningEfforts":[{"reasoningEffort":"medium"},{"reasoningEffort":"high"}]}
+	]`), &models); err != nil {
+		t.Fatal(err)
+	}
+	c := testController()
+	c.Models = func() []codex.Model { return models }
+	m := testMobileApp()
+	m.State.Agents = c.PhoneSnapshot().Agents
+	m.StartConversation("/a", appmodel.AgentCodex)
+	tt := ui.NewTester(m.ViewRoot, 390, 750)
+	tt.Frame()
+	if !slices.Contains(tt.Texts(), "MEDIUM") || tt.HasText("DEFAULT") {
+		t.Fatalf("composer effort was not resolved: %q", tt.Texts())
+	}
+	if err := tt.Click("Model settings"); err != nil {
+		t.Fatal(err)
+	}
+	if texts := tt.Texts(); !slices.Contains(texts, "gpt-test") || !slices.Contains(texts, "Medium") {
+		t.Fatalf("settings did not show the inherited values: %q", texts)
+	}
+	m.State.Agents[0].Models[0].Label = "默认 · gpt-test" // Sent by older desktops running in Chinese.
+	if err := tt.Click("Model"); err != nil {
+		t.Fatal(err)
+	}
+	texts := tt.Texts()
+	if i := slices.Index(texts, "Model gpt-test"); i < 0 || slices.Contains(texts[i+1:], "Model gpt-test") || tt.HasText("Default model") {
+		t.Fatalf("picker should show one row for the inherited model: %q", texts)
+	}
+	if err := tt.Click("Back"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.Click("Reasoning effort"); err != nil {
+		t.Fatal(err)
+	}
+	if tt.HasText("Model default") {
+		t.Fatalf("picker showed a placeholder effort: %q", tt.Texts())
+	}
+	texts = tt.Texts()
+	if i := slices.Index(texts, "Effort Medium"); i < 0 || slices.Contains(texts[i+1:], "Effort Medium") {
+		t.Fatalf("picker should show one row for the inherited effort: %q", texts)
+	}
+	if err := tt.Click("Back"); err != nil {
+		t.Fatal(err)
+	}
+	if got := m.SendOptions(appmodel.AgentCodex); got != m.State.Agents[0].Current || len(m.Options) != 0 {
+		t.Fatalf("displaying inherited values changed the send settings: %+v", got)
+	}
+}
 
 func TestMobileModelSettingsRemainLocalAndKeepDraft(t *testing.T) {
 	m := testMobileApp()

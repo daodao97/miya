@@ -27,7 +27,7 @@ func (api *Service) collaboration(r mcpproto.Request) (any, error) {
 		return nil, fmt.Errorf("STORAGE_UNAVAILABLE: %w", s.LoadError)
 	}
 	if r.Tool == "list_agents" {
-		return c.AgentList(), nil
+		return c.AgentList(caller), nil
 	}
 	if r.Tool == "start_task" || r.Tool == "send_thread" {
 		return c.StartCollaboration(caller, r.Tool, a)

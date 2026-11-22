@@ -100,7 +100,7 @@ func TestSidebarActivityEqualTimesKeepProjectOrder(t *testing.T) {
 	app.C = c
 	for _, project := range []string{"/first", "/second", "/first"} {
 		c.ApplyState(sidebarNavigationState(project, true))
-		running, _ := app.SidebarActivityThreads()
+		_, running, _ := app.SidebarActivityThreads()
 		if len(running) != 2 || running[0].ID != 1 || running[1].ID != 2 {
 			t.Fatalf("selecting %s changed activity order: %+v", project, running)
 		}

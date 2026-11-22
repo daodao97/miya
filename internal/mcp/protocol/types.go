@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 
 	"miya/internal/automation"
+	"miya/internal/statecard"
 )
 
 // CallerUnknown is the service's answer while the calling conversation
@@ -50,6 +51,8 @@ type ThreadInfo struct {
 	Title     string `json:"title"`
 	Agent     string `json:"agent"`
 	Status    string `json:"status"`
+	// Card is the conversation's state card, when it has one.
+	Card *statecard.Card `json:"card,omitempty"`
 }
 
 type ThreadsResult struct {
@@ -68,6 +71,18 @@ type StatusResult struct {
 	Agent     string `json:"agent"`
 	Status    string `json:"status"`
 	Reply     string `json:"reply"`
+	// Card is the conversation's state card, when it has one.
+	Card *statecard.Card `json:"card,omitempty"`
+}
+
+// StatusArgs is what update_status takes: the caller's own state card.
+type StatusArgs struct {
+	Purpose    string   `json:"purpose"`
+	Done       []string `json:"done,omitempty"`
+	Remaining  []string `json:"remaining,omitempty"`
+	WaitingFor string   `json:"waiting_for,omitempty"`
+	Checked    []string `json:"checked,omitempty"`
+	References []string `json:"references,omitempty"`
 }
 
 type DelegateResult struct {

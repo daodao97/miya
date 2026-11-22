@@ -124,10 +124,11 @@ func TestActivitiesCollapseIntoOneRow(t *testing.T) {
 		}
 	})
 	tt.Frame()
-	if !tt.HasText("2 activities") || tt.HasText("Ran ls -la") {
+	const summary = "Ran 1 command · 1 failed"
+	if !tt.HasText(summary) || tt.HasText("Ran ls -la") {
 		t.Fatalf("activities not collapsed: %q", tt.Texts())
 	}
-	if err := tt.Click("2 activities"); err != nil {
+	if err := tt.Click(summary); err != nil {
 		t.Fatal(err)
 	}
 	if !tt.HasText("Ran ls -la") || !tt.HasText("Failed · go test") {

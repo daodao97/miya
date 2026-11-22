@@ -26,6 +26,11 @@ type Engine struct {
 	cfg     claude.CLI
 	extract func(context.Context, claude.CLI, memory.ExtractionJob) ([]memory.Candidate, error)
 	onSaved func(memory.Scope, memory.ExtractionJob, []memory.Entry)
+	// consolidate is nil in engines that only extract.
+	consolidate func(context.Context, claude.CLI, memory.ConsolidationJob) ([]memory.ConsolidationOp, error)
+	// hold, when it reports true, keeps queued work waiting; see SetHold.
+	hold                 func() bool
+	checkedConsolidation time.Time
 }
 
 func (e *Engine) Wakeup() {
@@ -44,12 +49,28 @@ func (e *Engine) Configure(cfg claude.CLI) {
 
 func (e *Engine) Pause() { e.paused.Store(true) }
 
+// SetHold makes the engine leave queued extractions and consolidations
+// waiting while hold reports true, such as while the person's own
+// conversation runs. A job already started finishes.
+func (e *Engine) SetHold(hold func() bool) {
+	e.mu.Lock()
+	e.hold = hold
+	e.mu.Unlock()
+}
+
+func (e *Engine) held() bool {
+	e.mu.Lock()
+	hold := e.hold
+	e.mu.Unlock()
+	return hold != nil && hold()
+}
+
 func (e *Engine) loop() {
 	recoveryNeeded := true
 	timer := time.NewTicker(5 * time.Second)
 	defer timer.Stop()
 	for {
-		if !e.paused.Load() {
+		if !e.paused.Load() && !e.held() {
 			e.busy.Store(true)
 			if recoveryNeeded {
 				if err := e.store.RecoverExtractions(); err != nil {
@@ -94,6 +115,14 @@ func (e *Engine) loop() {
 				if runErr == nil && commitErr == nil {
 					continue
 				}
+			} else if ran, ok := e.consolidateOnce(); ran {
+				e.busy.Store(false)
+				if e.ctx.Err() != nil {
+					return
+				}
+				if ok {
+					continue
+				}
 			} else {
 				e.busy.Store(false)
 			}
@@ -107,11 +136,44 @@ func (e *Engine) loop() {
 	}
 }
 
+// consolidateOnce runs one due consolidation when no extraction is waiting.
+// Due projects are looked up at most once a minute, since that reads every
+// project's memory file. It reports whether a run happened and succeeded.
+func (e *Engine) consolidateOnce() (ran, ok bool) {
+	if e.consolidate == nil || time.Since(e.checkedConsolidation) < time.Minute {
+		return false, false
+	}
+	e.checkedConsolidation = time.Now()
+	scope, job, claimed, err := e.store.ClaimConsolidation()
+	if err != nil || !claimed {
+		return false, false
+	}
+	e.mu.Lock()
+	cfg := e.cfg
+	e.mu.Unlock()
+	started := time.Now()
+	ctx, cancel := context.WithTimeout(e.ctx, 120*time.Second)
+	ops, runErr := e.consolidate(ctx, cfg, job)
+	cancel()
+	if runErr != nil && e.ctx.Err() == nil {
+		log.Printf("memory consolidation failed (agent %s): %s", job.ExtractorAgent, textutil.ClipRunes(strings.Join(strings.Fields(runErr.Error()), " "), 400))
+	}
+	entries, commitErr := e.store.CompleteConsolidation(scope, job.Key, ops, time.Since(started), runErr, e.ctx.Err() != nil)
+	if commitErr != nil {
+		entries, commitErr = e.store.CompleteConsolidation(scope, job.Key, ops, time.Since(started), runErr, e.ctx.Err() != nil)
+	}
+	// onSaved hears consolidations with a zero extraction job.
+	if len(entries) > 0 && e.onSaved != nil {
+		e.onSaved(scope, memory.ExtractionJob{}, entries)
+	}
+	return true, runErr == nil && commitErr == nil
+}
+
 // NewEngine starts an engine for store that asks Claude Code through cfg,
 // or Codex, and calls onSaved with the memories each job saved.
 func NewEngine(parent context.Context, store *memory.Store, cfg claude.CLI, onSaved func(memory.Scope, memory.ExtractionJob, []memory.Entry)) *Engine {
 	ctx, cancel := context.WithCancel(parent)
-	e := &Engine{store: store, ctx: ctx, cancel: cancel, wake: make(chan struct{}, 1), cfg: cfg, extract: Extract}
+	e := &Engine{store: store, ctx: ctx, cancel: cancel, wake: make(chan struct{}, 1), cfg: cfg, extract: Extract, consolidate: Consolidate}
 	e.onSaved = onSaved
 	go e.loop()
 	return e

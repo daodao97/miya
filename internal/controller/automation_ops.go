@@ -204,6 +204,7 @@ func (h automationHost) Changed() {
 // every automation.TickInterval from now on.
 func (c *Controller) StartAutomations(path string, schedule bool) {
 	c.Auto = automation.NewRunner(automationHost{c}, path)
+	c.Auto.Hold = c.Pressure.Agent
 	// Reviews still waiting from before wait among the approvals again.
 	c.syncReviewApprovals()
 	done := make(<-chan struct{})

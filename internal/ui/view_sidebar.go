@@ -36,6 +36,7 @@ func (app *App) SidebarView(c *ui.Context) {
 				}
 			})
 			app.sidebarActivity(c.Key("activity"))
+			app.sidebarBots(c.Key("bots"))
 			ui.Row(c).AlignItems(ui.Center).Margin(28, 0, 4, 0).Padding(0, 12, 0, 20).Children(func() {
 				ui.Text(c, tr("Projects")).FontSize(11).TextColor(widgets.Faint).Grow(1)
 				if widgets.ToolButton(c.Key("add-project"), "folder-plus", tr("Select project")).Clicked() {
@@ -63,13 +64,13 @@ func (app *App) SidebarView(c *ui.Context) {
 
 // Activity spans projects, including conversations hidden by the compact list.
 func (app *App) sidebarActivity(c *ui.Context) {
-	running, completed := app.SidebarActivityThreads()
+	waiting, running, completed := app.SidebarActivityThreads()
 	ui.Column(c).PaddingX(12).Children(func() {
-		widgets.SidebarActivity(c, running, completed, 11, 8, widgets.Faint, app.threadRow)
+		widgets.SidebarActivity(c, waiting, running, completed, 11, 8, widgets.Faint, app.threadRow)
 	})
 }
 
-func (app *App) SidebarActivityThreads() (running, completed []model.Thread) {
+func (app *App) SidebarActivityThreads() (waiting, running, completed []model.Thread) {
 	s := app.C.State()
 	projects := make([]model.ProjectSnapshot, 0, len(s.Projects())+1)
 	seen := map[string]bool{}
@@ -108,7 +109,7 @@ func (app *App) SidebarActivityThreads() (running, completed []model.Thread) {
 			projects = append([]model.ProjectSnapshot{{Threads: threads}}, projects...)
 		}
 	}
-	return msgfmt.SidebarActivityThreads(projects, app.C.DesktopThreadUnread)
+	return msgfmt.SidebarActivityThreads(projects, app.C.WaitingThreads().Has, app.C.DesktopThreadUnread)
 }
 
 func (app *App) nav(c *ui.Context, symbol, label string) ui.Element {
@@ -323,6 +324,9 @@ func (app *App) header(c *ui.Context) {
 			}
 		}
 		title := strings.Join(strings.Fields(app.C.Current().Title), " ")
+		if b, ok := app.C.CurrentBot(); ok {
+			title = b.Name
+		}
 		if app.Section != "" {
 			title = tr(app.Section)
 		}

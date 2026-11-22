@@ -104,7 +104,7 @@ func (rn *Runner) review(a Automation, r *ActiveRun, dir, action string) Answer 
 		rn.trimReviews()
 		rn.Persist()
 		rn.host.Changed()
-		rn.host.Deliver(notification.Notice{ID: "miya-auto-review-" + id, Title: a.Name + " · " + tr("Waiting for your review"), Body: textutil.ClipRunes(action, 300)})
+		rn.host.Deliver(notification.Notice{ID: "miya-auto-review-" + id, Title: a.Name + " · " + tr("Waiting for your review"), Body: textutil.ClipRunes(action, 300), Urgent: true})
 	}
 	return Answer{Decided: true, Message: fmt.Sprintf("Miya sent this action to the user for review as #%s; it did not run. Do not try another way to do it. Finish the work that does not depend on it, then end this run, saying in report_result what waits for review. When the user decides, Miya starts a new run of this automation with the decision; if it is approved, run the same command again then.", id)}
 }

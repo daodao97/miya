@@ -234,9 +234,10 @@ func (b Adapter) SetModel(v string)       { b.host.SetModel(v) }
 func (b Adapter) SetEffort(v string)      { b.host.SetEffort(v) }
 
 func (b Adapter) ModelOptions() []agent.ModelOption {
+	defaultID := defaultModel(b.host.Snapshot())
 	var out []agent.ModelOption
 	for _, v := range b.ModelChoices() {
-		out = append(out, agent.ModelOption{Value: v, Label: b.ModelLabel(v), Efforts: append([]string(nil), piEfforts...)})
+		out = append(out, agent.ModelOption{Value: v, Label: textutil.FirstNonEmpty(v, defaultID), Efforts: append([]string(nil), piEfforts...)})
 	}
 	return out
 }

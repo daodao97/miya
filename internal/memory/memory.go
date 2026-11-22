@@ -77,6 +77,8 @@ type Entry struct {
 	ValidUntil time.Time `json:"validUntil,omitzero"`
 	State      string    `json:"state"`
 	Supersedes uint64    `json:"supersedes,omitempty"`
+	// MergedInto names the entry a merged entry was folded into.
+	MergedInto string    `json:"mergedInto,omitempty"`
 	CreatedAt  time.Time `json:"createdAt"`
 	UpdatedAt  time.Time `json:"updatedAt"`
 }

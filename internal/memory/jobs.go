@@ -111,7 +111,7 @@ func jobRelated(s *Store, scope Scope, job ExtractionJob) []Entry {
 			text.WriteByte('\n')
 		}
 	}
-	entries, _ := s.search(scope, text.String(), job.TaskKey, 5)
+	entries, _ := s.search(scope, []string{text.String()}, job.TaskKey, 5)
 	var out []Entry
 	for _, e := range entries {
 		if e.Scope == scope {
@@ -284,6 +284,11 @@ func (s *Store) RecoverExtractions() error {
 					j.State = JobPending
 				}
 			}
+		}
+		// An interrupted consolidation keeps its attempt and becomes due again.
+		if c := &d.Consolidation; c.State == JobRunning {
+			changed = true
+			c.State, c.Key, c.Offered = "", "", nil
 		}
 		if changed {
 			if err = s.commit(d); err != nil {
@@ -540,26 +545,7 @@ func (s *Store) CompleteExtraction(scope Scope, key string, candidates []Candida
 		if candidate.Action == "forget" {
 			s.searchIndex = nil
 			i, _ := target(d, m.ID, m.Version)
-			old := d.Entries[i]
-			mark := tombstone{ID: old.ID, Version: old.Version, Revision: d.Revision + 1}
-			kept := make([]Entry, 0, len(d.Entries))
-			for _, e := range d.Entries {
-				if e.ID != old.ID {
-					kept = append(kept, e)
-					continue
-				}
-				sum := sha256.Sum256([]byte(e.Content))
-				mark.Digests = append(mark.Digests, hex.EncodeToString(sum[:]))
-				for _, src := range e.Sources {
-					src.Quote = ""
-					mark.Sources = append(mark.Sources, src)
-				}
-			}
-			e := Entry{ID: old.ID, Version: old.Version + 1, Scope: scope, State: EntryForgotten, CreatedAt: old.CreatedAt, UpdatedAt: s.now()}
-			d.Entries = append(kept, e)
-			d.Tombstones = append(d.Tombstones, mark)
-			scrubForgottenJobs(&d, old.ID, mark.Sources, s.now())
-			accepted = append(accepted, e)
+			accepted = append(accepted, s.forgetIn(&d, scope, i))
 			continue
 		}
 		if candidate.Action != "add" && candidate.Action != "supersede" && candidate.Action != "conflict" {
@@ -637,6 +623,13 @@ type ExtractionStatus struct {
 	LastDetail string `json:"lastDetail,omitempty"`
 	// PausedUntil is set while repeated failures stop new rounds from queueing.
 	PausedUntil time.Time `json:"pausedUntil,omitzero"`
+	// ConsolidatedAt is the last consolidation that finished without error,
+	// with what it merged and marked as conflicts.
+	ConsolidatedAt      time.Time `json:"consolidatedAt,omitzero"`
+	Merged              int       `json:"merged,omitempty"`
+	Conflicts           int       `json:"conflicts,omitempty"`
+	ConsolidationError  string    `json:"consolidationError,omitempty"`
+	ConsolidationDetail string    `json:"consolidationDetail,omitempty"`
 }
 
 func (s *Store) ExtractionStatus(scope Scope) (ExtractionStatus, error) {
@@ -681,6 +674,11 @@ func (s *Store) ExtractionStatus(scope Scope) (ExtractionStatus, error) {
 	}
 	if until, paused := extractionPausedUntil(d, d.Settings.ExtractionAgent(), s.now()); paused {
 		out.PausedUntil = until
+	}
+	if c := d.Consolidation; c.Error != "" {
+		out.ConsolidationError, out.ConsolidationDetail = c.Error, c.Detail
+	} else if !c.CompletedAt.IsZero() {
+		out.ConsolidatedAt, out.Merged, out.Conflicts = c.CompletedAt, c.Merged, c.Conflicts
 	}
 	return out, nil
 }

@@ -51,8 +51,8 @@ func TestSidebarActivitySharedBetweenDesktopAndPhone(t *testing.T) {
 		m.ApplyPhoneState(state)
 	}
 	apply()
-	running, completed := app.SidebarActivityThreads()
-	phoneRunning, phoneCompleted := m.SidebarActivityThreads()
+	_, running, completed := app.SidebarActivityThreads()
+	_, phoneRunning, phoneCompleted := m.SidebarActivityThreads()
 	if len(running) != 8 || len(completed) != 8 || !reflect.DeepEqual(running, phoneRunning) || !reflect.DeepEqual(completed, phoneCompleted) {
 		t.Fatal("desktop and phone activity must share filtering, ordering and the complete cross-project lists")
 	}
@@ -61,8 +61,8 @@ func TestSidebarActivitySharedBetweenDesktopAndPhone(t *testing.T) {
 	}
 	c.SetProjects([]projectmodel.Project{{Name: "other", Path: "/other"}})
 	apply()
-	running, completed = app.SidebarActivityThreads()
-	phoneRunning, phoneCompleted = m.SidebarActivityThreads()
+	_, running, completed = app.SidebarActivityThreads()
+	_, phoneRunning, phoneCompleted = m.SidebarActivityThreads()
 	if !reflect.DeepEqual(running, phoneRunning) || !reflect.DeepEqual(completed, phoneCompleted) {
 		t.Fatal("an unregistered current project should have the same activity order on both clients")
 	}
@@ -74,13 +74,13 @@ func TestSidebarActivitySharedBetweenDesktopAndPhone(t *testing.T) {
 	}
 	c.MarkDesktopRead(appmodel.DesktopRead{Key: key, Version: 200})
 	apply()
-	_, completed = m.SidebarActivityThreads()
+	_, _, completed = m.SidebarActivityThreads()
 	if len(completed) != 7 {
 		t.Fatal("reading a desktop completion should remove it from the phone's activity too")
 	}
 	c.DesktopUnread = map[string]int64{}
 	apply()
-	_, completed = m.SidebarActivityThreads()
+	_, _, completed = m.SidebarActivityThreads()
 	if m.State.CompletionUnread == nil || len(completed) != 0 {
 		t.Fatal("an empty shared unread map must survive the phone wire format")
 	}
@@ -90,18 +90,18 @@ func TestMobileSidebarCompletionUnreadCompatibility(t *testing.T) {
 	m := testMobileApp()
 	thread := m.State.Projects[0].Threads[0]
 	m.State.Notifications.Unread = []notification.Unread{{ServerID: thread.ServerID}}
-	_, completed := m.SidebarActivityThreads()
+	_, _, completed := m.SidebarActivityThreads()
 	if len(completed) != 1 {
 		t.Fatal("older desktops should still use per-phone unread completions")
 	}
 	m.State.CompletionUnread = map[string]int64{}
-	_, completed = m.SidebarActivityThreads()
+	_, _, completed = m.SidebarActivityThreads()
 	if len(completed) != 0 {
 		t.Fatal("stale push unread state must not override an authoritative shared completion state")
 	}
 	m.State.CompletionUnread[appmodel.DesktopUnreadKey(thread)] = 100
 	m.State.Notifications.Unread = nil
-	_, completed = m.SidebarActivityThreads()
+	_, _, completed = m.SidebarActivityThreads()
 	if len(completed) != 1 {
 		t.Fatal("completion activity should work with push notifications disabled")
 	}

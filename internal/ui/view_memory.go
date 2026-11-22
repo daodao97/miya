@@ -300,6 +300,15 @@ func (app *App) memorySettings(c *ui.Context) {
 			footnote += fmt.Sprintf(tr("\nAutomatic extraction is paused after repeated failures and resumes after %s."), status.PausedUntil.Local().Format("15:04"))
 		}
 	}
+	if status := m.List.Extraction; status.ConsolidationError != "" {
+		footnote += tr("\nLatest consolidation issue: ") + tr(status.ConsolidationError)
+		if status.ConsolidationDetail != "" {
+			footnote += " (" + status.ConsolidationDetail + ")"
+		}
+	} else if !status.ConsolidatedAt.IsZero() {
+		footnote += fmt.Sprintf(tr("\nLatest consolidation: %s · %d merged · %d marked as conflicts"), status.ConsolidatedAt.Local().Format("01-02 15:04"), status.Merged, status.Conflicts)
+	}
+	footnote = strings.TrimPrefix(footnote, "\n")
 	widgets.SettingsGroup(c, tr("Project settings"), footnote, rows...)
 }
 

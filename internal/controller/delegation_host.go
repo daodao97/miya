@@ -32,7 +32,12 @@ func (h collaborationHostOf) Update(id int, f func(*model.Thread)) { h.c.Update(
 
 func (h collaborationHostOf) DrainQueue(id int) { h.c.drainQueue(id) }
 
-func (h collaborationHostOf) Submit(req model.SendRequest) int { return h.c.SubmitExpanded(req) }
+func (h collaborationHostOf) Submit(req model.SendRequest) int {
+	if req.Bot != "" {
+		return h.c.submitBotTask(req)
+	}
+	return h.c.SubmitExpanded(req)
+}
 
 func (h collaborationHostOf) Permission(t model.Thread) string { return h.c.permissionForThread(t) }
 

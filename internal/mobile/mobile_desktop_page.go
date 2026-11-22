@@ -776,10 +776,15 @@ func (m *App) desktopGestures(p *MobileDesktopPage, events []ui.GestureEvent) {
 	for _, e := range events {
 		switch e.Kind {
 		case "pinch":
-			if e.Scale > 0 {
+			// The mobile backend ends gestures with neutral cumulative values.
+			// Their resulting deltas undo the gesture if applied on release.
+			if e.Phase == "change" && e.Scale > 0 {
 				p.SetZoom(p.Zoom * e.Scale)
 			}
 		case "pan":
+			if e.Phase != "change" {
+				continue
+			}
 			if p.Trackpad && p.Active {
 				m.desktopScroll(p, p.Cursor, e.DX*2, e.DY*2)
 			} else {

@@ -354,6 +354,13 @@ func (app *App) composerInput(c *ui.Context) {
 		placeholder = tr("Enter to queue, ⌘Enter to steer now")
 	}
 	label := tr("Message ") + cc.CurrentAgentControls().Name()
+	if b, ok := cc.CurrentBot(); ok {
+		// A Bot's conversation is addressed to the Bot, not to its agent.
+		label = tr("Message ") + b.Name
+		if !cur.Busy {
+			placeholder = fmt.Sprintf(tr("Message %s… / Commands · @ Files"), b.Name)
+		}
+	}
 	ui.Column(c).FillWidth().MinWidth(0).Gap(4).Children(func() {
 		width := min(float32(744), max(200, c.Root().Bounds().W-340))
 		in := app.ThreadInput(c.Key("composer"), &m.Input, cc.State().Draft(), fmt.Sprintf("%s:%d:%s", cc.State().Cwd, cur.ID, cc.CurrentAgent()), label, placeholder, 13, width, 2, 10, func(text string) {

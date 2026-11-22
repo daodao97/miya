@@ -8,11 +8,11 @@ import (
 
 // SidebarActivity shares activity sections while each platform supplies its
 // conversation row, typography and palette.
-func SidebarActivity(c *ui.Context, running, completed []model.Thread, fontSize, headerInset float32, color ui.Color, row func(*ui.Context, model.Thread)) {
+func SidebarActivity(c *ui.Context, waiting, running, completed []model.Thread, fontSize, headerInset float32, color ui.Color, row func(*ui.Context, model.Thread)) {
 	for _, group := range []struct {
 		key, label string
 		threads    []model.Thread
-	}{{"running", tr("In progress"), running}, {"completed", tr("Completed"), completed}} {
+	}{{"waiting", tr("Waiting for you"), waiting}, {"running", tr("In progress"), running}, {"completed", tr("Completed"), completed}} {
 		if len(group.threads) == 0 {
 			continue
 		}

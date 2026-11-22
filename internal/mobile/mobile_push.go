@@ -42,10 +42,34 @@ func (m *App) setupPush() {
 	})
 }
 
-// notificationData decodes what a push carries, as JSON.
+// notificationData decodes what a push carries, as JSON. A push carries
+// Miya's data under "mygo" (apns.Payload), beside "aps": a tap tells its
+// userInfo as it is, an object there, and SetPresentation as strings, the
+// object's JSON there. Strings at the top, as of the app's own
+// notifications, are kept.
 func notificationData(data []byte) map[string]string {
-	var d map[string]string
-	_ = json.Unmarshal(data, &d)
+	var raw map[string]json.RawMessage
+	if json.Unmarshal(data, &raw) != nil {
+		return nil
+	}
+	d := map[string]string{}
+	for k, v := range raw {
+		var s string
+		if json.Unmarshal(v, &s) == nil {
+			d[k] = s
+		}
+	}
+	nested := raw["mygo"]
+	if s, ok := d["mygo"]; ok {
+		nested = json.RawMessage(s)
+		delete(d, "mygo")
+	}
+	var inner map[string]string
+	if len(nested) > 0 && json.Unmarshal(nested, &inner) == nil {
+		for k, v := range inner {
+			d[k] = v
+		}
+	}
 	return d
 }
 

@@ -133,8 +133,8 @@ type DelegationTask struct {
 
 | 工具 | 作用 | 边界 |
 | --- | --- | --- |
-| `list_agents` | 查询可用 Agent 及配置能力 | 由现有注册表生成 |
-| `start_task` | 创建独立会话并提交任务 | 接受后立即返回 TaskID |
+| `list_agents` | 查询可用 Agent 及配置能力，以及本项目的 Bot | Agent 由现有注册表生成；Bot 只列调用会话所在项目的 |
+| `start_task` | 创建独立会话并提交任务；带 `bot` 时进入该 Bot 的常驻对话 | 接受后立即返回 TaskID |
 | `read_task` | 读取状态、进度和结果 | 不启动执行，读取不消费结果 |
 | `wait_task` | 有界等待指定任务 | 默认 30 秒，最大 120 秒，超时不取消任务 |
 | `send_thread` | 向已有空闲会话提交任务 | 返回新的 TaskID，不静默排队 |
@@ -175,6 +175,8 @@ type DelegationTask struct {
 `send_thread` 的目标参数使用完整 ThreadRef。目标忙碌或正在启动时返回 `THREAD_BUSY`；历史未加载时返回明确的加载状态或可重试错误，不通过 Claude 原有的自动入队路径接受任务。检查和目标占用预留必须在同一次 executor 操作中完成。协作额度已满时同样立即返回 `QUOTA_EXHAUSTED`，不进入 queued，也不在等待额度期间预留目标会话，避免与用户在该会话的手动输入冲突。
 
 既有会话的 Agent 以目标 ThreadRef 为准，不能由参数切换后端；目标属于其他项目时明确拒绝，不沿用调用方目录偷偷执行。`previous_task_id` 只关联同一目标上调用方可见的旧任务，不改变权限或执行归属。目标存在活跃 Goal、Loop、待续轮的原生子任务或未核对提交时同样拒绝接受，防止原生自动续轮与受管执行争用目标。
+
+`start_task` 的 `bot` 参数写 `list_agents` 返回的 Bot 名字，任务进入该 Bot 的常驻对话（见 [Personal Agent 实现路径](personal-agent.md) 的 P4）。对话已存在时按 `send_thread` 的规则检查，忙碌返回 `THREAD_BUSY`；还没有对话时由这个任务创建并记到 Bot 名下，此时 Bot 的访问级别不能比发起会话自己的权限宽，否则返回 `ACCESS_DENIED`。`bot` 不能和 `agent`、`model`、`effort`、`access` 同时出现；Bot 属于其他项目时拒绝。重试比较用请求里写的名字，名字对应的 Bot 在首次接受时确定。
 
 `read_thread` 继续读取会话摘要；`read_task` 读取固定执行的结果，不改变现有摘要接口的含义。新工具的结构化输出包含 `task_id`、`state`、`thread`、`revision` 和结果可用性，供模型直接使用。`read_task`、`wait_task` 与 `list_tasks` 只对任务的发起会话、目标会话及其派生链上的祖先会话可见；同项目的其他会话需要通过桌面或手机界面查看。
 

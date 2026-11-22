@@ -81,7 +81,7 @@ func (rn *Runner) tickBriefing(now time.Time) {
 	rn.Store.BriefedAt = now
 	rn.Persist()
 	if body, ok := rn.BriefingText(now.Add(-24*time.Hour), now); ok {
-		rn.host.Deliver(notification.Notice{ID: "miya-briefing-" + at.Format("2006-01-02"), Title: tr("Miya · Daily briefing"), Body: body})
+		rn.host.Deliver(notification.Notice{ID: "miya-briefing-" + at.Format("2006-01-02"), Title: tr("Miya · Daily briefing"), Body: body, Category: "briefing"})
 	}
 }
 

@@ -145,7 +145,7 @@ func (rn *Runner) afterProgress(a Automation, run Run) {
 	rn.Persist()
 	rn.host.Changed()
 	rn.host.Deliver(notification.Notice{ID: "miya-auto-stall-" + a.ID, Title: a.Name + " · " + tr("Stalled"),
-		Body: fmt.Sprintf(tr("%d runs in a row found nothing new."), n) + " " + tr("Triggered runs wait until you edit it or run it now.")})
+		Body: fmt.Sprintf(tr("%d runs in a row found nothing new."), n) + " " + tr("Triggered runs wait until you edit it or run it now."), Urgent: true})
 }
 
 // unstall ends an automation's stall.

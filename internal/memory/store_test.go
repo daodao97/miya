@@ -386,3 +386,28 @@ func TestSearchUsesCompactSourcesWithoutRemovingStoredEvidence(t *testing.T) {
 		t.Fatal("compact recall removed stored evidence")
 	}
 }
+func TestSearchAlternateWordingsKeepBestScore(t *testing.T) {
+	s, scope := fixture(t)
+	precise := save(t, s, scope, mutation(s, "connectService 判断后台版本"))
+	broad := save(t, s, scope, mutation(s, "background 和 upgrade 的说明"))
+	if got, _ := s.Search(scope, "background upgrade", "", 5); len(got) != 1 || got[0].ID != broad.ID {
+		t.Fatalf("english only: %v", got)
+	}
+	got, err := s.Search(scope, "background upgrade", "", 5, "后台版本")
+	if err != nil || len(got) != 2 {
+		t.Fatalf("translation did not reach chinese memory: %v %v", got, err)
+	}
+	// Three wordings each give the broad entry a weak match; summed they would
+	// beat the exact phrase, but only the best wording counts.
+	got, _ = s.Search(scope, "后台版本", "", 5, "background upgrade", "upgrade background", "background, upgrade")
+	if len(got) != 2 || got[0].ID != precise.ID {
+		t.Fatalf("alternates outranked the precise match: %v", got)
+	}
+	if got, _ := s.Search(scope, "", "", 5, "", "   ", "!!"); len(got) != 0 {
+		t.Fatalf("empty wordings recalled data: %v", got)
+	}
+	many := []string{"a1", "a2", "a3", "a4", "a5", "a6", "后台版本"}
+	if got, _ := s.Search(scope, "xyzNotRelated", "", 5, many...); len(got) != 0 {
+		t.Fatalf("wordings past the limit were searched: %v", got)
+	}
+}

@@ -46,6 +46,12 @@ func (c *Controller) PhoneSnapshot() phoneproto.State {
 	for key, version := range c.DesktopUnread {
 		s.CompletionUnread[key] = version
 	}
+	for key, what := range c.WaitingThreads() {
+		if s.Waiting == nil {
+			s.Waiting = map[string]string{}
+		}
+		s.Waiting[key] = what
+	}
 	s.Collaboration = c.CollaborationCapabilities()
 	s.DesktopWindows = s.DesktopControl
 	s.AutomationRun = c.Auto != nil

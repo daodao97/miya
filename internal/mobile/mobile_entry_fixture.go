@@ -31,7 +31,6 @@ func MobileEntry() {
 	source := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	thread := model.Thread{ID: 1, ServerID: "input-fixture", Agent: agentmeta.Default().ID, Title: tr("Native input interaction test"), HistoryLoaded: true}
 	m.State = phoneproto.State{ReferenceSource: source, Projects: []model.ProjectSnapshot{{Name: "Miya", Path: "/input-fixture", Current: true, Threads: []model.Thread{thread}}}}
-	m.Router().Transition = ui.TransitionNone
 	m.OpenThread(thread)
 	m.ShowThread(thread)
 	if os.Getenv("MIYA_INPUT_AUTH_TEST") == "1" {

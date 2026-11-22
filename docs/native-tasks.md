@@ -37,6 +37,23 @@ Miya 调用 app-server 的 `thread/goal/get`、`set`、`clear`，以 `origin: us
 
 Loop 仍遵循 Claude 的会话生命周期和过期规则。服务退出或进程异常后，内存任务结束；原生持久任务能否恢复由 Claude Code 管理。Miya 不把 Loop 转换为 Automations。
 
+## 和计划中的跟进计时器的关系
+
+`follow_up` 是计划中的 MCP 工具（`docs/personal-agent.md` 的 P1.5），还没有实现。它和上面两种原生任务各管一件事，互不转换：
+
+| | Goal / Loop | `follow_up`（计划中） |
+| --- | --- | --- |
+| 谁发起 | 用户用 `/goal`、`/loop` | 对话里的 Agent 自己 |
+| 做什么 | 持续推进一个目标，或反复执行同一段提示 | 一次性：到期时把一句说明作为新消息交回同一个对话 |
+| 谁保存 | CLI 自己；Miya 只读取和显示 | Miya 后台，落盘 |
+| 服务或进程退出后 | Loop 的内存任务结束，能否恢复由 Claude Code 决定 | 还在，到期照常投递 |
+| 适用的 Agent | Goal 只有 Codex，Loop 只有 Claude Code | 所有 Agent |
+
+- 用户要的反复检查（「每 5 分钟看一次部署」）用 Loop。Agent 自己说「稍后再看」，而这件事可能要跨过进程退出或后台重启，用 `follow_up`。
+- Claude Code 在 Loop 里用 `ScheduleWakeup` 给自己排下一次，这仍然是 Loop 的一部分，Miya 不把它改写成 `follow_up`。
+- 还没到期的跟进和 Loop 一样列在这个状态栏里，显示到期时间和那句说明，可以取消；用户停止对话时一并取消。
+- 要长期按时间或条件反复运行、并且不依赖某个对话还开着的事，是 Automations（`docs/automations.md`），不是这两者。
+
 ## 验证
 
 常规 `go test ./...` 包含原生 RPC、调度跨轮存活、普通消息复用、取消结果、后台项目路由、手机任务元数据增量和桌面/手机布局测试。可用 `MIYA_TASK_SNAPSHOT=/tmp/miya-tasks go test ./tests/integration -run TestTaskBarDesktopAndMobile` 导出渲染快照。

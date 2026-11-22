@@ -224,7 +224,7 @@ func (app *View) MessageList(c *ui.Context, t model.Thread) {
 						}
 					}
 					if completedGroup >= 0 {
-						responseDiffStats(c.Key("diff-stats"), groups[completedGroup].DiffStats)
+						diffStatsView(c.Key("diff-stats"), groups[completedGroup].DiffStats, true)
 						app.responseActions(c.Key("response-actions"), groups[completedGroup])
 					}
 					// The phone's short hint and the Agent tasks toggle keep to the
@@ -313,7 +313,7 @@ func (app *View) groupViewWithFooter(c *ui.Context, g msgfmt.MessageGroup, inlin
 					if elapsed != "" {
 						ui.Text(c, "·").TextColor(widgets.Muted).FontSize(11)
 					}
-					responseDiffStats(c, stats)
+					diffStatsView(c, stats, true)
 				})
 			}
 			copied := app.Copied[g.ID]
@@ -361,22 +361,26 @@ func (app *View) activityRunView(c *ui.Context, run msgfmt.ActivityRun, streamin
 		app.MessageView(c.Key(msgfmt.MessageViewKey(run.Messages[0])), run.Messages[0], streaming)
 		return
 	}
-	// Activity batches only expand through the user's explicit toggle.
+	summary := msgfmt.SummarizeActivities(run.Messages)
 	agents := subagent.Latest(run.Messages)
+	label := summary.Label
+	if s := subagent.Counts(agents); s != "" {
+		label += " · " + s
+	}
 	expanded := app.Open[-run.ID]
+	height := float32(28)
+	if app.Mobile {
+		height = 44
+	}
 	ui.Column(c).FillWidth().Gap(4).Children(func() {
-		header := widgets.Quiet(c.Key("header")).PaddingX(0).AlignSelf(ui.Start)
-		// Sub-agents inside a collapsed run still show that they work.
+		header := widgets.Quiet(c.Key("header")).FillWidth().Height(0).MinHeight(height).PaddingX(0).Gap(6).
+			Role(ui.RoleDisclosure).Expanded(expanded).Label(label)
 		header.Children(func() {
-			widgets.Icon(c, "stack-2", 14, widgets.Muted)
-			if subagent.AnyActive(agents) {
-				ui.Spinner(c).FontSize(12)
+			if summary.Running || subagent.AnyActive(agents) {
+				ui.Spinner(c).FontSize(12).Shrink(0)
 			}
-			label := fmt.Sprintf("%d activities", len(run.Messages))
-			if s := subagent.Counts(agents); s != "" {
-				label += " · " + s
-			}
-			widgets.MutedText(c, label)
+			widgets.MutedText(c, label).MinWidth(0).Shrink(1).Wrap()
+			diffStatsView(c.Key("diff-stats"), summary.DiffStats, false)
 			app.Chevron(c, expanded)
 		})
 		if header.Clicked() {

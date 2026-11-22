@@ -294,7 +294,7 @@ func (rn *Runner) afterLine(id, tid string, ev StreamEvent) {
 	switch {
 	case ev.Err != "":
 		if st.Errors == probeErrorNotice {
-			rn.host.Deliver(notification.Notice{ID: "miya-auto-probe-" + key, Title: a.Name + " · " + tr("Condition check failing"), Body: st.Error})
+			rn.host.Deliver(notification.Notice{ID: "miya-auto-probe-" + key, Title: a.Name + " · " + tr("Condition check failing"), Body: st.Error, Category: "probe:" + a.ID, Topic: a.Name})
 		}
 	case ev.Line != "":
 		reason := fmt.Sprintf("`%s` printed: %s", commandLabel(*t.Condition), st.Value)

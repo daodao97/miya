@@ -10,7 +10,10 @@ import (
 
 func NewMemoryEngine(c *Controller) *extractor.Engine {
 	cfg := c.claudeCLI()
-	return extractor.NewEngine(c.parentContext(), c.Memories().Store, cfg, c.MemorySaved)
+	e := extractor.NewEngine(c.parentContext(), c.Memories().Store, cfg, c.MemorySaved)
+	// Memory work waits while the person's own conversations run.
+	e.SetHold(c.Pressure.Waiting)
+	return e
 }
 
 // memorySaved hears of the memories the engine saved. Automatic extraction

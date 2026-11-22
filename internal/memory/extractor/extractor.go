@@ -27,10 +27,29 @@ const memoryExtractionSystem = "You are Miya's project memory extractor. Analyze
 // The extractor uses no main-session arguments, tools, MCP, hooks, skills or
 // workspace. Authentication/provider environment remains the configured user's.
 func memoryExtractorArgs() []string {
-	return []string{"-p", "--output-format", "json", "--json-schema", memoryExtractionSchema, "--tools", "", "--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`, "--disable-slash-commands", "--no-session-persistence", "--safe-mode", "--setting-sources", "user", "--settings", `{"disableAllHooks":true}`, "--no-chrome", "--system-prompt", memoryExtractionSystem}
+	return claudeArgs(memoryExtractionSchema, memoryExtractionSystem)
+}
+
+func claudeArgs(schema, system string) []string {
+	return []string{"-p", "--output-format", "json", "--json-schema", schema, "--tools", "", "--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`, "--disable-slash-commands", "--no-session-persistence", "--safe-mode", "--setting-sources", "user", "--settings", `{"disableAllHooks":true}`, "--no-chrome", "--system-prompt", system}
 }
 
 func WithClaude(ctx context.Context, cfg claude.CLI, job memory.ExtractionJob) ([]memory.Candidate, error) {
+	input, err := job.InputJSON()
+	if err != nil {
+		return nil, err
+	}
+	raw, err := runClaude(ctx, cfg, memoryExtractorArgs(), input, "extraction", "extract memories")
+	if err != nil {
+		return nil, err
+	}
+	return decodeMemoryCandidates(raw)
+}
+
+// runClaude makes one isolated Claude Code call with args and returns its
+// structured output. what names the call in errors; task describes it to the
+// structured output parser.
+func runClaude(ctx context.Context, cfg claude.CLI, args []string, input []byte, what, task string) ([]byte, error) {
 	bin := cfg.Binary
 	if bin == "" {
 		var err error
@@ -44,11 +63,7 @@ func WithClaude(ctx context.Context, cfg claude.CLI, job memory.ExtractionJob) (
 		return nil, err
 	}
 	defer os.RemoveAll(dir)
-	input, err := job.InputJSON()
-	if err != nil {
-		return nil, err
-	}
-	cmd := exec.CommandContext(ctx, bin, memoryExtractorArgs()...)
+	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.WaitDelay = time.Second
 	cmd.Dir = dir
 	cmd.Env = processenv.Environ(bin, cfg.Env...)
@@ -56,15 +71,14 @@ func WithClaude(ctx context.Context, cfg claude.CLI, job memory.ExtractionJob) (
 	// Never return stdout/stderr in routine errors: either can contain evidence.
 	var output extractionOutput
 	cmd.Stdout = &output
-	err = cmd.Run()
-	if err != nil {
-		return nil, errors.New("Claude extraction failed")
+	if err = cmd.Run(); err != nil {
+		return nil, errors.New("Claude " + what + " failed")
 	}
-	raw, err := claude.StructuredOutput(output.Bytes(), "extract memories")
+	raw, err := claude.StructuredOutput(output.Bytes(), task)
 	if err != nil {
-		return nil, errors.New("Unable to parse Claude extraction result")
+		return nil, errors.New("Unable to parse Claude " + what + " result")
 	}
-	return decodeMemoryCandidates(raw)
+	return raw, nil
 }
 
 func decodeMemoryCandidates(raw []byte) ([]memory.Candidate, error) {

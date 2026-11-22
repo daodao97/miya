@@ -51,13 +51,17 @@ func (c *Controller) agentStatuses() []model.AgentStatus {
 }
 
 // agentList is list_agents' result: each agent, whether it is ready, and its
-// model and thinking choices.
-func (c *Controller) agentList() map[string]any {
+// model and thinking choices, then the Bots of the caller's project.
+func (c *Controller) agentList(project string) map[string]any {
 	var agents []map[string]any
 	for _, st := range c.agentStatuses() {
 		agents = append(agents, map[string]any{"id": st.ID, "name": st.Name, "ready": st.Ready, "models": st.ModelChoices, "efforts": st.EffortChoices})
 	}
-	return map[string]any{"agents": agents}
+	out := map[string]any{"agents": agents}
+	if bots := c.botList(project); len(bots) > 0 {
+		out["bots"] = bots
+	}
+	return out
 }
 
 // stopAgentRun asks a conversation's agent to stop its turn.
@@ -70,6 +74,12 @@ func (c *Controller) ApprovalOwner(a codex.Approval) agent.Adapter { return c.Ba
 func (c *Controller) CurrentAgent() string {
 	if t := c.Current(); t.ID != 0 {
 		return model.ThreadAgent(t)
+	}
+	// An empty conversation opened from a Bot is for the Bot's agent.
+	if c.bots.draft != "" {
+		if b, ok := c.CurrentBot(); ok {
+			return b.Agent
+		}
 	}
 	if c.Agent != nil {
 		if id := c.BackendFor(c.Agent()).ID(); c.AgentEnabled(id) {
@@ -232,6 +242,19 @@ func (c *Controller) Submit(req model.SendRequest) int {
 		}
 		return id
 	}
+	// A message for a Bot goes to its standing conversation. The first one
+	// starts it, with the Bot's agent, project and settings.
+	startBot := ""
+	if req.Bot != "" && req.ThreadID == 0 {
+		var err error
+		if req, startBot, err = c.botRequest(req); err != nil {
+			c.LastSubmitError = err.Error()
+			if c.SetStatus != nil {
+				c.SetStatus(c.LastSubmitError)
+			}
+			return 0
+		}
+	}
 	_, existingSnapshots := model.SplitReferenceContext(req.Text)
 	if len(req.Parts) > 0 && len(existingSnapshots) == 0 {
 		var err error
@@ -259,6 +282,9 @@ func (c *Controller) Submit(req model.SendRequest) int {
 		c.LastSubmitError = err.Error()
 		c.SetStatus(err.Error())
 		return 0
+	}
+	if startBot != "" {
+		return c.startBotThread(startBot, req)
 	}
 	return c.SubmitExpanded(req)
 }

@@ -58,8 +58,8 @@ func (m *App) StartConversation(project, agent string) {
 	}
 }
 
-func (m *App) SidebarActivityThreads() (running, completed []model.Thread) {
-	return msgfmt.SidebarActivityThreads(m.allPhoneProjects(), m.completionUnread)
+func (m *App) SidebarActivityThreads() (waiting, running, completed []model.Thread) {
+	return msgfmt.SidebarActivityThreads(m.allPhoneProjects(), appmodel.Waiting(m.State.Waiting).Has, m.completionUnread)
 }
 
 func (m *App) completionUnread(thread model.Thread) bool {
@@ -71,12 +71,12 @@ func (m *App) completionUnread(thread model.Thread) bool {
 }
 
 func (m *App) drawerActivity(c *ui.Context) {
-	running, completed := m.SidebarActivityThreads()
-	if len(running)+len(completed) == 0 {
+	waiting, running, completed := m.SidebarActivityThreads()
+	if len(waiting)+len(running)+len(completed) == 0 {
 		return
 	}
 	ui.Column(c).FillWidth().Margin(0, 0, 16, 0).Children(func() {
-		widgets.SidebarActivity(c, running, completed, m.Font(13), 0, m.Pal.muted, m.drawerThread)
+		widgets.SidebarActivity(c, waiting, running, completed, m.Font(13), 0, m.Pal.muted, m.drawerThread)
 	})
 }
 

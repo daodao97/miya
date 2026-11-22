@@ -291,7 +291,7 @@ func (s *Coordinator) start(task dg.Task) {
 		if text == "" {
 			text = task.Prompt
 		}
-		id := s.host.Submit(model.SendRequest{ExecutionID: task.ID, Origin: "delegation", ThreadID: t.ID, Agent: task.Agent, Project: task.Workspace, Text: text, Model: task.Config.Model, Effort: task.Config.Effort, Policy: task.Config.Policy, ExplicitSettings: true, MemoryControl: true})
+		id := s.host.Submit(model.SendRequest{ExecutionID: task.ID, Origin: "delegation", Bot: startedBot(task), ThreadID: t.ID, Agent: task.Agent, Project: task.Workspace, Text: text, Model: task.Config.Model, Effort: task.Config.Effort, Policy: task.Config.Policy, ExplicitSettings: true, MemoryControl: true})
 		if id == 0 {
 			return nil, errors.New("Native submission was not started")
 		}
@@ -303,6 +303,15 @@ func (s *Coordinator) start(task dg.Task) {
 }
 
 func referenceSourceOf(raw string) string { ref, _ := model.ParseThreadURL(raw); return ref.Source }
+
+// startedBot is the Bot whose standing conversation a task starts, for the
+// host to record the new conversation as that Bot's.
+func startedBot(task dg.Task) string {
+	if task.NewSession {
+		return task.Bot
+	}
+	return ""
+}
 
 func (s *Coordinator) failBeforeStart(task dg.Task, err error) {
 	if saveErr := s.Manager.Observe(dg.Event{TaskID: task.ID, State: dg.Failed, Result: dg.Result{Error: err.Error()}}); saveErr != nil {

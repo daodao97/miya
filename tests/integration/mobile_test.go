@@ -269,3 +269,60 @@ func TestMobileDrawerScrimWobblyTap(t *testing.T) {
 		t.Fatal("a tap on the scrim that moves a little should still close the drawer")
 	}
 }
+
+// A quick throw stops the page where the drawer rests, closed or open: a
+// spring's overshoot swung it past the screen's left edge, which showed it
+// shifted left with an empty strip on the right.
+func TestMobileDrawerThrowStopsAtItsEdges(t *testing.T) {
+	m := testMobileApp()
+	m.State.Approvals = nil
+	tt := ui.NewTester(m.ViewRoot, 393, 852)
+	tt.Frame()
+	openMobileDrawer(t, tt)
+	if err := tt.Click("thread-one"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	tt.Advance(time.Second)
+	tt.Frame()
+	base, ok := tt.Find("More")
+	if !ok {
+		t.Fatal("the conversation page should have a More button")
+	}
+	shift := func() float32 {
+		r, _ := tt.Find("More")
+		return (r.X + r.W) - (base.X + base.W)
+	}
+	throw := func(x0, x1 float32, lo, hi float32) {
+		t.Helper()
+		tt.FingerDown(x0, 400)
+		tt.Frame()
+		for i := 1; i <= 4; i++ {
+			tt.Advance(8 * time.Millisecond)
+			tt.FingerMove(x0+(x1-x0)*float32(i)/4, 400)
+			tt.Frame()
+		}
+		tt.FingerUp(x1, 400)
+		tt.Frame()
+		for i := 0; i < 60; i++ {
+			tt.Advance(16 * time.Millisecond)
+			tt.Frame()
+			if dx := shift(); dx < lo-0.5 || dx > hi+0.5 {
+				t.Fatalf("%d ms after the throw the page is %.1f from where it rests, out of [%.0f, %.0f]", (i+1)*16, dx, lo, hi)
+			}
+		}
+	}
+	m.Menu = true
+	tt.Frame()
+	tt.Advance(time.Second)
+	tt.Frame()
+	w := m.DrawerW
+	throw(370, 90, 0, w)
+	if m.Menu || shift() != 0 {
+		t.Fatalf("a throw to the left should close the drawer: menu = %v, page at %.1f", m.Menu, shift())
+	}
+	throw(12, 300, 0, w)
+	if !m.Menu {
+		t.Fatal("a throw to the right should open the drawer")
+	}
+}

@@ -65,4 +65,7 @@ type SendRequest struct {
 	// KeepSessionSettings is used by native task controls, which must work
 	// even after the user has changed the next message's launch settings.
 	KeepSessionSettings bool
+	// Bot is the Bot the message is for. With no ThreadID it goes to the
+	// Bot's standing conversation, starting it when there is none.
+	Bot string `json:"bot,omitempty"`
 }

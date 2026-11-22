@@ -53,13 +53,17 @@ func currentTurnStatus(t model.Thread, groups []msgfmt.MessageGroup) (string, in
 	return "", -1
 }
 
-func responseDiffStats(c *ui.Context, stats model.DiffLineStats) {
+func diffStatsView(c *ui.Context, stats model.DiffLineStats, showZero bool) {
 	if stats.Added == 0 && stats.Deleted == 0 {
 		return
 	}
 	ui.Row(c).Shrink(0).Gap(4).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, fmt.Sprintf("+%d", stats.Added)).TextColor(widgets.Success).FontSize(11)
-		ui.Text(c, fmt.Sprintf("−%d", stats.Deleted)).TextColor(widgets.Danger).FontSize(11)
+		if stats.Added > 0 || showZero {
+			ui.Text(c, fmt.Sprintf("+%d", stats.Added)).TextColor(widgets.Success).FontSize(11)
+		}
+		if stats.Deleted > 0 || showZero {
+			ui.Text(c, fmt.Sprintf("−%d", stats.Deleted)).TextColor(widgets.Danger).FontSize(11)
+		}
 	})
 }
 
