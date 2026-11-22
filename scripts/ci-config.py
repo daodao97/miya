@@ -2,7 +2,7 @@
 """Adjust mygo.json for a CI packaging job. The checkout is disposable, so the
 file is edited in place; local builds keep the committed configuration.
 
-  scripts/ci-config.py [--version V] [--unsigned-ios]
+  scripts/ci-config.py [--version V] [--ios-build-number N]
                        [--ios-signing TEAM PROFILE_UUID]
                        [--notarize PROFILE KEYCHAIN]
 """
@@ -13,7 +13,7 @@ from pathlib import Path
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--version', help='app version, e.g. 1.2.3 (a leading v is dropped)')
-parser.add_argument('--unsigned-ios', action='store_true', help='drop ios.developmentTeam so the device build is unsigned')
+parser.add_argument('--ios-build-number', type=int, help='iOS bundle build number')
 parser.add_argument('--ios-signing', nargs=2, metavar=('TEAM', 'PROFILE_UUID'), help='manual Apple Distribution signing')
 parser.add_argument('--notarize', nargs=2, metavar=('PROFILE', 'KEYCHAIN'), help='notarytool keychain profile for the disk image')
 args = parser.parse_args()
@@ -28,23 +28,16 @@ if args.version:
     config['version'] = version
 
 ios = config.setdefault('ios', {})
-if args.unsigned_ios:
-    ios.pop('developmentTeam', None)
-    ios.pop('signing', None)
+if args.ios_build_number is not None:
+    ios['buildNumber'] = str(args.ios_build_number)
 if args.ios_signing:
     team, uuid = args.ios_signing
     if not re.fullmatch(r'[A-Z0-9]{10}', team):
         raise SystemExit('invalid team id')
     if not re.fullmatch(r'[A-Za-z0-9-]{1,100}', uuid):
         raise SystemExit('invalid profile UUID')
-    ios['developmentTeam'] = team
-    ios['signing'] = {
-        'style': 'manual',
-        'identity': 'Apple Distribution',
-        'provisioningProfile': uuid,
-        'exportCertificate': 'Apple Distribution',
-        'exportProfiles': {config['identifier']: uuid},
-    }
+    ios['team'] = team
+    ios['provisioningProfile'] = uuid
 
 if args.notarize:
     profile, keychain = args.notarize

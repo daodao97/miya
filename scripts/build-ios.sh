@@ -38,4 +38,4 @@ if config.get('i18n'):
         locale_stage.parent.mkdir(parents=True, exist_ok=True)
         locale_stage.symlink_to(root / locale_dir, target_is_directory=True)
 PY
-go tool mygo build -platform ios/arm64 "$@" "$STAGE"
+go tool mygo build -platform "${MIYA_IOS_PLATFORM:-ios/arm64}" "$@" "$STAGE"

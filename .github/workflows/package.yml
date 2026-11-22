@@ -7,7 +7,7 @@ name: Package
 #
 # Signing is optional. Without secrets the jobs still produce artifacts:
 #   macOS   ad hoc signed DMG (Gatekeeper blocks it on other Macs)
-#   iOS     unsigned device build (compile check; not installable)
+#   iOS     simulator build (no provisioning profile needed)
 #   Android debug-signed APK
 #
 # Secrets (all optional):
@@ -18,12 +18,6 @@ name: Package
 
 on:
   workflow_dispatch:
-    inputs:
-      ios_export_method:
-        description: IPA export method when iOS signing secrets are set
-        type: choice
-        options: [app-store-connect, release-testing, debugging, enterprise]
-        default: app-store-connect
   push:
     branches: [main]
     tags: ['v*']
@@ -134,7 +128,6 @@ jobs:
       IOS_CERTIFICATE_BASE64: ${{ secrets.IOS_CERTIFICATE_BASE64 }}
       IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
       IOS_PROFILE_BASE64: ${{ secrets.IOS_PROFILE_BASE64 }}
-      IOS_EXPORT_METHOD: ${{ inputs.ios_export_method || 'app-store-connect' }}
       IOS_BUILD_NUMBER: ${{ github.run_number }}
     steps:
       - uses: actions/checkout@v5
@@ -145,7 +138,7 @@ jobs:
         if: github.ref_type == 'tag'
         run: python3 scripts/ci-config.py --version "$GITHUB_REF_NAME"
       - name: Check the iOS tools
-        run: go tool mygo ios doctor
+        run: xcodebuild -showsdks
       - name: Import the distribution identity and profile
         if: env.IOS_CERTIFICATE_BASE64 != '' && env.IOS_PROFILE_BASE64 != ''
         run: |
@@ -169,35 +162,23 @@ jobs:
           profiles="$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"
           mkdir -p "$profiles"
           cp "$dir/profile.mobileprovision" "$profiles/$uuid.mobileprovision"
-          python3 scripts/ci-config.py --ios-signing "$team" "$uuid"
+          python3 scripts/ci-config.py --ios-signing "$team" "$uuid" --ios-build-number "$IOS_BUILD_NUMBER"
           echo "IOS_KEYCHAIN=$kc" >> "$GITHUB_ENV"
           echo "IOS_PROFILE_PATH=$profiles/$uuid.mobileprovision" >> "$GITHUB_ENV"
           echo "IOS_SIGNED=1" >> "$GITHUB_ENV"
-      - name: Build the signed archive and IPA
+      - name: Build the signed IPA
         if: env.IOS_SIGNED == '1'
         run: |
-          out="$RUNNER_TEMP/ios"
-          ./scripts/build-ios.sh -ios-archive -ios-export-method "$IOS_EXPORT_METHOD" -ios-build-number "$IOS_BUILD_NUMBER" -o "$out"
-          ipa=$(find "$out" -path '*/Export/*.ipa' -print -quit)
-          symbols=$(find "$out" -maxdepth 4 -path '*.xcarchive/dSYMs/*.dSYM' -print -quit)
-          if [ -z "$ipa" ]; then echo 'mygo build produced no IPA' >&2; exit 1; fi
-          check=(go tool mygo ios check -ipa "$ipa" -json)
-          if [ -n "$symbols" ]; then check+=(-symbols "$symbols"); fi
-          if [ "$IOS_EXPORT_METHOD" = app-store-connect ]; then check+=(-distribution); fi
-          "${check[@]}"
+          ./scripts/build-ios.sh
           mkdir -p "$RUNNER_TEMP/ios-artifact"
-          cp "$ipa" "$RUNNER_TEMP/ios-artifact/"
-          if [ -n "$symbols" ]; then ditto -c -k --keepParent "$symbols" "$RUNNER_TEMP/ios-artifact/Miya.dSYM.zip"; fi
-      - name: Build an unsigned device app
+          cp build/ios-arm64/*.ipa "$RUNNER_TEMP/ios-artifact/"
+      - name: Build the simulator app
         if: env.IOS_SIGNED != '1'
         run: |
-          python3 scripts/ci-config.py --unsigned-ios
-          out="$RUNNER_TEMP/ios"
-          ./scripts/build-ios.sh -ios-build-number "$IOS_BUILD_NUMBER" -o "$out"
-          app=$(find "$out" -maxdepth 3 -name '*.app' -print -quit)
-          if [ -z "$app" ]; then echo 'mygo build produced no app' >&2; exit 1; fi
+          python3 scripts/ci-config.py --ios-build-number "$IOS_BUILD_NUMBER"
+          MIYA_IOS_PLATFORM=ios/simulator ./scripts/build-ios.sh
           mkdir -p "$RUNNER_TEMP/ios-artifact"
-          ditto -c -k --keepParent "$app" "$RUNNER_TEMP/ios-artifact/Miya-ios-unsigned.zip"
+          ditto -c -k --keepParent build/ios-simulator/Miya.app "$RUNNER_TEMP/ios-artifact/Miya-ios-simulator.zip"
       - uses: actions/upload-artifact@v4
         with:
           name: miya-ios
@@ -247,11 +228,11 @@ jobs:
           CGO_ENABLED: '1'
         run: |
           ./scripts/build-android.sh
-          sha256sum build/android-arm64/Miya.apk
+          sha256sum build/android/*.apk
       - uses: actions/upload-artifact@v4
         with:
           name: miya-android
-          path: build/android-arm64/Miya.apk
+          path: build/android/*.apk
           if-no-files-found: error
           retention-days: 30
 
