@@ -56,6 +56,8 @@ type MobileDesktopPage struct {
 	Image           ui.ImageSource
 	ImageHash       [32]byte
 	Status          string
+	frameQuality    desktopFrameQuality
+	frameScale      float32
 
 	Zoom, PanX, panY float32
 	View             ui.Rect
@@ -399,16 +401,31 @@ func (m *App) DesktopPoll(p *MobileDesktopPage) {
 	}
 	p.Polling = true
 	revision := p.targetRevision
+	options := p.frameOptions()
 	m.desktopDo(p, func(ctx context.Context) func() {
-		data, locked, err := p.Client.Frame(ctx)
+		started := time.Now()
+		var data []byte
+		var locked bool
+		var err error
+		if options.MaxEdge == 0 {
+			data, locked, err = p.Client.Frame(ctx)
+		} else {
+			frameCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			data, locked, err = p.Client.FrameWithOptions(frameCtx, options)
+			cancel()
+		}
 		var image ui.ImageSource
 		if err == nil {
 			if image, _ = ui.DecodeImage(data); image == nil {
 				err = fmt.Errorf("%s", tr("Unable to decode the screen. Retrying."))
 			}
 		}
+		elapsed := time.Since(started)
 		return func() {
 			if revision == p.targetRevision {
+				if p.Active && options.MaxEdge != 0 {
+					p.frameQuality.observe(elapsed, err)
+				}
 				m.ReceiveDesktopFrame(p, data, image, locked, err)
 			}
 		}
@@ -585,18 +602,25 @@ func desktopDist(dx, dy float32) float32 {
 	return float32(math.Hypot(float64(dx), float64(dy)))
 }
 
-// imageRect is where the frame shows inside the viewport, in local DIPs.
+func desktopFitSize(image ui.ImageSource, view ui.Rect) (float32, float32) {
+	if image == nil {
+		return 0, 0
+	}
+	iw, ih := ui.ImageSize(image)
+	if iw <= 0 || ih <= 0 || view.W <= 0 || view.H <= 0 {
+		return 0, 0
+	}
+	scale := min(view.W/iw, view.H/ih)
+	return iw * scale, ih * scale
+}
+
+// ImageRect is where the frame shows inside the viewport, in local DIPs.
 func (p *MobileDesktopPage) ImageRect() (ui.Rect, bool) {
-	if p.Image == nil {
+	w, h := desktopFitSize(p.Image, p.View)
+	if w == 0 || h == 0 {
 		return ui.Rect{}, false
 	}
-	iw, ih := ui.ImageSize(p.Image)
-	vw, vh := p.View.W, p.View.H
-	if iw <= 0 || ih <= 0 || vw <= 0 || vh <= 0 {
-		return ui.Rect{}, false
-	}
-	s := min(vw/iw, vh/ih) * p.Zoom
-	w, h := iw*s, ih*s
+	w, h = w*p.Zoom, h*p.Zoom
 	maxX, maxY := max(0, (w-p.View.W)/2), max(0, (h-p.View.H)/2)
 	p.PanX, p.panY = desktopClamp(p.PanX, -maxX, maxX), desktopClamp(p.panY, -maxY, maxY)
 	return ui.Rect{X: (p.View.W-w)/2 + p.PanX, Y: (p.View.H-h)/2 + p.panY, W: w, H: h}, true
@@ -985,9 +1009,10 @@ func (m *App) desktopLiveView(c *ui.Context, p *MobileDesktopPage) {
 	if len(taps) > 0 {
 		c.After(16 * time.Millisecond) // animate until the ripples fade
 	}
-	if haveImage && (p.Trackpad || len(taps) > 0) {
-		trackpad, cursor, dragging := p.Trackpad, p.Cursor, p.pointer.active && p.pointer.drag
-		vp.DrawOver(func(painter *ui.Painter, box ui.Rect) {
+	trackpad, cursor, dragging := p.Trackpad, p.Cursor, p.pointer.active && p.pointer.drag
+	vp.DrawOver(func(painter *ui.Painter, box ui.Rect) {
+		p.frameScale = painter.Scale()
+		if haveImage && (trackpad || len(taps) > 0) {
 			now := time.Now()
 			for _, tap := range taps {
 				t := float32(now.Sub(tap.when)) / float32(DesktopTapDuration)
@@ -1009,8 +1034,8 @@ func (m *App) desktopLiveView(c *ui.Context, p *MobileDesktopPage) {
 			}
 			painter.FillPath(new(ui.Path).Circle(x, y, radius), pal.ink)
 			painter.StrokePath(new(ui.Path).Circle(x, y, radius), 2, pal.Bg)
-		})
-	}
+		}
+	})
 	p.overlays = p.overlays[:0]
 	vp.Children(func() {
 		if haveImage {

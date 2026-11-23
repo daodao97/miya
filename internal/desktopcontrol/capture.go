@@ -17,6 +17,7 @@ var (
 type CaptureOptions struct {
 	MaxDimension int
 	Quality      float64
+	NativePixels bool // account for the target's backing scale before limiting size
 }
 
 func (o CaptureOptions) validate() error {

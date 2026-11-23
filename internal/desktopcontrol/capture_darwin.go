@@ -142,6 +142,11 @@ func capture(ctx context.Context, d Display, w Window, o CaptureOptions) ([]byte
 					}
 					return
 				}
+				if o.NativePixels {
+					backingScale := float64(objc.Send[float32](filter, sel("pointPixelScale")))
+					width *= math.Max(1, backingScale)
+					height *= math.Max(1, backingScale)
+				}
 				scale := 1.0
 				if o.MaxDimension > 0 {
 					scale = math.Min(1, float64(o.MaxDimension)/math.Max(width, height))

@@ -15,6 +15,7 @@ import (
 type desktopFloat struct {
 	placed bool
 	offset ui.Point
+	view   ui.Rect
 }
 
 // DesktopFloatPollInterval slows the screen refresh while minimized.
@@ -72,6 +73,7 @@ func (m *App) desktopFloatView(c *ui.Context) {
 	}
 	w, h := desktopFloatSize(p, root.W)
 	f := &p.float
+	f.view = ui.Rect{W: w, H: h}
 	const margin = 12
 	minX, maxX := safe.Left+margin, root.W-safe.Right-margin-w
 	minY, maxY := safe.Top+margin, root.H-safe.Bottom-margin-h

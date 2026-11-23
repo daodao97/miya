@@ -1,9 +1,14 @@
 package mobile
 
 import (
+	"image"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
+
+	"miya/internal/desktop"
+	"miya/internal/desktop/control"
 )
 
 func TestDesktopPinchKeepsZoomAfterRelease(t *testing.T) {
@@ -51,4 +56,40 @@ func TestDesktopPanKeepsPositionAfterRelease(t *testing.T) {
 	if p.PanX != 30 || p.panY != 20 {
 		t.Fatalf("release moved the view back: %v, %v", p.PanX, p.panY)
 	}
+}
+
+func TestDesktopFrameQualityFollowsViewAndConnection(t *testing.T) {
+	p := &MobileDesktopPage{
+		Image:      ui.NewBitmap(image.NewRGBA(image.Rect(0, 0, 160, 90))),
+		View:       ui.Rect{W: 640, H: 225},
+		Zoom:       1,
+		frameScale: 3,
+	}
+	check := func(edge, quality int) {
+		t.Helper()
+		want := desktop.FrameOptions{MaxEdge: edge, Quality: quality}
+		if got := p.frameOptions(); got != want {
+			t.Fatalf("frame options = %+v, want %+v", got, want)
+		}
+	}
+	check(1200, 90)
+	p.SetZoom(3)
+	check(3600, 90)
+	p.SetZoom(4)
+	check(control.MaxFrameEdge, 90)
+	p.SetZoom(3)
+
+	p.frameQuality.observe(time.Second, nil)
+	check(3600, 90)
+	p.frameQuality.observe(time.Second, nil)
+	check(3060, 82)
+	for range 7 {
+		p.frameQuality.observe(100*time.Millisecond, nil)
+	}
+	check(3060, 82)
+	p.frameQuality.observe(100*time.Millisecond, nil)
+	check(3600, 90)
+
+	p.Floating, p.float.view = true, ui.Rect{W: 160, H: 90}
+	check(480, 90)
 }

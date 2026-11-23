@@ -220,9 +220,18 @@ func (c *Client) Start(ctx context.Context) error {
 	return err
 }
 
-// frame also reports whether the Mac currently shows its lock screen.
+// Frame also reports whether the Mac currently shows its lock screen.
 func (c *Client) Frame(ctx context.Context) ([]byte, bool, error) {
-	data, header, err := c.doHeader(ctx, http.MethodGet, "/frame", nil)
+	return c.frame(ctx, "/frame")
+}
+
+func (c *Client) FrameWithOptions(ctx context.Context, options desktop.FrameOptions) ([]byte, bool, error) {
+	path := fmt.Sprintf("/frame?maxEdge=%d&quality=%d", options.MaxEdge, options.Quality)
+	return c.frame(ctx, path)
+}
+
+func (c *Client) frame(ctx context.Context, path string) ([]byte, bool, error) {
+	data, header, err := c.doHeader(ctx, http.MethodGet, path, nil)
 	if err == nil && len(data) == 0 {
 		err = errors.New(tr("Invalid or oversized frame"))
 	}

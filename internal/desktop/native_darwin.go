@@ -82,20 +82,58 @@ func captureTarget(d dc.Display, w dc.Window) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	opts := dc.CaptureOptions{MaxDimension: 1600, Quality: 0.65}
-	var data []byte
-	var err error
-	if w.ID != 0 {
-		data, err = dc.CaptureWindow(ctx, w, opts)
-	} else {
-		data, err = dc.CaptureDisplay(ctx, d, opts)
-	}
+	data, err := captureJPEG(ctx, d, w, opts)
 	if err != nil {
-		return nil, desktopError(err)
+		return nil, err
 	}
 	if len(data) > 2<<20 {
 		return nil, permissionError(10)
 	}
 	return data, nil
+}
+
+func CaptureFrame(ctx context.Context, display *Display, window *Window, options FrameOptions) ([]byte, error) {
+	var d dc.Display
+	var w dc.Window
+	switch {
+	case window != nil:
+		if window.ID == 0 || window.PID <= 0 {
+			return nil, ErrWindowUnavailable
+		}
+		w = nativeWindow(*window)
+	case display != nil:
+		d = dc.Display{ID: display.ID, UUID: display.UUID}
+	default:
+		var err error
+		d, err = displayInfo(Display{})
+		if err != nil {
+			return nil, err
+		}
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	opts := dc.CaptureOptions{MaxDimension: options.MaxEdge, Quality: float64(options.Quality) / 100, NativePixels: true}
+	data, err := captureJPEG(ctx, d, w, opts)
+	if err != nil || len(data) <= 2<<20 {
+		return data, err
+	}
+	// Detailed content can exceed the wire limit even on a fast link.
+	opts.MaxDimension = min(opts.MaxDimension, 1600)
+	opts.Quality = min(opts.Quality, .65)
+	data, err = captureJPEG(ctx, d, w, opts)
+	if len(data) > 2<<20 {
+		return nil, permissionError(10)
+	}
+	return data, err
+}
+
+func captureJPEG(ctx context.Context, d dc.Display, w dc.Window, opts dc.CaptureOptions) ([]byte, error) {
+	if w.ID != 0 {
+		data, err := dc.CaptureWindow(ctx, w, opts)
+		return data, desktopError(err)
+	}
+	data, err := dc.CaptureDisplay(ctx, d, opts)
+	return data, desktopError(err)
 }
 
 func Windows() ([]Window, error) {

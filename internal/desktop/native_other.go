@@ -12,7 +12,10 @@ func OpenApplication(context.Context, string) error { return Authorize() }
 func RunPrivacyHelper() error                       { return Authorize() }
 func Displays() ([]Display, error)                  { return nil, Authorize() }
 func CaptureDisplay(Display) ([]byte, error)        { return nil, Authorize() }
-func SendDisplayInput(Display, Input) error         { return Authorize() }
+func CaptureFrame(context.Context, *Display, *Window, FrameOptions) ([]byte, error) {
+	return nil, Authorize()
+}
+func SendDisplayInput(Display, Input) error { return Authorize() }
 
 func Available() bool                        { return false }
 func WakeDisplay() error                     { return Authorize() }

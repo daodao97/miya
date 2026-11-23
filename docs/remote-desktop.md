@@ -57,7 +57,7 @@ Agent 发起的授权窗口接管不提供解锁、保存或使用登录密码�
 - `desktop-open` 必须带有效的稳定会话 ID，返回与当前连接绑定的随机 256 位令牌；每次仅允许一个操作界面；全屏查看、浮窗画面刷新和操作请求都会续期，持续使用不因累计时长结束。连续三十分钟没有请求才空闲到期，关闭或断线即撤销。正在使用远程桌面时，后台服务视为忙碌，等待结束后才执行空闲升级。
 - `desktop-preview` 仅在精确匹配的待处理审批及会话内允许；预览缩略图只驻留手机内存，不写附件缓存、聊天记录或磁盘。断线、审批处理及内容版本改变时移除。`desktop-action` 重新读取原生按钮状态，拒绝已禁用、重复名称、过期审批或其他会话的操作。预览不创建独占控制租约、不请求新的系统权限；缺权限时给出本机授权提示。
 - Mac 私有 HTTP 路径为 `/.miya-desktop/v1/{session,windows,select,displays,display,apps,launch,privacy,start,frame,input,unlock,actions,action,stop}`，请求经 Authorization 携带令牌。`privacy` 的 GET 读取状态、POST 切换，仅菜单租约允许；开启还要求已开始控制且十秒内取得成功画面。`actions` 只返回当前授权窗口的按钮元数据，`action` 再读取原生按钮状态并核验请求中的窗口 ID/PID；主屏幕会话不提供这两项操作。手机原生页面经已配对 Tailcat 通道的独立文件流直接请求这些路径，令牌只保存在手机进程内存中，作为本次控制租约的凭证；手机不再开放本机回环端口，不经过 WebView、Cookie 或网页。
-- 控制租约的 `/start` 之前拒绝实时采集及输入；授权卡另有受待处理审批约束的只读单窗口缩略图通道。切换窗口撤销输入状态，须收到该窗口的新画面才能输入。原生采集使用 ScreenCaptureKit，最长边 1600 像素、JPEG 质量 0.65、单帧最多 2 MiB，最多四次采集/秒。触屏的点击／滚动模式通过触摸滚动事件持续发送位移，含系统键盘容器转发及惯性滚动，不等待松手才滚动；拖动和移动画面模式分别保留原语义。前端串行轮询，正常间隔 300 ms；实际帧率取决于采集和网络耗时。慢帧不会阻塞输入、聊天或审批。
+- 控制租约的 `/start` 之前拒绝实时采集及输入；授权卡另有受待处理审批约束的只读单窗口缩略图通道。切换窗口撤销输入状态，须收到该窗口的新画面才能输入。原生采集使用 ScreenCaptureKit，单帧最多 2 MiB，最多四次采集/秒。手机根据画面实际占用的像素和缩放倍率为 `/frame` 请求画质，Mac 按目标原生像素采集，最长边最多 4096 像素。连续慢帧时降低尺寸及 JPEG 质量，取帧恢复稳定后逐档回升。旧客户端和用于确定画面比例的首帧沿用最长边 1600 像素、JPEG 质量 0.65。触屏的点击／滚动模式通过触摸滚动事件持续发送位移，含系统键盘容器转发及惯性滚动，不等待松手才滚动；拖动和移动画面模式分别保留原语义。前端串行轮询，正常间隔 300 ms；实际帧率取决于采集和网络耗时。慢帧不会阻塞输入、聊天或审批。
 - 输入校验归一化坐标、操作枚举、修饰键和正文大小；文字每次最多 4096 UTF-8 字节，Unicode 事件分块且不拆开代理对，不借用系统剪贴板。输入之前须有十秒以内的成功画面。服务串行发送输入，拒绝过快的操作。
 - 截图仅驻留内存，使用 `no-store`，不进入聊天记录或图片缓存。App 进入后台时断开连接并暂停控制，保留目标身份，回前台重连后恢复查看；结束、暂停或关闭时清空输入及画面。旧连接、过期会话和撤销后的在途画面不能继续操作或交付。
 
@@ -71,7 +71,7 @@ go test -race ./tests/integration ./internal/remote ./internal/desktop -run 'Tes
 mkdir -p /tmp/miya-desktop-snapshots
 MIYA_SNAPSHOT=/tmp/miya-desktop-snapshots go test ./tests/integration -run 'TestDesktopMobileTakeoverEntry|TestMobileConversationActionsSheet'
 ./scripts/build-macos.sh -platform darwin/arm64
-DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer ./scripts/build-ios.sh -ios-simulator -o /tmp/miya-desktop-ios-build
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer MIYA_IOS_PLATFORM=ios/simulator ./scripts/build-ios.sh -o /tmp/miya-desktop-ios-build
 ```
 
 自动测试覆盖未确认拒绝采集、权限失败、连接隔离、稳定会话校验、EOF 立即撤销、持续查看续期和空闲到期、慢采集时输入及停止仍可用、撤销后丢弃在途画面、无 Cookie / 跨 Origin 拒绝、Agent 等待明确完成，以及 320 / 390 点手机菜单和接管卡片布局。

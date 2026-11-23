@@ -58,6 +58,7 @@ type Native struct {
 	CaptureDisplay func(desktop.Display) ([]byte, error)
 	InputDisplay   func(desktop.Display, desktop.Input) error
 	CaptureWindow  func(desktop.Window) ([]byte, error)
+	CaptureFrame   func(context.Context, *desktop.Display, *desktop.Window, desktop.FrameOptions) ([]byte, error)
 	InputWindow    func(desktop.Window, desktop.Input) error
 	Dialog         func(desktop.Window) (desktop.Dialog, error)
 	PressAction    func(desktop.Window, string) error
@@ -387,6 +388,11 @@ func (d *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if path == "/frame" {
+		options, ok := frameOptions(r.URL.Query())
+		if !ok {
+			http.Error(w, "Invalid frame options", http.StatusBadRequest)
+			return
+		}
 		d.mu.Lock()
 		tooSoon := time.Since(l.lastFrame) < 250*time.Millisecond
 		if !tooSoon {
@@ -403,27 +409,31 @@ func (d *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Mac is locked. Unlock it first.", http.StatusLocked)
 			return
 		}
-		var data []byte
-		var err error
-		if window != nil {
-			data, err = d.CaptureWindow(*window)
-		} else if display != nil {
-			data, err = d.CaptureDisplay(*display)
-		} else {
-			data, err = d.Capture()
+		capture := func() ([]byte, error) {
+			switch {
+			case options.MaxEdge != 0 && d.CaptureFrame != nil:
+				return d.CaptureFrame(r.Context(), display, window, options)
+			case window != nil:
+				return d.CaptureWindow(*window)
+			case display != nil:
+				return d.CaptureDisplay(*display)
+			default:
+				return d.Capture()
+			}
 		}
+		data, err := capture()
 		// A sleeping display drops out of the shareable list. Wake it and
 		// retry once after it reappears instead of reporting a stale state.
-		if err != nil && d.Wake != nil && !errors.Is(err, desktop.ErrWindowUnavailable) && !errors.Is(err, desktop.ErrDisplayUnavailable) {
+		if err != nil && d.Wake != nil && r.Context().Err() == nil && !errors.Is(err, desktop.ErrWindowUnavailable) && !errors.Is(err, desktop.ErrDisplayUnavailable) {
 			d.keepAwake(l, true)
-			time.Sleep(500 * time.Millisecond)
-			if window != nil {
-				data, err = d.CaptureWindow(*window)
-			} else if display != nil {
-				data, err = d.CaptureDisplay(*display)
-			} else {
-				data, err = d.Capture()
+			timer := time.NewTimer(500 * time.Millisecond)
+			defer timer.Stop()
+			select {
+			case <-r.Context().Done():
+				return
+			case <-timer.C:
 			}
+			data, err = capture()
 		}
 		if err != nil {
 			if errors.Is(err, desktop.ErrDisplayUnavailable) {

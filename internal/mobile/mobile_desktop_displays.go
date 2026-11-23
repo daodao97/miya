@@ -17,6 +17,7 @@ func (p *MobileDesktopPage) InvalidateTarget() {
 	p.targetRevision++
 	p.Active, p.Image, p.Queue, p.actionsFresh, p.More = false, nil, nil, false, false
 	p.Polling, p.Sending, p.actionsBusy = false, false, false
+	p.frameQuality = desktopFrameQuality{}
 	p.pointer = desktopPointer{}
 	p.lastTap, p.Taps = time.Time{}, nil
 	p.scrollX, p.scrollY = 0, 0
