@@ -38,6 +38,9 @@ func (api *Service) automation(op string, r mcpproto.Request) (any, error) {
 		if args.Worktree != nil {
 			a.Worktree = *args.Worktree
 		}
+		if err := api.applyBot(&a, r, args); err != nil {
+			return nil, err
+		}
 		if err := applyWakeArgs(&a, nil, args); err != nil {
 			return nil, err
 		}
@@ -112,6 +115,9 @@ func (api *Service) updateAutomation(r mcpproto.Request, args mcpproto.Automatio
 	}
 	if args.Worktree != nil {
 		next.Worktree = *args.Worktree
+	}
+	if err := api.applyBot(&next, r, args); err != nil {
+		return nil, err
 	}
 	if err := applyWakeArgs(&next, &old, args); err != nil {
 		return nil, err

@@ -31,11 +31,17 @@ var SendHover = ui.Hex("#dcdcdc")
 
 var LinkInk = ui.Hex("#2563eb")
 
+// Accent is the system blue; UserBubble the tint of it that the person's
+// messages sit on in a chat.
+var Accent = ui.Hex("#007aff")
+var UserBubble = ui.Hex("#e5f0ff")
+
 // desktopPalette holds the desktop's colors for one appearance.
 type DesktopPalette struct {
 	Canvas, side, panel, Ink, Muted, Line, Hover, chosen, bubble ui.Color
 	border, Subtle, selected, faint, warnBg, warnLine, WarnInk   ui.Color
 	success, sendHover, Danger, failed, shadow, link             ui.Color
+	accent                                                       ui.Color
 }
 
 var DesktopLight = DesktopPalette{
@@ -44,7 +50,7 @@ var DesktopLight = DesktopPalette{
 	border: ui.Hex("#dddddd"), Subtle: ui.Hex("#f7f7f7"), selected: ui.Hex("#f1f2f4"), faint: ui.Hex("#a3a7b3"),
 	warnBg: ui.Hex("#fbf6ea"), warnLine: ui.Hex("#eadfc4"), WarnInk: ui.Hex("#b7791f"),
 	success: ui.Hex("#3f9a63"), sendHover: ui.Hex("#dcdcdc"), Danger: ui.Hex("#b42318"), failed: ui.Hex("#e58b84"), shadow: ui.RGBA(0, 0, 0, 0.16),
-	link: ui.Hex("#2563eb"),
+	link: ui.Hex("#2563eb"), accent: ui.Hex("#007aff"),
 }
 
 var DesktopDark = DesktopPalette{
@@ -53,7 +59,7 @@ var DesktopDark = DesktopPalette{
 	border: ui.Hex("#38383c"), Subtle: ui.Hex("#222226"), selected: ui.Hex("#2c2c30"), faint: ui.Hex("#6b6e78"),
 	warnBg: ui.Hex("#2b2618"), warnLine: ui.Hex("#4a3f22"), WarnInk: ui.Hex("#e0a54a"),
 	success: ui.Hex("#4cc38a"), sendHover: ui.Hex("#3a3a3e"), Danger: ui.Hex("#f87171"), failed: ui.Hex("#f19a93"), shadow: ui.RGBA(0, 0, 0, 0.5),
-	link: ui.Hex("#6ba4ff"),
+	link: ui.Hex("#6ba4ff"), accent: ui.Hex("#0a84ff"),
 }
 
 // applyDesktopPalette sets the shared colors for an appearance and returns
@@ -68,6 +74,10 @@ func ApplyDesktopPalette(dark bool) *ui.Theme {
 	Border, Subtle, SelectedBg, Faint = p.border, p.Subtle, p.selected, p.faint
 	WarnBg, WarnLine, WarnInk, Success, SendHover = p.warnBg, p.warnLine, p.WarnInk, p.success, p.sendHover
 	LinkInk = p.link
+	Accent, UserBubble = p.accent, p.accent.Mix(p.Canvas, 0.87)
+	if dark {
+		UserBubble = p.accent.Mix(p.Canvas, 0.7)
+	}
 	t.Background, t.Surface, t.SurfaceHover, t.Border = p.Canvas, p.bubble, p.Hover, p.Line
 	t.Text, t.TextMuted, t.Danger = p.Ink, p.Muted, p.Danger
 	t.Accent, t.AccentHover, t.AccentText = p.Ink, p.Ink.Mix(p.Canvas, 0.15), p.Canvas

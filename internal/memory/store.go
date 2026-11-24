@@ -55,6 +55,9 @@ func (s *Store) path(scope Scope) string {
 	if scope.Kind == "user" {
 		return filepath.Join(s.root, "user.json")
 	}
+	if scope.Kind == "bot" {
+		return filepath.Join(s.root, "bots", scope.ProjectKey+"-"+scope.Bot+".json")
+	}
 	return filepath.Join(s.root, "projects", scope.ProjectKey+".json")
 }
 func clone(d document) document {
@@ -171,7 +174,7 @@ func atomicWrite(path string, b []byte) error {
 	if err := os.Chmod(dir, 0o700); err != nil {
 		return err
 	}
-	if filepath.Base(dir) == "projects" {
+	if base := filepath.Base(dir); base == "projects" || base == "bots" {
 		if err := os.Chmod(filepath.Dir(dir), 0o700); err != nil {
 			return err
 		}
@@ -302,6 +305,17 @@ func (s *Store) save(scope Scope, m Mutation) (Entry, error) {
 		return Entry{}, err
 	}
 	now := s.now()
+	if scope.Kind == "bot" && m.ID == "" {
+		active := 0
+		for _, e := range latest(d) {
+			if effective(e, now).State == EntryActive {
+				active++
+			}
+		}
+		if active >= MaxBotEntries {
+			return Entry{}, fmt.Errorf("A Bot keeps at most %d memories. Correct or forget one of them first, or fold several into one", MaxBotEntries)
+		}
+	}
 	e := Entry{ID: m.ID, Version: 1, Scope: scope, Kind: m.Kind, Content: m.Content, TaskKey: m.TaskKey, Sources: m.Sources, ObservedAt: m.ObservedAt, ValidUntil: m.ValidUntil, State: EntryActive, CreatedAt: now, UpdatedAt: now}
 	if m.ID != "" {
 		i, err := target(d, m.ID, m.Version)

@@ -22192,11 +22192,11 @@ func (msgs Messages) BotName() string {
 	return Catalog.Format(msgs.locale, "botName", nil)
 }
 
-// BotRole says "Role"
+// BotRole says "Charter"
 // in the language the app shows.
 func BotRole() string { return In(i18n.Locale()).BotRole() }
 
-// BotRole says "Role"
+// BotRole says "Charter"
 // in the language of msgs.
 func (msgs Messages) BotRole() string {
 	return Catalog.Format(msgs.locale, "botRole", nil)
@@ -22212,14 +22212,354 @@ func (msgs Messages) BotRolePlaceholder() string {
 	return Catalog.Format(msgs.locale, "botRolePlaceholder", nil)
 }
 
-// BotDescription says "A Bot is a named assistant with one standing conversation in a project."
+// BotDescription says "A Bot is a named assistant in a project. Its charter goes with every message to its conversations."
 // in the language the app shows.
 func BotDescription() string { return In(i18n.Locale()).BotDescription() }
 
-// BotDescription says "A Bot is a named assistant with one standing conversation in a project."
+// BotDescription says "A Bot is a named assistant in a project. Its charter goes with every message to its conversations."
 // in the language of msgs.
 func (msgs Messages) BotDescription() string {
 	return Catalog.Format(msgs.locale, "botDescription", nil)
+}
+
+// BotAddDuty says "Add a duty"
+// in the language the app shows.
+func BotAddDuty() string { return In(i18n.Locale()).BotAddDuty() }
+
+// BotAddDuty says "Add a duty"
+// in the language of msgs.
+func (msgs Messages) BotAddDuty() string {
+	return Catalog.Format(msgs.locale, "botAddDuty", nil)
+}
+
+// BotProfile says "Bot profile"
+// in the language the app shows.
+func BotProfile() string { return In(i18n.Locale()).BotProfile() }
+
+// BotProfile says "Bot profile"
+// in the language of msgs.
+func (msgs Messages) BotProfile() string {
+	return Catalog.Format(msgs.locale, "botProfile", nil)
+}
+
+// BotDuties says "Duties"
+// in the language the app shows.
+func BotDuties() string { return In(i18n.Locale()).BotDuties() }
+
+// BotDuties says "Duties"
+// in the language of msgs.
+func (msgs Messages) BotDuties() string {
+	return Catalog.Format(msgs.locale, "botDuties", nil)
+}
+
+// BotNoDuties says "No duties yet. Give it an automation and it works on its own."
+// in the language the app shows.
+func BotNoDuties() string { return In(i18n.Locale()).BotNoDuties() }
+
+// BotNoDuties says "No duties yet. Give it an automation and it works on its own."
+// in the language of msgs.
+func (msgs Messages) BotNoDuties() string {
+	return Catalog.Format(msgs.locale, "botNoDuties", nil)
+}
+
+// BotOpenAutomations says "Open Automations"
+// in the language the app shows.
+func BotOpenAutomations() string { return In(i18n.Locale()).BotOpenAutomations() }
+
+// BotOpenAutomations says "Open Automations"
+// in the language of msgs.
+func (msgs Messages) BotOpenAutomations() string {
+	return Catalog.Format(msgs.locale, "botOpenAutomations", nil)
+}
+
+// BotMemory says "Memory"
+// in the language the app shows.
+func BotMemory() string { return In(i18n.Locale()).BotMemory() }
+
+// BotMemory says "Memory"
+// in the language of msgs.
+func (msgs Messages) BotMemory() string {
+	return Catalog.Format(msgs.locale, "botMemory", nil)
+}
+
+// BotMemoryCount says "%d of %d"
+// in the language the app shows.
+func BotMemoryCount() string { return In(i18n.Locale()).BotMemoryCount() }
+
+// BotMemoryCount says "%d of %d"
+// in the language of msgs.
+func (msgs Messages) BotMemoryCount() string {
+	return Catalog.Format(msgs.locale, "botMemoryCount", nil)
+}
+
+// BotNoMemory says "Nothing yet. Tell it what to remember about this work."
+// in the language the app shows.
+func BotNoMemory() string { return In(i18n.Locale()).BotNoMemory() }
+
+// BotNoMemory says "Nothing yet. Tell it what to remember about this work."
+// in the language of msgs.
+func (msgs Messages) BotNoMemory() string {
+	return Catalog.Format(msgs.locale, "botNoMemory", nil)
+}
+
+// BotForget says "Forget"
+// in the language the app shows.
+func BotForget() string { return In(i18n.Locale()).BotForget() }
+
+// BotForget says "Forget"
+// in the language of msgs.
+func (msgs Messages) BotForget() string {
+	return Catalog.Format(msgs.locale, "botForget", nil)
+}
+
+// BotReports says "Reports"
+// in the language the app shows.
+func BotReports() string { return In(i18n.Locale()).BotReports() }
+
+// BotReports says "Reports"
+// in the language of msgs.
+func (msgs Messages) BotReports() string {
+	return Catalog.Format(msgs.locale, "botReports", nil)
+}
+
+// BotReportsAll says "All %d"
+// in the language the app shows.
+func BotReportsAll() string { return In(i18n.Locale()).BotReportsAll() }
+
+// BotReportsAll says "All %d"
+// in the language of msgs.
+func (msgs Messages) BotReportsAll() string {
+	return Catalog.Format(msgs.locale, "botReportsAll", nil)
+}
+
+// BotReportsFewer says "Fewer"
+// in the language the app shows.
+func BotReportsFewer() string { return In(i18n.Locale()).BotReportsFewer() }
+
+// BotReportsFewer says "Fewer"
+// in the language of msgs.
+func (msgs Messages) BotReportsFewer() string {
+	return Catalog.Format(msgs.locale, "botReportsFewer", nil)
+}
+
+// BotReportNeedsYou says "Needs you"
+// in the language the app shows.
+func BotReportNeedsYou() string { return In(i18n.Locale()).BotReportNeedsYou() }
+
+// BotReportNeedsYou says "Needs you"
+// in the language of msgs.
+func (msgs Messages) BotReportNeedsYou() string {
+	return Catalog.Format(msgs.locale, "botReportNeedsYou", nil)
+}
+
+// BotFinishedTask says "Finished a task"
+// in the language the app shows.
+func BotFinishedTask() string { return In(i18n.Locale()).BotFinishedTask() }
+
+// BotFinishedTask says "Finished a task"
+// in the language of msgs.
+func (msgs Messages) BotFinishedTask() string {
+	return Catalog.Format(msgs.locale, "botFinishedTask", nil)
+}
+
+// BotAlsoWorksIn says "Also works in"
+// in the language the app shows.
+func BotAlsoWorksIn() string { return In(i18n.Locale()).BotAlsoWorksIn() }
+
+// BotAlsoWorksIn says "Also works in"
+// in the language of msgs.
+func (msgs Messages) BotAlsoWorksIn() string {
+	return Catalog.Format(msgs.locale, "botAlsoWorksIn", nil)
+}
+
+// BotAddProject says "Add a project…"
+// in the language the app shows.
+func BotAddProject() string { return In(i18n.Locale()).BotAddProject() }
+
+// BotAddProject says "Add a project…"
+// in the language of msgs.
+func (msgs Messages) BotAddProject() string {
+	return Catalog.Format(msgs.locale, "botAddProject", nil)
+}
+
+// BotRemoveProject says "Remove %s"
+// in the language the app shows.
+func BotRemoveProject() string { return In(i18n.Locale()).BotRemoveProject() }
+
+// BotRemoveProject says "Remove %s"
+// in the language of msgs.
+func (msgs Messages) BotRemoveProject() string {
+	return Catalog.Format(msgs.locale, "botRemoveProject", nil)
+}
+
+// BotProjectCount says "%d projects"
+// in the language the app shows.
+func BotProjectCount() string { return In(i18n.Locale()).BotProjectCount() }
+
+// BotProjectCount says "%d projects"
+// in the language of msgs.
+func (msgs Messages) BotProjectCount() string {
+	return Catalog.Format(msgs.locale, "botProjectCount", nil)
+}
+
+// BotReviewedBy says "Reviewed by %s"
+// in the language the app shows.
+func BotReviewedBy() string { return In(i18n.Locale()).BotReviewedBy() }
+
+// BotReviewedBy says "Reviewed by %s"
+// in the language of msgs.
+func (msgs Messages) BotReviewedBy() string {
+	return Catalog.Format(msgs.locale, "botReviewedBy", nil)
+}
+
+// BotReviewer says "Reviewer"
+// in the language the app shows.
+func BotReviewer() string { return In(i18n.Locale()).BotReviewer() }
+
+// BotReviewer says "Reviewer"
+// in the language of msgs.
+func (msgs Messages) BotReviewer() string {
+	return Catalog.Format(msgs.locale, "botReviewer", nil)
+}
+
+// BotNoReviewer says "No reviewer"
+// in the language the app shows.
+func BotNoReviewer() string { return In(i18n.Locale()).BotNoReviewer() }
+
+// BotNoReviewer says "No reviewer"
+// in the language of msgs.
+func (msgs Messages) BotNoReviewer() string {
+	return Catalog.Format(msgs.locale, "botNoReviewer", nil)
+}
+
+// BotReviewerHint says "After a turn that changes files, the reviewer checks the changes read only and the Bot fixes what it finds, up to 3 r…"
+// in the language the app shows.
+func BotReviewerHint() string { return In(i18n.Locale()).BotReviewerHint() }
+
+// BotReviewerHint says "After a turn that changes files, the reviewer checks the changes read only and the Bot fixes what it finds, up to 3 r…"
+// in the language of msgs.
+func (msgs Messages) BotReviewerHint() string {
+	return Catalog.Format(msgs.locale, "botReviewerHint", nil)
+}
+
+// BotReviewFailed says "Automatic review not started: "
+// in the language the app shows.
+func BotReviewFailed() string { return In(i18n.Locale()).BotReviewFailed() }
+
+// BotReviewFailed says "Automatic review not started: "
+// in the language of msgs.
+func (msgs Messages) BotReviewFailed() string {
+	return Catalog.Format(msgs.locale, "botReviewFailed", nil)
+}
+
+// AutoNotify says "Notify"
+// in the language the app shows.
+func AutoNotify() string { return In(i18n.Locale()).AutoNotify() }
+
+// AutoNotify says "Notify"
+// in the language of msgs.
+func (msgs Messages) AutoNotify() string {
+	return Catalog.Format(msgs.locale, "autoNotify", nil)
+}
+
+// AutoNotifyEvery says "Every run"
+// in the language the app shows.
+func AutoNotifyEvery() string { return In(i18n.Locale()).AutoNotifyEvery() }
+
+// AutoNotifyEvery says "Every run"
+// in the language of msgs.
+func (msgs Messages) AutoNotifyEvery() string {
+	return Catalog.Format(msgs.locale, "autoNotifyEvery", nil)
+}
+
+// AutoNotifyAttention says "When it needs you"
+// in the language the app shows.
+func AutoNotifyAttention() string { return In(i18n.Locale()).AutoNotifyAttention() }
+
+// AutoNotifyAttention says "When it needs you"
+// in the language of msgs.
+func (msgs Messages) AutoNotifyAttention() string {
+	return Catalog.Format(msgs.locale, "autoNotifyAttention", nil)
+}
+
+// AutoNotifyNever says "Never"
+// in the language the app shows.
+func AutoNotifyNever() string { return In(i18n.Locale()).AutoNotifyNever() }
+
+// AutoNotifyNever says "Never"
+// in the language of msgs.
+func (msgs Messages) AutoNotifyNever() string {
+	return Catalog.Format(msgs.locale, "autoNotifyNever", nil)
+}
+
+// AutoNotifyHint says "A run that passes with nothing new stays in the history quietly. With Never no run notifies; one that fails or needs …"
+// in the language the app shows.
+func AutoNotifyHint() string { return In(i18n.Locale()).AutoNotifyHint() }
+
+// AutoNotifyHint says "A run that passes with nothing new stays in the history quietly. With Never no run notifies; one that fails or needs …"
+// in the language of msgs.
+func (msgs Messages) AutoNotifyHint() string {
+	return Catalog.Format(msgs.locale, "autoNotifyHint", nil)
+}
+
+// AutoBot says "Bot"
+// in the language the app shows.
+func AutoBot() string { return In(i18n.Locale()).AutoBot() }
+
+// AutoBot says "Bot"
+// in the language of msgs.
+func (msgs Messages) AutoBot() string {
+	return Catalog.Format(msgs.locale, "autoBot", nil)
+}
+
+// AutoNoBot says "No Bot"
+// in the language the app shows.
+func AutoNoBot() string { return In(i18n.Locale()).AutoNoBot() }
+
+// AutoNoBot says "No Bot"
+// in the language of msgs.
+func (msgs Messages) AutoNoBot() string {
+	return Catalog.Format(msgs.locale, "autoNoBot", nil)
+}
+
+// AutoBotHint says "Each run is a new conversation of the Bot, under its charter, with its agent"
+// in the language the app shows.
+func AutoBotHint() string { return In(i18n.Locale()).AutoBotHint() }
+
+// AutoBotHint says "Each run is a new conversation of the Bot, under its charter, with its agent"
+// in the language of msgs.
+func (msgs Messages) AutoBotHint() string {
+	return Catalog.Format(msgs.locale, "autoBotHint", nil)
+}
+
+// BotSearch says "Search Bots"
+// in the language the app shows.
+func BotSearch() string { return In(i18n.Locale()).BotSearch() }
+
+// BotSearch says "Search Bots"
+// in the language of msgs.
+func (msgs Messages) BotSearch() string {
+	return Catalog.Format(msgs.locale, "botSearch", nil)
+}
+
+// BotFirstMessage says "Your first message starts a conversation with this Bot."
+// in the language the app shows.
+func BotFirstMessage() string { return In(i18n.Locale()).BotFirstMessage() }
+
+// BotFirstMessage says "Your first message starts a conversation with this Bot."
+// in the language of msgs.
+func (msgs Messages) BotFirstMessage() string {
+	return Catalog.Format(msgs.locale, "botFirstMessage", nil)
+}
+
+// BotsEmpty says "Pick a Bot to chat with, or create one."
+// in the language the app shows.
+func BotsEmpty() string { return In(i18n.Locale()).BotsEmpty() }
+
+// BotsEmpty says "Pick a Bot to chat with, or create one."
+// in the language of msgs.
+func (msgs Messages) BotsEmpty() string {
+	return Catalog.Format(msgs.locale, "botsEmpty", nil)
 }
 
 // BotNewConversation says "Start a new conversation"

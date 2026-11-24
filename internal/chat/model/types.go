@@ -48,6 +48,17 @@ type SendRequest struct {
 	Origin      string `json:"origin,omitempty"`
 	// Internal/MCP/automation messages do not become automatic memories.
 	MemoryControl bool `json:"memoryControl,omitempty"`
+	// Charter is the charter of the Bot whose conversation takes the message.
+	// The service sets it as it sends; it follows the message to the agent and
+	// stays out of the visible conversation.
+	Charter string `json:"charter,omitempty"`
+	// BotID is that Bot, set with Charter: its memory is recalled with the
+	// project's.
+	BotID string `json:"botId,omitempty"`
+	// BotHome is that Bot's own project, where its memory belongs, and Dirs
+	// the Bot's other projects the agent may also work in.
+	BotHome string   `json:"botHome,omitempty"`
+	Dirs    []string `json:"dirs,omitempty"`
 	// ThreadID is the conversation, 0 to start one of Agent.
 	ThreadID int
 	Agent    string

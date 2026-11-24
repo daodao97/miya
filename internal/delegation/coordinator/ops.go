@@ -68,7 +68,7 @@ func init() {
 		readonly := false
 		switch name {
 		case "list_agents":
-			description = "List available agents and their native model and thinking choices, and the Bots of this project: named assistants that each keep one standing conversation."
+			description = "List available agents and their native model and thinking choices, and the Bots of this project: named assistants, each with its own role, agent and access."
 			readonly = true
 		case "start_task", "send_thread":
 			description = "Submit one independent task and return immediately. By default, completion resumes this conversation so you can read the fixed result and continue the user's work. While actively waiting, use wait_task repeatedly and inspect progress; a timeout does not finish your responsibility. Use notify=none only for explicitly record-only work."
@@ -77,7 +77,7 @@ func init() {
 			if name == "start_task" {
 				props["access"] = map[string]any{"type": "string", "enum": []string{"read", "edit"}, "description": "What the new conversation may do, answered by Miya so it never waits on an approval: read (read only) or edit (change files in the workspace and run local commands, no network). Actions outside the workspace, such as git push or posting, are refused and listed in the result for you to do here. edit needs this conversation to allow edits itself. Omit to use the window's permission choice."}
 				props["agent"] = str("Agent ID from list_agents; defaults to this conversation's agent.")
-				props["bot"] = str("Name of a Bot from list_agents. The task goes to the Bot's standing conversation, or starts it; a busy conversation rejects instead of queueing. A Bot has its own agent, model, thinking choice and access: omit agent, model, effort and access.")
+				props["bot"] = str("Name of a Bot from list_agents. The task starts a new conversation of the Bot, which works under the Bot's charter, so a Bot takes tasks while it works on others. A Bot has its own agent, model, thinking choice and access: omit agent, model and effort; access can only narrow it to read.")
 			} else {
 				props["thread_id"] = str("Full miya:// link of an idle writable target. Busy or quota-limited targets reject instead of queueing.")
 				props["previous_task_id"] = taskID

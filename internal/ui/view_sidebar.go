@@ -34,9 +34,11 @@ func (app *App) SidebarView(c *ui.Context) {
 				if app.nav(c.Key("nav-automations"), "clock", tr("Automations")).Clicked() {
 					app.ShowAutomations()
 				}
+				if app.nav(c.Key("nav-bots"), "message-circle", tr("Bots")).Clicked() {
+					app.ShowBots()
+				}
 			})
 			app.sidebarActivity(c.Key("activity"))
-			app.sidebarBots(c.Key("bots"))
 			ui.Row(c).AlignItems(ui.Center).Margin(28, 0, 4, 0).Padding(0, 12, 0, 20).Children(func() {
 				ui.Text(c, tr("Projects")).FontSize(11).TextColor(widgets.Faint).Grow(1)
 				if widgets.ToolButton(c.Key("add-project"), "folder-plus", tr("Select project")).Clicked() {

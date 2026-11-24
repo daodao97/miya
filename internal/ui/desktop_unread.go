@@ -30,7 +30,7 @@ func (app *App) MarkVisibleThreadRead() {
 // describe what the previous frame actually displayed, not an incoming result
 // whose final layout (or scroll-to-end animation) has not happened yet.
 func (app *App) MarkDisplayedThreadRead() {
-	if app.Mobile || app.Section != "" || app.ProjectDialog || app.Switcher.Open || app.ShortcutsOpen || app.CommandPalette.Open {
+	if app.Mobile || !app.inConversation() || app.ProjectDialog || app.Switcher.Open || app.ShortcutsOpen || app.CommandPalette.Open {
 		return
 	}
 	t := app.C.Current()
@@ -55,7 +55,7 @@ func (app *App) MarkDisplayedThreadRead() {
 }
 
 func (app *App) MarkRequestedThreadRead() {
-	if app.Section != "" || app.desktopReadIntent.Key == "" {
+	if !app.inConversation() || app.desktopReadIntent.Key == "" {
 		return
 	}
 	t := app.C.Current()

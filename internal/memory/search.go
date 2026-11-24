@@ -81,12 +81,18 @@ const MaxAlternates = 6
 // score, so several synonyms matching one broad entry do not outrank a
 // precise match.
 func (s *Store) Search(project Scope, query, task string, limit int, alternates ...string) ([]Entry, error) {
+	return s.SearchBot(project, Scope{}, query, task, limit, alternates...)
+}
+
+// SearchBot is Search in a Bot's conversation: the Bot's own memory, bot, is
+// searched with the project's. The zero bot is Search.
+func (s *Store) SearchBot(project, bot Scope, query, task string, limit int, alternates ...string) ([]Entry, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if len(alternates) > MaxAlternates {
 		alternates = alternates[:MaxAlternates]
 	}
-	return s.search(project, append([]string{query}, alternates...), task, limit)
+	return s.search(project, append([]string{query}, alternates...), task, limit, bot)
 }
 
 type searchQuery struct {
@@ -109,7 +115,7 @@ func searchQueries(queries []string) []searchQuery {
 	return out
 }
 
-func (s *Store) search(project Scope, queries []string, task string, limit int) ([]Entry, error) {
+func (s *Store) search(project Scope, queries []string, task string, limit int, bot Scope) ([]Entry, error) {
 	d, err := s.read(project)
 	if err != nil {
 		return nil, err
@@ -124,6 +130,13 @@ func (s *Store) search(project Scope, queries []string, task string, limit int) 
 			return nil, err
 		}
 		docs = append(docs, user)
+	}
+	if bot.Kind == "bot" && project.Kind == "project" {
+		own, err := s.read(bot)
+		if err != nil {
+			return nil, err
+		}
+		docs = append(docs, own)
 	}
 	qs := searchQueries(queries)
 	if len(qs) == 0 && strings.TrimSpace(task) == "" {

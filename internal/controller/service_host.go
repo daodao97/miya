@@ -170,7 +170,7 @@ func (c *Controller) ServiceRequest(req svcproto.Request) (any, error) {
 			return nil, err
 		}
 		return c.AutomationOp(req.Op, r)
-	case "botSave", "botDelete", "botReset":
+	case "botSave", "botDelete", "botReset", "botRead":
 		var r bot.Request
 		if err := arg(&r); err != nil {
 			return nil, err

@@ -121,6 +121,8 @@ type AutomationArgs struct {
 	Worktree       *bool   `json:"worktree,omitempty"`
 	StallAfter     *int    `json:"stallAfter,omitempty"`
 	NotifyEveryRun *bool   `json:"notifyEveryRun,omitempty"`
+	Notify         *string `json:"notify,omitempty"`
+	Bot            *string `json:"bot,omitempty"`
 	Recheck        *bool   `json:"recheck,omitempty"`
 	Access         *string `json:"access,omitempty"`
 	// Triggers and Policy are automation.Trigger and automation.WakePolicy

@@ -65,6 +65,12 @@ type Runner struct {
 	WorktreeRoot string
 	// Probe probes a condition off the host's thread; replaced in tests.
 	Probe func(c Condition, dir string) ProbeResult
+	// Report posts a run that notifies, even one kept off the phone, in the
+	// chat of the Bot the automation is given to; nil posts nothing.
+	Report func(a Automation, run Run, title, body string, needsUser bool)
+	// Bot is the agent and access of a Bot, for the runs of an automation
+	// given to it; nil knows no Bots.
+	Bot func(id string) (agent string, access Access, ok bool)
 	// Hold says why an agent's triggered runs should wait, "" when they
 	// may start; nil never holds.
 	Hold func(agent string) string
@@ -264,13 +270,16 @@ func (rn *Runner) startRun(id string, ev WakeEvent) error {
 	run := Run{Started: now, Round: 1, Rounds: a.Rounds, Result: Running, CatchUp: catchUp,
 		WakeSource: ev.Source, WakeTrigger: ev.Trigger, WakeReason: ev.Reason}
 	thread := 0
+	agent, access, botErr := rn.runAs(a)
 	if info, err := os.Stat(a.Project); err != nil || !info.IsDir() {
 		run.Result, run.Summary, run.Finished = Failed, "Project directory does not exist: "+a.Project, now
+	} else if botErr != nil {
+		run.Result, run.Summary, run.Finished = Failed, botErr.Error(), now
 	} else if a.Worktree {
 		rn.startInWorktree(a, run, prev, ev)
 		return nil
-	} else if thread = rn.Submit(model.SendRequest{Agent: a.Agent, Project: a.Project, Text: rn.runText(a, prev, ev), Policy: a.Access.Policy(), MemoryControl: true}); thread == 0 {
-		run.Result, run.Summary, run.Finished = Failed, model.AgentName(a.Agent)+" is not ready", now
+	} else if thread = rn.Submit(model.SendRequest{Agent: agent, Bot: a.Bot, Project: a.Project, Text: rn.runText(a, prev, ev), Policy: access.Policy(), MemoryControl: true}); thread == 0 {
+		run.Result, run.Summary, run.Finished = Failed, model.AgentName(agent)+" is not ready", now
 	}
 	rn.Store.AddRun(id, run)
 	if thread != 0 {
@@ -284,6 +293,21 @@ func (rn *Runner) startRun(id string, ev WakeEvent) error {
 		return errors.New(run.Summary)
 	}
 	return nil
+}
+
+// runAs is the agent and access a run of a has: for an automation given to a
+// Bot, the Bot's agent and the narrower of the two access levels, as the Bot
+// is now.
+func (rn *Runner) runAs(a Automation) (string, Access, error) {
+	if a.Bot == "" {
+		return a.Agent, a.Access, nil
+	}
+	if rn.Bot != nil {
+		if agent, access, ok := rn.Bot(a.Bot); ok {
+			return agent, Narrower(a.Access, access), nil
+		}
+	}
+	return "", "", errors.New("The Bot this automation is given to no longer exists")
 }
 
 // attach makes thread the conversation of a's run in progress, r.
@@ -435,6 +459,13 @@ func (rn *Runner) notice(a Automation, run Run) {
 		rn.Store.UpdateRun(a.ID, run.Started, func(x *Run) { x.Quiet = true })
 		rn.Persist()
 		rn.host.Changed()
+		return
+	}
+	if rn.Report != nil && a.Bot != "" {
+		rn.Report(a, run, a.Name+" · "+ResultLabel(run.Result), noticeBody(a, run), run.Result == Failed || run.Report != nil && run.Report.NeedsUser)
+	}
+	if a.NotifyNever {
+		// Not quiet: what the run asks still waits in what needs the person.
 		return
 	}
 	title := a.Name + " · " + ResultLabel(run.Result)

@@ -523,14 +523,6 @@ func (m *Manager) Create(in StartInput) (Task, error) {
 				}
 			}
 		}
-		if in.BotID != "" && in.Target == "" {
-			// A Bot has one standing conversation: one task starts it.
-			for _, t := range s.Tasks {
-				if t.Bot == in.BotID && t.NewSession && !Terminal(t.State) {
-					return errCode("THREAD_BUSY", "Another task is starting this Bot's conversation")
-				}
-			}
-		}
 		if in.PreviousTaskID != "" {
 			p, ok := s.Tasks[in.PreviousTaskID]
 			if !ok || !canAccess(*s, in.From, p) || in.Target == "" || p.Target != in.Target {

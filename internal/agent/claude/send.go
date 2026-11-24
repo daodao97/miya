@@ -142,7 +142,7 @@ func (b Adapter) Send(req model.SendRequest) int {
 			mem.Finish(err == nil)
 			return
 		}
-		run, err := claude.Start(c.Context(), claude.Options{Binary: c.Snapshot().Binary, Args: append(append([]string(nil), c.Snapshot().Args...), mcpconfig.ClaudeArgs(cwd)...), Env: append(append([]string(nil), c.Snapshot().Env...), mcpconfig.ClaudeEnv()...), Cwd: cwd, SessionID: t.ServerID, Resume: t.Resumed, PermissionMode: claude.PermissionMode(policy), Model: req.Model, Effort: req.Effort, Content: content, BeforeInput: beforeInput}, func(f claude.Frame) {
+		run, err := claude.Start(c.Context(), claude.Options{Binary: c.Snapshot().Binary, Args: append(append(append([]string(nil), c.Snapshot().Args...), mcpconfig.ClaudeArgs(cwd)...), addDirArgs(req.Dirs)...), Env: append(append([]string(nil), c.Snapshot().Env...), mcpconfig.ClaudeEnv()...), Cwd: cwd, SessionID: t.ServerID, Resume: t.Resumed, PermissionMode: claude.PermissionMode(policy), Model: req.Model, Effort: req.Effort, Content: content, BeforeInput: beforeInput}, func(f claude.Frame) {
 			c.Dispatch(func() {
 				if c.ThreadWorkspace(id) == cwd && c.ThreadWithID(id).ClaudeGeneration == generation {
 					b.Handle(id, f)
@@ -179,4 +179,14 @@ func (b Adapter) Send(req model.SendRequest) int {
 		})
 	}()
 	return id
+}
+
+// addDirArgs opens a Bot's other projects to Claude Code when its process
+// starts.
+func addDirArgs(dirs []string) []string {
+	var out []string
+	for _, d := range dirs {
+		out = append(out, "--add-dir", d)
+	}
+	return out
 }

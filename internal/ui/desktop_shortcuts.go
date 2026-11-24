@@ -50,14 +50,14 @@ func (app *App) desktopShortcuts() []desktopShortcut {
 			app.openSurface(app.Panel(), SurfaceTerminal)
 		}},
 		{ui.Cmd | ui.Shift, ui.KeyO, "O", "Add attachment", func() {
-			if app.Section == "" && !app.C.Current().ReadOnly && !app.C.Current().Loading {
+			if app.inConversation() && !app.C.Current().ReadOnly && !app.C.Current().Loading {
 				app.attachFiles()
 			}
 		}},
 		{ui.Ctrl, ui.KeyTab, "Tab", "Next conversation in project", func() { app.cycleConversation(1) }},
 		{ui.Ctrl | ui.Shift, ui.KeyTab, "Tab", "Previous conversation in project", func() { app.cycleConversation(-1) }},
 		{ui.Cmd, ui.KeyPeriod, ".", "Stop current response", func() {
-			if t := app.C.Current(); app.Section == "" && t.Busy && !t.StopRequested {
+			if t := app.C.Current(); app.inConversation() && t.Busy && !t.StopRequested {
 				app.C.Stop()
 			}
 		}},

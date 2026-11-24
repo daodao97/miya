@@ -34,7 +34,7 @@ type App struct {
 	*conversation.View
 
 	Sidebar   bool
-	Section   string // "", "Settings", "Automations" or "Skills"
+	Section   string // "", "Settings", "Automations", "Bots" or "Skills"
 	menu      string // the composer's or header's open menu
 	modelOpen bool
 	effortOpen,
@@ -185,7 +185,7 @@ func DesktopMain() {
 		w.OnFocus(func() {
 			w.Update(func() {
 				active := app.activeWorkspaceApp()
-				if active.Section == "" {
+				if active.inConversation() {
 					active.RequestDesktopRead(active.C.Current())
 					active.MarkVisibleThreadRead()
 				}
@@ -315,7 +315,10 @@ func (app *App) SendDraft(steer bool) {
 	if before == 0 && c.State().Active() != 0 {
 		app.adoptDraftPanel(c.State().Active())
 	}
-	app.Section = ""
+	// A message sent on the Bots page keeps the chat there.
+	if app.Section != "Bots" {
+		app.Section = ""
+	}
 	app.menu = ""
 }
 
@@ -505,7 +508,9 @@ func (app *App) Render(ctx *ui.Context) {
 		}
 		ui.Column(ctx).Grow(1).MinWidth(0).FillHeight().Children(func() {
 			app.header(ctx)
-			if app.Section != "" {
+			if app.Section == "Bots" {
+				app.botsPage(ctx)
+			} else if app.Section != "" {
 				app.sectionView(ctx)
 			} else {
 				app.chatView(ctx)

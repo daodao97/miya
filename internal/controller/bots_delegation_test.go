@@ -42,52 +42,39 @@ func TestBotNamed(t *testing.T) {
 	}
 }
 
-// list_agents shows a conversation the Bots of its own project, each with
-// the state of its standing conversation.
-func TestBotListShowsTheProjectsBotsAndTheirConversations(t *testing.T) {
+// list_agents shows a conversation the Bots of its own project: the name,
+// the role and the agent. Every task starts a new conversation of the Bot,
+// so no conversation state is listed.
+func TestBotListShowsTheProjectsBots(t *testing.T) {
 	c, _ := botTestController(t)
 	other := t.TempDir()
 	c.SetProjects([]projectmodel.Project{{Name: "other", Path: other}})
 	save := func(name, project, note string) bot.Bot {
 		return saveTestBot(t, c, bot.Bot{Name: name, Agent: model.AgentCodex, Project: project, Note: note})
 	}
-	fresh := save("Fresh", c.Cwd, "Reviews pull requests")
-	idle := save("Idle", c.Cwd, "")
+	save("Review", c.Cwd, "Reviews pull requests")
 	busy := save("Busy", c.Cwd, "")
-	starting := save("Starting", c.Cwd, "")
-	unloaded := save("Unloaded", c.Cwd, "")
 	save("Elsewhere", other, "")
-	c.bots.store.SetSession(idle.ID, "srv-idle")
 	c.bots.store.SetSession(busy.ID, "srv-busy")
-	c.bots.store.SetSession(unloaded.ID, "srv-gone")
-	c.bots.pending[3] = starting.ID
-	c.SetThreads([]model.Thread{
-		{ID: 1, ServerID: "srv-idle", Agent: model.AgentCodex},
-		{ID: 2, ServerID: "srv-busy", Agent: model.AgentCodex, Busy: true},
-		{ID: 3, Agent: model.AgentCodex},
-	})
+	c.SetThreads([]model.Thread{{ID: 2, ServerID: "srv-busy", Agent: model.AgentCodex, Busy: true}})
 
 	listed := map[string]map[string]any{}
 	for _, entry := range c.botList(c.Cwd) {
 		listed[entry["name"].(string)] = entry
 	}
-	for name, want := range map[string]string{"Fresh": "new", "Idle": "idle", "Busy": "busy", "Starting": "busy", "Unloaded": "not_loaded"} {
-		entry, ok := listed[name]
-		if !ok || entry["conversation"] != want || entry["agent"] != fresh.Agent {
-			t.Errorf("%s: %v, want conversation %q", name, entry, want)
-		}
+	if len(listed) != 2 {
+		t.Fatalf("listed %v, want the 2 Bots of this project", listed)
 	}
-	if len(listed) != 5 {
-		t.Errorf("listed %d Bots, want the 5 of this project: %v", len(listed), listed)
+	if listed["Review"]["role"] != "Reviews pull requests" || listed["Review"]["agent"] != model.AgentCodex {
+		t.Errorf("Review = %v", listed["Review"])
 	}
-	if listed["Fresh"]["role"] != "Reviews pull requests" {
-		t.Errorf("role = %v", listed["Fresh"]["role"])
+	if _, has := listed["Busy"]["role"]; has {
+		t.Error("a Bot without a charter got a role")
 	}
-	if _, has := listed["Idle"]["role"]; has {
-		t.Error("a Bot without a note got a role")
+	if _, has := listed["Busy"]["conversation"]; has {
+		t.Error("a conversation state is listed")
 	}
-
-	if got := c.botList(other); len(got) != 1 || got[0]["name"] != "Elsewhere" || got[0]["conversation"] != "new" {
+	if got := c.botList(other); len(got) != 1 || got[0]["name"] != "Elsewhere" {
 		t.Errorf("the other project lists %v", got)
 	}
 	if got := c.botList(""); got != nil {
@@ -98,9 +85,10 @@ func TestBotListShowsTheProjectsBotsAndTheirConversations(t *testing.T) {
 	}
 }
 
-// start_task with bot goes to the Bot's standing conversation, or starts it,
-// and never starts a second one.
-func TestDelegationBotResolvesTheStandingConversation(t *testing.T) {
+// start_task with bot always starts a new conversation of the Bot: whether
+// the person's conversation with it is busy, starting or not loaded does not
+// matter.
+func TestDelegationBotStartsANewConversation(t *testing.T) {
 	c, _ := botTestController(t)
 	c.ReferenceSource = botTestSource
 	other := t.TempDir()
@@ -115,7 +103,7 @@ func TestDelegationBotResolvesTheStandingConversation(t *testing.T) {
 		{Bot: "Rin", Agent: model.AgentCodex},
 		{Bot: "Rin", Model: "m1"},
 		{Bot: "Rin", Effort: "high"},
-		{Bot: "Rin", Access: "read"},
+		{Bot: "Rin", Access: "edit"},
 		{Bot: "Ren"},
 	} {
 		if _, _, err := c.delegationBot(here, a); !botErrorIs(err, "INVALID_ARGUMENT") {
@@ -126,40 +114,27 @@ func TestDelegationBotResolvesTheStandingConversation(t *testing.T) {
 		t.Errorf("a conversation of another project: %v, want ACCESS_DENIED", err)
 	}
 
-	// No conversation yet: the task starts it.
-	b, ref, err := c.delegationBot(here, coordinator.Args{Bot: " rin "})
-	if err != nil || b.ID != rin.ID || ref != "" {
-		t.Fatalf("new conversation: Bot %q, target %q, %v", b.ID, ref, err)
-	}
-
-	// Started, but its agent has not named the session.
-	c.bots.pending[4] = rin.ID
-	c.SetThreads([]model.Thread{here, {ID: 4, Agent: model.AgentClaude}})
-	if !c.botPending(rin.ID) || c.botPending("another") {
-		t.Fatalf("pending = %v", c.bots.pending)
-	}
-	if _, _, err := c.delegationBot(here, coordinator.Args{Bot: "Rin"}); !botErrorIs(err, "THREAD_BUSY") {
-		t.Errorf("a conversation still starting: %v, want THREAD_BUSY", err)
-	}
-
-	// Recorded, but not among the loaded conversations.
-	delete(c.bots.pending, 4)
-	c.bots.store.SetSession(rin.ID, "srv1")
-	c.SetThreads([]model.Thread{here})
-	if _, _, err := c.delegationBot(here, coordinator.Args{Bot: "Rin"}); !botErrorIs(err, "CONTEXT_LOADING") {
-		t.Errorf("a conversation that is not loaded: %v, want CONTEXT_LOADING", err)
-	}
-
-	standing := model.Thread{ID: 5, ServerID: "srv1", Agent: model.AgentClaude}
-	c.SetThreads([]model.Thread{here, standing})
-	b, ref, err = c.delegationBot(here, coordinator.Args{Bot: "Rin"})
-	if err != nil || b.ID != rin.ID || ref == "" || ref != c.ThreadRef(standing).URL() {
-		t.Fatalf("standing conversation: Bot %q, target %q, %v", b.ID, ref, err)
+	for name, setup := range map[string]func(){
+		"no conversation": func() {},
+		"starting": func() {
+			c.bots.pending[4] = rin.ID
+			c.SetThreads([]model.Thread{here, {ID: 4, Agent: model.AgentClaude}})
+		},
+		"not loaded": func() { c.bots.store.SetSession(rin.ID, "srv1"); c.SetThreads([]model.Thread{here}) },
+		"busy": func() {
+			c.SetThreads([]model.Thread{here, {ID: 5, ServerID: "srv1", Agent: model.AgentClaude, Busy: true}})
+		},
+	} {
+		setup()
+		b, ref, err := c.delegationBot(here, coordinator.Args{Bot: " rin "})
+		if err != nil || b.ID != rin.ID || ref != "" {
+			t.Errorf("%s: Bot %q, target %q, %v; want a new conversation of Rin", name, b.ID, ref, err)
+		}
 	}
 }
 
 // A task starts a Bot's conversation only with access its own conversation
-// has; a conversation that exists keeps the permission it was started with.
+// has, even where the person's conversation with the Bot has more.
 func TestBotTaskCannotStartAConversationWithWiderAccess(t *testing.T) {
 	c, _ := botTestController(t)
 	c.ReferenceSource = botTestSource
@@ -192,7 +167,28 @@ func TestBotTaskCannotStartAConversationWithWiderAccess(t *testing.T) {
 	}
 	c.bots.store.SetSession(wide.ID, "srv1")
 	c.SetThreads([]model.Thread{caller, {ID: 5, ServerID: "srv1", Agent: model.AgentCodex, PermissionPolicy: "never"}})
-	if _, ref, err := c.delegationBot(caller, coordinator.Args{Bot: "Wide"}); err != nil || ref == "" {
-		t.Fatalf("the conversation the person started: target %q, %v", ref, err)
+	if _, _, err := c.delegationBot(caller, coordinator.Args{Bot: "Wide"}); !botErrorIs(err, "ACCESS_DENIED") {
+		t.Fatalf("with the person's full-access conversation: %v, want ACCESS_DENIED", err)
+	}
+}
+
+// A Bot that also works in another project is listed there and takes its
+// tasks.
+func TestBotOfSeveralProjects(t *testing.T) {
+	c, _ := botTestController(t)
+	c.ReferenceSource = botTestSource
+	other := t.TempDir()
+	c.SetProjects([]projectmodel.Project{{Name: "other", Path: other}})
+	saveTestBot(t, c, bot.Bot{Name: "Ops", Agent: model.AgentCodex, Project: c.Cwd, Projects: []string{other}})
+	if got := c.botList(other); len(got) != 1 || got[0]["name"] != "Ops" {
+		t.Fatalf("the other project lists %v", got)
+	}
+	there := model.Thread{ID: 11, ServerID: "elsewhere", Agent: model.AgentCodex, PermissionPolicy: "on-request"}
+	c.ProjectCache[other] = []model.Thread{there}
+	if _, _, err := c.delegationBot(there, coordinator.Args{Bot: "Ops"}); err != nil {
+		t.Fatalf("a task from the other project: %v", err)
+	}
+	if _, err := c.BotOp("botSave", bot.Request{Bot: bot.Bot{Name: "Lost", Agent: model.AgentCodex, Project: c.Cwd, Projects: []string{t.TempDir()}}}); err == nil {
+		t.Fatal("a Bot mounting an unknown project was saved")
 	}
 }

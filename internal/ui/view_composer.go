@@ -25,8 +25,8 @@ func (app *App) composerArea(c *ui.Context) {
 	cc := app.C
 	cur := cc.Current()
 	ui.Row(c).FillWidth().Justify(ui.Center).Shrink(0).Children(func() {
-		ui.Column(c).FillWidth().MaxWidth(800).Padding(0, 28, 10, 28).Gap(10).Children(func() {
-			if cur.ID == 0 {
+		ui.Column(c).FillWidth().MaxWidth(app.ContentWidth()+56).Padding(0, 28, 10, 28).Gap(10).Children(func() {
+			if cur.ID == 0 && !app.Bubbles { // a Bot introduces itself instead
 				ui.Text(c, tr("A few ideas to get started")).AlignSelf(ui.End).FontSize(11).TextColor(widgets.Muted)
 				ui.Row(c).Gap(10).Children(func() {
 					app.suggestion(c.Key("snake"), "device-gamepad-2", tr("Create a classic snake game"), tr("Create a classic snake game in this project."))

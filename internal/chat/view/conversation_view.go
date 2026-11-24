@@ -44,6 +44,10 @@ type View struct {
 	WorkingAccessory func(*ui.Context)
 	DesktopAccessory func(*ui.Context, model.Thread)
 	UserGroup        func(*ui.Context, msgfmt.MessageGroup)
+	// Bubbles shows replies as an instant-messaging chat: each in a bubble
+	// after Avatar, with its activity folded into one line per run.
+	Bubbles          bool
+	Avatar           func(*ui.Context)
 	MemoryNotice     func(*ui.Context, *model.MemoryNotice)
 	NeedsReadFrame   func(model.Thread, *ui.ListState, int) bool
 	PasteAttachments func(transfer.Data) bool
@@ -110,7 +114,8 @@ func (app *View) MessageList(c *ui.Context, t model.Thread) {
 	}
 	list := ui.List(c, state, len(groups), func(i int) {
 		ui.Column(c).FillWidth().AlignItems(ui.Center).Children(func() {
-			ui.Column(c).FillWidth().MaxWidth(744).Children(func() {
+			column := ui.Column(c).FillWidth().MaxWidth(app.ContentWidth())
+			column.Children(func() {
 				app.groupViewWithFooter(c, groups[i], i != completedGroup)
 			})
 		})
@@ -178,7 +183,7 @@ func (app *View) MessageList(c *ui.Context, t model.Thread) {
 		// remaining background work need its own line.
 		if len(t.BackgroundTasks) > 0 && !t.Busy {
 			ui.Row(c.Key("background-tasks")).FillWidth().Justify(ui.Center).Padding(4, app.listPadding()).Children(func() {
-				ui.Column(c).FillWidth().MaxWidth(744).Gap(4).Children(func() {
+				ui.Column(c).FillWidth().MaxWidth(app.ContentWidth()).Gap(4).Children(func() {
 					widgets.WorkingLabel(c, "clock", fmt.Sprintf(tr("Background tasks running (%d) · Waiting for results"), len(t.BackgroundTasks)))
 					names := make([]string, 0, len(t.BackgroundTasks))
 					for _, task := range t.BackgroundTasks {
@@ -196,7 +201,7 @@ func (app *View) MessageList(c *ui.Context, t model.Thread) {
 				if app.Mobile {
 					height = 44
 				}
-				row := ui.Row(c.Key("turn-status")).FillWidth().MaxWidth(744).MinHeight(height).Gap(8).AlignItems(ui.Center)
+				row := ui.Row(c.Key("turn-status")).FillWidth().MaxWidth(app.ContentWidth()).MinHeight(height).Gap(8).AlignItems(ui.Center)
 				if app.Mobile {
 					row.Gap(6)
 				}
@@ -259,6 +264,15 @@ func (app *View) MessageList(c *ui.Context, t model.Thread) {
 	}
 }
 
+// ContentWidth is how wide the messages, and what lines up with them, grow: a
+// chat gives replies room for tables and code.
+func (app *View) ContentWidth() float32 {
+	if app.Bubbles {
+		return 880
+	}
+	return 744
+}
+
 func (app *View) TurnStatusVisible(t model.Thread) bool {
 	label, completedGroup := currentTurnStatus(t, app.Groups.ofThread(t, app.C.ViewRevision()))
 	return label != "" || completedGroup >= 0
@@ -283,6 +297,10 @@ func (app *View) groupViewWithFooter(c *ui.Context, g msgfmt.MessageGroup, inlin
 		}
 		return
 	}
+	if app.Bubbles {
+		app.bubbleGroup(c, g, inlineFooter)
+		return
+	}
 	group := ui.Column(c).FillWidth().Gap(12)
 	hovered := group.Hovered()
 	group.Children(func() {
@@ -299,28 +317,71 @@ func (app *View) groupViewWithFooter(c *ui.Context, g msgfmt.MessageGroup, inlin
 		if !inlineFooter {
 			return
 		}
-		size := float32(28)
-		if app.Mobile {
-			size = 44
+		app.groupFooter(c, g, hovered)
+	})
+}
+
+// groupFooter is the row under a finished reply: how long it took, what it
+// changed and, on hover, its actions.
+func (app *View) groupFooter(c *ui.Context, g msgfmt.MessageGroup, hovered bool) {
+	size := float32(28)
+	if app.Mobile {
+		size = 44
+	}
+	ui.Row(c).AlignItems(ui.Center).Gap(8).Height(size).Children(func() {
+		elapsed := msgfmt.TurnElapsedLabel(g.Messages, false)
+		if elapsed != "" {
+			ui.Text(c, elapsed).TextColor(widgets.Muted).FontSize(11).Tooltip(msgfmt.FormatMessageTimestamp(g.Timestamp))
 		}
-		ui.Row(c).AlignItems(ui.Center).Gap(8).Height(size).Children(func() {
-			elapsed := msgfmt.TurnElapsedLabel(g.Messages, false)
-			if elapsed != "" {
-				ui.Text(c, elapsed).TextColor(widgets.Muted).FontSize(11).Tooltip(msgfmt.FormatMessageTimestamp(g.Timestamp))
+		if stats := g.DiffStats; stats.Added > 0 || stats.Deleted > 0 {
+			ui.Row(c.Key("diff-stats")).Gap(4).AlignItems(ui.Center).Children(func() {
+				if elapsed != "" {
+					ui.Text(c, "·").TextColor(widgets.Muted).FontSize(11)
+				}
+				diffStatsView(c, stats, true)
+			})
+		}
+		copied := app.Copied[g.ID]
+		if !app.Mobile && !hovered && !copied {
+			return
+		}
+		app.responseActions(c.Key("actions"), g)
+	})
+}
+
+// bubbleGroup shows a reply as a chat message: the avatar, then a bubble
+// holding the reply with its activity folded, then the reply's footer.
+func (app *View) bubbleGroup(c *ui.Context, g msgfmt.MessageGroup, inlineFooter bool) {
+	row := ui.Row(c).FillWidth().Gap(10).AlignItems(ui.Start)
+	hovered := row.Hovered()
+	row.Children(func() {
+		if app.Avatar != nil {
+			app.Avatar(c.Key("avatar"))
+		}
+		ui.Column(c).Grow(1).MinWidth(0).Gap(4).Children(func() {
+			if g.ShowTimestamp {
+				ui.Text(c, msgfmt.FormatMessageTimestamp(g.Timestamp)).AlignSelf(ui.Start).TextColor(widgets.Muted).FontSize(11)
 			}
-			if stats := g.DiffStats; stats.Added > 0 || stats.Deleted > 0 {
-				ui.Row(c.Key("diff-stats")).Gap(4).AlignItems(ui.Center).Children(func() {
-					if elapsed != "" {
-						ui.Text(c, "·").TextColor(widgets.Muted).FontSize(11)
-					}
-					diffStatsView(c, stats, true)
-				})
-			}
-			copied := app.Copied[g.ID]
-			if !app.Mobile && !hovered && !copied {
+			// Wide enough for tables and code, so they are not cut off.
+			bubble := ui.Column(c.Key("bubble")).AlignSelf(ui.Start).MaxWidthPercent(100).MinWidth(0).Background(widgets.Bubble).Radius(18).Padding(10, 14, 10, 14).Gap(6)
+			bubble.Children(func() {
+				runs := msgfmt.ActivityRuns(g.Messages)
+				for i, run := range runs {
+					app.activityRunView(c.Key(msgfmt.MessageViewKey(run.Messages[0])), run, g.Streaming && i == len(runs)-1)
+				}
+			})
+			if g.Streaming || !inlineFooter {
 				return
 			}
-			app.responseActions(c.Key("actions"), g)
+			// The footer floats under the bubble from a row of no height, so
+			// showing it on hover moves nothing and the chat stays compact.
+			float := ui.Row(c.Key("footer")).Height(0)
+			if !hovered && !app.Copied[g.ID] {
+				float.Invisible()
+			}
+			float.Children(func() {
+				ui.Row(c).Translate(0, -2).Children(func() { app.groupFooter(c, g, true) })
+			})
 		})
 	})
 }
@@ -357,7 +418,8 @@ func (app *View) activityRunView(c *ui.Context, run msgfmt.ActivityRun, streamin
 		app.MessageView(c, run.Messages[0], streaming)
 		return
 	}
-	if len(run.Messages) == 1 {
+	// A chat folds even a single step.
+	if len(run.Messages) == 1 && !app.Bubbles {
 		app.MessageView(c.Key(msgfmt.MessageViewKey(run.Messages[0])), run.Messages[0], streaming)
 		return
 	}
@@ -433,6 +495,7 @@ func (app *View) MessageView(c *ui.Context, m model.Message, streaming bool) {
 		})
 		return
 	case "user":
+		m.Content = msgfmt.WithoutBotIntro(m.Content)
 		ui.Column(c).FillWidth().Gap(8).Children(func() {
 			if len(m.Images) > 0 {
 				ui.Row(c).FillWidth().Wrap().Justify(ui.End).Gap(8).Children(func() {
@@ -453,6 +516,9 @@ func (app *View) MessageView(c *ui.Context, m model.Message, streaming bool) {
 			}
 			// Short prompts stay compact; long ones wrap within a bounded bubble.
 			prompt := ui.Column(c).AlignSelf(ui.End).MaxWidth(560).MinWidth(0).Background(widgets.Bubble).Radius(16).Padding(14).Gap(8)
+			if app.Bubbles {
+				prompt.Background(widgets.UserBubble).Radius(18).Padding(10, 14, 10, 14)
+			}
 			if app.Mobile {
 				prompt.MaxWidthPercent(100)
 			}
@@ -719,7 +785,7 @@ func (app *View) ThreadReferenceContent(text string) (string, []threadTag) {
 
 func (app *View) threadMessage(c *ui.Context, message model.Message) {
 	if message.Role == "user" {
-		message.Content = msgfmt.Message(message).Content
+		message.Content = msgfmt.WithoutBotIntro(msgfmt.Message(message).Content)
 	}
 	content, tags := app.ThreadReferenceContent(message.Content)
 	if len(tags) == 0 {

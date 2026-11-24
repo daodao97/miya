@@ -90,26 +90,55 @@ func recallEntry(e Entry, now time.Time, task string) Entry {
 // Pending reservations suppress duplicate concurrent steer injections. Failed
 // sends reset the session, so the next accepted request can recall them again.
 func (s *Store) Prepare(project Scope, session, epoch, query, task string) (Prepared, error) {
+	return s.PrepareBot(project, Scope{}, false, session, epoch, query, task)
+}
+
+// PrepareBot is Prepare for a Bot's conversation: the Bot's own memory, bot,
+// is recalled with the project's. A Bot always recalls its own memory, unless
+// the project turned memory off; the project's is recalled only where its
+// settings recall it, and never with botOnly, as for tasks and automation
+// runs. The zero bot is Prepare.
+func (s *Store) PrepareBot(project, bot Scope, botOnly bool, session, epoch, query, task string) (Prepared, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	d, err := s.load(project)
-	if err != nil || d.Settings.Disabled || !d.Settings.AutoInject || session == "" || d.DisabledSessions[session] {
+	if err != nil || d.Settings.Disabled || session == "" || d.DisabledSessions[session] {
 		return Prepared{}, err
 	}
-	entries, err := s.search(project, []string{query}, task, 5)
+	projectRecall := d.Settings.AutoInject && !botOnly
+	if !projectRecall && bot.Kind != "bot" {
+		return Prepared{}, nil
+	}
+	var entries []Entry
+	if projectRecall {
+		entries, err = s.search(project, []string{query}, task, 5, bot)
+	} else {
+		entries, err = s.search(bot, []string{query}, task, 5, Scope{})
+	}
 	if err != nil {
 		return Prepared{}, err
 	}
 	current := map[string]Entry{}
-	for _, e := range latest(d) {
-		current[stampKey(stampOf(e))] = recallEntry(e, s.now(), task)
+	if projectRecall {
+		for _, e := range latest(d) {
+			current[stampKey(stampOf(e))] = recallEntry(e, s.now(), task)
+		}
 	}
-	if d.Settings.UseUserPreferences {
+	if projectRecall && d.Settings.UseUserPreferences {
 		user, err := s.load(UserScope())
 		if err != nil {
 			return Prepared{}, err
 		}
 		for _, e := range latest(user) {
+			current[stampKey(stampOf(e))] = recallEntry(e, s.now(), task)
+		}
+	}
+	if bot.Kind == "bot" {
+		own, err := s.load(bot)
+		if err != nil {
+			return Prepared{}, err
+		}
+		for _, e := range latest(own) {
 			current[stampKey(stampOf(e))] = recallEntry(e, s.now(), task)
 		}
 	}
@@ -238,10 +267,14 @@ func (s *Store) ValidatePrepared(project Scope, p Prepared) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	d, err := s.read(project)
-	if err != nil || d.Settings.Disabled || !d.Settings.AutoInject || d.DisabledSessions[p.Session] {
+	if err != nil || d.Settings.Disabled || d.DisabledSessions[p.Session] {
 		return false
 	}
 	for _, v := range p.Entries {
+		// Without the project's recall, only a Bot's own memory goes.
+		if !d.Settings.AutoInject && v.Scope.Kind != "bot" {
+			return false
+		}
 		if v.Scope.Kind == "user" && project.Kind != "user" && !d.Settings.UseUserPreferences {
 			if v.State == EntryUnavailable {
 				continue

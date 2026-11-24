@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	agentpolicy "miya/internal/agent/policy"
+	"miya/internal/automation"
 	"miya/internal/bot"
 	"miya/internal/chat/model"
 	projectmodel "miya/internal/project/model"
@@ -126,18 +127,19 @@ func TestBotDeleteAndReset(t *testing.T) {
 	if _, err := c.BotOp("botReset", bot.Request{ID: b.ID}); err != nil {
 		t.Fatal(err)
 	}
-	if got := storedBot(t, c, b.ID); got.Session != "" || got.Preview != "" {
-		t.Fatalf("reset Bot = %+v", got)
+	if got := storedBot(t, c, b.ID); got.Session != "" || got.Preview != "" || len(got.Others) != 1 || got.Others[0] != "srv1" {
+		t.Fatalf("reset Bot = %+v, want srv1 among its other conversations", got)
 	}
-	if len(c.bots.pending) != 0 {
-		t.Fatalf("reset kept the pending conversation: %v", c.bots.pending)
+	// The conversation still waiting for its session stays the Bot's too.
+	if len(c.bots.pending) != 0 || c.bots.tasks[4] != b.ID {
+		t.Fatalf("after reset pending %v, other conversations waiting %v", c.bots.pending, c.bots.tasks)
 	}
 
 	c.bots.pending[5] = b.ID
 	if _, err := c.BotOp("botDelete", bot.Request{ID: b.ID}); err != nil {
 		t.Fatal(err)
 	}
-	if len(c.bots.store.Bots) != 0 || len(c.bots.pending) != 0 {
+	if len(c.bots.store.Bots) != 0 || len(c.bots.pending) != 0 || len(c.bots.tasks) != 0 {
 		t.Fatalf("after delete: %+v, pending %v", c.bots.store.Bots, c.bots.pending)
 	}
 	if kept := bot.Load(path).Bots; len(kept) != 0 {
@@ -356,5 +358,139 @@ func TestBotThreadUpdatedRecordsSessionAndPreview(t *testing.T) {
 	}
 	if kept := bot.Load(path).Bots; len(kept) != 1 || kept[0].Preview != "Done. All good" {
 		t.Fatalf("file holds %+v", kept)
+	}
+}
+
+// A delegated task's conversation becomes another of the Bot's once its agent
+// names the session, and every conversation of the Bot is found as the
+// Bot's, so that its messages carry the charter.
+func TestBotTaskConversationsAndBotOf(t *testing.T) {
+	c, path := botTestController(t)
+	b := saveTestBot(t, c, bot.Bot{Name: "Rin", Agent: model.AgentCodex, Project: c.Cwd, Note: "Reviews"})
+	c.bots.tasks[5] = b.ID
+	if got, ok := c.botOf(model.Thread{ID: 5}, ""); !ok || got.ID != b.ID {
+		t.Fatal("a task conversation still starting is not the Bot's")
+	}
+	c.botThreadUpdated(model.Thread{ID: 5, Agent: model.AgentCodex}, model.Thread{ID: 5, Agent: model.AgentCodex, ServerID: "task1"}, c.Cwd)
+	if got := storedBot(t, c, b.ID); got.Session != "" || len(got.Others) != 1 || got.Others[0] != "task1" || len(c.bots.tasks) != 0 {
+		t.Fatalf("Bot = %+v, waiting %v; want task1 among its other conversations", got, c.bots.tasks)
+	}
+	if kept := bot.Load(path).Bots; len(kept) != 1 || len(kept[0].Others) != 1 {
+		t.Fatalf("file holds %+v", kept)
+	}
+
+	// A reply in a task conversation is not the Bot's preview.
+	busy := model.Thread{ID: 5, Agent: model.AgentCodex, ServerID: "task1", Busy: true, Messages: []model.Message{{Role: "assistant", Content: "Reviewed."}}}
+	done := busy
+	done.Busy = false
+	c.botThreadUpdated(busy, done, c.Cwd)
+	if got := storedBot(t, c, b.ID).Preview; got != "" {
+		t.Fatalf("preview %q taken from a task conversation", got)
+	}
+
+	c.SetThreads([]model.Thread{{ID: 5, ServerID: "task1", Agent: model.AgentCodex}, {ID: 6, ServerID: "plain", Agent: model.AgentCodex}})
+	if got, ok := c.botOf(c.ThreadWithID(5), ""); !ok || got.ID != b.ID {
+		t.Fatal("a recorded task conversation is not the Bot's")
+	}
+	if got, ok := c.botOf(c.ThreadWithID(6), ""); ok {
+		t.Fatalf("an ordinary conversation belongs to %q", got.Name)
+	}
+	if got, ok := c.botOf(model.Thread{}, b.ID); !ok || got.ID != b.ID {
+		t.Fatal("a message naming the Bot is not the Bot's")
+	}
+	if _, ok := c.botOf(model.Thread{}, "missing"); ok {
+		t.Fatal("a deleted Bot was found")
+	}
+
+	// A Bot deleted while a task conversation starts leaves it ordinary.
+	c.bots.tasks[7] = "missing"
+	c.botThreadUpdated(model.Thread{ID: 7, Agent: model.AgentCodex}, model.Thread{ID: 7, Agent: model.AgentCodex}, c.Cwd)
+	if _, waiting := c.bots.tasks[7]; waiting {
+		t.Fatal("a deleted Bot's conversation is still waiting")
+	}
+}
+
+// MCP tools find the Bot of the calling conversation, for its memory.
+func TestThreadBot(t *testing.T) {
+	c, _ := botTestController(t)
+	b := saveTestBot(t, c, bot.Bot{Name: "Rin", Agent: model.AgentCodex, Project: c.Cwd})
+	c.bots.store.SetSession(b.ID, "talk")
+	c.bots.store.AddOther(b.ID, "task")
+	c.SetThreads([]model.Thread{
+		{ID: 1, ServerID: "talk", Agent: model.AgentCodex},
+		{ID: 2, ServerID: "task", Agent: model.AgentCodex},
+		{ID: 3, ServerID: "plain", Agent: model.AgentCodex},
+		{ID: 4, ServerID: "talk", Agent: model.AgentClaude},
+	})
+	for id, want := range map[int]string{1: b.ID, 2: b.ID, 3: "", 4: ""} {
+		got, home := c.ThreadBot(c.ThreadWithID(id))
+		if got != want || (want != "") != (home == c.Cwd) {
+			t.Errorf("conversation %d belongs to Bot %q of %q, want %q", id, got, home, want)
+		}
+	}
+}
+
+// An automation given to a Bot runs in the Bot's project, with its agent.
+func TestCheckAutomationBot(t *testing.T) {
+	c, _ := botTestController(t)
+	other := t.TempDir()
+	c.SetProjects([]projectmodel.Project{{Name: "other", Path: other}})
+	b := saveTestBot(t, c, bot.Bot{Name: "Rin", Agent: model.AgentClaude, Project: c.Cwd})
+	if err := c.checkAutomationBot(&automation.Automation{Agent: model.AgentCodex, Project: c.Cwd}); err != nil {
+		t.Fatalf("an automation without a Bot: %v", err)
+	}
+	if err := c.checkAutomationBot(&automation.Automation{Bot: "missing", Project: c.Cwd}); err == nil {
+		t.Fatal("a missing Bot was accepted")
+	}
+	if err := c.checkAutomationBot(&automation.Automation{Bot: b.ID, Project: other}); err == nil {
+		t.Fatal("a Bot of another project was accepted")
+	}
+	a := automation.Automation{Bot: b.ID, Agent: model.AgentCodex, Project: c.Cwd}
+	if err := c.checkAutomationBot(&a); err != nil || a.Agent != model.AgentClaude {
+		t.Fatalf("agent %q, %v; want the Bot's", a.Agent, err)
+	}
+	if agent, access, ok := c.automationBot(b.ID); !ok || agent != model.AgentClaude || access != "" {
+		t.Fatalf("automationBot = %q, %q, %v", agent, access, ok)
+	}
+}
+
+// A task the Bot finished is posted in its chat; its conversation with the
+// person and automation runs are not, the runner posting those that notify.
+func TestBotReports(t *testing.T) {
+	c, path := botTestController(t)
+	b := saveTestBot(t, c, bot.Bot{Name: "Rin", Agent: model.AgentCodex, Project: c.Cwd})
+	c.bots.store.SetSession(b.ID, "talk")
+	c.bots.store.AddOther(b.ID, "task")
+	c.bots.store.AddOther(b.ID, "run")
+	reply := []model.Message{{Role: "assistant", Content: "Reviewed: two problems."}}
+	finish := func(th model.Thread) {
+		busy := th
+		busy.Busy = true
+		c.botThreadUpdated(busy, th, c.Cwd)
+	}
+	finish(model.Thread{ID: 1, ServerID: "talk", Agent: model.AgentCodex, Messages: reply})
+	finish(model.Thread{ID: 3, ServerID: "run", Agent: model.AgentCodex, ExecutionID: "x", Automation: "a1", Messages: reply})
+	if got := storedBot(t, c, b.ID).Reports; len(got) != 0 {
+		t.Fatalf("reports %+v from the person's conversation or a run", got)
+	}
+	finish(model.Thread{ID: 2, ServerID: "task", Agent: model.AgentCodex, ExecutionID: "task-1", Title: "Review of Kai's changes", Messages: reply})
+	got := storedBot(t, c, b.ID).Reports
+	if len(got) != 1 || got[0].Title != "Review of Kai's changes" || got[0].Summary != "Reviewed: two problems." || got[0].Kind != "task" || got[0].Read {
+		t.Fatalf("reports = %+v", got)
+	}
+	if kept := bot.Load(path).Bots; len(kept[0].Reports) != 1 {
+		t.Fatalf("file holds %+v", kept[0].Reports)
+	}
+	c.SetThreads([]model.Thread{{ID: 2, ServerID: "task", Agent: model.AgentCodex}})
+	if th := c.BotReportThread(got[0]); th.ID != 2 {
+		t.Fatalf("the report opens conversation %d, want 2", th.ID)
+	}
+
+	c.botAutomationReport(automation.Automation{ID: "a1", Bot: b.ID, Project: c.Cwd}, automation.Run{ServerID: "run"}, "Patrol · Passed", "All clear", false)
+	if got := storedBot(t, c, b.ID).Reports; len(got) != 2 || got[0].Kind != "automation" || got[0].Title != "Patrol · Passed" {
+		t.Fatalf("after the run: %+v", got)
+	}
+	if _, err := c.BotOp("botRead", bot.Request{ID: b.ID}); err != nil || storedBot(t, c, b.ID).Unread() != 0 {
+		t.Fatalf("botRead: %v, %d unread", err, storedBot(t, c, b.ID).Unread())
 	}
 }

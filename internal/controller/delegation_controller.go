@@ -36,7 +36,7 @@ func (c *Controller) prepareDelegation(caller model.Thread, a coordinator.Args) 
 	}
 	var standing bot.Bot
 	if a.Bot != "" {
-		// The task goes to the Bot's standing conversation, or starts it.
+		// The task starts a new conversation of the Bot.
 		b, ref, err := c.delegationBot(caller, a)
 		if err != nil {
 			return dg.StartInput{}, err
@@ -117,7 +117,7 @@ func (c *Controller) prepareDelegation(caller model.Thread, a coordinator.Args) 
 		workspace = c.ThreadWorkspace(target.ID)
 	}
 	policy := textutil.FirstNonEmpty(a.Access, c.permissionForThread(target))
-	if own := botPolicy(standing); own != "" && target.ID == 0 {
+	if own := botPolicy(standing); own != "" && target.ID == 0 && a.Access == "" {
 		// The conversation a Bot's first task starts gets the Bot's access.
 		policy = own
 	}

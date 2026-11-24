@@ -39,7 +39,9 @@ type automationsUI struct {
 
 	// The form: what the person wrote, where it runs, and what the agent
 	// made of it.
-	editID      string
+	editID string
+	// forBot is the Bot a new automation is a duty of, given from its profile.
+	forBot      string
 	Request     string
 	project     string
 	Agent       string
@@ -535,10 +537,18 @@ func (app *App) automationDetail(c *ui.Context) {
 		ui.Text(c, tr("Each run works on its own Git branch, so it cannot collide with your edits; merge or discard its changes afterwards")).FontSize(12).TextColor(widgets.Muted)
 	})
 	ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
-		every := v.NotifyEveryRun
-		if ui.Switch(c.Key("notify-every"), &every).Label(tr("Notify every run")).Shrink(0).Changed() {
+		labels := []string{tr("Every run"), tr("When it needs you"), tr("Never")}
+		current := labels[1]
+		if v.NotifyEveryRun {
+			current = labels[0]
+		} else if v.NotifyNever {
+			current = labels[2]
+		}
+		selected := current
+		ui.Text(c, tr("Notify")).Shrink(0)
+		if ui.Select(c.Key("notify"), &selected, labels).Label(tr("Notify")).Shrink(0).Changed() && selected != current {
 			next := v.Automation
-			next.NotifyEveryRun = every
+			next.NotifyEveryRun, next.NotifyNever = selected == labels[0], selected == labels[2]
 			app.autoCall("automationSave", automation.Request{Automation: &next}, func(_ json.RawMessage, err error) {
 				if err != nil {
 					app.Autos.err = err.Error()
@@ -546,8 +556,35 @@ func (app *App) automationDetail(c *ui.Context) {
 				app.loadAutomations()
 			})
 		}
-		ui.Text(c, tr("Otherwise a run that passes with nothing new stays in the history without a notification")).FontSize(12).TextColor(widgets.Muted)
+		ui.Text(c, tr("A run that passes with nothing new stays in the history quietly. With Never no run notifies; one that fails or needs you still waits for you here")).FontSize(12).TextColor(widgets.Muted)
 	})
+	if bots := app.projectBots(v.Project); len(bots) > 0 || v.Bot != "" {
+		ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
+			labels, ids := []string{tr("No Bot")}, []string{""}
+			for _, b := range bots {
+				labels, ids = append(labels, b.Name), append(ids, b.ID)
+			}
+			current := labels[0]
+			for i, id := range ids {
+				if id == v.Bot {
+					current = labels[i]
+				}
+			}
+			selected := current
+			ui.Text(c, tr("Bot")).Shrink(0)
+			if ui.Select(c.Key("bot"), &selected, labels).Label(tr("Bot")).Shrink(0).Changed() && selected != current {
+				next := v.Automation
+				next.Bot = ids[slices.Index(labels, selected)]
+				app.autoCall("automationSave", automation.Request{Automation: &next}, func(_ json.RawMessage, err error) {
+					if err != nil {
+						app.Autos.err = err.Error()
+					}
+					app.loadAutomations()
+				})
+			}
+			ui.Text(c, tr("Each run is a new conversation of the Bot, under its charter, with its agent")).FontSize(12).TextColor(widgets.Muted)
+		})
+	}
 	ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
 		values := []automation.Access{"", automation.AccessRead, automation.AccessEdit, automation.AccessExternal, automation.AccessFull}
 		names := make([]string, len(values))
@@ -727,6 +764,7 @@ func (app *App) OpenAutomationForm(v *automation.View) {
 	a := &app.Autos
 	c := app.C
 	a.Page, a.editID, a.Request, a.Draft, a.DraftErr, a.Drafting, a.editing, a.editErr = "form", "", "", nil, "", false, "", ""
+	a.forBot = ""
 	a.enable, a.project, a.Agent, a.projectOpen = true, c.State().Cwd, model.Backends[0], false
 	if c.State().Agent != nil {
 		a.Agent = c.State().Agent()
@@ -1086,6 +1124,9 @@ func (app *App) saveAutomationForm(runNow bool) {
 	}
 	d := a.Draft.Automation
 	d.ID, d.Enabled, d.Request, d.Project, d.Agent = a.editID, a.enable, strings.TrimSpace(a.Request), a.project, a.Agent
+	if a.editID == "" && a.forBot != "" {
+		d.Bot = a.forBot
+	}
 	a.Saving = true
 	app.autoCall("automationSave", automation.Request{Automation: &d}, func(raw json.RawMessage, err error) {
 		a.Saving = false
@@ -1095,7 +1136,7 @@ func (app *App) saveAutomationForm(runNow bool) {
 		}
 		var v automation.View
 		_ = json.Unmarshal(raw, &v)
-		a.Page, a.Detail = "detail", v.ID
+		a.Page, a.Detail, a.forBot = "detail", v.ID, ""
 		replaced := false
 		for i := range a.list {
 			if a.list[i].ID == v.ID {

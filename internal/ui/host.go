@@ -62,6 +62,8 @@ type Host interface {
 	Bots() []bot.Bot
 	BotOp(op string, r bot.Request) (bot.Bot, error)
 	BotThread(b bot.Bot) model.Thread
+	// BotReportThread is the conversation of a Bot's report, if loaded.
+	BotReportThread(r bot.Report) model.Thread
 	CurrentBot() (bot.Bot, bool)
 	SetDraftBot(id string)
 	CanRewind(t model.Thread, m model.Message) bool

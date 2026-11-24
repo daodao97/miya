@@ -1,6 +1,7 @@
 package desktopui
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 
@@ -9,6 +10,7 @@ import (
 	"miya/internal/automation"
 	"miya/internal/bot"
 	"miya/internal/chat/model"
+	"miya/internal/memory"
 	"miya/internal/widgets"
 )
 
@@ -21,6 +23,18 @@ type botsUI struct {
 	// fresh is the Bot just given a new conversation: the service's list may
 	// name the old one for a moment longer.
 	fresh string
+	// Query filters the Bots page's list by name and charter.
+	Query string
+	// reading is the Bot whose reports are being marked read; allReports
+	// lists every report of the open Bot instead of the latest.
+	reading    string
+	allReports bool
+	// profile shows the open Bot's profile beside its chat; memories are its
+	// memory as last loaded, for memFor.
+	profile    bool
+	memFor     string
+	memLoading bool
+	memories   []memory.Entry
 }
 
 // botCall runs a Bot operation. Through the service it waits off the main
@@ -36,81 +50,12 @@ func (app *App) botCall(op string, r bot.Request, done func(bot.Bot, error)) {
 	}()
 }
 
-// sidebarBots lists the Bots above the projects. Opening one opens its
-// standing conversation, like any other conversation.
-func (app *App) sidebarBots(c *ui.Context) {
-	current, open := app.C.CurrentBot()
-	app.followBot(current, open)
-	ui.Row(c).AlignItems(ui.Center).Margin(28, 0, 4, 0).Padding(0, 12, 0, 20).Children(func() {
-		ui.Text(c, tr("Bots")).FontSize(11).TextColor(widgets.Faint).Grow(1)
-		if widgets.ToolButton(c.Key("add-bot"), "plus", tr("New Bot")).Clicked() {
-			app.editBot(bot.Bot{})
-		}
-	})
-	ui.Column(c).PaddingX(12).Gap(3).Children(func() {
-		for _, b := range app.C.Bots() {
-			app.botRow(c.Key("bot:"+b.ID), b, open && current.ID == b.ID)
-		}
-	})
-}
-
-// botRow shows a Bot: its name, the start of its last reply, and the state of
-// its standing conversation.
-func (app *App) botRow(c *ui.Context, b bot.Bot, active bool) {
-	t := app.C.BotThread(b)
-	wrap := ui.Box(c).FillWidth()
-	hovered := wrap.Hovered()
-	running := t.ID != 0 && t.Busy && !t.Loading
-	unread := t.ID != 0 && !t.Busy && app.C.DesktopThreadUnread(t)
-	wrap.ContextMenu(func(m *ui.Menu) { app.botMenu(m, b) })
-	wrap.Children(func() {
-		row := widgets.Quiet(c.Key("row")).FillWidth().Height(44).FontSize(13).Clip()
-		if active {
-			row.Background(widgets.Chosen)
-		}
-		row.Children(func() {
-			widgets.AgentIcon(c, b.Agent, 16)
-			text := ui.Column(c).Grow(1).MinWidth(0).Gap(1).Clip()
-			if hovered || running || unread {
-				text.Margin(0, 24, 0, 0)
-			}
-			text.Children(func() {
-				ui.Text(c, b.Name).NoWrap().FontWeight(500).TextColor(widgets.Ink)
-				ui.Text(c, botPreview(b)).NoWrap().FontSize(11).TextColor(widgets.Faint)
-			})
-		})
-		if row.Clicked() {
-			app.openBot(b)
-		}
-		ui.Row(c.Key("status-actions")).Absolute().Right(5).Top(10).Size(24, 24).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
-			if !hovered {
-				if running {
-					ui.Spinner(c.Key("running")).Size(16, 16).FontSize(13).Label(tr("Working…"))
-				} else if unread {
-					color := ui.Hex("#30a46c")
-					if app.Dark {
-						color = ui.Hex("#3dd68c")
-					}
-					ui.Box(c.Key("unread")).Size(8, 8).Radius(4).Background(color).Label(tr("Unread: ") + b.Name)
-				}
-			}
-			// Keep the anchor built while the pointer moves into its menu.
-			more := widgets.Quiet(c.Key("more")).Absolute().Top(0).Left(0).Size(24, 24).PaddingX(4).Justify(ui.Center).Background(widgets.Hover).Label(tr("Bot actions")).Tooltip(tr("More"))
-			if active {
-				more.Background(widgets.Chosen)
-			}
-			if !hovered {
-				more.Invisible()
-			}
-			more.Children(func() { widgets.Icon(c, "dots", 16, widgets.Muted) })
-			more.PopoverMenuButton(func(m *ui.Menu) { app.botMenu(m, b) })
-		})
-	})
-}
-
 // botPreview is the line under a Bot's name: its last reply, else what it is
 // for.
 func botPreview(b bot.Bot) string {
+	if len(b.Reports) > 0 && !b.Reports[0].Read {
+		return b.Reports[0].Title
+	}
 	for _, text := range []string{b.Preview, b.Note} {
 		if line := strings.Join(strings.Fields(text), " "); line != "" {
 			return line
@@ -123,7 +68,7 @@ func (app *App) botMenu(m *ui.Menu, b bot.Bot) {
 	if m.Item(tr("Edit Bot")).Chosen() {
 		app.editBot(b)
 	}
-	// The conversation so far stays in its project as an ordinary one.
+	// The conversation so far stays the Bot's, with its charter.
 	if (b.Session != "" || b.Thread != 0) && m.Item(tr("Start a new conversation")).Chosen() {
 		app.botCall("botReset", bot.Request{ID: b.ID}, func(_ bot.Bot, err error) {
 			if err != nil {
@@ -145,10 +90,11 @@ func (app *App) botMenu(m *ui.Menu, b bot.Bot) {
 	}
 }
 
-// openBot opens a Bot's standing conversation, or the empty conversation its
-// first message starts.
+// openBot opens on the Bots page the conversation the person talks to a Bot
+// in, or the empty conversation its first message starts.
 func (app *App) openBot(b bot.Bot) {
 	app.Bots.fresh = ""
+	defer func() { app.Section = "Bots" }()
 	if t := app.C.BotThread(b); t.ID != 0 {
 		app.SelectThread(t)
 		return
@@ -170,10 +116,10 @@ func (app *App) openBot(b bot.Bot) {
 	app.C.SetDraftBot(b.ID)
 }
 
-// followBot opens a Bot's standing conversation once it is loaded, while the
-// window still shows the empty conversation opened for that Bot.
+// followBot opens a Bot's conversation once it is loaded, while the Bots page
+// still shows the empty conversation opened for that Bot.
 func (app *App) followBot(b bot.Bot, ok bool) {
-	if !ok || app.Section != "" || app.C.Current().ID != 0 {
+	if !ok || app.Section != "Bots" || app.C.Current().ID != 0 {
 		return
 	}
 	if app.Bots.fresh == b.ID {
@@ -273,13 +219,13 @@ func (app *App) botDialogView(c *ui.Context) {
 				a.open = false
 			}
 		})
-		widgets.MutedText(c, tr("A Bot is a named assistant with one standing conversation in a project."))
+		widgets.MutedText(c, tr("A Bot is a named assistant in a project. Its charter goes with every message to its conversations."))
 		ui.Field(c, tr("Name"), func() {
 			if ui.TextInput(c.Key("name"), &a.edit.Name).Placeholder(tr("Bot name")).AutoFocus().Submitted() {
 				app.saveBot()
 			}
 		})
-		ui.Field(c, tr("Role"), func() {
+		ui.Field(c, tr("Charter"), func() {
 			ui.TextArea(c.Key("note"), &a.edit.Note).Placeholder(tr("What this Bot is for and how it should work")).Lines(3, 8).FillWidth()
 		})
 		ui.Field(c, tr("Agent"), func() {
@@ -314,6 +260,39 @@ func (app *App) botDialogView(c *ui.Context) {
 				}
 			})
 		}
+		// The other projects the Bot works in, besides its own.
+		ui.Field(c, tr("Also works in"), func() {
+			ui.Column(c).FillWidth().Gap(6).Children(func() {
+				for i, p := range a.edit.Projects {
+					label := p
+					if j := slices.Index(paths, p); j >= 0 {
+						label = labels[j]
+					}
+					ui.Row(c.Key("mounted:"+p)).FillWidth().Height(30).Radius(8).Background(widgets.Hover).Padding(0, 4, 0, 10).Gap(8).AlignItems(ui.Center).Children(func() {
+						widgets.Icon(c, "folder", 13, widgets.Muted)
+						ui.Text(c, label).Grow(1).MinWidth(0).SingleLine().Ellipsis("…").FontSize(12)
+						if widgets.ToolButton(c.Key("remove"), "x", fmt.Sprintf(tr("Remove %s"), label)).Clicked() {
+							a.edit.Projects = slices.Delete(slices.Clone(a.edit.Projects), i, i+1)
+						}
+					})
+				}
+				var addLabels, addPaths []string
+				for j, p := range paths {
+					if p != a.edit.Project && !slices.Contains(a.edit.Projects, p) {
+						addLabels, addPaths = append(addLabels, labels[j]), append(addPaths, p)
+					}
+				}
+				if len(addPaths) > 0 {
+					prompt := tr("Add a project…")
+					choice := prompt
+					if ui.Select(c.Key("add-mounted"), &choice, append([]string{prompt}, addLabels...)).Label(prompt).FillWidth().Changed() {
+						if j := slices.Index(addLabels, choice); j >= 0 {
+							a.edit.Projects = append(slices.Clone(a.edit.Projects), addPaths[j])
+						}
+					}
+				}
+			})
+		})
 		levels := botAccessLevels(a.edit.Access)
 		names := make([]string, len(levels))
 		for i, level := range levels {
@@ -327,6 +306,26 @@ func (app *App) botDialogView(c *ui.Context) {
 				}
 			}
 		})
+		if others := app.reviewerChoices(a.edit); len(others) > 0 || a.edit.Reviewer != "" {
+			labels, ids := []string{tr("No reviewer")}, []string{""}
+			for _, b := range others {
+				labels, ids = append(labels, b.Name), append(ids, b.ID)
+			}
+			selected := labels[0]
+			for i, id := range ids {
+				if id == a.edit.Reviewer {
+					selected = labels[i]
+				}
+			}
+			ui.Field(c, tr("Reviewer"), func() {
+				if ui.Select(c.Key("reviewer"), &selected, labels).Label(tr("Reviewer")).FillWidth().Changed() {
+					if j := slices.Index(labels, selected); j >= 0 {
+						a.edit.Reviewer = ids[j]
+					}
+				}
+			})
+			widgets.MutedText(c, tr("After a turn that changes files, the reviewer checks the changes read only and the Bot fixes what it finds, up to 3 reviews in a row"))
+		}
 		if a.edit.Session != "" {
 			widgets.MutedText(c, tr("Changing the agent or project starts a new conversation."))
 		}

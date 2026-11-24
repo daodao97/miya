@@ -66,6 +66,13 @@ type Automation struct {
 	// Access is what its runs may do (docs/action-review.md): read, edit or
 	// external. Empty follows the permission picked in the window, as before.
 	Access Access `json:"access,omitempty"`
+	// Bot is the ID of the Bot the automation is given to: each run is a new
+	// conversation of the Bot, under its charter, with its agent and settings,
+	// and at most the Bot's access (docs/personal-agent.md, P4).
+	Bot string `json:"bot,omitempty"`
+	// NotifyNever keeps every run off the phone. A run that fails or needs
+	// the person still waits in what needs them.
+	NotifyNever bool `json:"notifyNever,omitempty"`
 }
 
 // Run is one run of an automation.

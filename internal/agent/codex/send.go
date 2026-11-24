@@ -119,7 +119,7 @@ func (b Adapter) Send(req model.SendRequest) int {
 			own, _ := model.SplitReferenceContext(text)
 			input = append(input, composer.FileMentionInputs(own, cwd)...)
 			input = append(input, c.AttachmentInputs(attachments)...)
-			params := map[string]any{"threadId": serverID, "cwd": cwd, "input": input, "approvalPolicy": codexpolicy.ApprovalForPolicy(policy), "approvalsReviewer": codexpolicy.ReviewerForPolicy(policy), "sandboxPolicy": codexpolicy.TurnSandbox(policy, resolved)}
+			params := map[string]any{"threadId": serverID, "cwd": cwd, "input": input, "approvalPolicy": codexpolicy.ApprovalForPolicy(policy), "approvalsReviewer": codexpolicy.ReviewerForPolicy(policy), "sandboxPolicy": codexpolicy.WithWritableRoots(codexpolicy.TurnSandbox(policy, resolved), req.Dirs)}
 			if modelID != "" {
 				params["model"] = modelID
 			}
@@ -146,7 +146,7 @@ func (b Adapter) Send(req model.SendRequest) int {
 				if err == nil {
 					sandbox := resumed.Sandbox
 					c.Dispatch(func() { c.Update(id, func(t *model.Thread) { t.NativeSandbox = sandbox }) })
-					params["sandboxPolicy"] = codexpolicy.TurnSandbox(policy, sandbox)
+					params["sandboxPolicy"] = codexpolicy.WithWritableRoots(codexpolicy.TurnSandbox(policy, sandbox), req.Dirs)
 					input[0]["text"] = composer.CollaborationTaggedInput(mem.Text(text), req.Parts)
 					mayHaveStarted = true
 					err = client.Call(turnCtx, "turn/start", params, &result)

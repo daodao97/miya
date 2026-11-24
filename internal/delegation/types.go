@@ -79,8 +79,8 @@ type Task struct {
 	RequestHash string `json:"request_hash"`
 	From        string `json:"from"`
 	Target      string `json:"thread,omitempty"`
-	// Bot is the ID of the Bot whose standing conversation the task goes to
-	// or, as a new session, starts (docs/personal-agent.md, P4).
+	// Bot is the ID of the Bot the task starts a new conversation of
+	// (docs/personal-agent.md, P4).
 	Bot              string          `json:"bot,omitempty"`
 	NewSession       bool            `json:"new_session"`
 	ParentTaskID     string          `json:"parent_task_id,omitempty"`

@@ -111,7 +111,7 @@ func jobRelated(s *Store, scope Scope, job ExtractionJob) []Entry {
 			text.WriteByte('\n')
 		}
 	}
-	entries, _ := s.search(scope, []string{text.String()}, job.TaskKey, 5)
+	entries, _ := s.search(scope, []string{text.String()}, job.TaskKey, 5, Scope{})
 	var out []Entry
 	for _, e := range entries {
 		if e.Scope == scope {

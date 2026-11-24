@@ -36,6 +36,11 @@ type Host interface {
 	NoteDelegation(model.Thread, int, string)
 	PrepareRuntime(model.ThreadRef, string) (async.Reply, error)
 	Memories() *manager.Manager
+	// ThreadBot is the ID and own project of the Bot a conversation belongs
+	// to, or empty.
+	ThreadBot(model.Thread) (id, home string)
+	// BotOf resolves a Bot's name in the caller's project to its ID and agent.
+	BotOf(caller model.Thread, name string) (id, agent string, err error)
 	Collaboration() *coordinator.Coordinator
 	StartCollaboration(model.Thread, string, coordinator.Args) (any, error)
 	PrepareDelegation(model.Thread, coordinator.Args) (dg.StartInput, error)

@@ -87,10 +87,10 @@ func (app *App) commandPaletteItems() []desktopPaletteItem {
 		if binding.mods == ui.Cmd|ui.Shift && binding.key == ui.KeyP {
 			continue
 		}
-		if binding.key == ui.KeyPeriod && (!app.C.Current().Busy || app.C.Current().StopRequested || app.Section != "") {
+		if binding.key == ui.KeyPeriod && (!app.C.Current().Busy || app.C.Current().StopRequested || !app.inConversation()) {
 			continue
 		}
-		if binding.key == ui.KeyO && (app.Section != "" || app.C.Current().ReadOnly || app.C.Current().Loading) {
+		if binding.key == ui.KeyO && (!app.inConversation() || app.C.Current().ReadOnly || app.C.Current().Loading) {
 			continue
 		}
 		add(desktopPaletteItem{
@@ -192,7 +192,7 @@ func (app *App) commandPaletteView(c *ui.Context) {
 		}
 		ui.Text(c, tr("↑ ↓ Navigate · Enter Run")).FontSize(11).TextColor(widgets.Muted).Padding(10, 20).BorderWidth(1, 0, 0, 0).BorderColor(widgets.Line)
 	})
-	if !p.Open && !ran && app.Section == "" {
+	if !p.Open && !ran && app.inConversation() {
 		app.focusComposer = true
 	}
 }

@@ -30,37 +30,20 @@ func TestBotTaskRetryKeepsTheAcceptedBot(t *testing.T) {
 	}
 }
 
-// A Bot has one standing conversation, so one task at a time may start it.
-func TestOneTaskStartsABotsConversation(t *testing.T) {
+// Each task starts a new conversation of its Bot, so a Bot takes a second task
+// while the first runs. Its tasks wait for a free place like any new
+// conversation.
+func TestBotTakesTasksWhileItWorks(t *testing.T) {
 	m, _ := harness(t, 1)
 	task := func(request, name, id string) StartInput {
 		in := input(request)
 		in.Bot, in.BotID = name, id
 		return in
 	}
-	create(t, m, task("first", "Rin", "b1"))
-	if _, err := m.Create(task("second", "Rin", "b1")); !IsCode(err, "THREAD_BUSY") {
-		t.Fatalf("a second task starting the conversation: %v", err)
+	first := create(t, m, task("first", "Rin", "b1"))
+	second := create(t, m, task("second", "Rin", "b1"))
+	if second.ID == first.ID || second.State != Queued || second.Bot != "b1" || !second.NewSession {
+		t.Fatalf("a second task for the Bot = %+v, want it queued for b1 in a new conversation", second)
 	}
-
-	// Another Bot's conversation waits for a free place like any new one,
-	// and holds its Bot while it waits.
-	queued := create(t, m, task("other", "Ren", "b2"))
-	if queued.State != Queued || queued.Bot != "b2" {
-		t.Fatalf("another Bot's task = %+v, want it queued for b2", queued)
-	}
-	if _, err := m.Create(task("other-again", "Ren", "b2")); !IsCode(err, "THREAD_BUSY") {
-		t.Fatalf("a second task behind a queued one: %v", err)
-	}
-
-	// Once that task is over without a conversation, another may start it.
-	if q, err := m.Cancel(queued.From, queued.ID); err != nil || !Terminal(q.State) {
-		t.Fatalf("cancel the queued task: %+v %v", q, err)
-	}
-	if next := create(t, m, task("other-next", "Ren", "b2")); next.Bot != "b2" {
-		t.Fatalf("task after the cancelled one = %+v", next)
-	}
-
-	// Tasks that name no Bot are not held back.
 	create(t, m, input("plain"))
 }

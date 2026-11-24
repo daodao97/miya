@@ -1045,8 +1045,9 @@ func (c *Controller) Send() { c.SendDraft(false) }
 func (c *Controller) SendDraft(steer bool) int {
 	controls := c.CurrentAgentControls()
 	req := model.SendRequest{Steer: steer, ThreadID: c.Current().ID, Text: c.Draft(), Attachments: append([]string(nil), c.Attachments()...), Agent: c.CurrentAgent(), Model: controls.Model(), Effort: controls.Effort(), Policy: c.CurrentPermissionPolicy()}
-	// An empty conversation opened from a Bot starts or continues the Bot's
-	// standing conversation; the service applies the Bot's settings.
+	// An empty conversation opened from a Bot starts or continues the
+	// conversation the person talks to the Bot in; the service applies the
+	// Bot's settings.
 	if b, ok := c.CurrentBot(); ok && req.ThreadID == 0 {
 		req.Bot = b.ID
 	}

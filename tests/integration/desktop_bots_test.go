@@ -12,17 +12,26 @@ import (
 	"miya/internal/controller"
 )
 
-func TestSidebarBots(t *testing.T) {
+// The Bots page lists the Bots like contacts and opens one as a chat, with
+// the window's composer; opening an ordinary conversation leaves the page.
+func TestBotsPage(t *testing.T) {
 	app, full := testApp(t)
 	c := app.C.(*controller.Controller)
 	c.LoadDesktopUnread()
 
-	tt := ui.NewTester(app.SidebarView, 260, 1000)
-	tt.Frame()
-	if !tt.HasText("Bots") {
-		t.Fatalf("no Bots section before the first Bot: %v", tt.Texts())
+	side := ui.NewTester(app.SidebarView, 260, 1000)
+	side.Frame()
+	if err := side.Click("Bots"); err != nil {
+		t.Fatalf("no Bots entry in the sidebar: %v (%v)", err, side.Texts())
 	}
-	if _, ok := tt.Find("New Bot"); !ok {
+	if app.Section != "Bots" {
+		t.Fatalf("section = %q, want Bots", app.Section)
+	}
+	full.Frame()
+	if !full.HasText("Pick a Bot to chat with, or create one.") {
+		t.Fatalf("no empty state before the first Bot: %v", full.Texts())
+	}
+	if _, ok := full.Find("New Bot"); !ok {
 		t.Fatal("no button to add a Bot")
 	}
 
@@ -43,64 +52,67 @@ func TestSidebarBots(t *testing.T) {
 	}
 	standing := model.Thread{ID: 5, ServerID: "srv5", Agent: model.AgentCodex, Title: "Standing conversation", Loaded: true, HistoryLoaded: true, Resumed: true}
 	c.SetThreads([]model.Thread{standing, {ID: 6, ServerID: "srv6", Agent: model.AgentCodex, Title: "Ordinary conversation", Loaded: true, HistoryLoaded: true, Resumed: true}})
-	tt.Frame()
+	full.Frame()
 
-	// Each row is the name over the last reply, else what the Bot is for.
+	// Each contact is the name over the last reply, else the charter.
 	for _, label := range []string{"Rin", "Earlier reply", "Kai", "Writes release notes", "Mio", "No messages yet"} {
-		if !tt.HasText(label) {
-			t.Fatalf("missing %q in %v", label, tt.Texts())
+		if !full.HasText(label) {
+			t.Fatalf("missing %q in %v", label, full.Texts())
 		}
 	}
-	if tt.HasText("Reviews pull requests") {
-		t.Fatal("the role note is shown beside the last reply")
+	if full.HasText("Reviews pull requests") {
+		t.Fatal("the charter is shown beside the last reply")
 	}
-	bots, _ := tt.Find("Bots")
-	rin, _ := tt.Find("Rin")
-	projects, _ := tt.Find("Projects")
-	if !(bots.Y < rin.Y && rin.Y < projects.Y) {
-		t.Fatalf("Bots at %v, Rin at %v, Projects at %v: Bots should precede Projects", bots.Y, rin.Y, projects.Y)
+	side.Frame()
+	if side.HasText("Rin") {
+		t.Fatal("the sidebar still lists the Bots")
 	}
 
-	// The row carries the state of the standing conversation.
-	if _, ok := tt.Find("Unread: Rin"); ok {
+	// The contact carries the state of the Bot's conversation.
+	if _, ok := full.Find("Unread: Rin"); ok {
 		t.Fatal("a read conversation shows the unread dot")
 	}
 	c.DesktopUnread[appmodel.DesktopUnreadKey(standing)] = 100
-	tt.Frame()
-	if _, ok := tt.Find("Unread: Rin"); !ok {
-		t.Fatalf("an unread reply has no dot on the Bot: %v", tt.Texts())
+	full.Frame()
+	if _, ok := full.Find("Unread: Rin"); !ok {
+		t.Fatalf("an unread reply has no dot on the Bot: %v", full.Texts())
 	}
 	c.Update(5, func(t *model.Thread) {
 		t.Busy = true
 		t.Messages = []model.Message{{ID: 1, Role: "user", Content: "q"}, {ID: 2, Role: "assistant", Content: "All  done\nhere"}}
 	})
 	c.Update(5, func(t *model.Thread) { t.Busy = false })
-	tt.Frame()
-	if !tt.HasText("All done here") || tt.HasText("Earlier reply") {
-		t.Fatalf("the row does not show the last reply: %v", tt.Texts())
+	full.Frame()
+	if !full.HasText("All done here") || full.HasText("Earlier reply") {
+		t.Fatalf("the contact does not show the last reply: %v", full.Texts())
 	}
 
-	// A Bot opens its standing conversation, like any other conversation.
-	if err := tt.Click("Rin"); err != nil {
+	// A Bot opens as a chat on the page, with the window's composer.
+	if err := full.Click("Rin"); err != nil {
 		t.Fatal(err)
 	}
-	if c.Active() != 5 {
-		t.Fatalf("active conversation = %d, want Rin's 5", c.Active())
+	if c.Active() != 5 || app.Section != "Bots" {
+		t.Fatalf("active conversation = %d in section %q, want Rin's 5 on the Bots page", c.Active(), app.Section)
 	}
 	if b, ok := c.CurrentBot(); !ok || b.Name != "Rin" {
 		t.Fatalf("current Bot = %+v, %v", b, ok)
 	}
 	full.Frame()
-	if _, ok := full.Find("Message Rin"); !ok {
-		t.Fatalf("the composer does not name the Bot: %v", full.Texts())
+	for _, want := range []string{"Message Rin", "Bot actions"} {
+		if _, ok := full.Find(want); !ok {
+			t.Fatalf("the chat has no %q: %v", want, full.Texts())
+		}
+	}
+	if !full.HasText("q") || !full.HasText("All  done\nhere") && !full.HasText("All done here") {
+		t.Fatalf("the chat does not show the conversation: %v", full.Texts())
 	}
 
-	// A Bot without one opens the empty conversation its first message starts.
-	if err := tt.Click("Kai"); err != nil {
+	// A Bot without a conversation shows who it is until the first message.
+	if err := full.Click("Kai"); err != nil {
 		t.Fatal(err)
 	}
-	if c.Active() != 0 {
-		t.Fatalf("active conversation = %d, want a new one", c.Active())
+	if c.Active() != 0 || app.Section != "Bots" {
+		t.Fatalf("active conversation = %d in section %q, want a new one on the Bots page", c.Active(), app.Section)
 	}
 	if b, ok := c.CurrentBot(); !ok || b.Name != "Kai" {
 		t.Fatalf("current Bot = %+v, %v", b, ok)
@@ -109,13 +121,25 @@ func TestSidebarBots(t *testing.T) {
 	if _, ok := full.Find("Message Kai"); !ok {
 		t.Fatalf("the composer does not name the Bot of a new conversation: %v", full.Texts())
 	}
+	if !full.HasText("Your first message starts a conversation with this Bot.") {
+		t.Fatalf("no introduction before the first message: %v", full.Texts())
+	}
 
-	// An ordinary conversation belongs to no Bot.
-	if err := tt.Click("Ordinary conversation"); err != nil {
+	// The search filters the contacts.
+	app.Bots.Query = "release"
+	full.Frame()
+	if full.HasText("Mio") || !full.HasText("Writes release notes") {
+		t.Fatalf("searching for release lists %v", full.Texts())
+	}
+	app.Bots.Query = ""
+
+	// An ordinary conversation belongs to no Bot and leaves the page.
+	side.Frame()
+	if err := side.Click("Ordinary conversation"); err != nil {
 		t.Fatal(err)
 	}
-	if b, ok := c.CurrentBot(); ok {
-		t.Fatalf("an ordinary conversation belongs to %q", b.Name)
+	if b, ok := c.CurrentBot(); ok || app.Section != "" {
+		t.Fatalf("an ordinary conversation: Bot %q, section %q", b.Name, app.Section)
 	}
 	full.Frame()
 	if _, ok := full.Find("Message Kai"); ok {

@@ -523,3 +523,13 @@ func ActivityIcon(m model.Message) string {
 }
 
 func tr(s string) string { return locales.T(s) }
+
+// WithoutBotIntro drops the introduction early Bots added, once, after the
+// message that started their conversation; Bots now carry their charter
+// outside the conversation.
+func WithoutBotIntro(text string) string {
+	if i := strings.Index(text, "\n\n[Miya, sent once] "); i >= 0 {
+		return text[:i]
+	}
+	return text
+}

@@ -9,6 +9,7 @@ import (
 	codex "miya/internal/agent/codex/native"
 	piagent "miya/internal/agent/pi"
 	"miya/internal/appmodel"
+	"miya/internal/bot"
 	"miya/internal/chat/composer"
 	"miya/internal/chat/model"
 	msgfmt "miya/internal/chat/presentation"
@@ -245,8 +246,8 @@ func (c *Controller) Submit(req model.SendRequest) int {
 		}
 		return id
 	}
-	// A message for a Bot goes to its standing conversation. The first one
-	// starts it, with the Bot's agent, project and settings.
+	// A message for a Bot goes to the conversation the person talks to it in.
+	// The first one starts it, with the Bot's agent, project and settings.
 	startBot := ""
 	if req.Bot != "" && req.ThreadID == 0 {
 		var err error
@@ -287,7 +288,7 @@ func (c *Controller) Submit(req model.SendRequest) int {
 		return 0
 	}
 	if startBot != "" {
-		return c.startBotThread(startBot, req)
+		return c.startBotThread(startBot, req, false)
 	}
 	return c.SubmitExpanded(req)
 }
@@ -334,6 +335,21 @@ func (c *Controller) SubmitExpanded(req model.SendRequest) int {
 	}
 	if req.Effort == "" && !req.ExplicitSettings {
 		req.Effort = b.Effort()
+	}
+	// Every message to a Bot's conversation carries the Bot's charter, worked
+	// out here so that no window supplies another.
+	req.Charter, req.BotID, req.BotHome, req.Dirs = "", "", "", nil
+	if owner, ok := c.botOf(t, req.Bot); ok {
+		req.Charter, req.BotID, req.BotHome = bot.Charter(owner), owner.ID, owner.Project
+		here := req.Project
+		if t.ID != 0 {
+			here = c.ThreadWorkspace(t.ID)
+		}
+		for _, p := range owner.AllProjects() {
+			if p != here {
+				req.Dirs = append(req.Dirs, p)
+			}
+		}
 	}
 	return b.Send(req)
 }

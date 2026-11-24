@@ -100,3 +100,47 @@ func Verify(policy string, sandbox, approval json.RawMessage) error {
 	}
 	return nil
 }
+
+// WithWritableRoots adds roots to a workspaceWrite turn sandbox, for a Bot
+// that also works in other projects. Other sandboxes already read them, or
+// reach everything.
+func WithWritableRoots(sandbox any, roots []string) any {
+	if len(roots) == 0 {
+		return sandbox
+	}
+	var m map[string]any
+	switch v := sandbox.(type) {
+	case map[string]any:
+		m = make(map[string]any, len(v)+1)
+		for k, x := range v {
+			m[k] = x
+		}
+	case json.RawMessage:
+		if json.Unmarshal(v, &m) != nil {
+			return sandbox
+		}
+	default:
+		return sandbox
+	}
+	if m["type"] != "workspaceWrite" {
+		return sandbox
+	}
+	var all []any
+	seen := map[string]bool{}
+	if existing, ok := m["writableRoots"].([]any); ok {
+		for _, r := range existing {
+			if s, ok := r.(string); ok && !seen[s] {
+				seen[s] = true
+				all = append(all, s)
+			}
+		}
+	}
+	for _, r := range roots {
+		if !seen[r] {
+			seen[r] = true
+			all = append(all, r)
+		}
+	}
+	m["writableRoots"] = all
+	return m
+}

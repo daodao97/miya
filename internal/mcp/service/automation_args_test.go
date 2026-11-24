@@ -31,3 +31,29 @@ func TestAutomationArgsReachTheAutomation(t *testing.T) {
 		t.Fatalf("an update without them changed them: %+v", kept)
 	}
 }
+
+// notify picks one of three tiers and overrides notifyEveryRun.
+func TestAutomationNotifyTiers(t *testing.T) {
+	for raw, want := range map[string][2]bool{
+		`{"notify":"always"}`:                          {true, false},
+		`{"notify":"attention","notifyEveryRun":true}`: {false, false},
+		`{"notify":"never","notifyEveryRun":true}`:     {false, true},
+		`{"notifyEveryRun":true}`:                      {true, false},
+	} {
+		var args mcpproto.AutomationArgs
+		if err := json.Unmarshal([]byte(raw), &args); err != nil {
+			t.Fatal(err)
+		}
+		a := automation.Automation{NotifyNever: true}
+		if err := applyWakeArgs(&a, nil, args); err != nil {
+			t.Fatalf("%s: %v", raw, err)
+		}
+		if a.NotifyEveryRun != want[0] || a.NotifyNever != want[1] {
+			t.Errorf("%s: every %v, never %v; want %v", raw, a.NotifyEveryRun, a.NotifyNever, want)
+		}
+	}
+	bad := "sometimes"
+	if err := applyWakeArgs(&automation.Automation{}, nil, mcpproto.AutomationArgs{Notify: &bad}); err == nil {
+		t.Fatal("an unknown tier was accepted")
+	}
+}

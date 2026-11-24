@@ -84,3 +84,18 @@ func recheckText(a Automation) string {
 	}
 	return "no"
 }
+
+// accessRank orders the access levels from the narrowest.
+var accessRank = map[Access]int{AccessRead: 1, AccessEdit: 2, AccessExternal: 3, AccessFull: 4}
+
+// Narrower is the narrower of two access levels. Empty, which follows the
+// window's choice, yields to the other.
+func Narrower(a, b Access) Access {
+	if a == "" {
+		return b
+	}
+	if b == "" || accessRank[a] <= accessRank[b] {
+		return a
+	}
+	return b
+}

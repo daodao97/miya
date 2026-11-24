@@ -40,9 +40,11 @@ func (b Adapter) Stop(t model.Thread) {
 }
 
 // Archive and delete forget the app's entry; Claude Code keeps its session.
+// The session is hidden from discovery, which would otherwise list it again.
 func (b Adapter) Archive(t model.Thread) {
 	c := b.host
 	b.Stop(t)
+	transcript.MarkSuperseded(t.ServerID)
 	c.RemoveThread(t.ID, t.ServerID)
 }
 

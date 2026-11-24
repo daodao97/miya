@@ -47,7 +47,7 @@ func (app *App) userGroupView(c *ui.Context, g msgfmt.MessageGroup) {
 // startEdit edits a message's text, without the attachment lines the
 // composer added to it.
 func (app *App) StartEdit(m model.Message) {
-	m.Content = msgfmt.Message(m).Content
+	m.Content = msgfmt.WithoutBotIntro(msgfmt.Message(m).Content)
 	var keep []string
 	for _, l := range strings.Split(model.ImagePlaceholder.ReplaceAllString(m.Content, ""), "\n") {
 		if !strings.HasPrefix(l, "📎 ") {

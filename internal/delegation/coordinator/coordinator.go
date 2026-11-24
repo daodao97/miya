@@ -306,7 +306,7 @@ func (s *Coordinator) start(task dg.Task) {
 
 func referenceSourceOf(raw string) string { ref, _ := model.ParseThreadURL(raw); return ref.Source }
 
-// startedBot is the Bot whose standing conversation a task starts, for the
+// startedBot is the Bot a task starts a new conversation of, for the
 // host to record the new conversation as that Bot's.
 func startedBot(task dg.Task) string {
 	if task.NewSession {

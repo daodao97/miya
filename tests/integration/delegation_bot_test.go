@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -12,10 +13,11 @@ import (
 	"miya/internal/chat/model"
 )
 
-// An agent hands a task to a Bot by the name list_agents gave. The first task
-// starts the Bot's standing conversation, with the Bot's introduction, and
-// the next one goes to that same conversation.
-func TestCollaborationTaskGoesToABotsStandingConversation(t *testing.T) {
+// An agent hands tasks to a Bot by the name list_agents gave. Each task starts
+// a new conversation of the Bot, so the Bot takes a task while it works on
+// another, and each conversation is recorded as the Bot's. The charter goes
+// to the agent with the message, not into the visible conversation.
+func TestCollaborationTasksStartConversationsOfABot(t *testing.T) {
 	f := newServiceFixture(t)
 	caller := collaborationCaller(t, f, appmodel.AgentClaude, "initiator")
 	var rin bot.Bot
@@ -29,56 +31,17 @@ func TestCollaborationTaskGoesToABotsStandingConversation(t *testing.T) {
 		t.Fatal("the Bot was not saved")
 	}
 
-	// conversation is the state list_agents gives for the Bot's conversation.
-	conversation := func() string {
-		t.Helper()
-		listed, err := collaborationMCPCall(t, f, caller, "list_agents", map[string]any{})
-		if err != nil {
-			t.Fatal(err)
-		}
-		bots, _ := listed["bots"].([]any)
-		if len(bots) != 1 {
-			t.Fatalf("list_agents lists the Bots %v, want Rin alone", listed["bots"])
-		}
-		entry, _ := bots[0].(map[string]any)
-		if entry["name"] != "Rin" || entry["role"] != "Reviews pull requests" || entry["agent"] != string(appmodel.AgentClaude) {
-			t.Fatalf("list_agents shows the Bot as %v", entry)
-		}
-		state, _ := entry["conversation"].(string)
-		return state
+	listed, err := collaborationMCPCall(t, f, caller, "list_agents", map[string]any{})
+	if err != nil {
+		t.Fatal(err)
 	}
-	// settled waits until the conversation at ref can take another task.
-	settled := func(ref string) model.Thread {
-		t.Helper()
-		var target model.Thread
-		for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
-			ready := false
-			f.serv.Do(func() {
-				var ok bool
-				target, ok = f.C.ThreadByReference(ref)
-				ready = ok && !target.Busy && f.C.Collaboration.Reservations[target.ID] == ""
-			})
-			if ready {
-				return target
-			}
-		}
-		t.Fatalf("the conversation %s did not settle: busy %v", ref, target.Busy)
-		return target
+	bots, _ := listed["bots"].([]any)
+	if len(bots) != 1 {
+		t.Fatalf("list_agents lists the Bots %v, want Rin alone", listed["bots"])
 	}
-	storedSession := func() string {
-		session := ""
-		f.serv.Do(func() {
-			for _, b := range f.C.Bots() {
-				if b.ID == rin.ID {
-					session = b.Session
-				}
-			}
-		})
-		return session
-	}
-
-	if state := conversation(); state != "new" {
-		t.Fatalf("a Bot nobody has written to has the conversation %q, want new", state)
+	entry, _ := bots[0].(map[string]any)
+	if entry["name"] != "Rin" || entry["role"] != "Reviews pull requests" || entry["agent"] != string(appmodel.AgentClaude) {
+		t.Fatalf("list_agents shows the Bot as %v", entry)
 	}
 
 	// A Bot brings its own agent, and only a listed name is a Bot.
@@ -91,7 +54,7 @@ func TestCollaborationTaskGoesToABotsStandingConversation(t *testing.T) {
 		}
 	}
 
-	// The first task starts the conversation. Agents write the name loosely.
+	// Agents write the name loosely; a retry is the same task.
 	firstArgs := map[string]any{"request_id": "first", "bot": " rin ", "task": "Review the diff", "notify": "none"}
 	first, err := collaborationMCPCall(t, f, caller, "start_task", firstArgs)
 	if err != nil {
@@ -101,55 +64,64 @@ func TestCollaborationTaskGoesToABotsStandingConversation(t *testing.T) {
 	if id == "" {
 		t.Fatalf("start_task with a Bot returned %v", first)
 	}
-	// While it runs, a retry is the same task and another task is refused.
 	if retry, err := collaborationMCPCall(t, f, caller, "start_task", firstArgs); err != nil || retry["task_id"] != id {
-		t.Fatalf("retry while the conversation starts: %v %v, want task %s", retry, err, id)
+		t.Fatalf("retry: %v %v, want task %s", retry, err, id)
 	}
-	if _, err := collaborationMCPCall(t, f, caller, "start_task", map[string]any{"request_id": "eager", "bot": "Rin", "task": "Check the tests", "notify": "none"}); err == nil || !strings.Contains(err.Error(), "THREAD_BUSY") {
-		t.Fatalf("a second task while the first runs: %v, want THREAD_BUSY", err)
-	}
-
-	done := waitCollaborationTask(t, f, id)
-	if done.Bot != rin.ID || !done.NewSession || done.Result.Text != "partial done" {
-		t.Fatalf("the first task = %+v, want it to start the conversation of Bot %s", done, rin.ID)
-	}
-	standing := settled(done.Target)
-	if standing.ServerID == "" || storedSession() != standing.ServerID {
-		t.Fatalf("the Bot's conversation is %q, the task ran in %q", storedSession(), standing.ServerID)
-	}
-	var threads int
-	f.serv.Do(func() { threads = len(f.C.AllThreads()) })
-	if state := conversation(); state != "idle" {
-		t.Fatalf("after its first task the conversation is %q, want idle", state)
-	}
-
-	// The next task goes to the same conversation and starts no other.
+	// The Bot takes another task while it works on the first.
 	second, err := collaborationMCPCall(t, f, caller, "start_task", map[string]any{"request_id": "second", "bot": "Rin", "task": "Check the tests", "notify": "none"})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("a second task while the first runs: %v", err)
 	}
 	nextID, _ := second["task_id"].(string)
 	if nextID == "" || nextID == id {
 		t.Fatalf("the second task = %v", second)
 	}
+
+	done := waitCollaborationTask(t, f, id)
 	again := waitCollaborationTask(t, f, nextID)
-	if again.Target != done.Target || again.NewSession || again.Result.Text != "partial done" {
-		t.Fatalf("the second task = %+v, want it in the conversation %s", again, done.Target)
+	for _, task := range []struct {
+		name        string
+		bot, target string
+		new         bool
+		result      string
+	}{{"first", done.Bot, done.Target, done.NewSession, done.Result.Text}, {"second", again.Bot, again.Target, again.NewSession, again.Result.Text}} {
+		if task.bot != rin.ID || !task.new || task.target == "" || task.result != "partial done" {
+			t.Fatalf("the %s task: Bot %q, new %v, target %q, result %q; want a new conversation of %s", task.name, task.bot, task.new, task.target, task.result, rin.ID)
+		}
 	}
-	standing = settled(done.Target)
-	var after int
-	f.serv.Do(func() { after = len(f.C.AllThreads()) })
-	if after != threads || storedSession() != standing.ServerID {
-		t.Fatalf("%d conversations after the second task, %d before; the Bot's is %q", after, threads, storedSession())
+	if done.Target == again.Target {
+		t.Fatalf("both tasks ran in %s", done.Target)
 	}
 
-	// The introduction went with the task that started the conversation, once.
-	intros, role := 0, false
-	for _, m := range standing.Messages {
-		intros += strings.Count(m.Content, "[Miya, sent once]")
-		role = role || strings.Contains(m.Content, "Reviews pull requests")
+	// Both conversations are the Bot's; the person's own is still to start.
+	var sessions []string
+	for _, ref := range []string{done.Target, again.Target} {
+		var target model.Thread
+		f.serv.Do(func() { target, _ = f.C.ThreadByReference(ref) })
+		if target.ServerID == "" {
+			t.Fatalf("the conversation %s has no session", ref)
+		}
+		for _, m := range target.Messages {
+			if strings.Contains(m.Content, "[Miya] In this conversation") || strings.Contains(m.Content, "Reviews pull requests") {
+				t.Fatalf("the charter shows in the conversation: %q", m.Content)
+			}
+		}
+		sessions = append(sessions, target.ServerID)
 	}
-	if intros != 1 || !role {
-		t.Fatalf("the Bot was introduced %d times, with its role %v; want once with it", intros, role)
+	var stored bot.Bot
+	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+		f.serv.Do(func() {
+			for _, b := range f.C.Bots() {
+				if b.ID == rin.ID {
+					stored = b
+				}
+			}
+		})
+		if slices.Contains(stored.Others, sessions[0]) && slices.Contains(stored.Others, sessions[1]) {
+			break
+		}
+	}
+	if stored.Session != "" || !slices.Contains(stored.Others, sessions[0]) || !slices.Contains(stored.Others, sessions[1]) {
+		t.Fatalf("the Bot records %q and %v, want %v among its other conversations", stored.Session, stored.Others, sessions)
 	}
 }

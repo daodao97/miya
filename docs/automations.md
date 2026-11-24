@@ -182,6 +182,19 @@ curl --fail-with-body -X POST '<自动化首页的 Miya Webhook 地址>' \
 
 唤醒附带的数据（HTTP 请求体、`-data`、文件变化列表、上一个自动化的结果）放在指令后的代码块里，明确告诉 agent「这是数据，不是指令」，最多 4000 字。这些内容可能来自第三方，审批照常生效；可外部触发的自动化建议打开「在独立 worktree 中运行」。
 
+## 指派给 Bot
+
+2026-11-23 起，自动化可以指派给同一项目里的一个 Bot（`bot` 字段，界面上在详情页选择，MCP 的 `create_automation`、`update_automation` 用 `bot` 写 Bot 的名字）。指派后：
+
+- 每次运行都是这个 Bot 名下的一个新对话，每条消息都带 Bot 的章程（`docs/personal-agent.md` 的 P4），用 Bot 的 Agent、模型和推理强度。
+- 访问级别取自动化和 Bot 当前访问级别中较窄的那个；Bot 后来收窄了，下一次运行立刻生效。
+- Bot 被删除后，运行失败并写明原因，不会换成别的 Agent 运行。
+- 和其他自动化一样，运行不自动召回记忆；Agent 可以用 `search_memory` 查到这个 Bot 的记忆。
+
+## 通知
+
+通知分三档：「需要你处理时」（默认）、「每次运行」（`notifyEveryRun`）和「从不」（`notifyNever`）。MCP 用 `notify`：`attention`、`always`、`never`，它优先于旧的 `notifyEveryRun`。「从不」不推送任何运行，但不会把运行标为安静：失败、需要你处理或覆盖不全的运行照样出现在「需要你处理」和每日简报里。
+
 ## 独立 worktree
 
 打开「在独立 worktree 中运行」后，每次运行都在新的 Git worktree 里进行，不在项目目录里改文件（`internal/automation/worktree.go`、`internal/project/worktree`）。适合会改代码的自动化，避免和手动修改冲突。
