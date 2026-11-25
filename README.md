@@ -1,199 +1,88 @@
 <div align="center">
 
-<img src="assets/app-icon/icon.png" width="112" alt="Miya" />
+<img src="assets/app-icon/icon.png" width="96" alt="Miya" />
 
 # Miya
 
-**在电脑和手机上管理你的 AI 编程 Agent。**
+**让 Codex 和 Claude Code 坐到同一张桌子上干活。**
 
-Miya 把 Codex、Claude Code 和 Pi 放进同一个工作台。<br/>
-多个项目可以同时运行，Agent 可以互相委派任务，你可以在手机上查看进度、回复和审批。
+一个窗口管住所有项目和 Agent；人离开电脑，就拿手机接着看。
 
 [![Package](https://github.com/daodao97/miya/actions/workflows/package.yml/badge.svg)](https://github.com/daodao97/miya/actions/workflows/package.yml)
 ![Platforms](https://img.shields.io/badge/platform-macOS%20·%20Linux%20server%20·%20iOS%20·%20Android-6c5ce7)
-![Go](https://img.shields.io/badge/Go-1.27.3-00ADD8?logo=go&logoColor=white)
+
+<img src="assets/readme/hero.png" alt="Miya 主窗口：左边是项目和进行中的对话，右边是新建对话" />
 
 </div>
 
-## 为什么做 Miya
+## 为什么做它
 
-同时用几个 Agent 做不同项目时，终端窗口、会话历史和权限确认很容易散落各处。让 Claude Code 写代码、Codex 审查，还需要自己转交上下文和结果。
+同时开着 Codex 和 Claude Code、跑三四个项目的时候，终端标签越开越多：哪个在等审批，哪个早就跑完了，全靠记性。想让 Claude 写、Codex 审，还得自己当传话筒，来回复制粘贴。
 
-Miya 用独立后台管理项目和 Agent 进程。切换项目或关闭桌面窗口不会中断后台任务；需要你处理时，可以从电脑或手机接着操作。任务仍依赖运行它的电脑保持唤醒和联网。需要长期运行时，可以把工作空间放在 Linux 服务器上。
+Miya 就是为了把这些杂事收起来：Agent 交给一个常驻后台去跑，你只在需要你的时候出现——在电脑前，或者在手机上。
 
-## 主要功能
+## 它能帮你做什么
 
-### 多 Agent、多项目
+### 一个窗口，所有 Agent
 
-- 在同一个界面使用 Codex、Claude Code 和 Pi，按各自能力选择模型、推理档位和斜杠命令。
-- 多个项目同时运行，查看会话进度、工具调用、审批和原生任务状态。
-- 用 `@` 引用其他会话，支持跨项目、跨 Agent 提供上下文。
-- 通过内置 `miya` MCP 委派任务，结果自动回到发起对话。
+Codex、Claude Code、Pi 放在一起用，模型、推理档位和斜杠命令都按各自的来。侧边栏一眼就能看出哪些在跑、哪些在等你点头。
 
-### 手机接续工作
+### Agent 之间会自己分工
 
-桌面与手机通过 Tailcat 配对，使用端到端加密连接，无需安装 Tailscale 客户端或开放公网入站端口。
+跟 Claude Code 说一句「让 Codex 审一下」，它会通过内置的 `miya` 工具把任务交过去，结果自动回到原来的对话。用 `@` 还能把另一个会话整段拿来当上下文，跨项目、跨 Agent 都行。
 
-- 查看运行中、待审批和未读会话，回复消息、发送图片或语音输入。
-- 接收任务完成和审批通知，同时连接多台电脑。
-- 在支持的 macOS 设备上远程查看桌面或接管窗口。远程桌面需要 macOS 14 及以上，并授予对应系统权限。
+### 关掉窗口，活儿不停
 
-### 自动化与共享记忆
+Agent 跑在独立的后台里，切项目、关窗口都不会打断它。想让它一直跑，就把工作空间放到 Linux 服务器上（`miya -serve`），电脑和手机用连接码接进去，断开了任务也照常继续。
 
-用自然语言起草自动化，再确认项目、Agent、触发条件和检查命令。支持定时、文件变化、命令条件和外部唤醒。例如：
+### 手机上接着干
 
-> 每个工作日早上 9 点检查新 Issue，修复后运行 go test，失败时再试两轮。
+扫码配对，端到端加密，不用装 Tailscale，也不用开公网端口。在手机上看进度、回消息、发图片和语音、点审批，任务做完会推送通知。macOS 14 以上还能远程看桌面、接管窗口。
 
-后台负责触发任务、执行检查并记录结果。共享记忆让不同 Agent 复用项目经验，每条记忆都可以查看来源、修改或删除。
+<div align="center">
+<img src="assets/readme/mobile.png" width="720" alt="手机上的 Miya：新建对话，选择 Codex 或 Claude Code" />
+</div>
 
-### 远程工作空间
+### 记得你们聊过的事
 
-Linux 服务器运行 `miya -serve` 后，电脑和手机可通过连接码接入。Agent、项目文件和终端都在服务器上运行，客户端断开后任务继续执行。桌面端可以切换本机和多个远程工作空间。
+Codex 和 Claude 共用同一份项目记忆：一个踩过的坑，另一个不用再踩。每条记忆都能看到来源，随时修改或删除。
 
-此外，Miya 提供 Codex / Claude 套餐用量展示、菜单栏入口、中英双语和[键盘快捷键](docs/keyboard-shortcuts.md)。
+<div align="center">
+<img src="assets/readme/memory.png" width="720" alt="设置窗口里的共享记忆" />
+</div>
 
-## 开始使用
+### 让它按时上班
 
-### 安装与首次运行
+用一句话写自动化，Miya 会帮你拆成项目、Agent、触发条件和检查命令，确认后交给后台：
 
-从 [Releases](https://github.com/daodao97/miya/releases) 查看已发布的安装包，也可以从 [Package 工作流](https://github.com/daodao97/miya/actions/workflows/package.yml) 获取构建产物。具体平台产物和签名方式见[打包配置](.github/workflows/package.yml)。未配置 iOS 分发签名时，CI 生成的是模拟器应用。
+> 每个工作日早上 9 点检查新 Issue，修好后跑 `go test`，失败就再试两轮。
 
-1. 在运行任务的电脑上安装并登录需要使用的 Agent CLI，例如 Codex 或 Claude Code；使用 Pi 时也需配置对应 CLI 和模型凭据。
-2. 打开 Miya，添加项目目录，选择 Agent 后开始对话。
-3. 需要手机接入时，在桌面「设置 → 手机」显示二维码，用手机端配对。
-4. 需要接入服务器时，按[服务器部署文档](docs/server.md)安装，再从工作空间菜单添加连接码。
+定时、文件变化、命令条件和外部 Webhook 都能触发。
 
-macOS 桌面最低要求为 macOS 13，iOS 最低要求为 iOS 17。连接码允许已配对设备操作对应工作空间，应只交给可信设备。
+还有一些小东西：菜单栏里看 Codex / Claude 套餐用量，中英双语，`⌘N` 新对话、`⌘,` 打开设置，更多见[键盘快捷键](docs/keyboard-shortcuts.md)。
 
-### 从源码构建
+## 三分钟上手
 
-需要 Git、[go.mod](go.mod) 指定的 Go 1.27.3 或兼容的更新工具链，以及 Python 3。各平台还需准备对应的构建环境。
+1. 在要跑任务的电脑上装好并登录 Agent CLI，比如 Codex 或 Claude Code。
+2. 从 [Releases](https://github.com/daodao97/miya/releases) 下载 Miya，打开后添加项目目录，挑一个 Agent 开聊。
+3. 想用手机：打开「设置 → 手机」，用手机 App 扫码。
+4. 想用服务器：按 [Linux 服务器文档](docs/server.md) 部署，再从工作空间菜单添加连接码。
 
-```sh
-git clone https://github.com/daodao97/miya.git
-cd miya
-go mod download
-```
-
-项目使用 Go 和 MyGo。`go.mod` 已固定 MyGo fork 的版本，普通构建会自动下载依赖，无需另外克隆 `../mygo`。
-
-#### macOS
-
-在 Mac 上运行：
-
-```sh
-./scripts/build-macos.sh
-```
-
-脚本默认构建本机架构，输出 `build/darwin-<架构>/Miya.app`，不生成 DMG。也可以指定平台：
-
-```sh
-./scripts/build-macos.sh -platform darwin/arm64
-```
-
-本地默认使用 ad-hoc 签名；需要固定开发签名时，设置 `MIYA_SIGNING_IDENTITY`。安装或覆盖旧版本前，按[安装与后台服务升级](docs/install-and-upgrade.md)完成验签、备份、窗口重开和后台版本核验。
-
-#### iOS
-
-需要 macOS 和 Xcode。先构建模拟器版本：
-
-```sh
-MIYA_IOS_PLATFORM=ios/simulator ./scripts/build-ios.sh
-```
-
-真机构建需要配置自己的 Apple 开发团队、签名证书和 provisioning profile，再执行：
-
-```sh
-./scripts/build-ios.sh
-```
-
-#### Android
-
-需要 JDK 17、Android SDK 和 NDK，并配置 `ANDROID_HOME`。CI 使用的 NDK 版本见[工作流](.github/workflows/package.yml)。
-
-```sh
-./scripts/build-android.sh
-# 构建后通过 adb 安装并启动到已连接设备：
-./scripts/build-android.sh --install
-```
-
-脚本构建 arm64 APK，输出到 `build/android*/`；未配置 keystore 时使用调试签名。
-
-#### Linux 服务端
-
-```sh
-./scripts/build-server.sh amd64
-# ARM 服务器：
-./scripts/build-server.sh arm64
-```
-
-产物位于 `build/server/linux-<架构>/`，包含二进制、安装脚本和校验文件，同时生成 `.tar.gz` 压缩包。服务端不需要图形会话，部署、配对和 systemd 管理见[服务器文档](docs/server.md)。
-
-## 开发
-
-### 测试与隔离运行
-
-```sh
-go test ./...
-```
-
-在 macOS 上可用隔离实例验证界面和后台，不覆盖已安装应用：
-
-```sh
-./scripts/run-isolated.sh
-./scripts/run-isolated.sh status
-./scripts/run-isolated.sh stop
-```
-
-隔离实例默认把 Miya 数据写入 `~/Library/Application Support/Miya-dev`，但仍共享 `~/.codex` 和 `~/.claude`。不要在两个实例中同时打开同一个 Agent 对话。更多说明见[独立验证](docs/install-and-upgrade.md#独立验证不覆盖已安装应用)。
-
-### 运行架构
-
-```mermaid
-flowchart LR
-    Desktop[桌面窗口] <--> Service[Miya 后台服务]
-    Mobile[手机 App] <-->|Tailcat 加密连接| Service
-    Remote[远程电脑] <-->|Tailcat 加密连接| Service
-    Service --> Codex[Codex]
-    Service --> Claude[Claude Code]
-    Service --> Pi[Pi]
-    Codex & Claude & Pi -. miya MCP .-> Service
-```
-
-同一个可执行文件承担不同入口：
-
-| 入口 | 职责 |
-| --- | --- |
-| 默认启动 | 显示桌面窗口并连接后台 |
-| `-server` | 由本机窗口管理的后台服务 |
-| `-serve` | 持续运行的无界面服务器 |
-| `-mcp` | 为 Agent 提供委派、记忆、自动化等工具 |
-
-窗口、后台和 MCP 是独立进程。替换应用文件后，运行中的后台不会立即变成新版；新窗口会安排旧后台在空闲后退出并重连。不要通过批量结束 Miya 进程来升级。
-
-### 代码导航
-
-| 目录 | 内容 |
-| --- | --- |
-| `internal/agent/` | Agent 契约、适配器和原生协议 |
-| `internal/controller/` | 工作空间、业务调度和组件组装 |
-| `internal/service/` | 前后台协议、客户端、服务端和工作空间连接 |
-| `internal/desktop/`、`internal/mobile/` | 桌面与手机界面 |
-| `internal/chat/`、`internal/ui/`、`internal/widgets/` | 会话展示与共享界面组件 |
-| `internal/remote/`、`internal/phone/` | 加密连接与手机通信 |
-| `internal/automation/`、`internal/delegation/`、`internal/memory/` | 自动化、任务委派和共享记忆 |
-| `locales/` | 多语言文案 |
-| `scripts/`、`tests/` | 构建脚本和测试 |
+系统要求：macOS 13+（远程桌面需要 14+），iOS 17+。连接码等于对应工作空间的操作权限，只给自己信得过的设备。
 
 ## 文档
 
 | 主题 | 文档 |
 | --- | --- |
 | 安装与升级 | [安装与后台服务升级](docs/install-and-upgrade.md) · [Linux 服务器](docs/server.md) |
-| 手机与远程操作 | [手机功能](docs/mobile-features.md) · [多桌面连接](docs/mobile-desktops.md) · [远程桌面](docs/remote-desktop.md) |
+| 手机与远程 | [手机功能](docs/mobile-features.md) · [多桌面连接](docs/mobile-desktops.md) · [远程桌面](docs/remote-desktop.md) |
 | 协作与上下文 | [Agent 协作](docs/agent-collaboration.md) · [会话引用](docs/thread-references.md) · [共享记忆](docs/memory.md) |
 | 自动化与通知 | [自动化](docs/automations.md) · [动作审查](docs/action-review.md) · [通知](docs/notifications.md) |
 | 日常使用 | [菜单栏用量](docs/tray-usage.md) · [键盘快捷键](docs/keyboard-shortcuts.md) |
-| 架构与扩展 | [Agent 适配契约](docs/agent-adapters.md) · [领域边界](docs/domain-scopes.md) · [MCP 边界](docs/mcp-boundaries.md) · [国际化](docs/i18n.md) |
+| 架构与扩展 | [开发指南](docs/development.md) · [Agent 适配契约](docs/agent-adapters.md) · [领域边界](docs/domain-scopes.md) · [MCP 边界](docs/mcp-boundaries.md) · [国际化](docs/i18n.md) |
 
-遇到问题可提交 [Issue](https://github.com/daodao97/miya/issues)，附上平台、Miya 版本、使用的 Agent、复现步骤和相关日志。分享日志前请移除连接码、凭据和私人对话内容。
+## 参与开发
+
+从源码构建（macOS / iOS / Android / Linux 服务端）、测试、隔离运行和代码结构都在[开发指南](docs/development.md)里。
+
+遇到问题欢迎提 [Issue](https://github.com/daodao97/miya/issues)，附上平台、Miya 版本、用的 Agent 和复现步骤。贴日志前记得去掉连接码、凭据和私人对话。
