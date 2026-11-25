@@ -3,6 +3,8 @@ package delegation
 import (
 	"fmt"
 	"strings"
+
+	"miya/internal/chat/model"
 )
 
 func (m *Manager) Observe(e Event) error {
@@ -284,7 +286,7 @@ func (m *Manager) NotificationText(d Delivery) string {
 	}
 	s := m.view.Load()
 	var b strings.Builder
-	b.WriteString("[Miya collaboration] These delegated tasks finished. Read each fixed result with read_task, assess the findings, and continue the user's original task. Report issues, apply authorized fixes, and verify the outcome as needed; do not stop at acknowledging completion. Execution state alone does not establish correctness.\n")
+	b.WriteString(model.DelegationNoticeHeading + " Read each fixed result with read_task, assess the findings, and continue the user's original task. Report issues, apply authorized fixes, and verify the outcome as needed; do not stop at acknowledging completion. Execution state alone does not establish correctness.\n")
 	for _, id := range d.TaskIDs {
 		t := s.Tasks[id]
 		fmt.Fprintf(&b, "- %s: %s (task_id: %s, session: %s)\n", t.Title, t.State, id, t.Target)

@@ -18802,6 +18802,116 @@ func (msgs Messages) DesktopUnlockAuthenticationB80abded() string {
 	return Catalog.Format(msgs.locale, "desktopUnlockAuthentication_b80abded", nil)
 }
 
+// DelegationTimelineCall says "Delegated task"
+// in the language the app shows.
+func DelegationTimelineCall() string { return In(i18n.Locale()).DelegationTimelineCall() }
+
+// DelegationTimelineCall says "Delegated task"
+// in the language of msgs.
+func (msgs Messages) DelegationTimelineCall() string {
+	return Catalog.Format(msgs.locale, "delegationTimelineCall", nil)
+}
+
+// DelegationTimelineAgent says "Delegated to %s"
+// in the language the app shows.
+func DelegationTimelineAgent() string { return In(i18n.Locale()).DelegationTimelineAgent() }
+
+// DelegationTimelineAgent says "Delegated to %s"
+// in the language of msgs.
+func (msgs Messages) DelegationTimelineAgent() string {
+	return Catalog.Format(msgs.locale, "delegationTimelineAgent", nil)
+}
+
+// DelegationTimelineBlocked says "Blocked actions"
+// in the language the app shows.
+func DelegationTimelineBlocked() string { return In(i18n.Locale()).DelegationTimelineBlocked() }
+
+// DelegationTimelineBlocked says "Blocked actions"
+// in the language of msgs.
+func (msgs Messages) DelegationTimelineBlocked() string {
+	return Catalog.Format(msgs.locale, "delegationTimelineBlocked", nil)
+}
+
+// DelegationTimelineResults says "Delegation results"
+// in the language the app shows.
+func DelegationTimelineResults() string { return In(i18n.Locale()).DelegationTimelineResults() }
+
+// DelegationTimelineResults says "Delegation results"
+// in the language of msgs.
+func (msgs Messages) DelegationTimelineResults() string {
+	return Catalog.Format(msgs.locale, "delegationTimelineResults", nil)
+}
+
+// DelegationTimelineRead says "Read by the main agent"
+// in the language the app shows.
+func DelegationTimelineRead() string { return In(i18n.Locale()).DelegationTimelineRead() }
+
+// DelegationTimelineRead says "Read by the main agent"
+// in the language of msgs.
+func (msgs Messages) DelegationTimelineRead() string {
+	return Catalog.Format(msgs.locale, "delegationTimelineRead", nil)
+}
+
+// DelegationTimelineMore says "%d more tasks"
+// in the language the app shows.
+func DelegationTimelineMore() string { return In(i18n.Locale()).DelegationTimelineMore() }
+
+// DelegationTimelineMore says "%d more tasks"
+// in the language of msgs.
+func (msgs Messages) DelegationTimelineMore() string {
+	return Catalog.Format(msgs.locale, "delegationTimelineMore", nil)
+}
+
+// DelegationTimelineLess says "Show fewer tasks"
+// in the language the app shows.
+func DelegationTimelineLess() string { return In(i18n.Locale()).DelegationTimelineLess() }
+
+// DelegationTimelineLess says "Show fewer tasks"
+// in the language of msgs.
+func (msgs Messages) DelegationTimelineLess() string {
+	return Catalog.Format(msgs.locale, "delegationTimelineLess", nil)
+}
+
+// DelegationTimelineReveal says "Show delegated call"
+// in the language the app shows.
+func DelegationTimelineReveal() string { return In(i18n.Locale()).DelegationTimelineReveal() }
+
+// DelegationTimelineReveal says "Show delegated call"
+// in the language of msgs.
+func (msgs Messages) DelegationTimelineReveal() string {
+	return Catalog.Format(msgs.locale, "delegationTimelineReveal", nil)
+}
+
+// DelegationTimelineTasks says "%d tasks"
+// in the language the app shows.
+func DelegationTimelineTasks() string { return In(i18n.Locale()).DelegationTimelineTasks() }
+
+// DelegationTimelineTasks says "%d tasks"
+// in the language of msgs.
+func (msgs Messages) DelegationTimelineTasks() string {
+	return Catalog.Format(msgs.locale, "delegationTimelineTasks", nil)
+}
+
+// DelegationTimelineResult says "Result"
+// in the language the app shows.
+func DelegationTimelineResult() string { return In(i18n.Locale()).DelegationTimelineResult() }
+
+// DelegationTimelineResult says "Result"
+// in the language of msgs.
+func (msgs Messages) DelegationTimelineResult() string {
+	return Catalog.Format(msgs.locale, "delegationTimelineResult", nil)
+}
+
+// DelegationTimelineBrief says "Task brief"
+// in the language the app shows.
+func DelegationTimelineBrief() string { return In(i18n.Locale()).DelegationTimelineBrief() }
+
+// DelegationTimelineBrief says "Task brief"
+// in the language of msgs.
+func (msgs Messages) DelegationTimelineBrief() string {
+	return Catalog.Format(msgs.locale, "delegationTimelineBrief", nil)
+}
+
 // AgentTaskIndependentConversation says "Run a task in an independent conversation"
 // in the language the app shows.
 func AgentTaskIndependentConversation() string {

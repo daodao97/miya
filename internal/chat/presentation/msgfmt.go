@@ -287,6 +287,10 @@ func GroupMessages(messages []model.Message) []MessageGroup {
 		if EmptyThought(m) {
 			continue
 		}
+		// The receipt before it already records that the parent read the result.
+		if FoldedDelegationRead(m) {
+			continue
+		}
 		user := m.Role == "user"
 		newGroup := len(groups) == 0 || user
 		if !newGroup {
@@ -460,7 +464,7 @@ type ActivityRun struct {
 func ActivityRuns(messages []model.Message) []ActivityRun {
 	var runs []ActivityRun
 	for _, m := range messages {
-		activity := m.Role == "tool" || m.Role == "activity"
+		activity := (m.Role == "tool" || m.Role == "activity") && !IsDelegationCall(m)
 		if !activity || len(runs) == 0 || !runs[len(runs)-1].Activity {
 			runs = append(runs, ActivityRun{ID: m.ID, Activity: activity})
 		}

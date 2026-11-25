@@ -62,6 +62,8 @@ type View struct {
 	// Footer to build in the floating bar, in the same frame.
 	BottomInset float32
 	footer      func()
+	// jumpTask is the task whose call card a receipt asked to show.
+	jumpTask string
 }
 
 // Footer builds the rows under the list that MessageList left for the
@@ -103,6 +105,7 @@ func (app *View) MessageList(c *ui.Context, t model.Thread) {
 	groups := app.Groups.ofThread(t, app.C.ViewRevision())
 	status, completedGroup := currentTurnStatus(t, groups)
 	state := app.ListFor(t.ID)
+	app.revealDelegation(state, groups)
 	state.Key = func(i int) any { return msgfmt.MessageViewKey(groups[i].Messages[0]) }
 	if t.Busy {
 		// The elapsed time of the running turn counts up.
@@ -284,6 +287,10 @@ func (app *View) GroupView(c *ui.Context, g msgfmt.MessageGroup) {
 
 func (app *View) groupViewWithFooter(c *ui.Context, g msgfmt.MessageGroup, inlineFooter bool) {
 	if g.User {
+		if tasks := msgfmt.DelegationResults(g.Messages[0]); len(tasks) > 0 {
+			app.delegationReceipt(c, g, tasks)
+			return
+		}
 		if app.UserGroup != nil {
 			app.UserGroup(c, g)
 		} else {
@@ -463,6 +470,17 @@ func (app *View) Chevron(c *ui.Context, open bool) {
 }
 
 func (app *View) MessageView(c *ui.Context, m model.Message, streaming bool) {
+	if msgfmt.IsDelegationCall(m) {
+		// The service supplies the live card; parse the call only without it.
+		card := model.DelegationCard{}
+		if len(m.Delegations) > 0 {
+			card = m.Delegations[0]
+		} else {
+			_, card, _ = msgfmt.DelegationCall(m)
+		}
+		app.delegationCall(c, m.ID, card)
+		return
+	}
 	presented := msgfmt.Message(m)
 	m.Presentation = &presented
 	m.Content = presented.Content

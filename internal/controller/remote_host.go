@@ -22,6 +22,7 @@ import (
 	"miya/internal/async"
 	"miya/internal/chat/model"
 	msgfmt "miya/internal/chat/presentation"
+	dg "miya/internal/delegation"
 	"miya/internal/desktop"
 	phoneproto "miya/internal/phone/protocol"
 	phoneserver "miya/internal/phone/server"
@@ -319,6 +320,9 @@ func (c *Controller) ServePhoneConnection(ctx context.Context, conn phoneConnect
 		state    phoneproto.State
 		revision int
 		t        phoneThread
+		from     string
+		tasks    *dg.Manager
+		tasksRev uint64
 		loading  bool
 	}
 	for {
@@ -334,6 +338,10 @@ func (c *Controller) ServePhoneConnection(ctx context.Context, conn phoneConnect
 			if want != 0 || ref.ServerID != "" {
 				v.t = c.PhoneThreadFor(ref)
 				v.t.Thread = c.withFollowUps(v.t.Thread, followUps)
+				v.from, v.tasks = c.ThreadRef(v.t.Thread).URL(), c.delegationManager()
+				if v.tasks != nil {
+					v.tasksRev = v.tasks.Revision()
+				}
 			}
 			return v
 		})
@@ -355,8 +363,9 @@ func (c *Controller) ServePhoneConnection(ctx context.Context, conn phoneConnect
 			ps.sub, ps.subscription.Thread = s.t.Thread.ID, s.t.Thread.ID
 			ps.lastRevision, ps.read, ps.fetched, ps.sync = -1, nil, false, nil
 		}
-		if ps.sub != 0 && s.revision != ps.lastRevision {
-			ps.lastRevision = s.revision
+		// Delegated tasks progress without changing the conversation itself.
+		if ps.sub != 0 && (s.revision != ps.lastRevision || s.tasksRev != ps.lastTaskRevision) {
+			ps.lastRevision, ps.lastTaskRevision = s.revision, s.tasksRev
 			t := s.t.Thread
 			switch {
 			case !s.t.Found:
@@ -379,7 +388,7 @@ func (c *Controller) ServePhoneConnection(ctx context.Context, conn phoneConnect
 			if ps.sync == nil {
 				ps.sync = phoneserver.NewThreadSync(nil)
 			}
-			if d, changed := ps.sync.Update(t); changed {
+			if d, changed := ps.sync.Update(delegationTimeline(t, s.from, s.tasks)); changed {
 				if data, err := json.Marshal(d); err == nil {
 					if !send(remote.Frame{Type: "thread", Thread: ps.sub, Data: data}) {
 						return

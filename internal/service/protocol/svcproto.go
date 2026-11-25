@@ -207,6 +207,10 @@ func MessageFingerprint(m model.Message) uint64 {
 		b, _ := json.Marshal(m.Presentation)
 		h.Write(b)
 	}
+	if len(m.Delegations) > 0 {
+		b, _ := json.Marshal(m.Delegations)
+		h.Write(b)
+	}
 	if m.Memory != nil {
 		b, _ := json.Marshal(m.Memory)
 		h.Write(b)

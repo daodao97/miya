@@ -40,6 +40,7 @@ type phoneSession struct {
 	sub               int
 	subscription      remote.Request
 	lastRevision      int
+	lastTaskRevision  uint64
 	read              *model.Thread
 	fetched           bool
 	pending           *PhoneSendReq
