@@ -76,7 +76,10 @@ var RunOnMain = func(f func()) {
 		f()
 		return
 	}
-	w.Update(f)
+	w.Update(func() {
+		f()
+		invalidateCompanions()
+	})
 }
 
 // inlineDispatch makes dispatched work run immediately, for tests that drive
@@ -106,8 +109,42 @@ func Invalidate() {
 	if w := CurrentWindow(); w != nil {
 		w.Invalidate()
 	}
+	invalidateCompanions()
 	if h := CurrentInvalidateHook(); h != nil {
 		h()
+	}
+}
+
+// Invalidator is a window that can be asked for a new frame.
+type Invalidator interface{ Invalidate() }
+
+// companions are windows beside the app's window that draw the same state,
+// such as Settings: every change of state redraws them too.
+var companions []Invalidator
+
+// AddCompanionWindow redraws w with the app's window until remove is called.
+func AddCompanionWindow(w Invalidator) (remove func()) {
+	WindowMu.Lock()
+	companions = append(companions, w)
+	WindowMu.Unlock()
+	return func() {
+		WindowMu.Lock()
+		defer WindowMu.Unlock()
+		for i, c := range companions {
+			if c == w {
+				companions = append(companions[:i:i], companions[i+1:]...)
+				return
+			}
+		}
+	}
+}
+
+func invalidateCompanions() {
+	WindowMu.Lock()
+	ws := append([]Invalidator(nil), companions...)
+	WindowMu.Unlock()
+	for _, w := range ws {
+		w.Invalidate()
 	}
 }
 

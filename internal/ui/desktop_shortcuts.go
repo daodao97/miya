@@ -43,7 +43,7 @@ func (app *App) desktopShortcuts() []desktopShortcut {
 				app.openPanel(p)
 			}
 		}},
-		{ui.Cmd, ui.KeyComma, ",", "Open settings", func() { app.closeMenus(); app.Section = "Settings" }},
+		{ui.Cmd, ui.KeyComma, ",", "Open settings", func() { app.openSettings(-1) }},
 		{ui.Cmd | ui.Shift, ui.KeyT, "T", "Open terminal", func() {
 			app.closeMenus()
 			app.Section = ""

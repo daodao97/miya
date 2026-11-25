@@ -205,6 +205,7 @@ func DesktopMain() {
 		})
 	}
 	app.openWindow = open
+	settingsWindowOpener = (*App).showSettingsWindow
 	mygo.App.WhenReady(func() {
 		widgets.WatchSystemAppearance()
 		open()
@@ -283,7 +284,7 @@ func (app *App) SendDraft(steer bool) {
 			app.modelOpen = true
 		case "permissions":
 			clear()
-			app.Section = "Settings"
+			app.openSettings(-1)
 		case "mention":
 			c.RememberDraft("@")
 			app.Complete.edit(app, "@")

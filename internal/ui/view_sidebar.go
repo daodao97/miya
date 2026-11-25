@@ -54,7 +54,7 @@ func (app *App) SidebarView(c *ui.Context) {
 		ui.Column(c).Padding(12).Shrink(0).Background(widgets.Side).BorderWidth(1, 0, 0, 0).BorderColor(widgets.Line).Children(func() {
 			ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(4).Children(func() {
 				if widgets.ToolButton(c.Key("nav-settings"), "settings", tr("Settings")).Height(34).Tooltip(tr("Settings") + " · " + ShortcutKeys(ui.Cmd, ",")).Clicked() {
-					app.Section = "Settings"
+					app.openSettings(-1)
 				}
 				ui.Spacer(c)
 				app.workspaceSelector(c.Key("workspace"))

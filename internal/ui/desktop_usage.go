@@ -230,9 +230,9 @@ func (app *App) showMainWindow() {
 
 func (app *App) openAccountSettingsFromPanel() {
 	app.closeUsagePanel()
-	app.Section, app.SettingsTab = "Settings", 1
-	app.closeMenus()
-	app.showMainWindow()
+	if !app.openSettings(1) {
+		app.showMainWindow()
+	}
 }
 
 func (app *App) usageTrayMenu() *mygo.Menu {

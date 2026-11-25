@@ -22,7 +22,7 @@ type webhookUI struct {
 
 // ShowWebhookSettings opens Settings on the Webhook pane.
 func (app *App) ShowWebhookSettings() {
-	app.Section, app.SettingsTab = "Settings", webhookSettingsTab
+	app.openSettings(webhookSettingsTab)
 	app.Webhook.loadedAt = time.Time{}
 }
 
