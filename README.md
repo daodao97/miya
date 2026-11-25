@@ -11,7 +11,7 @@
 [![Package](https://github.com/daodao97/miya/actions/workflows/package.yml/badge.svg)](https://github.com/daodao97/miya/actions/workflows/package.yml)
 ![Platforms](https://img.shields.io/badge/platform-macOS%20·%20Linux%20server%20·%20iOS%20·%20Android-6c5ce7)
 
-<img src="assets/readme/hero.png" alt="Miya 主窗口：左边是项目和进行中的对话，右边是新建对话" />
+<img src="assets/readme/hero.png" alt="Miya 的桌面主窗口和手机端" />
 
 </div>
 
