@@ -13,8 +13,6 @@ Miya 把 Codex、Claude Code 和 Pi 放进同一个工作台。<br/>
 ![Platforms](https://img.shields.io/badge/platform-macOS%20·%20Linux%20server%20·%20iOS%20·%20Android-6c5ce7)
 ![Go](https://img.shields.io/badge/Go-1.27.3-00ADD8?logo=go&logoColor=white)
 
-<img src="assets/readme/hero.png" alt="Miya 桌面与手机工作台" width="100%" />
-
 </div>
 
 ## 为什么做 Miya
@@ -32,8 +30,6 @@ Miya 用独立后台管理项目和 Agent 进程。切换项目或关闭桌面�
 - 用 `@` 引用其他会话，支持跨项目、跨 Agent 提供上下文。
 - 通过内置 `miya` MCP 委派任务，结果自动回到发起对话。
 
-<img src="assets/readme/agents.png" alt="多 Agent 协作" width="100%" />
-
 ### 手机接续工作
 
 桌面与手机通过 Tailcat 配对，使用端到端加密连接，无需安装 Tailscale 客户端或开放公网入站端口。
@@ -42,8 +38,6 @@ Miya 用独立后台管理项目和 Agent 进程。切换项目或关闭桌面�
 - 接收任务完成和审批通知，同时连接多台电脑。
 - 在支持的 macOS 设备上远程查看桌面或接管窗口。远程桌面需要 macOS 14 及以上，并授予对应系统权限。
 
-<img src="assets/readme/mobile.png" alt="手机会话与远程操作" width="100%" />
-
 ### 自动化与共享记忆
 
 用自然语言起草自动化，再确认项目、Agent、触发条件和检查命令。支持定时、文件变化、命令条件和外部唤醒。例如：
@@ -51,8 +45,6 @@ Miya 用独立后台管理项目和 Agent 进程。切换项目或关闭桌面�
 > 每个工作日早上 9 点检查新 Issue，修复后运行 go test，失败时再试两轮。
 
 后台负责触发任务、执行检查并记录结果。共享记忆让不同 Agent 复用项目经验，每条记忆都可以查看来源、修改或删除。
-
-<img src="assets/readme/automation.png" alt="自动化与共享记忆" width="100%" />
 
 ### 远程工作空间
 
