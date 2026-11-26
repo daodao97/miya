@@ -26,6 +26,17 @@ go mod download
 
 脚本默认构建本机架构，输出 `build/darwin-<架构>/Miya.app`，不生成 DMG。本地默认使用 ad-hoc 签名；需要固定开发签名时，设置 `MIYA_SIGNING_IDENTITY`。安装或覆盖旧版本前，按[安装与后台服务升级](install-and-upgrade.md)完成验签、备份、窗口重开和后台版本核验。
 
+### Windows 和 Linux 桌面端
+
+```sh
+# 在 Windows 上构建 NSIS 安装程序
+go tool mygo build -platform windows/amd64
+# 在 Linux 上构建 DEB 和 RPM
+go tool mygo build -platform linux/amd64
+```
+
+将 `amd64` 换成 `arm64` 可构建 ARM 版本。产物位于 `build/windows-<架构>/` 和 `build/linux-<架构>/`。MyGo 会在 Windows 上按需下载 NSIS，安装程序默认不签名。
+
 ### iOS
 
 需要 macOS 和 Xcode。先构建模拟器版本：
@@ -61,6 +72,19 @@ MIYA_IOS_PLATFORM=ios/simulator ./scripts/build-ios.sh
 ```
 
 产物位于 `build/server/linux-<架构>/`，包含二进制、安装脚本和校验文件，同时生成 `.tar.gz` 压缩包。服务端不需要图形会话，部署、配对和 systemd 管理见[服务器文档](server.md)。
+
+## GitHub Actions 打包
+
+推送代码到 `main` 或在 GitHub 的 **Actions → Package → Run workflow** 手动运行后，可从运行详情的 **Artifacts** 下载产物。推送 `v1.2.3` 这类版本标签会用标签设置版本，打包成功后生成带安装包和远程更新清单的 Release 草稿。
+
+| 平台 | 产物 |
+| --- | --- |
+| macOS | Apple Silicon 和 Intel 通用 DMG |
+| Windows | amd64 / arm64 NSIS 安装程序 |
+| Linux 桌面端 | amd64 / arm64 DEB、RPM |
+| Linux 服务端 | amd64 / arm64 安装压缩包 |
+| iOS | 配置签名后生成 IPA，否则生成模拟器 ZIP |
+| Android | arm64 APK |
 
 ## 测试与隔离运行
 

@@ -1,12 +1,13 @@
 name: Package
 
-# Packages Miya for macOS (DMG), iOS and Android with the MyGo toolchain.
+# Packages Miya for macOS, Windows, Linux desktop, iOS, Android and Linux server.
 # go.mod pins the daodao97/mygo fork (replace github.com/egoist/mygo => a
 # pseudo-version), so the jobs need only this repository; a local go.work
 # that points at ../mygo is for development and is not committed.
 #
 # Signing is optional. Without secrets the jobs still produce artifacts:
 #   macOS   ad hoc signed DMG (Gatekeeper blocks it on other Macs)
+#   Windows unsigned NSIS installer
 #   iOS     simulator build (no provisioning profile needed)
 #   Android debug-signed APK
 #
@@ -116,6 +117,60 @@ jobs:
         run: |
           security delete-keychain "$MACOS_KEYCHAIN" || true
           rm -rf "$RUNNER_TEMP/macos-signing"
+
+  windows:
+    name: Windows installer
+    runs-on: windows-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Set the version from the tag
+        if: github.ref_type == 'tag'
+        run: python scripts/ci-config.py --version "$env:GITHUB_REF_NAME"
+      - name: Build the NSIS installer
+        run: go tool mygo build -platform windows/${{ matrix.arch }} -o build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: miya-windows-${{ matrix.arch }}
+          path: build/windows-${{ matrix.arch }}/miya-setup-*.exe
+          if-no-files-found: error
+          retention-days: 30
+
+  linux-desktop:
+    name: Linux desktop packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Set the version from the tag
+        if: github.ref_type == 'tag'
+        run: python3 scripts/ci-config.py --version "$GITHUB_REF_NAME"
+      - name: Build the DEB and RPM packages
+        run: go tool mygo build -platform linux/${{ matrix.arch }} -o build
+      - name: Collect the desktop packages
+        run: |
+          mkdir -p "$RUNNER_TEMP/linux-desktop"
+          cp build/linux-${{ matrix.arch }}/*.{deb,rpm} "$RUNNER_TEMP/linux-desktop/"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: miya-linux-desktop-${{ matrix.arch }}
+          path: ${{ runner.temp }}/linux-desktop/*
+          if-no-files-found: error
+          retention-days: 30
 
   ios:
     name: iOS
@@ -252,22 +307,24 @@ jobs:
         if: github.ref_type == 'tag'
         run: python3 scripts/ci-config.py --version "$GITHUB_REF_NAME"
       - name: Build server
-        run: ./scripts/build-server.sh "${{ matrix.arch }}"
+        run: ./scripts/build-server.sh "${{ matrix.arch }}" "$RUNNER_TEMP/server/linux-${{ matrix.arch }}"
       - name: Package remote server update
         if: github.ref_type == 'tag'
-        run: python3 scripts/package-update.py --source "build/server/linux-${{ matrix.arch }}/miya" --target "linux-${{ matrix.arch }}" --version "${GITHUB_REF_NAME#v}" --out build/updates
+        run: python3 scripts/package-update.py --source "$RUNNER_TEMP/server/linux-${{ matrix.arch }}/miya" --target "linux-${{ matrix.arch }}" --version "${GITHUB_REF_NAME#v}" --out "$RUNNER_TEMP/server"
       - uses: actions/upload-artifact@v4
         with:
           name: miya-server-${{ matrix.arch }}
+          # Use a shared artifact root so the release job can merge the manifests.
           path: |
-            build/server/*.tar.gz
-            build/updates/*
+            ${{ runner.temp }}/server/*.tar.gz
+            ${{ runner.temp }}/server/miya-update-*.json
           if-no-files-found: error
+          retention-days: 30
 
   release:
     name: Draft release
     if: github.ref_type == 'tag'
-    needs: [macos, ios, android, server]
+    needs: [macos, windows, linux-desktop, ios, android, server]
     runs-on: ubuntu-latest
     permissions:
       contents: write
