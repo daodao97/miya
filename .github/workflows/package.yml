@@ -19,6 +19,12 @@ name: Package
 
 on:
   workflow_dispatch:
+    inputs:
+      testflight:
+        description: TestFlight distribution (none builds all platforms without publishing)
+        type: choice
+        default: none
+        options: [none, internal, public]
   push:
     branches: [main]
     tags: ['v*']
@@ -28,16 +34,18 @@ permissions:
   contents: read
 
 concurrency:
-  group: package-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ inputs.testflight && inputs.testflight != 'none' && 'package-testflight' || format('package-{0}', github.ref) }}
+  cancel-in-progress: ${{ inputs.testflight == '' || inputs.testflight == 'none' }}
 
 env:
   ANDROID_NDK_VERSION: 28.2.13676358
   CGO_ENABLED: '0'
+  TESTFLIGHT_VERSION: '0.1.0'
 
 jobs:
   macos:
     name: macOS DMG
+    if: inputs.testflight == '' || inputs.testflight == 'none'
     runs-on: macos-latest
     timeout-minutes: 60
     defaults:
@@ -120,6 +128,7 @@ jobs:
 
   windows:
     name: Windows installer
+    if: inputs.testflight == '' || inputs.testflight == 'none'
     runs-on: windows-latest
     timeout-minutes: 30
     strategy:
@@ -145,6 +154,7 @@ jobs:
 
   linux-desktop:
     name: Linux desktop packages
+    if: inputs.testflight == '' || inputs.testflight == 'none'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -192,6 +202,14 @@ jobs:
       - name: Set the version from the tag
         if: github.ref_type == 'tag'
         run: python3 scripts/ci-config.py --version "$GITHUB_REF_NAME"
+      - name: Set the TestFlight version
+        if: inputs.testflight != '' && inputs.testflight != 'none'
+        run: |
+          if [[ "$GITHUB_REF" != refs/heads/main ]]; then
+            echo 'TestFlight publishing requires the main branch.' >&2
+            exit 1
+          fi
+          python3 scripts/ci-config.py --version "$TESTFLIGHT_VERSION"
       - name: Check the iOS tools
         run: xcodebuild -showsdks
       - name: Import the distribution identity and profile
@@ -247,8 +265,46 @@ jobs:
           rm -f "$IOS_PROFILE_PATH"
           rm -rf "$RUNNER_TEMP/ios-signing"
 
+  testflight:
+    name: Publish to TestFlight
+    if: github.ref == 'refs/heads/main' && inputs.testflight != '' && inputs.testflight != 'none'
+    needs: ios
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: testflight
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: miya-ios
+          path: ipa
+      - name: Install App Store Connect CLI
+        run: |
+          curl --fail --silent --show-error --location --retry 3 \
+            https://github.com/rorkai/App-Store-Connect-CLI/releases/download/7.6.0/asc_7.6.0_linux_amd64 \
+            --output "$RUNNER_TEMP/asc"
+          echo "7ab1cc1718aaed429e49587d88be2cac939ba9a19e122bd412c8e6c09060fbf5  $RUNNER_TEMP/asc" | sha256sum --check
+          chmod 700 "$RUNNER_TEMP/asc"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      - name: Upload and distribute the signed IPA
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+          TESTFLIGHT_TARGET: ${{ inputs.testflight }}
+        run: |
+          umask 077
+          : "${ASC_KEY_ID:?Missing ASC_KEY_ID}" "${ASC_ISSUER_ID:?Missing ASC_ISSUER_ID}" "${ASC_PRIVATE_KEY:?Missing ASC_PRIVATE_KEY}"
+          ASC_PRIVATE_KEY_PATH=$(mktemp)
+          export ASC_PRIVATE_KEY_PATH
+          trap 'rm -f "$ASC_PRIVATE_KEY_PATH"' EXIT
+          printf '%s\n' "$ASC_PRIVATE_KEY" > "$ASC_PRIVATE_KEY_PATH"
+          unset ASC_PRIVATE_KEY
+          bash scripts/publish-testflight.sh "$TESTFLIGHT_TARGET" "$TESTFLIGHT_VERSION" "$GITHUB_RUN_NUMBER" ipa/*.ipa
+
   android:
     name: Android APK
+    if: inputs.testflight == '' || inputs.testflight == 'none'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     defaults:
@@ -293,6 +349,7 @@ jobs:
 
   server:
     name: Linux server
+    if: inputs.testflight == '' || inputs.testflight == 'none'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
