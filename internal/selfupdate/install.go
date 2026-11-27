@@ -244,17 +244,3 @@ func replace(staged, target string) (string, error) {
 	}
 	return backup, nil
 }
-
-// ReopenWindows performs the same normal application quit used by the local
-// installer. It never signals the service or MCP processes.
-func (m *Manager) ReopenWindows(ctx context.Context) error {
-	if runtime.GOOS != "darwin" {
-		return nil
-	}
-	// The path is passed as argv, never interpolated into AppleScript source.
-	script := "on run argv\n tell application (item 1 of argv) to quit\nend run"
-	if err := exec.CommandContext(ctx, "/usr/bin/osascript", "-e", script, m.target).Run(); err != nil {
-		return errors.New("The update is installed, but the desktop window could not be reopened; reopen Miya on the target computer")
-	}
-	return exec.CommandContext(ctx, "/usr/bin/open", "-n", m.target).Run()
-}
