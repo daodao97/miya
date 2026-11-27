@@ -102,8 +102,7 @@ func TestPhoneQuestionsAndFormValidation(t *testing.T) {
 func TestPhoneMemoryScopeRevisionAndSource(t *testing.T) {
 	app, m, sent := startPhone(t)
 	changePhone(app, m, func() { m.State.Memory = true; m.State.MemoryRevision = 3 })
-	openPhoneDrawer(app)
-	app.Press("id:memory")
+	changePhone(app, m, func() { m.pages.Open("memory") })
 	r := awaitRequest(t, app, sent, "memory")
 	if r.Project != "/work" || r.MemoryScope != "project" {
 		t.Fatal(r)

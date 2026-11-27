@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"miya/internal/processenv"
 	svcproto "miya/internal/service/protocol"
 )
 
@@ -18,7 +19,8 @@ func ClaudeArgs(cwd string) []string {
 	if !ok {
 		return nil
 	}
-	cfg, _ := json.Marshal(map[string]any{"mcpServers": map[string]any{"miya": map[string]any{"type": "stdio", "command": exe, "args": []string{"-mcp", cwd, svcproto.Socket()}}}})
+	exe, args := agentCommand(exe, cwd)
+	cfg, _ := json.Marshal(map[string]any{"mcpServers": map[string]any{"miya": map[string]any{"type": "stdio", "command": exe, "args": args}}})
 	allowed := make([]string, len(ReadOnlyTools))
 	for i, tool := range ReadOnlyTools {
 		allowed[i] = "mcp__miya__" + tool
@@ -40,11 +42,22 @@ func CodexArgs(cwd string) []string {
 	if !ok {
 		return nil
 	}
-	return []string{
+	exe, args := agentCommand(exe, cwd)
+	quoted := make([]string, len(args))
+	for i, a := range args {
+		quoted[i] = TomlString(a)
+	}
+	out := []string{
 		"-c", "mcp_servers.miya.command=" + TomlString(exe),
-		"-c", "mcp_servers.miya.args=[" + TomlString("-mcp") + "," + TomlString(cwd) + "," + TomlString(svcproto.Socket()) + "]",
+		"-c", "mcp_servers.miya.args=[" + strings.Join(quoted, ",") + "]",
 		"-c", "mcp_servers.miya.tool_timeout_sec=1500",
 	}
+	// The read-only tools run without asking, as Claude Code's --allowedTools
+	// lets them; the others ask as any tool does.
+	for _, tool := range ReadOnlyTools {
+		out = append(out, "-c", "mcp_servers.miya.tools."+tool+".approval_mode=\"approve\"")
+	}
+	return out
 }
 
 func Command() (string, bool) {
@@ -56,7 +69,7 @@ func Command() (string, bool) {
 }
 
 // miyaReadOnlyTools are the miya tools an agent may call without asking.
-var ReadOnlyTools = []string{"list_threads", "read_thread", "thread_status", "list_agents", "read_task", "wait_task", "list_tasks", "list_automations", "report_result", "search_memory", "runtime_info", "request_desktop_control"}
+var ReadOnlyTools = []string{"list_threads", "read_thread", "thread_status", "list_agents", "read_task", "wait_task", "list_tasks", "list_automations", "report_result", "search_memory", "runtime_info", "request_desktop_control", "update_status", "follow_up"}
 
 // tomlString quotes s as a TOML basic string, whose escapes JSON's are.
 func TomlString(s string) string {
@@ -67,3 +80,13 @@ func TomlString(s string) string {
 // miyaMCPEnabled is set in the background service, whose socket the miya
 // MCP server reaches; agents get the server only there.
 var Enabled bool
+
+// WSL starts the Windows MCP executable through interop. Only the executable
+// is translated: its -mcp arguments still address the Windows service/files.
+func agentCommand(exe, cwd string) (string, []string) {
+	args := []string{"-mcp", cwd, svcproto.Socket()}
+	if processenv.AgentWSL() != "" {
+		return "sh", append([]string{"-c", `exe=$(wslpath -a -- "$1") || exit $?; shift; exec "$exe" "$@"`, "miya-mcp", exe}, args...)
+	}
+	return exe, args
+}

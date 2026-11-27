@@ -71,15 +71,51 @@ func terms(s string) []string {
 	return out
 }
 
+// MaxAlternates bounds the alternate wordings (synonyms, translations,
+// identifiers) one search accepts besides its query.
+const MaxAlternates = 6
+
 // Search is keyword retrieval, scoped before ranking. It never calls a model.
 // Empty or unrelated queries return no entries. Management uses List instead.
-func (s *Store) Search(project Scope, query, task string, limit int) ([]Entry, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.search(project, query, task, limit)
+// Each alternate wording is scored on its own and an entry keeps its best
+// score, so several synonyms matching one broad entry do not outrank a
+// precise match.
+func (s *Store) Search(project Scope, query, task string, limit int, alternates ...string) ([]Entry, error) {
+	return s.SearchBot(project, Scope{}, query, task, limit, alternates...)
 }
 
-func (s *Store) search(project Scope, query, task string, limit int) ([]Entry, error) {
+// SearchBot is Search in a Bot's conversation: the Bot's own memory, bot, is
+// searched with the project's. The zero bot is Search.
+func (s *Store) SearchBot(project, bot Scope, query, task string, limit int, alternates ...string) ([]Entry, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(alternates) > MaxAlternates {
+		alternates = alternates[:MaxAlternates]
+	}
+	return s.search(project, append([]string{query}, alternates...), task, limit, bot)
+}
+
+type searchQuery struct {
+	tokens []string
+	phrase string
+}
+
+func searchQueries(queries []string) []searchQuery {
+	out := []searchQuery{}
+	seen := map[string]bool{}
+	for _, q := range queries {
+		tokens := terms(q)
+		phrase := strings.TrimSpace(normalized(q))
+		if len(tokens) == 0 || seen[phrase] {
+			continue
+		}
+		seen[phrase] = true
+		out = append(out, searchQuery{tokens, phrase})
+	}
+	return out
+}
+
+func (s *Store) search(project Scope, queries []string, task string, limit int, bot Scope) ([]Entry, error) {
 	d, err := s.read(project)
 	if err != nil {
 		return nil, err
@@ -95,8 +131,15 @@ func (s *Store) search(project Scope, query, task string, limit int) ([]Entry, e
 		}
 		docs = append(docs, user)
 	}
-	tokens := terms(query)
-	if len(tokens) == 0 && strings.TrimSpace(task) == "" {
+	if bot.Kind == "bot" && project.Kind == "project" {
+		own, err := s.read(bot)
+		if err != nil {
+			return nil, err
+		}
+		docs = append(docs, own)
+	}
+	qs := searchQueries(queries)
+	if len(qs) == 0 && strings.TrimSpace(task) == "" {
 		return []Entry{}, nil
 	}
 	type hit struct {
@@ -116,13 +159,17 @@ func (s *Store) search(project Scope, query, task string, limit int) ([]Entry, e
 			indexed := s.index(e)
 			content, words := indexed.normalized, indexed.words
 			score := 0
-			for _, w := range tokens {
-				if words[w] {
-					score += 2
+			for _, q := range qs {
+				matched := 0
+				for _, w := range q.tokens {
+					if words[w] {
+						matched += 2
+					}
 				}
-			}
-			if q := strings.TrimSpace(normalized(query)); q != "" && strings.Contains(content, q) {
-				score += 5
+				if strings.Contains(content, q.phrase) {
+					matched += 5
+				}
+				score = max(score, matched)
 			}
 			if task != "" && e.TaskKey == task {
 				score += 8

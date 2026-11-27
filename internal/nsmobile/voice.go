@@ -24,6 +24,7 @@ type phoneVoice struct {
 	session            voiceSession
 	owner              composerOwner
 	draft, preview     string
+	partial            string
 	anchor, caret      int
 	released, autoSend bool
 	final              *voiceinput.Result
@@ -105,6 +106,7 @@ func (m *App) voiceResult(v *phoneVoice, r voiceinput.Result) {
 	}
 }
 func (m *App) previewVoice(v *phoneVoice, s string) {
+	v.partial = s
 	v.preview = v.draft[:v.anchor] + s + v.draft[v.caret:]
 	m.Draft = v.preview
 	m.anchor, m.caret = v.anchor+len(s), v.anchor+len(s)
@@ -226,30 +228,53 @@ func (m *App) voiceHold(cx *core.Scope, quiet *time.Time, child core.Node) core.
 		Children: []core.Node{child}}
 }
 
-// voiceStatus sits above the composer while a recording runs.
+// voiceStatus keeps the recognized words visible without taking the active touch.
 func (m *App) voiceStatus(cx *core.Scope) core.Node {
 	return core.Show{When: live(m, func() bool { return m.voice != nil }), Then: func(cx *core.Scope) core.Node {
 		colors := nswidgets.ColorsOf(cx)
-		return core.View{Style: core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Gap: 8, Padding: core.Edges{Left: 8, Right: 4}}, Children: []core.Node{
-			core.View{Style: core.Style{FlexGrow: 1, FlexShrink: 1, MinWidth: core.Pt(0), Gap: 2}, Children: []core.Node{
-				core.Text{TestID: "voice-status", ContentFunc: live(m, func() string {
-					v := m.voice
-					switch {
-					case v == nil:
-						return ""
-					case v.released && v.autoSend:
-						return tr("Recognizing… Will send when ready")
-					case v.released:
-						return tr("Recognizing…")
-					case v.autoSend:
-						return tr("Listening… Release to send")
+		released := live(m, func() bool { return m.voice != nil && m.voice.released })
+		return core.View{TestID: "voice-overlay", PointerEvents: core.PointerEventsBoxNone,
+			Style: core.Style{Position: core.Absolute, Top: core.Pt(0), Bottom: core.Pt(0), Left: core.Pt(0), Right: core.Pt(0),
+				AlignItems: core.AlignCenter, JustifyContent: core.JustifyCenter, Padding: core.All(24), Background: ui.Black(0.4)},
+			Children: []core.Node{core.View{PointerEvents: core.PointerEventsBoxNone, StyleFunc: func() core.Style {
+				return core.Style{Width: core.Pct(100), MaxWidth: core.Pt(440), Gap: 14, CornerRadius: 26,
+					Padding: core.Edges{Top: 18, Right: 20, Bottom: 14, Left: 20}, Background: colors.Canvas()}
+			}, Children: []core.Node{
+				core.View{PointerEvents: core.PointerEventsNone, Style: core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Gap: 10}, Children: []core.Node{
+					nswidgets.Icon("microphone", 18, colors.Link),
+					core.Text{TestID: "voice-status", ContentFunc: live(m, func() string {
+						v := m.voice
+						switch {
+						case v == nil:
+							return ""
+						case v.released && v.autoSend:
+							return tr("Recognizing… Will send when ready")
+						case v.released:
+							return tr("Recognizing…")
+						case v.autoSend:
+							return tr("Listening… Release to send")
+						default:
+							return tr("Listening… Release to finish")
+						}
+					}), StyleFunc: func() core.Style { return core.Style{FontSize: 13, Color: colors.Muted(), FlexShrink: 1} }},
+				}},
+				core.View{PointerEvents: core.PointerEventsNone, StyleFunc: func() core.Style {
+					return core.Style{MinHeight: core.Pt(33), MaxHeight: core.Pt(max(120, cx.Env().Window().Height*0.4)),
+						Overflow: core.Hidden, JustifyContent: core.JustifyEnd}
+				}, Children: []core.Node{core.Text{TestID: "voice-text", ContentFunc: live(m, func() string {
+					if m.voice == nil || m.voice.partial == "" {
+						return "…"
 					}
-					return tr("Listening… Release to finish")
-				}), StyleFunc: func() core.Style { return core.Style{FontSize: 15, FontWeight: 500, Color: colors.Ink()} }},
-				core.Text{Content: tr("Slide away to cancel"), StyleFunc: func() core.Style { return core.Style{FontSize: 13, Color: colors.Muted()} }},
-			}},
-			m.round(cx, "voice-cancel", tr("Cancel voice input"), "x", 44, m.cancelVoice),
-		}}
+					return m.voice.partial
+				}), StyleFunc: func() core.Style { return core.Style{FontSize: 22, FontWeight: 500, Color: colors.Ink()} }}}},
+				core.Show{When: released, Then: func(cx *core.Scope) core.Node {
+					return core.View{PointerEvents: core.PointerEventsBoxNone, Style: core.Style{AlignItems: core.AlignEnd}, Children: []core.Node{
+						ui.Button{TestID: "voice-cancel", Text: tr("Cancel"), Variant: ui.ButtonGhost,
+							Style: core.Style{MinHeight: core.Pt(44)}, OnPress: m.act(m.cancelVoice)},
+					}}
+				}},
+			}}},
+		}
 	}}
 }
 

@@ -12,12 +12,14 @@ import (
 	codex "miya/internal/agent/codex/native"
 	agentpolicy "miya/internal/agent/policy"
 	"miya/internal/appmodel"
+	"miya/internal/bot"
 	"miya/internal/chat/model"
 	"miya/internal/prefs"
 	projectmodel "miya/internal/project/model"
 	svcclient "miya/internal/service/client"
 	svcproto "miya/internal/service/protocol"
 	"miya/internal/service/workspaces"
+	"miya/internal/statecard"
 	"miya/internal/uiruntime"
 )
 
@@ -105,7 +107,11 @@ func NewLocalWindowController() *Controller {
 		uiruntime.OnCleanup(func() { c.Cancel(); c.Remote.Close() })
 		return c
 	}
-	return newChatController()
+	// Without the service this window owns the Bots itself.
+	c := newChatController()
+	c.StartBots(bot.Path())
+	c.StartStateCards(statecard.Dir())
+	return c
 }
 
 func NewServiceWindow(workspace string, connect func() (*svcclient.Client, svcproto.State, error)) *Controller {
@@ -291,6 +297,8 @@ func (c *Controller) ApplyState(s svcproto.State) {
 	c.Cwd = windowCwd
 	c.ProjectCache = projects
 	c.DesktopUnread = s.DesktopUnread
+	c.waiting = s.Waiting
+	c.bots.mirror = s.Bots
 	for key, version := range c.DesktopReadPending {
 		if s.DesktopUnread[key] != version {
 			delete(c.DesktopReadPending, key)
@@ -332,7 +340,9 @@ func (c *Controller) ApplyState(s svcproto.State) {
 	}
 	c.Pi.Command, c.Pi.Error, c.Pi.Binary, c.Pi.Args, c.Pi.Env = s.PiCommand, s.PiError, s.PiBinary, s.PiArgs, s.PiEnv
 	c.Pi.Model, c.Pi.Effort = s.PiModel, s.PiEffort
+	c.Providers.views, c.Providers.use, c.Providers.err = s.Providers, s.ProviderUse, s.ProviderError
 	c.agentUpdates = s.AgentUpdates
+	c.agentEnvironment = s.AgentEnvironment
 	c.agents = agentSwitches{}
 	for id, on := range s.AgentEnabled {
 		c.agents[id] = on

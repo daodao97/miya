@@ -3,6 +3,7 @@ package nsmobile
 import (
 	"context"
 	"net"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -178,4 +179,25 @@ func (m *App) webServicesSheet(cx *core.Scope) core.Node {
 			return m.button("web-service-"+strconv.Itoa(v.Port), tr("Open ")+"http://"+net.JoinHostPort(v.Host, strconv.Itoa(v.Port)), live(m, func() bool { return s.loading || !m.State.WebPorts }), func() { m.openWebService(s, service()) })
 		}),
 		m.button("web-done", tr("Done"), nil, func() { m.closeWebServices(); m.pages.Open("") }))
+}
+
+func (m *App) openLocalWebLink(port int, path string) {
+	if !m.Connected || m.Conn == nil {
+		m.SendErr = tr("Connect to your desktop to open web services.")
+		return
+	}
+	if !m.State.WebPorts {
+		m.SendErr = tr("Update Miya on your desktop first. If the background service is busy, it will update when idle.")
+		return
+	}
+	proxy, err := phoneproxy.NewPhoneWebProxy(m.Conn, port, "")
+	if err != nil {
+		m.SendErr = tr("Unable to open web service") + ": " + err.Error()
+		return
+	}
+	m.closeWebServices()
+	m.closeFileBrowser()
+	m.closeFiles, m.webBrowser = proxy.Close, true
+	m.filesURL.Set(proxy.URL + "?path=" + url.QueryEscape(path))
+	m.pages.Open("")
 }

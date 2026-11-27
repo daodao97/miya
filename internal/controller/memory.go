@@ -1,7 +1,6 @@
 package controller
 
 import (
-	claude "miya/internal/agent/claude/native"
 	"miya/internal/agent/integrations"
 	"miya/internal/chat/model"
 	"miya/internal/memory"
@@ -10,8 +9,12 @@ import (
 )
 
 func NewMemoryEngine(c *Controller) *extractor.Engine {
-	cfg := claude.CLI{Binary: c.ClaudeBinary, Args: append([]string(nil), c.ClaudeArgs...), Env: append([]string(nil), c.ClaudeEnv...)}
-	return extractor.NewEngine(c.parentContext(), c.Memories().Store, cfg, c.MemorySaved)
+	cfg := c.claudeCLI()
+	e := extractor.NewEngine(c.parentContext(), c.Memories().Store, cfg, c.MemorySaved)
+	// Memory work waits while the person's own conversations run.
+	e.SetHold(c.Pressure.Waiting)
+	e.SetStateCardHold(func(agent string) bool { return c.Pressure.Agent(agent) != "" })
+	return e
 }
 
 // memorySaved hears of the memories the engine saved. Automatic extraction

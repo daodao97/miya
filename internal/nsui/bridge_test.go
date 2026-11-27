@@ -14,8 +14,10 @@ import (
 	agentmeta "miya/internal/agent/catalog"
 	"miya/internal/agent/cliupdate"
 	"miya/internal/agent/login"
+	"miya/internal/agent/provider"
 	"miya/internal/appmodel"
 	"miya/internal/automation"
+	"miya/internal/bot"
 	"miya/internal/chat/model"
 	"miya/internal/interaction"
 	"miya/internal/memory/manager"
@@ -202,10 +204,9 @@ func TestPlatformServicesReachController(t *testing.T) {
 	t.Cleanup(func() { uiruntime.IdleTime = nil })
 	uiruntime.IdleTime = nil
 	app := nsgotest.Start(t, func(cx *core.Scope) core.Node {
-		sampleIdle(cx)
+		sampleIdleWith(cx, func() (time.Duration, bool) { return 90 * time.Second, true })
 		return core.View{}
 	}, nsgotest.Size(100, 100), nsgotest.Environment(core.Environment{OS: core.OSMacOS}))
-	app.SystemIdle = 90 * time.Second
 	app.Advance(idleEvery)
 	app.Settle()
 	if uiruntime.IdleTime == nil {
@@ -221,7 +222,7 @@ func TestIdleTimeUnsupportedStaysUnset(t *testing.T) {
 	t.Cleanup(func() { uiruntime.IdleTime = nil })
 	uiruntime.IdleTime = nil
 	app := nsgotest.Start(t, func(cx *core.Scope) core.Node {
-		sampleIdle(cx)
+		sampleIdleWith(cx, func() (time.Duration, bool) { return 0, false })
 		return core.View{}
 	}, nsgotest.Size(100, 100), nsgotest.Environment(core.Environment{OS: core.OSLinux}))
 	app.Advance(idleEvery)
@@ -429,3 +430,23 @@ func (f *fakeControls) Model() string              { return f.model }
 func (f *fakeControls) Effort() string             { return f.effort }
 func (f *fakeControls) SetModel(s string)          { f.model = s; uiruntime.Invalidate() }
 func (f *fakeControls) SetEffort(s string)         { f.effort = s; uiruntime.Invalidate() }
+
+func (f *fakeHost) WaitingThreads() appmodel.Waiting { return nil }
+
+func (f *fakeHost) Bots() []bot.Bot                            { return nil }
+func (f *fakeHost) BotOp(string, bot.Request) (bot.Bot, error) { return bot.Bot{}, nil }
+func (f *fakeHost) BotThread(bot.Bot) model.Thread             { return model.Thread{} }
+func (f *fakeHost) BotReportThread(bot.Report) model.Thread    { return model.Thread{} }
+func (f *fakeHost) CurrentBot() (bot.Bot, bool)                { return bot.Bot{}, false }
+func (f *fakeHost) SetDraftBot(string)                         {}
+
+func (f *fakeHost) AgentEnvironment() cliupdate.Environment   { return cliupdate.Environment{} }
+func (f *fakeHost) SetAgentEnvironment(string)                {}
+func (f *fakeHost) ProviderViews() []provider.View            { return nil }
+func (f *fakeHost) ProviderUse() map[string]string            { return nil }
+func (f *fakeHost) SaveProvider(provider.Edit) error          { return nil }
+func (f *fakeHost) DeleteProvider(string) error               { return nil }
+func (f *fakeHost) EnableProvider(string, string, bool) error { return nil }
+func (f *fakeHost) ProviderModelsFetch(provider.Edit) func(context.Context) ([]string, error) {
+	return nil
+}

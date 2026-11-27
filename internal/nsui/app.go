@@ -12,9 +12,11 @@ import (
 	"miya/internal/agent"
 	"miya/internal/agent/cliupdate"
 	"miya/internal/agent/login"
+	"miya/internal/agent/provider"
 	"miya/internal/agent/quota"
 	"miya/internal/appmodel"
 	"miya/internal/automation"
+	"miya/internal/bot"
 	"miya/internal/chat/model"
 	"miya/internal/memory/manager"
 	"miya/internal/nswidgets"
@@ -72,6 +74,14 @@ type Host interface {
 	AgentUpdates() map[string]cliupdate.Info
 	AgentUpdateBusy() bool
 	UpgradeAgent(string)
+	AgentEnvironment() cliupdate.Environment
+	SetAgentEnvironment(string)
+	ProviderViews() []provider.View
+	ProviderUse() map[string]string
+	SaveProvider(provider.Edit) error
+	DeleteProvider(string) error
+	EnableProvider(agent, id string, on bool) error
+	ProviderModelsFetch(provider.Edit) func(context.Context) ([]string, error)
 	SelectedPermissionPolicy() string
 	RefreshAccount()
 	AccountLoginTarget() func(login.Request) (login.State, error)
@@ -93,6 +103,13 @@ type Host interface {
 	ArchiveThread(t model.Thread)
 	DeleteThread(t model.Thread)
 	DesktopThreadUnread(t model.Thread) bool
+	WaitingThreads() appmodel.Waiting
+	Bots() []bot.Bot
+	BotOp(string, bot.Request) (bot.Bot, error)
+	BotThread(bot.Bot) model.Thread
+	BotReportThread(bot.Report) model.Thread
+	CurrentBot() (bot.Bot, bool)
+	SetDraftBot(string)
 	ReadDesktopThread(t model.Thread)
 	MirroredHistory(id int) bool
 	WorkspaceFiles() projectaccess.Files

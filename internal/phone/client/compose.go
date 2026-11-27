@@ -10,11 +10,16 @@ func (m *Client) sendDraft(steer bool) {
 	if m.Sending {
 		return
 	}
-	if !m.CanSend() {
-		m.SendErr = m.disconnectedSendError()
+	text := strings.TrimSpace(m.Draft)
+	if text == "" && len(m.Images) == 0 {
 		return
 	}
-	if model.HasAgentReferences(m.Draft, nil) && (m.State.Collaboration == nil || m.State.Collaboration.Version < 1) {
+	offline := !m.CanSend()
+	if offline && !m.retryNow() {
+		m.SendErr = tr("Not connected to desktop")
+		return
+	}
+	if !offline && m.unsupportedAgentTags(text) {
 		m.SendErr = tr("Update the Miya background service to use Agent tags")
 		return
 	}
@@ -28,7 +33,11 @@ func (m *Client) sendDraft(steer bool) {
 		m.Path = "/thread"
 	}
 	r := m.ThreadRequest("send", m.Open)
-	r.Text = strings.TrimSpace(m.Draft)
+	if offline && r.Thread != 0 && r.ServerID == "" {
+		m.SendErr = tr("Available once the session is created")
+		return
+	}
+	r.Text = text
 	r.Steer = steer
 	agent := m.composerAgent()
 	if m.Open != 0 {
@@ -41,10 +50,12 @@ func (m *Client) sendDraft(steer bool) {
 	if m.Open == 0 {
 		r.Project, r.Agent = m.NewProject, m.NewAgent
 	}
-	if r.Text == "" && len(m.Images) == 0 {
+	m.BeginSend(r, m.Images)
+	if offline {
+		m.sending.waitingForConnection = true
+		m.sending.stage = tr("Will send when the desktop reconnects…")
 		return
 	}
-	m.BeginSend(r, m.Images)
 	m.transmitSend(m.sending)
 }
 

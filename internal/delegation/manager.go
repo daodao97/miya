@@ -14,6 +14,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 )
 
 type Options struct {
@@ -88,8 +89,9 @@ func (m *Manager) Paused(ref string) bool    { return m.view.Load().Paused[ref] 
 func (m *Manager) PendingReceivers() []string {
 	seen := map[string]bool{}
 	var refs []string
-	for _, d := range m.view.Load().Deliveries {
-		if d.State == NotifyPending && d.Resolution == "" && !seen[d.Notify] {
+	view, now := m.view.Load(), m.now()
+	for _, d := range view.Deliveries {
+		if deliveryDue(d, now, view.Paused[d.Notify]) && !seen[d.Notify] {
 			refs = append(refs, d.Notify)
 			seen[d.Notify] = true
 		}
@@ -137,6 +139,7 @@ func cloneSnapshot(s Snapshot) Snapshot {
 	}
 	for id, t := range out.Tasks {
 		t.Result.Artifacts = slices.Clone(t.Result.Artifacts)
+		t.Refused = slices.Clone(t.Refused)
 		out.Tasks[id] = t
 	}
 	for id, d := range out.Deliveries {
@@ -324,6 +327,15 @@ func validateSnapshot(s Snapshot) error {
 		if id != d.ID || !deliveryIDPattern.MatchString(id) || !d.State.validDelivery() || d.CreatedAt.IsZero() || d.Attempts < 0 {
 			return fmt.Errorf("invalid delivery identity")
 		}
+		if d.IsFollowUp() {
+			if _, ok := referenceSource(d.Notify); !ok || len(d.TaskIDs) != 0 ||
+				d.FollowUpNote == "" || utf8.RuneCountInString(d.FollowUpNote) > MaxFollowUpNote ||
+				!d.FollowUpAt.After(d.CreatedAt) || d.FollowUpAt.After(d.CreatedAt.Add(MaxFollowUpDelay)) {
+				return fmt.Errorf("invalid follow-up delivery")
+			}
+		} else if d.FollowUpNote != "" {
+			return fmt.Errorf("invalid follow-up note")
+		}
 		seen := map[string]bool{}
 		for _, taskID := range d.TaskIDs {
 			t, ok := s.Tasks[taskID]
@@ -418,6 +430,7 @@ func requestHash(in StartInput) string {
 	in.Effective = Config{}
 	in.Snapshot = ""
 	in.ParentTaskID = ""
+	in.BotID = ""
 	data, _ := json.Marshal(in)
 	return digest(data)
 }
@@ -532,7 +545,7 @@ func (m *Manager) Create(in StartInput) (Task, error) {
 		if len(runes) > 120 {
 			title = string(runes[:120])
 		}
-		t := Task{ID: id, RequestID: in.RequestID, RequestHash: hash, From: in.From, Target: in.Target, NewSession: in.Target == "", ParentTaskID: in.ParentTaskID, PreviousTaskID: in.PreviousTaskID, Depth: depth, Agent: in.Agent, Workspace: in.Workspace, Title: title, Prompt: in.Prompt, Snapshot: in.Snapshot, Config: in.Effective, Requested: in.Requested, State: state, SubmissionPhase: PhasePrepared, Result: Result{Availability: ResultPending}, CreatedAt: m.now()}
+		t := Task{ID: id, RequestID: in.RequestID, RequestHash: hash, From: in.From, Target: in.Target, Bot: in.BotID, NewSession: in.Target == "", ParentTaskID: in.ParentTaskID, PreviousTaskID: in.PreviousTaskID, Depth: depth, Agent: in.Agent, Workspace: in.Workspace, Title: title, Prompt: in.Prompt, Snapshot: in.Snapshot, Config: in.Effective, Requested: in.Requested, State: state, SubmissionPhase: PhasePrepared, Result: Result{Availability: ResultPending}, CreatedAt: m.now()}
 		s.Tasks[id] = t
 		if in.Notify {
 			s.Watches[watchKey(id, in.From)] = Watch{id, in.From, NotifyWatching}
@@ -586,4 +599,23 @@ func (m *Manager) ClaimQueued() ([]Task, error) {
 		out = append(out, t)
 	}
 	return out, nil
+}
+
+// MaxRefused is how many refused actions a task keeps.
+const MaxRefused = 20
+
+// RecordRefused notes an action Miya refused a running task.
+func (m *Manager) RecordRefused(id, what string) error {
+	return m.change(func(s *Snapshot) error {
+		t, ok := s.Tasks[id]
+		if !ok {
+			return errCode("TASK_NOT_FOUND", "Unknown execution")
+		}
+		if Terminal(t.State) || len(t.Refused) >= MaxRefused || slices.Contains(t.Refused, what) {
+			return nil
+		}
+		t.Refused = append(t.Refused, what)
+		s.Tasks[id] = t
+		return nil
+	})
 }

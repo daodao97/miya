@@ -78,7 +78,7 @@ func (m *Client) Run(ctx context.Context, gen int, link string, wake <-chan stru
 			m.Conn, m.Connected, m.Status = nil, false, message
 
 			m.RetryAt, m.RetryError = retryAt, retryError
-			if m.Sending {
+			if m.sending != nil && !m.sending.waitingForConnection {
 				m.Sending, m.SendErr = false, tr("Connection lost. The message may not have been sent.")
 				m.failPendingSend()
 			}
@@ -229,7 +229,7 @@ func (m *Client) read(gen int, conn *remote.Conn) (greeted bool, err error) {
 					}
 				})
 			}
-		case "memory", "automations", "automation-webhook", "automation-run", "automation-draft", "automation-create", "collaboration":
+		case "memory", "automations", "automation-webhook", "automation-briefing", "automation-review", "automation-run", "automation-draft", "automation-create", "collaboration":
 			m.onMain(gen, func() {
 				if m.Conn == conn {
 					m.ReceiveFeatureFrame(f)

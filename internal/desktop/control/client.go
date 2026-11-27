@@ -104,13 +104,15 @@ func (c *Client) doHeader(ctx context.Context, method, path string, body any) ([
 }
 
 type Session struct {
-	WindowOnly bool             `json:"windowOnly"`
-	Window     *desktop.Window  `json:"window"`
-	Pick       bool             `json:"pick"`
-	Apps       bool             `json:"apps"`
-	Privacy    bool             `json:"privacy"`
-	Displays   bool             `json:"displays"`
-	Display    *desktop.Display `json:"display,omitempty"`
+	WindowOnly        bool             `json:"windowOnly"`
+	Window            *desktop.Window  `json:"window"`
+	Pick              bool             `json:"pick"`
+	Apps              bool             `json:"apps"`
+	Privacy           bool             `json:"privacy"`
+	Displays          bool             `json:"displays"`
+	Display           *desktop.Display `json:"display,omitempty"`
+	InteractiveFrames bool             `json:"interactiveFrames,omitempty"`
+	FrameStream       bool             `json:"frameStream,omitempty"`
 }
 
 func (c *Client) Displays(ctx context.Context) ([]desktop.Display, error) {
@@ -220,9 +222,29 @@ func (c *Client) Start(ctx context.Context) error {
 	return err
 }
 
-// frame also reports whether the Mac currently shows its lock screen.
+// Frame also reports whether the Mac currently shows its lock screen.
 func (c *Client) Frame(ctx context.Context) ([]byte, bool, error) {
-	data, header, err := c.doHeader(ctx, http.MethodGet, "/frame", nil)
+	return c.frame(ctx, "/frame")
+}
+
+func (c *Client) FrameWithOptions(ctx context.Context, options desktop.FrameOptions) ([]byte, bool, error) {
+	return c.frameWithOptions(ctx, options, false)
+}
+
+func (c *Client) InteractiveFrame(ctx context.Context, options desktop.FrameOptions) ([]byte, bool, error) {
+	return c.frameWithOptions(ctx, options, true)
+}
+
+func (c *Client) frameWithOptions(ctx context.Context, options desktop.FrameOptions, interactive bool) ([]byte, bool, error) {
+	path := fmt.Sprintf("/frame?maxEdge=%d&quality=%d", options.MaxEdge, options.Quality)
+	if interactive {
+		path += "&interactive=1"
+	}
+	return c.frame(ctx, path)
+}
+
+func (c *Client) frame(ctx context.Context, path string) ([]byte, bool, error) {
+	data, header, err := c.doHeader(ctx, http.MethodGet, path, nil)
 	if err == nil && len(data) == 0 {
 		err = errors.New(tr("Invalid or oversized frame"))
 	}

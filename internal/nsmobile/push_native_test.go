@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/nsgo-dev/nsgo/core"
-	nativemobile "github.com/nsgo-dev/nsgo/mobile"
 	"github.com/nsgo-dev/nsgo/widget"
 	"miya/internal/apns"
 	"miya/internal/chat/model"
@@ -20,11 +19,11 @@ import (
 )
 
 func TestNativePushRegistrationRotationAndPresentation(t *testing.T) {
-	var emit func(nativemobile.NotificationEvent)
+	var emit func(mobileNotificationEvent)
 	calls := 0
 	app, m, sent := startConfiguredPhone(t, core.OSIOS, func(m *App) {
-		m.push.services.observe = func(fn func(nativemobile.NotificationEvent)) { emit = fn }
-		m.push.services.register = func(p nativemobile.NotificationPresentation) error {
+		m.push.services.observe = func(fn func(mobileNotificationEvent)) { emit = fn }
+		m.push.services.register = func(p int) error {
 			calls++
 			if p != 0 {
 				t.Fatal("native banners bypass conversation suppression", p)
@@ -40,7 +39,7 @@ func TestNativePushRegistrationRotationAndPresentation(t *testing.T) {
 		t.Fatal("native registration not requested")
 	}
 	for _, token := range []string{strings.Repeat("a", 64), strings.Repeat("b", 64)} {
-		emit(nativemobile.NotificationEvent{Kind: nativemobile.NotificationToken, Token: token})
+		emit(mobileNotificationEvent{Kind: mobileNotificationToken, Token: token})
 		r := awaitRequest(t, app, sent, "push")
 		var reg notification.Registration
 		if json.Unmarshal(r.Push, &reg) != nil || reg.Token != token || reg.Live || len(reg.ID) != 32 {
@@ -50,13 +49,13 @@ func TestNativePushRegistrationRotationAndPresentation(t *testing.T) {
 	changePhone(app, m, func() { m.pages.Open("") })
 	openPhoneThread(t, app, m, sent)
 	payload, _ := json.Marshal(apns.Payload{ID: "notice", Title: "Done", Body: "Result", Data: map[string]string{"serverId": "session", "agent": "codex", "project": "/work"}})
-	emit(nativemobile.NotificationEvent{Kind: nativemobile.NotificationReceived, Remote: true, Payload: payload})
+	emit(mobileNotificationEvent{Kind: mobileNotificationReceived, Remote: true, Payload: payload})
 	app.Settle()
 	if len(app.Notifications) != 0 {
 		t.Fatal("open conversation presented")
 	}
 	goPhoneHome(app)
-	emit(nativemobile.NotificationEvent{Kind: nativemobile.NotificationReceived, Remote: true, Payload: payload})
+	emit(mobileNotificationEvent{Kind: mobileNotificationReceived, Remote: true, Payload: payload})
 	app.Settle()
 	if len(app.Notifications) != 1 {
 		t.Fatal("remote foreground notice missing")
@@ -67,24 +66,24 @@ func TestNativePushRegistrationRotationAndPresentation(t *testing.T) {
 	changePhone(app, m, func() {
 		m.ApplyNotifications(notification.PhoneState{Revision: 4, Unread: []notification.Unread{{Key: "new", Version: 4}}})
 	})
-	emit(nativemobile.NotificationEvent{Kind: nativemobile.NotificationReceived, Remote: true, Payload: silent})
+	emit(mobileNotificationEvent{Kind: mobileNotificationReceived, Remote: true, Payload: silent})
 	app.Settle()
 	if app.Badge != 1 || len(app.Notifications) != 0 {
 		t.Fatal("silent receipt corrupted badges or failed to close notices")
 	}
-	emit(nativemobile.NotificationEvent{Kind: nativemobile.NotificationOpened, Remote: true, Payload: payload})
+	emit(mobileNotificationEvent{Kind: mobileNotificationOpened, Remote: true, Payload: payload})
 	app.Settle()
 	if m.Open != 7 {
 		t.Fatal("native open did not route", m.Open)
 	}
-	emit(nativemobile.NotificationEvent{Kind: nativemobile.NotificationRegistrationError, Err: errors.New("denied")})
+	emit(mobileNotificationEvent{Kind: mobileNotificationRegistrationError})
 	app.Settle()
 	if m.push.requesting || m.push.err == "" {
 		t.Fatal("native registration failure hidden")
 	}
 	old := emit
 	changePhone(app, m, m.closePush)
-	old(nativemobile.NotificationEvent{Kind: nativemobile.NotificationToken, Token: "late"})
+	old(mobileNotificationEvent{Kind: mobileNotificationToken, Token: "late"})
 	app.Settle()
 	if m.push.token == "late" || emit != nil {
 		t.Fatal("closed observer mutated app")
@@ -94,7 +93,7 @@ func TestNativePushRegistrationRotationAndPresentation(t *testing.T) {
 func TestNativePushColdOpenWaitsForLoadAndSelectsDesktop(t *testing.T) {
 	first, second := nativeLink(), nativeLink()
 	var target string
-	var emit func(nativemobile.NotificationEvent)
+	var emit func(mobileNotificationEvent)
 	app, m, _ := startConfiguredPhone(t, core.OSIOS, func(m *App) {
 		m.Link = first
 		d, _ := m.Desktops.Remember(first, "One")
@@ -102,11 +101,11 @@ func TestNativePushColdOpenWaitsForLoadAndSelectsDesktop(t *testing.T) {
 		d, _ = m.Desktops.Remember(second, "Two")
 		target = d.ID
 		payload, _ := json.Marshal(apns.Payload{ID: "cold", Data: map[string]string{"desktop": target, "serverId": "cold-session", "agent": "codex", "project": "/two"}})
-		m.push.services.observe = func(fn func(nativemobile.NotificationEvent)) {
+		m.push.services.observe = func(fn func(mobileNotificationEvent)) {
 			emit = fn
 			if fn != nil {
 				m.Loaded = false
-				fn(nativemobile.NotificationEvent{Kind: nativemobile.NotificationOpened, Remote: true, Payload: payload})
+				fn(mobileNotificationEvent{Kind: mobileNotificationOpened, Remote: true, Payload: payload})
 			}
 		}
 		m.DialDesktop = func(ctx context.Context, _ string) (*remote.Conn, error) { <-ctx.Done(); return nil, ctx.Err() }
@@ -126,7 +125,7 @@ func TestNativePushColdOpenWaitsForLoadAndSelectsDesktop(t *testing.T) {
 		t.Fatal("cold open did not route after state", m.Open)
 	}
 	// Local native events must not open a second time through the remote path.
-	emit(nativemobile.NotificationEvent{Kind: nativemobile.NotificationOpened, Remote: false, Payload: json.RawMessage(`{"data":{"thread":"7"}}`)})
+	emit(mobileNotificationEvent{Kind: mobileNotificationOpened, Remote: false, Payload: json.RawMessage(`{"data":{"thread":"7"}}`)})
 	app.Settle()
 	if m.Open != 88 {
 		t.Fatal("local open delivered twice")
@@ -140,9 +139,9 @@ type testPushActivity struct {
 	updates, ends int
 }
 
-func (a *testPushActivity) ID() string                           { return a.id }
-func (a *testPushActivity) UpdateJSON(raw json.RawMessage) error { a.updates++; return nil }
-func (a *testPushActivity) EndJSON(raw json.RawMessage, d widget.Dismissal) error {
+func (a *testPushActivity) ID() string                                  { return a.id }
+func (a *testPushActivity) Update(content widget.ActivityContent) error { a.updates++; return nil }
+func (a *testPushActivity) End(content *widget.ActivityContent, d widget.Dismissal) error {
 	a.ends++
 	return nil
 }
@@ -153,8 +152,8 @@ func TestNativeActivityTokensRotateReconnectAndUnregister(t *testing.T) {
 	app, m, sent := startConfiguredPhone(t, core.OSIOS, func(m *App) {
 		m.push.services.observeActivity = func(fn func(string, string)) { token = fn }
 		m.push.services.activitiesEnabled = func() bool { return true }
-		m.push.services.startActivity = func(kind string, raw json.RawMessage, opts ...widget.ActivityOptions) (phoneActivity, error) {
-			if kind != "miya-conversation" || len(opts) != 1 || !opts[0].Push || !json.Valid(raw) {
+		m.push.services.startActivity = func(kind string, content widget.ActivityContent, opts ...widget.ActivityOptions) (phoneActivity, error) {
+			if kind != "miya-conversation" || len(opts) != 1 || !opts[0].Push || content.Title == "" {
 				t.Fatal("wrong widget request")
 			}
 			return a, nil
@@ -192,11 +191,11 @@ func TestNativeActivityTokensRotateReconnectAndUnregister(t *testing.T) {
 }
 
 func TestNativeForegroundServiceLeasesAndLateCompletions(t *testing.T) {
-	var starts []nativemobile.ForegroundService
+	var starts []mobileForegroundService
 	var completions []func(error)
 	stops := 0
 	app, m, sent := startConfiguredPhone(t, core.OSAndroid, func(m *App) {
-		m.push.services.startForeground = func(n nativemobile.ForegroundService, done func(error)) error {
+		m.push.services.startForeground = func(n mobileForegroundService, done func(error)) error {
 			starts = append(starts, n)
 			completions = append(completions, done)
 			return nil
@@ -211,7 +210,7 @@ func TestNativeForegroundServiceLeasesAndLateCompletions(t *testing.T) {
 	})
 	openPhoneThread(t, app, m, sent)
 	changePhone(app, m, func() { m.push.disabled = true; m.State.Projects[0].Threads[0].Busy = true })
-	if len(starts) != 1 || starts[0].Types != nativemobile.ForegroundDataSync || m.KeepConnectionInBackground {
+	if len(starts) != 1 || starts[0].Types != mobileForegroundDataSync || m.KeepConnectionInBackground {
 		t.Fatal("unconfirmed service retained connection")
 	}
 	completions[0](nil)
@@ -224,13 +223,13 @@ func TestNativeForegroundServiceLeasesAndLateCompletions(t *testing.T) {
 		m.DesktopPage = &phoneclient.MobileDesktopPage{Active: true, Phase: "live"}
 		m.State.Projects[0].Threads[0].Busy = false
 	})
-	if len(starts) != 2 || starts[1].Types != nativemobile.ForegroundDataSync|nativemobile.ForegroundMicrophone {
+	if len(starts) != 2 || starts[1].Types != mobileForegroundDataSync|mobileForegroundMicrophone {
 		t.Fatal("operation types not combined", starts)
 	}
 	completions[1](nil)
 	app.Settle()
 	changePhone(app, m, func() { m.voice = nil })
-	if len(starts) != 3 || starts[2].Types != nativemobile.ForegroundDataSync || stops != 0 {
+	if len(starts) != 3 || starts[2].Types != mobileForegroundDataSync || stops != 0 {
 		t.Fatal("recording release stopped desktop lease")
 	}
 	completions[2](nil)
@@ -279,7 +278,7 @@ func TestNativeActivityRelaunchAdoptsNativeActivityAndToken(t *testing.T) {
 			}
 		}
 		m.push.services.activitiesEnabled = func() bool { return true }
-		m.push.services.startActivity = func(string, json.RawMessage, ...widget.ActivityOptions) (phoneActivity, error) {
+		m.push.services.startActivity = func(string, widget.ActivityContent, ...widget.ActivityOptions) (phoneActivity, error) {
 			t.Fatal("relaunch created duplicate activity")
 			return nil, nil
 		}
@@ -322,7 +321,7 @@ func TestNativeForegroundLastLeaseDisconnectsInBackground(t *testing.T) {
 	var promote func(error)
 	stops := 0
 	app, m, _ := startConfiguredPhone(t, core.OSAndroid, func(m *App) {
-		m.push.services.startForeground = func(_ nativemobile.ForegroundService, done func(error)) error { promote = done; return nil }
+		m.push.services.startForeground = func(_ mobileForegroundService, done func(error)) error { promote = done; return nil }
 		m.push.services.stopForeground = func(done func(error)) error {
 			stops++
 			if done != nil {
@@ -345,14 +344,14 @@ func TestNativeForegroundLastLeaseDisconnectsInBackground(t *testing.T) {
 }
 
 func TestNativeAndroidLiveRegistrationDoesNotSubmitFCMToken(t *testing.T) {
-	var emit func(nativemobile.NotificationEvent)
+	var emit func(mobileNotificationEvent)
 	app, m, sent := startConfiguredPhone(t, core.OSAndroid, func(m *App) {
-		m.push.services.observe = func(fn func(nativemobile.NotificationEvent)) { emit = fn }
-		m.push.services.register = func(nativemobile.NotificationPresentation) error {
+		m.push.services.observe = func(fn func(mobileNotificationEvent)) { emit = fn }
+		m.push.services.register = func(int) error {
 			t.Fatal("paired Android delivery requested APNs registration")
 			return nil
 		}
-		m.push.services.startForeground = func(_ nativemobile.ForegroundService, done func(error)) error { done(nil); return nil }
+		m.push.services.startForeground = func(_ mobileForegroundService, done func(error)) error { done(nil); return nil }
 		m.push.services.stopForeground = func(done func(error)) error {
 			if done != nil {
 				done(nil)
@@ -367,7 +366,7 @@ func TestNativeAndroidLiveRegistrationDoesNotSubmitFCMToken(t *testing.T) {
 	r := awaitRequest(t, app, sent, "push")
 	var reg notification.Registration
 	_ = json.Unmarshal(r.Push, &reg)
-	emit(nativemobile.NotificationEvent{Kind: nativemobile.NotificationToken, Token: "opaque-fcm-token"})
+	emit(mobileNotificationEvent{Kind: mobileNotificationToken, Token: "opaque-fcm-token"})
 	app.Settle()
 	if !reg.Live || reg.Token != "" || m.push.token != "" || !m.KeepConnectionInBackground {
 		t.Fatal("Android delivery mixed with APNs", string(r.Push))
@@ -375,11 +374,11 @@ func TestNativeAndroidLiveRegistrationDoesNotSubmitFCMToken(t *testing.T) {
 }
 
 func TestNativeBackgroundAPNsAlertDoesNotDuplicateSystemPresentation(t *testing.T) {
-	var emit func(nativemobile.NotificationEvent)
-	app, _, _ := startConfiguredPhone(t, core.OSIOS, func(m *App) { m.push.services.observe = func(fn func(nativemobile.NotificationEvent)) { emit = fn } })
+	var emit func(mobileNotificationEvent)
+	app, _, _ := startConfiguredPhone(t, core.OSIOS, func(m *App) { m.push.services.observe = func(fn func(mobileNotificationEvent)) { emit = fn } })
 	app.SetEnvironment(core.Environment{OS: core.OSIOS, Idiom: core.IdiomPhone, Lifecycle: core.LifecycleBackground})
 	payload, _ := json.Marshal(apns.Payload{ID: "system-alert", Title: "Done", Data: map[string]string{"thread": "7"}})
-	emit(nativemobile.NotificationEvent{Kind: nativemobile.NotificationReceived, Remote: true, Payload: payload})
+	emit(mobileNotificationEvent{Kind: mobileNotificationReceived, Remote: true, Payload: payload})
 	app.Settle()
 	if len(app.Notifications) != 0 {
 		t.Fatal("background APNs alert duplicated locally")

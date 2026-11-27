@@ -9,7 +9,8 @@ OUT=${2:-"$ROOT/build/server/linux-$ARCH"}
 mkdir -p "$OUT" "$ROOT/build/.tmp"
 export TMPDIR="$ROOT/build/.tmp"
 OUT=$(CDPATH= cd -- "$OUT" && pwd)
-RELEASE_LDFLAGS=$(python3 -c 'import json; c=json.load(open("nsgo.yaml")); print(c["miya"]["ldflags"].replace("{version}", c["version"]))')
+VERSION=$(python3 -c 'import json; print(json.load(open("nsgo.yaml"))["version"])')
+RELEASE_LDFLAGS="-X miya/internal/selfupdate.Build=miya-release:$VERSION:end"
 CGO_ENABLED=0 GOOS=linux GOARCH="$ARCH" go build -trimpath -ldflags="-s -w $RELEASE_LDFLAGS" -o "$OUT/miya" .
 cp scripts/install-server.sh "$OUT/install-server.sh"
 cp docs/server.md "$OUT/README.md"

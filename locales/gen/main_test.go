@@ -24,14 +24,9 @@ func TestPackagingKeepsCatalogLanguages(t *testing.T) {
 		t.Fatal(err)
 	}
 	var config struct {
-		Miya struct {
-			MacOS struct {
-				Info map[string]json.RawMessage `json:"info"`
-			} `json:"macos"`
-			IOS struct {
-				Info map[string]json.RawMessage `json:"info"`
-			} `json:"ios"`
-		} `json:"miya"`
+		Apple struct {
+			Info map[string]json.RawMessage `json:"info"`
+		} `json:"apple"`
 	}
 	if err := json.Unmarshal(data, &config); err != nil {
 		t.Fatal(err)
@@ -40,7 +35,7 @@ func TestPackagingKeepsCatalogLanguages(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for platform, plist := range map[string]map[string]json.RawMessage{"macOS": config.Miya.MacOS.Info, "iOS": config.Miya.IOS.Info} {
+	for platform, plist := range map[string]map[string]json.RawMessage{"macOS": config.Apple.Info, "iOS": config.Apple.Info} {
 		var languages []string
 		var source string
 		if err := json.Unmarshal(plist["CFBundleLocalizations"], &languages); err != nil {

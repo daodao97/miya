@@ -190,7 +190,7 @@ func (rn *Runner) keepWebhook(message WebhookMessage) WebhookMessage {
 	rn.Persist()
 	rn.host.Changed()
 	if len(message.Routes) == 0 && message.Detail == "No matching automation" {
-		rn.host.Deliver(notification.Notice{ID: "miya-webhook-" + message.ID, Title: tr("Webhook received"), Body: textutil.ClipRunes(message.Data, 180)})
+		rn.host.Deliver(notification.Notice{ID: "miya-webhook-" + message.ID, Title: tr("Webhook received"), Body: textutil.ClipRunes(message.Data, 180), Category: "webhook"})
 	}
 	return message
 }

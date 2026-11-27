@@ -19,33 +19,89 @@ import (
 // APNs connection, Android service or packaged ActivityKit extension.
 type phoneActivity interface {
 	ID() string
-	UpdateJSON(json.RawMessage) error
-	EndJSON(json.RawMessage, widget.Dismissal) error
+	Update(widget.ActivityContent) error
+	End(*widget.ActivityContent, widget.Dismissal) error
 }
 
 type phoneServices struct {
-	observe           func(func(nativemobile.NotificationEvent))
-	register          func(nativemobile.NotificationPresentation) error
-	startForeground   func(nativemobile.ForegroundService, func(error)) error
+	observe           func(func(mobileNotificationEvent))
+	register          func(int) error
+	startForeground   func(mobileForegroundService, func(error)) error
 	stopForeground    func(func(error)) error
 	activitiesEnabled func() bool
 	listActivities    func() []phoneActivity
-	startActivity     func(string, json.RawMessage, ...widget.ActivityOptions) (phoneActivity, error)
+	startActivity     func(string, widget.ActivityContent, ...widget.ActivityOptions) (phoneActivity, error)
 	observeActivity   func(func(string, string))
 }
 
+type mobileNotificationEvent struct {
+	Kind    int
+	Token   string
+	Remote  bool
+	Payload json.RawMessage
+}
+
+const (
+	mobileNotificationToken = iota
+	mobileNotificationRegistrationError
+	mobileNotificationReceived
+	mobileNotificationOpened
+)
+
+type mobileForegroundServiceType uint8
+
+const (
+	mobileForegroundDataSync mobileForegroundServiceType = 1 << iota
+	mobileForegroundMicrophone
+)
+
+type mobileForegroundService struct {
+	ID, Title, Body string
+	Types           mobileForegroundServiceType
+}
+
+var errNativePushUnavailable = errors.New("this NSGo host does not provide APNs registration")
+
 func (s *phoneServices) defaults() {
 	if s.observe == nil {
-		s.observe = nativemobile.OnNotificationEvent
+		s.observe = func(func(mobileNotificationEvent)) {}
 	}
 	if s.register == nil {
-		s.register = nativemobile.RegisterRemoteNotifications
+		s.register = func(int) error { return errNativePushUnavailable }
 	}
-	if s.startForeground == nil {
-		s.startForeground = nativemobile.StartForegroundService
-	}
-	if s.stopForeground == nil {
-		s.stopForeground = nativemobile.StopForegroundService
+	if s.startForeground == nil || s.stopForeground == nil {
+		var lease *nativemobile.DataSync
+		if s.startForeground == nil {
+			s.startForeground = func(service mobileForegroundService, done func(error)) error {
+				if service.Types&mobileForegroundDataSync != 0 {
+					next, err := nativemobile.StartDataSync(nativemobile.DataSyncOptions{
+						Notification: nativemobile.DataSyncNotification{Title: service.Title, Body: service.Body},
+					})
+					if err != nil {
+						return err
+					}
+					lease.Stop()
+					lease = next
+				} else {
+					lease.Stop()
+					lease = nil
+				}
+				if done != nil {
+					done(nil)
+				}
+				return nil
+			}
+		}
+		if s.stopForeground == nil {
+			s.stopForeground = func(done func(error)) error {
+				lease.Stop()
+				lease = nil
+				if done != nil {
+					done(nil)
+				}
+				return nil
+			}
+		}
 	}
 	if s.activitiesEnabled == nil {
 		s.activitiesEnabled = widget.ActivitiesEnabled
@@ -60,8 +116,8 @@ func (s *phoneServices) defaults() {
 		}
 	}
 	if s.startActivity == nil {
-		s.startActivity = func(kind string, raw json.RawMessage, opts ...widget.ActivityOptions) (phoneActivity, error) {
-			a, err := widget.StartActivityJSON(kind, raw, opts...)
+		s.startActivity = func(kind string, content widget.ActivityContent, opts ...widget.ActivityOptions) (phoneActivity, error) {
+			a, err := widget.StartActivity(kind, content, opts...)
 			if err != nil {
 				return nil, err
 			}
@@ -83,9 +139,9 @@ func (s *phoneServices) defaults() {
 	}
 }
 
-func (m *App) notificationEvent(n nativemobile.NotificationEvent) {
+func (m *App) notificationEvent(n mobileNotificationEvent) {
 	switch n.Kind {
-	case nativemobile.NotificationToken:
+	case mobileNotificationToken:
 		// Android uses paired live delivery, not the desktop's APNs provider. An
 		// embedding host's FCM token must never be submitted as an APNs token.
 		if m.cx.Env().OS() != core.OSIOS || n.Token == "" {
@@ -93,10 +149,10 @@ func (m *App) notificationEvent(n nativemobile.NotificationEvent) {
 		}
 		m.push.token, m.push.err, m.push.requesting = n.Token, "", false
 		m.syncPush()
-	case nativemobile.NotificationRegistrationError:
+	case mobileNotificationRegistrationError:
 		m.push.requesting = false
 		m.push.err = tr("Unable to register for notifications. Check system notification settings.")
-	case nativemobile.NotificationReceived, nativemobile.NotificationOpened:
+	case mobileNotificationReceived, mobileNotificationOpened:
 		if !n.Remote {
 			return
 		} // local presses have their own scope callback
@@ -104,7 +160,7 @@ func (m *App) notificationEvent(n nativemobile.NotificationEvent) {
 		if !ok {
 			return
 		}
-		if n.Kind == nativemobile.NotificationOpened {
+		if n.Kind == mobileNotificationOpened {
 			m.openNotification(notice.Data)
 		} else if notice.Silent || m.cx.Env().OS() != core.OSIOS || m.cx.Env().Lifecycle() != core.LifecycleBackground {
 			// iOS already presents background APNs alerts. Only foreground receipts
@@ -165,7 +221,7 @@ func (m *App) restoreActivity() bool {
 			m.push.activity, m.push.activityOwner, m.push.activityLink = a, ref, m.Link
 			m.push.activityToken = m.push.restoredToken
 		} else {
-			_ = a.EndJSON(nil, widget.DismissNow)
+			_ = a.End(nil, widget.DismissNow)
 		}
 		break
 	}
@@ -242,7 +298,7 @@ func (m *App) syncActivityToken() {
 }
 
 type foregroundLease struct {
-	desired, active, attempted nativemobile.ForegroundServiceType
+	desired, active, attempted mobileForegroundServiceType
 	pending                    bool
 	body, activeBody           string
 }
@@ -252,31 +308,31 @@ func (m *App) syncForeground(live bool) {
 		return
 	}
 	body := tr("Running")
-	var want nativemobile.ForegroundServiceType
+	var want mobileForegroundServiceType
 	if live && !m.push.disabled && m.Link != "" {
-		want |= nativemobile.ForegroundDataSync
+		want |= mobileForegroundDataSync
 		body = tr("Receiving notifications from your Mac")
 	}
 	if m.Connected {
 		if m.voice != nil && m.voice.session != nil && !m.voice.released {
-			want |= nativemobile.ForegroundMicrophone
+			want |= mobileForegroundMicrophone
 		}
 		if p := m.DesktopPage; p != nil && p.Active && p.Phase != "ended" && p.Phase != "error" {
-			want |= nativemobile.ForegroundDataSync
+			want |= mobileForegroundDataSync
 			body = tr("Remote desktop")
 		}
 		for _, p := range m.State.Projects {
 			for _, t := range p.Threads {
 				if t.Busy {
-					want |= nativemobile.ForegroundDataSync
+					want |= mobileForegroundDataSync
 				}
 			}
 		}
 		if m.Viewer.Current().Busy {
-			want |= nativemobile.ForegroundDataSync
+			want |= mobileForegroundDataSync
 		}
 	}
-	if want&nativemobile.ForegroundMicrophone != 0 {
+	if want&mobileForegroundMicrophone != 0 {
 		body = tr("Listening… Release to finish")
 	}
 	f := &m.push.foreground
@@ -324,7 +380,7 @@ func (m *App) applyForeground() {
 				// rather than claiming a microphone/type lease Android did not grant.
 				f.active = 0
 				_ = m.push.services.stopForeground(nil)
-				if !errors.Is(err, nativemobile.ErrPlatformUnsupported) {
+				if !errors.Is(err, nativemobile.ErrDataSyncUnavailable) {
 					m.push.err = tr("Action failed: ") + err.Error()
 				}
 			}
@@ -336,7 +392,7 @@ func (m *App) applyForeground() {
 	if want == 0 {
 		err = m.push.services.stopForeground(done)
 	} else {
-		err = m.push.services.startForeground(nativemobile.ForegroundService{ID: "miya-running", Title: "Miya", Body: body, Types: want}, done)
+		err = m.push.services.startForeground(mobileForegroundService{ID: "miya-running", Title: "Miya", Body: body, Types: want}, done)
 	}
 	if err != nil {
 		done(err)

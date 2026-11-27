@@ -171,23 +171,57 @@ func (r ReferenceInput) Render(cx *core.Scope) core.Node {
 			changed(referenceEdit(get(), value, r.ReferenceTitle))
 		}
 	}
-	selectionRange := func(selection core.InputSelection) (int, int) {
+	focused := core.NewSignal(cx, false)
+	var selected core.TextRange
+	in.OnSelectionChange = func(selection core.TextRange) {
+		selected = selection
+		if r.Input.OnSelectionChange != nil {
+			r.Input.OnSelectionChange(selection)
+		}
+	}
+	in.OnFocus = func() {
+		focused.Set(true)
+		if r.Input.OnFocus != nil {
+			r.Input.OnFocus()
+		}
+	}
+	in.OnBlur = func() {
+		focused.Set(false)
+		if r.Input.OnBlur != nil {
+			r.Input.OnBlur()
+		}
+	}
+	editable := func() bool {
+		return changed != nil && !in.Readonly && (in.ReadonlyFunc == nil || !in.ReadonlyFunc()) &&
+			(in.Disabled == nil || !in.Disabled())
+	}
+	selectionRange := func() (int, int) {
 		visible := referenceText(get(), r.ReferenceTitle)
-		a, b := utf16ByteOffset(visible, max(0, min(selection.Range.Start, selection.Range.End))), utf16ByteOffset(visible, max(selection.Range.Start, selection.Range.End))
+		a := utf16ByteOffset(visible, max(0, min(selected.Start, selected.End)))
+		b := utf16ByteOffset(visible, max(selected.Start, selected.End))
 		return referenceRange(get(), a, b, r.ReferenceTitle)
 	}
-	in.CopyText = func(selection core.InputSelection) string { a, b := selectionRange(selection); return get()[a:b] }
-	in.ContextMenu = append(in.ContextMenu, core.InputMenuItem{Label: tr("Paste as conversation reference"), OnPress: func(selection core.InputSelection) {
-		if in.Disabled != nil && in.Disabled() || in.Readonly || in.ReadonlyFunc != nil && in.ReadonlyFunc() {
+	copyRange := func(cut bool) {
+		a, b := selectionRange()
+		if a == b {
 			return
 		}
 		source := get()
-		a, b := selectionRange(selection)
-		cx.ReadClipboard(func(text string) {
-			if source != get() || changed == nil || in.Disabled != nil && in.Disabled() || in.Readonly || in.ReadonlyFunc != nil && in.ReadonlyFunc() {
+		cx.SetClipboard(source[a:b])
+		if cut && editable() {
+			start := min(selected.Start, selected.End)
+			selected = core.TextRange{Start: start, End: start}
+			changed(source[:a] + source[b:])
+		}
+	}
+	pasteReference := func() {
+		source := get()
+		a, b := selectionRange()
+		cx.ReadClipboard(func(raw string) {
+			if !editable() || get() != source {
 				return
 			}
-			if ref, ok := model.ParseThreadURL(strings.TrimSpace(text)); ok {
+			if ref, ok := model.ParseThreadURL(strings.TrimSpace(raw)); ok {
 				title := ""
 				if r.ReferenceTitle != nil {
 					title = r.ReferenceTitle(ref)
@@ -195,6 +229,31 @@ func (r ReferenceInput) Render(cx *core.Scope) core.Node {
 				changed(source[:a] + model.ReferenceText(ref, title) + source[b:])
 			}
 		})
-	}})
-	return in
+	}
+	in.OnEditAction = func(action core.EditAction) {
+		switch action {
+		case core.EditCopy:
+			copyRange(false)
+		case core.EditCut:
+			copyRange(true)
+		default:
+			if r.Input.OnEditAction != nil {
+				r.Input.OnEditAction(action)
+			}
+		}
+	}
+	return core.View{Style: core.Style{MinWidth: core.Pt(0), FlexGrow: 1},
+		OnContextMenu: func(e core.ContextMenuEvent) {
+			a, b := selectionRange()
+			cx.PopupMenu([]core.MenuItem{
+				{Label: tr("Copy"), Disabled: a == b, OnSelect: func() { copyRange(false) }},
+				{Label: tr("Cut"), Disabled: a == b || !editable(), OnSelect: func() { copyRange(true) }},
+				{Label: tr("Paste as conversation reference"), Disabled: !editable(), OnSelect: pasteReference},
+			}, e.PagePosition, nil)
+		},
+		Children: []core.Node{in, core.Show{When: focused.Get, Then: func(cx *core.Scope) core.Node {
+			cx.OnKeyWith("mod+c", core.KeyOptions{When: core.KeyAlways}, func() { copyRange(false) })
+			cx.OnKeyWith("mod+x", core.KeyOptions{When: core.KeyAlways}, func() { copyRange(true) })
+			return nil
+		}}}}
 }

@@ -48,13 +48,22 @@ func root(cx *core.Scope, c Host, sidebarFooter ...core.Node) core.Node {
 	// settingsOpen shows the settings dialog; see settings.go.
 	settingsOpen := core.NewSignal(cx, false)
 	paletteOpen := core.NewSignal(cx, false)
-	usage.openSettings = func(category string) { usage.category.Set(category); settingsOpen.Set(true) }
+	openSettings := func() {
+		switch cx.Env().OS() {
+		case core.OSMacOS, core.OSWindows, core.OSLinux:
+			if openSettingsWindow(cx, c, usage) {
+				return
+			}
+		}
+		settingsOpen.Set(true)
+	}
+	usage.openSettings = func(category string) { usage.category.Set(category); openSettings() }
 	cx.Cleanup(func() { usage.openSettings = nil })
 	cmd := commands{
 		openPalette:   func() { paletteOpen.Set(true) },
 		shortcuts:     func() { shortcutsOpen.Set(true) },
 		newThread:     c.NewThread,
-		openSettings:  func() { settingsOpen.Set(true) },
+		openSettings:  openSettings,
 		toggleSidebar: func() { open.Update(func(b bool) bool { return !b }) },
 		stop: func() {
 			if c.Current().Busy {
@@ -110,6 +119,10 @@ func root(cx *core.Scope, c Host, sidebarFooter ...core.Node) core.Node {
 			cmd.openSettings()
 		case "Mod-n":
 			cmd.newThread()
+		case "Ctrl-Tab":
+			cmd.step(1)
+		case "Ctrl-Shift-Tab", "Shift-Ctrl-Tab":
+			cmd.step(-1)
 		case "Mod-Alt-b", "Alt-Mod-b":
 			panelOpen.Update(func(v bool) bool { return !v })
 		case "Mod-Shift-o":
@@ -158,11 +171,17 @@ func root(cx *core.Scope, c Host, sidebarFooter ...core.Node) core.Node {
 		Right: []core.Node{panelNode}, RightHeader: []core.Node{panelHead}, RightOpen: panelOpen.Get, OnRightOpenChange: panelOpen.Set,
 		RightToggleLabel: tr("Show / Hide right panel"), RightResizeLabel: tr("Resize right panel"),
 		RightWidth: panelWidth.Get, OnRightWidthChange: panelWidth.Set, RightDefaultWidth: 460, RightMinWidth: 320, RightMaxWidth: 960,
-		Sidebar: []core.Node{sidebar(cx, c, shellNav{page: page, expanded: expanded, settings: cmd.openSettings, project: openProject, usage: func() { usage.openSettings("usage") }, footer: sidebarFooter})},
+		Sidebar: []core.Node{sidebar(cx, c, shellNav{page: page, expanded: expanded, settings: cmd.openSettings, project: openProject, footer: sidebarFooter})},
 		Header: []core.Node{core.Text{TestID: "current-title", MaxLines: 1,
 			ContentFunc: func() string {
-				if page.Get() == "automations" {
+				switch page.Get() {
+				case "automations":
 					return tr("Automations")
+				case "bots":
+					return tr("Bots")
+				}
+				if name := Live(func() string { b, _ := c.CurrentBot(); return b.Name })(); name != "" {
+					return name
 				}
 				return threadTitle(current())
 			},
@@ -175,6 +194,9 @@ func root(cx *core.Scope, c Host, sidebarFooter ...core.Node) core.Node {
 				return ui.FillRest.Merge(core.Style{Display: displayIf(page.Get() == "chat")})
 			}, Children: []core.Node{conversationNode}},
 			core.Show{When: func() bool { return page.Get() == "automations" }, Then: func(cx *core.Scope) core.Node { return automationsPage(cx, c) }},
+			core.Show{When: func() bool { return page.Get() == "bots" }, Then: func(cx *core.Scope) core.Node {
+				return botsPage(cx, c, func() { page.Set("chat") })
+			}},
 			commandPalette(cx, paletteOpen, func() []paletteEntry {
 				return paletteEntries(cmd, current(), threadChoices(refProjects()), c.SelectThread)
 			}), settingsDialog(cx, c, settingsOpen), projectNode, shortcutsDialog(cx, shortcutsOpen)},

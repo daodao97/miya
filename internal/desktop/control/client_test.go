@@ -60,3 +60,79 @@ func TestDesktopClientRejectsWrongToken(t *testing.T) {
 		t.Fatal("wrong token accepted", err)
 	}
 }
+
+func TestDesktopClientFrameQuality(t *testing.T) {
+	ctx := context.Background()
+	for _, adaptive := range []bool{false, true} {
+		d, token, _ := mockDesktop(t)
+		want := desktop.FrameOptions{MaxEdge: 3024, Quality: 90}
+		if adaptive {
+			d.CaptureFrame = func(_ context.Context, display *desktop.Display, window *desktop.Window, options desktop.FrameOptions) ([]byte, error) {
+				if display != nil || window != nil || options != want {
+					t.Errorf("unexpected capture target or options: %v %v %+v", display, window, options)
+				}
+				return []byte("adaptive"), nil
+			}
+		}
+		c := testDesktopClient(t, d, token)
+		if _, _, err := c.FrameWithOptions(ctx, want); Status(err) != 403 {
+			t.Fatalf("adaptive capture before consent: %v", err)
+		}
+		if err := c.Start(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err := c.FrameWithOptions(ctx, desktop.FrameOptions{MaxEdge: MaxFrameEdge + 1, Quality: 90}); Status(err) != 400 {
+			t.Fatalf("invalid frame request: %v", err)
+		}
+		data, _, err := c.FrameWithOptions(ctx, want)
+		expected := "jpeg"
+		if adaptive {
+			expected = "adaptive"
+		}
+		if err != nil || string(data) != expected {
+			t.Fatalf("frame: %q, %v, want %q", data, err, expected)
+		}
+		c.Stop()
+	}
+}
+
+func TestDesktopInteractiveFrameRate(t *testing.T) {
+	ctx := context.Background()
+	for _, pick := range []bool{false, true} {
+		d, token, _ := mockDesktop(t)
+		d.CaptureFrame = func(_ context.Context, _ *desktop.Display, _ *desktop.Window, options desktop.FrameOptions) ([]byte, error) {
+			return []byte("adaptive"), nil
+		}
+		if pick {
+			d.AllowPick(token)
+		}
+		c := testDesktopClient(t, d, token)
+		session, err := c.Session(ctx)
+		if err != nil || session.InteractiveFrames != pick {
+			t.Fatalf("interactive capability for pick=%v: %+v, %v", pick, session, err)
+		}
+		if err = c.Start(ctx); err != nil {
+			t.Fatal(err)
+		}
+		options := desktop.FrameOptions{MaxEdge: InteractiveFrameMaxEdge, Quality: 65}
+		setLastFrame := func() {
+			d.mu.Lock()
+			d.lease.lastFrame = time.Now().Add(-150 * time.Millisecond)
+			d.mu.Unlock()
+		}
+		setLastFrame()
+		if _, _, err = c.FrameWithOptions(ctx, options); Status(err) != 429 {
+			t.Fatalf("ordinary frame bypassed its rate limit: %v", err)
+		}
+		setLastFrame()
+		_, _, err = c.InteractiveFrame(ctx, options)
+		if pick && err != nil || !pick && Status(err) != 429 {
+			t.Fatalf("interactive frame rate for pick=%v: %v", pick, err)
+		}
+		setLastFrame()
+		options.MaxEdge++
+		if _, _, err = c.InteractiveFrame(ctx, options); Status(err) != 429 {
+			t.Fatalf("large frame bypassed its rate limit: %v", err)
+		}
+	}
+}

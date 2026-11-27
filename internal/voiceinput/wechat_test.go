@@ -6,6 +6,7 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -110,30 +111,37 @@ func TestWechatReplyParsesRepeatedHeadersAndRejectsTruncation(t *testing.T) {
 }
 
 func TestWechatStreamFramesPCMAndPollsPolishedFinal(t *testing.T) {
+	testWechatStream(t, 7*640+112, 0, 18, 4)
+}
+
+func TestWechatStreamCatchesUpAfterSlowNetwork(t *testing.T) {
+	// Audio accumulated during a handshake or a slow mobile-network reply
+	// must not cost another round trip for each 120 ms of recorded speech.
+	testWechatStream(t, 180*640, 150*time.Millisecond, 190, 5)
+}
+
+type wechatUploaded struct {
+	packets, uploads int
+	polled           bool
+	err              error
+}
+
+func newWechatStreamClient(t *testing.T, ctx context.Context, replyDelay time.Duration) (*wechatClient, <-chan wechatUploaded) {
+	t.Helper()
 	key := []byte(wechatBootKey)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	type uploaded struct {
-		packets, uploads int
-		polled           bool
-		err              error
-	}
-	done := make(chan uploaded, 1)
+	done := make(chan wechatUploaded, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Ordinary HTTP probes of ephemeral localhost ports are not recognition
-		// sessions and must not publish into the WebSocket result channel.
 		if !strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
-			http.NotFound(w, r)
+			w.WriteHeader(http.StatusNotFound)
 			return
 		}
-
 		ws, err := websocket.Accept(w, r, nil)
 		if err != nil {
-			done <- uploaded{err: err}
+			done <- wechatUploaded{err: err}
 			return
 		}
 		defer ws.CloseNow()
-		var got uploaded
+		var got wechatUploaded
 		defer func() { done <- got }()
 		dec, err := gopus.NewDecoder(gopus.DefaultDecoderConfig(16000, 1))
 		if err != nil {
@@ -193,7 +201,7 @@ func TestWechatStreamFramesPCMAndPollsPolishedFinal(t *testing.T) {
 				audio := inner.bytes(4)
 				total += uint64(len(audio))
 				if inner.number(11) != total {
-					got.err = fmt.Errorf("incorrect uploaded byte count")
+					got.err = fmt.Errorf("incorrect wechatUploaded byte count")
 					return
 				}
 				if seq == 1 {
@@ -224,7 +232,7 @@ func TestWechatStreamFramesPCMAndPollsPolishedFinal(t *testing.T) {
 					audio = audio[n:]
 					count++
 				}
-				if count > 6 || (inner.number(6) == 0 && count != 6) {
+				if count > 48 || (inner.number(6) == 0 && count < 6) {
 					got.err = fmt.Errorf("unexpected batch size %d", count)
 					return
 				}
@@ -236,6 +244,10 @@ func TestWechatStreamFramesPCMAndPollsPolishedFinal(t *testing.T) {
 			}
 			cipher, _ := wechatEncrypt(key, snappy.Encode(nil, wechatMessage(nil).data(1, result)))
 			response := wechatMessage(nil).num(2, 200).data(3, wechatMessage(nil).str(1, "Kb-CompressionType").str(2, "2")).data(5, cipher)
+			if err := waitWechat(ctx, replyDelay); err != nil {
+				got.err = err
+				return
+			}
 			if err := ws.Write(ctx, websocket.MessageBinary, wechatMessage(nil).data(4, response)); err != nil {
 				got.err = err
 				return
@@ -245,15 +257,23 @@ func TestWechatStreamFramesPCMAndPollsPolishedFinal(t *testing.T) {
 			}
 		}
 	}))
-	defer server.Close()
+	t.Cleanup(server.Close)
 	ws, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(server.URL, "http"), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer ws.CloseNow()
+	t.Cleanup(func() { _ = ws.CloseNow() })
 	client := wechatClient{ws: ws, key: key, wechatIdentity: wechatIdentity{UIN: "123"}}
+	return &client, done
+}
+
+func testWechatStream(t *testing.T, pcmBytes int, replyDelay time.Duration, wantPackets, maxUploads int) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	client, done := newWechatStreamClient(t, ctx, replyDelay)
 	// Chunk boundaries can split both a PCM frame and an individual sample.
-	pcm := make([]byte, 7*640+112)
+	pcm := make([]byte, pcmBytes)
 	for i := 0; i < len(pcm); i += 2 {
 		binary.LittleEndian.PutUint16(pcm[i:], uint16(i%3000))
 	}
@@ -263,13 +283,63 @@ func TestWechatStreamFramesPCMAndPollsPolishedFinal(t *testing.T) {
 	audio <- pcm[641:]
 	close(audio)
 	var partial string
+	started := time.Now()
 	text, err := client.recognize(ctx, audio, func(s string) { partial = s })
 	if err != nil || text != "整理后的定稿。" || partial != "中间结果" {
 		t.Fatalf("transcript=%q, partial=%q, err=%v", text, partial, err)
 	}
 	got := <-done
-	if got.err != nil || got.packets != 18 || got.uploads != 4 || !got.polled {
-		t.Fatalf("uploaded=%+v error=%v", got, got.err)
+	t.Logf("%d audio frames, %d uploads, reply delay %s, elapsed %s", got.packets, got.uploads, replyDelay, time.Since(started))
+	if got.err != nil || got.packets != wantPackets || got.uploads > maxUploads || !got.polled {
+		t.Fatalf("uploaded=%+v, error=%v (want %d packets in at most %d uploads)", got, got.err, wantPackets, maxUploads)
+	}
+}
+
+func TestWechatStreamFlushesBeforeReleaseAndCanCancel(t *testing.T) {
+	for _, canceled := range []bool{false, true} {
+		t.Run(fmt.Sprintf("cancel=%v", canceled), func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			client, done := newWechatStreamClient(t, ctx, 0)
+			audio := make(chan []byte, 1)
+			audio <- make([]byte, 6*640)
+			partial := make(chan string, 1)
+			result := make(chan error, 1)
+			go func() {
+				_, err := client.recognize(ctx, audio, func(s string) {
+					select {
+					case partial <- s:
+					default:
+					}
+				})
+				result <- err
+			}()
+			// The channel is still open: no finger release has happened.
+			select {
+			case <-partial:
+			case <-ctx.Done():
+				t.Fatal("live recognition waited for release or a larger batch")
+			}
+			if canceled {
+				cancel()
+			} else {
+				close(audio)
+			}
+			select {
+			case err := <-result:
+				if canceled && !errors.Is(err, context.Canceled) || !canceled && err != nil {
+					t.Fatalf("recognition error: %v", err)
+				}
+			case <-time.After(time.Second):
+				t.Fatal("release/cancel did not finish promptly")
+			}
+			if !canceled {
+				got := <-done
+				if got.err != nil || got.packets != 16 || !got.polled {
+					t.Fatalf("live upload: %+v, %v", got, got.err)
+				}
+			}
+		})
 	}
 }
 
@@ -298,6 +368,7 @@ func TestWechatLive(t *testing.T) {
 			}
 		}
 	}()
+	started := time.Now()
 	text, err := recognizeWechat(ctx, dir, audio, func(string) {})
 	if err != nil {
 		t.Fatal(err)
@@ -308,5 +379,5 @@ func TestWechatLive(t *testing.T) {
 	if expected := os.Getenv("MIYA_WECHAT_TEST_EXPECT"); expected != "" && !strings.Contains(text, expected) {
 		t.Fatalf("transcript %q does not contain %q", text, expected)
 	}
-	t.Logf("WeChat transcript: %s", text)
+	t.Logf("WeChat elapsed: %s, transcript: %s", time.Since(started), text)
 }

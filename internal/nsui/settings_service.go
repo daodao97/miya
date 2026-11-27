@@ -38,7 +38,7 @@ func newSettingsService(cx *core.Scope, c Host) *settingsService {
 			if cl != nil && cl.Connected() && (s.phase == "waiting" || s.phase == "confirm" && s.back == "waiting") && cl != s.restartClient {
 				s.verifyRestart(cl)
 			}
-			if c.RemoteHost() && cl != nil && cl.Connected() && cl != s.updateClient {
+			if cl != nil && cl.Connected() && cl != s.updateClient {
 				s.connectUpdate(cl)
 			}
 		})
@@ -268,7 +268,7 @@ func (s *settingsService) groups() []ui.SettingsGroup {
 	groups := []ui.SettingsGroup{{ID: "service", Title: tr("Background service"), Items: []ui.SettingsItem{{ID: "restart-server", Title: tr("Restart background service"), Content: restart}}}}
 	// The category remains stable across workspace connections; the region hides
 	// remote-only controls when the controller is operating on this computer.
-	groups = append(groups, ui.SettingsGroup{ID: "miya-update", Items: []ui.SettingsItem{{ID: "miya-update", Title: tr("Miya on this workspace"), Content: core.Show{When: Live(s.c.RemoteHost), Then: func(cx *core.Scope) core.Node {
+	groups = append(groups, ui.SettingsGroup{ID: "miya-update", Items: []ui.SettingsItem{{ID: "miya-update", Title: tr("Miya on this workspace"), Content: core.Show{When: Live(func() bool { return s.c.RemoteHost() || s.c.State().Remote != nil }), Then: func(cx *core.Scope) core.Node {
 		return core.Dynamic(func(cx *core.Scope) core.Node {
 			s.revision.Get()
 			status := s.update

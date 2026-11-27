@@ -53,7 +53,6 @@ func (m *App) composer(cx *core.Scope, state *chat.ConversationState) core.Node 
 		m.desktopPreviews(cx),
 		m.pendingView(cx), m.queueView(cx), m.references(cx),
 		m.requestCards(cx),
-		m.voiceStatus(cx),
 		m.thumbnails(cx),
 		// A new conversation opened outside home chooses its project here;
 		// home has its own picker.
@@ -118,13 +117,13 @@ func (m *App) composerBox(cx *core.Scope, state *chat.ConversationState) core.No
 	// quiet keeps the press that ends a recording from also sending.
 	var quiet time.Time
 	send := core.View{TestID: "send", Role: core.RoleButton, LabelFunc: func() string { return look.Get().label },
-		Disabled: live(m, func() bool { return !m.Connected || m.Sending }),
+		Disabled: live(m, func() bool { return m.Sending || !m.Connected && !m.composerHasContent() }),
 		OnPress: func(core.PressEvent) {
 			if time.Now().Before(quiet) {
 				return
 			}
 			m.act(func() {
-				if !m.Connected || m.Sending || m.voice != nil {
+				if m.Sending || m.voice != nil {
 					return
 				}
 				if !m.composerHasContent() {
@@ -134,6 +133,9 @@ func (m *App) composerBox(cx *core.Scope, state *chat.ConversationState) core.No
 					return
 				}
 				m.Send()
+				if m.Sending {
+					cx.DismissKeyboard()
+				}
 				state.JumpToLatest()
 			})()
 		},
@@ -220,6 +222,9 @@ func (m *App) composerBox(cx *core.Scope, state *chat.ConversationState) core.No
 						m.act(func() {
 							if m.voice == nil && m.Connected && !m.Sending && m.composerHasContent() {
 								m.Steer()
+								if m.Sending {
+									cx.DismissKeyboard()
+								}
 							}
 						})()
 					},

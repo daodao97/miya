@@ -22,6 +22,7 @@ import (
 	"miya/internal/async"
 	"miya/internal/chat/model"
 	msgfmt "miya/internal/chat/presentation"
+	dg "miya/internal/delegation"
 	"miya/internal/desktop"
 	phoneproto "miya/internal/phone/protocol"
 	phoneserver "miya/internal/phone/server"
@@ -41,16 +42,28 @@ const (
 )
 
 func (c *Controller) PhoneSnapshot() phoneproto.State {
+	return c.phoneSnapshot(c.followUpTasks())
+}
+
+func (c *Controller) phoneSnapshot(followUps map[string][]model.ThreadTask) phoneproto.State {
 	s := phoneproto.State{DesktopControl: desktop.Available(), ReferenceSource: c.ReferenceSource, MemoryRevision: c.MemoryRevision, Memory: c.Memories().Store != nil, Files: true, WebPorts: true, WebServices: true, Runtime: true, FileReferences: true, Automations: c.Auto != nil, Status: c.Status(), Approvals: c.Approvals(), Agents: c.phoneAgentOptions(), Quotas: c.PhoneQuotas()}
 	s.CompletionUnread = make(map[string]int64, len(c.DesktopUnread))
 	for key, version := range c.DesktopUnread {
 		s.CompletionUnread[key] = version
+	}
+	for key, what := range c.WaitingThreads() {
+		if s.Waiting == nil {
+			s.Waiting = map[string]string{}
+		}
+		s.Waiting[key] = what
 	}
 	s.Collaboration = c.CollaborationCapabilities()
 	s.DesktopWindows = s.DesktopControl
 	s.AutomationRun = c.Auto != nil
 	s.AutomationCreate = c.Auto != nil
 	s.AutomationWebhook = c.Auto != nil
+	s.AutomationBriefing = c.Auto != nil
+	s.AutomationReview = c.Auto != nil
 	if c.Agent != nil {
 		s.Agent = c.Agent()
 	}
@@ -80,7 +93,7 @@ func (c *Controller) PhoneSnapshot() phoneproto.State {
 		}
 		pp := model.ProjectSnapshot{Name: p.Name, Path: p.Path, Current: p.Path == c.Cwd, Threads: make([]model.Thread, 0, len(threads))}
 		for _, t := range threads {
-			pp.Threads = append(pp.Threads, model.ListThread(t))
+			pp.Threads = append(pp.Threads, c.withFollowUps(model.ListThread(t), followUps))
 		}
 		pp.Threads = msgfmt.DisplayedThreads(pp.Threads, true)
 		s.Projects = append(s.Projects, pp)
@@ -307,19 +320,28 @@ func (c *Controller) ServePhoneConnection(ctx context.Context, conn phoneConnect
 		state    phoneproto.State
 		revision int
 		t        phoneThread
+		from     string
+		tasks    *dg.Manager
+		tasksRev uint64
 		loading  bool
 	}
 	for {
 		want := ps.sub
 		ref := ps.subscription
 		s, ok := async.OnMain(ctx, c.Dispatch, func() snapshot {
-			v := snapshot{state: c.PhoneSnapshot(), revision: c.Revision(),
+			followUps := c.followUpTasks()
+			v := snapshot{state: c.phoneSnapshot(followUps), revision: c.Revision(),
 				loading: c.Connecting || !c.Ready() || c.HistoryStatus() == "Loading conversations…"}
 			if ps.deviceID != "" && c.Push != nil {
 				v.state.Notifications = c.Push.State(ps.deviceID)
 			}
 			if want != 0 || ref.ServerID != "" {
 				v.t = c.PhoneThreadFor(ref)
+				v.t.Thread = c.withFollowUps(v.t.Thread, followUps)
+				v.from, v.tasks = c.ThreadRef(v.t.Thread).URL(), c.delegationManager()
+				if v.tasks != nil {
+					v.tasksRev = v.tasks.Revision()
+				}
 			}
 			return v
 		})
@@ -341,8 +363,9 @@ func (c *Controller) ServePhoneConnection(ctx context.Context, conn phoneConnect
 			ps.sub, ps.subscription.Thread = s.t.Thread.ID, s.t.Thread.ID
 			ps.lastRevision, ps.read, ps.fetched, ps.sync = -1, nil, false, nil
 		}
-		if ps.sub != 0 && s.revision != ps.lastRevision {
-			ps.lastRevision = s.revision
+		// Delegated tasks progress without changing the conversation itself.
+		if ps.sub != 0 && (s.revision != ps.lastRevision || s.tasksRev != ps.lastTaskRevision) {
+			ps.lastRevision, ps.lastTaskRevision = s.revision, s.tasksRev
 			t := s.t.Thread
 			switch {
 			case !s.t.Found:
@@ -365,7 +388,7 @@ func (c *Controller) ServePhoneConnection(ctx context.Context, conn phoneConnect
 			if ps.sync == nil {
 				ps.sync = phoneserver.NewThreadSync(nil)
 			}
-			if d, changed := ps.sync.Update(t); changed {
+			if d, changed := ps.sync.Update(delegationTimeline(t, s.from, s.tasks)); changed {
 				if data, err := json.Marshal(d); err == nil {
 					if !send(remote.Frame{Type: "thread", Thread: ps.sub, Data: data}) {
 						return

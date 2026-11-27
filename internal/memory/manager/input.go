@@ -15,6 +15,9 @@ type Input struct {
 	store    *memory.Store
 	scope    memory.Scope
 	prepared memory.Prepared
+	// charter is the charter of the Bot whose conversation takes the message.
+	// It goes with the message whether or not memory does.
+	charter string
 }
 
 // Only command-shaped first tokens bypass memory. A leading absolute path is
@@ -34,7 +37,18 @@ func Command(text string) bool {
 
 func (mg *Manager) PrepareInput(t model.Thread, req model.SendRequest, project, session string) Input {
 	base := Input{}
-	if mg.Store == nil || t.MemoryDisabled || t.Automation != "" || req.MemoryControl || req.KeepSessionSettings || Command(req.Text) {
+	if Command(req.Text) {
+		// A command goes to the agent as typed.
+		return base
+	}
+	base.charter = req.Charter
+	if mg.Store == nil || req.KeepSessionSettings {
+		return base
+	}
+	// A Bot recalls its own memory also in its tasks and automation runs,
+	// which recall nothing of the project's.
+	botOnly := t.MemoryDisabled || t.Automation != "" || req.MemoryControl
+	if botOnly && req.BotID == "" {
 		return base
 	}
 	scope, err := memory.ProjectScope(project)
@@ -42,7 +56,14 @@ func (mg *Manager) PrepareInput(t model.Thread, req model.SendRequest, project, 
 		return base
 	}
 	own, _ := model.SplitReferenceContext(req.Text)
-	p, err := mg.Store.Prepare(scope, session, fmt.Sprint(t.MemoryEpoch), own, TaskKey(t, session))
+	// A Bot's memory belongs to its own project, wherever the conversation is.
+	var bot memory.Scope
+	if req.BotID != "" {
+		if home, err := memory.ProjectScope(req.BotHome); err == nil {
+			bot = memory.BotScope(home, req.BotID)
+		}
+	}
+	p, err := mg.Store.PrepareBot(scope, bot, botOnly, session, fmt.Sprint(t.MemoryEpoch), own, TaskKey(t, session))
 	if err != nil {
 		return base
 	}
@@ -51,6 +72,7 @@ func (mg *Manager) PrepareInput(t model.Thread, req model.SendRequest, project, 
 }
 
 func (m Input) Text(raw string) string {
+	raw += m.charter
 	if m.store == nil || m.prepared.Block == "" {
 		return raw
 	}

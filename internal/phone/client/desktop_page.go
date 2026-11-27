@@ -40,6 +40,9 @@ type MobileDesktopPage struct {
 	Active, Polling bool
 	Image           desktopview.ImageSource
 	ImageHash       [32]byte
+	frameStream     bool
+	streamCtx       context.Context
+	streamCancel    context.CancelFunc
 	Status          string
 
 	Zoom, PanX, panY float32
@@ -185,6 +188,9 @@ func (m *Client) desktopAfter(p *MobileDesktopPage, d time.Duration, f func()) {
 }
 
 func (m *Client) DesktopStage(p *MobileDesktopPage, phase, title, detail string, busy bool) {
+	if phase != "live" {
+		p.stopStreaming()
+	}
 	p.Phase, p.Title, p.Detail, p.Busy = phase, title, detail, busy
 }
 
@@ -239,6 +245,7 @@ func (m *Client) DesktopInitialize(p *MobileDesktopPage) {
 		if s.Pick && s.WindowOnly && s.Window != nil && s.Window.ID == 0 {
 			return func() {
 				p.Pickable, p.WindowOnly, p.AppsAvailable = true, true, s.Apps
+				p.frameStream = s.FrameStream
 				m.DesktopInitPrivacy(p, s)
 				p.DisplaysAvailable, p.Displays = s.Displays, displays
 				m.DesktopChooseWindows(p)
@@ -247,6 +254,7 @@ func (m *Client) DesktopInitialize(p *MobileDesktopPage) {
 		if !s.WindowOnly || s.Window == nil {
 			return func() {
 				p.WindowOnly, p.Pickable, p.AppsAvailable = false, s.Pick, s.Apps
+				p.frameStream = s.FrameStream
 				m.DesktopInitPrivacy(p, s)
 				p.DisplaysAvailable, p.Displays = s.Pick && s.Displays, displays
 				if p.DisplaysAvailable {
@@ -272,6 +280,7 @@ func (m *Client) DesktopInitialize(p *MobileDesktopPage) {
 		return func() {
 			p.WindowOnly, p.Secret, p.Pickable = true, true, s.Pick
 			p.AppsAvailable = s.Apps
+			p.frameStream = s.FrameStream
 			m.DesktopInitPrivacy(p, s)
 			p.DisplaysAvailable, p.Displays = s.Pick && s.Displays, displays
 			p.Keyboard = true // authorization windows usually need a password
@@ -383,7 +392,11 @@ func (p *MobileDesktopPage) ConnectedStatus() string {
 
 // desktopPoll fetches frames one at a time; a slow frame never blocks input.
 func (m *Client) DesktopPoll(p *MobileDesktopPage) {
-	if !p.Active || p.Polling {
+	if !p.Active || p.Polling || p.streamCtx != nil {
+		return
+	}
+	if p.frameStream && !p.Floating {
+		m.startDesktopStream(p)
 		return
 	}
 	p.Polling = true
@@ -450,7 +463,9 @@ func (m *Client) ReceiveDesktopFrame(p *MobileDesktopPage, data []byte, image de
 	if p.Floating {
 		delay = max(delay, DesktopFloatPollInterval)
 	}
-	m.desktopAfter(p, delay, func() { m.DesktopPoll(p) })
+	if p.streamCtx == nil {
+		m.desktopAfter(p, delay, func() { m.DesktopPoll(p) })
+	}
 }
 
 func (m *Client) desktopRefreshActions(p *MobileDesktopPage) {

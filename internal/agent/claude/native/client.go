@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os/exec"
 	"strings"
 	"sync"
 	"time"
@@ -140,6 +139,7 @@ type Block struct {
 	IsError                        bool            `json:"is_error"`
 }
 type Client struct {
+	binary          string
 	pid             int
 	epoch           string
 	background      []BackgroundTask
@@ -161,7 +161,7 @@ type Client struct {
 func (c *Client) Write(v any) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return json.NewEncoder(c.in).Encode(v)
+	return processenv.WriteJSON(c.in, v, c.binary)
 }
 
 // ErrNotSteerable tells that the turn takes no more messages now.
@@ -183,7 +183,7 @@ func (c *Client) Send(sessionID string, content []map[string]any) error {
 	if (!c.idle && !c.open) || c.stopping {
 		return ErrNotSteerable
 	}
-	if err := json.NewEncoder(c.in).Encode(map[string]any{"type": "user", "session_id": sessionID, "parent_tool_use_id": nil, "message": map[string]any{"role": "user", "content": content}}); err != nil {
+	if err := processenv.WriteJSON(c.in, map[string]any{"type": "user", "session_id": sessionID, "parent_tool_use_id": nil, "message": map[string]any{"role": "user", "content": content}}, c.binary); err != nil {
 		return err
 	}
 	c.idle, c.open = false, true
@@ -263,7 +263,7 @@ func (c *Client) Steer(sessionID string, content []map[string]any) error {
 	if !c.open {
 		return ErrNotSteerable
 	}
-	return json.NewEncoder(c.in).Encode(map[string]any{"type": "user", "session_id": sessionID, "parent_tool_use_id": nil, "message": map[string]any{"role": "user", "content": content}})
+	return processenv.WriteJSON(c.in, map[string]any{"type": "user", "session_id": sessionID, "parent_tool_use_id": nil, "message": map[string]any{"role": "user", "content": content}}, c.binary)
 }
 
 func (c *Client) Reply(id string, response any) error {
@@ -291,6 +291,10 @@ func Start(parent context.Context, o Options, onFrame func(Frame), onDone func(e
 			return nil, err
 		}
 	}
+	binary, err = processenv.PinWSL(parent, binary)
+	if err != nil {
+		return nil, err
+	}
 	ctx, cancel := context.WithCancel(parent)
 	args := append(append([]string(nil), o.Args...), "--print", "--verbose", "--input-format", "stream-json", "--output-format", "stream-json", "--include-partial-messages", "--permission-prompt-tool", "stdio", "--permission-mode", o.PermissionMode)
 	if o.Resume {
@@ -307,7 +311,7 @@ func Start(parent context.Context, o Options, onFrame func(Frame), onDone func(e
 	if o.Tools != nil {
 		args = append(args, "--tools", *o.Tools)
 	}
-	cmd := exec.CommandContext(ctx, binary, args...)
+	cmd := processenv.CommandContext(ctx, binary, args...)
 	cmd.Dir = o.Cwd
 	cmd.Env = processenv.Environ(binary, o.Env...)
 	configureProcess(cmd)
@@ -324,12 +328,13 @@ func Start(parent context.Context, o Options, onFrame func(Frame), onDone func(e
 		return nil, err
 	}
 	cmd.Stderr = io.Discard
+	processenv.Prepare(cmd)
 	if err = cmd.Start(); err != nil {
 		in.Close()
 		cancel()
 		return nil, err
 	}
-	c := &Client{pid: cmd.Process.Pid, epoch: fmt.Sprintf("%d:%d", cmd.Process.Pid, time.Now().UnixNano()), in: in, cancel: cancel, done: make(chan struct{}), model: o.Model, effort: o.Effort, permissionMode: o.PermissionMode}
+	c := &Client{binary: binary, pid: cmd.Process.Pid, epoch: fmt.Sprintf("%d:%d", cmd.Process.Pid, time.Now().UnixNano()), in: in, cancel: cancel, done: make(chan struct{}), model: o.Model, effort: o.Effort, permissionMode: o.PermissionMode}
 	if err = c.Write(map[string]any{"type": "control_request", "request_id": "initialize", "request": map[string]any{"subtype": "initialize", "hooks": map[string]any{}}}); err != nil {
 		cancel()
 	}
@@ -361,7 +366,7 @@ func Start(parent context.Context, o Options, onFrame func(Frame), onDone func(e
 			defer close(frames)
 			for scanner.Scan() {
 				var f Frame
-				err := json.Unmarshal(scanner.Bytes(), &f)
+				err := json.Unmarshal(processenv.ProtocolPaths(scanner.Bytes(), c.binary, false), &f)
 				if err != nil {
 					err = fmt.Errorf("Failed to parse Claude Code protocol: %w", err)
 				}

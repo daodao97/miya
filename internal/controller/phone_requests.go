@@ -8,7 +8,6 @@ import (
 	"time"
 
 	agentmeta "miya/internal/agent/catalog"
-	"miya/internal/apns"
 	"miya/internal/appdir"
 	"miya/internal/appmodel"
 	"miya/internal/async"
@@ -40,6 +39,7 @@ type phoneSession struct {
 	sub               int
 	subscription      remote.Request
 	lastRevision      int
+	lastTaskRevision  uint64
 	read              *model.Thread
 	fetched           bool
 	pending           *PhoneSendReq
@@ -55,34 +55,36 @@ type previewRequest struct {
 
 // phoneRequests answer a phone's requests by their Op; unknown ones are ignored.
 var phoneRequests = map[string]func(*phoneSession, remote.Request) bool{
-	"desktop-preview":    (*phoneSession).onDesktopPreview,
-	"desktop-action":     (*phoneSession).onDesktopPreview,
-	"desktop-open":       (*phoneSession).onDesktopOpen,
-	"desktop-close":      (*phoneSession).onDesktopClose,
-	"image":              (*phoneSession).onImage,
-	"memory":             (*phoneSession).onMemory,
-	"collaboration":      (*phoneSession).onCollaboration,
-	"automation-draft":   (*phoneSession).onAutomationDraft,
-	"automation-create":  (*phoneSession).onAutomationCreate,
-	"automation-run":     (*phoneSession).onAutomationRun,
-	"automations":        (*phoneSession).onAutomations,
-	"automation-webhook": (*phoneSession).onAutomationWebhook,
-	"quota":              (*phoneSession).onQuota,
-	"push":               (*phoneSession).onPush,
-	"activity":           (*phoneSession).onActivity,
-	"read":               (*phoneSession).onRead,
-	"read-all":           (*phoneSession).onRead,
-	"subscribe":          (*phoneSession).onSubscribe,
-	"send":               (*phoneSession).onSend,
-	"prefetch":           (*phoneSession).onPrefetch,
-	"stop":               (*phoneSession).onStop,
-	"task":               (*phoneSession).onTask,
-	"retry":              (*phoneSession).onRetry,
-	"dequeue":            (*phoneSession).onQueueAction,
-	"steer-queued":       (*phoneSession).onQueueAction,
-	"drain-queue":        (*phoneSession).onQueueAction,
-	"respond":            (*phoneSession).onRespond,
-	"commands":           (*phoneSession).onCommands,
+	"desktop-preview":     (*phoneSession).onDesktopPreview,
+	"desktop-action":      (*phoneSession).onDesktopPreview,
+	"desktop-open":        (*phoneSession).onDesktopOpen,
+	"desktop-close":       (*phoneSession).onDesktopClose,
+	"image":               (*phoneSession).onImage,
+	"memory":              (*phoneSession).onMemory,
+	"collaboration":       (*phoneSession).onCollaboration,
+	"automation-draft":    (*phoneSession).onAutomationDraft,
+	"automation-create":   (*phoneSession).onAutomationCreate,
+	"automation-run":      (*phoneSession).onAutomationRun,
+	"automations":         (*phoneSession).onAutomations,
+	"automation-webhook":  (*phoneSession).onAutomationWebhook,
+	"automation-briefing": (*phoneSession).onAutomationBriefing,
+	"automation-review":   (*phoneSession).onAutomationReview,
+	"quota":               (*phoneSession).onQuota,
+	"push":                (*phoneSession).onPush,
+	"activity":            (*phoneSession).onActivity,
+	"read":                (*phoneSession).onRead,
+	"read-all":            (*phoneSession).onRead,
+	"subscribe":           (*phoneSession).onSubscribe,
+	"send":                (*phoneSession).onSend,
+	"prefetch":            (*phoneSession).onPrefetch,
+	"stop":                (*phoneSession).onStop,
+	"task":                (*phoneSession).onTask,
+	"retry":               (*phoneSession).onRetry,
+	"dequeue":             (*phoneSession).onQueueAction,
+	"steer-queued":        (*phoneSession).onQueueAction,
+	"drain-queue":         (*phoneSession).onQueueAction,
+	"respond":             (*phoneSession).onRespond,
+	"commands":            (*phoneSession).onCommands,
 }
 
 // onDesktopPreview answers a phone's "desktop-preview", "desktop-action" request; false ends the connection.
@@ -335,8 +337,8 @@ func (ps *phoneSession) onPush(r remote.Request) bool {
 			}
 		}
 		if message == "" && !registration.Disabled && !registration.Live {
-			if _, err := apns.OpenProvider(appdir.Dir()); err != nil {
-				message = "Phone registered. APNs is not configured on the desktop; see docs/notifications.md."
+			if _, err := notification.OpenAPNsProvider(appdir.Dir()); err != nil {
+				message = "Phone registered. Check APNs on the desktop with go run ./scripts/apns status."
 			}
 		}
 	}
@@ -426,14 +428,26 @@ func (ps *phoneSession) onStop(r remote.Request) bool {
 
 // onTask answers a phone's "task" request; false ends the connection.
 func (ps *phoneSession) onTask(r remote.Request) bool {
-	message, _ := async.OnMain(ps.ctx, ps.c.Dispatch, func() string {
+	answer, ok := async.OnMain(ps.ctx, ps.c.Dispatch, func() any {
 		t := ps.c.PhoneThreadFor(r)
 		if !t.Found {
 			return "Conversation is no longer on the desktop"
 		}
 		id, action, _ := strings.Cut(r.Text, " ")
-		return ps.c.TaskAction(t.Thread.ID, id, action)
+		return ps.c.prepareTaskAction(t.Thread.ID, id, action)
 	})
+	if !ok {
+		return false
+	}
+	message, _ := answer.(string)
+	if wait, ok := answer.(async.Reply); ok {
+		value, err := wait()
+		if err != nil {
+			message = err.Error()
+		} else {
+			message, _ = value.(string)
+		}
+	}
 	if !ps.send(remote.Frame{Type: "action", Thread: r.Thread, Error: message}) {
 		return false
 	}
@@ -497,6 +511,27 @@ func (ps *phoneSession) onCommands(r remote.Request) bool {
 	return true
 }
 
+// onAutomationBriefing reads the daily briefing's setting, or changes it
+// when the request carries an automation request with action set.
+func (ps *phoneSession) onAutomationBriefing(r remote.Request) bool {
+	var req automation.Request
+	if len(r.Automation) > 0 {
+		_ = json.Unmarshal(r.Automation, &req)
+	}
+	frame, ok := async.OnMain(ps.ctx, ps.c.Dispatch, func() remote.Frame {
+		result, err := ps.c.AutomationOp("automationBriefing", automation.Request{Action: req.Action, Data: req.Data})
+		frame := remote.Frame{Type: "automation-briefing"}
+		if err == nil {
+			frame.Data, err = json.Marshal(result)
+		}
+		if err != nil {
+			frame.Error = err.Error()
+		}
+		return frame
+	})
+	return ok && ps.send(frame)
+}
+
 func (ps *phoneSession) onAutomationWebhook(r remote.Request) bool {
 	frame, ok := async.OnMain(ps.ctx, ps.c.Dispatch, func() remote.Frame {
 		result, err := ps.c.AutomationOp("automationWebhook", automation.Request{})
@@ -504,6 +539,26 @@ func (ps *phoneSession) onAutomationWebhook(r remote.Request) bool {
 		if err == nil {
 			frame.Data, err = json.Marshal(result)
 		}
+		if err != nil {
+			frame.Error = err.Error()
+		}
+		return frame
+	})
+	return ok && ps.send(frame)
+}
+
+// onAutomationReview approves, denies, revokes or marks a run handled for
+// a phone, and answers with the automations as they are after it.
+func (ps *phoneSession) onAutomationReview(r remote.Request) bool {
+	var req automation.Request
+	if len(r.Automation) > 0 {
+		_ = json.Unmarshal(r.Automation, &req)
+	}
+	frame, ok := async.OnMain(ps.ctx, ps.c.Dispatch, func() remote.Frame {
+		_, err := ps.c.AutomationOp("automationReview", automation.Request{ID: req.ID, Started: req.Started, Review: req.Review, Action: req.Action, Scope: req.Scope, Note: req.Note})
+		list, _ := ps.c.AutomationOp("automationList", automation.Request{})
+		frame := remote.Frame{Type: "automation-review"}
+		frame.Data, _ = json.Marshal(list)
 		if err != nil {
 			frame.Error = err.Error()
 		}

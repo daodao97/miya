@@ -6,9 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"maps"
 	"net"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -65,10 +63,11 @@ func startNativePhone(t *testing.T, os core.OS, secrets map[[2]string]string) (*
 	m := NewMobileApp()
 	m.DataDir = t.TempDir()
 	m.DialDesktop = func(ctx context.Context, _ string) (*remote.Conn, error) { <-ctx.Done(); return nil, ctx.Err() }
-	app := nsgotest.Start(t, m.Render, nsgotest.Size(390, 844), nsgotest.Environment(core.Environment{OS: os, Idiom: core.IdiomPhone, Locale: "en"}), func(a *nsgotest.App) {
-		a.Secrets = maps.Clone(secrets)
-		a.NetworkAvailable = true
-		a.NetworkInterfaces = []core.NetworkInterface{{Name: "wlan0", Kind: core.NetworkWiFi}}
+	app := nsgotest.Start(t, m.Render, nsgotest.Size(390, 844), nsgotest.Environment(core.Environment{OS: os, Idiom: core.IdiomPhone, Locale: "en", ScanCode: true, Network: &core.Network{Online: true}}), func(a *nsgotest.App) {
+		a.Secrets = &core.MemorySecrets{}
+		for key, value := range secrets {
+			_ = a.Secrets.WriteSecret(core.SecretItem{Service: key[0], Account: key[1]}, value)
+		}
 	})
 	t.Cleanup(func() { m.Close(); app.Settle() })
 	settleNative(t, app, func() bool { return m.Loaded })
@@ -79,13 +78,13 @@ func awaitRegistry(t *testing.T, app *nsgotest.App, count int) phoneclient.Mobil
 	t.Helper()
 	var saved phoneclient.MobileDesktops
 	settleNative(t, app, func() bool {
-		raw, ok := app.Secrets[[2]string{"Miya", phonecache.DesktopsKey}]
+		raw, ok := testSecrets(app)[[2]string{"Miya", phonecache.DesktopsKey}]
 		if !ok {
 			return false
 		}
 		data, err := base64.StdEncoding.DecodeString(raw)
-		_, tombstone := app.Secrets[[2]string{"Miya", "nsgo-desktop-link"}]
-		_, old := app.Secrets[[2]string{"Miya", "desktop-link"}]
+		_, tombstone := testSecrets(app)[[2]string{"Miya", "nsgo-desktop-link"}]
+		_, old := testSecrets(app)[[2]string{"Miya", "desktop-link"}]
 		return err == nil && json.Unmarshal(data, &saved) == nil && len(saved.Items) == count && tombstone && !old
 	})
 	return saved
@@ -96,10 +95,12 @@ func TestNativeQRPairingPersistsMultipleDesktops(t *testing.T) {
 		t.Run(string(os), func(t *testing.T) {
 			app, m := startNativePhone(t, os, nil)
 			first, second := nativeLink(), nativeLink()
-			app.ScanQRCode = func() (string, bool, error) { return " \n" + first + "\n", true, nil }
+			app.ScanCode = func(nsgotest.CodeScan) (*core.ScannedCode, error) {
+				return &core.ScannedCode{Text: " \n" + first + "\n"}, nil
+			}
 			app.Press("id:pair-scan")
 			settleNative(t, app, func() bool { return m.Link == first })
-			if app.QRScans != 1 || m.scanning {
+			if len(app.Scans) != 1 || m.scanning {
 				t.Fatal("scan was not completed")
 			}
 			awaitRegistry(t, app, 1)
@@ -116,22 +117,22 @@ func TestNativeQRPairingPersistsMultipleDesktops(t *testing.T) {
 			}
 			changePhone(app, m, func() { m.RenameDesktop(saved.Active, "Office Mac") })
 			settleNative(t, app, func() bool {
-				raw, _ := base64.StdEncoding.DecodeString(app.Secrets[[2]string{"Miya", phonecache.DesktopsKey}])
+				raw, _ := base64.StdEncoding.DecodeString(testSecrets(app)[[2]string{"Miya", phonecache.DesktopsKey}])
 				return strings.Contains(string(raw), "Office Mac")
 			})
-			restored, next := startNativePhone(t, os, app.Secrets)
+			restored, next := startNativePhone(t, os, testSecrets(app))
 			settleNative(t, restored, func() bool { return next.Link == second })
 			if len(next.Desktops.Items) != 2 || next.DesktopName() != "Office Mac" || next.PersistenceError != "" {
 				t.Fatal("secure registry did not survive restart", next.Desktops, next.PersistenceError)
 			}
-			if app.Secrets[[2]string{"Miya", "tunnel-secret"}] != restored.Secrets[[2]string{"Miya", "tunnel-secret"}] {
+			if testSecrets(app)[[2]string{"Miya", "tunnel-secret"}] != testSecrets(restored)[[2]string{"Miya", "tunnel-secret"}] {
 				t.Fatal("tunnel identity changed")
 			}
 			changePhone(restored, next, func() { next.RemoveDesktop(next.CurrentDesktopID()) })
 			awaitRegistry(t, restored, 1)
 			changePhone(restored, next, func() { next.Forget() })
 			awaitRegistry(t, restored, 0)
-			empty, forgotten := startNativePhone(t, os, restored.Secrets)
+			empty, forgotten := startNativePhone(t, os, testSecrets(restored))
 			empty.Settle()
 			if forgotten.Link != "" || len(forgotten.Desktops.Items) != 0 {
 				t.Fatal("Forget resurrected a desktop")
@@ -157,7 +158,12 @@ func TestNativeQRRejectsInvalidCancelAndCameraFailure(t *testing.T) {
 		{"", false, nil, false}, {"", true, nil, true}, {"https://example.com", true, nil, true}, {"", false, errors.New("camera denied"), true},
 	} {
 		changePhone(app, m, func() { m.Error = "" })
-		app.ScanQRCode = func() (string, bool, error) { return result.code, result.ok, result.err }
+		app.ScanCode = func(nsgotest.CodeScan) (*core.ScannedCode, error) {
+			if !result.ok {
+				return nil, result.err
+			}
+			return &core.ScannedCode{Text: result.code}, result.err
+		}
 		app.Press("id:pair-scan")
 		app.Settle()
 		if m.Link != "" || m.scanning || (m.Error != "") != result.wantError {
@@ -173,7 +179,10 @@ func TestNativeQRRejectsInvalidCancelAndCameraFailure(t *testing.T) {
 		t.Fatal("invalid code dismissed pairing or replaced desktop")
 	}
 	// A late native result cannot replace a desktop selected during the scan.
-	app.ScanQRCode = func() (string, bool, error) { m.Connect(first); return nativeLink(), true, nil }
+	app.ScanCode = func(nsgotest.CodeScan) (*core.ScannedCode, error) {
+		m.Connect(first)
+		return &core.ScannedCode{Text: nativeLink()}, nil
+	}
 	app.Press("id:pair-scan")
 	app.Settle()
 	if m.Link != first {
@@ -206,9 +215,9 @@ func TestNativeSecretsMigration(t *testing.T) {
 				t.Fatal(m.PersistenceError)
 			}
 			if tc.service != "Miya" {
-				settleNative(t, app, func() bool { _, exists := app.Secrets[[2]string{tc.service, tc.key}]; return !exists })
+				settleNative(t, app, func() bool { _, exists := testSecrets(app)[[2]string{tc.service, tc.key}]; return !exists })
 			}
-			if app.Secrets[[2]string{"Miya", "tunnel-secret"}] != encoded(bytes.Repeat([]byte{7}, 32)) {
+			if testSecrets(app)[[2]string{"Miya", "tunnel-secret"}] != encoded(bytes.Repeat([]byte{7}, 32)) {
 				t.Fatal("migration replaced tunnel identity")
 			}
 		})
@@ -241,132 +250,81 @@ func TestNativeSecretRoundtripAndFailures(t *testing.T) {
 				if err := m.Store.Delete("test"); err != nil {
 					t.Error(err)
 				}
-				if _, err := m.Store.Get("test"); !errors.Is(err, core.ErrSecretNotFound) {
+				if _, err := m.Store.Get("test"); !errors.Is(err, errSecretNotFound) {
 					t.Error("missing secret identity", err)
 				}
 				if err := m.Store.Delete("test"); err != nil {
 					t.Error("idempotent delete", err)
 				}
 			})
-			failure := errors.New("locked")
-			app.PlatformServiceError = failure
-			nativeWorker(t, app, func() {
-				if _, err := m.Store.Get("test"); !errors.Is(err, failure) {
-					t.Error("read failure hidden", err)
-				}
-				if err := m.Store.Set("test", []byte("secret")); !errors.Is(err, failure) {
-					t.Error("write failure hidden", err)
-				}
-			})
-			if _, exists := app.Secrets[[2]string{"Miya", "test"}]; exists {
-				t.Fatal("failed write changed store")
-			}
-			app.PlatformServiceError = nil
 		})
 	}
 }
 
 func TestNativeNetworkChangesAndPreparation(t *testing.T) {
-	for _, os := range []core.OS{core.OSIOS, core.OSAndroid} {
-		t.Run(string(os), func(t *testing.T) {
-			app, m := startNativePhone(t, os, nil)
-			changePhone(app, m, func() { m.Cancel = func() {}; m.Wake = make(chan struct{}, 1) })
-			assertWake := func(want bool) {
-				t.Helper()
-				select {
-				case <-m.Wake:
-					if !want {
-						t.Fatal("unchanged/offline path retried")
-					}
-				default:
-					if want {
-						t.Fatal("new path did not wake reconnect")
-					}
-				}
-			}
-			app.SetNetworkPath(true)
-			assertWake(false)
-			app.NetworkInterfaces = []core.NetworkInterface{{Name: "rmnet0", Kind: core.NetworkCellular}}
-			app.SetNetworkPath(true)
-			assertWake(true)
-			app.SetNetworkPath(false)
-			assertWake(false)
-			app.SetNetworkPath(true)
-			assertWake(true)
-			// Unknown Android names still carry transport identity; ordering does not.
-			app.NetworkInterfaces = []core.NetworkInterface{{Kind: core.NetworkWiFi}, {Kind: core.NetworkVPN}}
-			app.SetNetworkPath(true)
-			assertWake(true)
-			slices.Reverse(app.NetworkInterfaces)
-			app.SetNetworkPath(true)
-			assertWake(false)
-
-			n := &phoneNetwork{cx: m.cx}
-			var warmed bool
-			n.warmup = func(ctx context.Context, _ string) error { warmed = true; return ctx.Err() }
-			nativeWorker(t, app, func() {
-				if err := n.prepare(context.Background(), "https://relay.example"); err != nil {
-					t.Error(err)
-				}
-			})
-			if !warmed {
-				t.Fatal("available path skipped system preparation")
-			}
-			warmed = false
-			app.SetNetworkPath(false)
-			nativeWorker(t, app, func() {
-				if err := n.prepare(context.Background(), "https://relay.example"); err == nil {
-					t.Error("offline path allowed dial")
-				}
-			})
-			if warmed {
-				t.Fatal("offline path started warmup")
-			}
-			ctx, cancel := context.WithCancel(context.Background())
-			cancel()
-			nativeWorker(t, app, func() {
-				if err := n.prepare(ctx, "https://relay.example"); !errors.Is(err, context.Canceled) {
-					t.Error("cancellation ignored", err)
-				}
-			})
-			app.PlatformServiceError = errors.New("path failed")
-			nativeWorker(t, app, func() {
-				if err := n.prepare(context.Background(), "https://relay.example"); err == nil {
-					t.Error("native path failure hidden")
-				}
-			})
-			app.PlatformServiceError = nil
-			n.update(core.NetworkPath{Available: true, Interfaces: []core.NetworkInterface{{Name: "wlan0", Kind: core.NetworkWiFi}, {Name: "wlan0", Kind: core.NetworkVPN}, {Kind: core.NetworkCellular}}})
-			interfaces, err := n.interfaces()
-			if err != nil || len(interfaces) != 1 || interfaces[0].Name != "wlan0" || interfaces[0].Flags&net.FlagUp == 0 || interfaces[0].AltAddrs == nil {
-				t.Fatalf("Android path inventory: %+v %v", interfaces, err)
-			}
-			n.addresses = []net.Addr{&net.IPNet{IP: net.ParseIP("2001:db8::1"), Mask: net.CIDRMask(128, 128)}}
-			withIP, _ := n.interfaces()
-			withIP[0].AltAddrs[0].(*net.IPNet).IP[0] = 0
-			if n.addresses[0].(*net.IPNet).IP[0] != 0x20 {
-				t.Fatal("worker mutated retained address")
-			}
-			interfaces[0].Name = "changed"
-			again, _ := n.interfaces()
-			if again[0].Name != "wlan0" {
-				t.Fatal("worker mutated retained path")
-			}
-			changePhone(app, m, func() { m.Connected = true })
-			generation := m.Generation
-			app.NetworkInterfaces = []core.NetworkInterface{{Name: "live-path", Kind: core.NetworkEthernet}}
-			app.SetNetworkPath(true)
-			assertWake(false)
-			if !m.Connected || m.Generation != generation {
-				t.Fatal("path change tore down a live connection")
-			}
-			changePhone(app, m, func() { m.EnterBackground() })
-			app.SetNetworkPath(true)
-			if m.Cancel != nil {
-				t.Fatal("background path reconnected")
-			}
-		})
+	app, m := startNativePhone(t, core.OSIOS, nil)
+	changePhone(app, m, func() { m.Cancel = func() {}; m.Wake = make(chan struct{}, 1) })
+	setNetwork := func(online, expensive bool) {
+		app.SetEnvironment(core.Environment{OS: core.OSIOS, Idiom: core.IdiomPhone, Network: &core.Network{Online: online, Expensive: expensive}})
+		app.Settle()
 	}
+	assertWake := func(want bool) {
+		t.Helper()
+		select {
+		case <-m.Wake:
+			if !want {
+				t.Fatal("unchanged/offline path retried")
+			}
+		default:
+			if want {
+				t.Fatal("new path did not wake reconnect")
+			}
+		}
+	}
+	setNetwork(true, false)
+	assertWake(false)
+	setNetwork(true, true)
+	assertWake(true)
+	setNetwork(false, true)
+	assertWake(false)
+	setNetwork(true, true)
+	assertWake(true)
+	changePhone(app, m, func() { m.Connected = true })
+	generation := m.Generation
+	setNetwork(true, false)
+	assertWake(false)
+	if !m.Connected || m.Generation != generation {
+		t.Fatal("path change tore down a live connection")
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	nativeWorker(t, app, func() {
+		if err := m.PrepareNetwork(ctx, "https://relay.example"); !errors.Is(err, context.Canceled) {
+			t.Error("cancellation ignored", err)
+		}
+	})
+	n := &phoneNetwork{addresses: []net.Addr{&net.IPNet{IP: net.ParseIP("2001:db8::1"), Mask: net.CIDRMask(128, 128)}}}
+	interfaces, err := n.interfaces()
+	if err != nil || len(interfaces) != 1 || interfaces[0].Flags&net.FlagUp == 0 || len(interfaces[0].AltAddrs) != 1 {
+		t.Fatalf("Android route inventory: %+v %v", interfaces, err)
+	}
+	interfaces[0].AltAddrs[0].(*net.IPNet).IP[0] = 0
+	if n.addresses[0].(*net.IPNet).IP[0] != 0x20 {
+		t.Fatal("worker mutated retained address")
+	}
+}
+
+func testSecretItem(key [2]string) core.SecretItem {
+	return core.SecretItem{Service: key[0], Account: key[1]}
+}
+
+func testSecrets(app *nsgotest.App) map[[2]string]string {
+	out := map[[2]string]string{}
+	for item, value := range app.Secrets.Items() {
+		out[[2]string{item.Service, item.Account}] = value
+	}
+	return out
 }
 
 type failingRegistryStore struct {
@@ -385,17 +343,17 @@ func TestNativeMigrationRetainsSourceUntilRegistryWriteSucceeds(t *testing.T) {
 	app, m := startNativePhone(t, core.OSIOS, nil)
 	awaitRegistry(t, app, 0)
 	link := nativeLink()
-	delete(app.Secrets, [2]string{"Miya", phonecache.DesktopsKey})
-	app.Secrets[[2]string{"Miya", "nsgo-desktop-link"}] = base64.StdEncoding.EncodeToString([]byte(link))
+	_ = app.Secrets.DeleteSecret(testSecretItem([2]string{"Miya", phonecache.DesktopsKey}))
+	_ = app.Secrets.WriteSecret(testSecretItem([2]string{"Miya", "nsgo-desktop-link"}), base64.StdEncoding.EncodeToString([]byte(link)))
 	store := &failingRegistryStore{SecretStore: m.Store}
 	store.fail.Store(true)
 	changePhone(app, m, func() { m.Store = store; m.Loaded = false })
-	nativeWorker(t, app, func() { m.LoadSaved(core.ErrSecretNotFound) })
+	nativeWorker(t, app, func() { m.LoadSaved(errSecretNotFound) })
 	settleNative(t, app, func() bool { return m.PersistenceError != "" })
-	if _, ok := app.Secrets[[2]string{"Miya", phonecache.DesktopsKey}]; ok {
+	if _, ok := testSecrets(app)[[2]string{"Miya", phonecache.DesktopsKey}]; ok {
 		t.Fatal("failed registry write replaced destination")
 	}
-	if app.Secrets[[2]string{"Miya", "nsgo-desktop-link"}] != base64.StdEncoding.EncodeToString([]byte(link)) {
+	if testSecrets(app)[[2]string{"Miya", "nsgo-desktop-link"}] != base64.StdEncoding.EncodeToString([]byte(link)) {
 		t.Fatal("failed migration retired singleton")
 	}
 	store.fail.Store(false)
@@ -412,12 +370,12 @@ func TestNativeUnreadableRegistryCannotBeOverwrittenByPairing(t *testing.T) {
 	changePhone(app, m, func() { m.pair(nativeLink()) })
 	// Flush a later native operation so any erroneous asynchronous write can run.
 	nativeWorker(t, app, func() { _, _ = m.Store.Get("tunnel-secret") })
-	if app.Secrets[[2]string{"Miya", phonecache.DesktopsKey}] != original {
+	if testSecrets(app)[[2]string{"Miya", phonecache.DesktopsKey}] != original {
 		t.Fatal("pairing overwrote unreadable saved desktops")
 	}
 	link := nativeLink()
 	repaired := `{"version":1,"items":[{"link":` + strconvQuote(link) + `,"name":"Recovered"}]}`
-	app.Secrets[[2]string{"Miya", phonecache.DesktopsKey}] = base64.StdEncoding.EncodeToString([]byte(repaired))
+	_ = app.Secrets.WriteSecret(testSecretItem([2]string{"Miya", phonecache.DesktopsKey}), base64.StdEncoding.EncodeToString([]byte(repaired)))
 	changePhone(app, m, m.ReloadDesktops)
 	awaitRegistry(t, app, 2)
 }

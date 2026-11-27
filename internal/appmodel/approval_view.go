@@ -47,6 +47,8 @@ func DescribeApproval(threads []model.Thread, a interaction.Request) ApprovalVie
 		v.Icon, v.Title = "lock-open", tr("Grant more access")
 	case "miya/desktopControl":
 		v.Icon, v.Title = "alert-circle", tr("Needs your attention")
+	case "miya/review":
+		v.Icon, v.Title = "shield-check", tr("Waiting for your review")
 	case "claude/permission":
 		v = describeClaudeTool(a)
 	}

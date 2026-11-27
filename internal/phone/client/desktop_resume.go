@@ -82,6 +82,7 @@ func (m *Client) initializeResumedDesktop(p *MobileDesktopPage, s control.Sessio
 		return
 	}
 	p.Pickable, p.AppsAvailable = s.Pick, s.Apps
+	p.frameStream = s.FrameStream
 	p.DisplaysAvailable, p.Displays = s.Pick && s.Displays, displays
 	p.Windows = windows
 	m.DesktopInitPrivacy(p, s)

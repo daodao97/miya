@@ -377,6 +377,7 @@ func (m *Client) ApplyPhoneState(s phoneproto.State) {
 		}
 	}
 	m.resumeDesktopPage()
+	m.resumePendingSend()
 }
 func (m *Client) Send()                         { m.sendDraft(false) }
 func (m *Client) Steer()                        { m.sendDraft(true) }

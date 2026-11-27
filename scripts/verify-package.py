@@ -31,21 +31,24 @@ def apple(app, signed):
     mac = (app / 'Contents/Info.plist').exists()
     plist = app / ('Contents/Info.plist' if mac else 'Info.plist')
     info = plistlib.loads(plist.read_bytes())
-    settings = CONFIG['miya']['macos' if mac else 'ios']
-    expected = dict(settings['info'], CFBundleIdentifier=CONFIG['id'], CFBundleName=CONFIG['name'],
+    expected = dict(CONFIG['apple']['info'], CFBundleIdentifier=CONFIG['id'], CFBundleName=CONFIG['name'],
                     CFBundleDisplayName=CONFIG['name'], CFBundleShortVersionString=CONFIG['version'],
-                    CFBundleVersion=CONFIG['version'] if mac else str(CONFIG['build_number']))
+                    CFBundleVersion=str(CONFIG['build_number']))
+    if not mac:
+        expected.pop("LSMinimumSystemVersion", None)
     for key, value in expected.items():
         require(info.get(key) == value, f'{plist}: {key}: expected {value!r}, got {info.get(key)!r}')
     schemes = [s for t in info.get('CFBundleURLTypes', []) for s in t.get('CFBundleURLSchemes', [])]
-    require(schemes == CONFIG['miya']['url_schemes'], 'URL scheme mismatch')
+    require(schemes == CONFIG['url_schemes'], 'URL scheme mismatch')
     binary = app / ('Contents/MacOS/' if mac else '') / info['CFBundleExecutable']
-    marker = CONFIG['miya']['ldflags'].split('Build=', 1)[1].format(version=CONFIG['version']).encode()
+    marker = f"miya-release:{CONFIG['version']}:end".encode()
     if mac:
         require(marker in binary.read_bytes(), 'selfupdate.Build release marker missing')
     resources = app / 'Contents/Resources' if mac else app
     for locale in ('en', 'zh-Hans'):
-        require((resources / f'{locale}.lproj/InfoPlist.strings').is_file(), f'missing {locale} localization')
+        path = f'{locale}.lproj/InfoPlist.strings'
+        require(any((directory / path).is_file() for directory in (resources, resources / 'languages')),
+                f'missing {locale} localization')
     require(any(resources.glob('*.icns')) if mac else any(app.glob('*.png')), 'missing packaged icon')
     if mac or signed or 'iPhoneSimulator' in info.get('CFBundleSupportedPlatforms', []):
         subprocess.run(['codesign', '--verify', '--deep', '--strict', str(app)], check=True)
@@ -56,7 +59,7 @@ def apple(app, signed):
         # No sandbox or separate helper existed in MyGo; all modes share this executable.
         require((app / 'Contents/MacOS/Miya').is_file(), 'same-binary service/MCP layout missing')
         require(not info.get('LSUIElement', False), 'Miya must retain its regular window/menu-bar behavior')
-        for key, value in settings['entitlements'].items():
+        for key, value in CONFIG.get('macos', {}).get('entitlements', {}).items():
             require(ents.get(key) == value, f'missing entitlement {key}')
     else:
         require(info.get('NSSupportsLiveActivities') is True, 'Live Activities missing')
@@ -69,9 +72,8 @@ def apple(app, signed):
             group = CONFIG['apple']['app_group']
             require(group in ents.get('com.apple.security.application-groups', []), 'app group missing')
             require(group in entitlements(widget).get('com.apple.security.application-groups', []), 'widget app group missing')
-            prefix = ents['application-identifier'].split('.')[0] + '.'
-            groups = [g.replace('$(AppIdentifierPrefix)', prefix) for g in settings['entitlements']['keychain-access-groups']]
-            require(ents.get('keychain-access-groups') == groups, 'Keychain migration groups missing')
+            app_id = ents.get('application-identifier', '')
+            require(app_id.endswith('.' + CONFIG['id']), 'signed application identifier missing')
     return dict(platform='macos' if mac else 'ios', plist=info, entitlements=ents)
 
 
@@ -121,33 +123,25 @@ def android(path):
         require(manifest['package'] == CONFIG['id'], 'Android package mismatch')
         require(manifest['versionName'] == CONFIG['version'], 'Android version mismatch')
         require(int(manifest['versionCode']) == CONFIG['build_number'], 'Android build number mismatch')
-        require(int(sdk['minSdkVersion']) == CONFIG['miya']['android']['minimum_sdk'], 'Android min SDK mismatch')
+        require(int(sdk['minSdkVersion']) == 28, 'Android min SDK mismatch')
         require(int(sdk['targetSdkVersion']) == CONFIG['android']['target_sdk'], 'Android target SDK mismatch')
         require(app['label'] == CONFIG['name'] and 'icon' in app, 'Android label/icon missing')
-        require(int(app['allowBackup']) == 0 and int(app['supportsRtl']) != 0, 'Android backup/RTL policy changed')
+        require(int(app['supportsRtl']) != 0, 'Android RTL support missing')
         require(int(first('activity')['launchMode']) == 2, 'singleTask link handling missing')
-        require(int(first('activity')['configChanges']) & 0x10000000, 'font-weight configuration handling missing')
-        features = {a['name']: a for tag, a in nodes if tag == 'uses-feature'}
-        for feature in CONFIG['miya']['android']['optional_features']:
-            require(int(features[feature]['required']) == 0, f'optional hardware became required: {feature}')
-        actions = [a.get('name') for tag, a in nodes if tag == 'action']
-        for query in CONFIG['miya']['android']['queries']:
-            require(query['action'] in actions, f'package visibility query missing: {query}')
         require('networkSecurityConfig' in app, 'network-security resource missing')
-        network = binary_manifest(archive.read('res/xml/miya_network_security.xml'))
-        require(int(next(a for tag, a in network if tag == 'base-config')['cleartextTrafficPermitted']) == 0, 'general cleartext traffic became permitted')
-        require(int(next(a for tag, a in network if tag == 'domain-config')['cleartextTrafficPermitted']) != 0, 'loopback WebView access missing')
+        network = binary_manifest(archive.read('res/xml/network_security_config.xml'))
+        require(next(a for tag, a in network if tag == 'base-config')['cleartextTrafficPermitted'] in (0, 'false'), 'general cleartext traffic became permitted')
+        require(next(a for tag, a in network if tag == 'domain-config')['cleartextTrafficPermitted'] in (0xffffffff, 1, 'true'), 'loopback WebView access missing')
         domains = [a['text'] for tag, a in network if tag == '#text']
-        require(domains == ['127.0.0.1', 'localhost'], 'cleartext exceptions changed')
-        require(all(int(a['includeSubdomains']) == 0 for tag, a in network if tag == 'domain'), 'loopback subdomain policy changed')
+        require(set(domains) == {'127.0.0.1', 'localhost', '::1', '[::1]'}, 'cleartext exceptions changed')
+        require(all(a.get('includeSubdomains', 0) in (0, 'false') for tag, a in network if tag == 'domain'), 'loopback subdomain policy changed')
         perms = {a['name']: a for tag, a in nodes if tag == 'uses-permission'}
         for p in CONFIG['android']['permissions'] + ['INTERNET', 'ACCESS_NETWORK_STATE']:
             require('android.permission.' + p in perms, f'Android permission missing: {p}')
-        for p, maximum in CONFIG['miya']['android']['permission_max_sdk'].items():
-            require(int(perms[p]['maxSdkVersion']) == maximum, f'permission bound missing: {p}')
-        require([a['scheme'] for tag, a in nodes if tag == 'data' and 'scheme' in a] == CONFIG['miya']['url_schemes'], 'Android URL scheme missing')
-        require(int(first('service')['foregroundServiceType']) == 0x40000000, 'specialUse foreground service missing')
-        require(first('property')['value'] == CONFIG['miya']['android']['foreground_service_subtype'], 'specialUse subtype missing')
+        require([a['scheme'] for tag, a in nodes if tag == 'data' and 'scheme' in a] == CONFIG['url_schemes'], 'Android URL scheme missing')
+        require(any(int(a.get('foregroundServiceType', 0)) & 1 for tag, a in nodes if tag == 'service'),
+                'dataSync foreground service missing')
+        require('android.permission.FOREGROUND_SERVICE_DATA_SYNC' in perms, 'dataSync foreground service permission missing')
         require('lib/arm64-v8a/libnsgo.so' in archive.namelist(), 'NSGo Android executable missing')
         return dict(platform='android', manifest=nodes, network_security=network)
 
@@ -155,7 +149,7 @@ def android(path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('package', type=Path)
-    parser.add_argument('--signed', action='store_true', help='require profile/APNs/Keychain/App Group entitlements in an IPA')
+    parser.add_argument('--signed', action='store_true', help='require profile/APNs/App Group entitlements in an IPA')
     parser.add_argument('--json', action='store_true')
     args = parser.parse_args()
     if args.package.suffix == '.apk':

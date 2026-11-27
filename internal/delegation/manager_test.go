@@ -247,3 +247,30 @@ func TestSessionAncestryAndTaskVisibility(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// Actions Miya refused a task are kept on it, once each, and the
+// completion notice lists them for the delegating conversation.
+func TestRefusedActionsAreKeptAndNotified(t *testing.T) {
+	m, _ := harness(t, 4)
+	task := create(t, m, input("refused"))
+	for _, what := range []string{"git push origin main", "git push origin main", "gh pr create --fill"} {
+		if err := m.RecordRefused(task.ID, what); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := m.RecordRefused("task-missing", "x"); !IsCode(err, "TASK_NOT_FOUND") {
+		t.Fatalf("unknown task: %v", err)
+	}
+	got, _ := m.Read(task.ID)
+	if strings.Join(got.Refused, "|") != "git push origin main|gh pr create --fill" {
+		t.Fatalf("refused: %q", got.Refused)
+	}
+	loaded, err := m.store.Load()
+	if err != nil || len(loaded.Tasks[task.ID].Refused) != 2 {
+		t.Fatalf("not persisted: %v %+v", err, loaded.Tasks[task.ID])
+	}
+	text := m.NotificationText(Delivery{TaskIDs: []string{task.ID}})
+	if !strings.Contains(text, "Miya refused these actions") || !strings.Contains(text, "  - gh pr create --fill") {
+		t.Fatalf("notice:\n%s", text)
+	}
+}

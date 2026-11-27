@@ -123,7 +123,7 @@ func DraftFor(ctx context.Context, generate DraftGenerator, project, request str
 // FromDraft checks what the agent made and fills the rest.
 func FromDraft(d Draft, agent, project, request string) (Automation, bool, error) {
 	a := Automation{Name: d.Name, Project: project, Agent: agent, Request: strings.TrimSpace(request),
-		Instructions: d.Instructions, Schedule: d.Schedule, Check: d.Check, Rounds: d.Rounds}
+		Instructions: d.Instructions, Schedule: d.Schedule, Check: d.Check, Rounds: d.Rounds, Access: AccessEdit}
 	a.Check = stripProjectCd(a.Check, project)
 	trigger, condition := draftTrigger(d)
 	timeMissing := d.TimeMissing || strings.TrimSpace(d.Schedule) == ""
@@ -181,7 +181,10 @@ func draftTrigger(d Draft) (*Trigger, bool) {
 			}
 		}
 		r, _ := FindRecipe(name)
-		return &Trigger{Kind: TriggerCondition, Condition: &Condition{Recipe: name, Params: params}}, r.When == "" || r.When == WhenSuccess
+		// What a change is made of must be there: an empty answer is a source
+		// that stopped answering, not a change.
+		cond := &Condition{Recipe: name, Params: params, EmptyIsError: r.When == WhenChanged}
+		return &Trigger{Kind: TriggerCondition, Condition: cond}, r.When == "" || r.When == WhenSuccess
 	case draftCommand:
 		if command == "" {
 			return nil, false
@@ -192,7 +195,7 @@ func draftTrigger(d Draft) (*Trigger, bool) {
 		}
 		// A change or a line is an event, not a state a schedule could
 		// wait for.
-		return &Trigger{Kind: TriggerCondition, Condition: &Condition{Command: command, When: when}}, when == WhenSuccess
+		return &Trigger{Kind: TriggerCondition, Condition: &Condition{Command: command, When: when, EmptyIsError: when == WhenChanged}}, when == WhenSuccess
 	case draftFile:
 		if path == "" {
 			return nil, false

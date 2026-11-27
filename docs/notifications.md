@@ -12,31 +12,44 @@
 
 桌面 GUI 定期报告使用状态，人在电脑前时由桌面提醒，离开电脑约五分钟后由手机提醒。GUI 退出后，状态租约最多 25 秒过期。桌面服务必须运行且可访问 Apple APNs；关机时无法发送。
 
+## 手机通知规则
+
+手机推送默认安静：同一类提醒你一再不看，之后就只更新角标，不再响铃和弹横幅。规则由后台服务持有，保存在应用数据目录的 `push-policy.json`（权限 0600），在桌面「设置 › 通用 › 手机通知规则」里查看和修改。没有连接后台服务时不显示这一组。
+
+**类别。** 每条提醒带一个类别：普通对话的完成按项目分（`completion:<项目路径>`），自动化结果按自动化分（`automation:<ID>`），条件检查失败按自动化分（`probe:<ID>`），另有没有自动化接收的 Webhook（`webhook`）和每日简报（`briefing`）。
+
+**紧急提醒不学习。** 审批与提问、等待复核、自动化停滞、失败（对话失败或自动化运行失败）、`needs_user` 的结果总会弹横幅，不受规则影响，也不计入学习。
+
+**怎么学。** 服务端只看得到两种反应：在手机上打开了对应会话（`read`），或者用「全部标为已读」清掉了它（`read-all`）。
+
+- 同一类别的横幅提醒连续 2 次没打开就被清掉，这一类以后只更新角标。中间打开过一次，计数重来。
+- 已经静音的类别，连续 2 次打开它的会话，规则自动解除；中间又有一次没打开就清掉，计数重来。
+- 在电脑上读过的会话（桌面的已读回执），算作打开，之后在手机上清掉也不算忽略。
+- 同一条提醒在多台手机上只计一次。
+- 设置页每条规则旁有「恢复提醒」，删除规则并清零计数。
+
+**免打扰时段。** 默认关闭，开启后默认 22:00–08:00，可以跨午夜。时段内所有提醒（包括紧急提醒）只更新角标，不计入学习；未读和角标照常累计，醒来后打开手机就能看到。时间按后台服务所在电脑的本地时区。
+
+**限制。** 学习只依据「打开」和「全部已读」两种反应，读不懂提醒之后你在对话里说的话；「以后这种直接告诉我」这类明确指令还不能直接变成规则。手机端暂时没有规则管理页面。桌面窗口自己弹出的通知（不经后台服务时）不受这些规则影响。
+
 ## Android
 
-Android 不使用第三方推送服务。开启手机通知并配对电脑后，Miya 在通知栏常驻一条低优先级通知「正在接收电脑通知」（前台服务，NSGo `mobile.StartForegroundService`），退到后台时保持与电脑的 tailcat 加密连接；桌面直接经这条连接发送通知，内容不经第三方，也不需要配置发送端。文案、角标、未读、正在查看的会话不弹、人在电脑前不发，都与 iOS 相同；点击通知打开对应会话。
+Android 不使用第三方推送服务。开启手机通知并配对电脑后，Miya 在通知栏常驻一条低优先级通知「正在接收电脑通知」（前台服务，`mygo.Power.KeepRunning`），退到后台时保持与电脑的 tailcat 加密连接；桌面直接经这条连接发送通知，内容不经第三方，也不需要配置发送端。文案、角标、未读、正在查看的会话不弹、人在电脑前不发，都与 iOS 相同；点击通知打开对应会话。
 
 限制：Miya 被系统清理或被用户结束后收不到通知，重新打开后读取未读状态，不补发错过的提醒。部分国产 ROM 需要允许 Miya 自启动或忽略电池优化。电脑关机或休眠时同样无法发送。设计与验收见 [Android 通知](android-push-design.md)。
 
 ## 配置发送端
 
-发送端由 `internal/apns` 管理，不再依赖旧框架 CLI。已有应用数据目录中的 `push-config.json` 和 Keychain 凭据继续可用。首次配置可使用 `apns.ImportProvider` 在发送端导入并校验密钥（macOS 存入登录 Keychain，Linux 存入权限为 0600 的文件）；当前没有用户可用的设置命令或导入界面。
+准备 Apple Developer 团队下有权向 `com.daodao.miya` 发送推送的 APNs `.p8` 密钥，然后在 Miya 项目目录运行以下命令。将示例路径替换为本机密钥路径。
 
-也可在桌面应用数据目录手动配置已有的 owner-only 密钥文件，例如：
-
-```json
-{
-  "teamID": "YOURTEAMID",
-  "keyID": "YOURKEYID1",
-  "topic": "com.daodao.miya",
-  "environment": "sandbox",
-  "keyFile": "/absolute/private/path/AuthKey_YOURKEYID1.p8"
-}
+```sh
+go run ./scripts/apns setup -team XNDA84PBM3 -environment sandbox /path/to/AuthKey_KEYID.p8
+go run ./scripts/apns status
 ```
 
-将这份 JSON 保存为 `push-config.json`，配置与密钥文件权限均设为 0600。默认目录是 macOS 的 `~/Library/Application Support/Miya`；服务器使用 `MIYA_DIR`，隔离验证使用 `MIYA_ISOLATED_DIR`。密钥仅保存在发送端，不会传给手机或打包进应用。导入后的 Keychain 配置使用 `keychainService: "com.daodao.miya.apns"` 代替 `keyFile`。通用 CLI/设置导入入口仍待补齐；不要尝试已移除的旧框架工具。
+命令使用与后台相同的应用数据目录，优先读取 `MIYA_ISOLATED_DIR` 或 `MIYA_DIR`。若命令所在终端与后台的环境不同，可用 `-data-dir` 指定后台的数据目录（放在密钥路径前）。如果密钥文件已改名，用 `-key-id` 提供 Apple Key ID。macOS 将私钥存入钥匙串，Linux 使用仅当前用户可读的文件。`status` 检查本地能否加载凭据。后台会在手机重新注册或发送推送时读取配置，无需重启。
 
-开发签名使用 sandbox；TestFlight/App Store 使用 production，并确保手机构建的 aps-environment 与发送端环境一致。`nsgo.yaml` 已开启 `ios.remote_notifications`。Apple Developer 中的 Miya App ID 必须开启 Push Notifications，重新生成包含该能力的 provisioning profile 后重建安装：
+开发签名使用 sandbox，TestFlight/App Store 使用 production。密钥的授权环境、手机构建的 `aps-environment` 和发送端环境需要一致。iOS 构建由 MyGo 的 push 插件声明该签名权限。如果当前描述文件缺少该权限，在 Apple Developer 中为 Miya App ID 开启 Push Notifications，重新生成包含该能力的 provisioning profile，再重建安装。
 
 ```sh
 ./scripts/build-ios.sh

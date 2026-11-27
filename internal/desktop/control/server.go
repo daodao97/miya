@@ -42,6 +42,7 @@ type desktopLease struct {
 	privacy              desktop.Privacy
 	display              *desktop.Display
 	displayInputRequired bool
+	streamCancel         context.CancelFunc
 }
 
 // desktopNative is what remote control needs from the operating system:
@@ -58,6 +59,7 @@ type Native struct {
 	CaptureDisplay func(desktop.Display) ([]byte, error)
 	InputDisplay   func(desktop.Display, desktop.Input) error
 	CaptureWindow  func(desktop.Window) ([]byte, error)
+	CaptureFrame   func(context.Context, *desktop.Display, *desktop.Window, desktop.FrameOptions) ([]byte, error)
 	InputWindow    func(desktop.Window, desktop.Input) error
 	Dialog         func(desktop.Window) (desktop.Dialog, error)
 	PressAction    func(desktop.Window, string) error
@@ -215,15 +217,17 @@ func (d *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(struct {
-			WindowOnly bool             `json:"windowOnly"`
-			Window     *desktop.Window  `json:"window"`
-			Pick       bool             `json:"pick"`
-			Apps       bool             `json:"apps"`
-			Privacy    bool             `json:"privacy"`
-			Displays   bool             `json:"displays"`
-			Display    *desktop.Display `json:"display,omitempty"`
-		}{l.window != nil, l.window, l.pick, l.pick && d.Apps != nil && d.OpenApp != nil, l.pick && d.Privacy != nil, l.pick && d.displaysAvailable(), l.display})
+		_ = json.NewEncoder(w).Encode(Session{
+			WindowOnly: l.window != nil, Window: l.window, Pick: l.pick,
+			Apps: l.pick && d.Apps != nil && d.OpenApp != nil, Privacy: l.pick && d.Privacy != nil,
+			Displays: l.pick && d.displaysAvailable(), Display: l.display,
+			InteractiveFrames: l.pick && d.CaptureFrame != nil,
+			FrameStream:       l.pick && d.CaptureFrame != nil,
+		})
+		return
+	}
+	if path == "/stream" && r.Method == http.MethodGet {
+		d.serveStream(w, r, l)
 		return
 	}
 	if path == "/actions" || path == "/action" {
@@ -315,6 +319,7 @@ func (d *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "Unlocking Mac. Please wait.", 409)
 				return
 			}
+			l.cancelStream()
 			l.window = nil
 			l.display, l.displayInputRequired = nil, false
 			l.active = false
@@ -337,6 +342,7 @@ func (d *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "Checking the authorization result. Please wait.", 409)
 				return
 			}
+			l.cancelStream()
 			l.window = &candidate
 			l.display, l.displayInputRequired = nil, false
 			l.active = false
@@ -372,6 +378,7 @@ func (d *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Remote control ended", 410)
 			return
 		}
+		l.cancelStream()
 		l.active = true
 		l.display = display
 		d.mu.Unlock()
@@ -387,76 +394,35 @@ func (d *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if path == "/frame" {
+		query := r.URL.Query()
+		options, ok := frameOptions(query)
+		if !ok {
+			http.Error(w, "Invalid frame options", http.StatusBadRequest)
+			return
+		}
+		interval := FrameInterval
+		if query.Get("interactive") == "1" && pick && d.CaptureFrame != nil &&
+			options.MaxEdge > 0 && options.MaxEdge <= InteractiveFrameMaxEdge {
+			interval = InteractiveFrameInterval
+		}
 		d.mu.Lock()
-		tooSoon := time.Since(l.lastFrame) < 250*time.Millisecond
+		now := time.Now()
+		tooSoon := now.Sub(l.lastFrame) < interval
 		if !tooSoon {
-			l.lastFrame = time.Now()
+			l.lastFrame = now
 		}
 		d.mu.Unlock()
 		if tooSoon {
 			http.Error(w, "Too many requests", 429)
 			return
 		}
-		d.keepAwake(l, false)
-		if d.unlockAllowed(window, pick) && d.screenLocked() {
+		data, locked, captureErr := d.captureFrame(r.Context(), l, display, window, options, pick)
+		if locked {
 			w.Header().Set(desktopLockedHeader, "1")
-			http.Error(w, "Mac is locked. Unlock it first.", http.StatusLocked)
+		}
+		if captureErr != nil {
+			http.Error(w, captureErr.Message, captureErr.Status)
 			return
-		}
-		var data []byte
-		var err error
-		if window != nil {
-			data, err = d.CaptureWindow(*window)
-		} else if display != nil {
-			data, err = d.CaptureDisplay(*display)
-		} else {
-			data, err = d.Capture()
-		}
-		// A sleeping display drops out of the shareable list. Wake it and
-		// retry once after it reappears instead of reporting a stale state.
-		if err != nil && d.Wake != nil && !errors.Is(err, desktop.ErrWindowUnavailable) && !errors.Is(err, desktop.ErrDisplayUnavailable) {
-			d.keepAwake(l, true)
-			time.Sleep(500 * time.Millisecond)
-			if window != nil {
-				data, err = d.CaptureWindow(*window)
-			} else if display != nil {
-				data, err = d.CaptureDisplay(*display)
-			} else {
-				data, err = d.Capture()
-			}
-		}
-		if err != nil {
-			if errors.Is(err, desktop.ErrDisplayUnavailable) {
-				d.mu.Lock()
-				l.capturedAt = time.Time{}
-				d.mu.Unlock()
-				http.Error(w, err.Error(), 409)
-				return
-			}
-			if window != nil && errors.Is(err, desktop.ErrWindowUnavailable) {
-				d.Revoke(token)
-				http.Error(w, "The authorization window closed. Close this view to return to the conversation.", 410)
-				return
-			}
-			http.Error(w, err.Error(), http.StatusServiceUnavailable)
-			return
-		}
-		if len(data) == 0 || len(data) > 2<<20 {
-			http.Error(w, "Invalid or oversized frame", 503)
-			return
-		}
-		d.mu.Lock()
-		valid := d.valid(token) == l
-		if valid {
-			l.capturedAt = time.Now()
-		}
-		d.mu.Unlock()
-		if !valid || r.Context().Err() != nil {
-			http.Error(w, "Remote control ended", 410)
-			return
-		}
-		if d.unlockAllowed(window, pick) && d.screenLocked() {
-			w.Header().Set(desktopLockedHeader, "1")
 		}
 		_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(10 * time.Second))
 		w.Header().Set("Content-Type", "image/jpeg")
@@ -471,77 +437,9 @@ func (d *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid operation", 400)
 		return
 	}
-	in := request.Input
-	if err := in.Validate(); err != nil {
-		http.Error(w, err.Error(), 400)
+	if failure := d.performInput(r.Context(), l, display, window, request); failure != nil {
+		http.Error(w, failure.Message, failure.Status)
 		return
-	}
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	if d.valid(token) != l || r.Context().Err() != nil {
-		http.Error(w, "Remote control ended", 410)
-		return
-	}
-	if (window == nil) != (l.window == nil) || window != nil && (window.ID != l.window.ID || window.PID != l.window.PID) {
-		http.Error(w, "The target window changed. Wait for a new frame.", 409)
-		return
-	}
-	if !sameDesktopDisplay(display, l.display) || !desktopInputMatchesDisplay(request, l) {
-		http.Error(w, "The target display changed. Wait for a new frame.", 409)
-		return
-	}
-	if time.Since(l.capturedAt) > 10*time.Second {
-		http.Error(w, "Wait for a new desktop frame before continuing", 409)
-		return
-	}
-	if time.Since(l.lastInput) < 20*time.Millisecond {
-		http.Error(w, "Input is too frequent", 429)
-		return
-	}
-	if l.actionPending {
-		http.Error(w, "Checking the authorization result. Please wait.", 409)
-		return
-	}
-	if l.unlocking || l.launching {
-		http.Error(w, "The desktop is busy. Try again later.", http.StatusConflict)
-		return
-	}
-	l.lastInput = time.Now()
-	// Revoke and dispatch are serialized: no event can begin after revocation.
-	var err error
-	var action desktop.Action
-	var acted bool
-	var before []desktop.Window
-	if window != nil {
-		if d.Dialog != nil && l.onAction != nil && (in.Kind == "click" || in.Kind == "key") {
-			if dialog, e := d.Dialog(*window); e == nil {
-				action, acted = dialog.InputAction(in)
-			}
-		}
-		if acted {
-			before, err = d.actionWindows(*window)
-			if err != nil {
-				http.Error(w, err.Error(), 409)
-				return
-			}
-		}
-		err = d.InputWindow(*window, in)
-	} else if display != nil {
-		err = d.InputDisplay(*display, in)
-	} else {
-		err = d.Input(in)
-	}
-	if err != nil {
-		if errors.Is(err, desktop.ErrDisplayUnavailable) {
-			l.capturedAt = time.Time{}
-			http.Error(w, err.Error(), 409)
-			return
-		}
-		http.Error(w, err.Error(), 403)
-		return
-	}
-	if acted && l.onAction != nil {
-		d.trackWindowActionLocked(l, action, before)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

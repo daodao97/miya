@@ -1,5 +1,6 @@
-// Miya's pi extension: registers the Anthropic-compatible provider of Miya's
-// Claude Code settings. Miya passes the endpoint and models in the
+// Miya's pi extension: registers the provider Miya gives pi — one configured
+// in Miya's settings, else the Anthropic-compatible endpoint of Miya's
+// Claude Code settings. Miya passes the endpoint, protocol and models in the
 // environment; the token stays in MIYA_PI_API_KEY and is never written here.
 export default function (pi: any) {
   const baseUrl = process.env.MIYA_PI_BASE_URL;
@@ -10,10 +11,11 @@ export default function (pi: any) {
   } catch {
     ids = [];
   }
+  const api = process.env.MIYA_PI_API || "anthropic-messages";
   const config: any = {
-    name: "Claude Code (Miya)",
+    name: process.env.MIYA_PI_NAME || "Claude Code (Miya)",
     baseUrl,
-    api: "anthropic-messages",
+    api,
     apiKey: "MIYA_PI_API_KEY",
     models: ids.map((id) => ({
       id,

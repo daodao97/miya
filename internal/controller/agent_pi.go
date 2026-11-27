@@ -62,6 +62,9 @@ func (h piAgentHost) RemoveThread(id int, session string) { h.removeThreadLocal(
 // piProvider is the Claude Code provider pi reuses. The settings files are
 // read again after a few seconds, so edits apply without a restart.
 func (c *Controller) piProvider() pinative.Provider {
+	if p, ok := c.piConfiguredProvider(); ok {
+		return p
+	}
 	if time.Since(c.Pi.providerAt) > 5*time.Second {
 		c.Pi.provider = pinative.ProviderFromClaude(c.ClaudeArgs, c.ClaudeEnv)
 		c.Pi.providerAt = time.Now()

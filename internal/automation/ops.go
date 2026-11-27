@@ -33,6 +33,12 @@ type View struct {
 	// WakeURLs are where its ingress triggers are woken over HTTP, by
 	// trigger ID, while the local wake endpoint listens.
 	WakeURLs map[string]string `json:"wakeURLs,omitempty"`
+	// Stalled is since when its triggered runs wait for a person.
+	Stalled time.Time `json:"stalled,omitzero"`
+	// Reviews wait for the person; Grants are what the person allowed and
+	// has not revoked (review.go).
+	Reviews []Review `json:"reviews,omitempty"`
+	Grants  []Grant  `json:"grants,omitempty"`
 }
 
 type Request struct {
@@ -51,6 +57,12 @@ type Request struct {
 	Trigger string `json:"trigger,omitempty"`
 	Data    string `json:"data,omitempty"`
 	Dedupe  string `json:"dedupe,omitempty"`
+	// Review, Scope and Note decide on a review, with Action approve,
+	// deny or revoke, or with Action handled, ID and Started mark what a
+	// finished run asked of the person as dealt with.
+	Review string `json:"review,omitempty"`
+	Scope  string `json:"scope,omitempty"`
+	Note   string `json:"note,omitempty"`
 }
 
 func ViewOf(a Automation, runs []Run, running bool, now time.Time) View {
@@ -107,6 +119,10 @@ func (rn *Runner) CardDetail(a Automation, now time.Time) string {
 		"Agent: "+model.AgentName(a.Agent),
 		"Completion check: "+CheckText(a),
 		"Runs in: "+WhereText(a),
+		"May: "+AccessText(a.Access),
+		"Notifies: "+notifyText(a),
+		"Stalls: "+stallText(a),
+		"Recheck: "+recheckText(a),
 		"Instructions: "+a.Instructions,
 	), "\n")
 }
@@ -126,6 +142,10 @@ func (rn *Runner) Diff(old, next Automation) string {
 	add("Agent", model.AgentName(old.Agent), model.AgentName(next.Agent))
 	add("Completion check", CheckText(old), CheckText(next))
 	add("Runs in", WhereText(old), WhereText(next))
+	add("May", AccessText(old.Access), AccessText(next.Access))
+	add("Notifies", notifyText(old), notifyText(next))
+	add("Stalls", stallText(old), stallText(next))
+	add("Recheck", recheckText(old), recheckText(next))
 	add("Instructions", old.Instructions, next.Instructions)
 	return strings.Join(lines, "\n")
 }
@@ -153,6 +173,8 @@ func (rn *Runner) SaveWithID(a Automation, createID string) (Automation, error) 
 			a.Due = now
 		}
 		rn.keepTriggerStates(old, a)
+		// Editing it is a person looking at it.
+		delete(rn.Store.Stalled, a.ID)
 		rn.Store.Automations[i] = a
 	} else {
 		rn.Store.Automations = append(rn.Store.Automations, a)

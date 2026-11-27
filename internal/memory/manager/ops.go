@@ -16,8 +16,10 @@ import (
 )
 
 type Request struct {
-	Project         string           `json:"project,omitempty"`
-	Scope           string           `json:"scope,omitempty"`
+	Project string `json:"project,omitempty"`
+	Scope   string `json:"scope,omitempty"`
+	// Bot is the Bot of a bot scope, in Project.
+	Bot             string           `json:"bot,omitempty"`
 	ID              string           `json:"id,omitempty"`
 	Version         uint64           `json:"version,omitempty"`
 	Kind            string           `json:"kind,omitempty"`
@@ -79,7 +81,7 @@ func (mg *Manager) Scope(r Request) (memory.Scope, error) {
 	if r.Scope == "user" {
 		return memory.UserScope(), nil
 	}
-	if r.Scope != "" && r.Scope != "project" {
+	if r.Scope != "" && r.Scope != "project" && r.Scope != "bot" {
 		return memory.Scope{}, errors.New("Invalid memory scope")
 	}
 	cwd, paths := mg.Host.Projects()
@@ -99,7 +101,12 @@ func (mg *Manager) Scope(r Request) (memory.Scope, error) {
 	if !known {
 		return memory.Scope{}, errors.New("Project does not exist")
 	}
-	return memory.ProjectScope(project)
+	scope, err := memory.ProjectScope(project)
+	if err != nil || r.Scope != "bot" {
+		return scope, err
+	}
+	// The store refuses a Bot ID that is not one.
+	return memory.BotScope(scope, r.Bot), nil
 }
 
 func (mg *Manager) Op(op string, r Request) (any, error) {

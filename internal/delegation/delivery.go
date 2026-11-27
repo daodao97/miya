@@ -19,7 +19,7 @@ func (m *Manager) enqueueNotifications(s *Snapshot, t Task) {
 		s.Watches[key] = w
 		var id string
 		for _, d := range s.Deliveries {
-			if d.Notify == w.Notify && d.State == NotifyPending {
+			if d.Notify == w.Notify && d.State == NotifyPending && !d.IsFollowUp() {
 				id = d.ID
 				break
 			}
@@ -93,7 +93,7 @@ func (m *Manager) unwatch(s *Snapshot, caller, id string) error {
 	w.State = NotifyCancelled
 	s.Watches[key] = w
 	for did, d := range s.Deliveries {
-		if d.Notify != caller || d.State != NotifyPending {
+		if d.Notify != caller || d.State != NotifyPending || d.IsFollowUp() {
 			continue
 		}
 		var tasks []string
@@ -123,9 +123,7 @@ func (m *Manager) ClaimDelivery(notify string) (Delivery, error) {
 		return Delivery{}, err
 	}
 	view := m.view.Load()
-	if view.Paused[notify] {
-		return Delivery{}, nil
-	}
+	now := m.now()
 	ready := false
 	for _, d := range view.Deliveries {
 		if d.Notify != notify || d.Resolution == ResolutionAbandoned {
@@ -134,7 +132,7 @@ func (m *Manager) ClaimDelivery(notify string) (Delivery, error) {
 		if d.State.InFlight() {
 			return Delivery{}, nil
 		}
-		ready = ready || d.State == NotifyPending && !m.now().Before(d.NextAttempt)
+		ready = ready || deliveryDue(d, now, view.Paused[notify])
 	}
 	if !ready {
 		return Delivery{}, nil
@@ -142,9 +140,6 @@ func (m *Manager) ClaimDelivery(notify string) (Delivery, error) {
 	var claimed Delivery
 	err := m.change(func(s *Snapshot) error {
 		m.expireDeliveries(s)
-		if s.Paused[notify] {
-			return nil
-		}
 		for _, d := range s.Deliveries {
 			if d.Notify == notify && d.Resolution != ResolutionAbandoned && d.State.InFlight() {
 				return nil
@@ -152,16 +147,19 @@ func (m *Manager) ClaimDelivery(notify string) (Delivery, error) {
 		}
 		var ids []string
 		for id, d := range s.Deliveries {
-			if d.Notify == notify && d.State == NotifyPending && d.Resolution == "" {
+			if d.Notify == notify && deliveryDue(d, m.now(), s.Paused[notify]) {
 				ids = append(ids, id)
 			}
 		}
-		sort.Strings(ids)
+		sort.Slice(ids, func(i, j int) bool {
+			a, b := s.Deliveries[ids[i]], s.Deliveries[ids[j]]
+			if order := a.FollowUpAt.Compare(b.FollowUpAt); order != 0 {
+				return order < 0
+			}
+			return a.ID < b.ID
+		})
 		for _, id := range ids {
 			d := s.Deliveries[id]
-			if !d.NextAttempt.IsZero() && m.now().Before(d.NextAttempt) {
-				continue
-			}
 			d.State = NotifySubmitting
 			d.SubmissionPhase = PhasePrepared
 			d.Attempts++
@@ -242,6 +240,9 @@ func (m *Manager) DeliveryOutcome(id, turnID, outcome, reason string) error {
 			d.TargetTurnID = turnID
 		case "not_started":
 			if d.Resolution == ResolutionAbandoned {
+				if d.IsFollowUp() {
+					d.State = NotifyCancelled
+				}
 				break
 			}
 			d.State = NotifyPending
@@ -278,7 +279,7 @@ func (m *Manager) DeliveryOutcome(id, turnID, outcome, reason string) error {
 func (m *Manager) ExpireDeliveries() error {
 	due := false
 	for _, d := range m.view.Load().Deliveries {
-		if d.State == NotifyPending && !m.now().Before(d.ExpiresAt) {
+		if d.State == NotifyPending && !d.IsFollowUp() && !m.now().Before(d.ExpiresAt) {
 			due = true
 			break
 		}
@@ -292,7 +293,7 @@ func (m *Manager) ExpireDeliveries() error {
 func (m *Manager) expireDeliveries(s *Snapshot) {
 	now := m.now()
 	for id, d := range s.Deliveries {
-		if d.State != NotifyPending {
+		if d.State != NotifyPending || d.IsFollowUp() {
 			continue
 		}
 		var tasks []string

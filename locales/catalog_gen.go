@@ -9853,13 +9853,13 @@ func (msgs Messages) PhoneNotificationsInTheBackgroundNeedMiya1d38a2() string {
 	return Catalog.Format(msgs.locale, "phoneNotificationsInTheBackgroundNeedMiya_1d38a2", nil)
 }
 
-// PhoneRegisteredApnsIsNotConfiguredOn97486e says "Phone registered. APNs is not configured on the desktop; see docs/notifications.md."
+// PhoneRegisteredApnsIsNotConfiguredOn97486e says "Phone registered. APNs is not configured on the desktop; run mygo push setup."
 // in the language the app shows.
 func PhoneRegisteredApnsIsNotConfiguredOn97486e() string {
 	return In(messageLocale()).PhoneRegisteredApnsIsNotConfiguredOn97486e()
 }
 
-// PhoneRegisteredApnsIsNotConfiguredOn97486e says "Phone registered. APNs is not configured on the desktop; see docs/notifications.md."
+// PhoneRegisteredApnsIsNotConfiguredOn97486e says "Phone registered. APNs is not configured on the desktop; run mygo push setup."
 // in the language of msgs.
 func (msgs Messages) PhoneRegisteredApnsIsNotConfiguredOn97486e() string {
 	return Catalog.Format(msgs.locale, "phoneRegisteredApnsIsNotConfiguredOn_97486e", nil)
@@ -21095,4 +21095,2446 @@ func NsAuthenticationBiometrics() string { return In(messageLocale()).NsAuthenti
 // in the language of msgs.
 func (msgs Messages) NsAuthenticationBiometrics() string {
 	return Catalog.Format(msgs.locale, "nsAuthenticationBiometrics", nil)
+}
+
+// CancelFollowUp0c021b says "Cancel follow-up"
+// in the language the app shows.
+func CancelFollowUp0c021b() string { return In(messageLocale()).CancelFollowUp0c021b() }
+
+// CancelFollowUp0c021b says "Cancel follow-up"
+// in the language of msgs.
+func (msgs Messages) CancelFollowUp0c021b() string {
+	return Catalog.Format(msgs.locale, "cancelFollowUp_0c021b", nil)
+}
+
+// DismissFollowUpD55ce5 says "Dismiss follow-up"
+// in the language the app shows.
+func DismissFollowUpD55ce5() string { return In(messageLocale()).DismissFollowUpD55ce5() }
+
+// DismissFollowUpD55ce5 says "Dismiss follow-up"
+// in the language of msgs.
+func (msgs Messages) DismissFollowUpD55ce5() string {
+	return Catalog.Format(msgs.locale, "dismissFollowUp_d55ce5", nil)
+}
+
+// DueC50447 says "Due "
+// in the language the app shows.
+func DueC50447() string { return In(messageLocale()).DueC50447() }
+
+// DueC50447 says "Due "
+// in the language of msgs.
+func (msgs Messages) DueC50447() string {
+	return Catalog.Format(msgs.locale, "due_c50447", nil)
+}
+
+// FollowUpA931af says "Follow-up"
+// in the language the app shows.
+func FollowUpA931af() string { return In(messageLocale()).FollowUpA931af() }
+
+// FollowUpA931af says "Follow-up"
+// in the language of msgs.
+func (msgs Messages) FollowUpA931af() string {
+	return Catalog.Format(msgs.locale, "followUp_a931af", nil)
+}
+
+// ActivityEditedOne says "Edited 1 file"
+// in the language the app shows.
+func ActivityEditedOne() string { return In(messageLocale()).ActivityEditedOne() }
+
+// ActivityEditedOne says "Edited 1 file"
+// in the language of msgs.
+func (msgs Messages) ActivityEditedOne() string {
+	return Catalog.Format(msgs.locale, "activityEditedOne", nil)
+}
+
+// ActivityEditedMany says "Edited %d files"
+// in the language the app shows.
+func ActivityEditedMany() string { return In(messageLocale()).ActivityEditedMany() }
+
+// ActivityEditedMany says "Edited %d files"
+// in the language of msgs.
+func (msgs Messages) ActivityEditedMany() string {
+	return Catalog.Format(msgs.locale, "activityEditedMany", nil)
+}
+
+// ActivityReadOne says "Read 1 file"
+// in the language the app shows.
+func ActivityReadOne() string { return In(messageLocale()).ActivityReadOne() }
+
+// ActivityReadOne says "Read 1 file"
+// in the language of msgs.
+func (msgs Messages) ActivityReadOne() string {
+	return Catalog.Format(msgs.locale, "activityReadOne", nil)
+}
+
+// ActivityReadMany says "Read %d files"
+// in the language the app shows.
+func ActivityReadMany() string { return In(messageLocale()).ActivityReadMany() }
+
+// ActivityReadMany says "Read %d files"
+// in the language of msgs.
+func (msgs Messages) ActivityReadMany() string {
+	return Catalog.Format(msgs.locale, "activityReadMany", nil)
+}
+
+// ActivitySearchOne says "1 search"
+// in the language the app shows.
+func ActivitySearchOne() string { return In(messageLocale()).ActivitySearchOne() }
+
+// ActivitySearchOne says "1 search"
+// in the language of msgs.
+func (msgs Messages) ActivitySearchOne() string {
+	return Catalog.Format(msgs.locale, "activitySearchOne", nil)
+}
+
+// ActivitySearchMany says "%d searches"
+// in the language the app shows.
+func ActivitySearchMany() string { return In(messageLocale()).ActivitySearchMany() }
+
+// ActivitySearchMany says "%d searches"
+// in the language of msgs.
+func (msgs Messages) ActivitySearchMany() string {
+	return Catalog.Format(msgs.locale, "activitySearchMany", nil)
+}
+
+// ActivityListOne says "1 file listing"
+// in the language the app shows.
+func ActivityListOne() string { return In(messageLocale()).ActivityListOne() }
+
+// ActivityListOne says "1 file listing"
+// in the language of msgs.
+func (msgs Messages) ActivityListOne() string {
+	return Catalog.Format(msgs.locale, "activityListOne", nil)
+}
+
+// ActivityListMany says "%d file listings"
+// in the language the app shows.
+func ActivityListMany() string { return In(messageLocale()).ActivityListMany() }
+
+// ActivityListMany says "%d file listings"
+// in the language of msgs.
+func (msgs Messages) ActivityListMany() string {
+	return Catalog.Format(msgs.locale, "activityListMany", nil)
+}
+
+// ActivityCommandOne says "Ran 1 command"
+// in the language the app shows.
+func ActivityCommandOne() string { return In(messageLocale()).ActivityCommandOne() }
+
+// ActivityCommandOne says "Ran 1 command"
+// in the language of msgs.
+func (msgs Messages) ActivityCommandOne() string {
+	return Catalog.Format(msgs.locale, "activityCommandOne", nil)
+}
+
+// ActivityCommandMany says "Ran %d commands"
+// in the language the app shows.
+func ActivityCommandMany() string { return In(messageLocale()).ActivityCommandMany() }
+
+// ActivityCommandMany says "Ran %d commands"
+// in the language of msgs.
+func (msgs Messages) ActivityCommandMany() string {
+	return Catalog.Format(msgs.locale, "activityCommandMany", nil)
+}
+
+// ActivityOne says "1 activity"
+// in the language the app shows.
+func ActivityOne() string { return In(messageLocale()).ActivityOne() }
+
+// ActivityOne says "1 activity"
+// in the language of msgs.
+func (msgs Messages) ActivityOne() string {
+	return Catalog.Format(msgs.locale, "activityOne", nil)
+}
+
+// ActivityMany says "%d activities"
+// in the language the app shows.
+func ActivityMany() string { return In(messageLocale()).ActivityMany() }
+
+// ActivityMany says "%d activities"
+// in the language of msgs.
+func (msgs Messages) ActivityMany() string {
+	return Catalog.Format(msgs.locale, "activityMany", nil)
+}
+
+// ActivityOtherOne says "1 other activity"
+// in the language the app shows.
+func ActivityOtherOne() string { return In(messageLocale()).ActivityOtherOne() }
+
+// ActivityOtherOne says "1 other activity"
+// in the language of msgs.
+func (msgs Messages) ActivityOtherOne() string {
+	return Catalog.Format(msgs.locale, "activityOtherOne", nil)
+}
+
+// ActivityOtherMany says "%d other activities"
+// in the language the app shows.
+func ActivityOtherMany() string { return In(messageLocale()).ActivityOtherMany() }
+
+// ActivityOtherMany says "%d other activities"
+// in the language of msgs.
+func (msgs Messages) ActivityOtherMany() string {
+	return Catalog.Format(msgs.locale, "activityOtherMany", nil)
+}
+
+// ActivityRunningOne says "1 running"
+// in the language the app shows.
+func ActivityRunningOne() string { return In(messageLocale()).ActivityRunningOne() }
+
+// ActivityRunningOne says "1 running"
+// in the language of msgs.
+func (msgs Messages) ActivityRunningOne() string {
+	return Catalog.Format(msgs.locale, "activityRunningOne", nil)
+}
+
+// ActivityRunningMany says "%d running"
+// in the language the app shows.
+func ActivityRunningMany() string { return In(messageLocale()).ActivityRunningMany() }
+
+// ActivityRunningMany says "%d running"
+// in the language of msgs.
+func (msgs Messages) ActivityRunningMany() string {
+	return Catalog.Format(msgs.locale, "activityRunningMany", nil)
+}
+
+// ActivityFailedOne says "1 failed"
+// in the language the app shows.
+func ActivityFailedOne() string { return In(messageLocale()).ActivityFailedOne() }
+
+// ActivityFailedOne says "1 failed"
+// in the language of msgs.
+func (msgs Messages) ActivityFailedOne() string {
+	return Catalog.Format(msgs.locale, "activityFailedOne", nil)
+}
+
+// ActivityFailedMany says "%d failed"
+// in the language the app shows.
+func ActivityFailedMany() string { return In(messageLocale()).ActivityFailedMany() }
+
+// ActivityFailedMany says "%d failed"
+// in the language of msgs.
+func (msgs Messages) ActivityFailedMany() string {
+	return Catalog.Format(msgs.locale, "activityFailedMany", nil)
+}
+
+// ActivityInterruptedOne says "1 interrupted"
+// in the language the app shows.
+func ActivityInterruptedOne() string { return In(messageLocale()).ActivityInterruptedOne() }
+
+// ActivityInterruptedOne says "1 interrupted"
+// in the language of msgs.
+func (msgs Messages) ActivityInterruptedOne() string {
+	return Catalog.Format(msgs.locale, "activityInterruptedOne", nil)
+}
+
+// ActivityInterruptedMany says "%d interrupted"
+// in the language the app shows.
+func ActivityInterruptedMany() string { return In(messageLocale()).ActivityInterruptedMany() }
+
+// ActivityInterruptedMany says "%d interrupted"
+// in the language of msgs.
+func (msgs Messages) ActivityInterruptedMany() string {
+	return Catalog.Format(msgs.locale, "activityInterruptedMany", nil)
+}
+
+// RemoteControlSettings says "Remote Control"
+// in the language the app shows.
+func RemoteControlSettings() string { return In(messageLocale()).RemoteControlSettings() }
+
+// RemoteControlSettings says "Remote Control"
+// in the language of msgs.
+func (msgs Messages) RemoteControlSettings() string {
+	return Catalog.Format(msgs.locale, "remoteControlSettings", nil)
+}
+
+// RemoteControlScreenRecording says "Screen Recording"
+// in the language the app shows.
+func RemoteControlScreenRecording() string { return In(messageLocale()).RemoteControlScreenRecording() }
+
+// RemoteControlScreenRecording says "Screen Recording"
+// in the language of msgs.
+func (msgs Messages) RemoteControlScreenRecording() string {
+	return Catalog.Format(msgs.locale, "remoteControlScreenRecording", nil)
+}
+
+// RemoteControlScreenRecordingHelp says "Share the Mac screen with your phone."
+// in the language the app shows.
+func RemoteControlScreenRecordingHelp() string {
+	return In(messageLocale()).RemoteControlScreenRecordingHelp()
+}
+
+// RemoteControlScreenRecordingHelp says "Share the Mac screen with your phone."
+// in the language of msgs.
+func (msgs Messages) RemoteControlScreenRecordingHelp() string {
+	return Catalog.Format(msgs.locale, "remoteControlScreenRecordingHelp", nil)
+}
+
+// RemoteControlAccessibility says "Accessibility"
+// in the language the app shows.
+func RemoteControlAccessibility() string { return In(messageLocale()).RemoteControlAccessibility() }
+
+// RemoteControlAccessibility says "Accessibility"
+// in the language of msgs.
+func (msgs Messages) RemoteControlAccessibility() string {
+	return Catalog.Format(msgs.locale, "remoteControlAccessibility", nil)
+}
+
+// RemoteControlAccessibilityHelp says "Control the Mac keyboard and pointer from your phone."
+// in the language the app shows.
+func RemoteControlAccessibilityHelp() string {
+	return In(messageLocale()).RemoteControlAccessibilityHelp()
+}
+
+// RemoteControlAccessibilityHelp says "Control the Mac keyboard and pointer from your phone."
+// in the language of msgs.
+func (msgs Messages) RemoteControlAccessibilityHelp() string {
+	return Catalog.Format(msgs.locale, "remoteControlAccessibilityHelp", nil)
+}
+
+// RemoteControlPermissionGranted says "Granted"
+// in the language the app shows.
+func RemoteControlPermissionGranted() string {
+	return In(messageLocale()).RemoteControlPermissionGranted()
+}
+
+// RemoteControlPermissionGranted says "Granted"
+// in the language of msgs.
+func (msgs Messages) RemoteControlPermissionGranted() string {
+	return Catalog.Format(msgs.locale, "remoteControlPermissionGranted", nil)
+}
+
+// RemoteControlPermissionNotGranted says "Not granted"
+// in the language the app shows.
+func RemoteControlPermissionNotGranted() string {
+	return In(messageLocale()).RemoteControlPermissionNotGranted()
+}
+
+// RemoteControlPermissionNotGranted says "Not granted"
+// in the language of msgs.
+func (msgs Messages) RemoteControlPermissionNotGranted() string {
+	return Catalog.Format(msgs.locale, "remoteControlPermissionNotGranted", nil)
+}
+
+// RemoteControlPermissionUnknown says "Unknown"
+// in the language the app shows.
+func RemoteControlPermissionUnknown() string {
+	return In(messageLocale()).RemoteControlPermissionUnknown()
+}
+
+// RemoteControlPermissionUnknown says "Unknown"
+// in the language of msgs.
+func (msgs Messages) RemoteControlPermissionUnknown() string {
+	return Catalog.Format(msgs.locale, "remoteControlPermissionUnknown", nil)
+}
+
+// RemoteControlOpenSystemSettings says "Open System Settings"
+// in the language the app shows.
+func RemoteControlOpenSystemSettings() string {
+	return In(messageLocale()).RemoteControlOpenSystemSettings()
+}
+
+// RemoteControlOpenSystemSettings says "Open System Settings"
+// in the language of msgs.
+func (msgs Messages) RemoteControlOpenSystemSettings() string {
+	return Catalog.Format(msgs.locale, "remoteControlOpenSystemSettings", nil)
+}
+
+// RemoteControlOpenSettingsError says "Could not open System Settings."
+// in the language the app shows.
+func RemoteControlOpenSettingsError() string {
+	return In(messageLocale()).RemoteControlOpenSettingsError()
+}
+
+// RemoteControlOpenSettingsError says "Could not open System Settings."
+// in the language of msgs.
+func (msgs Messages) RemoteControlOpenSettingsError() string {
+	return Catalog.Format(msgs.locale, "remoteControlOpenSettingsError", nil)
+}
+
+// RemoteControlPermissionsError says "Could not check remote control permissions."
+// in the language the app shows.
+func RemoteControlPermissionsError() string {
+	return In(messageLocale()).RemoteControlPermissionsError()
+}
+
+// RemoteControlPermissionsError says "Could not check remote control permissions."
+// in the language of msgs.
+func (msgs Messages) RemoteControlPermissionsError() string {
+	return Catalog.Format(msgs.locale, "remoteControlPermissionsError", nil)
+}
+
+// RemoteControlWaitingForService says "Permission checks will be available after the background service updates."
+// in the language the app shows.
+func RemoteControlWaitingForService() string {
+	return In(messageLocale()).RemoteControlWaitingForService()
+}
+
+// RemoteControlWaitingForService says "Permission checks will be available after the background service updates."
+// in the language of msgs.
+func (msgs Messages) RemoteControlWaitingForService() string {
+	return Catalog.Format(msgs.locale, "remoteControlWaitingForService", nil)
+}
+
+// RemoteControlPermissionsServiceHelp says "Allow Miya in System Settings. If the screen recording permission has yet to take effect, restart the background serv…"
+// in the language the app shows.
+func RemoteControlPermissionsServiceHelp() string {
+	return In(messageLocale()).RemoteControlPermissionsServiceHelp()
+}
+
+// RemoteControlPermissionsServiceHelp says "Allow Miya in System Settings. If the screen recording permission has yet to take effect, restart the background serv…"
+// in the language of msgs.
+func (msgs Messages) RemoteControlPermissionsServiceHelp() string {
+	return Catalog.Format(msgs.locale, "remoteControlPermissionsServiceHelp", nil)
+}
+
+// RemoteControlPermissionsLocalHelp says "Allow Miya in System Settings. After granting screen recording, macOS may ask you to reopen Miya."
+// in the language the app shows.
+func RemoteControlPermissionsLocalHelp() string {
+	return In(messageLocale()).RemoteControlPermissionsLocalHelp()
+}
+
+// RemoteControlPermissionsLocalHelp says "Allow Miya in System Settings. After granting screen recording, macOS may ask you to reopen Miya."
+// in the language of msgs.
+func (msgs Messages) RemoteControlPermissionsLocalHelp() string {
+	return Catalog.Format(msgs.locale, "remoteControlPermissionsLocalHelp", nil)
+}
+
+// RemoteControlPermissionsRemoteHelp says "Manage permissions in System Settings on the Mac you want to control."
+// in the language the app shows.
+func RemoteControlPermissionsRemoteHelp() string {
+	return In(messageLocale()).RemoteControlPermissionsRemoteHelp()
+}
+
+// RemoteControlPermissionsRemoteHelp says "Manage permissions in System Settings on the Mac you want to control."
+// in the language of msgs.
+func (msgs Messages) RemoteControlPermissionsRemoteHelp() string {
+	return Catalog.Format(msgs.locale, "remoteControlPermissionsRemoteHelp", nil)
+}
+
+// AgentInstall says "Install"
+// in the language the app shows.
+func AgentInstall() string { return In(messageLocale()).AgentInstall() }
+
+// AgentInstall says "Install"
+// in the language of msgs.
+func (msgs Messages) AgentInstall() string {
+	return Catalog.Format(msgs.locale, "agentInstall", nil)
+}
+
+// AgentEnvironment says "Agent environment"
+// in the language the app shows.
+func AgentEnvironment() string { return In(messageLocale()).AgentEnvironment() }
+
+// AgentEnvironment says "Agent environment"
+// in the language of msgs.
+func (msgs Messages) AgentEnvironment() string {
+	return Catalog.Format(msgs.locale, "agentEnvironment", nil)
+}
+
+// AgentEnvironmentHelp says "Agents are installed and run in the selected environment. Windows and WSL keep separate sign-ins."
+// in the language the app shows.
+func AgentEnvironmentHelp() string { return In(messageLocale()).AgentEnvironmentHelp() }
+
+// AgentEnvironmentHelp says "Agents are installed and run in the selected environment. Windows and WSL keep separate sign-ins."
+// in the language of msgs.
+func (msgs Messages) AgentEnvironmentHelp() string {
+	return Catalog.Format(msgs.locale, "agentEnvironmentHelp", nil)
+}
+
+// RunAgentsInWSL says "Run agents in WSL"
+// in the language the app shows.
+func RunAgentsInWSL() string { return In(messageLocale()).RunAgentsInWSL() }
+
+// RunAgentsInWSL says "Run agents in WSL"
+// in the language of msgs.
+func (msgs Messages) RunAgentsInWSL() string {
+	return Catalog.Format(msgs.locale, "runAgentsInWSL", nil)
+}
+
+// WslDistribution says "WSL distribution"
+// in the language the app shows.
+func WslDistribution() string { return In(messageLocale()).WslDistribution() }
+
+// WslDistribution says "WSL distribution"
+// in the language of msgs.
+func (msgs Messages) WslDistribution() string {
+	return Catalog.Format(msgs.locale, "wslDistribution", nil)
+}
+
+// DefaultWSLDistribution says "Default distribution"
+// in the language the app shows.
+func DefaultWSLDistribution() string { return In(messageLocale()).DefaultWSLDistribution() }
+
+// DefaultWSLDistribution says "Default distribution"
+// in the language of msgs.
+func (msgs Messages) DefaultWSLDistribution() string {
+	return Catalog.Format(msgs.locale, "defaultWSLDistribution", nil)
+}
+
+// WslDistributionHelp says "Use a distribution already installed in WSL, such as Ubuntu."
+// in the language the app shows.
+func WslDistributionHelp() string { return In(messageLocale()).WslDistributionHelp() }
+
+// WslDistributionHelp says "Use a distribution already installed in WSL, such as Ubuntu."
+// in the language of msgs.
+func (msgs Messages) WslDistributionHelp() string {
+	return Catalog.Format(msgs.locale, "wslDistributionHelp", nil)
+}
+
+// AgentEnvironmentBusy says "Finish running tasks before changing the agent environment."
+// in the language the app shows.
+func AgentEnvironmentBusy() string { return In(messageLocale()).AgentEnvironmentBusy() }
+
+// AgentEnvironmentBusy says "Finish running tasks before changing the agent environment."
+// in the language of msgs.
+func (msgs Messages) AgentEnvironmentBusy() string {
+	return Catalog.Format(msgs.locale, "agentEnvironmentBusy", nil)
+}
+
+// AgentInstalling says "Installing…"
+// in the language the app shows.
+func AgentInstalling() string { return In(messageLocale()).AgentInstalling() }
+
+// AgentInstalling says "Installing…"
+// in the language of msgs.
+func (msgs Messages) AgentInstalling() string {
+	return Catalog.Format(msgs.locale, "agentInstalling", nil)
+}
+
+// AgentInstallCommand says "Install command: %s"
+// in the language the app shows.
+func AgentInstallCommand() string { return In(messageLocale()).AgentInstallCommand() }
+
+// AgentInstallCommand says "Install command: %s"
+// in the language of msgs.
+func (msgs Messages) AgentInstallCommand() string {
+	return Catalog.Format(msgs.locale, "agentInstallCommand", nil)
+}
+
+// AgentNeedsNode says "Install Node.js and npm in the selected environment first"
+// in the language the app shows.
+func AgentNeedsNode() string { return In(messageLocale()).AgentNeedsNode() }
+
+// AgentNeedsNode says "Install Node.js and npm in the selected environment first"
+// in the language of msgs.
+func (msgs Messages) AgentNeedsNode() string {
+	return Catalog.Format(msgs.locale, "agentNeedsNode", nil)
+}
+
+// AgentInstallVerificationFailed says "The installer finished, but the installed CLI could not be verified"
+// in the language the app shows.
+func AgentInstallVerificationFailed() string {
+	return In(messageLocale()).AgentInstallVerificationFailed()
+}
+
+// AgentInstallVerificationFailed says "The installer finished, but the installed CLI could not be verified"
+// in the language of msgs.
+func (msgs Messages) AgentInstallVerificationFailed() string {
+	return Catalog.Format(msgs.locale, "agentInstallVerificationFailed", nil)
+}
+
+// AgentCustomCLIInstall says "Install the CLI configured in the launch command, then check again"
+// in the language the app shows.
+func AgentCustomCLIInstall() string { return In(messageLocale()).AgentCustomCLIInstall() }
+
+// AgentCustomCLIInstall says "Install the CLI configured in the launch command, then check again"
+// in the language of msgs.
+func (msgs Messages) AgentCustomCLIInstall() string {
+	return Catalog.Format(msgs.locale, "agentCustomCLIInstall", nil)
+}
+
+// WebhookPane says "Webhook"
+// in the language the app shows.
+func WebhookPane() string { return In(messageLocale()).WebhookPane() }
+
+// WebhookPane says "Webhook"
+// in the language of msgs.
+func (msgs Messages) WebhookPane() string {
+	return Catalog.Format(msgs.locale, "webhookPane", nil)
+}
+
+// NoWebhookMessagesYet says "No messages yet"
+// in the language the app shows.
+func NoWebhookMessagesYet() string { return In(messageLocale()).NoWebhookMessagesYet() }
+
+// NoWebhookMessagesYet says "No messages yet"
+// in the language of msgs.
+func (msgs Messages) NoWebhookMessagesYet() string {
+	return Catalog.Format(msgs.locale, "noWebhookMessagesYet", nil)
+}
+
+// Integrations says "Integrations"
+// in the language the app shows.
+func Integrations() string { return In(messageLocale()).Integrations() }
+
+// Integrations says "Integrations"
+// in the language of msgs.
+func (msgs Messages) Integrations() string {
+	return Catalog.Format(msgs.locale, "integrations", nil)
+}
+
+// WebhookSettingsHelp says "Webhook address for scripts, CI and other services. Matching automations wake on the messages it receives."
+// in the language the app shows.
+func WebhookSettingsHelp() string { return In(messageLocale()).WebhookSettingsHelp() }
+
+// WebhookSettingsHelp says "Webhook address for scripts, CI and other services. Matching automations wake on the messages it receives."
+// in the language of msgs.
+func (msgs Messages) WebhookSettingsHelp() string {
+	return Catalog.Format(msgs.locale, "webhookSettingsHelp", nil)
+}
+
+// AutomationRechecked says " · Rechecked in a clean checkout"
+// in the language the app shows.
+func AutomationRechecked() string { return In(messageLocale()).AutomationRechecked() }
+
+// AutomationRechecked says " · Rechecked in a clean checkout"
+// in the language of msgs.
+func (msgs Messages) AutomationRechecked() string {
+	return Catalog.Format(msgs.locale, "automationRechecked", nil)
+}
+
+// AutomationRecheckFailed says " · Recheck in a clean checkout failed"
+// in the language the app shows.
+func AutomationRecheckFailed() string { return In(messageLocale()).AutomationRecheckFailed() }
+
+// AutomationRecheckFailed says " · Recheck in a clean checkout failed"
+// in the language of msgs.
+func (msgs Messages) AutomationRecheckFailed() string {
+	return Catalog.Format(msgs.locale, "automationRecheckFailed", nil)
+}
+
+// AutomationAttentionRecheck says "Recheck failed"
+// in the language the app shows.
+func AutomationAttentionRecheck() string { return In(messageLocale()).AutomationAttentionRecheck() }
+
+// AutomationAttentionRecheck says "Recheck failed"
+// in the language of msgs.
+func (msgs Messages) AutomationAttentionRecheck() string {
+	return Catalog.Format(msgs.locale, "automationAttentionRecheck", nil)
+}
+
+// AutomationRecheckSwitch says "Recheck in a clean checkout"
+// in the language the app shows.
+func AutomationRecheckSwitch() string { return In(messageLocale()).AutomationRecheckSwitch() }
+
+// AutomationRecheckSwitch says "Recheck in a clean checkout"
+// in the language of msgs.
+func (msgs Messages) AutomationRecheckSwitch() string {
+	return Catalog.Format(msgs.locale, "automationRecheckSwitch", nil)
+}
+
+// AutomationRecheckHelp says "Before you merge, run the check again on only the changes; files git ignores, such as installed dependencies, are not…"
+// in the language the app shows.
+func AutomationRecheckHelp() string { return In(messageLocale()).AutomationRecheckHelp() }
+
+// AutomationRecheckHelp says "Before you merge, run the check again on only the changes; files git ignores, such as installed dependencies, are not…"
+// in the language of msgs.
+func (msgs Messages) AutomationRecheckHelp() string {
+	return Catalog.Format(msgs.locale, "automationRecheckHelp", nil)
+}
+
+// AutomationCovered says " · Covered %d of %d"
+// in the language the app shows.
+func AutomationCovered() string { return In(messageLocale()).AutomationCovered() }
+
+// AutomationCovered says " · Covered %d of %d"
+// in the language of msgs.
+func (msgs Messages) AutomationCovered() string {
+	return Catalog.Format(msgs.locale, "automationCovered", nil)
+}
+
+// AutomationAttentionPartial says "Covered only part"
+// in the language the app shows.
+func AutomationAttentionPartial() string { return In(messageLocale()).AutomationAttentionPartial() }
+
+// AutomationAttentionPartial says "Covered only part"
+// in the language of msgs.
+func (msgs Messages) AutomationAttentionPartial() string {
+	return Catalog.Format(msgs.locale, "automationAttentionPartial", nil)
+}
+
+// AutomationAttentionSilent says "Trigger has gone quiet"
+// in the language the app shows.
+func AutomationAttentionSilent() string { return In(messageLocale()).AutomationAttentionSilent() }
+
+// AutomationAttentionSilent says "Trigger has gone quiet"
+// in the language of msgs.
+func (msgs Messages) AutomationAttentionSilent() string {
+	return Catalog.Format(msgs.locale, "automationAttentionSilent", nil)
+}
+
+// AutomationSilentSince says "nothing printed since %s"
+// in the language the app shows.
+func AutomationSilentSince() string { return In(messageLocale()).AutomationSilentSince() }
+
+// AutomationSilentSince says "nothing printed since %s"
+// in the language of msgs.
+func (msgs Messages) AutomationSilentSince() string {
+	return Catalog.Format(msgs.locale, "automationSilentSince", nil)
+}
+
+// AutomationBriefingPartial says "%d covered only part of what they should."
+// in the language the app shows.
+func AutomationBriefingPartial() string { return In(messageLocale()).AutomationBriefingPartial() }
+
+// AutomationBriefingPartial says "%d covered only part of what they should."
+// in the language of msgs.
+func (msgs Messages) AutomationBriefingPartial() string {
+	return Catalog.Format(msgs.locale, "automationBriefingPartial", nil)
+}
+
+// AutomationBriefingTitle says "Miya · Daily briefing"
+// in the language the app shows.
+func AutomationBriefingTitle() string { return In(messageLocale()).AutomationBriefingTitle() }
+
+// AutomationBriefingTitle says "Miya · Daily briefing"
+// in the language of msgs.
+func (msgs Messages) AutomationBriefingTitle() string {
+	return Catalog.Format(msgs.locale, "automationBriefingTitle", nil)
+}
+
+// AutomationBriefingRuns says "%d runs in the last 24 hours: %d passed, %d failed."
+// in the language the app shows.
+func AutomationBriefingRuns() string { return In(messageLocale()).AutomationBriefingRuns() }
+
+// AutomationBriefingRuns says "%d runs in the last 24 hours: %d passed, %d failed."
+// in the language of msgs.
+func (msgs Messages) AutomationBriefingRuns() string {
+	return Catalog.Format(msgs.locale, "automationBriefingRuns", nil)
+}
+
+// AutomationBriefingQuiet says "%d found nothing new."
+// in the language the app shows.
+func AutomationBriefingQuiet() string { return In(messageLocale()).AutomationBriefingQuiet() }
+
+// AutomationBriefingQuiet says "%d found nothing new."
+// in the language of msgs.
+func (msgs Messages) AutomationBriefingQuiet() string {
+	return Catalog.Format(msgs.locale, "automationBriefingQuiet", nil)
+}
+
+// AutomationBriefingNeedsYou says "Needs you:"
+// in the language the app shows.
+func AutomationBriefingNeedsYou() string { return In(messageLocale()).AutomationBriefingNeedsYou() }
+
+// AutomationBriefingNeedsYou says "Needs you:"
+// in the language of msgs.
+func (msgs Messages) AutomationBriefingNeedsYou() string {
+	return Catalog.Format(msgs.locale, "automationBriefingNeedsYou", nil)
+}
+
+// AutomationBriefingMore says "and %d more"
+// in the language the app shows.
+func AutomationBriefingMore() string { return In(messageLocale()).AutomationBriefingMore() }
+
+// AutomationBriefingMore says "and %d more"
+// in the language of msgs.
+func (msgs Messages) AutomationBriefingMore() string {
+	return Catalog.Format(msgs.locale, "automationBriefingMore", nil)
+}
+
+// AutomationBriefingSetting says "Daily briefing"
+// in the language the app shows.
+func AutomationBriefingSetting() string { return In(messageLocale()).AutomationBriefingSetting() }
+
+// AutomationBriefingSetting says "Daily briefing"
+// in the language of msgs.
+func (msgs Messages) AutomationBriefingSetting() string {
+	return Catalog.Format(msgs.locale, "automationBriefingSetting", nil)
+}
+
+// AutomationBriefingTime says "Briefing time"
+// in the language the app shows.
+func AutomationBriefingTime() string { return In(messageLocale()).AutomationBriefingTime() }
+
+// AutomationBriefingTime says "Briefing time"
+// in the language of msgs.
+func (msgs Messages) AutomationBriefingTime() string {
+	return Catalog.Format(msgs.locale, "automationBriefingTime", nil)
+}
+
+// AutomationBriefingHelp says "One notice a day with the last 24 hours of runs and what needs you; nothing on a day with nothing to say"
+// in the language the app shows.
+func AutomationBriefingHelp() string { return In(messageLocale()).AutomationBriefingHelp() }
+
+// AutomationBriefingHelp says "One notice a day with the last 24 hours of runs and what needs you; nothing on a day with nothing to say"
+// in the language of msgs.
+func (msgs Messages) AutomationBriefingHelp() string {
+	return Catalog.Format(msgs.locale, "automationBriefingHelp", nil)
+}
+
+// AutomationBriefingBadTime says "Write the time as HH:MM, for example 09:00"
+// in the language the app shows.
+func AutomationBriefingBadTime() string { return In(messageLocale()).AutomationBriefingBadTime() }
+
+// AutomationBriefingBadTime says "Write the time as HH:MM, for example 09:00"
+// in the language of msgs.
+func (msgs Messages) AutomationBriefingBadTime() string {
+	return Catalog.Format(msgs.locale, "automationBriefingBadTime", nil)
+}
+
+// AutomationAttentionMerge says "Changes waiting to merge"
+// in the language the app shows.
+func AutomationAttentionMerge() string { return In(messageLocale()).AutomationAttentionMerge() }
+
+// AutomationAttentionMerge says "Changes waiting to merge"
+// in the language of msgs.
+func (msgs Messages) AutomationAttentionMerge() string {
+	return Catalog.Format(msgs.locale, "automationAttentionMerge", nil)
+}
+
+// AutomationAttentionFailed says "Last run failed"
+// in the language the app shows.
+func AutomationAttentionFailed() string { return In(messageLocale()).AutomationAttentionFailed() }
+
+// AutomationAttentionFailed says "Last run failed"
+// in the language of msgs.
+func (msgs Messages) AutomationAttentionFailed() string {
+	return Catalog.Format(msgs.locale, "automationAttentionFailed", nil)
+}
+
+// AutomationAttentionTrigger says "Trigger check failing"
+// in the language the app shows.
+func AutomationAttentionTrigger() string { return In(messageLocale()).AutomationAttentionTrigger() }
+
+// AutomationAttentionTrigger says "Trigger check failing"
+// in the language of msgs.
+func (msgs Messages) AutomationAttentionTrigger() string {
+	return Catalog.Format(msgs.locale, "automationAttentionTrigger", nil)
+}
+
+// AutomationNeedsYou says "Needs you"
+// in the language the app shows.
+func AutomationNeedsYou() string { return In(messageLocale()).AutomationNeedsYou() }
+
+// AutomationNeedsYou says "Needs you"
+// in the language of msgs.
+func (msgs Messages) AutomationNeedsYou() string {
+	return Catalog.Format(msgs.locale, "automationNeedsYou", nil)
+}
+
+// AutomationVerified says " · Verified by the check"
+// in the language the app shows.
+func AutomationVerified() string { return In(messageLocale()).AutomationVerified() }
+
+// AutomationVerified says " · Verified by the check"
+// in the language of msgs.
+func (msgs Messages) AutomationVerified() string {
+	return Catalog.Format(msgs.locale, "automationVerified", nil)
+}
+
+// AutomationUnverified says " · Not verified: no check command"
+// in the language the app shows.
+func AutomationUnverified() string { return In(messageLocale()).AutomationUnverified() }
+
+// AutomationUnverified says " · Not verified: no check command"
+// in the language of msgs.
+func (msgs Messages) AutomationUnverified() string {
+	return Catalog.Format(msgs.locale, "automationUnverified", nil)
+}
+
+// AutomationQuietRun says " · Nothing new, not notified"
+// in the language the app shows.
+func AutomationQuietRun() string { return In(messageLocale()).AutomationQuietRun() }
+
+// AutomationQuietRun says " · Nothing new, not notified"
+// in the language of msgs.
+func (msgs Messages) AutomationQuietRun() string {
+	return Catalog.Format(msgs.locale, "automationQuietRun", nil)
+}
+
+// AutomationNotifyEveryRun says "Notify every run"
+// in the language the app shows.
+func AutomationNotifyEveryRun() string { return In(messageLocale()).AutomationNotifyEveryRun() }
+
+// AutomationNotifyEveryRun says "Notify every run"
+// in the language of msgs.
+func (msgs Messages) AutomationNotifyEveryRun() string {
+	return Catalog.Format(msgs.locale, "automationNotifyEveryRun", nil)
+}
+
+// AutomationNotifyEveryRunHelp says "Otherwise a run that passes with nothing new stays in the history without a notification"
+// in the language the app shows.
+func AutomationNotifyEveryRunHelp() string { return In(messageLocale()).AutomationNotifyEveryRunHelp() }
+
+// AutomationNotifyEveryRunHelp says "Otherwise a run that passes with nothing new stays in the history without a notification"
+// in the language of msgs.
+func (msgs Messages) AutomationNotifyEveryRunHelp() string {
+	return Catalog.Format(msgs.locale, "automationNotifyEveryRunHelp", nil)
+}
+
+// AutomationAccess says "Access"
+// in the language the app shows.
+func AutomationAccess() string { return In(messageLocale()).AutomationAccess() }
+
+// AutomationAccess says "Access"
+// in the language of msgs.
+func (msgs Messages) AutomationAccess() string {
+	return Catalog.Format(msgs.locale, "automationAccess", nil)
+}
+
+// AutomationAccessHelp says "What runs may do without you. Outside actions include git push, opening pull requests, sending messages and network w…"
+// in the language the app shows.
+func AutomationAccessHelp() string { return In(messageLocale()).AutomationAccessHelp() }
+
+// AutomationAccessHelp says "What runs may do without you. Outside actions include git push, opening pull requests, sending messages and network w…"
+// in the language of msgs.
+func (msgs Messages) AutomationAccessHelp() string {
+	return Catalog.Format(msgs.locale, "automationAccessHelp", nil)
+}
+
+// AutomationAccessWindow says "Follow the window's permission"
+// in the language the app shows.
+func AutomationAccessWindow() string { return In(messageLocale()).AutomationAccessWindow() }
+
+// AutomationAccessWindow says "Follow the window's permission"
+// in the language of msgs.
+func (msgs Messages) AutomationAccessWindow() string {
+	return Catalog.Format(msgs.locale, "automationAccessWindow", nil)
+}
+
+// AutomationAccessRead says "Read only"
+// in the language the app shows.
+func AutomationAccessRead() string { return In(messageLocale()).AutomationAccessRead() }
+
+// AutomationAccessRead says "Read only"
+// in the language of msgs.
+func (msgs Messages) AutomationAccessRead() string {
+	return Catalog.Format(msgs.locale, "automationAccessRead", nil)
+}
+
+// AutomationAccessEdit says "Edit; refuse outside actions"
+// in the language the app shows.
+func AutomationAccessEdit() string { return In(messageLocale()).AutomationAccessEdit() }
+
+// AutomationAccessEdit says "Edit; refuse outside actions"
+// in the language of msgs.
+func (msgs Messages) AutomationAccessEdit() string {
+	return Catalog.Format(msgs.locale, "automationAccessEdit", nil)
+}
+
+// AutomationAccessExternal says "Edit; review outside actions"
+// in the language the app shows.
+func AutomationAccessExternal() string { return In(messageLocale()).AutomationAccessExternal() }
+
+// AutomationAccessExternal says "Edit; review outside actions"
+// in the language of msgs.
+func (msgs Messages) AutomationAccessExternal() string {
+	return Catalog.Format(msgs.locale, "automationAccessExternal", nil)
+}
+
+// AutomationAccessFull says "Full access; never ask"
+// in the language the app shows.
+func AutomationAccessFull() string { return In(messageLocale()).AutomationAccessFull() }
+
+// AutomationAccessFull says "Full access; never ask"
+// in the language of msgs.
+func (msgs Messages) AutomationAccessFull() string {
+	return Catalog.Format(msgs.locale, "automationAccessFull", nil)
+}
+
+// AutomationRunsInProject says "Automation runs (%d)"
+// in the language the app shows.
+func AutomationRunsInProject() string { return In(messageLocale()).AutomationRunsInProject() }
+
+// AutomationRunsInProject says "Automation runs (%d)"
+// in the language of msgs.
+func (msgs Messages) AutomationRunsInProject() string {
+	return Catalog.Format(msgs.locale, "automationRunsInProject", nil)
+}
+
+// AutomationRefusedLabel says " · Refused %d actions"
+// in the language the app shows.
+func AutomationRefusedLabel() string { return In(messageLocale()).AutomationRefusedLabel() }
+
+// AutomationRefusedLabel says " · Refused %d actions"
+// in the language of msgs.
+func (msgs Messages) AutomationRefusedLabel() string {
+	return Catalog.Format(msgs.locale, "automationRefusedLabel", nil)
+}
+
+// AutomationReviewWaiting says "Waiting for your review"
+// in the language the app shows.
+func AutomationReviewWaiting() string { return In(messageLocale()).AutomationReviewWaiting() }
+
+// AutomationReviewWaiting says "Waiting for your review"
+// in the language of msgs.
+func (msgs Messages) AutomationReviewWaiting() string {
+	return Catalog.Format(msgs.locale, "automationReviewWaiting", nil)
+}
+
+// AutomationReviewSource says "Review"
+// in the language the app shows.
+func AutomationReviewSource() string { return In(messageLocale()).AutomationReviewSource() }
+
+// AutomationReviewSource says "Review"
+// in the language of msgs.
+func (msgs Messages) AutomationReviewSource() string {
+	return Catalog.Format(msgs.locale, "automationReviewSource", nil)
+}
+
+// AutomationReviewRunsIn says "Runs in %s"
+// in the language the app shows.
+func AutomationReviewRunsIn() string { return In(messageLocale()).AutomationReviewRunsIn() }
+
+// AutomationReviewRunsIn says "Runs in %s"
+// in the language of msgs.
+func (msgs Messages) AutomationReviewRunsIn() string {
+	return Catalog.Format(msgs.locale, "automationReviewRunsIn", nil)
+}
+
+// AutomationReviewInstructions says "Its instructions: %s"
+// in the language the app shows.
+func AutomationReviewInstructions() string { return In(messageLocale()).AutomationReviewInstructions() }
+
+// AutomationReviewInstructions says "Its instructions: %s"
+// in the language of msgs.
+func (msgs Messages) AutomationReviewInstructions() string {
+	return Catalog.Format(msgs.locale, "automationReviewInstructions", nil)
+}
+
+// AutomationReviewDeny says "Deny"
+// in the language the app shows.
+func AutomationReviewDeny() string { return In(messageLocale()).AutomationReviewDeny() }
+
+// AutomationReviewDeny says "Deny"
+// in the language of msgs.
+func (msgs Messages) AutomationReviewDeny() string {
+	return Catalog.Format(msgs.locale, "automationReviewDeny", nil)
+}
+
+// AutomationReviewApproveKind says "Approve all %s for 7 days"
+// in the language the app shows.
+func AutomationReviewApproveKind() string { return In(messageLocale()).AutomationReviewApproveKind() }
+
+// AutomationReviewApproveKind says "Approve all %s for 7 days"
+// in the language of msgs.
+func (msgs Messages) AutomationReviewApproveKind() string {
+	return Catalog.Format(msgs.locale, "automationReviewApproveKind", nil)
+}
+
+// AutomationReviewApproveProject says "Approve all %s in this project for 7 days"
+// in the language the app shows.
+func AutomationReviewApproveProject() string {
+	return In(messageLocale()).AutomationReviewApproveProject()
+}
+
+// AutomationReviewApproveProject says "Approve all %s in this project for 7 days"
+// in the language of msgs.
+func (msgs Messages) AutomationReviewApproveProject() string {
+	return Catalog.Format(msgs.locale, "automationReviewApproveProject", nil)
+}
+
+// AutomationReviewApproveOnce says "Approve once"
+// in the language the app shows.
+func AutomationReviewApproveOnce() string { return In(messageLocale()).AutomationReviewApproveOnce() }
+
+// AutomationReviewApproveOnce says "Approve once"
+// in the language of msgs.
+func (msgs Messages) AutomationReviewApproveOnce() string {
+	return Catalog.Format(msgs.locale, "automationReviewApproveOnce", nil)
+}
+
+// AutomationGrants says "Allowed actions"
+// in the language the app shows.
+func AutomationGrants() string { return In(messageLocale()).AutomationGrants() }
+
+// AutomationGrants says "Allowed actions"
+// in the language of msgs.
+func (msgs Messages) AutomationGrants() string {
+	return Catalog.Format(msgs.locale, "automationGrants", nil)
+}
+
+// AutomationGrantKind says "Allowed %s until %s"
+// in the language the app shows.
+func AutomationGrantKind() string { return In(messageLocale()).AutomationGrantKind() }
+
+// AutomationGrantKind says "Allowed %s until %s"
+// in the language of msgs.
+func (msgs Messages) AutomationGrantKind() string {
+	return Catalog.Format(msgs.locale, "automationGrantKind", nil)
+}
+
+// AutomationGrantProject says "Allowed %s in %s until %s"
+// in the language the app shows.
+func AutomationGrantProject() string { return In(messageLocale()).AutomationGrantProject() }
+
+// AutomationGrantProject says "Allowed %s in %s until %s"
+// in the language of msgs.
+func (msgs Messages) AutomationGrantProject() string {
+	return Catalog.Format(msgs.locale, "automationGrantProject", nil)
+}
+
+// AutomationGrantOnce says "Allowed once until %s: %s"
+// in the language the app shows.
+func AutomationGrantOnce() string { return In(messageLocale()).AutomationGrantOnce() }
+
+// AutomationGrantOnce says "Allowed once until %s: %s"
+// in the language of msgs.
+func (msgs Messages) AutomationGrantOnce() string {
+	return Catalog.Format(msgs.locale, "automationGrantOnce", nil)
+}
+
+// AutomationGrantRevoke says "Revoke"
+// in the language the app shows.
+func AutomationGrantRevoke() string { return In(messageLocale()).AutomationGrantRevoke() }
+
+// AutomationGrantRevoke says "Revoke"
+// in the language of msgs.
+func (msgs Messages) AutomationGrantRevoke() string {
+	return Catalog.Format(msgs.locale, "automationGrantRevoke", nil)
+}
+
+// AutomationReviewNote says "Note to the automation (optional)"
+// in the language the app shows.
+func AutomationReviewNote() string { return In(messageLocale()).AutomationReviewNote() }
+
+// AutomationReviewNote says "Note to the automation (optional)"
+// in the language of msgs.
+func (msgs Messages) AutomationReviewNote() string {
+	return Catalog.Format(msgs.locale, "automationReviewNote", nil)
+}
+
+// AutomationReviewSendFailed says "Could not send the decision: "
+// in the language the app shows.
+func AutomationReviewSendFailed() string { return In(messageLocale()).AutomationReviewSendFailed() }
+
+// AutomationReviewSendFailed says "Could not send the decision: "
+// in the language of msgs.
+func (msgs Messages) AutomationReviewSendFailed() string {
+	return Catalog.Format(msgs.locale, "automationReviewSendFailed", nil)
+}
+
+// AutomationStalled says "Stalled"
+// in the language the app shows.
+func AutomationStalled() string { return In(messageLocale()).AutomationStalled() }
+
+// AutomationStalled says "Stalled"
+// in the language of msgs.
+func (msgs Messages) AutomationStalled() string {
+	return Catalog.Format(msgs.locale, "automationStalled", nil)
+}
+
+// AutomationStalledRuns says "%d runs in a row found nothing new."
+// in the language the app shows.
+func AutomationStalledRuns() string { return In(messageLocale()).AutomationStalledRuns() }
+
+// AutomationStalledRuns says "%d runs in a row found nothing new."
+// in the language of msgs.
+func (msgs Messages) AutomationStalledRuns() string {
+	return Catalog.Format(msgs.locale, "automationStalledRuns", nil)
+}
+
+// AutomationStalledSince says "Stalled since "
+// in the language the app shows.
+func AutomationStalledSince() string { return In(messageLocale()).AutomationStalledSince() }
+
+// AutomationStalledSince says "Stalled since "
+// in the language of msgs.
+func (msgs Messages) AutomationStalledSince() string {
+	return Catalog.Format(msgs.locale, "automationStalledSince", nil)
+}
+
+// AutomationStalledWaits says "Triggered runs wait until you edit it or run it now."
+// in the language the app shows.
+func AutomationStalledWaits() string { return In(messageLocale()).AutomationStalledWaits() }
+
+// AutomationStalledWaits says "Triggered runs wait until you edit it or run it now."
+// in the language of msgs.
+func (msgs Messages) AutomationStalledWaits() string {
+	return Catalog.Format(msgs.locale, "automationStalledWaits", nil)
+}
+
+// TriggerFailuresInARow says "%d in a row"
+// in the language the app shows.
+func TriggerFailuresInARow() string { return In(messageLocale()).TriggerFailuresInARow() }
+
+// TriggerFailuresInARow says "%d in a row"
+// in the language of msgs.
+func (msgs Messages) TriggerFailuresInARow() string {
+	return Catalog.Format(msgs.locale, "triggerFailuresInARow", nil)
+}
+
+// TriggerNeverSucceeded says "Never succeeded"
+// in the language the app shows.
+func TriggerNeverSucceeded() string { return In(messageLocale()).TriggerNeverSucceeded() }
+
+// TriggerNeverSucceeded says "Never succeeded"
+// in the language of msgs.
+func (msgs Messages) TriggerNeverSucceeded() string {
+	return Catalog.Format(msgs.locale, "triggerNeverSucceeded", nil)
+}
+
+// TriggerLastSucceeded says "Last succeeded "
+// in the language the app shows.
+func TriggerLastSucceeded() string { return In(messageLocale()).TriggerLastSucceeded() }
+
+// TriggerLastSucceeded says "Last succeeded "
+// in the language of msgs.
+func (msgs Messages) TriggerLastSucceeded() string {
+	return Catalog.Format(msgs.locale, "triggerLastSucceeded", nil)
+}
+
+// WaitingForYou says "Waiting for you"
+// in the language the app shows.
+func WaitingForYou() string { return In(messageLocale()).WaitingForYou() }
+
+// WaitingForYou says "Waiting for you"
+// in the language of msgs.
+func (msgs Messages) WaitingForYou() string {
+	return Catalog.Format(msgs.locale, "waitingForYou", nil)
+}
+
+// PhoneRegisteredCheckApnsStatus says "Phone registered. Check APNs on the desktop with go run ./scripts/apns status."
+// in the language the app shows.
+func PhoneRegisteredCheckApnsStatus() string {
+	return In(messageLocale()).PhoneRegisteredCheckApnsStatus()
+}
+
+// PhoneRegisteredCheckApnsStatus says "Phone registered. Check APNs on the desktop with go run ./scripts/apns status."
+// in the language of msgs.
+func (msgs Messages) PhoneRegisteredCheckApnsStatus() string {
+	return Catalog.Format(msgs.locale, "phoneRegisteredCheckApnsStatus", nil)
+}
+
+// DelegationTimelineCall says "Delegated task"
+// in the language the app shows.
+func DelegationTimelineCall() string { return In(messageLocale()).DelegationTimelineCall() }
+
+// DelegationTimelineCall says "Delegated task"
+// in the language of msgs.
+func (msgs Messages) DelegationTimelineCall() string {
+	return Catalog.Format(msgs.locale, "delegationTimelineCall", nil)
+}
+
+// DelegationTimelineAgent says "Delegated to %s"
+// in the language the app shows.
+func DelegationTimelineAgent() string { return In(messageLocale()).DelegationTimelineAgent() }
+
+// DelegationTimelineAgent says "Delegated to %s"
+// in the language of msgs.
+func (msgs Messages) DelegationTimelineAgent() string {
+	return Catalog.Format(msgs.locale, "delegationTimelineAgent", nil)
+}
+
+// DelegationTimelineBlocked says "Blocked actions"
+// in the language the app shows.
+func DelegationTimelineBlocked() string { return In(messageLocale()).DelegationTimelineBlocked() }
+
+// DelegationTimelineBlocked says "Blocked actions"
+// in the language of msgs.
+func (msgs Messages) DelegationTimelineBlocked() string {
+	return Catalog.Format(msgs.locale, "delegationTimelineBlocked", nil)
+}
+
+// DelegationTimelineResults says "Delegation results"
+// in the language the app shows.
+func DelegationTimelineResults() string { return In(messageLocale()).DelegationTimelineResults() }
+
+// DelegationTimelineResults says "Delegation results"
+// in the language of msgs.
+func (msgs Messages) DelegationTimelineResults() string {
+	return Catalog.Format(msgs.locale, "delegationTimelineResults", nil)
+}
+
+// DelegationTimelineRead says "Read by the main agent"
+// in the language the app shows.
+func DelegationTimelineRead() string { return In(messageLocale()).DelegationTimelineRead() }
+
+// DelegationTimelineRead says "Read by the main agent"
+// in the language of msgs.
+func (msgs Messages) DelegationTimelineRead() string {
+	return Catalog.Format(msgs.locale, "delegationTimelineRead", nil)
+}
+
+// DelegationTimelineMore says "%d more tasks"
+// in the language the app shows.
+func DelegationTimelineMore() string { return In(messageLocale()).DelegationTimelineMore() }
+
+// DelegationTimelineMore says "%d more tasks"
+// in the language of msgs.
+func (msgs Messages) DelegationTimelineMore() string {
+	return Catalog.Format(msgs.locale, "delegationTimelineMore", nil)
+}
+
+// DelegationTimelineLess says "Show fewer tasks"
+// in the language the app shows.
+func DelegationTimelineLess() string { return In(messageLocale()).DelegationTimelineLess() }
+
+// DelegationTimelineLess says "Show fewer tasks"
+// in the language of msgs.
+func (msgs Messages) DelegationTimelineLess() string {
+	return Catalog.Format(msgs.locale, "delegationTimelineLess", nil)
+}
+
+// DelegationTimelineReveal says "Show delegated call"
+// in the language the app shows.
+func DelegationTimelineReveal() string { return In(messageLocale()).DelegationTimelineReveal() }
+
+// DelegationTimelineReveal says "Show delegated call"
+// in the language of msgs.
+func (msgs Messages) DelegationTimelineReveal() string {
+	return Catalog.Format(msgs.locale, "delegationTimelineReveal", nil)
+}
+
+// DelegationTimelineTasks says "%d tasks"
+// in the language the app shows.
+func DelegationTimelineTasks() string { return In(messageLocale()).DelegationTimelineTasks() }
+
+// DelegationTimelineTasks says "%d tasks"
+// in the language of msgs.
+func (msgs Messages) DelegationTimelineTasks() string {
+	return Catalog.Format(msgs.locale, "delegationTimelineTasks", nil)
+}
+
+// DelegationTimelineResult says "Result"
+// in the language the app shows.
+func DelegationTimelineResult() string { return In(messageLocale()).DelegationTimelineResult() }
+
+// DelegationTimelineResult says "Result"
+// in the language of msgs.
+func (msgs Messages) DelegationTimelineResult() string {
+	return Catalog.Format(msgs.locale, "delegationTimelineResult", nil)
+}
+
+// DelegationTimelineBrief says "Task brief"
+// in the language the app shows.
+func DelegationTimelineBrief() string { return In(messageLocale()).DelegationTimelineBrief() }
+
+// DelegationTimelineBrief says "Task brief"
+// in the language of msgs.
+func (msgs Messages) DelegationTimelineBrief() string {
+	return Catalog.Format(msgs.locale, "delegationTimelineBrief", nil)
+}
+
+// MobileSendWaitingForConnection says "Will send when the desktop reconnects…"
+// in the language the app shows.
+func MobileSendWaitingForConnection() string {
+	return In(messageLocale()).MobileSendWaitingForConnection()
+}
+
+// MobileSendWaitingForConnection says "Will send when the desktop reconnects…"
+// in the language of msgs.
+func (msgs Messages) MobileSendWaitingForConnection() string {
+	return Catalog.Format(msgs.locale, "mobileSendWaitingForConnection", nil)
+}
+
+// ProvidersTitle says "Model providers"
+// in the language the app shows.
+func ProvidersTitle() string { return In(messageLocale()).ProvidersTitle() }
+
+// ProvidersTitle says "Model providers"
+// in the language of msgs.
+func (msgs Messages) ProvidersTitle() string {
+	return Catalog.Format(msgs.locale, "providersTitle", nil)
+}
+
+// ProvidersHelp says "A provider reaches only the agents Miya starts, appended to their launch command; the CLIs' own configuration and sig…"
+// in the language the app shows.
+func ProvidersHelp() string { return In(messageLocale()).ProvidersHelp() }
+
+// ProvidersHelp says "A provider reaches only the agents Miya starts, appended to their launch command; the CLIs' own configuration and sig…"
+// in the language of msgs.
+func (msgs Messages) ProvidersHelp() string {
+	return Catalog.Format(msgs.locale, "providersHelp", nil)
+}
+
+// ProvidersNone says "No providers yet. Add an API key and base URL to use them in Claude Code, Codex or Pi."
+// in the language the app shows.
+func ProvidersNone() string { return In(messageLocale()).ProvidersNone() }
+
+// ProvidersNone says "No providers yet. Add an API key and base URL to use them in Claude Code, Codex or Pi."
+// in the language of msgs.
+func (msgs Messages) ProvidersNone() string {
+	return Catalog.Format(msgs.locale, "providersNone", nil)
+}
+
+// ProviderAdd says "Add provider"
+// in the language the app shows.
+func ProviderAdd() string { return In(messageLocale()).ProviderAdd() }
+
+// ProviderAdd says "Add provider"
+// in the language of msgs.
+func (msgs Messages) ProviderAdd() string {
+	return Catalog.Format(msgs.locale, "providerAdd", nil)
+}
+
+// ProviderEdit says "Edit provider"
+// in the language the app shows.
+func ProviderEdit() string { return In(messageLocale()).ProviderEdit() }
+
+// ProviderEdit says "Edit provider"
+// in the language of msgs.
+func (msgs Messages) ProviderEdit() string {
+	return Catalog.Format(msgs.locale, "providerEdit", nil)
+}
+
+// ProviderApiResponses says "OpenAI Responses"
+// in the language the app shows.
+func ProviderApiResponses() string { return In(messageLocale()).ProviderApiResponses() }
+
+// ProviderApiResponses says "OpenAI Responses"
+// in the language of msgs.
+func (msgs Messages) ProviderApiResponses() string {
+	return Catalog.Format(msgs.locale, "providerApiResponses", nil)
+}
+
+// ProviderApiChat says "OpenAI Chat Completions"
+// in the language the app shows.
+func ProviderApiChat() string { return In(messageLocale()).ProviderApiChat() }
+
+// ProviderApiChat says "OpenAI Chat Completions"
+// in the language of msgs.
+func (msgs Messages) ProviderApiChat() string {
+	return Catalog.Format(msgs.locale, "providerApiChat", nil)
+}
+
+// ProviderApiAnthropic says "Anthropic Messages"
+// in the language the app shows.
+func ProviderApiAnthropic() string { return In(messageLocale()).ProviderApiAnthropic() }
+
+// ProviderApiAnthropic says "Anthropic Messages"
+// in the language of msgs.
+func (msgs Messages) ProviderApiAnthropic() string {
+	return Catalog.Format(msgs.locale, "providerApiAnthropic", nil)
+}
+
+// ProviderBaseURL says "Base URL"
+// in the language the app shows.
+func ProviderBaseURL() string { return In(messageLocale()).ProviderBaseURL() }
+
+// ProviderBaseURL says "Base URL"
+// in the language of msgs.
+func (msgs Messages) ProviderBaseURL() string {
+	return Catalog.Format(msgs.locale, "providerBaseURL", nil)
+}
+
+// ProviderApisHelp says "Turn on each API the provider serves, with its base URL."
+// in the language the app shows.
+func ProviderApisHelp() string { return In(messageLocale()).ProviderApisHelp() }
+
+// ProviderApisHelp says "Turn on each API the provider serves, with its base URL."
+// in the language of msgs.
+func (msgs Messages) ProviderApisHelp() string {
+	return Catalog.Format(msgs.locale, "providerApisHelp", nil)
+}
+
+// ProviderAPIKey says "API key"
+// in the language the app shows.
+func ProviderAPIKey() string { return In(messageLocale()).ProviderAPIKey() }
+
+// ProviderAPIKey says "API key"
+// in the language of msgs.
+func (msgs Messages) ProviderAPIKey() string {
+	return Catalog.Format(msgs.locale, "providerAPIKey", nil)
+}
+
+// ProviderModels says "Models"
+// in the language the app shows.
+func ProviderModels() string { return In(messageLocale()).ProviderModels() }
+
+// ProviderModels says "Models"
+// in the language of msgs.
+func (msgs Messages) ProviderModels() string {
+	return Catalog.Format(msgs.locale, "providerModels", nil)
+}
+
+// ProviderNamePlaceholder says "My provider"
+// in the language the app shows.
+func ProviderNamePlaceholder() string { return In(messageLocale()).ProviderNamePlaceholder() }
+
+// ProviderNamePlaceholder says "My provider"
+// in the language of msgs.
+func (msgs Messages) ProviderNamePlaceholder() string {
+	return Catalog.Format(msgs.locale, "providerNamePlaceholder", nil)
+}
+
+// ProviderKeepKey says "Leave blank to keep ••••%s"
+// in the language the app shows.
+func ProviderKeepKey() string { return In(messageLocale()).ProviderKeepKey() }
+
+// ProviderKeepKey says "Leave blank to keep ••••%s"
+// in the language of msgs.
+func (msgs Messages) ProviderKeepKey() string {
+	return Catalog.Format(msgs.locale, "providerKeepKey", nil)
+}
+
+// ProviderModelsPlaceholder says "One model ID per line; the first is the default"
+// in the language the app shows.
+func ProviderModelsPlaceholder() string { return In(messageLocale()).ProviderModelsPlaceholder() }
+
+// ProviderModelsPlaceholder says "One model ID per line; the first is the default"
+// in the language of msgs.
+func (msgs Messages) ProviderModelsPlaceholder() string {
+	return Catalog.Format(msgs.locale, "providerModelsPlaceholder", nil)
+}
+
+// ProviderFetchModels says "Fetch models"
+// in the language the app shows.
+func ProviderFetchModels() string { return In(messageLocale()).ProviderFetchModels() }
+
+// ProviderFetchModels says "Fetch models"
+// in the language of msgs.
+func (msgs Messages) ProviderFetchModels() string {
+	return Catalog.Format(msgs.locale, "providerFetchModels", nil)
+}
+
+// ProviderFetching says "Fetching…"
+// in the language the app shows.
+func ProviderFetching() string { return In(messageLocale()).ProviderFetching() }
+
+// ProviderFetching says "Fetching…"
+// in the language of msgs.
+func (msgs Messages) ProviderFetching() string {
+	return Catalog.Format(msgs.locale, "providerFetching", nil)
+}
+
+// ProviderNoModelsListed says "The provider answered but listed no models; enter them by hand."
+// in the language the app shows.
+func ProviderNoModelsListed() string { return In(messageLocale()).ProviderNoModelsListed() }
+
+// ProviderNoModelsListed says "The provider answered but listed no models; enter them by hand."
+// in the language of msgs.
+func (msgs Messages) ProviderNoModelsListed() string {
+	return Catalog.Format(msgs.locale, "providerNoModelsListed", nil)
+}
+
+// ProviderModelsFound says "Connected. %d models found; remove the ones you don't use."
+// in the language the app shows.
+func ProviderModelsFound() string { return In(messageLocale()).ProviderModelsFound() }
+
+// ProviderModelsFound says "Connected. %d models found; remove the ones you don't use."
+// in the language of msgs.
+func (msgs Messages) ProviderModelsFound() string {
+	return Catalog.Format(msgs.locale, "providerModelsFound", nil)
+}
+
+// ProviderNeedsModels says "%s uses this provider, which lists no models; add at least one."
+// in the language the app shows.
+func ProviderNeedsModels() string { return In(messageLocale()).ProviderNeedsModels() }
+
+// ProviderNeedsModels says "%s uses this provider, which lists no models; add at least one."
+// in the language of msgs.
+func (msgs Messages) ProviderNeedsModels() string {
+	return Catalog.Format(msgs.locale, "providerNeedsModels", nil)
+}
+
+// ProviderAgentNeedsAPI says "needs %s"
+// in the language the app shows.
+func ProviderAgentNeedsAPI() string { return In(messageLocale()).ProviderAgentNeedsAPI() }
+
+// ProviderAgentNeedsAPI says "needs %s"
+// in the language of msgs.
+func (msgs Messages) ProviderAgentNeedsAPI() string {
+	return Catalog.Format(msgs.locale, "providerAgentNeedsAPI", nil)
+}
+
+// MarkHandled68d012 says "Mark handled"
+// in the language the app shows.
+func MarkHandled68d012() string { return In(messageLocale()).MarkHandled68d012() }
+
+// MarkHandled68d012 says "Mark handled"
+// in the language of msgs.
+func (msgs Messages) MarkHandled68d012() string {
+	return Catalog.Format(msgs.locale, "markHandled_68d012", nil)
+}
+
+// MergedIntoAnotherMemoryEe4466 says "Merged into another memory"
+// in the language the app shows.
+func MergedIntoAnotherMemoryEe4466() string {
+	return In(messageLocale()).MergedIntoAnotherMemoryEe4466()
+}
+
+// MergedIntoAnotherMemoryEe4466 says "Merged into another memory"
+// in the language of msgs.
+func (msgs Messages) MergedIntoAnotherMemoryEe4466() string {
+	return Catalog.Format(msgs.locale, "mergedIntoAnotherMemory_ee4466", nil)
+}
+
+// ConsolidationFailedWaitingToRetryCd709c says "Consolidation failed. Waiting to retry."
+// in the language the app shows.
+func ConsolidationFailedWaitingToRetryCd709c() string {
+	return In(messageLocale()).ConsolidationFailedWaitingToRetryCd709c()
+}
+
+// ConsolidationFailedWaitingToRetryCd709c says "Consolidation failed. Waiting to retry."
+// in the language of msgs.
+func (msgs Messages) ConsolidationFailedWaitingToRetryCd709c() string {
+	return Catalog.Format(msgs.locale, "consolidationFailedWaitingToRetry_cd709c", nil)
+}
+
+// ConsolidationFailedItRunsAgainAfterMemories0f538d says "Consolidation failed. It runs again after memories change."
+// in the language the app shows.
+func ConsolidationFailedItRunsAgainAfterMemories0f538d() string {
+	return In(messageLocale()).ConsolidationFailedItRunsAgainAfterMemories0f538d()
+}
+
+// ConsolidationFailedItRunsAgainAfterMemories0f538d says "Consolidation failed. It runs again after memories change."
+// in the language of msgs.
+func (msgs Messages) ConsolidationFailedItRunsAgainAfterMemories0f538d() string {
+	return Catalog.Format(msgs.locale, "consolidationFailedItRunsAgainAfterMemories_0f538d", nil)
+}
+
+// LatestConsolidationIssueC2cd71 says "\nLatest consolidation issue: "
+// in the language the app shows.
+func LatestConsolidationIssueC2cd71() string {
+	return In(messageLocale()).LatestConsolidationIssueC2cd71()
+}
+
+// LatestConsolidationIssueC2cd71 says "\nLatest consolidation issue: "
+// in the language of msgs.
+func (msgs Messages) LatestConsolidationIssueC2cd71() string {
+	return Catalog.Format(msgs.locale, "latestConsolidationIssue_c2cd71", nil)
+}
+
+// LatestConsolidationSDMergedDMarked725eb1 says "\nLatest consolidation: %s · %d merged · %d marked as conflicts"
+// in the language the app shows.
+func LatestConsolidationSDMergedDMarked725eb1() string {
+	return In(messageLocale()).LatestConsolidationSDMergedDMarked725eb1()
+}
+
+// LatestConsolidationSDMergedDMarked725eb1 says "\nLatest consolidation: %s · %d merged · %d marked as conflicts"
+// in the language of msgs.
+func (msgs Messages) LatestConsolidationSDMergedDMarked725eb1() string {
+	return Catalog.Format(msgs.locale, "latestConsolidationSDMergedDMarked_725eb1", nil)
+}
+
+// PhoneNotificationRules463b95 says "Phone notification rules"
+// in the language the app shows.
+func PhoneNotificationRules463b95() string { return In(messageLocale()).PhoneNotificationRules463b95() }
+
+// PhoneNotificationRules463b95 says "Phone notification rules"
+// in the language of msgs.
+func (msgs Messages) PhoneNotificationRules463b95() string {
+	return Catalog.Format(msgs.locale, "phoneNotificationRules_463b95", nil)
+}
+
+// QuietHours706b24 says "Quiet hours"
+// in the language the app shows.
+func QuietHours706b24() string { return In(messageLocale()).QuietHours706b24() }
+
+// QuietHours706b24 says "Quiet hours"
+// in the language of msgs.
+func (msgs Messages) QuietHours706b24() string {
+	return Catalog.Format(msgs.locale, "quietHours_706b24", nil)
+}
+
+// PhoneNotificationsArriveAsABadgeOnly7e9de0 says "Phone notifications arrive as a badge only, without sound or banner."
+// in the language the app shows.
+func PhoneNotificationsArriveAsABadgeOnly7e9de0() string {
+	return In(messageLocale()).PhoneNotificationsArriveAsABadgeOnly7e9de0()
+}
+
+// PhoneNotificationsArriveAsABadgeOnly7e9de0 says "Phone notifications arrive as a badge only, without sound or banner."
+// in the language of msgs.
+func (msgs Messages) PhoneNotificationsArriveAsABadgeOnly7e9de0() string {
+	return Catalog.Format(msgs.locale, "phoneNotificationsArriveAsABadgeOnly_7e9de0", nil)
+}
+
+// QuietHoursStart86f693 says "Quiet hours start"
+// in the language the app shows.
+func QuietHoursStart86f693() string { return In(messageLocale()).QuietHoursStart86f693() }
+
+// QuietHoursStart86f693 says "Quiet hours start"
+// in the language of msgs.
+func (msgs Messages) QuietHoursStart86f693() string {
+	return Catalog.Format(msgs.locale, "quietHoursStart_86f693", nil)
+}
+
+// QuietHoursEnd0fed7c says "Quiet hours end"
+// in the language the app shows.
+func QuietHoursEnd0fed7c() string { return In(messageLocale()).QuietHoursEnd0fed7c() }
+
+// QuietHoursEnd0fed7c says "Quiet hours end"
+// in the language of msgs.
+func (msgs Messages) QuietHoursEnd0fed7c() string {
+	return Catalog.Format(msgs.locale, "quietHoursEnd_0fed7c", nil)
+}
+
+// ArrivesAsABadgeOnlySinceS28c09a says "Arrives as a badge only since %s, after you cleared it twice without opening it."
+// in the language the app shows.
+func ArrivesAsABadgeOnlySinceS28c09a() string {
+	return In(messageLocale()).ArrivesAsABadgeOnlySinceS28c09a()
+}
+
+// ArrivesAsABadgeOnlySinceS28c09a says "Arrives as a badge only since %s, after you cleared it twice without opening it."
+// in the language of msgs.
+func (msgs Messages) ArrivesAsABadgeOnlySinceS28c09a() string {
+	return Catalog.Format(msgs.locale, "arrivesAsABadgeOnlySinceS_28c09a", nil)
+}
+
+// AlertAgain3f362c says "Alert again"
+// in the language the app shows.
+func AlertAgain3f362c() string { return In(messageLocale()).AlertAgain3f362c() }
+
+// AlertAgain3f362c says "Alert again"
+// in the language of msgs.
+func (msgs Messages) AlertAgain3f362c() string {
+	return Catalog.Format(msgs.locale, "alertAgain_3f362c", nil)
+}
+
+// ApprovalsReviewsFailuresAndResultsThatNeedE7c397 says "Approvals, reviews, failures and results that need you always alert. Clear a kind of notice twice without opening it,…"
+// in the language the app shows.
+func ApprovalsReviewsFailuresAndResultsThatNeedE7c397() string {
+	return In(messageLocale()).ApprovalsReviewsFailuresAndResultsThatNeedE7c397()
+}
+
+// ApprovalsReviewsFailuresAndResultsThatNeedE7c397 says "Approvals, reviews, failures and results that need you always alert. Clear a kind of notice twice without opening it,…"
+// in the language of msgs.
+func (msgs Messages) ApprovalsReviewsFailuresAndResultsThatNeedE7c397() string {
+	return Catalog.Format(msgs.locale, "approvalsReviewsFailuresAndResultsThatNeed_e7c397", nil)
+}
+
+// FinishedConversations3d971f says "Finished conversations"
+// in the language the app shows.
+func FinishedConversations3d971f() string { return In(messageLocale()).FinishedConversations3d971f() }
+
+// FinishedConversations3d971f says "Finished conversations"
+// in the language of msgs.
+func (msgs Messages) FinishedConversations3d971f() string {
+	return Catalog.Format(msgs.locale, "finishedConversations_3d971f", nil)
+}
+
+// FinishedConversationsInS8bf858 says "Finished conversations in %s"
+// in the language the app shows.
+func FinishedConversationsInS8bf858() string {
+	return In(messageLocale()).FinishedConversationsInS8bf858()
+}
+
+// FinishedConversationsInS8bf858 says "Finished conversations in %s"
+// in the language of msgs.
+func (msgs Messages) FinishedConversationsInS8bf858() string {
+	return Catalog.Format(msgs.locale, "finishedConversationsInS_8bf858", nil)
+}
+
+// ResultsOfAutomationS730a21 says "Results of automation %s"
+// in the language the app shows.
+func ResultsOfAutomationS730a21() string { return In(messageLocale()).ResultsOfAutomationS730a21() }
+
+// ResultsOfAutomationS730a21 says "Results of automation %s"
+// in the language of msgs.
+func (msgs Messages) ResultsOfAutomationS730a21() string {
+	return Catalog.Format(msgs.locale, "resultsOfAutomationS_730a21", nil)
+}
+
+// FailingConditionChecksOfSBd8a0f says "Failing condition checks of %s"
+// in the language the app shows.
+func FailingConditionChecksOfSBd8a0f() string {
+	return In(messageLocale()).FailingConditionChecksOfSBd8a0f()
+}
+
+// FailingConditionChecksOfSBd8a0f says "Failing condition checks of %s"
+// in the language of msgs.
+func (msgs Messages) FailingConditionChecksOfSBd8a0f() string {
+	return Catalog.Format(msgs.locale, "failingConditionChecksOfS_bd8a0f", nil)
+}
+
+// WebhooksNoAutomationTookA5e526 says "Webhooks no automation took"
+// in the language the app shows.
+func WebhooksNoAutomationTookA5e526() string {
+	return In(messageLocale()).WebhooksNoAutomationTookA5e526()
+}
+
+// WebhooksNoAutomationTookA5e526 says "Webhooks no automation took"
+// in the language of msgs.
+func (msgs Messages) WebhooksNoAutomationTookA5e526() string {
+	return Catalog.Format(msgs.locale, "webhooksNoAutomationTook_a5e526", nil)
+}
+
+// QuietHoursNeedStartAndEndTimes18e020 says "Quiet hours need start and end times as HH:MM"
+// in the language the app shows.
+func QuietHoursNeedStartAndEndTimes18e020() string {
+	return In(messageLocale()).QuietHoursNeedStartAndEndTimes18e020()
+}
+
+// QuietHoursNeedStartAndEndTimes18e020 says "Quiet hours need start and end times as HH:MM"
+// in the language of msgs.
+func (msgs Messages) QuietHoursNeedStartAndEndTimes18e020() string {
+	return Catalog.Format(msgs.locale, "quietHoursNeedStartAndEndTimes_18e020", nil)
+}
+
+// NoSuchNotificationRule92557b says "No such notification rule"
+// in the language the app shows.
+func NoSuchNotificationRule92557b() string { return In(messageLocale()).NoSuchNotificationRule92557b() }
+
+// NoSuchNotificationRule92557b says "No such notification rule"
+// in the language of msgs.
+func (msgs Messages) NoSuchNotificationRule92557b() string {
+	return Catalog.Format(msgs.locale, "noSuchNotificationRule_92557b", nil)
+}
+
+// NotificationRulesRequireTheMiyaBackgroundService8cfe35 says "Notification rules require the Miya background service"
+// in the language the app shows.
+func NotificationRulesRequireTheMiyaBackgroundService8cfe35() string {
+	return In(messageLocale()).NotificationRulesRequireTheMiyaBackgroundService8cfe35()
+}
+
+// NotificationRulesRequireTheMiyaBackgroundService8cfe35 says "Notification rules require the Miya background service"
+// in the language of msgs.
+func (msgs Messages) NotificationRulesRequireTheMiyaBackgroundService8cfe35() string {
+	return Catalog.Format(msgs.locale, "notificationRulesRequireTheMiyaBackgroundService_8cfe35", nil)
+}
+
+// UnknownNotificationOperationCbd067 says "Unknown notification operation"
+// in the language the app shows.
+func UnknownNotificationOperationCbd067() string {
+	return In(messageLocale()).UnknownNotificationOperationCbd067()
+}
+
+// UnknownNotificationOperationCbd067 says "Unknown notification operation"
+// in the language of msgs.
+func (msgs Messages) UnknownNotificationOperationCbd067() string {
+	return Catalog.Format(msgs.locale, "unknownNotificationOperation_cbd067", nil)
+}
+
+// BotsTitle says "Bots"
+// in the language the app shows.
+func BotsTitle() string { return In(messageLocale()).BotsTitle() }
+
+// BotsTitle says "Bots"
+// in the language of msgs.
+func (msgs Messages) BotsTitle() string {
+	return Catalog.Format(msgs.locale, "botsTitle", nil)
+}
+
+// BotNew says "New Bot"
+// in the language the app shows.
+func BotNew() string { return In(messageLocale()).BotNew() }
+
+// BotNew says "New Bot"
+// in the language of msgs.
+func (msgs Messages) BotNew() string {
+	return Catalog.Format(msgs.locale, "botNew", nil)
+}
+
+// BotEdit says "Edit Bot"
+// in the language the app shows.
+func BotEdit() string { return In(messageLocale()).BotEdit() }
+
+// BotEdit says "Edit Bot"
+// in the language of msgs.
+func (msgs Messages) BotEdit() string {
+	return Catalog.Format(msgs.locale, "botEdit", nil)
+}
+
+// BotDelete says "Delete Bot"
+// in the language the app shows.
+func BotDelete() string { return In(messageLocale()).BotDelete() }
+
+// BotDelete says "Delete Bot"
+// in the language of msgs.
+func (msgs Messages) BotDelete() string {
+	return Catalog.Format(msgs.locale, "botDelete", nil)
+}
+
+// BotActions says "Bot actions"
+// in the language the app shows.
+func BotActions() string { return In(messageLocale()).BotActions() }
+
+// BotActions says "Bot actions"
+// in the language of msgs.
+func (msgs Messages) BotActions() string {
+	return Catalog.Format(msgs.locale, "botActions", nil)
+}
+
+// BotName says "Bot name"
+// in the language the app shows.
+func BotName() string { return In(messageLocale()).BotName() }
+
+// BotName says "Bot name"
+// in the language of msgs.
+func (msgs Messages) BotName() string {
+	return Catalog.Format(msgs.locale, "botName", nil)
+}
+
+// BotRole says "Charter"
+// in the language the app shows.
+func BotRole() string { return In(messageLocale()).BotRole() }
+
+// BotRole says "Charter"
+// in the language of msgs.
+func (msgs Messages) BotRole() string {
+	return Catalog.Format(msgs.locale, "botRole", nil)
+}
+
+// BotRolePlaceholder says "What this Bot is for and how it should work"
+// in the language the app shows.
+func BotRolePlaceholder() string { return In(messageLocale()).BotRolePlaceholder() }
+
+// BotRolePlaceholder says "What this Bot is for and how it should work"
+// in the language of msgs.
+func (msgs Messages) BotRolePlaceholder() string {
+	return Catalog.Format(msgs.locale, "botRolePlaceholder", nil)
+}
+
+// BotDescription says "A Bot is a named assistant in a project. Its charter goes with every message to its conversations."
+// in the language the app shows.
+func BotDescription() string { return In(messageLocale()).BotDescription() }
+
+// BotDescription says "A Bot is a named assistant in a project. Its charter goes with every message to its conversations."
+// in the language of msgs.
+func (msgs Messages) BotDescription() string {
+	return Catalog.Format(msgs.locale, "botDescription", nil)
+}
+
+// BotAddDuty says "Add a duty"
+// in the language the app shows.
+func BotAddDuty() string { return In(messageLocale()).BotAddDuty() }
+
+// BotAddDuty says "Add a duty"
+// in the language of msgs.
+func (msgs Messages) BotAddDuty() string {
+	return Catalog.Format(msgs.locale, "botAddDuty", nil)
+}
+
+// BotProfile says "Bot profile"
+// in the language the app shows.
+func BotProfile() string { return In(messageLocale()).BotProfile() }
+
+// BotProfile says "Bot profile"
+// in the language of msgs.
+func (msgs Messages) BotProfile() string {
+	return Catalog.Format(msgs.locale, "botProfile", nil)
+}
+
+// BotDuties says "Duties"
+// in the language the app shows.
+func BotDuties() string { return In(messageLocale()).BotDuties() }
+
+// BotDuties says "Duties"
+// in the language of msgs.
+func (msgs Messages) BotDuties() string {
+	return Catalog.Format(msgs.locale, "botDuties", nil)
+}
+
+// BotNoDuties says "No duties yet. Give it an automation and it works on its own."
+// in the language the app shows.
+func BotNoDuties() string { return In(messageLocale()).BotNoDuties() }
+
+// BotNoDuties says "No duties yet. Give it an automation and it works on its own."
+// in the language of msgs.
+func (msgs Messages) BotNoDuties() string {
+	return Catalog.Format(msgs.locale, "botNoDuties", nil)
+}
+
+// BotOpenAutomations says "Open Automations"
+// in the language the app shows.
+func BotOpenAutomations() string { return In(messageLocale()).BotOpenAutomations() }
+
+// BotOpenAutomations says "Open Automations"
+// in the language of msgs.
+func (msgs Messages) BotOpenAutomations() string {
+	return Catalog.Format(msgs.locale, "botOpenAutomations", nil)
+}
+
+// BotMemory says "Memory"
+// in the language the app shows.
+func BotMemory() string { return In(messageLocale()).BotMemory() }
+
+// BotMemory says "Memory"
+// in the language of msgs.
+func (msgs Messages) BotMemory() string {
+	return Catalog.Format(msgs.locale, "botMemory", nil)
+}
+
+// BotMemoryCount says "%d of %d"
+// in the language the app shows.
+func BotMemoryCount() string { return In(messageLocale()).BotMemoryCount() }
+
+// BotMemoryCount says "%d of %d"
+// in the language of msgs.
+func (msgs Messages) BotMemoryCount() string {
+	return Catalog.Format(msgs.locale, "botMemoryCount", nil)
+}
+
+// BotNoMemory says "Nothing yet. Tell it what to remember about this work."
+// in the language the app shows.
+func BotNoMemory() string { return In(messageLocale()).BotNoMemory() }
+
+// BotNoMemory says "Nothing yet. Tell it what to remember about this work."
+// in the language of msgs.
+func (msgs Messages) BotNoMemory() string {
+	return Catalog.Format(msgs.locale, "botNoMemory", nil)
+}
+
+// BotForget says "Forget"
+// in the language the app shows.
+func BotForget() string { return In(messageLocale()).BotForget() }
+
+// BotForget says "Forget"
+// in the language of msgs.
+func (msgs Messages) BotForget() string {
+	return Catalog.Format(msgs.locale, "botForget", nil)
+}
+
+// BotReports says "Reports"
+// in the language the app shows.
+func BotReports() string { return In(messageLocale()).BotReports() }
+
+// BotReports says "Reports"
+// in the language of msgs.
+func (msgs Messages) BotReports() string {
+	return Catalog.Format(msgs.locale, "botReports", nil)
+}
+
+// BotReportsAll says "All %d"
+// in the language the app shows.
+func BotReportsAll() string { return In(messageLocale()).BotReportsAll() }
+
+// BotReportsAll says "All %d"
+// in the language of msgs.
+func (msgs Messages) BotReportsAll() string {
+	return Catalog.Format(msgs.locale, "botReportsAll", nil)
+}
+
+// BotReportsFewer says "Fewer"
+// in the language the app shows.
+func BotReportsFewer() string { return In(messageLocale()).BotReportsFewer() }
+
+// BotReportsFewer says "Fewer"
+// in the language of msgs.
+func (msgs Messages) BotReportsFewer() string {
+	return Catalog.Format(msgs.locale, "botReportsFewer", nil)
+}
+
+// BotReportNeedsYou says "Needs you"
+// in the language the app shows.
+func BotReportNeedsYou() string { return In(messageLocale()).BotReportNeedsYou() }
+
+// BotReportNeedsYou says "Needs you"
+// in the language of msgs.
+func (msgs Messages) BotReportNeedsYou() string {
+	return Catalog.Format(msgs.locale, "botReportNeedsYou", nil)
+}
+
+// BotFinishedTask says "Finished a task"
+// in the language the app shows.
+func BotFinishedTask() string { return In(messageLocale()).BotFinishedTask() }
+
+// BotFinishedTask says "Finished a task"
+// in the language of msgs.
+func (msgs Messages) BotFinishedTask() string {
+	return Catalog.Format(msgs.locale, "botFinishedTask", nil)
+}
+
+// BotAlsoWorksIn says "Also works in"
+// in the language the app shows.
+func BotAlsoWorksIn() string { return In(messageLocale()).BotAlsoWorksIn() }
+
+// BotAlsoWorksIn says "Also works in"
+// in the language of msgs.
+func (msgs Messages) BotAlsoWorksIn() string {
+	return Catalog.Format(msgs.locale, "botAlsoWorksIn", nil)
+}
+
+// BotAddProject says "Add a project…"
+// in the language the app shows.
+func BotAddProject() string { return In(messageLocale()).BotAddProject() }
+
+// BotAddProject says "Add a project…"
+// in the language of msgs.
+func (msgs Messages) BotAddProject() string {
+	return Catalog.Format(msgs.locale, "botAddProject", nil)
+}
+
+// BotRemoveProject says "Remove %s"
+// in the language the app shows.
+func BotRemoveProject() string { return In(messageLocale()).BotRemoveProject() }
+
+// BotRemoveProject says "Remove %s"
+// in the language of msgs.
+func (msgs Messages) BotRemoveProject() string {
+	return Catalog.Format(msgs.locale, "botRemoveProject", nil)
+}
+
+// BotProjectCount says "%d projects"
+// in the language the app shows.
+func BotProjectCount() string { return In(messageLocale()).BotProjectCount() }
+
+// BotProjectCount says "%d projects"
+// in the language of msgs.
+func (msgs Messages) BotProjectCount() string {
+	return Catalog.Format(msgs.locale, "botProjectCount", nil)
+}
+
+// BotReviewedBy says "Reviewed by %s"
+// in the language the app shows.
+func BotReviewedBy() string { return In(messageLocale()).BotReviewedBy() }
+
+// BotReviewedBy says "Reviewed by %s"
+// in the language of msgs.
+func (msgs Messages) BotReviewedBy() string {
+	return Catalog.Format(msgs.locale, "botReviewedBy", nil)
+}
+
+// BotReviewer says "Reviewer"
+// in the language the app shows.
+func BotReviewer() string { return In(messageLocale()).BotReviewer() }
+
+// BotReviewer says "Reviewer"
+// in the language of msgs.
+func (msgs Messages) BotReviewer() string {
+	return Catalog.Format(msgs.locale, "botReviewer", nil)
+}
+
+// BotNoReviewer says "No reviewer"
+// in the language the app shows.
+func BotNoReviewer() string { return In(messageLocale()).BotNoReviewer() }
+
+// BotNoReviewer says "No reviewer"
+// in the language of msgs.
+func (msgs Messages) BotNoReviewer() string {
+	return Catalog.Format(msgs.locale, "botNoReviewer", nil)
+}
+
+// BotReviewerHint says "After a turn that changes files, the reviewer checks the changes read only and the Bot fixes what it finds, up to 3 r…"
+// in the language the app shows.
+func BotReviewerHint() string { return In(messageLocale()).BotReviewerHint() }
+
+// BotReviewerHint says "After a turn that changes files, the reviewer checks the changes read only and the Bot fixes what it finds, up to 3 r…"
+// in the language of msgs.
+func (msgs Messages) BotReviewerHint() string {
+	return Catalog.Format(msgs.locale, "botReviewerHint", nil)
+}
+
+// BotReviewFailed says "Automatic review not started: "
+// in the language the app shows.
+func BotReviewFailed() string { return In(messageLocale()).BotReviewFailed() }
+
+// BotReviewFailed says "Automatic review not started: "
+// in the language of msgs.
+func (msgs Messages) BotReviewFailed() string {
+	return Catalog.Format(msgs.locale, "botReviewFailed", nil)
+}
+
+// AutoNotify says "Notify"
+// in the language the app shows.
+func AutoNotify() string { return In(messageLocale()).AutoNotify() }
+
+// AutoNotify says "Notify"
+// in the language of msgs.
+func (msgs Messages) AutoNotify() string {
+	return Catalog.Format(msgs.locale, "autoNotify", nil)
+}
+
+// AutoNotifyEvery says "Every run"
+// in the language the app shows.
+func AutoNotifyEvery() string { return In(messageLocale()).AutoNotifyEvery() }
+
+// AutoNotifyEvery says "Every run"
+// in the language of msgs.
+func (msgs Messages) AutoNotifyEvery() string {
+	return Catalog.Format(msgs.locale, "autoNotifyEvery", nil)
+}
+
+// AutoNotifyAttention says "When it needs you"
+// in the language the app shows.
+func AutoNotifyAttention() string { return In(messageLocale()).AutoNotifyAttention() }
+
+// AutoNotifyAttention says "When it needs you"
+// in the language of msgs.
+func (msgs Messages) AutoNotifyAttention() string {
+	return Catalog.Format(msgs.locale, "autoNotifyAttention", nil)
+}
+
+// AutoNotifyNever says "Never"
+// in the language the app shows.
+func AutoNotifyNever() string { return In(messageLocale()).AutoNotifyNever() }
+
+// AutoNotifyNever says "Never"
+// in the language of msgs.
+func (msgs Messages) AutoNotifyNever() string {
+	return Catalog.Format(msgs.locale, "autoNotifyNever", nil)
+}
+
+// AutoNotifyHint says "A run that passes with nothing new stays in the history quietly. With Never no run notifies; one that fails or needs …"
+// in the language the app shows.
+func AutoNotifyHint() string { return In(messageLocale()).AutoNotifyHint() }
+
+// AutoNotifyHint says "A run that passes with nothing new stays in the history quietly. With Never no run notifies; one that fails or needs …"
+// in the language of msgs.
+func (msgs Messages) AutoNotifyHint() string {
+	return Catalog.Format(msgs.locale, "autoNotifyHint", nil)
+}
+
+// AutoBot says "Bot"
+// in the language the app shows.
+func AutoBot() string { return In(messageLocale()).AutoBot() }
+
+// AutoBot says "Bot"
+// in the language of msgs.
+func (msgs Messages) AutoBot() string {
+	return Catalog.Format(msgs.locale, "autoBot", nil)
+}
+
+// AutoNoBot says "No Bot"
+// in the language the app shows.
+func AutoNoBot() string { return In(messageLocale()).AutoNoBot() }
+
+// AutoNoBot says "No Bot"
+// in the language of msgs.
+func (msgs Messages) AutoNoBot() string {
+	return Catalog.Format(msgs.locale, "autoNoBot", nil)
+}
+
+// AutoBotHint says "Each run is a new conversation of the Bot, under its charter, with its agent"
+// in the language the app shows.
+func AutoBotHint() string { return In(messageLocale()).AutoBotHint() }
+
+// AutoBotHint says "Each run is a new conversation of the Bot, under its charter, with its agent"
+// in the language of msgs.
+func (msgs Messages) AutoBotHint() string {
+	return Catalog.Format(msgs.locale, "autoBotHint", nil)
+}
+
+// BotSearch says "Search Bots"
+// in the language the app shows.
+func BotSearch() string { return In(messageLocale()).BotSearch() }
+
+// BotSearch says "Search Bots"
+// in the language of msgs.
+func (msgs Messages) BotSearch() string {
+	return Catalog.Format(msgs.locale, "botSearch", nil)
+}
+
+// BotFirstMessage says "Your first message starts a conversation with this Bot."
+// in the language the app shows.
+func BotFirstMessage() string { return In(messageLocale()).BotFirstMessage() }
+
+// BotFirstMessage says "Your first message starts a conversation with this Bot."
+// in the language of msgs.
+func (msgs Messages) BotFirstMessage() string {
+	return Catalog.Format(msgs.locale, "botFirstMessage", nil)
+}
+
+// BotsEmpty says "Pick a Bot to chat with, or create one."
+// in the language the app shows.
+func BotsEmpty() string { return In(messageLocale()).BotsEmpty() }
+
+// BotsEmpty says "Pick a Bot to chat with, or create one."
+// in the language of msgs.
+func (msgs Messages) BotsEmpty() string {
+	return Catalog.Format(msgs.locale, "botsEmpty", nil)
+}
+
+// BotNewConversation says "Start a new conversation"
+// in the language the app shows.
+func BotNewConversation() string { return In(messageLocale()).BotNewConversation() }
+
+// BotNewConversation says "Start a new conversation"
+// in the language of msgs.
+func (msgs Messages) BotNewConversation() string {
+	return Catalog.Format(msgs.locale, "botNewConversation", nil)
+}
+
+// BotChangeStartsNewConversation says "Changing the agent or project starts a new conversation."
+// in the language the app shows.
+func BotChangeStartsNewConversation() string {
+	return In(messageLocale()).BotChangeStartsNewConversation()
+}
+
+// BotChangeStartsNewConversation says "Changing the agent or project starts a new conversation."
+// in the language of msgs.
+func (msgs Messages) BotChangeStartsNewConversation() string {
+	return Catalog.Format(msgs.locale, "botChangeStartsNewConversation", nil)
+}
+
+// BotNameRequired says "Give the Bot a name"
+// in the language the app shows.
+func BotNameRequired() string { return In(messageLocale()).BotNameRequired() }
+
+// BotNameRequired says "Give the Bot a name"
+// in the language of msgs.
+func (msgs Messages) BotNameRequired() string {
+	return Catalog.Format(msgs.locale, "botNameRequired", nil)
+}
+
+// BotAgentRequired says "Choose an agent for the Bot"
+// in the language the app shows.
+func BotAgentRequired() string { return In(messageLocale()).BotAgentRequired() }
+
+// BotAgentRequired says "Choose an agent for the Bot"
+// in the language of msgs.
+func (msgs Messages) BotAgentRequired() string {
+	return Catalog.Format(msgs.locale, "botAgentRequired", nil)
+}
+
+// BotProjectUnknown says "Add the project to Miya before giving it a Bot"
+// in the language the app shows.
+func BotProjectUnknown() string { return In(messageLocale()).BotProjectUnknown() }
+
+// BotProjectUnknown says "Add the project to Miya before giving it a Bot"
+// in the language of msgs.
+func (msgs Messages) BotProjectUnknown() string {
+	return Catalog.Format(msgs.locale, "botProjectUnknown", nil)
+}
+
+// BotGone says "This Bot no longer exists"
+// in the language the app shows.
+func BotGone() string { return In(messageLocale()).BotGone() }
+
+// BotGone says "This Bot no longer exists"
+// in the language of msgs.
+func (msgs Messages) BotGone() string {
+	return Catalog.Format(msgs.locale, "botGone", nil)
+}
+
+// BotConversationNotLoaded says "This Bot's conversation is not loaded yet. Try again in a moment, or start a new conversation from the Bot's menu"
+// in the language the app shows.
+func BotConversationNotLoaded() string { return In(messageLocale()).BotConversationNotLoaded() }
+
+// BotConversationNotLoaded says "This Bot's conversation is not loaded yet. Try again in a moment, or start a new conversation from the Bot's menu"
+// in the language of msgs.
+func (msgs Messages) BotConversationNotLoaded() string {
+	return Catalog.Format(msgs.locale, "botConversationNotLoaded", nil)
+}
+
+// BotMessagePlaceholder says "Message %s… / Commands · @ Files"
+// in the language the app shows.
+func BotMessagePlaceholder() string { return In(messageLocale()).BotMessagePlaceholder() }
+
+// BotMessagePlaceholder says "Message %s… / Commands · @ Files"
+// in the language of msgs.
+func (msgs Messages) BotMessagePlaceholder() string {
+	return Catalog.Format(msgs.locale, "botMessagePlaceholder", nil)
+}
+
+// Blocked says "Blocked"
+// in the language the app shows.
+func Blocked() string { return In(messageLocale()).Blocked() }
+
+// Blocked says "Blocked"
+// in the language of msgs.
+func (msgs Messages) Blocked() string {
+	return Catalog.Format(msgs.locale, "blocked", nil)
+}
+
+// Details says "Details"
+// in the language the app shows.
+func Details() string { return In(messageLocale()).Details() }
+
+// Details says "Details"
+// in the language of msgs.
+func (msgs Messages) Details() string {
+	return Catalog.Format(msgs.locale, "details", nil)
+}
+
+// RetainedTaskExpired says "The retained task result has expired."
+// in the language the app shows.
+func RetainedTaskExpired() string { return In(messageLocale()).RetainedTaskExpired() }
+
+// RetainedTaskExpired says "The retained task result has expired."
+// in the language of msgs.
+func (msgs Messages) RetainedTaskExpired() string {
+	return Catalog.Format(msgs.locale, "retainedTaskExpired", nil)
+}
+
+// FaceID says "Face ID"
+// in the language the app shows.
+func FaceID() string { return In(messageLocale()).FaceID() }
+
+// FaceID says "Face ID"
+// in the language of msgs.
+func (msgs Messages) FaceID() string {
+	return Catalog.Format(msgs.locale, "faceID", nil)
+}
+
+// TouchID says "Touch ID"
+// in the language the app shows.
+func TouchID() string { return In(messageLocale()).TouchID() }
+
+// TouchID says "Touch ID"
+// in the language of msgs.
+func (msgs Messages) TouchID() string {
+	return Catalog.Format(msgs.locale, "touchID", nil)
+}
+
+// ConversationNotLoaded says "This conversation is not loaded yet."
+// in the language the app shows.
+func ConversationNotLoaded() string { return In(messageLocale()).ConversationNotLoaded() }
+
+// ConversationNotLoaded says "This conversation is not loaded yet."
+// in the language of msgs.
+func (msgs Messages) ConversationNotLoaded() string {
+	return Catalog.Format(msgs.locale, "conversationNotLoaded", nil)
+}
+
+// NoBotsYet says "No Bots yet"
+// in the language the app shows.
+func NoBotsYet() string { return In(messageLocale()).NoBotsYet() }
+
+// NoBotsYet says "No Bots yet"
+// in the language of msgs.
+func (msgs Messages) NoBotsYet() string {
+	return Catalog.Format(msgs.locale, "noBotsYet", nil)
+}
+
+// None says "None"
+// in the language the app shows.
+func None() string { return In(messageLocale()).None() }
+
+// None says "None"
+// in the language of msgs.
+func (msgs Messages) None() string {
+	return Catalog.Format(msgs.locale, "none", nil)
+}
+
+// AgentEffort says "Effort"
+// in the language the app shows.
+func AgentEffort() string { return In(messageLocale()).AgentEffort() }
+
+// AgentEffort says "Effort"
+// in the language of msgs.
+func (msgs Messages) AgentEffort() string {
+	return Catalog.Format(msgs.locale, "agentEffort", nil)
+}
+
+// OtherProjects says "Other projects"
+// in the language the app shows.
+func OtherProjects() string { return In(messageLocale()).OtherProjects() }
+
+// OtherProjects says "Other projects"
+// in the language of msgs.
+func (msgs Messages) OtherProjects() string {
+	return Catalog.Format(msgs.locale, "otherProjects", nil)
+}
+
+// ProviderEndpoint says "%s endpoint"
+// in the language the app shows.
+func ProviderEndpoint() string { return In(messageLocale()).ProviderEndpoint() }
+
+// ProviderEndpoint says "%s endpoint"
+// in the language of msgs.
+func (msgs Messages) ProviderEndpoint() string {
+	return Catalog.Format(msgs.locale, "providerEndpoint", nil)
+}
+
+// RemoteControl says "Remote control"
+// in the language the app shows.
+func RemoteControl() string { return In(messageLocale()).RemoteControl() }
+
+// RemoteControl says "Remote control"
+// in the language of msgs.
+func (msgs Messages) RemoteControl() string {
+	return Catalog.Format(msgs.locale, "remoteControl", nil)
+}
+
+// PermissionAllowed says "Allowed"
+// in the language the app shows.
+func PermissionAllowed() string { return In(messageLocale()).PermissionAllowed() }
+
+// PermissionAllowed says "Allowed"
+// in the language of msgs.
+func (msgs Messages) PermissionAllowed() string {
+	return Catalog.Format(msgs.locale, "permissionAllowed", nil)
+}
+
+// PermissionRequired says "Permission required"
+// in the language the app shows.
+func PermissionRequired() string { return In(messageLocale()).PermissionRequired() }
+
+// PermissionRequired says "Permission required"
+// in the language of msgs.
+func (msgs Messages) PermissionRequired() string {
+	return Catalog.Format(msgs.locale, "permissionRequired", nil)
 }

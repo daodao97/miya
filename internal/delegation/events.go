@@ -3,6 +3,8 @@ package delegation
 import (
 	"fmt"
 	"strings"
+
+	"miya/internal/chat/model"
 )
 
 func (m *Manager) Observe(e Event) error {
@@ -212,7 +214,7 @@ func (m *Manager) abandon(s *Snapshot, caller, id, reason string) error {
 		}
 	}
 	for key, d := range s.Deliveries {
-		if d.State != NotifyPending {
+		if d.State != NotifyPending || d.IsFollowUp() {
 			continue
 		}
 		var tasks []string
@@ -279,12 +281,21 @@ func (m *Manager) Recover() error {
 }
 
 func (m *Manager) NotificationText(d Delivery) string {
+	if d.IsFollowUp() {
+		return "[Miya follow-up] The reminder you scheduled for this conversation is due. Continue the user's original task within the existing scope.\n\n" + d.FollowUpNote
+	}
 	s := m.view.Load()
 	var b strings.Builder
-	b.WriteString("[Miya collaboration] These delegated tasks finished. Read each fixed result with read_task, assess the findings, and continue the user's original task. Report issues, apply authorized fixes, and verify the outcome as needed; do not stop at acknowledging completion. Execution state alone does not establish correctness.\n")
+	b.WriteString(model.DelegationNoticeHeading + " Read each fixed result with read_task, assess the findings, and continue the user's original task. Report issues, apply authorized fixes, and verify the outcome as needed; do not stop at acknowledging completion. Execution state alone does not establish correctness.\n")
 	for _, id := range d.TaskIDs {
 		t := s.Tasks[id]
 		fmt.Fprintf(&b, "- %s: %s (task_id: %s, session: %s)\n", t.Title, t.State, id, t.Target)
+		if len(t.Refused) > 0 {
+			b.WriteString("  Miya refused these actions, which the task's access level does not allow; if the user's task needs them, do them here, where the user approves them:\n")
+			for _, r := range t.Refused {
+				fmt.Fprintf(&b, "  - %s\n", r)
+			}
+		}
 	}
 	return b.String()
 }

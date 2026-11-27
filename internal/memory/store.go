@@ -31,6 +31,7 @@ type document struct {
 	Injections       []Injection              `json:"injections,omitempty"`
 	Jobs             []ExtractionJob          `json:"jobs,omitempty"`
 	DisabledSessions map[string]bool          `json:"disabledSessions,omitempty"`
+	Consolidation    consolidation            `json:"consolidation,omitzero"`
 }
 type cached struct {
 	doc document
@@ -53,6 +54,9 @@ func New(root string) *Store {
 func (s *Store) path(scope Scope) string {
 	if scope.Kind == "user" {
 		return filepath.Join(s.root, "user.json")
+	}
+	if scope.Kind == "bot" {
+		return filepath.Join(s.root, "bots", scope.ProjectKey+"-"+scope.Bot+".json")
 	}
 	return filepath.Join(s.root, "projects", scope.ProjectKey+".json")
 }
@@ -109,9 +113,12 @@ func validateDocument(d document) error {
 		}
 		seen[e.ID] = e.Version
 		switch e.State {
-		case EntryActive, EntrySuperseded, EntryForgotten, EntryPromoted, EntryConflicted:
+		case EntryActive, EntrySuperseded, EntryForgotten, EntryPromoted, EntryConflicted, EntryMerged:
 		default:
 			return errors.New("Unknown memory status")
+		}
+		if (e.State == EntryMerged) != (e.MergedInto != "") {
+			return errors.New("Only a merged memory names the memory it was merged into")
 		}
 		if e.State != EntryForgotten {
 			if err := validate(Mutation{ID: e.ID, Version: e.Version, Kind: e.Kind, Content: e.Content, TaskKey: e.TaskKey, Sources: e.Sources, ObservedAt: e.ObservedAt, ValidUntil: e.ValidUntil}, d.Scope); err != nil {
@@ -167,7 +174,7 @@ func atomicWrite(path string, b []byte) error {
 	if err := os.Chmod(dir, 0o700); err != nil {
 		return err
 	}
-	if filepath.Base(dir) == "projects" {
+	if base := filepath.Base(dir); base == "projects" || base == "bots" {
 		if err := os.Chmod(filepath.Dir(dir), 0o700); err != nil {
 			return err
 		}
@@ -249,6 +256,21 @@ func (s *Store) List(scope Scope) ([]Entry, Settings, uint64, error) {
 	sort.SliceStable(out, func(i, j int) bool { return out[i].UpdatedAt.After(out[j].UpdatedAt) })
 	return out, d.Settings, d.Revision, nil
 }
+
+// AutomaticExtractor returns the provider the user enabled for background
+// transcript processing, if the project and session still allow it.
+func (s *Store) AutomaticExtractor(scope Scope, session string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	d, err := s.load(scope)
+	if err != nil {
+		return "", err
+	}
+	if d.Settings.Disabled || !d.Settings.AutoExtract || d.DisabledSessions[session] {
+		return "", nil
+	}
+	return d.Settings.ExtractionAgent(), nil
+}
 func (s *Store) Configure(scope Scope, settings Settings) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -283,6 +305,17 @@ func (s *Store) save(scope Scope, m Mutation) (Entry, error) {
 		return Entry{}, err
 	}
 	now := s.now()
+	if scope.Kind == "bot" && m.ID == "" {
+		active := 0
+		for _, e := range latest(d) {
+			if effective(e, now).State == EntryActive {
+				active++
+			}
+		}
+		if active >= MaxBotEntries {
+			return Entry{}, fmt.Errorf("A Bot keeps at most %d memories. Correct or forget one of them first, or fold several into one", MaxBotEntries)
+		}
+	}
 	e := Entry{ID: m.ID, Version: 1, Scope: scope, Kind: m.Kind, Content: m.Content, TaskKey: m.TaskKey, Sources: m.Sources, ObservedAt: m.ObservedAt, ValidUntil: m.ValidUntil, State: EntryActive, CreatedAt: now, UpdatedAt: now}
 	if m.ID != "" {
 		i, err := target(d, m.ID, m.Version)
@@ -355,6 +388,15 @@ func (s *Store) forgetIn(d *document, scope Scope, i int) Entry {
 	d.Entries = append(keep, e)
 	d.Tombstones = append(d.Tombstones, mark)
 	scrubForgottenJobs(d, id, mark.Sources, s.now())
+	// Entries merged into this one hold the same fact; forgetting it must not
+	// leave their bodies behind.
+	for _, other := range latest(*d) {
+		if other.State == EntryMerged && other.MergedInto == id {
+			if j, ok := find(*d, other.ID); ok {
+				s.forgetIn(d, scope, j)
+			}
+		}
+	}
 	return e
 }
 

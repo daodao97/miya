@@ -20,11 +20,11 @@ func TestMobileDiskCacheSurvivesRelaunch(t *testing.T) {
 	m.DataDir = data
 	m.OpenDiskCache("miya://connect?a")
 	m.Host = "mac"
-	m.State = phoneproto.State{Projects: []model.ProjectSnapshot{{Name: "Miya", Path: "/m", Current: true, Threads: []model.Thread{{ID: 3, Title: "cached", ServerID: "s3"}}}}}
+	m.State = phoneproto.State{Projects: []model.ProjectSnapshot{{Name: "Miya", Path: "/m", Current: true, Threads: []model.Thread{{ID: 3, Title: "cached", ServerID: "private-session-3-canary"}}}}}
 	m.State.Approvals = append(m.State.Approvals, m.State.Approvals...)
 	m.PersistState()
 	msgs := longThread(30).Messages
-	m.Remember("s3", msgs)
+	m.Remember("private-session-3-canary", msgs)
 	m.FlushCache(true)
 
 	// A relaunched app, before the desktop answers.
@@ -34,10 +34,10 @@ func TestMobileDiskCacheSurvivesRelaunch(t *testing.T) {
 	if n.Host != "mac" || len(n.State.Projects) != 1 || n.State.Projects[0].Threads[0].Title != "cached" {
 		t.Fatalf("the list should come back from disk: host %q, %+v", n.Host, n.State.Projects)
 	}
-	if got := n.CachedMessages("s3"); !sameMessages(got, msgs) {
+	if got := n.CachedMessages("private-session-3-canary"); !sameMessages(got, msgs) {
 		t.Fatalf("the messages should come back from disk: %d", len(got))
 	}
-	if req := n.SubscribeRequestFor("s3", 3); len(req.Have) != 30 {
+	if req := n.SubscribeRequestFor("private-session-3-canary", 3); len(req.Have) != 30 {
 		t.Errorf("subscribing should say what the phone holds: %d", len(req.Have))
 	}
 
@@ -45,13 +45,13 @@ func TestMobileDiskCacheSurvivesRelaunch(t *testing.T) {
 	o := mobile.New()
 	o.DataDir = data
 	o.OpenDiskCache("miya://connect?b")
-	if len(o.State.Projects) != 0 || len(o.CachedMessages("s3")) != 0 {
+	if len(o.State.Projects) != 0 || len(o.CachedMessages("private-session-3-canary")) != 0 {
 		t.Error("another desktop's cache should be separate")
 	}
 
 	// Nothing names the conversation in clear.
 	filepath.Walk(data, func(path string, _ os.FileInfo, _ error) error {
-		if strings.Contains(path, "s3") {
+		if strings.Contains(filepath.Base(path), "private-session-3-canary") {
 			t.Errorf("file names should not show conversation IDs: %s", path)
 		}
 		return nil

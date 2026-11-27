@@ -29,23 +29,28 @@ func Commands() []Command        { return commands }
 func IsCommand(name string) bool { return commandNames[name] }
 
 type Args struct {
-	RequestID      string   `json:"request_id,omitempty"`
-	TaskID         string   `json:"task_id,omitempty"`
-	Thread         string   `json:"thread_id,omitempty"`
-	PreviousTaskID string   `json:"previous_task_id,omitempty"`
-	Agent          string   `json:"agent,omitempty"`
-	Title          string   `json:"title,omitempty"`
-	Task           string   `json:"task,omitempty"`
-	Context        string   `json:"context,omitempty"`
-	Notify         string   `json:"notify,omitempty"`
-	Model          string   `json:"model,omitempty"`
-	Effort         string   `json:"effort,omitempty"`
-	WaitSeconds    *int     `json:"wait_seconds,omitempty"`
-	Action         string   `json:"action,omitempty"`
-	Reason         string   `json:"reason,omitempty"`
-	Limit          int      `json:"limit,omitempty"`
-	Cursor         string   `json:"cursor,omitempty"`
-	State          dg.State `json:"state,omitempty"`
+	RequestID      string `json:"request_id,omitempty"`
+	TaskID         string `json:"task_id,omitempty"`
+	Thread         string `json:"thread_id,omitempty"`
+	PreviousTaskID string `json:"previous_task_id,omitempty"`
+	Agent          string `json:"agent,omitempty"`
+	// Bot names a Bot for start_task: the task goes to the Bot's standing
+	// conversation (docs/personal-agent.md, P4).
+	Bot     string `json:"bot,omitempty"`
+	Title   string `json:"title,omitempty"`
+	Task    string `json:"task,omitempty"`
+	Context string `json:"context,omitempty"`
+	Notify  string `json:"notify,omitempty"`
+	Model   string `json:"model,omitempty"`
+	Effort  string `json:"effort,omitempty"`
+	// Access is read or edit for a new conversation (docs/delegation-access.md).
+	Access      string   `json:"access,omitempty"`
+	WaitSeconds *int     `json:"wait_seconds,omitempty"`
+	Action      string   `json:"action,omitempty"`
+	Reason      string   `json:"reason,omitempty"`
+	Limit       int      `json:"limit,omitempty"`
+	Cursor      string   `json:"cursor,omitempty"`
+	State       dg.State `json:"state,omitempty"`
 }
 
 var commandNames = map[string]bool{"list_agents": true, "start_task": true, "read_task": true, "wait_task": true, "send_thread": true, "cancel_task": true, "resolve_task": true, "watch_task": true, "unwatch_task": true, "list_tasks": true}
@@ -63,14 +68,16 @@ func init() {
 		readonly := false
 		switch name {
 		case "list_agents":
-			description = "List available agents and their native model and thinking choices."
+			description = "List available agents and their native model and thinking choices, and the Bots of this project: named assistants, each with its own role, agent and access."
 			readonly = true
 		case "start_task", "send_thread":
 			description = "Submit one independent task and return immediately. By default, completion resumes this conversation so you can read the fixed result and continue the user's work. While actively waiting, use wait_task repeatedly and inspect progress; a timeout does not finish your responsibility. Use notify=none only for explicitly record-only work."
 			props = map[string]any{"request_id": request, "task": str("Self-contained instructions for the target agent."), "title": str("Short display name."), "context": map[string]any{"type": "string", "enum": []string{"none", "caller_summary"}}, "notify": map[string]any{"type": "string", "enum": []string{"none", "on_finish"}, "default": "on_finish"}, "model": str("An exact model choice from list_agents."), "effort": str("An exact thinking choice from list_agents.")}
 			required = []string{"request_id", "task"}
 			if name == "start_task" {
+				props["access"] = map[string]any{"type": "string", "enum": []string{"read", "edit"}, "description": "What the new conversation may do, answered by Miya so it never waits on an approval: read (read only) or edit (change files in the workspace and run local commands, no network). Actions outside the workspace, such as git push or posting, are refused and listed in the result for you to do here. edit needs this conversation to allow edits itself. Omit to use the window's permission choice."}
 				props["agent"] = str("Agent ID from list_agents; defaults to this conversation's agent.")
+				props["bot"] = str("Name of a Bot from list_agents. The task starts a new conversation of the Bot, which works under the Bot's charter, so a Bot takes tasks while it works on others. A Bot has its own agent, model, thinking choice and access: omit agent, model and effort; access can only narrow it to read.")
 			} else {
 				props["thread_id"] = str("Full miya:// link of an idle writable target. Busy or quota-limited targets reject instead of queueing.")
 				props["previous_task_id"] = taskID

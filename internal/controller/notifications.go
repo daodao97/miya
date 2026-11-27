@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"log"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -23,6 +24,7 @@ func (c *Controller) InstallNotifications() {
 			previous[t.ID] = t
 		}
 		set(next)
+		c.updateForegroundPressure(next)
 		for _, t := range next {
 			if old, ok := previous[t.ID]; ok {
 				c.RecordDesktopCompletion(old, t)
@@ -37,6 +39,30 @@ func (c *Controller) InstallNotifications() {
 	}
 }
 
+func (c *Controller) updateForegroundPressure(current []model.Thread) {
+	if c.Pressure == nil {
+		return
+	}
+	running := func(threads []model.Thread) bool {
+		for _, t := range threads {
+			if t.Busy && t.Automation == "" && c.DelegationParent[t.ID] == 0 {
+				return true
+			}
+		}
+		return false
+	}
+	foreground := running(current)
+	for path, threads := range c.ProjectCache {
+		if foreground {
+			break
+		}
+		if path != c.Cwd {
+			foreground = running(threads)
+		}
+	}
+	c.Pressure.SetForeground(foreground)
+}
+
 func (c *Controller) installApprovalNotifications() {
 	set := c.SetApprovals
 	c.SetApprovals = func(next []codex.Approval) {
@@ -47,6 +73,10 @@ func (c *Controller) installApprovalNotifications() {
 		set(next)
 		for _, a := range next {
 			if previous[string(a.ID)] {
+				continue
+			}
+			// A review sent its own notice when it was made.
+			if _, review := reviewOfApproval(a); review {
 				continue
 			}
 			// Claude Code's approvals and background projects' too.
@@ -64,12 +94,24 @@ func (c *Controller) deliverNotice(n notification.Notice, kind string) {
 	if prefs.Load("notifications-"+kind) == "off" {
 		return
 	}
-	if c.Push != nil {
-		if id, err := strconv.Atoi(n.Thread); err == nil {
-			if target := c.phoneThread(id); target.Found {
-				n.ServerID, n.Agent, n.Project = target.Thread.ServerID, model.ThreadAgent(target.Thread), target.cwd
-			}
+	if kind == "waiting" {
+		n.Urgent = true
+	}
+	if id, err := strconv.Atoi(n.Thread); err == nil {
+		if target := c.phoneThread(id); target.Found {
+			n.ServerID, n.Agent, n.Project = target.Thread.ServerID, model.ThreadAgent(target.Thread), target.cwd
 		}
+	}
+	// A conversation's completions learn per project; automations name their
+	// own categories.
+	if kind == "completion" && n.Category == "" && n.Thread != "" {
+		n.Category = "completion:" + n.Project
+		if n.Project != "" {
+			n.Topic = filepath.Base(filepath.Clean(n.Project))
+		}
+	}
+	n.InProject(n.Project)
+	if c.Push != nil {
 		c.Push.Publish(n)
 		return
 	}

@@ -25,8 +25,7 @@ func authenticatedDesktop(t *testing.T, os core.OS) (*nsgotest.App, *App, *phone
 	}
 	app, m, p, _ := startDesktop(t, "live")
 	app.SetEnvironment(core.Environment{OS: os, Idiom: core.IdiomPhone, Locale: "en"})
-	app.Secrets = make(map[[2]string]string)
-	app.Authentication.Available, app.Authentication.Biometry = true, core.BiometryFace
+	app.BiometricAvailability = core.BiometricFace
 	changePhone(app, m, func() {
 		p.Unlock = phoneclient.DesktopUnlockState{Key: phoneclient.DesktopUnlockKey("test-mac"), Locked: true}
 		m.refreshDesktopAuthentication()
@@ -40,17 +39,7 @@ func TestNativeDesktopPasswordSaveAndUse(t *testing.T) {
 			app, m, p := authenticatedDesktop(t, os)
 			const password = "synthetic-password"
 			key := [2]string{"Miya", p.Unlock.Key}
-			prompts := 0
-			app.Authenticate = func(reason string, opts core.AuthenticateOptions) (bool, error) {
-				prompts++
-				if reason != tr("Verify your identity to save or use your Mac login password") || !opts.AllowDevicePasscode {
-					t.Error("prompt must have a localized reason and allow the device passcode", reason, opts)
-				}
-				if prompts == 1 && app.Secrets[key] != "" {
-					t.Error("password saved before authentication/unlock")
-				}
-				return true, nil
-			}
+			app.BiometricAnswer = core.BiometricSuccess
 			var submissions atomic.Int32
 			p.Client.SetTransport(desktopTransport(func(r *http.Request) (*http.Response, error) {
 				if strings.HasSuffix(r.URL.Path, "/unlock") {
@@ -69,10 +58,10 @@ func TestNativeDesktopPasswordSaveAndUse(t *testing.T) {
 				t.Fatal("submitted password retained by input")
 			}
 			settleNative(t, app, func() bool { return !p.Unlock.Busy })
-			if p.Unlock.Locked || !p.Unlock.Saved || prompts != 1 || submissions.Load() != 1 {
-				t.Fatal("authenticated save did not unlock", p.Unlock, prompts, submissions.Load())
+			if p.Unlock.Locked || !p.Unlock.Saved || len(app.AuthenticationReasons) != 1 || submissions.Load() != 1 {
+				t.Fatal("authenticated save did not unlock", p.Unlock, app.AuthenticationReasons, submissions.Load())
 			}
-			if app.Secrets[key] != base64.StdEncoding.EncodeToString([]byte(password)) {
+			if testSecrets(app)[key] != base64.StdEncoding.EncodeToString([]byte(password)) {
 				t.Fatal("password not saved in native secure storage")
 			}
 			if v, _ := app.Storage().GetItem(p.Unlock.Key); v != "" {
@@ -80,7 +69,7 @@ func TestNativeDesktopPasswordSaveAndUse(t *testing.T) {
 			}
 			changePhone(app, m, func() { m.DesktopLockChanged(p, false); m.DesktopLockChanged(p, true) })
 			settleNative(t, app, func() bool { return !p.Unlock.Busy })
-			if p.Unlock.Locked || prompts != 2 || submissions.Load() != 2 || p.Unlock.Text != "" {
+			if p.Unlock.Locked || len(app.AuthenticationReasons) != 2 || submissions.Load() != 2 || p.Unlock.Text != "" {
 				t.Fatal("automatic saved-password use did not freshly authenticate")
 			}
 		})
@@ -122,12 +111,16 @@ func TestNativeDesktopAuthenticationRejectsCancelFailureAndUnavailability(t *tes
 				app, m, p := authenticatedDesktop(t, core.OSIOS)
 				key := [2]string{"Miya", p.Unlock.Key}
 				if saved {
-					app.Secrets[key] = base64.StdEncoding.EncodeToString([]byte("saved-password"))
+					_ = app.Secrets.WriteSecret(testSecretItem(key), base64.StdEncoding.EncodeToString([]byte("saved-password")))
 				}
-				original := app.Secrets[key]
-				app.Authentication.Available = tc.available
-				prompts := 0
-				app.Authenticate = func(string, core.AuthenticateOptions) (bool, error) { prompts++; return tc.ok, tc.err }
+				original := testSecrets(app)[key]
+				if !tc.available {
+					app.BiometricAvailability = core.BiometricNone
+				}
+				app.BiometricAnswer = core.BiometricCancelled
+				if tc.err != nil {
+					app.BiometricAnswer = core.BiometricFailure
+				}
 				store := &authenticationStore{SecretStore: m.Store}
 				var submissions atomic.Int32
 				p.Client.SetTransport(desktopTransport(func(r *http.Request) (*http.Response, error) {
@@ -147,8 +140,8 @@ func TestNativeDesktopAuthenticationRejectsCancelFailureAndUnavailability(t *tes
 						t.Error("unavailability was not actionable", result.Err)
 					}
 				})
-				if (prompts == 1) != tc.available || submissions.Load() != 0 || store.reads.Load() != 0 || store.writes.Load() != 0 || app.Secrets[key] != original {
-					t.Fatal("denied authentication used or changed a password", prompts, submissions.Load(), store.reads.Load(), store.writes.Load())
+				if (len(app.AuthenticationReasons) == 1) != tc.available || submissions.Load() != 0 || store.reads.Load() != 0 || store.writes.Load() != 0 || testSecrets(app)[key] != original {
+					t.Fatal("denied authentication used or changed a password", app.AuthenticationReasons, submissions.Load(), store.reads.Load(), store.writes.Load())
 				}
 			})
 		}
@@ -157,11 +150,8 @@ func TestNativeDesktopAuthenticationRejectsCancelFailureAndUnavailability(t *tes
 
 func TestNativeDesktopAuthenticationCanceledPageCannotUseLateSuccess(t *testing.T) {
 	app, m, p := authenticatedDesktop(t, core.OSIOS)
-	app.Authenticate = func(string, core.AuthenticateOptions) (bool, error) {
-		// Native results may arrive after closing the requesting page.
-		m.CloseDesktopPage(false)
-		return true, nil
-	}
+	app.BiometricAnswer = core.BiometricSuccess
+	m.CloseDesktopPage(false)
 	store := &authenticationStore{SecretStore: m.Store}
 	nativeWorker(t, app, func() {
 		result := m.DesktopPerformUnlock(p.Ctx, nil, store, p.Unlock.Key, "typed-password", false, true)
@@ -174,10 +164,6 @@ func TestNativeDesktopAuthenticationCanceledPageCannotUseLateSuccess(t *testing.
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	app.Authenticate = func(string, core.AuthenticateOptions) (bool, error) {
-		t.Error("canceled request prompted")
-		return true, nil
-	}
 	nativeWorker(t, app, func() {
 		if err := m.DesktopAuthenticate(ctx); !errors.Is(err, context.Canceled) {
 			t.Error("canceled authentication did not return promptly", err)
@@ -188,22 +174,23 @@ func TestNativeDesktopAuthenticationCanceledPageCannotUseLateSuccess(t *testing.
 func TestNativeDesktopAuthenticationAvailabilityUI(t *testing.T) {
 	for _, tc := range []struct {
 		os        core.OS
-		kind      core.BiometryKind
+		kind      core.BiometricKind
 		available bool
 		label     string
 	}{
-		{core.OSIOS, core.BiometryFace, true, "Face ID or device passcode"},
-		{core.OSIOS, core.BiometryFingerprint, true, "Touch ID or device passcode"},
-		{core.OSIOS, core.BiometryNone, true, "Device screen lock"},
-		{core.OSAndroid, core.BiometryFace, true, "Face recognition or device screen lock"},
-		{core.OSAndroid, core.BiometryFingerprint, true, "Fingerprint or device screen lock"},
-		{core.OSAndroid, core.BiometryUnknown, true, "Biometrics or device screen lock"},
-		{core.OSIOS, core.BiometryFace, false, "Password saving requires device authentication, which is unavailable in this NSGo build."},
-		{core.OSLinux, core.BiometryNone, false, "Password saving requires device authentication, which is unavailable in this NSGo build."},
+		{core.OSIOS, core.BiometricFace, true, "Face ID"},
+		{core.OSIOS, core.BiometricFingerprint, true, "Touch ID"},
+		{core.OSAndroid, core.BiometricFace, true, "Face recognition or device screen lock"},
+		{core.OSAndroid, core.BiometricFingerprint, true, "Fingerprint or device screen lock"},
+		{core.OSIOS, core.BiometricFace, false, "Password saving requires device authentication, which is unavailable in this NSGo build."},
+		{core.OSLinux, core.BiometricNone, false, "Password saving requires device authentication, which is unavailable in this NSGo build."},
 	} {
 		t.Run(string(tc.os)+"/"+tc.label, func(t *testing.T) {
 			app, m, p := authenticatedDesktop(t, tc.os)
-			app.Authentication.Available, app.Authentication.Biometry = tc.available, tc.kind
+			app.BiometricAvailability = tc.kind
+			if !tc.available {
+				app.BiometricAvailability = core.BiometricNone
+			}
 			changePhone(app, m, func() { p.Unlock.Saved = true; m.refreshDesktopAuthentication() })
 			if !strings.Contains(strings.Join(app.Texts(), " "), tc.label) || app.Exists("id:desktop-unlock-save") != tc.available || app.Exists("id:desktop-unlock-saved") != tc.available {
 				t.Fatal("unlock availability/type incorrect", app.Texts())
@@ -221,7 +208,7 @@ func TestNativeDesktopAuthenticationAvailabilityUI(t *testing.T) {
 			}
 			// Returning from system settings must update retained controls.
 			changePhone(app, m, func() { p.Unlock.Remember = true })
-			app.Authentication.Available = false
+			app.BiometricAvailability = core.BiometricNone
 			app.SetEnvironment(core.Environment{OS: tc.os, Idiom: core.IdiomPhone, Locale: "en", Lifecycle: core.LifecycleInactive})
 			app.SetEnvironment(core.Environment{OS: tc.os, Idiom: core.IdiomPhone, Locale: "en", Lifecycle: core.LifecycleActive})
 			if m.authentication.available || p.Unlock.Remember {

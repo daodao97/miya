@@ -121,6 +121,12 @@ func (m *Manager) Collect() error {
 			}
 		}
 		for key, d := range s.Deliveries {
+			if d.IsFollowUp() {
+				if (!d.State.Live() || d.Resolution == ResolutionAbandoned) && !m.now().Before(d.FollowUpAt.Add(m.retention)) {
+					delete(s.Deliveries, key)
+				}
+				continue
+			}
 			var ids []string
 			for _, id := range d.TaskIDs {
 				if !removed[id] {

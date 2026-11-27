@@ -12,6 +12,7 @@ import (
 	"miya/internal/delegation/coordinator"
 	"miya/internal/interaction"
 	"miya/internal/memory/manager"
+	"miya/internal/statecard"
 )
 
 type Host interface {
@@ -35,10 +36,15 @@ type Host interface {
 	NoteDelegation(model.Thread, int, string)
 	PrepareRuntime(model.ThreadRef, string) (async.Reply, error)
 	Memories() *manager.Manager
+	// ThreadBot is the ID and own project of the Bot a conversation belongs
+	// to, or empty.
+	ThreadBot(model.Thread) (id, home string)
+	// BotOf resolves a Bot's name in the caller's project to its ID and agent.
+	BotOf(caller model.Thread, name string) (id, agent string, err error)
 	Collaboration() *coordinator.Coordinator
 	StartCollaboration(model.Thread, string, coordinator.Args) (any, error)
 	PrepareDelegation(model.Thread, coordinator.Args) (dg.StartInput, error)
-	AgentList() map[string]any
+	AgentList(model.Thread) map[string]any
 	Automations() *automation.Runner
 	AutomationOp(string, automation.Request) (any, error)
 	AskUser(model.Thread, string, string) (json.RawMessage, chan bool)
@@ -47,6 +53,10 @@ type Host interface {
 	Dispatch(func())
 	Approvals() []interaction.Request
 	SetApprovals([]interaction.Request)
+	// StateCard is a conversation's state card; WriteStateCard saves the one
+	// the conversation's own tool call wrote.
+	StateCard(model.Thread) (statecard.Card, bool)
+	WriteStateCard(model.Thread, model.Message, statecard.Card) (statecard.Card, error)
 }
 
 type Service struct{ host Host }

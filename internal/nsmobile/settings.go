@@ -1,6 +1,7 @@
 package nsmobile
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -19,6 +20,11 @@ func (m *App) settings(cx *core.Scope) core.Node {
 	m.refreshDesktopAuthentication()
 	unread := live(m, func() int { return len(m.State.Notifications.Unread) })
 	return m.groupedPage(cx,
+		core.Show{When: live(m, func() bool { return m.appUpdate.url != "" }), Then: func(cx *core.Scope) core.Node {
+			return m.group(cx, "",
+				nil, gRow{ID: "mobile-update", Label: fmt.Sprintf(tr("Available version: %s"), m.appUpdate.version),
+					Action: true, Press: func() { cx.OpenURL(m.appUpdate.url, nil) }})
+		}},
 		m.group(cx, tr("General"), nil,
 			gRow{ID: "language", Label: tr("Interface language"), Value: func() string { return languageName(currentLanguage()) }, Chevron: true, Press: func() { m.pages.Open("language") }},
 			gRow{ID: "voice-settings", Label: tr("Voice input"), Chevron: true, Press: func() { m.pages.Open("voice") }},

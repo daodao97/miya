@@ -166,6 +166,22 @@ const FilesPort = 4244
 const ServicePort = 4245
 const TerminalPort = 4246
 
+// DialPhone opens a separate phone-protocol stream inside the paired tunnel.
+// Closing it leaves the workspace connection and its tunnel open.
+func (c *Conn) DialPhone(ctx context.Context) (*Conn, error) {
+	if err := c.ctx.Err(); err != nil {
+		return nil, err
+	}
+	if c.dialPort == nil {
+		return nil, errors.New("remote: phone transport unavailable")
+	}
+	nc, err := c.dialPort(ctx, Port)
+	if err != nil {
+		return nil, err
+	}
+	return newConn(nc, nil), nil
+}
+
 func (c *Conn) DialTerminal(ctx context.Context) (*Conn, error) {
 	if err := c.ctx.Err(); err != nil {
 		return nil, err

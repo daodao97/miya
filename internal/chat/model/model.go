@@ -9,6 +9,7 @@ import (
 )
 
 type Message struct {
+	Delegations    []DelegationCard     `json:"delegations,omitempty"`
 	Presentation   *MessagePresentation `json:"presentation,omitempty"`
 	ExecutionID    string               `json:"executionId,omitempty"`
 	MemoryControl  bool                 `json:"memoryControl,omitempty"`

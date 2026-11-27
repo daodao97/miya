@@ -35,7 +35,7 @@ func TestNativeReferenceInputEditsAndCopiesIdentity(t *testing.T) {
 		cx.SetTheme(nswidgets.Theme())
 		draft = core.NewSignal(cx, raw)
 		return ReferenceInput{ReferenceTitle: func(model.ThreadRef) string { return "Previous task" }, Input: core.Input{TestID: "composer", Value: draft.Get, OnChange: draft.Set}}
-	}, nsgotest.Size(900, 700))
+	}, nsgotest.Size(900, 700), nsgotest.Environment(core.Environment{OS: core.OSMacOS, Idiom: core.IdiomDesktop}))
 	if got := app.Find("id:composer").Text; got != "@Previous task " {
 		t.Fatalf("displayed raw reference: %q", got)
 	}

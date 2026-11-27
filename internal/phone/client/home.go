@@ -19,8 +19,13 @@ func (m *Client) StartConversation(project, agent string) {
 	}
 }
 
-func (m *Client) SidebarActivityThreads() (running, completed []model.Thread) {
-	return msgfmt.SidebarActivityThreads(m.allPhoneProjects(), m.completionUnread)
+func (m *Client) SidebarActivityThreads() (waiting, running, completed []model.Thread) {
+	return msgfmt.SidebarActivityThreads(m.allPhoneProjects(), m.ThreadWaiting, m.completionUnread)
+}
+
+func (m *Client) ThreadWaiting(thread model.Thread) bool {
+	_, ok := m.State.Waiting[notification.DesktopUnreadKey(thread)]
+	return ok || len(m.ApprovalsFor(thread.ServerID)) > 0 && thread.ServerID != ""
 }
 
 func (m *Client) completionUnread(thread model.Thread) bool {

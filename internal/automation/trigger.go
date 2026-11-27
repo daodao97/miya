@@ -339,6 +339,8 @@ func SourceLabel(source string) string {
 		return tr("Run now")
 	case SourceAgent:
 		return tr("Conversation")
+	case SourceReview:
+		return tr("Review")
 	case TriggerCondition:
 		return tr("Condition")
 	case TriggerIngress:

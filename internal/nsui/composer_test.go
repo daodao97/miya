@@ -188,7 +188,7 @@ func TestComposerFilePickerAndPickers(t *testing.T) {
 	app.PickFiles = pickedFiles(app.PickFiles, []core.File{{Path: "/tmp/chosen.txt"}})
 	app.Press("id:attach-files")
 	app.WaitUntil(time.Second, func() bool { return len(h.attachments) == 1 })
-	if h.attachments[0] != "/tmp/chosen.txt" || len(app.FilePicks) != 1 || app.FilePicks[0].Limit < 2 || app.FilePicks[0].Dialog.Title != tr("Add files") || app.FilePicks[0].Dialog.Directory != h.state.Cwd || app.FilePicks[0].Dialog.Prompt != tr("Attach") {
+	if h.attachments[0] != "/tmp/chosen.txt" || len(app.FilePicks) != 1 || app.FilePicks[0].Limit < 2 || app.FilePicks[0].Title != tr("Add files") || app.FilePicks[0].Start != h.state.Cwd || app.FilePicks[0].Button != tr("Attach") {
 		t.Fatal("file picker did not allow multiple files", h.attachments)
 	}
 	for _, p := range []struct{ id, choice string }{{"model", "fast"}, {"effort", "high"}, {"permissions", "never"}, {"agent", model.AgentClaude}} {

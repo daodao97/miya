@@ -22,14 +22,17 @@ const (
 // Open reports whether the job still holds evidence and may run.
 func (s JobState) Open() bool { return s == JobPending || s == JobRunning }
 
-// Entry.State values. The first five are stored; EntryExpired and
-// EntryUnavailable are derived for readers and never persisted.
+// Entry.State values. The first six are stored; EntryExpired and
+// EntryUnavailable are derived for readers and never persisted. EntryMerged
+// is an entry consolidation folded into Entry.MergedInto; it keeps its body
+// as history and is not recalled.
 const (
 	EntryActive      = "active"
 	EntrySuperseded  = "superseded"
 	EntryForgotten   = "forgotten"
 	EntryPromoted    = "promoted"
 	EntryConflicted  = "conflicted"
+	EntryMerged      = "merged"
 	EntryExpired     = "expired"
 	EntryUnavailable = "unavailable"
 )

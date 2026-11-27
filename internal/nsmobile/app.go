@@ -37,6 +37,7 @@ type App struct {
 	drawerRun                                 *core.AnimationRun
 	drawerAt                                  float64
 	drawerExpanded                            bool
+	automationRunsShown                       map[string]bool
 	scanning                                  bool
 	optionsAgent                              string
 	filesURL                                  *core.Signal[string]
@@ -54,11 +55,13 @@ type App struct {
 	collaborationOwner                        string
 	requestFields                             map[string]map[string]string
 	authentication                            desktopAuthentication
+	appUpdate                                 mobileUpdate
+	nextUpdateCheck                           time.Time
 }
 
 func NewMobileApp() *App {
 	m := &App{Client: phoneclient.New(), caret: -1, voiceAutoSend: prefs.Load("phone-voice-auto-send") == "on"}
-	m.SecretNotFound = core.ErrSecretNotFound
+	m.SecretNotFound = errSecretNotFound
 	return m
 }
 
@@ -86,6 +89,7 @@ func (m *App) Render(cx *core.Scope) core.Node {
 	m.pages = newPages(cx)
 	m.pages.actions = m.showActions
 	m.drawerOpen = core.NewSignal(cx, false)
+	m.automationRunsShown = map[string]bool{}
 	m.drawerSearching = core.NewSignal(cx, false)
 	m.drawerActive = core.NewSignal(cx, false)
 	m.drawerPos = core.NewAnimatedValue(cx, 0)
@@ -95,6 +99,7 @@ func (m *App) Render(cx *core.Scope) core.Node {
 	m.Client.Dispatch = cx.Post
 	m.Client.Changed = m.change
 	m.setupNative(cx)
+	cx.Post(m.checkMobileUpdate)
 	// Drop resolved or superseded form values, including secret answers.
 	cx.Effect(func() {
 		m.revision.Get()
@@ -127,6 +132,7 @@ func (m *App) Render(cx *core.Scope) core.Node {
 		lifecycle = next
 		if next == core.LifecycleActive {
 			m.refreshDesktopAuthentication()
+			m.checkMobileUpdate()
 		}
 		if next == core.LifecycleBackground {
 			m.cancelVoice()

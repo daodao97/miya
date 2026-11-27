@@ -45,12 +45,17 @@ func (b Adapter) RespondLegacy(a interaction.Request, result any) bool {
 	encoded, _ := json.Marshal(result)
 	var r struct {
 		Decision string `json:"decision"`
-		Answers  map[string]struct {
+		// Message, when Miya answers for an automation, says why it refused.
+		Message string `json:"message"`
+		Answers map[string]struct {
 			Answers []string `json:"answers"`
 		} `json:"answers"`
 	}
 	_ = json.Unmarshal(encoded, &r)
 	response := map[string]any{"behavior": "deny", "message": "The user denied this operation"}
+	if r.Message != "" {
+		response["message"] = r.Message
+	}
 	if r.Decision == "accept" || r.Answers != nil {
 		var input map[string]any
 		_ = json.Unmarshal(a.Payload, &input)

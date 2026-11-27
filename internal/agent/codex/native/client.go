@@ -37,6 +37,7 @@ type response struct {
 	err  error
 }
 type Client struct {
+	binary      string
 	epoch       string
 	cmd         *exec.Cmd
 	input       io.WriteCloser
@@ -75,9 +76,9 @@ func (c *Client) WatchNotifications(method string) (<-chan Frame, func()) {
 
 func Binary() (string, error) {
 	if p := os.Getenv("CODEX_BINARY"); p != "" {
-		return processenv.LookPath(p)
+		return processenv.AgentBinary(p)
 	}
-	if p, err := processenv.LookPath("codex"); err == nil {
+	if p, err := processenv.AgentBinary("codex"); err == nil {
 		return p, nil
 	}
 	const appBinary = "/Applications/Codex.app/Contents/Resources/codex"
@@ -112,7 +113,11 @@ func StartWithEnv(ctx context.Context, binary, cwd string, env []string, args ..
 			return nil, err
 		}
 	}
-	cmd := exec.Command(binary, append([]string{"app-server", "--listen", "stdio://"}, args...)...)
+	binary, err = processenv.PinWSL(ctx, binary)
+	if err != nil {
+		return nil, err
+	}
+	cmd := processenv.Command(binary, append([]string{"app-server", "--listen", "stdio://"}, args...)...)
 	configureProcess(cmd)
 	cmd.Dir = cwd
 	// Authentication and provider configuration remain owned by Codex.
@@ -130,6 +135,7 @@ func StartWithEnv(ctx context.Context, binary, cwd string, env []string, args ..
 	cmd.Stderr = stderr
 	// A background command Codex started can hold stderr open after Codex exits.
 	cmd.WaitDelay = 2 * time.Second
+	processenv.Prepare(cmd)
 	if err = cmd.Start(); err != nil {
 		input.Close()
 		output.Close()
@@ -137,6 +143,7 @@ func StartWithEnv(ctx context.Context, binary, cwd string, env []string, args ..
 	}
 	c := newClient(input)
 	c.cmd = cmd
+	c.binary = binary
 	c.epoch = fmt.Sprintf("%d:%d", cmd.Process.Pid, time.Now().UnixNano())
 	c.exited = make(chan struct{})
 	go func() {
@@ -244,6 +251,7 @@ func (c *Client) write(v any) error {
 	if err != nil {
 		return err
 	}
+	data = processenv.ProtocolPaths(data, c.binary, true)
 	data = append(data, '\n')
 	c.writeMu.Lock()
 	defer c.writeMu.Unlock()
@@ -274,7 +282,7 @@ func (c *Client) readFrames(r io.Reader) error {
 	scanner.Buffer(make([]byte, 64*1024), 16*1024*1024)
 	for scanner.Scan() {
 		var f Frame
-		if err := json.Unmarshal(scanner.Bytes(), &f); err != nil {
+		if err := json.Unmarshal(processenv.ProtocolPaths(scanner.Bytes(), c.binary, false), &f); err != nil {
 			return fmt.Errorf("invalid Codex protocol frame: %w", err)
 		}
 		if f.Method == "" && len(f.ID) > 0 {

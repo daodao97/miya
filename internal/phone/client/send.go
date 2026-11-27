@@ -23,6 +23,7 @@ type mobilePendingSend struct {
 	beforeUsers          int
 	retainedImages       map[string]bool
 	acknowledged, echoed bool
+	waitingForConnection bool
 	failure, stage       string
 }
 
@@ -78,6 +79,25 @@ func (m *Client) composingNewThread(p *mobilePendingSend) bool {
 	return m.Open == 0 && m.NewProject == p.request.Project && m.composerEpoch == p.epoch
 }
 
+func (m *Client) unsupportedAgentTags(text string) bool {
+	return (m.State.Collaboration == nil || m.State.Collaboration.Version < 1) && model.HasAgentReferences(text, nil)
+}
+
+func (m *Client) resumePendingSend() {
+	p := m.sending
+	if p == nil || !p.waitingForConnection || p.desktop != m.Link || !m.CanSend() {
+		return
+	}
+	if m.unsupportedAgentTags(p.request.Text) {
+		m.SendErr = tr("Update the Miya background service to use Agent tags")
+		m.failPendingSend()
+		return
+	}
+	p.waitingForConnection = false
+	p.stage = sendStage(p.Message.Images)
+	m.transmitSend(p)
+}
+
 func (m *Client) transmitSend(p *mobilePendingSend) {
 	conn, gen := m.Conn, m.Generation
 	p.attempt++
@@ -106,7 +126,7 @@ func (m *Client) transmitSend(p *mobilePendingSend) {
 
 func (m *Client) failPendingSend() {
 	if p := m.sending; p != nil {
-		p.failure = m.SendErr
+		p.failure, p.waitingForConnection = m.SendErr, false
 		m.sending = nil
 		m.SendErr = ""
 	}
@@ -196,7 +216,7 @@ func (m *Client) receivePendingSends(t model.Thread) {
 		if p.echoed || !m.pendingFor(p, t) {
 			continue
 		}
-		if p.request.ServerID == "" && t.ServerID != "" {
+		if !p.waitingForConnection && p.request.ServerID == "" && t.ServerID != "" {
 			p.request.ServerID = t.ServerID
 		}
 		seen := 0
@@ -207,13 +227,13 @@ func (m *Client) receivePendingSends(t model.Thread) {
 			seen++
 			// Resuming a thread can replace every runtime ID in its old
 			// history. Those earlier occurrences are still not this send.
-			if seen > p.beforeUsers && !p.beforeMessages[msg.ID] && !usedMessages[msg.ID] {
+			if !p.waitingForConnection && seen > p.beforeUsers && !p.beforeMessages[msg.ID] && !usedMessages[msg.ID] {
 				p.echoed, usedMessages[msg.ID] = true, true
 				p.retainedImages = m.keepSentImagePreviews(p.Message.Images, msg.Images)
 				break
 			}
 		}
-		if !p.echoed {
+		if !p.waitingForConnection && !p.echoed {
 			for _, q := range t.Queue {
 				if !p.beforeQueue[q.ID] && !usedQueue[q.ID] && samePendingText(q.Text, p.Message.Content) && len(q.Attachments) >= len(p.Message.Images) {
 					p.echoed, usedQueue[q.ID] = true, true
@@ -255,7 +275,7 @@ func (m *Client) prunePendingSends() {
 
 func (m *Client) Sent(id int, msg string) {
 	p := m.sending
-	if !m.Sending || p == nil {
+	if !m.Sending || p == nil || p.waitingForConnection {
 		return
 	}
 	if msg != "" {

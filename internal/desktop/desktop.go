@@ -11,6 +11,12 @@ import (
 var ErrWindowUnavailable = errors.New("The permission window was closed, obscured, or could not be focused")
 var ErrDisplayUnavailable = errors.New("The selected display is unavailable. Select another desktop.")
 
+// FrameOptions controls the output of a live remote capture.
+type FrameOptions struct {
+	MaxEdge int
+	Quality int // JPEG quality as a percentage
+}
+
 // UUID keeps a reconnected/replaced screen from inheriting another display's
 // control session when CoreGraphics reuses a numeric display ID.
 type Display struct {

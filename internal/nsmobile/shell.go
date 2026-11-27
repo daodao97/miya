@@ -128,6 +128,7 @@ func (m *App) shell(cx *core.Scope) core.Node {
 					return st
 				},
 				Children: m.drawerContent(cx)},
+			m.voiceStatus(cx),
 		}}
 }
 
@@ -227,6 +228,11 @@ func (m *App) drawerContent(cx *core.Scope) []core.Node {
 						nswidgets.Icon("chevron-down", 11, colors.Muted),
 					}},
 				}},
+			core.Show{When: live(m, func() bool { return m.appUpdate.url != "" }), Then: func(cx *core.Scope) core.Node {
+				return m.circle(cx, "drawer-update", fmt.Sprintf(tr("Available version: %s"), m.appUpdate.version), "chevron-down", func() {
+					cx.OpenURL(m.appUpdate.url, nil)
+				})
+			}},
 			m.circle(cx, "drawer-search", tr("Search conversations"), "search", func() {
 				m.drawerSearching.Set(!m.drawerSearching.GetUntracked())
 				m.search.Set("")
@@ -284,15 +290,19 @@ func (m *App) drawerKey() string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%v\x00%s\x00%s\x00%d\x00%s\x00", m.drawerSearching.Get(), m.search.Get(), m.ExpandedProject, m.Open, m.Path)
 	thread := func(t model.Thread) {
-		fmt.Fprintf(&b, "%d:%s:%s:%v:%v:%d\x01", t.ID, t.Title, model.ThreadAgent(t), t.Busy, m.CompletionUnread(t), len(m.ApprovalsFor(t.ServerID)))
+		fmt.Fprintf(&b, "%d:%s:%s:%s:%v:%v:%v:%d\x01", t.ID, t.Title, model.ThreadAgent(t), t.Automation, t.Busy, m.CompletionUnread(t), m.ThreadWaiting(t), len(m.ApprovalsFor(t.ServerID)))
 	}
 	for _, p := range m.State.Projects {
-		fmt.Fprintf(&b, "\x02%s:%s:%v\x02", p.Path, p.Name, m.ThreadListExpanded[p.Path])
+		fmt.Fprintf(&b, "\x02%s:%s:%v:%v\x02", p.Path, p.Name, m.ThreadListExpanded[p.Path], m.automationRunsShown[p.Path])
 		for _, t := range p.Threads {
 			thread(t)
 		}
 	}
-	running, completed := m.SidebarActivityThreads()
+	waiting, running, completed := m.SidebarActivityThreads()
+	b.WriteString("\x03")
+	for _, t := range waiting {
+		thread(t)
+	}
 	b.WriteString("\x03")
 	for _, t := range running {
 		thread(t)
@@ -329,16 +339,15 @@ func (m *App) drawerRows(cx *core.Scope) core.Node {
 		}}
 	}
 	nodes = append(nodes,
-		nav("memory", "stack-2", tr("Shared memory"), "memory"),
 		nav("automations", "clock", tr("Automations"), "automations"),
 		nav("quota", "pi", tr("Usage"), "quota"),
 		core.View{Style: core.Style{Height: core.Pt(1), Margin: core.Edges{Top: 16, Bottom: 12}}, StyleFunc: func() core.Style { return core.Style{Background: colors.Line()} }},
 	)
-	running, completed := m.SidebarActivityThreads()
+	waiting, running, completed := m.SidebarActivityThreads()
 	for _, section := range []struct {
 		label   string
 		threads []model.Thread
-	}{{tr("In progress"), running}, {tr("Completed"), completed}} {
+	}{{tr("Waiting for you"), waiting}, {tr("In progress"), running}, {tr("Completed"), completed}} {
 		if len(section.threads) == 0 {
 			continue
 		}
@@ -395,11 +404,14 @@ func (m *App) drawerProject(cx *core.Scope, p model.ProjectSnapshot) core.Node {
 				core.Text{Content: tr("No conversations yet"), StyleFunc: func() core.Style { return core.Style{FontSize: 14, Color: colors.Muted()} }},
 			}})
 		}
+		threads, runs := msgfmt.SplitAutomationThreads(p.Threads, func(t model.Thread) bool {
+			return t.Busy || m.CompletionUnread(t) || m.ThreadWaiting(t) || t.ID == m.Open && m.Path == "/thread"
+		})
 		more := m.ThreadListExpanded[path]
-		for _, t := range msgfmt.DisplayedThreads(p.Threads, more) {
+		for _, t := range msgfmt.DisplayedThreads(threads, more) {
 			nodes = append(nodes, m.drawerThread(cx, t, "thread-"))
 		}
-		if len(p.Threads) > msgfmt.CollapsedThreadCount {
+		if len(threads) > msgfmt.CollapsedThreadCount {
 			label := tr("Expand")
 			if more {
 				label = tr("Collapse")
@@ -417,6 +429,26 @@ func (m *App) drawerProject(cx *core.Scope, p model.ProjectSnapshot) core.Node {
 					core.Text{Content: label, StyleFunc: func() core.Style { return core.Style{FontSize: 15, Color: colors.Muted()} }},
 				}})
 		}
+		if len(runs) > 0 {
+			shown := m.automationRunsShown[path]
+			label := fmt.Sprintf(tr("Automation runs (%d)"), len(runs))
+			icon := "chevron-right"
+			if shown {
+				icon = "chevron-down"
+			}
+			nodes = append(nodes, core.View{TestID: "automation-runs-" + path, Role: core.RoleButton, Label: label,
+				OnPress: func(core.PressEvent) { m.act(func() { m.automationRunsShown[path] = !shown })() },
+				Style:   core.Style{Direction: core.Row, AlignItems: core.AlignCenter, MinHeight: core.Pt(44), Gap: 8, Padding: core.Symmetric(0, 8)},
+				Children: []core.Node{nswidgets.Icon(icon, 12, colors.Muted), core.Text{Content: label, StyleFunc: func() core.Style {
+					return core.Style{FontSize: 15, Color: colors.Muted()}
+				}}},
+			})
+			if shown {
+				for _, t := range runs {
+					nodes = append(nodes, m.drawerThread(cx, t, "thread-"))
+				}
+			}
+		}
 	}
 	return core.View{Style: core.Style{MinWidth: core.Pt(0)}, Children: nodes}
 }
@@ -427,8 +459,14 @@ func (m *App) drawerThread(cx *core.Scope, t model.Thread, prefix string) core.N
 	colors := nswidgets.ColorsOf(cx)
 	title := msgfmt.NativeText(textutil.FirstNonEmpty(t.Title, tr("Untitled conversation")))
 	open := t.ID == m.Open && m.Path == "/thread"
+	agent := model.ThreadAgent(t)
+	lead := nswidgets.AgentIcon(agent, 18)
+	if t.Automation != "" {
+		tint := nswidgets.AgentTint(agent)
+		lead = nswidgets.Icon("clock", 18, func() core.Color { return tint })
+	}
 	children := []core.Node{
-		nswidgets.AgentIcon(model.ThreadAgent(t), 18),
+		lead,
 		core.Text{Content: title, MaxLines: 1, Style: core.Style{FontSize: 16, FlexGrow: 1, FlexShrink: 1, MinWidth: core.Pt(0)}},
 	}
 	switch {
@@ -437,6 +475,8 @@ func (m *App) drawerThread(cx *core.Scope, t model.Thread, prefix string) core.N
 			dot(7, colors.WarnInk),
 			core.Text{Content: tr("Pending approval"), MaxLines: 1, StyleFunc: func() core.Style { return core.Style{FontSize: 12, Color: colors.WarnInk()} }},
 		}})
+	case m.ThreadWaiting(t):
+		children = append(children, dot(7, colors.WarnInk))
 	case t.Busy:
 		children = append(children, ui.Spinner{Size: 13})
 	case m.CompletionUnread(t):

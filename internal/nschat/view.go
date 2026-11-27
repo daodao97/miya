@@ -273,6 +273,9 @@ func (v View) groupRow(cx *core.Scope, group func() msgfmt.MessageGroup) core.No
 				}
 				return model.Message{}
 			}
+			if tasks := msgfmt.DelegationResults(first()); len(tasks) > 0 {
+				return v.delegationReceipt(cx, tasks)
+			}
 			body := v.userMessage(cx, first)
 			if v.UserContent != nil {
 				body = v.UserContent(cx, first, body)
@@ -339,6 +342,9 @@ func (v View) runRow(cx *core.Scope, run func() msgfmt.ActivityRun) core.Node {
 // changes: its text and status update in place.
 func (v View) message(cx *core.Scope, m func() model.Message) core.Node {
 	role := core.NewMemo(cx, func() string {
+		if msgfmt.IsDelegationCall(m()) {
+			return "delegation"
+		}
 		r := m().Role
 		if r != "memory" && r != "error" && r != "user" && r != "assistant" {
 			return "activity"
@@ -347,6 +353,8 @@ func (v View) message(cx *core.Scope, m func() model.Message) core.Node {
 	})
 	return core.Dynamic(func(cx *core.Scope) core.Node {
 		switch role.Get() {
+		case "delegation":
+			return v.delegationMessage(cx, m)
 		case "assistant":
 			return v.assistant(cx, m)
 		case "user":
@@ -473,7 +481,7 @@ func (v View) errorCard(cx *core.Scope, m func() model.Message) core.Node {
 // activity is a tool call, command, edit or plan as one row whose detail
 // expands.
 func (v View) activity(cx *core.Scope, m func() model.Message) core.Node {
-	return chat.ActivityRow{Conversation: v.State, Activity: func() chat.Activity {
+	return activityRow(cx, func() chat.Activity {
 		msg := m()
 		p := msgfmt.Message(msg)
 		a := chat.Activity{ID: strconv.Itoa(msg.ID), Action: msgfmt.NativeText(p.Title), Status: status(msg.Status)}
@@ -506,7 +514,7 @@ func (v View) activity(cx *core.Scope, m func() model.Message) core.Node {
 			a.Mono = len(p.Plan) == 0 && (p.Format == "" || p.Format == "text")
 		}
 		return a
-	}}
+	})
 }
 
 func status(s string) chat.Status {

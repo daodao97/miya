@@ -39,8 +39,8 @@ func bindCommands(cx *core.Scope, cmd commands) {
 	cx.OnKey("mod+b", cmd.toggleSidebar)
 	cx.OnKey("mod+.", cmd.stop)
 	cx.OnKey("f1", cmd.shortcuts)
-	cx.OnKey("ctrl+tab", func() { cmd.step(1) })
-	cx.OnKey("ctrl+shift+tab", func() { cmd.step(-1) })
+	cx.OnKeyWith("ctrl+tab", core.KeyOptions{When: core.KeyAlways}, func() { cmd.step(1) })
+	cx.OnKeyWith("ctrl+shift+tab", core.KeyOptions{When: core.KeyAlways}, func() { cmd.step(-1) })
 }
 
 // appMenu is the macOS menu bar; the platform labels the role items.

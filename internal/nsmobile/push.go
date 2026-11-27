@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/nsgo-dev/nsgo/core"
-	nativemobile "github.com/nsgo-dev/nsgo/mobile"
 	"github.com/nsgo-dev/nsgo/ui"
 	"github.com/nsgo-dev/nsgo/widget"
 	"miya/internal/apns"
@@ -92,7 +91,7 @@ func (m *App) setupPush(cx *core.Scope) {
 	}
 	// NSGo retains cold-start opens until this observer is installed. Keep the
 	// native presentation silent; showLiveNotice applies conversation suppression.
-	m.push.services.observe(func(n nativemobile.NotificationEvent) {
+	m.push.services.observe(func(n mobileNotificationEvent) {
 		cx.Post(func() {
 			if !m.push.closed {
 				m.notificationEvent(n)
@@ -406,15 +405,11 @@ func (m *App) syncActivity() {
 	if content.Title == "" {
 		content.Title = "Miya"
 	}
-	raw, err := widget.ActivityState(content)
-	if err != nil {
-		return
-	}
 	state := content.Title + content.Body
 	if m.push.activity != nil {
 		m.syncActivityToken()
 		if state != m.push.activityState || time.Since(m.push.activityUpdated) >= 30*time.Second {
-			if err := m.push.activity.UpdateJSON(raw); err == nil {
+			if err := m.push.activity.Update(content); err == nil {
 				m.push.activityState, m.push.activityUpdated = state, time.Now()
 			}
 		}
@@ -423,7 +418,7 @@ func (m *App) syncActivity() {
 	if !m.push.services.activitiesEnabled() {
 		return
 	}
-	activity, err := m.push.services.startActivity("miya-conversation", raw, widget.ActivityOptions{Push: true})
+	activity, err := m.push.services.startActivity("miya-conversation", content, widget.ActivityOptions{Push: true})
 	if err == nil {
 		m.push.activity, m.push.activityOwner, m.push.activityState = activity, ref, state
 		m.push.activityUpdated = time.Now()
@@ -439,7 +434,7 @@ func (m *App) endActivity() {
 	if r := m.push.restoredActivity; r != nil {
 		for _, a := range m.push.services.listActivities() {
 			if a.ID() == r.ID {
-				_ = a.EndJSON(nil, widget.DismissNow)
+				_ = a.End(nil, widget.DismissNow)
 			}
 		}
 		m.push.restoredActivity = nil
@@ -447,7 +442,7 @@ func (m *App) endActivity() {
 	}
 	prefs.Save("nsgo-phone-activity", "")
 	if a := m.push.activity; a != nil {
-		_ = a.EndJSON(nil, widget.DismissNow)
+		_ = a.End(nil, widget.DismissNow)
 		m.registerActivity(apns.ActivityRegistration{ID: a.ID(), ResourceID: m.push.activityOwner.URL()})
 		m.push.activityToken, m.push.activitySent = "", ""
 		m.push.activity = nil

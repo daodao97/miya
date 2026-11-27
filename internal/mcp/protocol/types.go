@@ -5,9 +5,22 @@ package protocol
 
 import (
 	"encoding/json"
+	"time"
 
 	"miya/internal/automation"
+	"miya/internal/statecard"
 )
+
+type FollowUpArgs struct {
+	At   string `json:"at"`
+	Note string `json:"note"`
+}
+
+type FollowUpResult struct {
+	ID    string    `json:"id"`
+	At    time.Time `json:"at"`
+	State string    `json:"state"`
+}
 
 // CallerUnknown is the service's answer while the calling conversation
 // has not shown its tool call yet; the call is tried again shortly.
@@ -50,6 +63,8 @@ type ThreadInfo struct {
 	Title     string `json:"title"`
 	Agent     string `json:"agent"`
 	Status    string `json:"status"`
+	// Card is the conversation's state card, when it has one.
+	Card *statecard.Card `json:"card,omitempty"`
 }
 
 type ThreadsResult struct {
@@ -68,6 +83,18 @@ type StatusResult struct {
 	Agent     string `json:"agent"`
 	Status    string `json:"status"`
 	Reply     string `json:"reply"`
+	// Card is the conversation's state card, when it has one.
+	Card *statecard.Card `json:"card,omitempty"`
+}
+
+// StatusArgs is what update_status takes: the caller's own state card.
+type StatusArgs struct {
+	Purpose    string   `json:"purpose"`
+	Done       []string `json:"done,omitempty"`
+	Remaining  []string `json:"remaining,omitempty"`
+	WaitingFor string   `json:"waiting_for,omitempty"`
+	Checked    []string `json:"checked,omitempty"`
+	References []string `json:"references,omitempty"`
 }
 
 type DelegateResult struct {
@@ -83,15 +110,21 @@ type Error struct {
 }
 
 type AutomationArgs struct {
-	ID           string `json:"id,omitempty"`
-	Name         string `json:"name,omitempty"`
-	Schedule     string `json:"schedule,omitempty"`
-	Instructions string `json:"instructions,omitempty"`
-	Check        string `json:"check,omitempty"`
-	Rounds       int    `json:"rounds,omitempty"`
-	Agent        string `json:"agent,omitempty"`
-	Enabled      *bool  `json:"enabled,omitempty"`
-	Worktree     *bool  `json:"worktree,omitempty"`
+	ID             string  `json:"id,omitempty"`
+	Name           string  `json:"name,omitempty"`
+	Schedule       string  `json:"schedule,omitempty"`
+	Instructions   string  `json:"instructions,omitempty"`
+	Check          string  `json:"check,omitempty"`
+	Rounds         int     `json:"rounds,omitempty"`
+	Agent          string  `json:"agent,omitempty"`
+	Enabled        *bool   `json:"enabled,omitempty"`
+	Worktree       *bool   `json:"worktree,omitempty"`
+	StallAfter     *int    `json:"stallAfter,omitempty"`
+	NotifyEveryRun *bool   `json:"notifyEveryRun,omitempty"`
+	Notify         *string `json:"notify,omitempty"`
+	Bot            *string `json:"bot,omitempty"`
+	Recheck        *bool   `json:"recheck,omitempty"`
+	Access         *string `json:"access,omitempty"`
 	// Triggers and Policy are automation.Trigger and automation.WakePolicy
 	// values, decoded where the automations are.
 	Triggers json.RawMessage `json:"triggers,omitempty"`

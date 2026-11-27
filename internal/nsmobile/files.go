@@ -9,6 +9,7 @@ import (
 	"miya/internal/chat/model"
 	msgfmt "miya/internal/chat/presentation"
 	phoneproxy "miya/internal/phone/proxy"
+	webservice "miya/internal/runtime/web"
 )
 
 // showActions is the conversation actions menu as the system's action sheet
@@ -68,6 +69,10 @@ func (m *App) openMessageLink(raw string) {
 				return
 			}
 			m.openProjectFile(project, file)
+			return
+		}
+		if port, path, ok := webservice.LocalLink(raw); ok {
+			m.openLocalWebLink(port, path)
 			return
 		}
 		if core.CheckURL(raw) == nil {

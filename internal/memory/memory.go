@@ -23,6 +23,33 @@ type Scope struct {
 	Kind        string `json:"kind"`
 	ProjectKey  string `json:"projectKey,omitempty"`
 	ProjectPath string `json:"projectPath,omitempty"`
+	// Bot is the ID of the Bot a bot scope belongs to, within its project.
+	Bot string `json:"bot,omitempty"`
+}
+
+// MaxBotEntries bounds a Bot's memory: a full one is consolidated, by
+// correcting or forgetting entries, before it takes a new one.
+const MaxBotEntries = 50
+
+// BotScope is a Bot's own memory in its project: how the Bot works and what
+// it learned, recalled only in the Bot's conversations
+// (docs/personal-agent.md, P4).
+func BotScope(project Scope, bot string) Scope {
+	return Scope{Kind: "bot", ProjectKey: project.ProjectKey, ProjectPath: project.ProjectPath, Bot: bot}
+}
+
+// botID reports whether s can be a Bot's ID: short lowercase hex, so that it
+// is safe in a file name.
+func botID(s string) bool {
+	if s == "" || len(s) > 32 {
+		return false
+	}
+	for _, r := range s {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 func UserScope() Scope { return Scope{Kind: "user"} }
@@ -44,7 +71,13 @@ func (s Scope) valid() bool {
 	if s.Kind == "user" {
 		return s == UserScope()
 	}
-	if s.Kind != "project" || !filepath.IsAbs(s.ProjectPath) {
+	if s.Kind == "bot" {
+		if !botID(s.Bot) {
+			return false
+		}
+		s.Kind, s.Bot = "project", ""
+	}
+	if s.Kind != "project" || s.Bot != "" || !filepath.IsAbs(s.ProjectPath) {
 		return false
 	}
 	sum := sha256.Sum256([]byte(s.ProjectPath))
@@ -77,6 +110,8 @@ type Entry struct {
 	ValidUntil time.Time `json:"validUntil,omitzero"`
 	State      string    `json:"state"`
 	Supersedes uint64    `json:"supersedes,omitempty"`
+	// MergedInto names the entry a merged entry was folded into.
+	MergedInto string    `json:"mergedInto,omitempty"`
 	CreatedAt  time.Time `json:"createdAt"`
 	UpdatedAt  time.Time `json:"updatedAt"`
 }

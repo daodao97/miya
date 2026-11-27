@@ -12,6 +12,8 @@ import (
 // scopeSecrets adapts NSGo's asynchronous secure store for the existing phone
 // cache contract. Calls run on a worker; all NSGo requests run on the engine.
 // Unsupported platforms return their error and never fall back to cleartext.
+var errSecretNotFound = errors.New("secure item not found")
+
 type scopeSecrets struct {
 	cx        *core.Scope
 	legacyIOS bool
@@ -24,7 +26,7 @@ func (m *App) setupNative(cx *core.Scope) {
 	m.setupDesktopAuthentication()
 	m.setupNetwork(cx)
 	if !m.Loaded {
-		cx.Post(func() { go m.LoadSaved(core.ErrSecretNotFound) })
+		cx.Post(func() { go m.LoadSaved(errSecretNotFound) })
 	}
 }
 
@@ -34,7 +36,15 @@ func (s scopeSecrets) read(service, key string) (string, error) {
 		err   error
 	}
 	ch := make(chan result, 1)
-	s.cx.Post(func() { s.cx.ReadSecret(service, key, func(v string, e error) { ch <- result{v, e} }) })
+	s.cx.Post(func() {
+		store := s.cx.Secrets()
+		store.Service = service
+		v, found, err := store.Get(key)
+		if err == nil && !found {
+			err = errSecretNotFound
+		}
+		ch <- result{v, err}
+	})
 	select {
 	case r := <-ch:
 		if r.err != nil {
@@ -55,7 +65,7 @@ func (s scopeSecrets) Get(key string) ([]byte, error) {
 	if err == nil {
 		return base64.StdEncoding.DecodeString(value)
 	}
-	if !errors.Is(err, core.ErrSecretNotFound) || !s.legacyIOS {
+	if !errors.Is(err, errSecretNotFound) || !s.legacyIOS {
 		return nil, err
 	}
 	value, err = s.read("com.daodao.miya", key)
@@ -66,7 +76,7 @@ func (s scopeSecrets) Get(key string) ([]byte, error) {
 	if err := s.Set(key, data); err != nil {
 		return nil, err
 	}
-	if err := s.delete("com.daodao.miya", key); err != nil && !errors.Is(err, core.ErrSecretNotFound) {
+	if err := s.delete("com.daodao.miya", key); err != nil && !errors.Is(err, errSecretNotFound) {
 		return nil, fmt.Errorf("retire legacy credential: %w", err)
 	}
 	return data, nil
@@ -74,7 +84,11 @@ func (s scopeSecrets) Get(key string) ([]byte, error) {
 func (s scopeSecrets) Set(key string, value []byte) error {
 	ch := make(chan error, 1)
 	encoded := base64.StdEncoding.EncodeToString(value)
-	s.cx.Post(func() { s.cx.StoreSecret("Miya", key, encoded, func(err error) { ch <- err }) })
+	s.cx.Post(func() {
+		store := s.cx.Secrets()
+		store.Service = "Miya"
+		ch <- store.Set(key, encoded)
+	})
 	select {
 	case err := <-ch:
 		return err
@@ -84,12 +98,12 @@ func (s scopeSecrets) Set(key string, value []byte) error {
 }
 func (s scopeSecrets) Delete(key string) error {
 	err := s.delete("Miya", key)
-	if err != nil && !errors.Is(err, core.ErrSecretNotFound) {
+	if err != nil && !errors.Is(err, errSecretNotFound) {
 		return err
 	}
 	if s.legacyIOS {
 		err = s.delete("com.daodao.miya", key)
-		if err != nil && !errors.Is(err, core.ErrSecretNotFound) {
+		if err != nil && !errors.Is(err, errSecretNotFound) {
 			return err
 		}
 	}
@@ -97,7 +111,11 @@ func (s scopeSecrets) Delete(key string) error {
 }
 func (s scopeSecrets) delete(service, key string) error {
 	ch := make(chan error, 1)
-	s.cx.Post(func() { s.cx.DeleteSecret(service, key, func(err error) { ch <- err }) })
+	s.cx.Post(func() {
+		store := s.cx.Secrets()
+		store.Service = service
+		ch <- store.Delete(key)
+	})
 	select {
 	case err := <-ch:
 		return err

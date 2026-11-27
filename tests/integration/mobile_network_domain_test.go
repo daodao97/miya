@@ -47,8 +47,8 @@ func TestMobileSendSkipsReconnectBackoff(t *testing.T) {
 	}
 	m.Draft = "hello"
 	m.Send()
-	if m.SendErr != "Not connected to desktop. Reconnecting…" {
-		t.Fatalf("send error = %q", m.SendErr)
+	if m.SendErr != "" || !m.Sending || m.Draft != "" || len(m.Outbox) != 1 {
+		t.Fatalf("the message was not queued for reconnect: %q", m.SendErr)
 	}
 	if !waitDial(2 * time.Second) {
 		t.Fatal("send did not cut the reconnect wait short")

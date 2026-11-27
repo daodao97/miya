@@ -15,7 +15,7 @@ var automationToolProps = map[string]any{
 	"schedule": map[string]any{"type": "string", "description": "5-field cron in local time, e.g. 0 9 * * 1-5. Leave empty when only triggers wake it"},
 	"triggers": map[string]any{"type": "array", "description": "Other ways it wakes, any of which starts a run. " +
 		"condition: a shell command Miya runs in the project. Miya does not know what it looks at, so thresholds and comparisons belong in the command. Give a recipe, which is a ready-made command with params, or a command of your own. Recipes (the .json files in " + automation.RecipeDir() + "): " + automation.RecipeHints() + ". E.g. {kind:condition, condition:{recipe:disk_free, params:{VOLUME:\"/\", BELOW_GB:\"5\"}}} for free disk space under 5 GB. " +
-		"A command of your own wakes as when says. success (default): run every everyMinutes (default 5), met when it exits 0, not met when it exits 1, any other status is an error, and the first line it prints is shown; it wakes when it turns met and again after repeatHours (default 24) while still met. changed: run every everyMinutes, it wakes each time the command prints something else than before and gives the run what it printed, e.g. {command:\"gh issue list --limit 20\", when:changed}. line: Miya keeps the command running and wakes with each line it prints, for a command that waits for events, e.g. {command:\"tail -n 0 -F app.log | grep --line-buffered ERROR\", when:line}; set policy queue with it so that lines printed during a run are kept. Keep success and changed commands quick and free of side effects. " +
+		"A command of your own wakes as when says. success (default): run every everyMinutes (default 5), met when it exits 0, not met when it exits 1, any other status is an error, and the first line it prints is shown; it wakes when it turns met and again after repeatHours (default 24) while still met. changed: run every everyMinutes, it wakes each time the command prints something else than before and gives the run what it printed, e.g. {command:\"gh issue list --limit 20\", when:changed}. line: Miya keeps the command running and wakes with each line it prints, for a command that waits for events, e.g. {command:\"tail -n 0 -F app.log | grep --line-buffered ERROR\", when:line}; set policy queue with it so that lines printed during a run are kept. Keep success and changed commands quick and free of side effects. Set emptyIsError true when a command that succeeds but prints nothing means its source stopped answering, as for a changed command over a list, so that it counts as a failed check rather than as an answer. For a line command, silentHours makes the pages say it may have stopped producing after that many hours without a line. " +
 		"ingress: subscribe to messages arriving at the one shared Miya webhook, or wake directly with `miya -wake <id>` / local HTTP. Optional match maps dotted JSON paths to exact scalar values (e.g. {topic:deploy,event.status:failed}); contains is a case-insensitive literal text filter. All supplied filters must match; no filters subscribes to every message. URLs belong to Miya, not to tasks. file: when a file or a directory's entries change (path). " +
 		"after: when another automation's run finishes (after: its id; results: passed/failed/interrupted). system: event wake, when the computer wakes from sleep.",
 		"items": map[string]any{"type": "object", "required": []string{"kind"}, "properties": map[string]any{
@@ -26,7 +26,9 @@ var automationToolProps = map[string]any{
 				"command":      map[string]any{"type": "string"},
 				"when":         map[string]any{"type": "string", "enum": []string{automation.WhenSuccess, automation.WhenChanged, automation.WhenLine}},
 				"everyMinutes": map[string]any{"type": "integer"},
-				"repeatHours":  map[string]any{"type": "integer"}}},
+				"repeatHours":  map[string]any{"type": "integer"},
+				"emptyIsError": map[string]any{"type": "boolean"},
+				"silentHours":  map[string]any{"type": "integer"}}},
 			"match":    map[string]any{"type": "object", "additionalProperties": map[string]any{"type": "string"}},
 			"contains": map[string]any{"type": "string"},
 			"path":     map[string]any{"type": "string"},
@@ -36,11 +38,17 @@ var automationToolProps = map[string]any{
 	"policy": map[string]any{"type": "object", "description": "Holds back triggered wakes: queue (keep one wake that comes while running), debounceSeconds, cooldownMinutes, maxPerDay (default 24), gate (a condition as in triggers, of a recipe or a success command, checked on every wake; the run starts only when met)",
 		"properties": map[string]any{"queue": map[string]any{"type": "boolean"}, "debounceSeconds": map[string]any{"type": "integer"},
 			"cooldownMinutes": map[string]any{"type": "integer"}, "maxPerDay": map[string]any{"type": "integer"}, "gate": map[string]any{"type": "object"}}},
-	"instructions": map[string]any{"type": "string", "description": "First message each run sends to a coding agent: what to do, when it is done, and to reply that there is nothing to report when so"},
-	"check":        map[string]any{"type": "string", "description": "Optional shell command run in the project after each round; exit 0 passes, otherwise its output starts another round"},
-	"rounds":       map[string]any{"type": "integer", "minimum": 1, "maximum": 5, "description": "Most rounds when check fails (default 3; 1 without check)"},
-	"agent":        map[string]any{"type": "string", "enum": model.Backends, "description": "Agent that runs it (default: this conversation's)"},
-	"worktree":     map[string]any{"type": "boolean", "description": "Run each run in a separate Git worktree on its own branch, so it cannot collide with edits in the project; the user merges or discards its changes afterwards. Use for automations that change code"},
+	"instructions":   map[string]any{"type": "string", "description": "First message each run sends to a coding agent: what to do, when it is done, and to reply that there is nothing to report when so"},
+	"check":          map[string]any{"type": "string", "description": "Optional shell command run in the project after each round; exit 0 passes, otherwise its output starts another round"},
+	"rounds":         map[string]any{"type": "integer", "minimum": 1, "maximum": 5, "description": "Most rounds when check fails (default 3; 1 without check)"},
+	"agent":          map[string]any{"type": "string", "enum": model.Backends, "description": "Agent that runs it (default: this conversation's)"},
+	"worktree":       map[string]any{"type": "boolean", "description": "Run each run in a separate Git worktree on its own branch, so it cannot collide with edits in the project; the user merges or discards its changes afterwards. Use for automations that change code"},
+	"stallAfter":     map[string]any{"type": "integer", "minimum": 0, "maximum": 10, "description": "Optional, for an automation that pushes one thing forward (fix CI, land a migration): after this many runs in a row whose reported results are the same as the run before, Miya stops the runs triggers start and tells the user, until they edit it or use Run now. 0 or unset never stops it"},
+	"notifyEveryRun": map[string]any{"type": "boolean", "description": "Notify the user after every run. By default a run that passes with nothing new (the same reported result as the run before, or an empty one) is kept in the history without a notification; a run that fails, needs the user or leaves worktree changes always notifies"},
+	"notify":         map[string]any{"type": "string", "enum": []string{"always", "attention", "never"}, "description": "When runs notify the user. attention (default): a run that passes with nothing new stays in the history quietly. always: every run. never: no run notifies; one that fails or needs the user still waits in what needs them. Overrides notifyEveryRun"},
+	"bot":            map[string]any{"type": "string", "description": "Name of a Bot of this project from list_agents to give the automation to: each run is a new conversation of the Bot, under its charter, with its agent, model and at most its access. Omit agent with bot; an empty name takes the automation back from its Bot"},
+	"recheck":        map[string]any{"type": "boolean", "description": "With worktree and check: before the user merges, Miya runs the check again in a clean checkout of only the changes, and says if it fails. Files git ignores (installed dependencies, build caches) are not in that checkout, so use it when the check runs without them"},
+	"access":         map[string]any{"type": "string", "enum": []string{"read", "edit", "external", "full"}, "description": "What runs may do without the user. read: read and plan, no file changes. edit: edit project files and run local commands; Miya refuses actions that reach outside (git push, opening PRs, sending messages, network writes). external: like edit, but each outside action is sent to the user for review and the automation is woken with the decision. full: full access, nothing waits for the user; use when the user wants the automation to run entirely on its own, including actions outside the project. Default edit for a new automation; omit on update to keep it"},
 }
 
 func init() {
@@ -98,8 +106,14 @@ func init() {
 				"value": map[string]any{"type": []string{"string", "number"}},
 				"unit":  map[string]any{"type": "string"},
 			}, "required": []string{"name", "value"}}},
-			"artifacts":  map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Files or links produced"},
-			"needs_user": map[string]any{"type": "boolean", "description": "Whether the user needs to act on this result"},
+			"artifacts":   map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Files or links produced"},
+			"needs_user":  map[string]any{"type": "boolean", "description": "Whether the user must do something about this result; give user_action with it"},
+			"user_action": map[string]any{"type": "string", "description": "When the user must act: one line saying exactly what they should do. It is shown in Needs you, the notification and the daily briefing in place of the summary, and implies needs_user"},
+			"coverage": map[string]any{"type": "object", "description": "When the run should look at a known set (repositories, sources, pages): how many it should have, how many it did, and what is missing and why. A run that covered only part always notifies the user", "properties": map[string]any{
+				"expected": map[string]any{"type": "integer"},
+				"included": map[string]any{"type": "integer"},
+				"missing":  map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+			}, "required": []string{"expected", "included"}},
 		}, "required": []string{"summary"}},
 		Annotations: map[string]any{"readOnlyHint": false, "openWorldHint": false}})
 }

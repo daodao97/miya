@@ -1,5 +1,6 @@
 # Local packaging output and NSGo cache (symlinked into build/)
 /build/
+/.mygo/
 /.nsgo
 /miya
 /Miya
@@ -11,6 +12,7 @@
 .env.*
 !.env.example
 
-# Local workspaces; NSGo development uses the go.mod replacement to ../nsgo-miya
+# Local workspaces; NSGo development uses the go.mod replacement to ../nsgo
 /go.work
 /go.work.sum
+.mygo

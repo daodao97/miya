@@ -278,7 +278,7 @@ func (s *Service) publish() {
 }
 
 func (s *Service) publishMessages(p *Peer) {
-	t := s.host.ThreadWithID(p.Sub)
+	t := s.host.ConversationThread(p.Sub)
 	if t.ID == 0 {
 		return
 	}

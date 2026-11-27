@@ -13,7 +13,16 @@ import (
 // these props itself. Keep this adapter scoped to its public Render result.
 func (r ReferenceEditor) adaptEditorSink(cx *core.Scope, root *core.View, sink core.Input, s *re.Session, snapshot func() func() bool) core.Input {
 	in := r.Input
-	originalPaste := sink.OnPaste
+	pasteFiles := func(event core.PasteEvent) {
+		if s.Editable() && in.OnPaste != nil {
+			for i := range event.Files {
+				if event.Files[i].Name == "" && event.Files[i].MIME == "image/png" {
+					event.Files[i].Name = "pasted.png"
+				}
+			}
+			in.OnPaste(event)
+		}
+	}
 	copyText := func(cut bool) {
 		text, _ := s.Copy()
 		if text != "" {
@@ -51,7 +60,7 @@ func (r ReferenceEditor) adaptEditorSink(cx *core.Scope, root *core.View, sink c
 				return
 			}
 			if len(uris) > 0 {
-				originalPaste(core.PasteEvent{URIs: uris})
+				pasteFiles(core.PasteEvent{URIs: uris})
 				return
 			}
 			cx.ReadClipboardImage(func(img core.ClipboardImage, ok bool, err error) {
@@ -59,7 +68,7 @@ func (r ReferenceEditor) adaptEditorSink(cx *core.Scope, root *core.View, sink c
 					return
 				}
 				if ok {
-					originalPaste(core.PasteEvent{Files: []core.PastedFile{{Name: "pasted.png", MIME: "image/png", Data: img.PNG}}})
+					pasteFiles(core.PasteEvent{Files: []core.PastedFile{{Name: "pasted.png", MIME: "image/png", Data: img.PNG}}})
 					return
 				}
 				if err != nil {
@@ -74,25 +83,38 @@ func (r ReferenceEditor) adaptEditorSink(cx *core.Scope, root *core.View, sink c
 		})
 	}
 
+	sink.OnEditAction = func(action core.EditAction) {
+		switch action {
+		case core.EditCopy:
+			copyText(false)
+		case core.EditCut:
+			copyText(true)
+		case core.EditSelectAll:
+			s.Run(re.SelectAll)
+		}
+	}
 	sink.OnPaste = func(e core.PasteEvent) {
 		if len(e.Files) > 0 || len(e.URIs) > 0 {
-			originalPaste(e)
+			pasteFiles(e)
 		} else {
 			paste(e.Text)
 		}
 	}
-	sink.ContextMenu = []core.InputMenuItem{
-		{Label: tr("Copy"), OnPress: func(core.InputSelection) { copyText(false) }},
-		{Label: tr("Cut"), OnPress: func(core.InputSelection) { copyText(true) }},
-		{Label: tr("Paste"), OnPress: func(core.InputSelection) { readClipboard() }},
-		{Label: tr("Copy session link"), OnPress: func(core.InputSelection) {
+	actions := []struct {
+		Label   string
+		OnPress func()
+	}{
+		{Label: tr("Copy"), OnPress: func() { copyText(false) }},
+		{Label: tr("Cut"), OnPress: func() { copyText(true) }},
+		{Label: tr("Paste"), OnPress: func() { readClipboard() }},
+		{Label: tr("Copy session link"), OnPress: func() {
 			text, _ := s.Copy()
 			ms := model.ThreadMentions(text)
 			if len(ms) == 1 {
 				cx.SetClipboard(ms[0].Ref.URL())
 			}
 		}},
-		{Label: tr("Paste as conversation reference"), OnPress: func(core.InputSelection) {
+		{Label: tr("Paste as conversation reference"), OnPress: func() {
 			if !s.Editable() {
 				return
 			}
@@ -112,9 +134,8 @@ func (r ReferenceEditor) adaptEditorSink(cx *core.Scope, root *core.View, sink c
 				}
 			})
 		}},
-		{Label: tr("Select all"), OnPress: func(core.InputSelection) { s.Run(re.SelectAll) }},
+		{Label: tr("Select all"), OnPress: func() { s.Run(re.SelectAll) }},
 	}
-	actions := sink.ContextMenu
 	root.OnContextMenu = func(e core.ContextMenuEvent) {
 		text, _ := s.Copy()
 		mentions := model.ThreadMentions(text)
@@ -131,7 +152,7 @@ func (r ReferenceEditor) adaptEditorSink(cx *core.Scope, root *core.View, sink c
 			case tr("Copy session link"):
 				disabled = len(mentions) != 1
 			}
-			items = append(items, core.MenuItem{Label: action.Label, Disabled: disabled, OnSelect: func() { action.OnPress(core.InputSelection{}); s.Focus() }})
+			items = append(items, core.MenuItem{Label: action.Label, Disabled: disabled, OnSelect: func() { action.OnPress(); s.Focus() }})
 		}
 		cx.PopupMenu(items, e.PagePosition, nil)
 	}

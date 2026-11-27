@@ -13,6 +13,7 @@ import (
 
 type Automations struct {
 	Webhook        *automation.WebhookView
+	Briefing       *automation.BriefingView
 	Form           AutomationForm
 	List           []automation.View
 	Detail         string
@@ -82,10 +83,13 @@ func (m *Client) LoadAutomations() {
 	}
 	m.Autos.Loading, m.Autos.RequestedAt = true, time.Now()
 	conn, gen := m.Conn, m.Generation
-	webhookSupported := m.State.AutomationWebhook
+	webhookSupported, briefingSupported := m.State.AutomationWebhook, m.State.AutomationBriefing
 	go func() {
 		if webhookSupported {
 			_ = m.write(conn, remote.Request{Op: "automation-webhook"})
+		}
+		if briefingSupported {
+			_ = m.write(conn, remote.Request{Op: "automation-briefing"})
 		}
 		if err := m.write(conn, remote.Request{Op: "automations"}); err != nil {
 			m.onMain(gen, func() {
@@ -113,4 +117,37 @@ func (m *Client) ReceiveAutomations(data json.RawMessage, message string) {
 
 func (m *Client) AutomationRunThread(v automation.View, r automation.Run) (model.Thread, bool) {
 	return phoneproto.AutomationRunThread(m.State.Projects, m.defaultAgent(), v, r)
+}
+
+func (m *Client) SetAutomationBriefing(at string) {
+	if m.State.AutomationBriefing {
+		m.automationRequest("automation-briefing", automation.Request{Action: "set", Data: at})
+	}
+}
+
+func (m *Client) ReviewAutomation(req automation.Request) {
+	if m.State.AutomationReview {
+		m.automationRequest("automation-review", req)
+	}
+}
+
+func (m *Client) automationRequest(op string, req automation.Request) {
+	if !m.Connected || !m.CanSend() {
+		return
+	}
+	body, err := json.Marshal(req)
+	if err != nil {
+		m.Autos.Err = err.Error()
+		return
+	}
+	conn, gen := m.Conn, m.Generation
+	go func() {
+		if err := m.write(conn, remote.Request{Op: op, Automation: body}); err != nil {
+			m.onMain(gen, func() {
+				if m.Conn == conn {
+					m.Autos.Err = err.Error()
+				}
+			})
+		}
+	}()
 }

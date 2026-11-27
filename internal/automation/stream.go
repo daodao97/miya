@@ -286,7 +286,7 @@ func (rn *Runner) afterLine(id, tid string, ev StreamEvent) {
 		st.Met, st.Error = true, ""
 	default:
 		st.Met, st.Error, st.Errors = true, "", 0
-		st.Value, st.LastFired = textutil.ClipRunes(textutil.FirstLine(ev.Line), 200), now
+		st.Value, st.LastFired, st.LastSuccess = textutil.ClipRunes(textutil.FirstLine(ev.Line), 200), now, now
 	}
 	rn.Store.Triggers[key] = st
 	rn.Persist()
@@ -294,7 +294,7 @@ func (rn *Runner) afterLine(id, tid string, ev StreamEvent) {
 	switch {
 	case ev.Err != "":
 		if st.Errors == probeErrorNotice {
-			rn.host.Deliver(notification.Notice{ID: "miya-auto-probe-" + key, Title: a.Name + " · " + tr("Condition check failing"), Body: st.Error})
+			rn.host.Deliver(notification.Notice{ID: "miya-auto-probe-" + key, Title: a.Name + " · " + tr("Condition check failing"), Body: st.Error, Category: "probe:" + a.ID, Topic: a.Name})
 		}
 	case ev.Line != "":
 		reason := fmt.Sprintf("`%s` printed: %s", commandLabel(*t.Condition), st.Value)

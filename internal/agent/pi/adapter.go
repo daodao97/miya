@@ -28,8 +28,9 @@ type State struct {
 	Binary, Error, Command string
 	Args, Env              []string
 	Model, Effort          string
-	// Provider is the endpoint of Miya's Claude Code settings, which pi uses
-	// when it is usable; otherwise pi uses its own configuration.
+	// Provider is the provider chosen for pi in Miya's settings, else the
+	// endpoint of Miya's Claude Code settings; pi uses it when it is usable,
+	// otherwise its own configuration.
 	Provider pinative.Provider
 	// ClaudeModel is the model Claude Code runs by default.
 	ClaudeModel string
@@ -181,6 +182,9 @@ var piModels = []string{"claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-
 var piEfforts = []string{"", "off", "minimal", "low", "medium", "high", "xhigh"}
 
 func providerModels(s State) []string {
+	if len(s.Provider.Models) > 0 {
+		return append([]string(nil), s.Provider.Models...)
+	}
 	out := append([]string(nil), piModels...)
 	for _, m := range []string{s.Provider.Model, s.ClaudeModel} {
 		if m != "" && !slices.Contains(out, m) {
@@ -194,6 +198,9 @@ func providerModels(s State) []string {
 func defaultModel(s State) string {
 	if !s.Provider.Usable() {
 		return ""
+	}
+	if len(s.Provider.Models) > 0 {
+		return textutil.FirstNonEmpty(s.Provider.Model, s.Provider.Models[0])
 	}
 	return textutil.FirstNonEmpty(s.Provider.Model, s.ClaudeModel, piModels[1])
 }
@@ -227,9 +234,10 @@ func (b Adapter) SetModel(v string)       { b.host.SetModel(v) }
 func (b Adapter) SetEffort(v string)      { b.host.SetEffort(v) }
 
 func (b Adapter) ModelOptions() []agent.ModelOption {
+	defaultID := defaultModel(b.host.Snapshot())
 	var out []agent.ModelOption
 	for _, v := range b.ModelChoices() {
-		out = append(out, agent.ModelOption{Value: v, Label: b.ModelLabel(v), Efforts: append([]string(nil), piEfforts...)})
+		out = append(out, agent.ModelOption{Value: v, Label: textutil.FirstNonEmpty(v, defaultID), Efforts: append([]string(nil), piEfforts...)})
 	}
 	return out
 }

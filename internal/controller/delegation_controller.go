@@ -4,10 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	agentpolicy "miya/internal/agent/policy"
+	"miya/internal/textutil"
 	"slices"
 	"strings"
 
 	"miya/internal/appmodel"
+	"miya/internal/bot"
 	"miya/internal/chat/model"
 	dg "miya/internal/delegation"
 	"miya/internal/delegation/coordinator"
@@ -30,6 +33,15 @@ func (c *Controller) prepareDelegation(caller model.Thread, a coordinator.Args) 
 	from := c.ThreadRef(caller).URL()
 	if from == "" {
 		return dg.StartInput{}, errors.New("CALLER_UNAVAILABLE: The initiating session is not created yet")
+	}
+	var standing bot.Bot
+	if a.Bot != "" {
+		// The task starts a new conversation of the Bot.
+		b, ref, err := c.delegationBot(caller, a)
+		if err != nil {
+			return dg.StartInput{}, err
+		}
+		standing, a.Agent, a.Thread = b, b.Agent, ref
 	}
 	agent := a.Agent
 	if agent == "" {
@@ -76,6 +88,9 @@ func (c *Controller) prepareDelegation(caller model.Thread, a coordinator.Args) 
 	if a.Notify != "" && a.Notify != "none" && a.Notify != "on_finish" {
 		return dg.StartInput{}, errors.New("INVALID_ARGUMENT: Unsupported notification selection")
 	}
+	if err := c.checkDelegationAccess(caller, a); err != nil {
+		return dg.StartInput{}, err
+	}
 	text := a.Task
 	if a.Context == "caller_summary" {
 		if !caller.HistoryLoaded {
@@ -88,6 +103,9 @@ func (c *Controller) prepareDelegation(caller model.Thread, a coordinator.Args) 
 		return dg.StartInput{}, err
 	}
 	model, effort := a.Model, a.Effort
+	if standing.ID != "" {
+		model, effort = standing.Model, standing.Effort
+	}
 	if model == "" {
 		model = b.Model
 	}
@@ -98,7 +116,12 @@ func (c *Controller) prepareDelegation(caller model.Thread, a coordinator.Args) 
 	if target.ID != 0 {
 		workspace = c.ThreadWorkspace(target.ID)
 	}
-	in := dg.StartInput{From: from, RequestID: a.RequestID, Target: a.Thread, Agent: agent, Workspace: workspace, Title: a.Title, Prompt: a.Task, Context: a.Context, Snapshot: expanded, Requested: dg.Config{Model: a.Model, Effort: a.Effort}, Effective: dg.Config{Model: model, Effort: effort, Policy: c.permissionForThread(target)}, Notify: a.Notify != "none", PreviousTaskID: a.PreviousTaskID}
+	policy := textutil.FirstNonEmpty(a.Access, c.permissionForThread(target))
+	if own := botPolicy(standing); own != "" && target.ID == 0 && a.Access == "" {
+		// The conversation a Bot's first task starts gets the Bot's access.
+		policy = own
+	}
+	in := dg.StartInput{From: from, RequestID: a.RequestID, Target: a.Thread, Bot: botKey(a.Bot), BotID: standing.ID, Agent: agent, Workspace: workspace, Title: a.Title, Prompt: a.Task, Context: a.Context, Snapshot: expanded, Requested: dg.Config{Model: a.Model, Effort: a.Effort, Policy: a.Access}, Effective: dg.Config{Model: model, Effort: effort, Policy: policy}, Notify: a.Notify != "none", PreviousTaskID: a.PreviousTaskID}
 	if caller.ExecutionID != "" && strings.HasPrefix(caller.ExecutionID, "task-") {
 		in.ParentTaskID = caller.ExecutionID
 	}
@@ -131,4 +154,28 @@ func (c *Controller) ManagedEvent(id string, event dg.Event) {
 
 func (c *Controller) managedEventWithOutcome(id string, event dg.Event, saveOutcome bool) {
 	c.Collaboration.Observe(id, event, saveOutcome)
+}
+
+// checkDelegationAccess validates the access level a task asks for. It only
+// narrows what the delegating conversation may do: edit needs a caller that
+// takes edits without asking the person (docs/delegation-access.md).
+func (c *Controller) checkDelegationAccess(caller model.Thread, a coordinator.Args) error {
+	switch a.Access {
+	case "":
+		return nil
+	case agentpolicy.Read, agentpolicy.Edit:
+	default:
+		return errors.New("INVALID_ARGUMENT: access must be read or edit")
+	}
+	if a.Thread != "" {
+		return errors.New("INVALID_ARGUMENT: access applies to a new conversation; omit thread_id or access")
+	}
+	if a.Access == agentpolicy.Edit {
+		switch c.permissionForThread(caller) {
+		case "on-failure", "never", agentpolicy.Edit:
+		default:
+			return errors.New("ACCESS_DENIED: This conversation needs the person's approval for edits, so it cannot delegate edit access. Delegate with access read and make the changes here, or ask the person to change the permission choice")
+		}
+	}
+	return nil
 }

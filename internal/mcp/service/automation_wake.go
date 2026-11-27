@@ -42,6 +42,33 @@ func applyWakeArgs(a, old *automation.Automation, args mcpproto.AutomationArgs) 
 		}
 		a.Policy = p
 	}
+	if args.StallAfter != nil {
+		a.StallAfter = *args.StallAfter
+	}
+	if args.NotifyEveryRun != nil {
+		a.NotifyEveryRun = *args.NotifyEveryRun
+		if a.NotifyEveryRun {
+			a.NotifyNever = false
+		}
+	}
+	if args.Notify != nil {
+		switch strings.TrimSpace(*args.Notify) {
+		case "always":
+			a.NotifyEveryRun, a.NotifyNever = true, false
+		case "attention":
+			a.NotifyEveryRun, a.NotifyNever = false, false
+		case "never":
+			a.NotifyEveryRun, a.NotifyNever = false, true
+		default:
+			return errors.New("notify must be always, attention or never")
+		}
+	}
+	if args.Recheck != nil {
+		a.Recheck = *args.Recheck
+	}
+	if args.Access != nil {
+		a.Access = automation.Access(strings.TrimSpace(*args.Access))
+	}
 	return nil
 }
 
@@ -94,4 +121,30 @@ func (api *Service) wakeAutomation(r mcpproto.Request, args mcpproto.AutomationA
 		}
 		return automation.OutcomeLabel(w.Outcome) + ": " + textutil.FirstNonEmpty(w.Detail, w.Outcome), nil
 	}), nil
+}
+
+// applyBot gives an automation to the Bot a tool call names, by the name
+// list_agents gave, in the caller's project; an empty name takes it back.
+func (api *Service) applyBot(a *automation.Automation, r mcpproto.Request, args mcpproto.AutomationArgs) error {
+	if args.Bot == nil {
+		return nil
+	}
+	name := strings.TrimSpace(*args.Bot)
+	if name == "" {
+		a.Bot = ""
+		return nil
+	}
+	if args.Agent != "" {
+		return errors.New("A Bot has its own agent; send bot without agent")
+	}
+	caller, ok := api.Caller(r.Tool)
+	if !ok {
+		return errors.New(mcpproto.CallerUnknown)
+	}
+	id, agent, err := api.host.BotOf(caller, name)
+	if err != nil {
+		return err
+	}
+	a.Bot, a.Agent = id, agent
+	return nil
 }

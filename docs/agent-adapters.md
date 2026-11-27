@@ -36,11 +36,35 @@ Pi 启动时默认通过 `--system-prompt <文件路径>` 加载内置的 `inter
 
 `ModelOptions()` 由各 Adapter 生成模型标签、可用推理档位和默认档位。手机协议层只转换和校验公共选项，不再读取 Codex 模型结构或对 Claude 做特判。
 
+## 模型 Provider
+
+设置 → 通用 →「模型 Provider」可以添加自己的 Provider：名称、API Key、模型列表，以及它支持的每个协议的 Base URL。一个 Provider 可以同时开启多个协议：Anthropic Messages（Base URL 是 `ANTHROPIC_BASE_URL` 接受的根地址，不含 `/v1`）、OpenAI Responses、OpenAI Chat Completions（后两者 Base URL 以 `/v1` 结尾），共用同一个 Key 和模型列表。Provider 下为每个智能体提供一个开关；一个智能体同时只用一个 Provider，在另一个 Provider 上打开会关掉原来的。智能体通过自己支持的协议连接：Claude Code 用 Anthropic Messages，Codex 用 OpenAI Responses，Pi 按 Anthropic → Responses → Chat 的顺序选 Provider 开启的第一个；Provider 没有对应协议时开关禁用。「获取模型」依次尝试各协议的模型列表，同时验证 URL 和 Key。旧版单协议配置在读取时自动转换。
+
+配置保存在 Miya 状态目录的 `providers/providers.json`（权限 0600），只由后台服务读写；窗口和快照只拿到不含 Key 的视图（Key 末四位用于识别）。Provider 只作用于 Miya 启动的进程，追加在用户启动命令之后，不修改 `~/.claude`、`~/.codex`、`~/.pi`，也不读写各 CLI 的登录凭据；关掉开关即恢复 CLI 自己的配置和账号（`internal/agent/provider`）：
+
+- Claude Code：在状态目录写 `providers/claude-<id>.json`（0600），以 `--settings` 传入。它的 `env` 设置 `ANTHROPIC_BASE_URL`、`ANTHROPIC_AUTH_TOKEN`，清空 `ANTHROPIC_API_KEY` 和 Bedrock、Vertex 等云端开关；有模型时，`ANTHROPIC_MODEL` 和 opus/sonnet/haiku 别名都指向第一个模型。`--settings` 优先于用户的 `settings.json`，避免用户 `env` 里的同名变量覆盖进程变量。启动命令中能读取的 `--settings` 先合并进这个文件、Provider 的值在上；读不到的原样保留。对话、记忆提取和自动化使用同一份参数。
+- Codex：每个开启了 Responses 协议的 Provider 都以 `-c model_providers.miya-<id>.*`（`wire_api = "responses"`，`env_key` 指向只放在进程环境里的 Key 变量）传给 app-server，选中的一个再设 `model_provider` 和 `model`。未选中的表也一并传入，因为 Codex 线程记住启动时的 provider，缺表就无法再打开。模型选择器显示 Provider 的模型。配置变化后，app-server 在没有 Codex 轮次运行时立即重启，否则等最后一个轮次结束再重启，不中断运行中的轮次。
+- Pi：Miya 的扩展按所选协议（`MIYA_PI_API`）注册 `anthropic-messages`、`openai-responses` 或 `openai-completions` provider，模型列表来自 Provider。没有为 Pi 打开 Provider 时，仍沿用 Claude Code 配置中的 Anthropic 兼容端点。已在运行的 pi 进程保留启动时的 Provider，新会话生效。
+
+Codex 和 Pi 只能使用 Provider 列出的模型，开启后没有模型时设置页会提示。
+
 ## CLI 版本与升级
 
 设置中的智能体列表通过 `internal/agent/cliupdate` 异步读取当前版本和可升级版本，参考 magpie 按原安装来源升级的做法。Codex、Claude Code 和 Pi 支持识别 Homebrew、npm、Bun、pnpm 及适用的官方独立安装器；npm 保留原安装前缀，并优先使用该安装器对应的 Node。无法确定来源的 CLI 只展示版本并提示使用原安装方式升级。
 
 检查和升级由后台 Controller 执行，窗口通过可选的 `AgentUpdates` 状态同步进度、错误和升级前后版本。包管理器升级串行执行，升级期间后台保持忙碌；命令退出成功后还要重新读取实际版本。已有智能体进程继续运行，新版本在后续进程启动时生效，不主动重启共享 Codex app-server。新增 Agent 时，需要在升级包中声明发行包和能够证明安装来源的识别规则。
+
+### 安装和 Windows / WSL
+
+未安装的内置智能体在设置 → 通用 → 智能体中提供“安装”按钮。Claude Code 和 Windows 原生环境中的 Codex 使用各自的官方独立安装器。macOS、Linux 和 WSL 中的 Codex 优先通过 npm 安装，找不到 npm 时使用官方独立安装器。Pi 需要 Node.js 和 npm。通过 npm 安装的 CLI 写入 Miya 管理的 `agents/npm` 目录。安装程序退出后重新检查 CLI 版本，若无法找到或验证则显示失败并允许重试。
+
+Windows 的 npm shim 只有同时匹配包清单和脚本入口时才按 Node 入口直接启动，避免 `cmd.exe` 把提示词、JSON、空格与特殊字符解释成命令。其他 `.cmd/.bat` 通过受限的批处理启动器执行；不支持安全传递的展开符、引号或换行会明确报错。工具查找补充用户 npm、Claude、Bun、pnpm、Volta 和系统 Node 目录，并读取当前注册表 PATH；安装后无需重启 Miya 才能发现新 CLI。
+
+Windows 服务端的智能体列表上方提供“在 WSL 中运行智能体”和发行版设置，留空使用默认发行版。需要先安装 WSL 和相应 Linux 发行版；Miya 不自动安装 Windows 系统组件。设置随服务状态同步，远程窗口也操作服务端的环境。切换前要求当前任务与安装/升级结束，再重连空闲的 Codex app-server；升级本身不会重启会话。
+
+WSL 模式的检测、安装、升级、登录、用量和新会话均在所选发行版运行，不把 Windows PATH 或默认账号目录传入 Linux。Claude 配置和历史从对应发行版的目录读取；Miya 的 MCP 进程通过 WSL interop 调用 Windows 可执行文件。WSL 中安装到 `$HOME/.local/share/miya/agents/npm` 的 npm 包可被后续会话发现。工作区、附件和协议中的结构化路径进行 Windows/WSL 转换，支持盘符路径、该发行版的 UNC 路径以及自定义 automount 根目录；提示词和正文不做路径替换。
+
+Windows/Linux 交叉编译只验证编译兼容性，不能代替 Windows 原生或 WSL 实机运行验收。
 
 ## 消息和交互
 

@@ -31,12 +31,15 @@ func (api *Service) automation(op string, r mcpproto.Request) (any, error) {
 			return nil, errors.New(mcpproto.CallerUnknown)
 		}
 		a := automation.Automation{Name: args.Name, Project: c.ThreadWorkspace(caller.ID), Agent: textutil.FirstNonEmpty(args.Agent, model.ThreadAgent(caller)),
-			Instructions: args.Instructions, Schedule: args.Schedule, Check: args.Check, Rounds: args.Rounds, Enabled: true}
+			Instructions: args.Instructions, Schedule: args.Schedule, Check: args.Check, Rounds: args.Rounds, Enabled: true, Access: automation.AccessEdit}
 		if a.Rounds == 0 {
 			a.Rounds = 3
 		}
 		if args.Worktree != nil {
 			a.Worktree = *args.Worktree
+		}
+		if err := api.applyBot(&a, r, args); err != nil {
+			return nil, err
 		}
 		if err := applyWakeArgs(&a, nil, args); err != nil {
 			return nil, err
@@ -112,6 +115,9 @@ func (api *Service) updateAutomation(r mcpproto.Request, args mcpproto.Automatio
 	}
 	if args.Worktree != nil {
 		next.Worktree = *args.Worktree
+	}
+	if err := api.applyBot(&next, r, args); err != nil {
+		return nil, err
 	}
 	if err := applyWakeArgs(&next, &old, args); err != nil {
 		return nil, err

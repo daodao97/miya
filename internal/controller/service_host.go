@@ -4,16 +4,22 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"miya/internal/agent/catalog"
+	"miya/internal/agent/integrations"
+	"miya/internal/pressure"
 	"path/filepath"
 	"time"
 
 	"miya/internal/agent/login"
 	agentpolicy "miya/internal/agent/policy"
+	"miya/internal/agent/provider"
 	"miya/internal/appdir"
 	"miya/internal/appmodel"
 	"miya/internal/async"
 	"miya/internal/automation"
+	"miya/internal/bot"
 	"miya/internal/chat/model"
+	"miya/internal/desktop"
 	mcpproto "miya/internal/mcp/protocol"
 	"miya/internal/memory"
 	"miya/internal/memory/manager"
@@ -22,6 +28,7 @@ import (
 	webservice "miya/internal/runtime/web"
 	svcproto "miya/internal/service/protocol"
 	serviceserver "miya/internal/service/server"
+	"miya/internal/statecard"
 	"miya/internal/uiruntime"
 )
 
@@ -30,11 +37,24 @@ func NewService(c *Controller, ex *async.Executor) *serviceserver.Service {
 	c.Memories().Store = memory.New(filepath.Join(appdir.Dir(), "memory"))
 	s := serviceserver.New(c, ex)
 	c.Push = notification.NewHub()
+	c.Pressure = pressure.New(integrations.Quotas().Read, func(agent string) string {
+		// No guess for an agent the catalog does not know; "" is the default.
+		d, ok := catalog.Lookup(agent)
+		if agent == "" {
+			d, ok = catalog.Default(), true
+		}
+		if !ok {
+			return ""
+		}
+		return d.UsageID
+	})
 	c.Run = ex.Push
 	c.startPhoneActivities()
 	c.OnDraftReturned = s.DraftReturned
 	c.Memories().Engine = NewMemoryEngine(c)
 	c.Collaboration = NewCollaboration(c, filepath.Join(appdir.Dir(), "delegations"))
+	c.StartBots(bot.Path())
+	c.StartStateCards(statecard.Dir())
 	return s
 }
 
@@ -55,6 +75,8 @@ func (c *Controller) ServiceRequest(req svcproto.Request) (any, error) {
 	var id int
 	var value string
 	switch req.Op {
+	case desktop.PermissionStatusOp:
+		return async.Reply(func() (any, error) { return desktop.CheckPermissions(), nil }), nil
 	case "accountLogin":
 		var r login.Request
 		if err := arg(&r); err != nil {
@@ -62,6 +84,28 @@ func (c *Controller) ServiceRequest(req svcproto.Request) (any, error) {
 		}
 		run := c.AccountLoginTarget()
 		return async.Reply(func() (any, error) { return run(r) }), nil
+	case "providerSave":
+		var e provider.Edit
+		if err := arg(&e); err != nil {
+			return nil, err
+		}
+		return nil, c.SaveProvider(e)
+	case "providerDelete":
+		_ = arg(&value)
+		return nil, c.DeleteProvider(value)
+	case "providerUse":
+		var u provider.Use
+		if err := arg(&u); err != nil {
+			return nil, err
+		}
+		return nil, c.UseProvider(u)
+	case "providerModels":
+		var e provider.Edit
+		if err := arg(&e); err != nil {
+			return nil, err
+		}
+		p := c.providerToFetch(e)
+		return async.Reply(func() (any, error) { return provider.FetchModels(context.Background(), p) }), nil
 	case "host":
 		var r svcproto.HostRequest
 		if err := arg(&r); err != nil {
@@ -97,6 +141,12 @@ func (c *Controller) ServiceRequest(req svcproto.Request) (any, error) {
 			return nil, err
 		}
 		return c.PrepareRuntime(r.Ref, r.Project)
+	case "notificationPolicy", "notificationQuietHours", "notificationRuleForget":
+		var r notification.PolicyRequest
+		if err := arg(&r); err != nil {
+			return nil, err
+		}
+		return c.NotificationPolicyOp(req.Op, r)
 	case "desktop-read":
 		var read appmodel.DesktopRead
 		if err := arg(&read); err != nil {
@@ -115,12 +165,18 @@ func (c *Controller) ServiceRequest(req svcproto.Request) (any, error) {
 			return nil, err
 		}
 		return c.Memories().Op(req.Op, r)
-	case "automationList", "automationDraft", "automationSave", "automationToggle", "automationDelete", "automationRunNow", "automationWorktree", "automationWake", "automationWebhook":
+	case "automationList", "automationDraft", "automationSave", "automationToggle", "automationDelete", "automationRunNow", "automationWorktree", "automationWake", "automationWebhook", "automationBriefing", "automationReview":
 		var r automation.Request
 		if err := arg(&r); err != nil {
 			return nil, err
 		}
 		return c.AutomationOp(req.Op, r)
+	case "botSave", "botDelete", "botReset", "botRead":
+		var r bot.Request
+		if err := arg(&r); err != nil {
+			return nil, err
+		}
+		return c.BotOp(req.Op, r)
 	case "prefetch":
 		var ref model.ThreadRef
 		if err := arg(&ref); err != nil {
@@ -192,7 +248,7 @@ func (c *Controller) ServiceRequest(req svcproto.Request) (any, error) {
 		if err := json.Unmarshal(req.Args, &a); err != nil {
 			return nil, err
 		}
-		return c.TaskAction(a.Thread, a.Task, a.Action), nil
+		return c.prepareTaskAction(a.Thread, a.Task, a.Action), nil
 	case "command":
 		var a svcproto.Command
 		_ = arg(&a)
@@ -277,6 +333,12 @@ func (c *Controller) ServiceRequest(req svcproto.Request) (any, error) {
 		}
 		_ = arg(&a)
 		c.SetAgentEnabled(a.ID, a.Enabled)
+	case "agentEnvironment":
+		var value string
+		if err := arg(&value); err != nil {
+			return nil, err
+		}
+		c.SetAgentEnvironment(value)
 	case "checkAgentUpdates":
 		c.CheckAgentUpdates()
 	case "upgradeAgent":
@@ -358,8 +420,12 @@ func (c *Controller) ServicePause() {
 		c.Memories().Engine.Pause()
 	}
 }
-func (c *Controller) ServiceKeepAlive() bool { return DesktopPhone.Connected() || c.Auto.Enabled() }
+func (c *Controller) ServiceKeepAlive() bool {
+	return DesktopPhone.Connected() || c.Auto.Enabled() ||
+		c.Collaboration != nil && c.Collaboration.Manager != nil && c.Collaboration.Manager.HasPendingFollowUps()
+}
 func (c *Controller) SnapshotState() svcproto.State {
+	followUps := c.followUpTasks()
 	busy := make(map[string]bool)
 	for _, p := range c.Projects() {
 		if c.ProjectBusy(p.Path) {
@@ -371,7 +437,7 @@ func (c *Controller) SnapshotState() svcproto.State {
 		draft := t.Draft
 		t = model.ListThread(t)
 		t.Draft = draft
-		threads[i] = t
+		threads[i] = c.withFollowUps(t, followUps)
 	}
 	projectThreads := make(map[string][]model.Thread, len(c.ProjectCache))
 	for path, cached := range c.ProjectCache {
@@ -382,7 +448,7 @@ func (c *Controller) SnapshotState() svcproto.State {
 		for i, t := range cached {
 			t = model.ListThread(t)
 			t.Queue = nil
-			items[i] = t
+			items[i] = c.withFollowUps(t, followUps)
 		}
 		projectThreads[path] = items
 	}
@@ -394,11 +460,14 @@ func (c *Controller) SnapshotState() svcproto.State {
 		ProjectBusy:     busy,
 		ProjectThreads:  projectThreads,
 		DesktopUnread:   c.DesktopUnread,
+		Waiting:         c.WaitingThreads(),
+		Bots:            c.Bots(),
 		Cwd:             c.Cwd, Projects: c.Projects(), Threads: threads, Approvals: c.Approvals(),
 		Status: c.Status(), HistoryStatus: c.HistoryStatus(), Ready: c.Ready(),
 		Models: snapshotModels(c.Models()), Model: c.Model(), Effort: c.Effort(), PermissionPolicy: c.PermissionPolicy(), Locale: c.Locale(),
 		ClaudeCommand: c.ClaudeCommand, ClaudeError: c.ClaudeError, ClaudeBinary: c.ClaudeBinary, ClaudeArgs: c.ClaudeArgs, ClaudeEnv: c.ClaudeEnv, ClaudeModel: c.ClaudeModel, ClaudeEffort: c.ClaudeEffort, ClaudeDefaultModel: c.claudeDefaultModel, ClaudeModels: snapshotClaudeModels(c.claudeModels),
-		PiCommand: c.Pi.Command, PiError: c.Pi.Error, PiBinary: c.Pi.Binary, PiArgs: c.Pi.Args, PiEnv: c.Pi.Env, PiModel: c.Pi.Model, PiEffort: c.Pi.Effort, AgentEnabled: c.AgentSwitches(), AgentUpdates: c.AgentUpdates(),
+		PiCommand: c.Pi.Command, PiError: c.Pi.Error, PiBinary: c.Pi.Binary, PiArgs: c.Pi.Args, PiEnv: c.Pi.Env, PiModel: c.Pi.Model, PiEffort: c.Pi.Effort, AgentEnabled: c.AgentSwitches(), AgentUpdates: c.AgentUpdates(), AgentEnvironment: c.AgentEnvironment(),
+		Providers: c.ProviderViews(), ProviderUse: c.ProviderUse(), ProviderError: c.ProviderError(),
 		Account: c.AccountState, AccountReset: c.AccountReset, QuotaLimits: c.QuotaLimits, QuotaStatus: c.quotaStatus,
 		Phone: DesktopPhone.Status(),
 	}

@@ -65,6 +65,15 @@ type Runner struct {
 	WorktreeRoot string
 	// Probe probes a condition off the host's thread; replaced in tests.
 	Probe func(c Condition, dir string) ProbeResult
+	// Report posts a run that notifies, even one kept off the phone, in the
+	// chat of the Bot the automation is given to; nil posts nothing.
+	Report func(a Automation, run Run, title, body string, needsUser bool)
+	// Bot is the agent and access of a Bot, for the runs of an automation
+	// given to it; nil knows no Bots.
+	Bot func(id string) (agent string, access Access, ok bool)
+	// Hold says why an agent's triggered runs should wait, "" when they
+	// may start; nil never holds.
+	Hold func(agent string) string
 	// Stream keeps a line trigger's command running until ctx ends and
 	// reports what it does; replaced in tests.
 	Stream func(ctx context.Context, dir string, c Condition, emit func(StreamEvent))
@@ -212,6 +221,7 @@ func (rn *Runner) Tick() {
 	for id, r := range rn.Active {
 		rn.advance(id, r)
 	}
+	rn.expireReviews(rn.Now())
 	now := rn.Now()
 	changed := false
 	for i := range rn.Store.Automations {
@@ -232,6 +242,7 @@ func (rn *Runner) Tick() {
 		rn.Persist()
 	}
 	rn.tickWakes(now)
+	rn.tickBriefing(now)
 }
 
 // StartRun starts a run now: a new conversation in the automation's
@@ -259,13 +270,16 @@ func (rn *Runner) startRun(id string, ev WakeEvent) error {
 	run := Run{Started: now, Round: 1, Rounds: a.Rounds, Result: Running, CatchUp: catchUp,
 		WakeSource: ev.Source, WakeTrigger: ev.Trigger, WakeReason: ev.Reason}
 	thread := 0
+	agent, access, botErr := rn.runAs(a)
 	if info, err := os.Stat(a.Project); err != nil || !info.IsDir() {
 		run.Result, run.Summary, run.Finished = Failed, "Project directory does not exist: "+a.Project, now
+	} else if botErr != nil {
+		run.Result, run.Summary, run.Finished = Failed, botErr.Error(), now
 	} else if a.Worktree {
 		rn.startInWorktree(a, run, prev, ev)
 		return nil
-	} else if thread = rn.Submit(model.SendRequest{Agent: a.Agent, Project: a.Project, Text: RunMessage(a, prev, ev), MemoryControl: true}); thread == 0 {
-		run.Result, run.Summary, run.Finished = Failed, model.AgentName(a.Agent)+" is not ready", now
+	} else if thread = rn.Submit(model.SendRequest{Agent: agent, Bot: a.Bot, Project: a.Project, Text: rn.runText(a, prev, ev), Policy: access.Policy(), MemoryControl: true}); thread == 0 {
+		run.Result, run.Summary, run.Finished = Failed, model.AgentName(agent)+" is not ready", now
 	}
 	rn.Store.AddRun(id, run)
 	if thread != 0 {
@@ -279,6 +293,21 @@ func (rn *Runner) startRun(id string, ev WakeEvent) error {
 		return errors.New(run.Summary)
 	}
 	return nil
+}
+
+// runAs is the agent and access a run of a has: for an automation given to a
+// Bot, the Bot's agent and the narrower of the two access levels, as the Bot
+// is now.
+func (rn *Runner) runAs(a Automation) (string, Access, error) {
+	if a.Bot == "" {
+		return a.Agent, a.Access, nil
+	}
+	if rn.Bot != nil {
+		if agent, access, ok := rn.Bot(a.Bot); ok {
+			return agent, Narrower(a.Access, access), nil
+		}
+	}
+	return "", "", errors.New("The Bot this automation is given to no longer exists")
 }
 
 // attach makes thread the conversation of a's run in progress, r.
@@ -335,6 +364,7 @@ func (rn *Runner) advance(id string, r *ActiveRun) {
 	case status != subagent.Completed:
 		rn.finish(id, Failed, textutil.FirstNonEmpty(t.Status, "No response received"))
 	case a.Check == "":
+		rn.updateRun(id, r, func(run *Run) { run.Verdict = VerdictUnchecked })
 		rn.finish(id, Passed, reply)
 	default:
 		r.checking = true
@@ -359,12 +389,14 @@ func (rn *Runner) afterCheck(id string, r *ActiveRun, passed bool, output, reply
 	a := rn.Store.Automations[i]
 	switch {
 	case passed:
+		rn.updateRun(id, r, func(run *Run) { run.Verdict = VerdictVerified })
 		rn.finish(id, Passed, reply)
 		return
 	case !a.Enabled && !r.allowPaused:
 		rn.finish(id, Interrupted, "Automation paused")
 		return
 	case r.round >= a.Rounds:
+		rn.updateRun(id, r, func(run *Run) { run.Verdict = VerdictCheckFailed })
 		rn.finish(id, Failed, "Check failed: "+textutil.LastLine(output))
 		return
 	}
@@ -400,11 +432,13 @@ func (rn *Runner) finish(id, result, summary string) {
 		if result == Passed && x.Report != nil && !x.Report.Auto {
 			x.Summary = textutil.ClipRunes(textutil.FirstLine(x.Report.Summary), 200)
 		}
+		x.Unchanged = foundNothingNew(*x, rn.Store.previousReport(id, x.Started))
 		run = *x
 	})
 	rn.Persist()
 	rn.reprobe(id, run)
 	if i, ok := rn.Store.Find(id); ok {
+		rn.afterProgress(rn.Store.Automations[i], run)
 		defer rn.afterRun(rn.Store.Automations[i], run)
 	}
 	if run.Worktree != nil {
@@ -420,18 +454,39 @@ func (rn *Runner) finish(id, result, summary string) {
 // notice tells the phone how a run ended, once per run; the conversation's
 // own completion notices stay quiet for automations.
 func (rn *Runner) notice(a Automation, run Run) {
+	if quietRun(a, run) {
+		// Kept in the history; nothing on the phone.
+		rn.Store.UpdateRun(a.ID, run.Started, func(x *Run) { x.Quiet = true })
+		rn.Persist()
+		rn.host.Changed()
+		return
+	}
+	if rn.Report != nil && a.Bot != "" {
+		rn.Report(a, run, a.Name+" · "+ResultLabel(run.Result), noticeBody(a, run), run.Result == Failed || run.Report != nil && run.Report.NeedsUser)
+	}
+	if a.NotifyNever {
+		// Not quiet: what the run asks still waits in what needs the person.
+		return
+	}
 	title := a.Name + " · " + ResultLabel(run.Result)
+	if run.Report != nil && run.Report.NeedsUser {
+		title = a.Name + " · " + tr("Needs your attention")
+	}
 	if run.Rounds > 1 {
 		title += fmt.Sprintf("(round %d/%d)", run.Round, run.Rounds)
 	}
 	rn.host.Deliver(notification.Notice{ID: fmt.Sprintf("miya-auto-%s-%d", a.ID, run.Started.Unix()), Thread: strconv.Itoa(run.Thread),
-		Title: title, Body: noticeBody(a, run)})
+		Title: title, Body: noticeBody(a, run), Category: "automation:" + a.ID, Topic: a.Name,
+		Urgent: run.Result == Failed || run.Report != nil && run.Report.NeedsUser})
 }
 
 // noticeBody is the run's summary and, for a worktree run, where its
 // changes are.
 func noticeBody(a Automation, run Run) string {
 	body := textutil.FirstNonEmpty(run.Summary, a.Name)
+	if run.Report != nil && run.Report.UserAction != "" {
+		body = run.Report.UserAction + "\n" + body
+	}
 	if label := WorktreeLabel(run); label != "" {
 		body += "\n" + label
 	}

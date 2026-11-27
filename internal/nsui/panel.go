@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	phoneproxy "miya/internal/phone/proxy"
+	"net/http"
+	"net/http/cookiejar"
 	"net/url"
 	"os"
 	"path"
@@ -949,12 +951,7 @@ func (p *panel) editorView(cx *core.Scope, ed *fileEditor) core.Node {
 			}},
 			core.Show{When: func() bool { return previewable && !ed.loading.Get() && ed.err.Get() == "" }, Then: func(cx *core.Scope) core.Node {
 				return ui.IconButton{TestID: "file-preview", Size: 32, IconSize: 17,
-					IconFunc: func() *core.SVG {
-						if ed.preview.Get() {
-							return nswidgets.SVG("code")
-						}
-						return nswidgets.SVG("eye")
-					},
+					Icon: nswidgets.IconOf("eye"),
 					LabelFunc: func() string {
 						if ed.preview.Get() {
 							return tr("Source")
@@ -1275,7 +1272,7 @@ func htmlFile(rel string) bool {
 // being edited, in an untrusted web view that loads and navigates only
 // within the proxy's exact origin. The proxy lives with the preview.
 func (p *panel) htmlPreview(cx *core.Scope, ed *fileEditor) core.Node {
-	root := p.cwd.GetUntracked()
+	root, rel := p.cwd.GetUntracked(), ed.rel
 	var proxy *phoneproxy.PhoneFileProxy
 	var err error
 	if p.host.RemoteHost() {
@@ -1285,28 +1282,82 @@ func (p *panel) htmlPreview(cx *core.Scope, ed *fileEditor) core.Node {
 		}
 		proxy, err = phoneproxy.NewPhoneFileProxy(cl.Wire(), root)
 	} else {
+		if !filepath.IsLocal(rel) {
+			if !filepath.IsAbs(rel) {
+				rel = filepath.Join(root, rel)
+			}
+			root, rel = filepath.Dir(rel), filepath.Base(rel)
+		}
 		proxy, err = phoneproxy.NewLocalFileProxy(root)
 	}
 	if err != nil {
 		return panelMessage(cx, tr("Browser unavailable"), err.Error())
 	}
 	cx.Cleanup(proxy.Close)
-	proxy.SetPreview(ed.rel, core.Untracked(cx, ed.text.Get))
+	proxy.SetPreview(rel, core.Untracked(cx, ed.text.Get))
 	origin, err := url.Parse(proxy.URL)
 	if err != nil {
 		return panelMessage(cx, tr("Browser unavailable"), err.Error())
 	}
 	allowed := origin.Scheme + "://" + origin.Host
-	page := proxy.URL + "?path=" + url.QueryEscape((&url.URL{Path: "/" + ed.rel}).String())
-	colors := nswidgets.ColorsOf(cx)
-	return core.WebView{TestID: "file-html", Label: tr("Preview"), Style: ui.FillRest,
-		Untrusted: true, AllowedOrigins: []string{allowed},
-		// The bootstrap redirects before the first document commits, so the
-		// policy, not only the resource rules, keeps it to the proxy.
-		NavigationPolicy: func(r core.WebNavigationRequest) bool {
-			target, err := url.Parse(r.URL)
-			return err == nil && !r.NewWindow && target.Scheme == origin.Scheme && target.Host == origin.Host
-		},
-		SourceFunc: func() core.WebSource { return core.WebSrc(page) },
-		StyleFunc:  func() core.Style { return ui.FillRest.Merge(core.Style{Background: colors.Canvas()}) }}
+	return core.Func(func(cx *core.Scope) core.Node {
+		cx.ProvideAccess(htmlPreviewAccess{})
+		client := &http.Client{
+			Timeout: 4 * time.Second,
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				if len(via) > 5 || req.URL.Scheme+"://"+req.URL.Host != allowed {
+					return http.ErrUseLastResponse
+				}
+				return nil
+			},
+		}
+		client.Jar, _ = cookiejar.New(nil)
+		const scheme = "miya-preview"
+		if err := cx.ServeSchemeRequest(scheme, func(req *core.WebSchemeRequest) *core.WebSchemeResponse {
+			u, err := url.Parse(req.URL)
+			if err != nil || u.Host != "workspace" || u.User != nil {
+				return nil
+			}
+			if req.Method != "" && req.Method != http.MethodGet && req.Method != http.MethodHead {
+				return &core.WebSchemeResponse{Status: http.StatusMethodNotAllowed}
+			}
+			target := (&url.URL{Path: u.Path, RawQuery: u.RawQuery}).String()
+			res, err := client.Get(proxy.URL + "?path=" + url.QueryEscape(target))
+			if err != nil {
+				return &core.WebSchemeResponse{Status: http.StatusBadGateway}
+			}
+			defer res.Body.Close()
+			if res.StatusCode >= 300 && res.StatusCode < 400 {
+				return &core.WebSchemeResponse{Status: http.StatusForbidden}
+			}
+			const maxPreviewSize = 16 << 20
+			body, err := io.ReadAll(io.LimitReader(res.Body, maxPreviewSize+1))
+			if err != nil || len(body) > maxPreviewSize {
+				return &core.WebSchemeResponse{Status: http.StatusBadGateway}
+			}
+			return &core.WebSchemeResponse{Status: res.StatusCode, Body: body, Headers: map[string]string{
+				"Content-Type":            res.Header.Get("Content-Type"),
+				"Content-Security-Policy": "default-src 'self' data:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'none'; object-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'self'",
+			}}
+		}); err != nil {
+			return panelMessage(cx, tr("Browser unavailable"), err.Error())
+		}
+		page := (&url.URL{Scheme: scheme, Host: "workspace", Path: "/" + rel}).String()
+		colors := nswidgets.ColorsOf(cx)
+		return core.WebView{TestID: "file-html", Label: tr("Preview"), Style: ui.FillRest,
+			Incognito: true, Source: core.WebSrc(page),
+			StyleFunc: func() core.Style { return ui.FillRest.Merge(core.Style{Background: colors.Canvas()}) }}
+	})
+}
+
+type htmlPreviewAccess struct{}
+
+func (htmlPreviewAccess) WebHosts() []string   { return nil }
+func (htmlPreviewAccess) WebSchemes() []string { return nil }
+func (htmlPreviewAccess) Allows(req core.AccessRequest) bool {
+	if req.Permission != core.AccessWebView || req.Method != "" {
+		return false
+	}
+	u, err := url.Parse(req.Resource)
+	return err == nil && u.Scheme == "miya-preview" && u.Host == "workspace" && u.User == nil
 }

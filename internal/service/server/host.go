@@ -10,7 +10,7 @@ import (
 // operations and their state remain in their owning domains.
 type Host interface {
 	SnapshotState() svcproto.State
-	ThreadWithID(int) model.Thread
+	ConversationThread(int) model.Thread
 	ServiceRequest(svcproto.Request) (any, error)
 	ServiceBusy() bool
 	ServiceKeepAlive() bool

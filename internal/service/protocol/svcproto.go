@@ -13,7 +13,9 @@ import (
 
 	"miya/internal/agent/account"
 	"miya/internal/agent/cliupdate"
+	"miya/internal/agent/provider"
 	"miya/internal/appdir"
+	"miya/internal/bot"
 	"miya/internal/chat/model"
 	"miya/internal/interaction"
 	projectmodel "miya/internal/project/model"
@@ -72,8 +74,14 @@ type State struct {
 	PiEnv              []string                   `json:"piEnv,omitempty"`
 	PiModel            string                     `json:"piModel,omitempty"`
 	PiEffort           string                     `json:"piEffort,omitempty"`
+	// Providers are those configured in Miya, never their keys, and
+	// ProviderUse the one each agent uses.
+	Providers     []provider.View   `json:"providers,omitempty"`
+	ProviderUse   map[string]string `json:"providerUse,omitempty"`
+	ProviderError string            `json:"providerError,omitempty"`
 	// AgentUpdates is discovered and executed on the service host.
-	AgentUpdates map[string]cliupdate.Info `json:"agentUpdates,omitempty"`
+	AgentUpdates     map[string]cliupdate.Info `json:"agentUpdates,omitempty"`
+	AgentEnvironment cliupdate.Environment     `json:"agentEnvironment,omitempty"`
 	// AgentEnabled holds the agents the user turned on or off.
 	AgentEnabled map[string]bool     `json:"agentEnabled,omitempty"`
 	Account      account.Display     `json:"account"`
@@ -84,6 +92,15 @@ type State struct {
 
 	ProjectThreads map[string][]model.Thread `json:"projectThreads,omitempty"`
 	DesktopUnread  map[string]int64          `json:"desktopUnread,omitempty"`
+
+	// Waiting are the conversations that wait for the person, by the key of
+	// DesktopUnread, each with what it waits for (docs/personal-agent.md,
+	// P1.5).
+	Waiting map[string]string `json:"waiting,omitempty"`
+
+	// Bots are the named assistants (docs/personal-agent.md, P4), each with
+	// its standing conversation's session.
+	Bots []bot.Bot `json:"bots,omitempty"`
 }
 
 // ThreadMessages updates a conversation's messages: Order lists them all by
@@ -188,6 +205,10 @@ func MessageFingerprint(m model.Message) uint64 {
 	h.Write([]byte(m.HandoffTitle))
 	if m.Presentation != nil {
 		b, _ := json.Marshal(m.Presentation)
+		h.Write(b)
+	}
+	if len(m.Delegations) > 0 {
+		b, _ := json.Marshal(m.Delegations)
 		h.Write(b)
 	}
 	if m.Memory != nil {

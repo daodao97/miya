@@ -10,7 +10,7 @@ import (
 
 type desktopAuthentication struct {
 	known, available, override bool
-	kind                       core.BiometryKind
+	kind                       core.BiometricKind
 	revision                   uint64
 }
 
@@ -19,7 +19,7 @@ func (m *App) setupDesktopAuthentication() {
 		m.DesktopAuthenticate = PlatformHooks.DesktopAuthenticate
 	}
 	if m.DesktopAuthenticate != nil {
-		m.authentication = desktopAuthentication{known: true, available: true, override: true, kind: core.BiometryUnknown}
+		m.authentication = desktopAuthentication{known: true, available: true, override: true, kind: core.BiometricNone}
 		return
 	}
 	m.DesktopAuthenticate = m.authenticateDesktop
@@ -34,14 +34,14 @@ func (m *App) refreshDesktopAuthentication() {
 	}
 	m.authentication.revision++
 	revision := m.authentication.revision
-	m.cx.AuthenticationAvailability(core.AuthenticateOptions{AllowDevicePasscode: true}, func(available bool, kind core.BiometryKind, err error) {
+	m.cx.BiometricAvailability(func(kind core.BiometricKind) {
 		if revision == m.authentication.revision {
-			m.setDesktopAuthentication(available && err == nil, kind)
+			m.setDesktopAuthentication(kind != core.BiometricNone, kind)
 		}
 	})
 }
 
-func (m *App) setDesktopAuthentication(available bool, kind core.BiometryKind) {
+func (m *App) setDesktopAuthentication(available bool, kind core.BiometricKind) {
 	m.authentication.known, m.authentication.available, m.authentication.kind = true, available, kind
 	if !available && m.DesktopPage != nil {
 		// A hidden save choice must not prevent subsequent manual unlock.
@@ -59,25 +59,21 @@ func (m *App) authenticateDesktop(ctx context.Context) error {
 		if ctx.Err() != nil {
 			return
 		}
-		opts := core.AuthenticateOptions{AllowDevicePasscode: true}
-		m.cx.AuthenticationAvailability(opts, func(available bool, kind core.BiometryKind, err error) {
-			m.authentication.revision++ // Supersede older UI-only queries.
-			m.setDesktopAuthentication(available && err == nil, kind)
-			if err != nil || !available {
+		m.cx.BiometricAvailability(func(kind core.BiometricKind) {
+			m.authentication.revision++
+			m.setDesktopAuthentication(kind != core.BiometricNone, kind)
+			if kind == core.BiometricNone {
 				done <- phoneclient.ErrDesktopAuthenticationUnavailable
 				return
 			}
 			if ctx.Err() != nil {
 				return
 			}
-			m.cx.Authenticate(tr("Verify your identity to save or use your Mac login password"), opts, func(ok bool, err error) {
-				switch {
-				case err != nil:
-					done <- err
-				case !ok:
-					done <- context.Canceled
-				default:
+			m.cx.AuthenticateBiometric(tr("Verify your identity to save or use your Mac login password"), func(result core.BiometricResult) {
+				if result == core.BiometricSuccess {
 					done <- ctx.Err()
+				} else {
+					done <- context.Canceled
 				}
 			})
 		})
@@ -101,17 +97,17 @@ func (m *App) desktopAuthenticationLabel() string {
 		return tr("Password saving requires device authentication, which is unavailable in this NSGo build.")
 	}
 	switch m.authentication.kind {
-	case core.BiometryFace:
+	case core.BiometricFace:
 		if m.cx.Env().OS() == core.OSIOS {
-			return tr("Face ID or device passcode")
+			return tr("Face ID")
 		}
 		return tr("Face recognition or device screen lock")
-	case core.BiometryFingerprint:
+	case core.BiometricFingerprint:
 		if m.cx.Env().OS() == core.OSIOS || m.cx.Env().OS() == core.OSMacOS {
-			return tr("Touch ID or device passcode")
+			return tr("Touch ID")
 		}
 		return tr("Fingerprint or device screen lock")
-	case core.BiometryNone:
+	case core.BiometricNone:
 		return tr("Device screen lock")
 	default:
 		return tr("Biometrics or device screen lock")

@@ -44,9 +44,13 @@ type Config struct {
 }
 
 type StartInput struct {
-	From           string `json:"from"`
-	RequestID      string `json:"request_id"`
-	Target         string `json:"target,omitempty"`
+	From      string `json:"from"`
+	RequestID string `json:"request_id"`
+	Target    string `json:"target,omitempty"`
+	// Bot is the Bot the caller named, as written. BotID is the Bot that name
+	// meant when the task was accepted; it is not part of the request.
+	Bot            string `json:"bot,omitempty"`
+	BotID          string `json:"bot_id,omitempty"`
 	ParentTaskID   string `json:"parent_task_id,omitempty"`
 	PreviousTaskID string `json:"previous_task_id,omitempty"`
 	Agent          string `json:"agent"`
@@ -70,11 +74,14 @@ type Result struct {
 }
 
 type Task struct {
-	ID               string          `json:"task_id"`
-	RequestID        string          `json:"request_id"`
-	RequestHash      string          `json:"request_hash"`
-	From             string          `json:"from"`
-	Target           string          `json:"thread,omitempty"`
+	ID          string `json:"task_id"`
+	RequestID   string `json:"request_id"`
+	RequestHash string `json:"request_hash"`
+	From        string `json:"from"`
+	Target      string `json:"thread,omitempty"`
+	// Bot is the ID of the Bot the task starts a new conversation of
+	// (docs/personal-agent.md, P4).
+	Bot              string          `json:"bot,omitempty"`
 	NewSession       bool            `json:"new_session"`
 	ParentTaskID     string          `json:"parent_task_id,omitempty"`
 	PreviousTaskID   string          `json:"previous_task_id,omitempty"`
@@ -97,11 +104,15 @@ type Task struct {
 	Progress         string          `json:"progress,omitempty"`
 	RecheckError     string          `json:"recheck_error,omitempty"`
 	Result           Result          `json:"result"`
-	Revision         uint64          `json:"revision"`
-	LastSequence     uint64          `json:"last_sequence,omitempty"`
-	CreatedAt        time.Time       `json:"created_at"`
-	StartedAt        time.Time       `json:"started_at,omitempty"`
-	FinishedAt       time.Time       `json:"finished_at,omitempty"`
+	// Refused are actions outside the workspace Miya refused a task with an
+	// access level, for the delegating conversation to take up
+	// (docs/delegation-access.md).
+	Refused      []string  `json:"refused,omitempty"`
+	Revision     uint64    `json:"revision"`
+	LastSequence uint64    `json:"last_sequence,omitempty"`
+	CreatedAt    time.Time `json:"created_at"`
+	StartedAt    time.Time `json:"started_at,omitempty"`
+	FinishedAt   time.Time `json:"finished_at,omitempty"`
 }
 
 type Event struct {
@@ -139,7 +150,11 @@ type Delivery struct {
 	SubmissionPhase  SubmissionPhase `json:"submission_phase,omitempty"`
 	Resolution       string          `json:"resolution,omitempty"`
 	ResolutionReason string          `json:"resolution_reason,omitempty"`
+	FollowUpAt       time.Time       `json:"follow_up_at,omitzero"`
+	FollowUpNote     string          `json:"follow_up_note,omitempty"`
 }
+
+func (d Delivery) IsFollowUp() bool { return !d.FollowUpAt.IsZero() }
 
 // Operation receipts survive later state changes. Retrying an old watch must
 // not reactivate it after a newer unwatch has committed.

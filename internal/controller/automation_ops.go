@@ -5,12 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"time"
 
-	claude "miya/internal/agent/claude/native"
 	"miya/internal/agent/integrations"
 	"miya/internal/appmodel"
 	"miya/internal/async"
 	"miya/internal/automation"
+	"miya/internal/bot"
 	"miya/internal/chat/model"
 	msgfmt "miya/internal/chat/presentation"
 	"miya/internal/notification"
@@ -19,7 +20,7 @@ import (
 )
 
 var automationOps = map[string]bool{"automationList": true, "automationDraft": true, "automationSave": true,
-	"automationToggle": true, "automationDelete": true, "automationRunNow": true, "automationWorktree": true, "automationWake": true, "automationWebhook": true}
+	"automationToggle": true, "automationDelete": true, "automationRunNow": true, "automationWorktree": true, "automationWake": true, "automationWebhook": true, "automationBriefing": true, "automationReview": true}
 
 // automationCall runs an operation where the automations are, decoding its
 // reply into out. A window's call waits for the service: make it off the
@@ -72,11 +73,19 @@ func (c *Controller) AutomationOp(op string, r automation.Request) (any, error) 
 			return nil, errors.New("Unknown webhook action")
 		}
 		return s.WebhookView(), nil
+	case "automationBriefing":
+		if r.Action == "set" {
+			return s.SetBriefing(r.Data)
+		}
+		return s.BriefingView(), nil
 	case "automationDraft":
 		return c.prepareAutomationDraft(c.Ctx, r)
 	case "automationSave":
 		if r.Automation == nil {
 			return nil, errors.New("No automation to save")
+		}
+		if err := c.checkAutomationBot(r.Automation); err != nil {
+			return nil, err
 		}
 		a, err := c.Auto.Save(*r.Automation)
 		if err != nil {
@@ -106,6 +115,17 @@ func (c *Controller) AutomationOp(op string, r automation.Request) (any, error) 
 		return c.Auto.Ingress(r.ID, r.Trigger, "", false, r.Data, r.Dedupe)
 	case "automationWorktree":
 		return nil, c.Auto.WorktreeAction(r.ID, r.Started, r.Action)
+	case "automationReview":
+		switch r.Action {
+		case "approve", "deny":
+			return nil, c.Auto.DecideReview(r.Review, r.Action == "approve", r.Scope, r.Note)
+		case "handled":
+			return nil, c.Auto.MarkHandled(r.ID, r.Started)
+		case "revoke":
+			c.Auto.RevokeGrant(r.Review)
+			return nil, nil
+		}
+		return nil, errors.New("Unknown review action")
 	}
 	return nil, errors.New("Unknown automation operation: " + op)
 }
@@ -123,7 +143,7 @@ func (c *Controller) prepareAutomationDraft(ctx context.Context, r automation.Re
 	if agent == "" {
 		return nil, errors.New("Agent must be codex or claude-code")
 	}
-	cfg, now := claude.CLI{Binary: c.ClaudeBinary, Args: c.ClaudeArgs, Env: c.ClaudeEnv}, c.Auto.Now()
+	cfg, now := c.claudeCLI(), c.Auto.Now()
 	return async.Reply(func() (any, error) {
 		d, err := integrations.DraftAutomation(ctx, cfg, agent, project, request, now)
 		if err != nil {
@@ -150,7 +170,20 @@ type automationHost struct{ c *Controller }
 
 func (h automationHost) Dispatch(f func()) { h.c.Dispatch(f) }
 
-func (h automationHost) Submit(r model.SendRequest) int { return h.c.Submit(r) }
+// Submit starts or continues a run's conversation. The first message of a
+// run of an automation given to a Bot starts a conversation of the Bot, with
+// its model and thinking choice; SubmitExpanded adds the Bot's charter.
+func (h automationHost) Submit(r model.SendRequest) int {
+	if r.Bot != "" && r.ThreadID == 0 {
+		if i, ok := h.c.bots.store.Find(r.Bot); ok {
+			b := h.c.bots.store.Bots[i]
+			r.Model, r.Effort = b.Model, b.Effort
+			return h.c.startBotThread(r.Bot, r, true)
+		}
+		r.Bot = ""
+	}
+	return h.c.Submit(r)
+}
 
 func (h automationHost) Thread(id int) model.Thread { return h.c.ThreadWithID(id) }
 
@@ -179,6 +212,7 @@ func (h automationHost) AddWorkspace(path string) {
 func (h automationHost) RemoveWorkspace(path string) { h.c.removeProject(path, false) }
 
 func (h automationHost) Changed() {
+	h.c.syncReviewApprovals()
 	if h.c.Revision != nil {
 		h.c.SetRevision(h.c.Revision() + 1)
 	}
@@ -188,6 +222,11 @@ func (h automationHost) Changed() {
 // every automation.TickInterval from now on.
 func (c *Controller) StartAutomations(path string, schedule bool) {
 	c.Auto = automation.NewRunner(automationHost{c}, path)
+	c.Auto.Hold = c.Pressure.Agent
+	c.Auto.Bot = c.automationBot
+	c.Auto.Report = c.botAutomationReport
+	// Reviews still waiting from before wait among the approvals again.
+	c.syncReviewApprovals()
 	done := make(<-chan struct{})
 	if c.Ctx != nil {
 		done = c.Ctx.Done()
@@ -205,4 +244,53 @@ func autoRunReport(t model.Thread) *automation.Report {
 	}
 	r := automation.Report{Summary: reply, Artifacts: files, Auto: true}.Cleaned()
 	return &r
+}
+
+// automationBot is the agent and access of a Bot, for the runs of the
+// automations given to it.
+func (c *Controller) automationBot(id string) (string, automation.Access, bool) {
+	if i, ok := c.bots.store.Find(id); ok {
+		b := c.bots.store.Bots[i]
+		return b.Agent, automation.Access(b.Access), true
+	}
+	return "", "", false
+}
+
+// checkAutomationBot keeps an automation given to a Bot in the Bot's project
+// and with the Bot's agent.
+func (c *Controller) checkAutomationBot(a *automation.Automation) error {
+	if a.Bot == "" {
+		return nil
+	}
+	i, ok := c.bots.store.Find(a.Bot)
+	if !ok {
+		return errors.New(tr("This Bot no longer exists"))
+	}
+	b := c.bots.store.Bots[i]
+	if !b.WorksIn(a.Project) {
+		return errors.New("An automation given to a Bot runs in one of the Bot's projects")
+	}
+	a.Agent = b.Agent
+	return nil
+}
+
+// botAutomationReport posts a run of an automation given to a Bot in the
+// Bot's chat.
+func (c *Controller) botAutomationReport(a automation.Automation, run automation.Run, title, body string, needsUser bool) {
+	session := run.ServerID
+	if session == "" {
+		session = c.ThreadWithID(run.Thread).ServerID
+	}
+	if session == "" {
+		session = "run:" + a.ID + ":" + run.Started.Format(time.RFC3339)
+	}
+	if !c.bots.store.AddReport(a.Bot, bot.Report{Session: session, Project: a.Project, Kind: "automation", Title: title, Summary: bot.Summary(body), NeedsUser: needsUser, At: time.Now()}) {
+		return
+	}
+	if err := c.saveBots(); err != nil && c.SetStatus != nil {
+		c.SetStatus(err.Error())
+	}
+	if c.Revision != nil {
+		c.SetRevision(c.Revision() + 1)
+	}
 }

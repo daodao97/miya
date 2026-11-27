@@ -86,6 +86,9 @@ func TestRuntimeServiceValidatedBeforeOpeningBrowser(t *testing.T) {
 			}
 			requests := make(chan svcproto.Request, 1)
 			h.state.Remote = settingsTestService(t, func(req svcproto.Request) (any, error) {
+				if req.Op == "hello" {
+					return svcproto.Hello{}, nil
+				}
 				requests <- req
 				if reject {
 					return nil, errors.New("service identity changed")

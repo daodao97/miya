@@ -107,6 +107,7 @@ func (d *Server) serveDisplays(w http.ResponseWriter, r *http.Request, token str
 			continue
 		}
 		copy := display
+		l.cancelStream()
 		l.display, l.window, l.displayInputRequired = &copy, nil, true
 		l.active, l.capturedAt, l.lastFrame = false, time.Time{}, time.Time{}
 		w.Header().Set("Content-Type", "application/json")

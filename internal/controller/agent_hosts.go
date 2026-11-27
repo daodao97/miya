@@ -64,7 +64,7 @@ type claudeAgentHost struct{ agentWorkspace }
 
 func (h claudeAgentHost) Snapshot() claudeagent.State {
 	c := h.Controller
-	return claudeagent.State{Binary: c.ClaudeBinary, Error: c.ClaudeError, Command: c.ClaudeCommand, Model: c.ClaudeModel, Effort: c.ClaudeEffort, DefaultModel: c.claudeDefaultModel, Models: c.claudeModels, Args: c.ClaudeArgs, Env: c.ClaudeEnv}
+	return claudeagent.State{Binary: c.ClaudeBinary, Error: c.ClaudeError, Command: c.ClaudeCommand, Model: c.ClaudeModel, Effort: c.ClaudeEffort, DefaultModel: c.claudeDefaultModel, Models: c.claudeModels, Args: c.claudeLaunchArgs(), Env: c.ClaudeEnv}
 }
 func (h claudeAgentHost) Run(id int) *claude.Client           { return h.ClaudeRuns[id] }
 func (h claudeAgentHost) Discover()                           { h.loadClaudeSessions() }
@@ -86,7 +86,7 @@ func (h agentWorkspace) Enqueue(id int, r model.SendRequest) int { return h.enqu
 func (h agentWorkspace) DrainQueue(id int)                       { h.drainQueue(id) }
 func (h agentWorkspace) Upsert(t *model.Thread, m model.Message) { h.upsert(t, m) }
 func (h agentWorkspace) Approvals() []interaction.Request        { return h.Controller.Approvals() }
-func (h agentWorkspace) SetApprovals(v []interaction.Request)    { h.Controller.SetApprovals(v) }
+func (h agentWorkspace) SetApprovals(v []interaction.Request)    { h.Controller.setAgentApprovals(v) }
 func (h agentWorkspace) BindExecution(ctx context.Context, id, target, epoch string) error {
 	return h.persistManagedExecutionBinding(ctx, id, target, epoch)
 }

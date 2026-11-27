@@ -22,6 +22,19 @@ func (m *Client) ReceiveFeatureFrame(f remote.Frame) {
 		m.ReceiveAutomationForm(f.Type, f.Data, f.Error)
 	case "collaboration":
 		m.ReceiveCollaboration(f.Data, f.Error)
+	case "automation-review":
+		if f.Error != "" {
+			m.Autos.Err = f.Error
+		} else {
+			m.ReceiveAutomations(f.Data, "")
+		}
+	case "automation-briefing":
+		var v automation.BriefingView
+		if f.Error != "" {
+			m.Autos.Err = f.Error
+		} else if json.Unmarshal(f.Data, &v) == nil {
+			m.Autos.Briefing = &v
+		}
 	case "automation-webhook":
 		var v automation.WebhookView
 		if f.Error == "" && json.Unmarshal(f.Data, &v) == nil {

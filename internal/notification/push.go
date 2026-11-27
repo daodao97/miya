@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -13,6 +14,20 @@ import (
 	"miya/internal/apns"
 	"miya/internal/appdir"
 )
+
+const APNsTopic = "com.daodao.miya"
+
+// OpenAPNsProvider checks that the sender is configured for Miya.
+func OpenAPNsProvider(dir string) (*apns.Provider, error) {
+	p, err := apns.OpenProvider(dir)
+	if err != nil {
+		return nil, err
+	}
+	if p.Topic() != APNsTopic {
+		return nil, fmt.Errorf("APNs topic must be %s", APNsTopic)
+	}
+	return p, nil
+}
 
 type Registration struct {
 	ID       string `json:"id"`
@@ -42,6 +57,9 @@ type Hub struct {
 	queue        chan pushDelivery
 	lastError    string
 	live         map[string]liveSender
+	policy       policy
+	// clock is injectable for tests of quiet hours.
+	clock func() time.Time
 }
 
 func NewHub() *Hub {
@@ -55,6 +73,7 @@ func NewHub() *Hub {
 	if b, e := os.ReadFile(filepath.Join(h.storageDir, "push-unread.json")); e == nil {
 		_ = json.Unmarshal(b, &h.unread)
 	}
+	h.loadPolicy()
 	go h.run()
 	return h
 }
@@ -134,6 +153,16 @@ func (h *Hub) Publish(n Notice) {
 	if time.Now().Before(h.desktopUntil) {
 		return
 	}
+	mode := h.deliveryLocked(n)
+	// Only notices sent by the rules teach them; quiet hours teach nothing.
+	category := ""
+	if n.learnable() && mode != deliverQuietHours {
+		category = n.Category
+		if st := h.categoryLocked(category); n.Topic != "" && st.Name != n.Topic {
+			st.Name = n.Topic
+			h.persistPolicyLocked()
+		}
+	}
 	for _, r := range h.devices {
 		if r.Disabled || time.Since(r.Updated) > 90*24*time.Hour {
 			continue
@@ -144,10 +173,11 @@ func (h *Hub) Publish(n Notice) {
 			continue
 		}
 		d.Revision++
-		d.Threads[key] = Unread{Key: key, Thread: n.Thread, ServerID: n.ServerID, Agent: n.Agent, Project: n.Project, NoticeID: n.ID, Version: d.Revision}
+		d.Threads[key] = Unread{Key: key, Thread: n.Thread, ServerID: n.ServerID, Agent: n.Agent, Project: n.Project, NoticeID: n.ID, Version: d.Revision,
+			Category: category, Banner: category != "" && mode == deliverBanner, Silenced: category != "" && mode == deliverSilenced}
 		h.persistUnreadLocked()
 		select {
-		case h.queue <- pushDelivery{Registration: r, Notice: n, Version: d.Revision}:
+		case h.queue <- pushDelivery{Registration: r, Notice: n, Version: d.Revision, BadgeOnly: mode != deliverBanner}:
 		default:
 			h.lastError = "Notification queue is full"
 		}
@@ -163,10 +193,7 @@ func (h *Hub) run() {
 			h.deliverLive(d.Registration.ID, notice)
 			continue
 		}
-		p, e := apns.OpenProvider(appdir.Dir())
-		if e == nil && p.Topic() != "com.daodao.miya" {
-			e = errors.New("APNs topic must be com.daodao.miya")
-		}
+		p, e := OpenAPNsProvider(h.storageDir)
 		if e == nil {
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			_, e = p.Send(ctx, notice)
@@ -203,6 +230,7 @@ func (h *Hub) NoteDesktopPresence(until time.Time) {
 // memory and queues deliveries for NextDelivery instead of sending them.
 func NewQueueHub(dir string, devices ...Registration) *Hub {
 	h := &Hub{storageDir: dir, devices: map[string]Registration{}, queue: make(chan pushDelivery, 20)}
+	h.loadPolicy()
 	for _, d := range devices {
 		h.devices[d.ID] = d
 	}

@@ -18,8 +18,11 @@ func ApprovalForPolicy(policy string) string {
 }
 
 func SandboxForPolicy(policy string) string {
-	if policy == "never" {
+	switch policy {
+	case "never":
 		return "danger-full-access"
+	case agentpolicy.Read:
+		return "read-only"
 	}
 	return "workspace-write"
 }
@@ -32,8 +35,11 @@ func ReviewerForPolicy(policy string) string {
 }
 
 func TurnSandboxForPolicy(policy string) map[string]any {
-	if policy == "never" {
+	switch policy {
+	case "never":
 		return map[string]any{"type": "dangerFullAccess"}
+	case agentpolicy.Read:
+		return map[string]any{"type": "readOnly"}
 	}
 	return map[string]any{"type": "workspaceWrite", "networkAccess": false}
 }
@@ -93,4 +99,48 @@ func Verify(policy string, sandbox, approval json.RawMessage) error {
 		return fmt.Errorf("Codex applied approval policy %s where %s was requested; nothing was sent", string(approval), wantApproval)
 	}
 	return nil
+}
+
+// WithWritableRoots adds roots to a workspaceWrite turn sandbox, for a Bot
+// that also works in other projects. Other sandboxes already read them, or
+// reach everything.
+func WithWritableRoots(sandbox any, roots []string) any {
+	if len(roots) == 0 {
+		return sandbox
+	}
+	var m map[string]any
+	switch v := sandbox.(type) {
+	case map[string]any:
+		m = make(map[string]any, len(v)+1)
+		for k, x := range v {
+			m[k] = x
+		}
+	case json.RawMessage:
+		if json.Unmarshal(v, &m) != nil {
+			return sandbox
+		}
+	default:
+		return sandbox
+	}
+	if m["type"] != "workspaceWrite" {
+		return sandbox
+	}
+	var all []any
+	seen := map[string]bool{}
+	if existing, ok := m["writableRoots"].([]any); ok {
+		for _, r := range existing {
+			if s, ok := r.(string); ok && !seen[s] {
+				seen[s] = true
+				all = append(all, s)
+			}
+		}
+	}
+	for _, r := range roots {
+		if !seen[r] {
+			seen[r] = true
+			all = append(all, r)
+		}
+	}
+	m["writableRoots"] = all
+	return m
 }

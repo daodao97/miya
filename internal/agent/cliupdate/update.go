@@ -10,7 +10,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -26,6 +25,7 @@ import (
 func tr(s string) string { return locales.T(s) }
 
 type Info struct {
+	Install  bool   `json:"install,omitempty"`
 	Path     string `json:"path,omitempty"`
 	Version  string `json:"version,omitempty"`
 	Latest   string `json:"latest,omitempty"`
@@ -54,18 +54,29 @@ type plan struct {
 	cask             bool
 	args             []string
 	env              []string
+	scriptURL        string
 }
 
 func executable(path string) bool { st, err := os.Stat(path); return err == nil && !st.IsDir() }
 func manager(name, dir string) string {
-	if runtime.GOOS == "windows" && name != "bun" {
-		name += ".cmd"
+	names := []string{name}
+	if runtime.GOOS == "windows" {
+		names = []string{name + ".cmd", name + ".exe", name}
 	}
-	if p := filepath.Join(dir, name); executable(p) {
-		return p
+	for _, candidate := range names {
+		if dir != "" && filepath.IsAbs(dir) {
+			p := filepath.Join(dir, candidate)
+			if executable(p) {
+				return p
+			}
+		}
 	}
-	p, _ := processenv.LookPath(name)
-	return p
+	for _, candidate := range names {
+		if p, err := processenv.LookPath(candidate); err == nil {
+			return p
+		}
+	}
+	return ""
 }
 
 // installedPlan follows symlinks before identifying the installer, including
@@ -74,6 +85,14 @@ func installedPlan(id, bin string, env []string) *plan {
 	s, ok := specs[id]
 	if !ok || bin == "" {
 		return nil
+	}
+	if processenv.IsWSL(bin) {
+		return nil
+	}
+	if runtime.GOOS == "windows" {
+		if target := processenv.NodeShim(bin); target != "" {
+			bin = target
+		}
 	}
 	real, err := filepath.EvalSymlinks(bin)
 	if err != nil {
@@ -214,9 +233,15 @@ func (b *boundedOutput) Write(p []byte) (int, error) {
 	return n, nil
 }
 func run(ctx context.Context, args, env []string, prefix string) (string, error) {
-	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
+	return runInput(ctx, args, env, prefix, "")
+}
+func runInput(ctx context.Context, args, env []string, prefix, input string) (string, error) {
+	cmd := processenv.CommandContext(ctx, args[0], args[1:]...)
 	cmd.Env = processenv.Environ(args[0], env...)
-	if prefix != "" {
+	if input != "" {
+		cmd.Stdin = strings.NewReader(input)
+	}
+	if prefix != "" && !processenv.IsWSL(args[0]) {
 		for _, entry := range cmd.Env {
 			if strings.HasPrefix(entry, "PATH=") {
 				cmd.Env = append(cmd.Env, "PATH="+prefix+string(os.PathListSeparator)+strings.TrimPrefix(entry, "PATH="))
@@ -229,6 +254,7 @@ func run(ctx context.Context, args, env []string, prefix string) (string, error)
 	var out boundedOutput
 	cmd.Stdout = &out
 	cmd.Stderr = &out
+	processenv.Prepare(cmd)
 	err := cmd.Run()
 	return strings.TrimSpace(string(out.data)), err
 }
@@ -246,7 +272,14 @@ func version(ctx context.Context, bin string, env []string) (string, error) {
 	return v, nil
 }
 func (p *plan) shown() string {
-	a := append([]string{filepath.Base(p.args[0])}, p.args[1:]...)
+	if p.scriptURL != "" {
+		return processenv.DisplayBinary(p.args[0]) + " < " + p.scriptURL
+	}
+	name := filepath.Base(p.args[0])
+	if processenv.IsWSL(p.args[0]) {
+		name = processenv.DisplayBinary(p.args[0])
+	}
+	a := append([]string{name}, p.args[1:]...)
 	for i, v := range a {
 		if strings.ContainsAny(v, " \t") {
 			a[i] = strconv.Quote(v)
@@ -305,7 +338,10 @@ func (p *plan) latest(ctx context.Context) (string, error) {
 func Check(ctx context.Context, id, bin string, env []string) Info {
 	info := Info{Path: bin}
 	if bin == "" {
-		return info
+		return missingInfo(ctx, id, bin, env)
+	}
+	if processenv.IsWSL(bin) {
+		return checkWSL(ctx, id, bin, env)
 	}
 	v, err := version(ctx, bin, env)
 	info.Version = v
@@ -335,13 +371,16 @@ func Check(ctx context.Context, id, bin string, env []string) Info {
 // command received from the window. Its caller serializes package managers.
 func Upgrade(ctx context.Context, id, bin string, env []string) Info {
 	before := Check(ctx, id, bin, env)
+	if before.Install {
+		return install(ctx, id, bin, env)
+	}
 	if !before.Update {
 		if before.Error == "" {
 			before.Error = tr("No supported update is available")
 		}
 		return before
 	}
-	p := installedPlan(id, bin, env)
+	p := upgradePlan(ctx, id, bin, env)
 	if p == nil || p.shown() != before.Command || p.via != before.Via {
 		before.Error = tr("Installation changed; check again")
 		return before

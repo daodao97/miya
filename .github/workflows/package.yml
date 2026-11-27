@@ -1,7 +1,6 @@
 name: Package
 
-# NSGo packaging. CI requires repository variables NSGO_FORK_MODULE and
-# NSGO_FORK_VERSION naming a published immutable fork; see docs/nsgo-packaging.md.
+# Resolve the pinned NSGo release from go.mod on each runner.
 # Optional signing secrets: MACOS_CERTIFICATE_BASE64/PASSWORD, APPLE_ID,
 # APPLE_APP_PASSWORD, APPLE_TEAM_ID, IOS_CERTIFICATE_BASE64/PASSWORD,
 # IOS_PROFILE_BASE64 AND IOS_WIDGETS_PROFILE_BASE64 (both profiles required).
@@ -9,6 +8,16 @@ name: Package
 
 on:
   workflow_dispatch:
+    inputs:
+      testflight:
+        description: TestFlight distribution (none builds all platforms without publishing)
+        type: choice
+        default: none
+        options: [none, internal, public]
+      testflight_sha:
+        description: Commit for the TestFlight build (defaults to the selected branch)
+        type: string
+        required: false
   push:
     branches: [main]
     tags: ['v*']
@@ -18,16 +27,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: package-${{ github.ref }}
-  cancel-in-progress: true
-
-env:
-  NSGO_FORK_MODULE: ${{ vars.NSGO_FORK_MODULE }}
-  NSGO_FORK_VERSION: ${{ vars.NSGO_FORK_VERSION }}
+  group: ${{ inputs.testflight && inputs.testflight != 'none' && 'package-testflight' || format('package-{0}', github.ref) }}
+  cancel-in-progress: ${{ inputs.testflight == '' || inputs.testflight == 'none' }}
 
 jobs:
   macos:
     name: macOS DMG
+    if: inputs.testflight == '' || inputs.testflight == 'none'
     runs-on: macos-latest
     timeout-minutes: 60
     defaults:
@@ -44,7 +50,7 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
-      - name: Resolve the published NSGo fork
+      - name: Resolve pinned NSGo
         run: |
           mkdir -p build/.tmp
           scripts/ci-pin-nsgo.sh
@@ -70,12 +76,16 @@ jobs:
           echo "MIYA_SIGNING_IDENTITY=$identity" >> "$GITHUB_ENV"
           echo "MACOS_KEYCHAIN=$kc" >> "$GITHUB_ENV"
           if [ -n "$APPLE_ID" ] && [ -n "$APPLE_APP_PASSWORD" ] && [ -n "$APPLE_TEAM_ID" ]; then
+            security default-keychain -d user -s "$kc"
             xcrun notarytool store-credentials miya-notary --apple-id "$APPLE_ID" --password "$APPLE_APP_PASSWORD" --team-id "$APPLE_TEAM_ID" --keychain "$kc"
-            python3 scripts/ci-config.py --notarize miya-notary "$kc"
+            python3 scripts/ci-config.py --notarize miya-notary
+            echo "MACOS_NOTARIZE=1" >> "$GITHUB_ENV"
           fi
       - name: Build the app and disk image
         run: |
-          ./scripts/build-macos.sh -target macos_universal -installers
+          flags=()
+          if [ "${MACOS_NOTARIZE:-}" = 1 ]; then flags=(-release); fi
+          ./scripts/build-macos.sh -target macos_universal -installers "${flags[@]}"
           app=$(find build -maxdepth 2 -path '*macos_universal/Miya.app' -print -quit)
           dmg=$(find build/releases -name '*.dmg' -print -quit)
           test -n "$app" && test -n "$dmg"
@@ -114,6 +124,8 @@ jobs:
     name: iOS
     runs-on: macos-latest
     timeout-minutes: 60
+    outputs:
+      version: ${{ steps.testflight_version.outputs.version }}
     defaults:
       run:
         shell: bash
@@ -125,16 +137,35 @@ jobs:
       IOS_BUILD_NUMBER: ${{ github.run_number }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.testflight != 'none' && inputs.testflight_sha || github.sha }}
+          fetch-tags: true
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
-      - name: Resolve the published NSGo fork
+      - name: Resolve pinned NSGo
         run: |
           mkdir -p build/.tmp
           scripts/ci-pin-nsgo.sh
       - name: Set the version from the tag
         if: github.ref_type == 'tag'
         run: python3 scripts/ci-config.py --version "$GITHUB_REF_NAME"
+      - name: Prepare the TestFlight build
+        if: inputs.testflight != '' && inputs.testflight != 'none'
+        env:
+          TESTFLIGHT_SHA: ${{ inputs.testflight_sha }}
+        run: |
+          if [[ "$GITHUB_REF" != refs/heads/main ]]; then
+            echo 'TestFlight publishing requires the main branch.' >&2
+            exit 1
+          fi
+          if [ -n "$TESTFLIGHT_SHA" ]; then
+            version=$(git tag --points-at HEAD --list 'v*' | sort -V | tail -1)
+            if [ -n "$version" ]; then python3 scripts/ci-config.py --version "$version"; fi
+          fi
+          version=$(python3 -c 'import json; print(json.load(open("nsgo.yaml"))["version"])')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+        id: testflight_version
       - name: Check the iOS tools
         run: go tool nsgo doctor
       - name: Import the distribution identity and profile
@@ -154,7 +185,6 @@ jobs:
           rm -f "$dir/cert.p12"
           printf '%s' "$IOS_WIDGETS_PROFILE_BASE64" | base64 --decode > "$dir/widgets.mobileprovision"
           security cms -D -i "$dir/profile.mobileprovision" > "$dir/profile.plist"
-          uuid=$(/usr/libexec/PlistBuddy -c 'Print :UUID' "$dir/profile.plist")
           team=$(/usr/libexec/PlistBuddy -c 'Print :TeamIdentifier:0' "$dir/profile.plist")
           appid=$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:application-identifier' "$dir/profile.plist")
           case "$appid" in *.com.daodao.miya) ;; *) echo "Profile is for $appid, not com.daodao.miya" >&2; exit 1 ;; esac
@@ -162,7 +192,13 @@ jobs:
           echo "IOS_KEYCHAIN=$kc" >> "$GITHUB_ENV"
           echo "IOS_SIGNED=1" >> "$GITHUB_ENV"
       - name: Build the IPA
+        env:
+          TESTFLIGHT_TARGET: ${{ inputs.testflight }}
         run: |
+          if [[ -n "$TESTFLIGHT_TARGET" && "$TESTFLIGHT_TARGET" != none && "${IOS_SIGNED:-}" != 1 ]]; then
+            echo 'TestFlight requires the app and widget signing profiles.' >&2
+            exit 1
+          fi
           python3 scripts/ci-config.py --build-number "$IOS_BUILD_NUMBER"
           if [ "${IOS_SIGNED:-}" != 1 ]; then python3 scripts/ci-config.py --unsigned-ios; fi
           ./scripts/build-ios.sh
@@ -189,8 +225,58 @@ jobs:
           security delete-keychain "$IOS_KEYCHAIN" || true
           rm -rf "$RUNNER_TEMP/ios-signing"
 
+  testflight:
+    name: Publish to TestFlight
+    if: github.ref == 'refs/heads/main' && inputs.testflight != '' && inputs.testflight != 'none'
+    needs: ios
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: testflight
+    concurrency:
+      group: miya-testflight-${{ inputs.testflight }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: miya-ios
+          path: ipa
+      - name: Install App Store Connect CLI
+        run: |
+          curl --fail --silent --show-error --location --retry 3 \
+            https://github.com/rorkai/App-Store-Connect-CLI/releases/download/7.6.0/asc_7.6.0_linux_amd64 \
+            --output "$RUNNER_TEMP/asc"
+          echo "7ab1cc1718aaed429e49587d88be2cac939ba9a19e122bd412c8e6c09060fbf5  $RUNNER_TEMP/asc" | sha256sum --check
+          chmod 700 "$RUNNER_TEMP/asc"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      - name: Upload and distribute the signed IPA
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+          TESTFLIGHT_TARGET: ${{ inputs.testflight }}
+          TESTFLIGHT_VERSION: ${{ needs.ios.outputs.version }}
+        run: |
+          umask 077
+          : "${ASC_KEY_ID:?Missing ASC_KEY_ID}" "${ASC_ISSUER_ID:?Missing ASC_ISSUER_ID}" "${ASC_PRIVATE_KEY:?Missing ASC_PRIVATE_KEY}"
+          ASC_PRIVATE_KEY_PATH=$(mktemp)
+          export ASC_PRIVATE_KEY_PATH
+          trap 'rm -f "$ASC_PRIVATE_KEY_PATH"' EXIT
+          printf '%s\n' "$ASC_PRIVATE_KEY" > "$ASC_PRIVATE_KEY_PATH"
+          unset ASC_PRIVATE_KEY
+          export TESTFLIGHT_UPDATE_RECORD="$RUNNER_TEMP/update-ios.json"
+          bash scripts/publish-testflight.sh "$TESTFLIGHT_TARGET" "$TESTFLIGHT_VERSION" "$GITHUB_RUN_NUMBER" ipa/*.ipa
+      - name: Publish available public iOS version
+        if: inputs.testflight == 'public'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/publish-testflight-update.sh "$RUNNER_TEMP/update-ios.json"
+
   android:
     name: Android APK
+    if: inputs.testflight == '' || inputs.testflight == 'none'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     defaults:
@@ -201,7 +287,7 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
-      - name: Resolve the published NSGo fork
+      - name: Resolve pinned NSGo
         run: |
           mkdir -p build/.tmp
           scripts/ci-pin-nsgo.sh
@@ -221,6 +307,7 @@ jobs:
           retention-days: 30
 
   server:
+    if: inputs.testflight == '' || inputs.testflight == 'none'
     name: Linux server
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -232,7 +319,7 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
-      - name: Resolve the published NSGo fork
+      - name: Resolve pinned NSGo
         run: |
           mkdir -p build/.tmp
           scripts/ci-pin-nsgo.sh

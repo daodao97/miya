@@ -22,18 +22,17 @@ type shellNav struct {
 	expanded *core.Signal[string]
 	settings func()
 	project  func()
-	usage    func()
 	footer   []core.Node
 }
 
 // sidebarData is what the sidebar shows, read from the controller at once.
 type sidebarData struct {
-	cwd, history       string
-	projects           []projectmodel.Project
-	threads            []model.Thread
-	running, completed []model.Thread
-	busy               map[string]bool
-	unread             map[int]bool
+	cwd, history                string
+	projects                    []projectmodel.Project
+	threads                     []model.Thread
+	waiting, running, completed []model.Thread
+	busy                        map[string]bool
+	unread                      map[int]bool
 }
 
 func gatherSidebar(c Host) sidebarData {
@@ -63,8 +62,8 @@ func gatherSidebar(c Host) sidebarData {
 	if !cwdProject {
 		snapshots = append([]model.ProjectSnapshot{{Threads: d.threads}}, snapshots...)
 	}
-	d.running, d.completed = msgfmt.SidebarActivityThreads(snapshots, c.DesktopThreadUnread)
-	for _, list := range [][]model.Thread{d.threads, d.running, d.completed} {
+	d.waiting, d.running, d.completed = msgfmt.SidebarActivityThreads(snapshots, c.WaitingThreads().Has, c.DesktopThreadUnread)
+	for _, list := range [][]model.Thread{d.threads, d.waiting, d.running, d.completed} {
 		for _, t := range list {
 			if !t.Busy && c.DesktopThreadUnread(t) {
 				d.unread[t.ID] = true
@@ -81,7 +80,7 @@ func (d sidebarData) key() string {
 	for _, p := range d.projects {
 		fmt.Fprintf(&b, "%s\x00%s\x00%v,", p.Path, p.Name, d.busy[p.Path])
 	}
-	for _, list := range [][]model.Thread{d.threads, d.running, d.completed} {
+	for _, list := range [][]model.Thread{d.threads, d.waiting, d.running, d.completed} {
 		b.WriteByte('\x01')
 		for _, t := range list {
 			fmt.Fprintf(&b, "%d\x00%s\x00%v%v%v\x00%s\x00%s\x00%d,", t.ID, t.Title, t.Busy, t.Loading, d.unread[t.ID], t.Agent, t.Automation, t.LastActivityAt)
@@ -91,7 +90,7 @@ func (d sidebarData) key() string {
 }
 
 func (d sidebarData) find(id int) (model.Thread, bool) {
-	for _, list := range [][]model.Thread{d.threads, d.running, d.completed} {
+	for _, list := range [][]model.Thread{d.threads, d.waiting, d.running, d.completed} {
 		for _, t := range list {
 			if t.ID == id {
 				return t, true
@@ -107,10 +106,12 @@ func (d sidebarData) find(id int) (model.Thread, bool) {
 // when what they show changes.
 func sidebar(cx *core.Scope, c Host, nav shellNav) core.Node {
 	colors := nswidgets.ColorsOf(cx)
-	more, moreRev := map[string]bool{}, core.NewSignal(cx, 0)
+	more, automationRuns := map[string]bool{}, map[string]bool{}
+	moreRev := core.NewSignal(cx, 0)
 	data := Live(func() string { return gatherSidebar(c).key() })
+	current := Live(func() int { return c.Current().ID })
 	key := core.NewMemo(cx, func() string {
-		return nav.page.Get() + "\x02" + nav.expanded.Get() + "\x02" + strconv.Itoa(moreRev.Get()) + "\x02" + data()
+		return strconv.Itoa(current()) + "\x02" + nav.page.Get() + "\x02" + nav.expanded.Get() + "\x02" + strconv.Itoa(moreRev.Get()) + "\x02" + data()
 	})
 	var last sidebarData
 	selectProject := func(p projectmodel.Project) {
@@ -219,21 +220,34 @@ func sidebar(cx *core.Scope, c Host, nav shellNav) core.Node {
 			strings.HasPrefix(d.history, "Unable to load") || strings.HasPrefix(d.history, "History")) {
 			items = append(items, secondaryItem("h:"+path, "history-status", d.history, nested))
 		}
-		for _, t := range msgfmt.DisplayedThreads(d.threads, more[path]) {
+		threads, runs := msgfmt.SplitAutomationThreads(d.threads, func(t model.Thread) bool {
+			return t.Busy || d.unread[t.ID] || t.ID == c.Current().ID
+		})
+		for _, t := range msgfmt.DisplayedThreads(threads, more[path]) {
 			items = append(items, threadItem("t:", "thread-", t, d.unread[t.ID], nested))
 		}
-		if len(d.threads) > msgfmt.CollapsedThreadCount {
+		if len(threads) > msgfmt.CollapsedThreadCount {
 			label := tr("Expand")
 			if more[path] {
 				label = tr("Collapse")
 			}
 			items = append(items, secondaryItem("m:"+path, "more-threads", label, nested))
 		}
+		if len(runs) > 0 {
+			row := secondaryItem("r:"+path, "automation-runs-"+path, fmt.Sprintf(tr("Automation runs (%d)"), len(runs)), nested)
+			row.Expanded = func() bool { moreRev.Get(); return automationRuns[path] }
+			items = append(items, row)
+			if automationRuns[path] {
+				for _, t := range runs {
+					items = append(items, threadItem("t:", "thread-", t, false, nested))
+				}
+			}
+		}
 		return items
 	}
 	// The activity sections fold from their titles. Their state outlives
 	// a section that empties and comes back.
-	activityOpen := map[string]*core.Signal[bool]{"running": core.NewSignal(cx, true), "completed": core.NewSignal(cx, true)}
+	activityOpen := map[string]*core.Signal[bool]{"waiting": core.NewSignal(cx, true), "running": core.NewSignal(cx, true), "completed": core.NewSignal(cx, true)}
 	sections := func() []ui.SidebarSection {
 		key.Get()
 		var sections []ui.SidebarSection
@@ -242,14 +256,14 @@ func sidebar(cx *core.Scope, c Host, nav shellNav) core.Node {
 			last = d
 			expanded := nav.expanded.GetUntracked()
 			sections = append(sections, ui.SidebarSection{Items: []ui.SidebarItem{
-				{ID: "nav:new", Text: tr("New conversation"), Icon: nswidgets.IconOf("edit"), TestID: "new-thread"},
+				{ID: "nav:new", Text: tr("New thread"), Icon: nswidgets.IconOf("edit"), TestID: "new-thread"},
 				{ID: "nav:automations", Text: tr("Automations"), Icon: nswidgets.IconOf("clock"), TestID: "open-automations"},
-				{ID: "nav:usage", Text: tr("Usage"), Icon: nswidgets.IconOf("pi"), TestID: "open-usage"},
+				{ID: "nav:bots", Text: tr("Bots"), Icon: nswidgets.IconOf("message-circle"), TestID: "open-bots"},
 			}})
 			for _, a := range []struct {
 				key, title string
 				threads    []model.Thread
-			}{{"running", tr("In progress"), d.running}, {"completed", tr("Completed"), d.completed}} {
+			}{{"waiting", tr("Waiting for you"), d.waiting}, {"running", tr("In progress"), d.running}, {"completed", tr("Completed"), d.completed}} {
 				if len(a.threads) == 0 {
 					continue
 				}
@@ -285,11 +299,10 @@ func sidebar(cx *core.Scope, c Host, nav shellNav) core.Node {
 		})
 		return sections
 	}
-	current := Live(func() int { return c.Current().ID })
 	list := ui.Sidebar{SectionsFunc: sections, TestID: "threads",
 		Selected: func() string {
-			if nav.page.Get() == "automations" {
-				return "nav:automations"
+			if page := nav.page.Get(); page == "automations" || page == "bots" {
+				return "nav:" + page
 			}
 			return "t:" + strconv.Itoa(current())
 		},
@@ -300,12 +313,8 @@ func sidebar(cx *core.Scope, c Host, nav shellNav) core.Node {
 				switch rest {
 				case "new":
 					c.NewThread()
-				case "automations":
-					nav.page.Set("automations")
-				case "usage":
-					if nav.usage != nil {
-						nav.usage()
-					}
+				case "automations", "bots":
+					nav.page.Set(rest)
 				}
 			case "t", "a":
 				if n, err := strconv.Atoi(rest); err == nil {
@@ -321,6 +330,9 @@ func sidebar(cx *core.Scope, c Host, nav shellNav) core.Node {
 				}
 			case "m":
 				more[rest] = !more[rest]
+				moreRev.Update(func(n int) int { return n + 1 })
+			case "r":
+				automationRuns[rest] = !automationRuns[rest]
 				moreRev.Update(func(n int) int { return n + 1 })
 			case "h":
 				c.Connect()

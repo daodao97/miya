@@ -11,18 +11,18 @@ func TestMobileSidebarCompletionUnreadCompatibility(t *testing.T) {
 	m := testPhoneClient()
 	thread := m.State.Projects[0].Threads[0]
 	m.State.Notifications.Unread = []notification.Unread{{ServerID: thread.ServerID}}
-	_, completed := m.SidebarActivityThreads()
+	_, _, completed := m.SidebarActivityThreads()
 	if len(completed) != 1 {
 		t.Fatal("older desktops should still use per-phone unread completions")
 	}
 	m.State.CompletionUnread = map[string]int64{}
-	_, completed = m.SidebarActivityThreads()
+	_, _, completed = m.SidebarActivityThreads()
 	if len(completed) != 0 {
 		t.Fatal("stale push unread state must not override an authoritative shared completion state")
 	}
 	m.State.CompletionUnread[appmodel.DesktopUnreadKey(thread)] = 100
 	m.State.Notifications.Unread = nil
-	_, completed = m.SidebarActivityThreads()
+	_, _, completed = m.SidebarActivityThreads()
 	if len(completed) != 1 {
 		t.Fatal("completion activity should work with push notifications disabled")
 	}

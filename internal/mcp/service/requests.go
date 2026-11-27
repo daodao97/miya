@@ -34,6 +34,9 @@ func (api *Service) Handle(op string, r mcpproto.Request) (any, error) {
 	if op == "mcpRuntime" {
 		return api.Runtime(r)
 	}
+	if op == "mcpFollowUp" {
+		return api.followUp(r)
+	}
 	if r.Reference != "" {
 		ref, ok := model.ParseThreadURL(r.Reference)
 		if !ok || ref.Source != c.ReferenceSource() {
@@ -78,6 +81,8 @@ func (api *Service) Handle(op string, r mcpproto.Request) (any, error) {
 		return api.Delegate(r)
 	case "mcpReportResult":
 		return api.reportResult(r)
+	case "mcpStateCard":
+		return api.StateCard(r)
 	case "mcpAutomationList", "mcpAutomationCreate", "mcpAutomationUpdate", "mcpAutomationWake":
 		return api.automation(op, r)
 	}

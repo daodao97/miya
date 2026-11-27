@@ -3,7 +3,9 @@ package service
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	mcpproto "miya/internal/mcp/protocol"
 	"miya/internal/memory"
@@ -29,11 +31,23 @@ func (api *Service) Memory(r mcpproto.Request) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	// A Bot's memory belongs to its own project, wherever the conversation is.
+	var botScope memory.Scope
+	if id, home := c.ThreadBot(caller); id != "" {
+		if own, err := memory.ProjectScope(home); err == nil {
+			botScope = memory.BotScope(own, id)
+		}
+	}
 	scope := project
 	switch a.Scope {
 	case "", "project":
 	case "user":
 		scope = memory.UserScope()
+	case "bot":
+		if botScope.Kind == "" {
+			return nil, errors.New("The bot scope is for a Bot's conversations, and this conversation belongs to no Bot")
+		}
+		scope = botScope
 	default:
 		return nil, errors.New("Invalid memory scope")
 	}
@@ -59,7 +73,15 @@ func (api *Service) Memory(r mcpproto.Request) (any, error) {
 		}
 		switch r.Tool {
 		case "search_memory":
-			entries, err := store.Search(project, a.Query, a.TaskKey, 5)
+			if len(a.Alternates) > memory.MaxAlternates {
+				return nil, fmt.Errorf("alternates accepts at most %d wordings", memory.MaxAlternates)
+			}
+			for _, alt := range a.Alternates {
+				if utf8.RuneCountInString(alt) > 200 {
+					return nil, errors.New("Each alternate wording must be at most 200 characters")
+				}
+			}
+			entries, err := store.SearchBot(project, botScope, a.Query, a.TaskKey, 5, a.Alternates...)
 			if err != nil {
 				return nil, err
 			}

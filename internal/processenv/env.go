@@ -21,6 +21,9 @@ func Environ(binary string, overrides ...string) []string {
 // then common user and system tool directories. Duplicate variables use their
 // last value, just as os/exec does. An isolated environment stays isolated.
 func WithPath(env []string, binary string) []string {
+	if IsWSL(binary) {
+		return append([]string(nil), env...)
+	}
 	out := make([]string, 0, len(env)+1)
 	indices := make(map[string]int)
 	for _, entry := range env {
@@ -97,9 +100,9 @@ func LookPath(name string) (string, error) {
 
 func installDirs(home string) []string {
 	if runtime.GOOS == "windows" {
-		return nil
+		return append([]string{ManagedBinDir()}, platformDirs(home)...)
 	}
-	var dirs []string
+	dirs := []string{ManagedBinDir()}
 	if filepath.IsAbs(home) {
 		for _, dir := range []string{".local/bin", ".npm-global/bin", ".bun/bin", ".volta/bin", ".cargo/bin", "go/bin"} {
 			dirs = append(dirs, filepath.Join(home, dir))

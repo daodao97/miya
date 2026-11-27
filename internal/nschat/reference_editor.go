@@ -47,7 +47,7 @@ func (r ReferenceEditor) Render(cx *core.Scope) core.Node {
 		{Name: "document", Nodes: []re.NodeSpec{{Name: "doc", Content: "paragraph"}}},
 		{Name: "paragraph", Nodes: []re.NodeSpec{{Name: "paragraph", Content: "inline*", Group: "block", Code: true}}},
 		{Name: "text", Nodes: []re.NodeSpec{{Name: "text", Group: "inline"}}},
-		re.InlineAtom("reference"), re.InlineAtom("file"), re.InlineAtom("command"),
+		referenceAtom("reference"), referenceAtom("file"), referenceAtom("command"),
 	}
 	s, err := re.NewSession(re.SessionConfig{Extensions: exts, Plugins: []*re.Plugin{{Key: "miya-atoms", AppendTransaction: func(_ []*re.Transaction, _ *re.State, st *re.State) *re.Transaction {
 		return atomize(st, r.ReferenceTitle, commands(), files())
@@ -205,7 +205,9 @@ func (r ReferenceEditor) Render(cx *core.Scope) core.Node {
 		if in.OnBlur != nil {
 			in.OnBlur()
 		}
-	}, TestID: in.TestID, Style: in.Style, StyleFunc: in.StyleFunc, StylesFunc: styles, OnPasteData: in.OnPaste, Ref: r.Ref}
+	}, TestID: in.TestID, Style: in.Style, StyleFunc: in.StyleFunc, StylesFunc: styles, Ref: r.Ref, NodeViews: map[string]re.NodeView{
+		"reference": referenceChip, "file": referenceChip, "command": referenceChip,
+	}}
 	// Rich editor exposes its native typing sink through Render. Add Miya's
 	// native edit actions here until NSGo offers these props on richeditor.View.
 	root := view.Render(cx).(core.View)
@@ -246,7 +248,6 @@ func (r ReferenceEditor) Render(cx *core.Scope) core.Node {
 
 	for i, n := range root.Children {
 		if sink, ok := n.(core.Input); ok {
-			sink.CopyText = func(core.InputSelection) string { text, _ := s.Copy(); return text }
 			sink = r.adaptEditorSink(cx, &root, sink, s, func() func() bool {
 				ownerAtRead, rawAtRead := owner, raw
 				return func() bool { return s.Editable() && ownerAtRead == owner && rawAtRead == raw }
@@ -264,4 +265,25 @@ func (r ReferenceEditor) Render(cx *core.Scope) core.Node {
 		}
 	}
 	return root
+}
+
+func referenceAtom(name string) re.Extension {
+	return re.Extension{Name: name, Nodes: []re.NodeSpec{{
+		Name: name, Inline: true, Group: "inline", Atom: true,
+		Attrs:      []re.AttrSpec{{Name: "text"}, {Name: "label"}},
+		LeafText:   func(n *re.Node) string { return n.AttrStr("text") },
+		RenderText: func(n *re.Node) string { return n.AttrStr("label") },
+	}}}
+}
+
+func referenceChip(cx *core.Scope, props re.NodeProps) core.Node {
+	colors := nswidgets.ColorsOf(cx)
+	return core.Text{ContentFunc: func() string { return props.Node().AttrStr("label") },
+		StyleFunc: func() core.Style {
+			background := colors.Subtle()
+			if props.Selected() {
+				background = colors.Line()
+			}
+			return core.Style{Background: background, Color: colors.Link(), CornerRadius: 5, Padding: core.Symmetric(0, 3), FontWeight: 500}
+		}}
 }

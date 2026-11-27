@@ -21,7 +21,6 @@ import (
 // the sidebar share the same open signal. Closing disposes pending view work.
 func settingsDialog(cx *core.Scope, c Host, open *core.Signal[bool]) core.Node {
 	usage := usageFor(cx, c)
-	category, query := usage.category, core.NewSignal(cx, "")
 	service := newSettingsService(cx, c)
 	// Apply saved device preferences before constructing the dialog, including
 	// when it starts closed. The shell can use the same environment settings.
@@ -30,34 +29,61 @@ func settingsDialog(cx *core.Scope, c Host, open *core.Signal[bool]) core.Node {
 	return ui.SettingsDialog{Open: open.Get, OnOpenChange: func(v bool, _ base.Reason) { open.Set(v) },
 		Label: tr("Settings"), TestID: "settings-dialog", Content: func(narrow func() bool) core.Node {
 			return core.Show{When: open.Get, Then: func(cx *core.Scope) core.Node {
-				c.EnsureAgentUpdates()
-				drafts := map[string]*settingsDraft{}
-				account := newSettingsAccount(cx, c, category)
-				memory := newSettingsMemory(cx, c, category)
-				memory.onSource = func() { open.Set(false) }
-				// Text in SettingsCategory/Item is static. Rebuild on language changes,
-				// keeping navigation, drafts and asynchronous operations outside this region.
-				return core.Dynamic(func(cx *core.Scope) core.Node {
-					tag := prefs.NormalizeInterfaceLanguage(cx.Env().Locale())
-					if tag == "" {
-						tag = "en"
-					}
-					locales.SetCurrent(tag)
-					return core.Func(func(cx *core.Scope) core.Node {
-						return ui.Settings{Category: category, Query: query, Narrow: narrow, TestID: "settings",
-							Title: tr("Settings"), SearchLabel: tr("Search settings"), SearchPlaceholder: tr("Search settings"),
-							ResultsTitle: tr("Settings"), EmptyText: tr("No matching settings."), CloseLabel: tr("Close"),
-							OnClose: func() { open.Set(false) }, Categories: []ui.SettingsCategory{
-								{ID: "general", Title: tr("General"), Icon: nswidgets.IconOf("settings"), Groups: generalSettings(cx, c, service, drafts)},
-								{ID: "account", Title: tr("Account"), Icon: nswidgets.IconOf("user-circle"), Groups: account.groups()},
-								{ID: "usage", Title: tr("Usage"), Icon: nswidgets.IconOf("pi"), Groups: usage.groups()},
-								{ID: "phone", Title: tr("Phone"), Icon: nswidgets.IconOf("device-mobile"), Groups: phoneSettings(cx, c)},
-								{ID: "memory", Title: tr("Memory"), Icon: nswidgets.IconOf("bulb"), Description: tr("Saved locally and shared by Codex and Claude. Current instructions and project files take priority. Forgetting removes Miya's content, but not agent history or backups."), Groups: memory.groups()},
-							}}
-					})
-				})
+				return settingsContent(cx, c, usage, service, narrow, func() { open.Set(false) })
 			}}
 		}}
+}
+
+func settingsContent(cx *core.Scope, c Host, usage *desktopUsage, service *settingsService, narrow func() bool, closeSettings func()) core.Node {
+	category, query := usage.category, core.NewSignal(cx, "")
+	c.EnsureAgentUpdates()
+	drafts := map[string]*settingsDraft{}
+	account := newSettingsAccount(cx, c, category)
+	memory := newSettingsMemory(cx, c, category)
+	memory.onSource = func() { closeSettings() }
+	// Text in SettingsCategory/Item is static. Rebuild on language changes,
+	// keeping navigation, drafts and asynchronous operations outside this region.
+	return core.Dynamic(func(cx *core.Scope) core.Node {
+		tag := prefs.NormalizeInterfaceLanguage(cx.Env().Locale())
+		if tag == "" {
+			tag = "en"
+		}
+		locales.SetCurrent(tag)
+		return core.Func(func(cx *core.Scope) core.Node {
+			return ui.Settings{Category: category, Query: query, Narrow: narrow, TestID: "settings",
+				Title: tr("Settings"), SearchLabel: tr("Search settings"), SearchPlaceholder: tr("Search settings"),
+				ResultsTitle: tr("Settings"), EmptyText: tr("No matching settings."), CloseLabel: tr("Close"),
+				OnClose: func() { closeSettings() }, Categories: []ui.SettingsCategory{
+					{ID: "general", Title: tr("General"), Icon: nswidgets.IconOf("settings"), Groups: generalSettings(cx, c, service, drafts)},
+					{ID: "providers", Title: tr("Model providers"), Icon: nswidgets.IconOf("settings"), Groups: []ui.SettingsGroup{{
+						ID: "providers", Title: tr("Model providers"), Items: []ui.SettingsItem{{ID: "providers", Content: core.Func(func(cx *core.Scope) core.Node {
+							return providerSettings(cx, c)
+						})}},
+					}}},
+					{ID: "account", Title: tr("Account"), Icon: nswidgets.IconOf("user-circle"), Groups: account.groups()},
+					{ID: "usage", Title: tr("Usage"), Icon: nswidgets.IconOf("pi"), Groups: usage.groups()},
+					{ID: "phone", Title: tr("Phone"), Icon: nswidgets.IconOf("device-mobile"), Groups: append(phoneSettings(cx, c), phoneNotificationGroup(cx, c), remoteControlSettings(cx, c))},
+					{ID: "memory", Title: tr("Memory"), Icon: nswidgets.IconOf("bulb"), Description: tr("Saved locally and shared by Codex and Claude. Current instructions and project files take priority. Forgetting removes Miya's content, but not agent history or backups."), Groups: memory.groups()},
+				}}
+		})
+	})
+}
+
+func openSettingsWindow(cx *core.Scope, c Host, usage *desktopUsage) bool {
+	var window *core.Window
+	window = cx.OpenWindow(core.WindowOptions{
+		Title: tr("Settings"), Key: "miya-settings", Width: 780, Height: 700,
+		Constraints: core.WindowConstraints{MinWidth: 560, MinHeight: 420},
+	}, func(cx *core.Scope) core.Node {
+		return settingsContent(cx, c, usage, newSettingsService(cx, c),
+			func() bool { return cx.Env().Window().Width < 680 },
+			func() {
+				if window != nil {
+					window.Close()
+				}
+			})
+	})
+	return window != nil
 }
 
 func setSettingsAppearance(cx *core.Scope, v string) {
@@ -129,7 +155,7 @@ func generalSettings(cx *core.Scope, c Host, service *settingsService, drafts ma
 			}
 		}}})
 	}
-	groups := []ui.SettingsGroup{general, notifications, permissions, {ID: "agents", Title: tr("Agents"), Actions: []core.Node{settingsButton("recheck-agents", tr("Check again"), c.RecheckAgents, Live(c.AgentUpdateBusy))}, Items: []ui.SettingsItem{{ID: "agents", Title: tr("Agents"), Description: tr("Turn agents on or off for new conversations. Existing conversations keep their agent."), Content: agentSettings(cx, c, drafts)}}}}
+	groups := []ui.SettingsGroup{general, notifications, permissions, {ID: "agents", Title: tr("Agents"), Actions: []core.Node{settingsButton("recheck-agents", tr("Check again"), c.RecheckAgents, Live(c.AgentUpdateBusy))}, Items: []ui.SettingsItem{{ID: "agents", Title: tr("Agents"), Description: tr("Turn agents on or off for new conversations. Existing conversations keep their agent."), Content: settingsColumn(agentEnvironmentSettings(cx, c), agentSettings(cx, c, drafts))}}}}
 	return append(groups, service.groups()...)
 }
 

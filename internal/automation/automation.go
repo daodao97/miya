@@ -53,6 +53,26 @@ type Automation struct {
 	// Worktree runs each run in a new Git worktree on its own branch, so
 	// that it cannot collide with edits in the project (worktree.go).
 	Worktree bool `json:"worktree,omitempty"`
+	// StallAfter, when set, stops the runs triggers start once that many
+	// runs in a row found nothing new, until a person edits the automation
+	// or runs it now (progress.go).
+	StallAfter int `json:"stallAfter,omitempty"`
+	// NotifyEveryRun notifies each run that ends; without it a run that
+	// passes with nothing new is kept in the history quietly (progress.go).
+	NotifyEveryRun bool `json:"notifyEveryRun,omitempty"`
+	// Recheck runs Check again, for a Worktree run that passed and left
+	// changes, in a clean checkout of what a merge would bring (worktree.go).
+	Recheck bool `json:"recheck,omitempty"`
+	// Access is what its runs may do (docs/action-review.md): read, edit or
+	// external. Empty follows the permission picked in the window, as before.
+	Access Access `json:"access,omitempty"`
+	// Bot is the ID of the Bot the automation is given to: each run is a new
+	// conversation of the Bot, under its charter, with its agent and settings,
+	// and at most the Bot's access (docs/personal-agent.md, P4).
+	Bot string `json:"bot,omitempty"`
+	// NotifyNever keeps every run off the phone. A run that fails or needs
+	// the person still waits in what needs them.
+	NotifyNever bool `json:"notifyNever,omitempty"`
 }
 
 // Run is one run of an automation.
@@ -60,10 +80,13 @@ type Run struct {
 	Started  time.Time `json:"started"`
 	Finished time.Time `json:"finished,omitzero"`
 	Thread   int       `json:"thread,omitempty"`
-	ServerID string    `json:"serverId,omitempty"`
-	Round    int       `json:"round,omitempty"`
-	Rounds   int       `json:"rounds,omitempty"`
-	Result   string    `json:"result"`
+	// Refused are the actions Miya refused for the run's access level
+	// (unattended.go).
+	Refused  []string `json:"refused,omitempty"`
+	ServerID string   `json:"serverId,omitempty"`
+	Round    int      `json:"round,omitempty"`
+	Rounds   int      `json:"rounds,omitempty"`
+	Result   string   `json:"result"`
 	// Summary is the first line of the agent's last reply, or why the run
 	// ended.
 	Summary string `json:"summary,omitempty"`
@@ -77,6 +100,25 @@ type Run struct {
 	WakeAfter   string `json:"wakeAfter,omitempty"`
 	// Report is the run\'s structured result.
 	Report *Report `json:"report,omitempty"`
+	// Handled is when the person said they dealt with what the run
+	// asked of them; the run then no longer waits for them.
+	Handled time.Time `json:"handled,omitzero"`
+	// Unchanged marks a run whose result said the same as the run before
+	// (progress.go).
+	Unchanged bool `json:"unchanged,omitempty"`
+	// Quiet marks a run that ended without a notification, as it passed
+	// with nothing new.
+	Quiet bool `json:"quiet,omitempty"`
+	// Verdict is who says the run's work is done: VerdictVerified when the
+	// check command passed, VerdictCheckFailed when it did not after the
+	// last round, VerdictUnchecked when there is no check and only the
+	// conversation ended. What the agent reports is no verdict.
+	Verdict string `json:"verdict,omitempty"`
+	// Recheck is what running the check again in a clean checkout found,
+	// RecheckPassed or RecheckFailed, and RecheckOutput the end of what a
+	// failed one printed.
+	Recheck       string `json:"recheck,omitempty"`
+	RecheckOutput string `json:"recheckOutput,omitempty"`
 	// Worktree is where a run of a Worktree automation worked, and
 	// WorktreeState what became of it.
 	Worktree      *worktree.Worktree `json:"worktree,omitempty"`
@@ -84,6 +126,47 @@ type Run struct {
 	Changes       worktree.Changes   `json:"changes,omitzero"`
 	// WorktreeError is why the last merge or discard failed.
 	WorktreeError string `json:"worktreeError,omitempty"`
+}
+
+// A run's recheck is one of these.
+const (
+	RecheckPassed = "passed"
+	RecheckFailed = "failed"
+)
+
+// A run's verdict is one of these.
+const (
+	VerdictVerified    = "verified"
+	VerdictCheckFailed = "check_failed"
+	VerdictUnchecked   = "unchecked"
+)
+
+// VerdictLabel says in a few words who says a run's work is done.
+func VerdictLabel(v string) string {
+	switch v {
+	case VerdictVerified:
+		return tr(" · Verified by the check")
+	case VerdictUnchecked:
+		return tr(" · Not verified: no check command")
+	}
+	return ""
+}
+
+// CoverageLabel says how much of what it should look at a run covered,
+// when its result says.
+func CoverageLabel(r Run) string {
+	if r.Report == nil || r.Report.Coverage == nil {
+		return ""
+	}
+	return fmt.Sprintf(tr(" · Covered %d of %d"), r.Report.Coverage.Included, r.Report.Coverage.Expected)
+}
+
+// RefusedLabel says how many actions Miya refused for the run's access level.
+func RefusedLabel(r Run) string {
+	if len(r.Refused) == 0 {
+		return ""
+	}
+	return fmt.Sprintf(tr(" · Refused %d actions"), len(r.Refused))
 }
 
 // A run's result is one of these.
@@ -142,8 +225,16 @@ func (a *Automation) Normalize() error {
 	if a.ID == "" {
 		a.ID = NewID()
 	}
+	if err := a.Access.valid(); err != nil {
+		return err
+	}
 	if err := a.normalizeTriggers(); err != nil {
 		return err
+	}
+	a.StallAfter = min(max(a.StallAfter, 0), maxStallAfter)
+	if a.StallAfter == 1 {
+		// One run alike is not yet a stall.
+		a.StallAfter = 2
 	}
 	if a.Check == "" {
 		a.Rounds = 1
@@ -185,6 +276,16 @@ type Store struct {
 	Triggers map[string]TriggerState `json:"triggers,omitempty"`
 	// Wakes is what became of each automation's latest wakes.
 	Wakes map[string][]Wake `json:"wakes,omitempty"`
+	// Stalled is since when each stalled automation has stalled.
+	Stalled map[string]time.Time `json:"stalled,omitempty"`
+	// Briefing is when the daily briefing comes, as 15:04, and BriefedAt
+	// when the latest one was due and looked at (briefing.go).
+	Briefing  string    `json:"briefing,omitempty"`
+	BriefedAt time.Time `json:"briefedAt,omitzero"`
+	// Reviews are the actions automations sent to the person, Grants what
+	// the person allowed (review.go).
+	Reviews []Review `json:"reviews,omitempty"`
+	Grants  []Grant  `json:"grants,omitempty"`
 }
 
 // TriggerState is what a trigger has seen.
@@ -197,10 +298,15 @@ type TriggerState struct {
 	// it found, Error why it could not, and Errors how many probes in a
 	// row could not.
 	LastProbe time.Time `json:"lastProbe,omitzero"`
-	Met       bool      `json:"met,omitempty"`
-	Value     string    `json:"value,omitempty"`
-	Error     string    `json:"error,omitempty"`
-	Errors    int       `json:"errors,omitempty"`
+	// LastSuccess is when a probe last found something out, or a command
+	// that keeps running last printed a line. A probe that keeps failing
+	// moves LastProbe on but not LastSuccess, so the pages can say how old
+	// what the trigger knows is.
+	LastSuccess time.Time `json:"lastSuccess,omitzero"`
+	Met         bool      `json:"met,omitempty"`
+	Value       string    `json:"value,omitempty"`
+	Error       string    `json:"error,omitempty"`
+	Errors      int       `json:"errors,omitempty"`
 	// Fingerprint identifies what a file trigger last saw.
 	Fingerprint string `json:"fingerprint,omitempty"`
 }
@@ -224,6 +330,7 @@ func (s *Store) AddWake(id string, w Wake) {
 func (s *Store) Forget(id string) {
 	delete(s.Runs, id)
 	delete(s.Wakes, id)
+	delete(s.Stalled, id)
 	for k := range s.Triggers {
 		if strings.HasPrefix(k, id+"/") {
 			delete(s.Triggers, k)

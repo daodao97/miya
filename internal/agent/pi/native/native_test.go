@@ -198,3 +198,15 @@ func TestInputSendsImagesInlineAndNamesOtherFiles(t *testing.T) {
 		t.Fatalf("text = %q images = %+v err = %v", text, images, err)
 	}
 }
+
+func TestLaunchPassesAConfiguredProvidersAPI(t *testing.T) {
+	_, env := launch(Options{Provider: Provider{BaseURL: "https://oa/v1", Token: "k", API: "openai-responses", Name: "Relay", Models: []string{"gpt-x"}}, Extension: "/x/miya-provider.ts", Models: []string{"gpt-x"}})
+	for _, kv := range []string{"MIYA_PI_API=openai-responses", "MIYA_PI_NAME=Relay", "MIYA_PI_BASE_URL=https://oa/v1"} {
+		if !slices.Contains(env, kv) {
+			t.Fatalf("env %q missing from %q", kv, env)
+		}
+	}
+	if slices.Contains(env, "MIYA_PI_BEARER=1") {
+		t.Fatalf("an OpenAI provider was given Anthropic's bearer switch: %q", env)
+	}
+}

@@ -53,7 +53,7 @@ func (rn *Runner) wakes() *wakeState {
 // triggered reports whether a source is one of the triggers, which the
 // policy holds back; schedules and Run now are not held back.
 func triggered(source string) bool {
-	return source != SourceSchedule && source != SourceManual && source != ""
+	return source != SourceSchedule && source != SourceManual && source != SourceReview && source != ""
 }
 
 func clipData(s string) string {
@@ -89,7 +89,7 @@ func (rn *Runner) Wake(ev WakeEvent) (Wake, error) {
 			return rn.record(a.ID, ev, WakeDropped, "The trigger is off"), errors.New("The trigger is off")
 		}
 	}
-	if !a.Enabled && ev.Source != SourceManual {
+	if !a.Enabled && ev.Source != SourceManual && ev.Source != SourceReview {
 		return rn.record(a.ID, ev, WakeDropped, "The automation is paused"), errors.New("The automation is paused")
 	}
 	if ev.Dedupe != "" {
@@ -157,10 +157,30 @@ func (rn *Runner) deliver(a Automation, ev WakeEvent, gated bool) (Wake, error) 
 		if n := rn.triggeredRuns(a.ID, now.Add(-24*time.Hour)); n >= a.Policy.MaxPerDay {
 			return rn.record(a.ID, ev, WakeHeld, fmt.Sprintf("Reached %d triggered runs in 24 hours", n)), nil
 		}
+		if since, stalled := rn.Store.Stalled[a.ID]; stalled {
+			return rn.record(a.ID, ev, WakeHeld, "Stalled since "+FormatTime(since)+": waiting for a person"), nil
+		}
+		// A wake that brings data has something new to look at; one without
+		// waits longer after runs that found nothing new.
+		if ev.Data == "" {
+			if until, n := rn.backoffUntil(a); now.Before(until) {
+				return rn.record(a.ID, ev, WakeHeld, fmt.Sprintf("Backing off until %s: the last %d triggered runs found nothing new", FormatTime(until), n)), nil
+			}
+			// Near a subscription's limit, leave what is left to the person.
+			if rn.Hold != nil {
+				if why := rn.Hold(a.Agent); why != "" {
+					return rn.record(a.ID, ev, WakeHeld, "Holding off: "+why), nil
+				}
+			}
+		}
+	}
+	if ev.Source == SourceManual {
+		// Running it now is a person looking at it.
+		rn.unstall(a.ID)
 	}
 	_, running := rn.Active[a.ID]
 	if running || w.gating[a.ID] {
-		if a.Policy.Queue && ev.Source != SourceManual {
+		if (a.Policy.Queue || ev.Source == SourceReview) && ev.Source != SourceManual {
 			if q, waiting := w.queued[a.ID]; waiting {
 				q.Count = max(q.Count, 1) + 1
 				if ev.Data != "" {
@@ -181,7 +201,7 @@ func (rn *Runner) deliver(a Automation, ev WakeEvent, gated bool) (Wake, error) 
 		}
 		return wk, nil
 	}
-	if g := a.Policy.Gate; g != nil && !gated && ev.Source != SourceManual {
+	if g := a.Policy.Gate; g != nil && !gated && ev.Source != SourceManual && ev.Source != SourceReview {
 		w.gating[a.ID] = true
 		gate, dir, probe := *g, a.Project, rn.Probe
 		rn.Background(func() func() {
@@ -284,7 +304,9 @@ func (rn *Runner) tickWakes(now time.Time) {
 		}
 		delete(w.queued, id)
 		i, ok := rn.Store.Find(id)
-		if !ok || !rn.Store.Automations[i].Enabled {
+		// A paused automation still takes what a person sent it, as Wake
+		// does: a manual run, or the decision on a review.
+		if !ok || !rn.Store.Automations[i].Enabled && ev.Source != SourceManual && ev.Source != SourceReview {
 			continue
 		}
 		if ev.Count > 1 {
@@ -360,11 +382,11 @@ func (rn *Runner) afterProbe(id, tid string, res ProbeResult) {
 		rn.Persist()
 		rn.host.Changed()
 		if st.Errors == probeErrorNotice {
-			rn.host.Deliver(notification.Notice{ID: "miya-auto-probe-" + key, Title: a.Name + " · " + tr("Condition check failing"), Body: st.Error})
+			rn.host.Deliver(notification.Notice{ID: "miya-auto-probe-" + key, Title: a.Name + " · " + tr("Condition check failing"), Body: st.Error, Category: "probe:" + a.ID, Topic: a.Name})
 		}
 		return
 	}
-	st.Errors, st.Error, st.Met, st.Value = 0, "", res.Met, res.Value
+	st.Errors, st.Error, st.Met, st.Value, st.LastSuccess = 0, "", res.Met, res.Value, now
 	if t.Condition.When == WhenChanged {
 		// Each change wakes it, with what the command printed as the run's
 		// data. The first look only remembers what is there.

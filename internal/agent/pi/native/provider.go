@@ -2,6 +2,7 @@ package pi
 
 import (
 	"encoding/json"
+	"miya/internal/processenv"
 	"os"
 	"path/filepath"
 	"slices"
@@ -20,6 +21,14 @@ type Provider struct {
 	Model string
 	// Source says where the endpoint came from, for the settings page.
 	Source string
+	// API is pi's name for the protocol, "" for anthropic-messages.
+	API string
+	// Name is the provider's name, as pi lists it.
+	Name string
+	// Models, when set, are all the provider serves: a provider configured
+	// in Miya, rather than the Claude Code endpoint, whose models are
+	// Claude's.
+	Models []string
 }
 
 // Usable is whether pi can be pointed at the provider.
@@ -46,7 +55,10 @@ func ProviderFromClaude(args, env []string) Provider {
 			configDir = v
 		}
 	}
-	if configDir == "" {
+	if processenv.AgentWSL() != "" {
+		configDir, _ = processenv.WSLConfigDir("claude", configDir)
+	}
+	if configDir == "" && processenv.AgentWSL() == "" {
 		if home, err := os.UserHomeDir(); err == nil && home != "" {
 			configDir = filepath.Join(home, ".claude")
 		}
@@ -71,6 +83,9 @@ func ProviderFromClaude(args, env []string) Provider {
 		source := value
 		if strings.HasPrefix(strings.TrimSpace(value), "{") {
 			source = "--settings"
+		}
+		if processenv.AgentWSL() != "" && !strings.HasPrefix(strings.TrimSpace(value), "{") {
+			value, _ = processenv.WSLConfigDir("claude", value)
 		}
 		for k, v := range settingsEnv(value) {
 			set(k, v, source)

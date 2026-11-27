@@ -265,12 +265,12 @@ func autoRunLabel(v automation.View) string {
 
 func autoRunVariant(v automation.View) ui.BadgeVariant {
 	if v.Running {
-		return ui.BadgeInfo
+		return ui.BadgeAccent
 	}
 	if r, ok := autoLast(v); ok {
 		switch r.Result {
 		case automation.Passed:
-			return ui.BadgeUp
+			return ui.BadgeSuccess
 		case automation.Failed:
 			return ui.BadgeDanger
 		case automation.Interrupted:
@@ -288,6 +288,7 @@ func (a *automationsState) listView(cx *core.Scope) core.Node {
 		autoRow(autoHeading(tr("Automations")), ui.Button{TestID: "automation-new", Text: tr("New"), Icon: nswidgets.IconOf("plus"), OnPress: func() { a.openForm(nil) }},
 			autoButton("automations-refresh", "Refresh", a.refresh)),
 		autoMuted(cx, tr("Start a new conversation in the project on schedule, then send the result to your phone.")),
+		a.attention(cx), a.briefing(cx),
 		core.Dynamic(func(cx *core.Scope) core.Node {
 			if v := a.webhook.Get(); v != nil {
 				return a.inboxRow(cx, *v, func() { webhookOpen.Set(true) })

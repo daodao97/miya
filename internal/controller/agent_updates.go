@@ -2,7 +2,9 @@ package controller
 
 import (
 	"context"
+	"os"
 	"slices"
+	"strings"
 	"time"
 
 	"miya/internal/agent/catalog"
@@ -25,7 +27,7 @@ func (c *Controller) agentUpdateEnv(id string) []string {
 func (c *Controller) EnsureAgentUpdates() {
 	if c.Remote == nil {
 		for id, info := range c.agentUpdates {
-			if path, _ := c.AgentInstall(id); path != info.Path && !info.Updating {
+			if path, _ := c.agentBinary(id); path != info.Path && !info.Updating {
 				c.agentUpdatesAt = time.Time{}
 				break
 			}
@@ -52,8 +54,9 @@ func (c *Controller) CheckAgentUpdates() {
 		if old.Checking || old.Updating {
 			continue
 		}
-		bin, _ := c.AgentInstall(id)
+		bin, _ := c.agentBinary(id)
 		env := c.agentUpdateEnv(id)
+		customMissing := bin == "" && (id == catalog.Codex && os.Getenv("CODEX_BINARY") != "" || id == catalog.Claude && strings.TrimSpace(c.ClaudeCommand) != "" || id == catalog.Pi && strings.TrimSpace(c.Pi.Command) != "")
 		parent := c.Ctx
 		if parent == nil {
 			parent = context.Background()
@@ -63,6 +66,9 @@ func (c *Controller) CheckAgentUpdates() {
 			ctx, cancel := context.WithTimeout(parent, 25*time.Second)
 			defer cancel()
 			info := c.checkAgentCLI()(ctx, id, bin, env)
+			if customMissing {
+				info = cliupdate.Info{Path: bin, Error: tr("Install the CLI configured in the launch command, then check again")}
+			}
 			if parent.Err() != nil {
 				return
 			}
@@ -73,7 +79,7 @@ func (c *Controller) CheckAgentUpdates() {
 					return
 				}
 				// A changed custom launch command invalidates this discovery result.
-				if path, _ := c.AgentInstall(id); path != bin || !slices.Equal(env, c.agentUpdateEnv(id)) {
+				if path, _ := c.agentBinary(id); path != bin || !slices.Equal(env, c.agentUpdateEnv(id)) {
 					delete(c.agentUpdates, id)
 					c.agentUpdatesAt = time.Time{}
 				} else {
@@ -116,10 +122,10 @@ func (c *Controller) UpgradeAgent(id string) {
 		return
 	}
 	info := c.agentUpdates[id]
-	if info.Checking || !info.Update {
+	if info.Checking || (!info.Update && !info.Install) {
 		return
 	}
-	bin, _ := c.AgentInstall(id)
+	bin, _ := c.agentBinary(id)
 	if bin != info.Path {
 		c.CheckAgentUpdates()
 		return
@@ -133,7 +139,7 @@ func (c *Controller) UpgradeAgent(id string) {
 	c.agentUpdates[id] = info
 	uiruntime.Invalidate()
 	go func() {
-		ctx, cancel := context.WithTimeout(parent, 5*time.Minute)
+		ctx, cancel := context.WithTimeout(parent, 10*time.Minute)
 		defer cancel()
 		result := c.upgradeAgentCLI()(ctx, id, bin, env)
 		if parent.Err() != nil {
@@ -143,13 +149,24 @@ func (c *Controller) UpgradeAgent(id string) {
 			if parent.Err() != nil {
 				return
 			}
-			if path, _ := c.AgentInstall(id); path != bin || !slices.Equal(env, c.agentUpdateEnv(id)) {
+			if path, _ := c.agentBinary(id); (path != bin && !(info.Install && result.Version != "" && path == result.Path)) || !slices.Equal(env, c.agentUpdateEnv(id)) {
 				delete(c.agentUpdates, id)
 				c.agentUpdatesAt = time.Time{}
 			} else {
 				c.agentUpdates[id] = result
 			}
 			c.forgetInstalls()
+			if result.Version != "" && !result.Install && bin == "" {
+				switch id {
+				case catalog.Claude:
+					c.applyClaudeCommand(c.ClaudeCommand)
+				case catalog.Pi:
+					c.applyPiCommand(c.Pi.Command)
+				}
+			}
+			if info.Install && id == catalog.Codex && result.Version != "" && c.Ready != nil && !c.Ready() {
+				c.Connect()
+			}
 			// Running sessions keep their processes; subsequent launches use the
 			// updated executable. Do not restart the shared Codex app-server here.
 			uiruntime.Invalidate()

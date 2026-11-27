@@ -1,0 +1,21 @@
+name: Release TestFlight
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  actions: write
+
+jobs:
+  dispatch:
+    name: Queue public TestFlight build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Run Package on main for the released commit
+        run: |
+          gh workflow run package.yml --repo "$GITHUB_REPOSITORY" --ref main \
+            -f testflight=public -f testflight_sha="$GITHUB_SHA"

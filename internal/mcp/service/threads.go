@@ -31,7 +31,11 @@ func (api *Service) mcpThreadsFor(caller model.Thread, project string) mcpproto.
 		if t.Busy || t.Loading {
 			status = subagent.Running
 		}
-		res.Threads = append(res.Threads, mcpproto.ThreadInfo{Reference: c.ThreadRef(t).URL(), ID: t.ID, Title: c.ThreadTitle(t), Agent: model.ThreadAgent(t), Status: status})
+		info := mcpproto.ThreadInfo{Reference: c.ThreadRef(t).URL(), ID: t.ID, Title: c.ThreadTitle(t), Agent: model.ThreadAgent(t), Status: status}
+		if card, ok := c.StateCard(t); ok {
+			info.Card = &card
+		}
+		res.Threads = append(res.Threads, info)
 	}
 	return res
 }
@@ -62,7 +66,11 @@ func (api *Service) Status(r mcpproto.Request) (mcpproto.StatusResult, error) {
 			last = i
 		}
 	}
-	return mcpproto.StatusResult{Reference: c.ThreadRef(t).URL(), ID: t.ID, Title: c.ThreadTitle(t), Agent: model.ThreadAgent(t), Status: status, Reply: textutil.ClipRunes(msgfmt.LastReply(t.Messages[last+1:]), 4000)}, nil
+	res := mcpproto.StatusResult{Reference: c.ThreadRef(t).URL(), ID: t.ID, Title: c.ThreadTitle(t), Agent: model.ThreadAgent(t), Status: status, Reply: textutil.ClipRunes(msgfmt.LastReply(t.Messages[last+1:]), 4000)}
+	if card, ok := c.StateCard(t); ok {
+		res.Card = &card
+	}
+	return res, nil
 }
 
 // mcpDelegate sends a task to another conversation, new or existing, with

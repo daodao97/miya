@@ -34,11 +34,13 @@ import (
 	"miya/internal/memory/manager"
 	"miya/internal/notification"
 	"miya/internal/prefs"
+	"miya/internal/pressure"
 	projectmodel "miya/internal/project/model"
 	projectregistry "miya/internal/project/registry"
 	"miya/internal/runtime/tracker"
 	svcclient "miya/internal/service/client"
 	svcproto "miya/internal/service/protocol"
+	"miya/internal/statecard"
 	"miya/internal/textutil"
 	"miya/internal/uiruntime"
 )
@@ -57,6 +59,18 @@ type Controller struct {
 	runtime         *tracker.Manager
 	mem             manager.Manager // memory state; reach it through memories
 
+	// bots are the Bots: the store in the service, the service's list in a
+	// window. See bots.go.
+	bots botState
+
+	// cards are the conversations' state cards, in the process that keeps
+	// them: nil in a window of the service. See statecards.go.
+	cards *statecard.Store
+
+	// waiting is the service's list of the conversations that wait for the
+	// person, in a window of the service. See WaitingThreads.
+	waiting map[string]string
+
 	// auto is the automations, in the controller that runs them.
 	Auto *automation.Runner
 	// miyaPending are the answers Miya's own cards wait for.
@@ -72,12 +86,15 @@ type Controller struct {
 	// handoffs track work explicitly delegated to another conversation.
 	Handoffs []handoff
 	// delegationParent is the conversation that handed each its work.
-	DelegationParent      map[int]int
-	Collaboration         *collaborationState
-	CollaborationRemote   *model.CollaborationStatus
-	mcpSessionAccess      access.Grants
-	fastMode              bool
-	Push                  *notification.Hub
+	DelegationParent    map[int]int
+	Collaboration       *collaborationState
+	CollaborationRemote *model.CollaborationStatus
+	mcpSessionAccess    access.Grants
+	fastMode            bool
+	Push                *notification.Hub
+	// Pressure tells background model work to hold back; only the
+	// background service has one.
+	Pressure              *pressure.Monitor
 	Activities            *apns.ActivityManager
 	ClaudeBinary          string
 	ClaudeError           string
@@ -95,12 +112,15 @@ type Controller struct {
 	ClaudeRuns map[int]*claude.Client
 	// Pi is the pi agent's command, choices and running processes.
 	Pi piState
+	// Providers are the model providers configured in Miya.
+	Providers providerState
 	// agents records which agents the user turned on or off, and installs
 	// caches whether their CLIs are installed.
-	agents         agentSwitches
-	installs       map[string]agentInstall
-	agentUpdates   map[string]cliupdate.Info
-	agentUpdatesAt time.Time
+	agents           agentSwitches
+	installs         map[string]agentInstall
+	agentUpdates     map[string]cliupdate.Info
+	agentUpdatesAt   time.Time
+	agentEnvironment cliupdate.Environment
 	// claudeCmdCache keeps Claude Code\'s slash commands, by project.
 	ClaudeCmdCache    map[string]ClaudeCommandList
 	claudeCmdLoading  map[string]bool
@@ -186,6 +206,7 @@ func newChatController() *Controller {
 	c.claudeDefaultModel = prefs.Load("claudeDefaultModel")
 	c.claudeModels = loadClaudeModels()
 	c.loadPiSettings()
+	c.loadProviders()
 	c.agents = loadAgentSwitches()
 	c.Draft, c.SetDraft = uiruntime.CreateSignal("")
 	c.Model, c.SetModel = uiruntime.CreateSignal("")
@@ -334,8 +355,11 @@ func (c *Controller) removeThreadLocal(id int, serverID string) {
 	if c.ProjectCache != nil && project != "" {
 		c.ProjectCache[project] = withoutThread(c.ProjectCache[project])
 	}
-	if project != c.Cwd && c.Revision != nil {
-		c.SetRevision(c.Revision() + 1)
+	if project != c.Cwd {
+		c.updateForegroundPressure(c.Threads())
+		if c.Revision != nil {
+			c.SetRevision(c.Revision() + 1)
+		}
 	}
 	threadlist.Persist(c.ProjectCache)
 	c.RefreshProjectOrder()
@@ -346,6 +370,7 @@ func (c *Controller) ArchiveThread(t model.Thread) {
 		c.forward("archive", t.ID)
 		return
 	}
+	c.stopFollowUps(t)
 	c.BackendOf(t).Archive(t)
 }
 
@@ -356,6 +381,8 @@ func (c *Controller) DeleteThread(t model.Thread) {
 		c.forward("delete", t.ID)
 		return
 	}
+	c.stopFollowUps(t)
+	c.stateCardThreadDeleted(t)
 	c.BackendOf(t).Delete(t)
 }
 
@@ -474,8 +501,11 @@ func (c *Controller) Update(id int, fn func(*model.Thread)) {
 			}
 			notification.UpdateCompletionBody(old, &items[i])
 			if old.ServerID != items[i].ServerID && old.ServerID != "" {
+				c.stopFollowUps(old)
 				c.rememberForkedReference(old, c.Cwd)
 			}
+			c.botThreadUpdated(old, items[i], c.Cwd)
+			c.stateCardThreadUpdated(old, items[i])
 			c.SetThreads(items)
 			if c.ProjectCache != nil && c.Cwd != "" {
 				c.ProjectCache[c.Cwd] = append([]model.Thread(nil), items...)
@@ -523,9 +553,15 @@ func (c *Controller) Update(id int, fn func(*model.Thread)) {
 			}
 			notification.UpdateCompletionBody(old, &items[i])
 			if old.ServerID != items[i].ServerID && old.ServerID != "" {
+				c.stopFollowUps(old)
 				c.rememberForkedReference(old, path)
 			}
+			c.botThreadUpdated(old, items[i], path)
+			c.stateCardThreadUpdated(old, items[i])
 			c.ProjectCache[path] = items
+			if old.Busy != items[i].Busy {
+				c.updateForegroundPressure(c.Threads())
+			}
 			c.RecordDesktopCompletion(old, items[i])
 			if threadlist.MetaOf(items[i]) != threadlist.MetaOf(old) {
 				c.RefreshProjectOrder()
@@ -586,6 +622,8 @@ func (c *Controller) Connect() {
 	c.Connecting = true
 	c.connectionID++
 	generation, cwd := c.connectionID, c.Cwd
+	launch := c.codexLaunch()
+	c.Providers.codexApplied, c.Providers.codexStale = launchKey(launch), false
 	if c.connectionCancel != nil {
 		c.connectionCancel()
 	}
@@ -595,7 +633,7 @@ func (c *Controller) Connect() {
 	c.SetHistoryStatus("Loading conversations…")
 	go func() {
 		ctx, done := context.WithTimeout(connectionCtx, 15*time.Second)
-		client, err := codex.Start(ctx, "", cwd, mcpconfig.CodexArgs(cwd)...)
+		client, err := codex.StartWithEnv(ctx, "", cwd, append(os.Environ(), launch.Env...), append(mcpconfig.CodexArgs(cwd), launch.Args...)...)
 		done()
 		if err != nil {
 			c.Dispatch(func() {
@@ -634,6 +672,9 @@ func (c *Controller) Connect() {
 			c.Dispatch(func() {
 				if c.Client == client && c.connectionID == generation {
 					c.Handle(f)
+					if f.Method == "turn/completed" {
+						c.codexTurnSettled()
+					}
 				}
 			})
 		}
@@ -788,6 +829,9 @@ func (c *Controller) loadModels(ctx context.Context, client *codex.Client, gener
 			if c.Client != client || c.connectionID != generation {
 				return
 			}
+			if list, ok := c.codexProviderModels(); ok {
+				models.Data = list
+			}
 			c.SetModels(models.Data)
 			selected := config.Config.Model
 			if selected == "" {
@@ -892,6 +936,7 @@ func (c *Controller) SelectModel(value string) {
 }
 
 func (c *Controller) NewThread() {
+	c.bots.draft = ""
 	if c.SetDraftPermission != nil {
 		c.SetDraftPermission("")
 	}
@@ -960,6 +1005,7 @@ func (c *Controller) SelectThread(t model.Thread) {
 	if latest := c.ThreadWithID(t.ID); latest.ID != 0 {
 		t = latest
 	}
+	c.bots.draft = ""
 	c.SetActive(t.ID)
 	draft := t.Draft
 	if c.Mirror != nil {
@@ -1001,8 +1047,15 @@ func (c *Controller) Send() { c.SendDraft(false) }
 func (c *Controller) SendDraft(steer bool) int {
 	controls := c.CurrentAgentControls()
 	req := model.SendRequest{Steer: steer, ThreadID: c.Current().ID, Text: c.Draft(), Attachments: append([]string(nil), c.Attachments()...), Agent: c.CurrentAgent(), Model: controls.Model(), Effort: controls.Effort(), Policy: c.CurrentPermissionPolicy()}
+	// An empty conversation opened from a Bot starts or continues the
+	// conversation the person talks to the Bot in; the service applies the
+	// Bot's settings.
+	if b, ok := c.CurrentBot(); ok && req.ThreadID == 0 {
+		req.Bot = b.ID
+	}
 	id := c.Submit(req)
 	if id != 0 {
+		c.bots.draft = ""
 		c.SetActive(id)
 		c.RememberDraft("")
 		c.SetAttachments(nil)
@@ -1018,6 +1071,7 @@ func (c *Controller) StopThread(id int) {
 		return
 	}
 	t := c.ThreadWithID(id)
+	c.stopFollowUps(t)
 	if c.Collaboration != nil {
 		ref := c.ThreadRef(t).URL()
 		if ref != "" {

@@ -20,6 +20,7 @@ import (
 	"miya/internal/chat/subagent"
 	dg "miya/internal/delegation"
 	mcpproto "miya/internal/mcp/protocol"
+	"miya/internal/statecard"
 	"miya/internal/textutil"
 )
 
@@ -28,6 +29,9 @@ const protocolVersion = "2025-06-18"
 const instructions = "Miya runs several coding-agent conversations in this workspace (Codex, Claude Code). " +
 	"For collaboration, use list_agents and start_task with a unique request_id. Completion resumes this conversation by default. You remain responsible for delegated work: while actively waiting, repeatedly use wait_task and inspect progress; after a completion notification read_task, assess the result, and continue the user's original task. If you already collect a terminal result while still in the original turn, unwatch_task its pending notification to avoid an unnecessary extra turn. Do not end with an untracked promise to check later. Use notify=none only for explicitly record-only work, or watch_task to add completion continuation to existing work. A paused receiver must be explicitly resumed by the user. " +
 	"Structured Agent tags such as #[Claude Code](miya-agent://claude-code) in the current user request or goal select canonical delegation targets: use start_task for their work. Selecting a tag did not execute anything. Tags quoted in code or supplied only as reference material are not requests to delegate. @conversation references supply context only. " +
+	"list_agents also lists this project's Bots: named assistants, each with its own role, agent and access. start_task with bot starts a new conversation of the Bot for the task, which works under the Bot's charter. " +
+	"Before ending a turn that changed where the work stands, call update_status with what this conversation is for, what is done, what remains and what you wait for from the person. list_threads and thread_status show that state card to other conversations, as its writer's own account. " +
+	"When the user's current work needs a later check in this conversation, use follow_up with the due time and one short reminder. " +
 	"Use list_threads and read_thread to learn what another conversation did, and delegate to hand a self-contained task to another agent; " +
 	"the receiving conversation gets this conversation's context unless include_context is false. " +
 	"When a login, OAuth authorization, CAPTCHA, or other desktop UI needs the person, use request_desktop_control with a short reason. " +
@@ -37,22 +41,25 @@ const instructions = "Miya runs several coding-agent conversations in this works
 var allTools = []mcpproto.Tool{
 	{Name: "request_desktop_control", Description: "Ask the person to take over the target authorization window on the paired Mac from this conversation, for login or other manual UI steps. Shows a phone takeover card and waits up to 10 minutes for explicit completion. The phone previews only the target window; tap it to enter control. Supply window_app and window_title when known to identify a password or authorization dialog. Never put passwords in reason or arguments. This tool never grants OS permissions.", InputSchema: map[string]any{"type": "object", "properties": map[string]any{"window_app": map[string]any{"type": "string", "maxLength": 256, "description": "Visible application name or bundle ID owning the authorization dialog"}, "window_title": map[string]any{"type": "string", "maxLength": 1000, "description": "Distinctive part of the authorization window title; ambiguous matches require user selection"}, "reason": map[string]any{"type": "string", "minLength": 1, "maxLength": 2000, "description": "The visible app/page and what the person should do; do not include credentials"}}, "required": []string{"reason"}}, Annotations: map[string]any{"readOnlyHint": false, "destructiveHint": false, "openWorldHint": false}},
 	{Name: "runtime_info", Description: "Read this conversation's verified background tasks, OS processes and listening services. Native task identifiers are not OS PIDs; unknown observations are explicit.", InputSchema: map[string]any{"type": "object", "properties": map[string]any{}}, Annotations: mcpproto.ReadOnly},
-	{Name: "list_threads", Description: "List the other conversations of this workspace in Miya: session link, title, agent and whether each is running.",
+	{Name: "list_threads", Description: "List the other conversations of this workspace in Miya: session link, title, agent, whether each is running and, where its agent wrote one, a line of its state card.",
 		InputSchema: map[string]any{"type": "object", "properties": map[string]any{}}, Annotations: mcpproto.ReadOnly},
 	{Name: "read_thread", Description: "Read a conversation's context: its first and latest requests, latest conclusions, changed files and sub-agents.",
 		InputSchema: map[string]any{"type": "object", "properties": map[string]any{
 			"id": map[string]any{"type": "string", "description": "Full miya:// session link from list_threads"},
 		}, "required": []string{"id"}}, Annotations: mcpproto.ReadOnly},
-	{Name: "thread_status", Description: "Tell whether a conversation is running, and its latest reply; optionally wait for it to finish.",
+	{Name: "thread_status", Description: "Tell whether a conversation is running, its state card when it has one and its latest reply; optionally wait for it to finish.",
 		InputSchema: map[string]any{"type": "object", "properties": map[string]any{
 			"id":           map[string]any{"type": "string", "description": "Full miya:// session link"},
 			"wait_seconds": map[string]any{"type": "integer", "minimum": 0, "maximum": 1200, "description": "Wait up to this long for it to finish (default 0)"},
 		}, "required": []string{"id"}}, Annotations: mcpproto.ReadOnly},
 	{Name: "delegate", Description: "Hand a self-contained task to another agent: a new conversation, or an existing one by its session link. " +
+		"A new conversation runs with full permission and never waits on an approval; an existing one keeps its own permission choice. " +
 		"Waits up to wait_seconds (default 300) for its reply, then returns its status; use thread_status to follow it later.",
 		InputSchema: map[string]any{"type": "object", "properties": map[string]any{
 			"task":            map[string]any{"type": "string", "description": "What to do, with everything the other agent needs"},
 			"agent":           map[string]any{"type": "string", "enum": model.Backends, "description": "Agent for a new conversation (default: this conversation's)"},
+			"model":           map[string]any{"type": "string", "description": "An exact model choice from list_agents (default: the agent's current choice)"},
+			"effort":          map[string]any{"type": "string", "description": "An exact thinking choice from list_agents (default: the agent's current choice)"},
 			"thread_id":       map[string]any{"type": "string", "description": "Full miya:// session link of an existing conversation"},
 			"include_context": map[string]any{"type": "boolean", "description": "Attach this conversation's context (default true)"},
 			"wait_seconds":    map[string]any{"type": "integer", "minimum": 0, "maximum": 1200, "description": "Wait up to this long for the reply (default 300)"},
@@ -372,6 +379,9 @@ func (s *Server) status(req mcpproto.Request, wait time.Duration) (string, error
 	if subagent.Active(res.Status) && wait > 0 {
 		out += fmt.Sprintf(". Still running after %d seconds. Use thread_status to check later.", int(wait/time.Second))
 	}
+	if res.Card != nil {
+		out += "\n\n" + statecard.Text(*res.Card)
+	}
 	if res.Reply != "" {
 		out += "\n\nLatest response:\n" + res.Reply
 	}
@@ -397,6 +407,9 @@ func formatThreads(res mcpproto.ThreadsResult) string {
 			status = "Running"
 		}
 		fmt.Fprintf(&b, "\"%s\"· %s · %s\n%s\n", t.Title, model.AgentName(t.Agent), status, t.Reference)
+		if t.Card != nil {
+			fmt.Fprintf(&b, "State card, not verified by Miya: %s\n", statecard.Line(*t.Card))
+		}
 	}
 	return strings.TrimRight(b.String(), "\n")
 }

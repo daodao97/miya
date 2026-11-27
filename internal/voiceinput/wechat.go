@@ -475,7 +475,8 @@ func decodeWechatVoice(key []byte, r wechatReply) (text, polished string, err er
 }
 
 // recognizeWechat consumes the same 16 kHz mono PCM as the microphone bridge.
-// Each request contains six 20 ms Opus frames, paced like voicekey's stream.
+// Live audio is batched in at least six 20 ms Opus frames. Buffered audio can
+// use larger batches to catch up after a handshake or a slow network reply.
 func recognizeWechat(ctx context.Context, dir string, audio <-chan []byte, partial func(string)) (string, error) {
 	c, err := openWechat(ctx, dir)
 	if err != nil {
@@ -530,18 +531,10 @@ func (c *wechatClient) recognize(ctx context.Context, audio <-chan []byte, parti
 	}
 	pcm := make([]int16, 320)
 	packet := make([]byte, 4000)
-	var next time.Time
 	encode := func(frame []byte) error {
-		if next.IsZero() {
-			next = time.Now()
-		}
-		if err := waitWechat(ctx, time.Until(next)); err != nil {
+		if err := ctx.Err(); err != nil {
 			return err
 		}
-		// Keep audio time independent of HTTP response latency. Restarting
-		// this clock after each upload would make long recordings accumulate
-		// a network round trip of delay for every six frames.
-		next = next.Add(20 * time.Millisecond)
 		clear(pcm)
 		for i := 0; i+1 < len(frame); i += 2 {
 			pcm[i/2] = int16(binary.LittleEndian.Uint16(frame[i:]))
@@ -553,7 +546,10 @@ func (c *wechatClient) recognize(ctx context.Context, audio <-chan []byte, parti
 		batch = binary.LittleEndian.AppendUint16(batch, uint16(n))
 		batch = append(batch, packet[:n]...)
 		packets++
-		if packets == 6 {
+		// Bound each request to 960 ms of audio, but let buffered frames
+		// share a round trip instead of falling further behind on mobile
+		// networks whose RTT exceeds the normal 120 ms batch duration.
+		if packets == 48 {
 			return upload(false)
 		}
 		return nil
@@ -564,21 +560,42 @@ func (c *wechatClient) recognize(ctx context.Context, audio <-chan []byte, parti
 		}
 	}
 	var pending []byte
+	closed := false
 	for {
-		select {
-		case <-ctx.Done():
-			return "", ctx.Err()
-		case b, ok := <-audio:
-			pending = append(pending, b...)
-			for len(pending) >= 640 {
-				if err := encode(pending[:640]); err != nil {
-					return "", err
+		if len(pending) < 640 && !closed {
+			// The microphone already supplies real-time pacing. If more
+			// audio is queued, merge it into this request; otherwise flush
+			// a normal live batch without waiting for extra audio.
+			if packets >= 6 {
+				select {
+				case <-ctx.Done():
+					return "", ctx.Err()
+				case b, ok := <-audio:
+					pending = append(pending, b...)
+					closed = !ok
+				default:
+					if err := upload(false); err != nil {
+						return "", err
+					}
+					continue
 				}
-				pending = pending[640:]
+			} else {
+				select {
+				case <-ctx.Done():
+					return "", ctx.Err()
+				case b, ok := <-audio:
+					pending = append(pending, b...)
+					closed = !ok
+				}
 			}
-			if ok {
-				continue
+		}
+		for len(pending) >= 640 {
+			if err := encode(pending[:640]); err != nil {
+				return "", err
 			}
+			pending = pending[640:]
+		}
+		if closed {
 			if len(pending)%2 != 0 {
 				return "", errors.New("incomplete microphone PCM sample")
 			}

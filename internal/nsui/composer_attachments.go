@@ -40,7 +40,7 @@ func (d *desktopComposer) pickFiles() {
 	if d.host.RemoteHost() {
 		directory, _ = os.UserHomeDir()
 	}
-	d.cx.PickFiles(core.PickFilesOptions{Multiple: true, Dialog: core.OpenDialogOptions{Title: tr("Add files"), Directory: directory, Prompt: tr("Attach")}}, func(files []core.File, err error) {
+	d.cx.PickFiles(core.PickFilesOptions{Multiple: true, Title: tr("Add files"), Start: directory, Button: tr("Attach")}, func(files []core.File, err error) {
 		if err != nil {
 			d.notice.Set(err.Error())
 			return

@@ -39,6 +39,8 @@ func (rn *Runner) View(a Automation, now time.Time) View {
 		}
 	}
 	v.Wakes = append([]Wake(nil), rn.Store.Wakes[a.ID]...)
+	v.Stalled = rn.Store.Stalled[a.ID]
+	v.Reviews, v.Grants = rn.Store.PendingReviews(a.ID), rn.Store.GrantsOf(a.ID, rn.Now())
 	if a.HasTrigger(TriggerIngress) {
 		v.WakeCommand = WakeCommand(a)
 	}

@@ -229,6 +229,21 @@ func DisplayedThreads(all []model.Thread, expanded bool) []model.Thread {
 	return all[:CollapsedThreadCount]
 }
 
+// SplitAutomationThreads sets apart the automation runs that need no
+// attention from a project's other conversations. The Automations page
+// lists every run, so the project list keeps only the runs keep says still
+// matter: running, unread or open.
+func SplitAutomationThreads(all []model.Thread, keep func(model.Thread) bool) (threads, runs []model.Thread) {
+	for _, t := range all {
+		if t.Automation != "" && !keep(t) {
+			runs = append(runs, t)
+		} else {
+			threads = append(threads, t)
+		}
+	}
+	return threads, runs
+}
+
 func ThreadMessageGroups(t model.Thread, groups []MessageGroup) []MessageGroup {
 	if !t.Busy {
 		// Older services recorded completion only on the thread. Recover its
@@ -267,12 +282,31 @@ func ThreadMessageGroups(t model.Thread, groups []MessageGroup) []MessageGroup {
 
 // Group protocol items for presentation without merging or modifying their data.
 // Tool activity belongs to the same response; a user message or new turn separates it.
+// EmptyThought reports whether m is a completed reasoning item with no text
+// to show. One in progress still shows "Thinking…", and one of no known
+// state keeps its place among the activities.
+func EmptyThought(m model.Message) bool {
+	if !strings.EqualFold(m.Kind, "reasoning") || m.Status != "completed" {
+		return false
+	}
+	return strings.TrimSpace(ReasoningContent(m.Content)) == ""
+}
+
 func GroupMessages(messages []model.Message) []MessageGroup {
 	var groups []MessageGroup
 	for _, m := range messages {
 		// Old services appended automatic memory cards without an explicit flag.
 		// Keep those historical records out of both desktop and phone timelines.
 		if m.Role == "memory" && (m.Memory == nil || !m.Memory.Explicit) {
+			continue
+		}
+		// A finished thought with nothing to read, as Claude Code's thinking
+		// that arrives with only its signature, would show an empty "Thought".
+		if EmptyThought(m) {
+			continue
+		}
+		// The receipt before it already records that the parent read the result.
+		if FoldedDelegationRead(m) {
 			continue
 		}
 		user := m.Role == "user"
@@ -399,9 +433,10 @@ func ThreadWorkingLabelAt(t model.Thread, now time.Time) string {
 		return label
 	}
 	if t.StartedAtMs > 0 {
-		elapsed := now.UnixMilli() - t.StartedAtMs
-		label := tr("Working for ") + FormatElapsed(elapsed)
-		if rate := ThreadTokenRateLabel(t, elapsed); rate != "" {
+		nowMS := now.UnixMilli()
+		label := tr("Working for ") + FormatElapsed(nowMS-responseStartMs(t))
+		// Output tokens restart with each segment, so the rate does too.
+		if rate := ThreadTokenRateLabel(t, nowMS-t.StartedAtMs); rate != "" {
 			label += " · " + rate
 		}
 		return label
@@ -410,6 +445,19 @@ func ThreadWorkingLabelAt(t model.Thread, now time.Time) string {
 		return tr(t.Status)
 	}
 	return tr("Waiting for agent…")
+}
+
+// A response can run in several segments: Claude Code resumes it when
+// background work reports back, without a new request. Each segment restarts
+// the thread's clock, so use the earliest start since the request.
+func responseStartMs(t model.Thread) int64 {
+	start := t.StartedAtMs
+	for i := len(t.Messages) - 1; i >= 0 && t.Messages[i].Role != "user"; i-- {
+		if s := t.Messages[i].StartedAtMs; s > 0 && s < start {
+			start = s
+		}
+	}
+	return start
 }
 
 var reconnectAttempt = regexp.MustCompile(`\b\d+\s*/\s*\d+\b`)
@@ -437,7 +485,7 @@ type ActivityRun struct {
 func ActivityRuns(messages []model.Message) []ActivityRun {
 	var runs []ActivityRun
 	for _, m := range messages {
-		activity := m.Role == "tool" || m.Role == "activity"
+		activity := (m.Role == "tool" || m.Role == "activity") && !IsDelegationCall(m)
 		if !activity || len(runs) == 0 || !runs[len(runs)-1].Activity {
 			runs = append(runs, ActivityRun{ID: m.ID, Activity: activity})
 		}
@@ -500,3 +548,13 @@ func ActivityIcon(m model.Message) string {
 }
 
 func tr(s string) string { return locales.T(s) }
+
+// WithoutBotIntro drops the introduction early Bots added, once, after the
+// message that started their conversation; Bots now carry their charter
+// outside the conversation.
+func WithoutBotIntro(text string) string {
+	if i := strings.Index(text, "\n\n[Miya, sent once] "); i >= 0 {
+		return text[:i]
+	}
+	return text
+}

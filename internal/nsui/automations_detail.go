@@ -51,6 +51,25 @@ func (a *automationsState) detail(cx *core.Scope, id string) core.Node {
 			),
 			autoMuted(cx, filepath.Base(v.Project)+" · "+model.AgentName(v.Agent)+" · "+v.ScheduleText),
 			a.stats(cx, v),
+			a.reviewControls(cx, v),
+			ui.Select[automation.Access]{TestID: "automation-access", Label: tr("Access"),
+				Options: automationAccessOptions(), Value: func() automation.Access { return v.Access },
+				OnChange: func(access automation.Access) { next := v.Automation; next.Access = access; a.save(next) }},
+			a.switchRow("automation-recheck", "Recheck before merging", func() bool { return v.Recheck }, func(on bool) {
+				next := v.Automation
+				next.Recheck = on
+				a.save(next)
+			}),
+			a.switchRow("automation-notify-every", "Notify for every run", func() bool { return v.NotifyEveryRun }, func(on bool) {
+				next := v.Automation
+				next.NotifyEveryRun = on
+				a.save(next)
+			}),
+			a.switchRow("automation-notify-never", "Disable phone notifications", func() bool { return v.NotifyNever }, func(on bool) {
+				next := v.Automation
+				next.NotifyNever = on
+				a.save(next)
+			}),
 			autoCard(cx, autoText(tr("Instructions")), autoText(v.Instructions), autoMuted(cx, v.Schedule), autoMuted(cx, autoCheck(v.Automation)), autoMuted(cx, tr("Original request: ")+v.Request)),
 			a.triggers(cx, v, false, state),
 			a.switchRow("automation-carry", "Include previous result", func() bool { return !v.NoCarryOver }, func(on bool) { next := v.Automation; next.NoCarryOver = !on; a.save(next) }),

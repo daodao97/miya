@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/nsgo-dev/nsgo/core"
-	"github.com/nsgo-dev/nsgo/mobile"
 	"miya/internal/remote"
 )
 
@@ -28,20 +27,20 @@ func (m *App) scan() {
 	// Native completion may outlive the pairing sheet. It cannot replace a
 	// desktop selected in the meantime or pair after the app backgrounds.
 	generation, sheet := m.Generation, m.pages.Top()
-	mobile.ScanQRCode(m.cx, func(code string, ok bool, err error) {
+	m.cx.ScanCode(core.ScanOptions{}, func(code *core.ScannedCode, err error) {
 		m.scanning = false
 		if generation != m.Generation || sheet != m.pages.Top() || m.cx.Env().Lifecycle() == core.LifecycleBackground {
 			m.change()
 			return
 		}
 		if err != nil {
-			if errors.Is(err, core.ErrPlatformUnsupported) {
+			if errors.Is(err, core.ErrNoScanner) {
 				m.Error = tr("Scan on your phone, or paste a desktop connection code")
 			} else {
 				m.Error = tr("Unable to open the camera")
 			}
-		} else if ok {
-			m.pair(code)
+		} else if code != nil {
+			m.pair(code.Text)
 		}
 		m.change()
 	})

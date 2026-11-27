@@ -14,7 +14,7 @@ parser.add_argument('--version')
 parser.add_argument('--build-number', type=int)
 parser.add_argument('--unsigned-ios', action='store_true')
 parser.add_argument('--ios-signing', nargs=3, metavar=('TEAM', 'APP_PROFILE', 'WIDGETS_PROFILE'))
-parser.add_argument('--notarize', nargs=2, metavar=('PROFILE', 'KEYCHAIN'))
+parser.add_argument('--notarize', metavar='PROFILE')
 args = parser.parse_args()
 path = Path(__file__).resolve().parent.parent / 'nsgo.yaml'
 config = json.loads(path.read_text())
@@ -38,9 +38,8 @@ if args.ios_signing:
     for profile in (app, widgets):
         if not Path(profile).is_file():
             raise SystemExit(f'missing provisioning profile: {profile}')
-    config['miya']['ios']['development_team'] = team
     sign.update(profile=app, widgets_profile=widgets)
 if args.notarize:
-    sign['notarize'], config['miya']['notary_keychain'] = args.notarize
+    sign['notarize'] = args.notarize
 path.write_text(json.dumps(config, indent=2, ensure_ascii=False) + '\n')
 print(f"nsgo.yaml: version {config['version']}, mobile build {config['build_number']}")

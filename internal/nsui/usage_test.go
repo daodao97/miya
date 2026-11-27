@@ -261,12 +261,13 @@ func TestUsageIconsArePNG(t *testing.T) {
 
 // Invalidation still updates connected-account controls alongside the shared
 // standalone readings; the tray never needs controller implementation imports.
-func TestUsageSidebarOpensSettingsCategory(t *testing.T) {
+func TestUsageOpensSettingsCategoryFromSettings(t *testing.T) {
 	t.Setenv("MIYA_ISOLATED_DIR", t.TempDir())
 	locales.SetCurrent("en")
 	t.Cleanup(func() { locales.SetCurrent(""); uiruntime.SetAppWindow(nil); current = nil })
 	app := startBridged(t, settingsHost())
-	app.Press("id:open-usage")
+	app.Press("Settings")
+	app.Press("Usage")
 	app.WaitFor("id:usage-tray", time.Second)
 }
 
