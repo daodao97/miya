@@ -1,6 +1,6 @@
 #!/bin/bash
 # Build Miya for Android (arm64) with MyGo's Android host, which the CLI
-# embeds. Without android.keystore in mygo.json the APK is debug-signed.
+# embeds. Set MIYA_ANDROID_KEYSTORE to sign with a release key.
 # Usage: scripts/build-android.sh [--install] [--identifier ID]
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd -P)
@@ -23,10 +23,12 @@ mkdir -p "$ROOT/.mygo"
 STAGE=$(mktemp -d "$ROOT/.mygo/android-config-XXXXXX")
 trap 'rm -rf "$STAGE"' EXIT
 python3 - "$ROOT" "$STAGE" "$APP_ID" <<'PY'
-import json, re, sys
+import json, os, re, sys
 from pathlib import Path
 root, stage, override = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3]
 config = json.loads((root / 'mygo.json').read_text())
+if keystore := os.getenv('MIYA_ANDROID_KEYSTORE'):
+    config.setdefault('android', {}).update(keystore=str(Path(keystore).resolve(strict=True)), keyAlias='miya')
 if override:
     if not re.fullmatch(r'[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+', override):
         raise SystemExit('Invalid Android application identifier')

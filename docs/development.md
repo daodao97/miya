@@ -86,11 +86,17 @@ MIYA_IOS_PLATFORM=ios/simulator ./scripts/build-ios.sh
 | iOS | 配置签名后生成 IPA，否则生成模拟器 ZIP |
 | Android | arm64 APK |
 
+标签构建使用 `MYGO_UPDATER_PRIVATE_KEY` 签名 macOS 和 Windows 的 MyGo 原生更新包，并把每种架构的包和清单加入 Release 草稿。MyGo 的更新签名使用 `mygo.json` 中的公钥。macOS Developer ID 仍用于签名应用和 DMG。
+
+Android 标签构建使用 `ANDROID_KEYSTORE_BASE64` 和 `ANDROID_KEYSTORE_PASSWORD` 为正式 APK 签名。手机侧边抽屉在 GitHub 发布新版正式 APK 后会显示升级图标。此前安装调试签名包的用户首次切换需要重新安装，使用正式密钥签名的后续版本可覆盖安装。
+
 ### 发布到 TestFlight
 
 在 **Actions → Package → Run workflow** 选择 `main`，将 `testflight` 设为 `internal` 或 `public`。这次运行只打 iOS 包，上传到 App Store Connect 应用 **Miya Agent**，并分发到对应的 **Internal Testers** 或 **Public Beta** 测试组。保留默认值 `none` 时打包所有平台。
 
 TestFlight 使用工作流中的 `TESTFLIGHT_VERSION`（目前为 `0.1.0`）和递增的 GitHub Actions 运行编号。同一次运行重试会复用已经上传的构建。如果同版本已有构建在审核，新构建会先上传，等审核结束后重新运行失败的发布任务即可。Apple 要求审核时，公开测试任务会提交审核。
+
+公开测试构建获批后，重新运行公开分发任务即可发布版本、构建号和过期时间到 `miya-testflight` 的 `update-ios.json`。iOS 在有可用的新构建时显示抽屉升级图标，点击打开 TestFlight。
 
 `testflight` 环境仅允许 `main` 部署，保存 `ASC_KEY_ID`、`ASC_ISSUER_ID` 和 `ASC_PRIVATE_KEY` 三项 App Store Connect API Secrets。
 

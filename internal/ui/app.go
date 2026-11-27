@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/plugins/updater"
+	nativeupdater "github.com/egoist/mygo/plugins/updater/native"
 	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/markdown"
@@ -154,6 +156,11 @@ func NewChatAppWithController(c Host) *App {
 
 func DesktopMain() {
 	app := newChatApp()
+	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
+		mygo.Updater.SetKeepPreviousBundles(true)
+		mygo.Use(nativeupdater.Plugin)
+		openLocalUpdater = updater.CheckForUpdates
+	}
 	widgets.ConfigureInterfaceLanguage()
 	mygo.App.OnLocaleChanged(func(tag string) {
 		locales.SetCurrent(tag)

@@ -16,6 +16,8 @@ name: Package
 #   APPLE_ID, APPLE_APP_PASSWORD, APPLE_TEAM_ID            notarization (needs the certificate)
 #   IOS_CERTIFICATE_BASE64, IOS_CERTIFICATE_PASSWORD       Apple Distribution .p12
 #   IOS_PROFILE_BASE64                                     provisioning profile for com.daodao.miya
+#   MYGO_UPDATER_PRIVATE_KEY                               required for tagged desktop updates
+#   ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD     required for tagged Android APKs
 
 on:
   workflow_dispatch:
@@ -88,9 +90,18 @@ jobs:
             python3 scripts/ci-config.py --notarize miya-notary "$kc"
           fi
       - name: Build the app and disk image
+        env:
+          MYGO_UPDATER_PRIVATE_KEY: ${{ github.ref_type == 'tag' && secrets.MYGO_UPDATER_PRIVATE_KEY || '' }}
         run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            : "${MYGO_UPDATER_PRIVATE_KEY:?Missing MyGo updater signing key}"
+          fi
           out="$RUNNER_TEMP/dist"
           ./scripts/package-macos.sh -o "$out"
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            test -s "$out/darwin-universal/miya-${GITHUB_REF_NAME#v}-darwin-universal.tar.gz"
+            test -s "$out/darwin-universal/update-darwin-universal.json"
+          fi
           dmg=$(find "$out" -name '*.dmg' -print -quit)
           if [ -z "$dmg" ]; then echo 'mygo build produced no disk image' >&2; exit 1; fi
           codesign --verify --deep --strict "$(find "$out" -maxdepth 2 -name '*.app' -print -quit)"
@@ -112,6 +123,14 @@ jobs:
         with:
           name: miya-desktop-updates
           path: ${{ runner.temp }}/updates/*
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: github.ref_type == 'tag'
+        with:
+          name: miya-native-updates-macos
+          path: |
+            ${{ runner.temp }}/dist/darwin-universal/miya-*-darwin-universal.tar.gz
+            ${{ runner.temp }}/dist/darwin-universal/update-darwin-universal.json
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
@@ -143,7 +162,29 @@ jobs:
         if: github.ref_type == 'tag'
         run: python scripts/ci-config.py --version "$env:GITHUB_REF_NAME"
       - name: Build the NSIS installer
-        run: go tool mygo build -platform windows/${{ matrix.arch }} -o build
+        env:
+          MYGO_UPDATER_PRIVATE_KEY: ${{ github.ref_type == 'tag' && secrets.MYGO_UPDATER_PRIVATE_KEY || '' }}
+        run: |
+          if ($env:GITHUB_REF_TYPE -eq "tag" -and -not $env:MYGO_UPDATER_PRIVATE_KEY) {
+            throw "Missing MyGo updater signing key"
+          }
+          go tool mygo build -platform windows/${{ matrix.arch }} -o build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($env:GITHUB_REF_TYPE -eq "tag") {
+            $target = "windows-${{ matrix.arch }}"
+            $version = $env:GITHUB_REF_NAME -replace '^v', ''
+            if (!(Test-Path "build/$target/miya-$version-$target.tar.gz") -or !(Test-Path "build/$target/update-$target.json")) {
+              throw "Missing MyGo updater archive or manifest"
+            }
+          }
+      - uses: actions/upload-artifact@v4
+        if: github.ref_type == 'tag'
+        with:
+          name: miya-native-updates-windows-${{ matrix.arch }}
+          path: |
+            build/windows-${{ matrix.arch }}/miya-*-windows-${{ matrix.arch }}.tar.gz
+            build/windows-${{ matrix.arch }}/update-windows-${{ matrix.arch }}.json
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
           name: miya-windows-${{ matrix.arch }}
@@ -271,6 +312,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: testflight
+    concurrency:
+      group: miya-testflight-${{ inputs.testflight }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v5
       - uses: actions/download-artifact@v4
@@ -299,7 +345,13 @@ jobs:
           trap 'rm -f "$ASC_PRIVATE_KEY_PATH"' EXIT
           printf '%s\n' "$ASC_PRIVATE_KEY" > "$ASC_PRIVATE_KEY_PATH"
           unset ASC_PRIVATE_KEY
+          export TESTFLIGHT_UPDATE_RECORD="$RUNNER_TEMP/update-ios.json"
           bash scripts/publish-testflight.sh "$TESTFLIGHT_TARGET" "$TESTFLIGHT_VERSION" "$GITHUB_RUN_NUMBER" ipa/*.ipa
+      - name: Publish available public iOS version
+        if: inputs.testflight == 'public'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/publish-testflight-update.sh "$RUNNER_TEMP/update-ios.json"
 
   android:
     name: Android APK
@@ -336,7 +388,18 @@ jobs:
       - name: Build the APK
         env:
           CGO_ENABLED: '1'
+          ANDROID_KEYSTORE_BASE64: ${{ github.ref_type == 'tag' && secrets.ANDROID_KEYSTORE_BASE64 || '' }}
+          MYGO_ANDROID_KEYSTORE_PASSWORD: ${{ github.ref_type == 'tag' && secrets.ANDROID_KEYSTORE_PASSWORD || '' }}
         run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            : "${ANDROID_KEYSTORE_BASE64:?Missing Android release keystore}"
+            : "${MYGO_ANDROID_KEYSTORE_PASSWORD:?Missing Android release key password}"
+            umask 077
+            export MIYA_ANDROID_KEYSTORE="$RUNNER_TEMP/miya-android.p12"
+            trap 'rm -f "$MIYA_ANDROID_KEYSTORE"' EXIT
+            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$MIYA_ANDROID_KEYSTORE"
+            unset ANDROID_KEYSTORE_BASE64
+          fi
           ./scripts/build-android.sh
           sha256sum build/android/*.apk
       - uses: actions/upload-artifact@v4

@@ -38,4 +38,6 @@ if config.get('i18n'):
         locale_stage.parent.mkdir(parents=True, exist_ok=True)
         locale_stage.symlink_to(root / locale_dir, target_is_directory=True)
 PY
+build_number=$(python3 -c 'import json; print(json.load(open("mygo.json")).get("ios", {}).get("buildNumber", "1"))')
+export MYGO_LDFLAGS="${MYGO_LDFLAGS:-} -X miya/internal/mobile.mobileBuildNumber=$build_number"
 go tool mygo build -platform "${MIYA_IOS_PLATFORM:-ios/arm64}" "$@" "$STAGE"

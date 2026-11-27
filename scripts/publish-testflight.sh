@@ -65,4 +65,11 @@ if [[ $target == public ]]; then
 fi
 
 "${publish[@]}"
-asc testflight distribution view --build-id "$build" | jq '.data[0].attributes'
+distribution=$(asc testflight distribution view --build-id "$build")
+jq '.data[0].attributes' <<< "$distribution"
+if [[ $target == public && -n ${TESTFLIGHT_UPDATE_RECORD:-} ]] &&
+   jq -e '.data[0].attributes.externalBuildState == "IN_BETA_TESTING"' <<< "$distribution" >/dev/null; then
+    expires_at=$(asc builds info --build-id "$build" | jq -er '.data.attributes.expirationDate | select(length > 0)')
+    jq -n --arg version "$version" --arg build "$build_number" --arg expiresAt "$expires_at" \
+        '{version: $version, build: $build, expiresAt: $expiresAt}' > "$TESTFLIGHT_UPDATE_RECORD"
+fi

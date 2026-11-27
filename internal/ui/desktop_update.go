@@ -23,6 +23,8 @@ type MiyaUpdateUI struct {
 	Err      string
 }
 
+var openLocalUpdater func()
+
 func (app *App) syncMiyaUpdate(c *ui.Context) {
 	if !app.C.RemoteHost() {
 		return
@@ -118,6 +120,13 @@ func (app *App) callMiyaUpdate(action string) {
 }
 
 func (app *App) MiyaUpdateSettings(c *ui.Context) {
+	if openLocalUpdater != nil {
+		widgets.SettingsGroup(c, "Miya", "", func() {
+			if widgets.SmallButton(c.Key("check-local-miya-update"), tr("Check for Miya updates"), false).Clicked() {
+				openLocalUpdater()
+			}
+		})
+	}
 	if !app.C.RemoteHost() {
 		return
 	}

@@ -3,6 +3,11 @@
   "identifier": "com.daodao.miya",
   "version": "0.1.1",
   "out": "build",
+  "updates": {
+    "publicKey": "p695dgWtjT/8eulkCbReOvamkC3wBjeTd8W9C7EqcaI=",
+    "github": "daodao97/miya",
+    "deltas": 0
+  },
   "macos": {
     "minimumSystemVersion": "13.0",
     "infoPlist": {

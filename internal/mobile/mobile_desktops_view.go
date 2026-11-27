@@ -1,6 +1,9 @@
 package mobile
 
 import (
+	"fmt"
+
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
 	phonecache "miya/internal/phone/cache"
@@ -19,21 +22,34 @@ func (m *App) addDesktop() {
 
 func (m *App) drawerDesktopSwitcher(c *ui.Context) {
 	p := m.Pal
-	b := m.phoneButton(c.Key("desktop-switcher")).Column().Grow(1).MinWidth(0).Padding(0).Gap(4).AlignItems(ui.Start).Label(tr("Switch desktop"))
-	b.Children(func() {
-		ui.Text(c, "Miya").FontSize(m.Font(22)).FontWeight(600).SingleLine()
-		ui.Row(c).FillWidth().Gap(6).AlignItems(ui.Center).Children(func() {
-			label := m.ConnectionLine()
-			if label == "" {
-				label = textutil.FirstNonEmpty(m.DesktopName(), tr("Connected"))
+	ui.Column(c).Grow(1).MinWidth(0).Gap(4).Children(func() {
+		update := m.appUpdate
+		if update.version != "" {
+			ui.Row(c.Key("miya-title")).FillWidth().Gap(6).AlignItems(ui.Center).Children(func() {
+				ui.Text(c, "Miya").FontSize(m.Font(22)).FontWeight(600).SingleLine()
+				label := fmt.Sprintf(tr("Available version: %s"), update.version)
+				if m.circle(c, "miya-update", label, func() {
+					widgets.Icon(c, "arrow-up", 17, p.link)
+				}).Clicked() {
+					go mygo.Shell.OpenExternal(update.url)
+				}
+			})
+		}
+		b := m.phoneButton(c.Key("desktop-switcher")).Column().MinWidth(0).Padding(0).Gap(4).AlignItems(ui.Start).Label(tr("Switch desktop"))
+		b.Children(func() {
+			if update.version == "" {
+				ui.Text(c, "Miya").FontSize(m.Font(22)).FontWeight(600).SingleLine()
 			}
-			ui.Text(c, label).FontSize(m.Font(12)).TextColor(p.muted).MinWidth(0).Shrink(1).SingleLine().Ellipsis("…")
-			widgets.Icon(c, "chevron-down", 11, p.muted)
+			ui.Row(c).FillWidth().Gap(6).AlignItems(ui.Center).Children(func() {
+				label := textutil.FirstNonEmpty(m.ConnectionLine(), m.DesktopName(), tr("Connected"))
+				ui.Text(c, label).FontSize(m.Font(12)).TextColor(p.muted).MinWidth(0).Shrink(1).SingleLine().Ellipsis("…")
+				widgets.Icon(c, "chevron-down", 11, p.muted)
+			})
 		})
+		if b.Clicked() {
+			m.openDesktopManager()
+		}
 	})
-	if b.Clicked() {
-		m.openDesktopManager()
-	}
 }
 
 func (m *App) desktopsView(c *ui.Context) {

@@ -136,6 +136,8 @@ type App struct {
 	AutomationRunsShown map[string]bool // projects whose settled automation runs are listed
 	DrawerSearch        bool
 	DrawerQuery         string
+	appUpdate           mobileUpdate
+	nextUpdateCheck     time.Time
 	Menu                bool
 	QuotaOpen           bool
 	quotaAgent          string
@@ -297,6 +299,7 @@ func mobileMain() {
 		m.watchNetwork()
 		m.setupPush()
 		go m.loadSaved()
+		m.checkMobileUpdate()
 
 	})
 	// iOS ends a suspended app's sockets; reconnect on return instead.
@@ -308,6 +311,7 @@ func mobileMain() {
 	})
 	mygo.App.OnDidBecomeActive(func() {
 		uiruntime.RunOnMain(func() {
+			m.checkMobileUpdate()
 			m.requestPush()
 			m.markCompletionRead()
 		})
