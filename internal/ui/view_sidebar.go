@@ -220,10 +220,12 @@ func (app *App) projectRow(c *ui.Context, p projectmodel.Project) {
 		if row.Clicked() {
 			app.selectProject(p)
 		}
+		// Keep the anchor built while the pointer moves into its menu.
+		actions := ui.Row(c.Key("actions")).Absolute().Right(4).Top(4).Gap(2).Padding(1).Background(widgets.Chosen).Radius(6)
 		if !showActions {
-			return
+			actions.Invisible()
 		}
-		ui.Row(c).Absolute().Right(4).Top(4).Gap(2).Padding(1).Background(widgets.Chosen).Radius(6).Children(func() {
+		actions.Children(func() {
 			more := widgets.Quiet(c.Key("more")).Size(28, 26).PaddingX(4).Justify(ui.Center).Label(tr("Project actions")).Tooltip(tr("Project actions"))
 			more.Children(func() { widgets.Icon(c, "dots", 16, widgets.Muted) })
 			more.PopoverMenuButton(func(m *ui.Menu) { app.projectMenu(m, p) })

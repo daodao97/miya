@@ -40,6 +40,33 @@ func TestCollapsedProjectShowsRunningConversation(t *testing.T) {
 	}
 }
 
+func TestProjectMenuStaysOpenWhenPointerLeavesRow(t *testing.T) {
+	for _, action := range []string{"Archive project", "Delete project"} {
+		t.Run(action, func(t *testing.T) {
+			app, tt := testApp(t)
+			project, ok := tt.Find("demo")
+			if !ok {
+				t.Fatal("project row is missing")
+			}
+			tt.Move(project.X+project.W/2, project.Y+project.H/2)
+			if err := tt.Click("Project actions"); err != nil {
+				t.Fatal(err)
+			}
+			item, ok := tt.Find(action)
+			if !ok {
+				t.Fatalf("project menu is missing %q", action)
+			}
+			tt.Move(item.X+item.W/2, item.Y+item.H/2)
+			if err := tt.Click(action); err != nil {
+				t.Fatal(err)
+			}
+			if len(app.C.State().Projects()) != 0 {
+				t.Fatalf("%q did not remove the project from the sidebar", action)
+			}
+		})
+	}
+}
+
 func TestProjectRunningStateReachesServiceWindow(t *testing.T) {
 	app, _ := testApp(t)
 	c := app.C.(*controller.Controller)
