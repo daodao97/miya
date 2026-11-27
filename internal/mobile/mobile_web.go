@@ -22,6 +22,12 @@ func (m *App) openWebService(service webservice.Service) {
 	m.openWebServiceAt(service, "")
 }
 
+func localWebCodeLink(code string) (string, bool) {
+	link := strings.TrimSpace(code)
+	_, _, ok := webservice.LocalLink(link)
+	return link, ok
+}
+
 // path is where the in-app browser lands after the proxy's bootstrap page.
 func (m *App) openWebServiceAt(service webservice.Service, path string) {
 	if !m.Connected || m.Conn == nil || m.FilesCancel != nil || !m.State.WebPorts {

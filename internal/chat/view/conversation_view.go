@@ -814,7 +814,7 @@ func (app *View) threadMessage(c *ui.Context, message model.Message) {
 	box := ui.Column(c).MinWidth(0)
 	options := ui.Local(box, "thread-markdown", func() markdown.Options { return markdown.Options{} })
 	options.OnLink, options.LoadImage, options.Theme = app.Md.OnLink, app.Md.LoadImage, app.Md.Theme
-	options.LinkMenu = app.Md.LinkMenu
+	options.LinkMenu, options.CodeLink = app.Md.LinkMenu, app.Md.CodeLink
 	options.Block = func(c *ui.Context, doc *parser.Document, index int) bool {
 		if doc.Block(index).Kind != parser.Paragraph {
 			return false
@@ -841,11 +841,18 @@ func (app *View) threadMessage(c *ui.Context, message model.Message) {
 		text := richtext.ParseMarkdown(b.String())
 		for _, run := range text.Runs(0, text.Len()) {
 			a := run.Attributes
+			dest := a.Link
 			base := ui.Span{Text: run.Text, Weight: a.Weight, Italic: a.Italic, Underline: a.Underline, Strikethrough: a.Strikethrough}
 			if a.Code {
 				base.Font = widgets.MonoFont
 				base.Background = c.Theme().Text.Alpha(.06)
 				base.Radius = 4
+				if dest == "" && options.CodeLink != nil {
+					if link, ok := options.CodeLink(run.Text); ok {
+						dest = link
+						base.Underline = true
+					}
+				}
 			}
 			end := 0
 			for _, match := range mentionPlaceholder.FindAllStringSubmatchIndex(run.Text, -1) {
@@ -856,14 +863,14 @@ func (app *View) threadMessage(c *ui.Context, message model.Message) {
 				before := base
 				before.Text = run.Text[end:match[0]]
 				title := mentions[i].Title
-				pieces = append(pieces, piece{span: before, link: a.Link, label: before.Text}, piece{
+				pieces = append(pieces, piece{span: before, link: dest, label: before.Text}, piece{
 					span: ui.Span{Text: " @ " + textutil.ClipRunes(strings.Join(strings.Fields(title), " "), 22) + " ", Weight: 500, Color: style.ink, Background: style.background, Radius: 5},
 					link: mentions[i].Ref.URL(), label: title,
 				})
 				end = match[1]
 			}
 			base.Text = run.Text[end:]
-			pieces = append(pieces, piece{span: base, link: a.Link, label: base.Text})
+			pieces = append(pieces, piece{span: base, link: dest, label: base.Text})
 		}
 		ui.RichText(c).MinWidth(0).FontSize(c.Theme().FontSize).LineHeight(1.7).Selectable().Children(func() {
 			for i, part := range pieces {

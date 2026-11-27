@@ -263,6 +263,7 @@ func NewMobileApp() *App {
 	m.FormErrors = map[string]string{}
 	m.View.Md = markdown.Options{
 		OnLink:    m.openMessageLink,
+		CodeLink:  localWebCodeLink,
 		LoadImage: func(src string) (ui.ImageSource, error) { return widgets.LoadImage(widgets.ImageSourcePath(src)) },
 	}
 	m.View.ImagePreview = m.MessageImage
