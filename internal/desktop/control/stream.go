@@ -3,6 +3,7 @@ package control
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -17,6 +18,36 @@ import (
 // of screenshots ahead of the viewer, and input travels in the other direction.
 const streamFrameCredits = 4
 const streamTimeout = 5 * time.Second
+const streamFrameInterval = time.Second / 30
+const streamRefreshInterval = time.Second
+
+var streamFrameOptions = [...]desktop.FrameOptions{
+	{MaxEdge: InteractiveFrameMaxEdge, Quality: 65},
+	{MaxEdge: 1024, Quality: 60},
+	{MaxEdge: 768, Quality: 55},
+}
+
+type streamQuality struct {
+	level, slow, fast int
+}
+
+func (q *streamQuality) observe(wait time.Duration) {
+	if wait >= streamFrameInterval/2 {
+		q.fast = 0
+		q.slow++
+		if q.slow >= 3 {
+			q.level = min(q.level+1, len(streamFrameOptions)-1)
+			q.slow = 0
+		}
+		return
+	}
+	q.slow = 0
+	q.fast++
+	if q.fast >= 120 {
+		q.level = max(0, q.level-1)
+		q.fast = 0
+	}
+}
 
 type StreamNotice struct {
 	HTTPError
@@ -112,11 +143,14 @@ func (d *Server) serveStream(w http.ResponseWriter, r *http.Request, l *desktopL
 	}()
 	defer func() { cancel(); <-readerDone }()
 
-	options := desktop.FrameOptions{MaxEdge: InteractiveFrameMaxEdge, Quality: 65}
+	var profile streamQuality
+	var previousHash [32]byte
+	var lastSent time.Time
 	creditTimer := time.NewTimer(streamTimeout)
 	creditTimer.Stop()
 	defer creditTimer.Stop()
 	for ctx.Err() == nil {
+		waiting := time.Now()
 		creditTimer.Reset(streamTimeout)
 		select {
 		case <-ctx.Done():
@@ -127,16 +161,17 @@ func (d *Server) serveStream(w http.ResponseWriter, r *http.Request, l *desktopL
 			creditTimer.Stop()
 		}
 		started := time.Now()
-		interval := InteractiveFrameInterval
+		interval := streamFrameInterval
 		if !d.work.TryLock() {
 			returnStreamCredit(credits)
 		} else {
-			data, locked, failure := d.captureStreamFrame(ctx, l, display, window, options)
+			data, locked, failure := d.captureStreamFrame(ctx, l, display, window, streamFrameOptions[profile.level])
 			d.work.Unlock()
 			if ctx.Err() != nil {
 				return
 			}
 			if locked || failure != nil {
+				lastSent = time.Time{}
 				returnStreamCredit(credits)
 				interval = 750 * time.Millisecond
 				if locked {
@@ -146,12 +181,19 @@ func (d *Server) serveStream(w http.ResponseWriter, r *http.Request, l *desktopL
 					return
 				}
 			} else {
-				writeCtx, stop := context.WithTimeout(ctx, streamTimeout)
-				err := conn.Write(writeCtx, websocket.MessageBinary, data)
-				stop()
-				if err != nil {
-					return
+				hash := sha256.Sum256(data)
+				if hash == previousHash && time.Since(lastSent) < streamRefreshInterval {
+					returnStreamCredit(credits)
+				} else {
+					writeCtx, stop := context.WithTimeout(ctx, streamTimeout)
+					err := conn.Write(writeCtx, websocket.MessageBinary, data)
+					stop()
+					if err != nil {
+						return
+					}
+					previousHash, lastSent = hash, time.Now()
 				}
+				profile.observe(max(started.Sub(waiting), time.Since(started)-streamFrameInterval))
 			}
 		}
 		if remaining := time.Until(started.Add(interval)); remaining > 0 && !Wait(ctx, remaining) {

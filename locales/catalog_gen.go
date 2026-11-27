@@ -10942,6 +10942,18 @@ func (msgs Messages) PhoneNotificationsInTheBackgroundNeedMiya1d38a2() string {
 	return Catalog.Format(msgs.locale, "phoneNotificationsInTheBackgroundNeedMiya_1d38a2", nil)
 }
 
+// PhoneRegisteredCheckApnsStatus says "Phone registered. Check APNs on the desktop with go run ./scripts/apns status."
+// in the language the app shows.
+func PhoneRegisteredCheckApnsStatus() string {
+	return In(i18n.Locale()).PhoneRegisteredCheckApnsStatus()
+}
+
+// PhoneRegisteredCheckApnsStatus says "Phone registered. Check APNs on the desktop with go run ./scripts/apns status."
+// in the language of msgs.
+func (msgs Messages) PhoneRegisteredCheckApnsStatus() string {
+	return Catalog.Format(msgs.locale, "phoneRegisteredCheckApnsStatus", nil)
+}
+
 // PhoneRegisteredApnsIsNotConfiguredOn97486e says "Phone registered. APNs is not configured on the desktop; run mygo push setup."
 // in the language the app shows.
 func PhoneRegisteredApnsIsNotConfiguredOn97486e() string {
@@ -20918,6 +20930,18 @@ func (msgs Messages) MobileSendWaiting() string {
 	return Catalog.Format(msgs.locale, "mobileSendWaiting", nil)
 }
 
+// MobileSendWaitingForConnection says "Will send when the desktop reconnects…"
+// in the language the app shows.
+func MobileSendWaitingForConnection() string {
+	return In(i18n.Locale()).MobileSendWaitingForConnection()
+}
+
+// MobileSendWaitingForConnection says "Will send when the desktop reconnects…"
+// in the language of msgs.
+func (msgs Messages) MobileSendWaitingForConnection() string {
+	return Catalog.Format(msgs.locale, "mobileSendWaitingForConnection", nil)
+}
+
 // MobileSendRetry says "Retry send"
 // in the language the app shows.
 func MobileSendRetry() string { return In(i18n.Locale()).MobileSendRetry() }
@@ -21984,6 +22008,16 @@ func ProviderNeedsModels() string { return In(i18n.Locale()).ProviderNeedsModels
 // in the language of msgs.
 func (msgs Messages) ProviderNeedsModels() string {
 	return Catalog.Format(msgs.locale, "providerNeedsModels", nil)
+}
+
+// ProviderAgentNeedsAPI says "needs %s"
+// in the language the app shows.
+func ProviderAgentNeedsAPI() string { return In(i18n.Locale()).ProviderAgentNeedsAPI() }
+
+// ProviderAgentNeedsAPI says "needs %s"
+// in the language of msgs.
+func (msgs Messages) ProviderAgentNeedsAPI() string {
+	return Catalog.Format(msgs.locale, "providerAgentNeedsAPI", nil)
 }
 
 // MarkHandled68d012 says "Mark handled"

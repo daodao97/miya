@@ -14,6 +14,8 @@ import (
 )
 
 func (p *MobileDesktopPage) InvalidateTarget() {
+	p.stopStreaming()
+	p.nextPoll++
 	p.targetRevision++
 	p.Active, p.Image, p.Queue, p.actionsFresh, p.More = false, nil, nil, false, false
 	p.Polling, p.Sending, p.actionsBusy = false, false, false

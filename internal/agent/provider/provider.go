@@ -68,6 +68,9 @@ func EndpointFor(agent string, eps []Endpoint) (Endpoint, bool) {
 	return Endpoint{}, false
 }
 
+// AgentAPIs are the protocols agent speaks, the one it prefers first.
+func AgentAPIs(agent string) []API { return agentAPIs[agent] }
+
 // Supports reports whether agent can use a provider serving eps.
 func Supports(agent string, eps []Endpoint) bool {
 	_, ok := EndpointFor(agent, eps)

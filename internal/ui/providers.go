@@ -49,6 +49,15 @@ func apiLabel(api provider.API) string {
 	return tr("Anthropic Messages")
 }
 
+// agentAPIList names the APIs agent can reach a provider through.
+func agentAPIList(agent string) string {
+	var labels []string
+	for _, api := range provider.AgentAPIs(agent) {
+		labels = append(labels, apiLabel(api))
+	}
+	return strings.Join(labels, " / ")
+}
+
 func apiPlaceholder(api provider.API) string {
 	if api == provider.Anthropic {
 		return "https://api.example.com/anthropic"
@@ -118,19 +127,30 @@ func (app *App) providerRow(c *ui.Context, v provider.View, use map[string]strin
 				}
 			}
 		})
-		ui.Row(c).FillWidth().Gap(16).AlignItems(ui.Center).Children(func() {
+		ui.Row(c).FillWidth().Gap(24).AlignItems(ui.Center).Wrap().Children(func() {
 			for _, agent := range provider.Agents {
 				agent := agent
 				name := names[agent]
 				if name == "" {
 					name = agent
 				}
+				supported := provider.Supports(agent, v.Endpoints)
 				on := use[agent] == v.ID
-				if ui.Switch(c.Key("use:"+agent), &on).Label(name).Disabled(!provider.Supports(agent, v.Endpoints)).Changed() {
-					if err := app.C.EnableProvider(agent, v.ID, on); err != nil {
-						app.providerEdit.err = err.Error()
+				ui.Row(c.Key("use:"+agent)).Gap(8).AlignItems(ui.Center).Children(func() {
+					if ui.Switch(c.Key("switch"), &on).Label(name).Disabled(!supported).Shrink(0).Changed() {
+						if err := app.C.EnableProvider(agent, v.ID, on); err != nil {
+							app.providerEdit.err = err.Error()
+						}
 					}
-				}
+					color := widgets.Ink
+					if !supported {
+						color = widgets.Muted
+					}
+					ui.Text(c, name).FontSize(12).TextColor(color).SingleLine()
+					if !supported {
+						ui.Text(c, fmt.Sprintf(tr("needs %s"), agentAPIList(agent))).FontSize(11).TextColor(widgets.Muted).SingleLine()
+					}
+				})
 			}
 		})
 		if agent := providerWithoutModels(v, use); agent != "" {

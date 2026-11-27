@@ -22,6 +22,17 @@ func installPlan(ctx context.Context, id, bin string, env []string) (*plan, erro
 	}
 	p := &plan{pkg: s.packages[0], env: env}
 	t, wsl := processenv.WSL(bin)
+	if id == catalog.Codex && runtime.GOOS == "windows" && !wsl {
+		shell, err := processenv.LookPath("powershell.exe")
+		if err != nil {
+			return nil, err
+		}
+		p.via = "self"
+		p.env = append(append([]string(nil), env...), "CODEX_NON_INTERACTIVE=1")
+		p.args = []string{shell, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command",
+			"Invoke-RestMethod https://chatgpt.com/codex/install.ps1 -ErrorAction Stop | Invoke-Expression"}
+		return p, nil
+	}
 	if id == catalog.Claude {
 		p.via = "self"
 		p.scriptURL = "https://claude.ai/install.sh"

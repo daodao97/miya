@@ -31,6 +31,10 @@ func (m *App) DesktopMinimize(p *MobileDesktopPage) {
 	p.keyboard, p.More, p.moreKeys, p.focusText = false, false, false, false
 	p.pointer, p.text, p.modifier = desktopPointer{}, "", ""
 	p.Queue = nil
+	if p.streamCtx != nil {
+		p.stopStreaming()
+		m.DesktopPoll(p)
+	}
 	if m.Router().Path() == "/desktop" {
 		m.Router().Back()
 	}
@@ -45,8 +49,9 @@ func (m *App) DesktopRestore(p *MobileDesktopPage) {
 	if m.Router().Path() != "/desktop" {
 		m.Router().Push("/desktop")
 	}
-	// The existing frame poll keeps running and uses the full-page cadence
-	// after its next response. Starting another here duplicates that chain.
+	if p.frameStream && !p.Polling {
+		m.DesktopPoll(p)
+	}
 }
 
 // desktopFloatSize keeps the frame's aspect inside a small window.

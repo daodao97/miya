@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	"fmt"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -19,11 +20,10 @@ func TestDesktopStreamPushesFramesAndAcceptsOrderedInput(t *testing.T) {
 	d.Windows = func() ([]desktop.Window, error) { return nil, nil }
 	frames := new(atomic.Int32)
 	d.CaptureFrame = func(_ context.Context, _ *desktop.Display, _ *desktop.Window, options desktop.FrameOptions) ([]byte, error) {
-		if options.MaxEdge != InteractiveFrameMaxEdge {
+		if options.MaxEdge > InteractiveFrameMaxEdge {
 			t.Errorf("unexpected stream size: %d", options.MaxEdge)
 		}
-		frames.Add(1)
-		return []byte("frame"), nil
+		return fmt.Appendf(nil, "frame %d", frames.Add(1)), nil
 	}
 	input := make(chan desktop.Input, 3)
 	d.Input = func(in desktop.Input) error {
@@ -49,9 +49,9 @@ func TestDesktopStreamPushesFramesAndAcceptsOrderedInput(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer stream.Close()
-	for range streamFrameCredits {
+	for i := 1; i <= streamFrameCredits; i++ {
 		kind, data, err := stream.conn.Read(ctx)
-		if kind != websocket.MessageBinary || string(data) != "frame" || err != nil {
+		if kind != websocket.MessageBinary || string(data) != fmt.Sprintf("frame %d", i) || err != nil {
 			t.Fatalf("push frame: %q, %v", data, err)
 		}
 	}
@@ -72,14 +72,14 @@ func TestDesktopStreamPushesFramesAndAcceptsOrderedInput(t *testing.T) {
 			t.Fatal(ctx.Err())
 		}
 	}
-	Wait(ctx, 2*InteractiveFrameInterval)
+	Wait(ctx, 2*streamFrameInterval)
 	if got := frames.Load(); got != streamFrameCredits {
 		t.Fatalf("unacknowledged frames in flight: %d", got)
 	}
 	if err := stream.conn.Write(ctx, websocket.MessageText, []byte("ack")); err != nil {
 		t.Fatal(err)
 	}
-	if data, notice, err := stream.Receive(ctx); string(data) != "frame" || notice != nil || err != nil {
+	if data, notice, err := stream.Receive(ctx); string(data) != fmt.Sprintf("frame %d", streamFrameCredits+1) || notice != nil || err != nil {
 		t.Fatalf("frame after ACK: %q, %+v, %v", data, notice, err)
 	}
 	if err := client.SelectWindow(ctx, desktop.Window{}); err != nil {
@@ -87,5 +87,37 @@ func TestDesktopStreamPushesFramesAndAcceptsOrderedInput(t *testing.T) {
 	}
 	if _, _, err := stream.Receive(ctx); err == nil {
 		t.Fatal("stream remained active after target change")
+	}
+}
+
+func TestDesktopStreamSkipsUnchangedFramesAndPushesChanges(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	d, token, _ := mockDesktop(t)
+	d.AllowPick(token)
+	var scene atomic.Int32
+	var captures atomic.Int32
+	d.CaptureFrame = func(context.Context, *desktop.Display, *desktop.Window, desktop.FrameOptions) ([]byte, error) {
+		value := scene.Load()
+		captures.Add(1)
+		return []byte{byte(value)}, nil
+	}
+	client := testDesktopClient(t, d, token)
+	if err := client.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	stream, err := client.OpenFrameStream(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stream.Close()
+	if data, notice, err := stream.Receive(ctx); len(data) != 1 || data[0] != 0 || notice != nil || err != nil {
+		t.Fatalf("initial frame %v, %+v, %v", data, notice, err)
+	}
+	for captures.Load() < 3 && Wait(ctx, 5*time.Millisecond) {
+	}
+	scene.Store(1)
+	if data, notice, err := stream.Receive(ctx); len(data) != 1 || data[0] != 1 || notice != nil || err != nil {
+		t.Fatalf("next frame %v, %+v, %v", data, notice, err)
 	}
 }

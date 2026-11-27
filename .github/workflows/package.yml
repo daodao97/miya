@@ -105,6 +105,11 @@ jobs:
           if [ "$GITHUB_REF_TYPE" = tag ]; then
             test -s "$out/darwin-universal/miya-${GITHUB_REF_NAME#v}-darwin-universal.tar.gz"
             test -s "$out/darwin-universal/update-darwin-universal.json"
+            # Existing updater binaries request the feed for their architecture.
+            # Both feeds can point to the same signed universal archive.
+            for arch in arm64 amd64; do
+              cp "$out/darwin-universal/update-darwin-universal.json" "$out/darwin-universal/update-darwin-$arch.json"
+            done
           fi
           dmg=$(find "$out" -name '*.dmg' -print -quit)
           if [ -z "$dmg" ]; then echo 'mygo build produced no disk image' >&2; exit 1; fi
@@ -134,7 +139,7 @@ jobs:
           name: miya-native-updates-macos
           path: |
             ${{ runner.temp }}/dist/darwin-universal/miya-*-darwin-universal.tar.gz
-            ${{ runner.temp }}/dist/darwin-universal/update-darwin-universal.json
+            ${{ runner.temp }}/dist/darwin-universal/update-darwin-*.json
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:

@@ -40,16 +40,16 @@ Android 不使用第三方推送服务。开启手机通知并配对电脑后，
 
 ## 配置发送端
 
-在本项目目录运行（密钥路径替换成自己的文件）：
+准备 Apple Developer 团队下有权向 `com.daodao.miya` 发送推送的 APNs `.p8` 密钥，然后在 Miya 项目目录运行以下命令。将示例路径替换为本机密钥路径。
 
 ```sh
-go tool mygo push setup -team XNDA84PBM3 -environment sandbox /path/to/AuthKey_KEYID.p8
-go tool mygo push status
+go run ./scripts/apns setup -team XNDA84PBM3 -environment sandbox /path/to/AuthKey_KEYID.p8
+go run ./scripts/apns status
 ```
 
-默认使用 `com.daodao.miya` 和应用数据目录 `Miya`。如果服务设置了 `MIYA_DIR`，配置时追加 `-data-dir "$MIYA_DIR"`（放在密钥路径前）。密钥只保存在桌面端，由 MyGo 管理；不会传给手机或打包进应用。
+命令使用与后台相同的应用数据目录，优先读取 `MIYA_ISOLATED_DIR` 或 `MIYA_DIR`。若命令所在终端与后台的环境不同，可用 `-data-dir` 指定后台的数据目录（放在密钥路径前）。如果密钥文件已改名，用 `-key-id` 提供 Apple Key ID。macOS 将私钥存入钥匙串，Linux 使用仅当前用户可读的文件。`status` 检查本地能否加载凭据。后台会在手机重新注册或发送推送时读取配置，无需重启。
 
-开发签名使用 sandbox；TestFlight/App Store 使用 production，并确保手机构建的 aps-environment 与发送端环境一致。`mygo.json` 已开启 `ios.pushNotifications`。Apple Developer 中的 Miya App ID 必须开启 Push Notifications，重新生成包含该能力的 provisioning profile 后重建安装：
+开发签名使用 sandbox，TestFlight/App Store 使用 production。密钥的授权环境、手机构建的 `aps-environment` 和发送端环境需要一致。iOS 构建由 MyGo 的 push 插件声明该签名权限。如果当前描述文件缺少该权限，在 Apple Developer 中为 Miya App ID 开启 Push Notifications，重新生成包含该能力的 provisioning profile，再重建安装。
 
 ```sh
 ./scripts/build-ios.sh

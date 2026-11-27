@@ -8,7 +8,6 @@ import (
 	"time"
 
 	agentmeta "miya/internal/agent/catalog"
-	"miya/internal/apns"
 	"miya/internal/appdir"
 	"miya/internal/appmodel"
 	"miya/internal/async"
@@ -330,8 +329,8 @@ func (ps *phoneSession) onPush(r remote.Request) bool {
 			}
 		}
 		if message == "" && !registration.Disabled && !registration.Live {
-			if _, err := apns.OpenProvider(appdir.Dir()); err != nil {
-				message = "Phone registered. APNs is not configured on the desktop; run mygo push setup."
+			if _, err := notification.OpenAPNsProvider(appdir.Dir()); err != nil {
+				message = "Phone registered. Check APNs on the desktop with go run ./scripts/apns status."
 			}
 		}
 	}

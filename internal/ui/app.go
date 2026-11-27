@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 
@@ -156,6 +157,7 @@ func NewChatAppWithController(c Host) *App {
 
 func DesktopMain() {
 	app := newChatApp()
+	var updateMenuItem *mygo.MenuItem
 	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
 		mygo.Updater.SetKeepPreviousBundles(true)
 		mygo.Use(nativeupdater.Plugin)
@@ -164,6 +166,9 @@ func DesktopMain() {
 	widgets.ConfigureInterfaceLanguage()
 	mygo.App.OnLocaleChanged(func(tag string) {
 		locales.SetCurrent(tag)
+		if updateMenuItem != nil {
+			updateMenuItem.SetLabel(updater.MenuItem().Label)
+		}
 		app.activeWorkspaceApp().syncUsageTray()
 	})
 	mygo.Theme.SetSource(widgets.ThemeSource(app.Appearance))
@@ -215,6 +220,17 @@ func DesktopMain() {
 	settingsWindowOpener = (*App).showSettingsWindow
 	mygo.App.WhenReady(func() {
 		widgets.WatchSystemAppearance()
+		if runtime.GOOS == "darwin" {
+			items := mygo.App.Menu().Items()
+			for _, item := range items {
+				if item.Role == mygo.RoleAppMenu {
+					updateMenuItem = updater.MenuItem()
+					item.Submenu = slices.Insert(item.Submenu, 1, updateMenuItem)
+					mygo.App.SetMenu(mygo.NewMenu(items))
+					break
+				}
+			}
+		}
 		open()
 		app.startUsage()
 	})

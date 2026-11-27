@@ -58,6 +58,11 @@ type MobileDesktopPage struct {
 	Status          string
 	frameQuality    desktopFrameQuality
 	frameScale      float32
+	frameStream     bool
+	streamCtx       context.Context
+	streamCancel    context.CancelFunc
+	stream          *control.FrameStream
+	nextPoll        uint64
 
 	Zoom, PanX, panY float32
 	View             ui.Rect
@@ -213,6 +218,7 @@ func (m *App) desktopFail(p *MobileDesktopPage, title string, err error) {
 		m.DesktopFinish(p, err.Error())
 		return
 	}
+	p.stopStreaming()
 	p.Active = false
 	m.DesktopStage(p, "error", title, err.Error(), false)
 }
@@ -255,6 +261,7 @@ func (m *App) DesktopInitialize(p *MobileDesktopPage) {
 		}
 		if s.Pick && s.WindowOnly && s.Window != nil && s.Window.ID == 0 {
 			return func() {
+				p.frameStream = s.FrameStream
 				p.Pickable, p.WindowOnly, p.AppsAvailable = true, true, s.Apps
 				m.DesktopInitPrivacy(p, s)
 				p.DisplaysAvailable, p.Displays = s.Displays, displays
@@ -263,6 +270,7 @@ func (m *App) DesktopInitialize(p *MobileDesktopPage) {
 		}
 		if !s.WindowOnly || s.Window == nil {
 			return func() {
+				p.frameStream = s.FrameStream
 				p.WindowOnly, p.Pickable, p.AppsAvailable = false, s.Pick, s.Apps
 				m.DesktopInitPrivacy(p, s)
 				p.DisplaysAvailable, p.Displays = s.Pick && s.Displays, displays
@@ -287,6 +295,7 @@ func (m *App) DesktopInitialize(p *MobileDesktopPage) {
 		want := *s.Window
 		windows, err := p.Client.Windows(ctx)
 		return func() {
+			p.frameStream = s.FrameStream
 			p.WindowOnly, p.Secret, p.Pickable = true, true, s.Pick
 			p.AppsAvailable = s.Apps
 			m.DesktopInitPrivacy(p, s)
@@ -399,9 +408,17 @@ func (m *App) DesktopPoll(p *MobileDesktopPage) {
 	if !p.Active || p.Polling {
 		return
 	}
+	p.nextPoll++
+	if p.frameStream && !p.Floating {
+		if p.streamCtx == nil {
+			m.startDesktopStream(p)
+		}
+		return
+	}
 	p.Polling = true
 	revision := p.targetRevision
 	options := p.frameOptions()
+	previousImage, previousHash := p.Image, p.ImageHash
 	m.desktopDo(p, func(ctx context.Context) func() {
 		started := time.Now()
 		var data []byte
@@ -415,8 +432,14 @@ func (m *App) DesktopPoll(p *MobileDesktopPage) {
 			cancel()
 		}
 		var image ui.ImageSource
+		var hash [32]byte
 		if err == nil {
-			if image, _ = ui.DecodeImage(data); image == nil {
+			hash = sha256.Sum256(data)
+			image = previousImage
+			if image == nil || hash != previousHash {
+				image, _ = ui.DecodeImage(data)
+			}
+			if image == nil {
 				err = fmt.Errorf("%s", tr("Unable to decode the screen. Retrying."))
 			}
 		}
@@ -426,16 +449,39 @@ func (m *App) DesktopPoll(p *MobileDesktopPage) {
 				if p.Active && options.MaxEdge != 0 {
 					p.frameQuality.observe(elapsed, err)
 				}
-				m.ReceiveDesktopFrame(p, data, image, locked, err)
+				m.finishDesktopPoll(p, hash, image, locked, err, elapsed)
 			}
 		}
 	})
 }
 
 func (m *App) ReceiveDesktopFrame(p *MobileDesktopPage, data []byte, image ui.ImageSource, locked bool, err error) {
+	m.finishDesktopPoll(p, sha256.Sum256(data), image, locked, err, 0)
+}
+
+func (m *App) finishDesktopPoll(p *MobileDesktopPage, hash [32]byte, image ui.ImageSource, locked bool, err error, elapsed time.Duration) {
 	p.Polling = false
-	if !p.Active {
+	delay := m.applyDesktopFrame(p, hash, image, locked, err)
+	if !p.Active || p.streamCtx != nil {
 		return
+	}
+	if p.Floating {
+		delay = max(delay, DesktopFloatPollInterval)
+	} else if err == nil {
+		delay = max(0, delay-elapsed)
+	}
+	p.nextPoll++
+	poll := p.nextPoll
+	m.desktopAfter(p, delay, func() {
+		if p.nextPoll == poll {
+			m.DesktopPoll(p)
+		}
+	})
+}
+
+func (m *App) applyDesktopFrame(p *MobileDesktopPage, hash [32]byte, image ui.ImageSource, locked bool, err error) time.Duration {
+	if !p.Active {
+		return 0
 	}
 	if locked {
 		m.DesktopLockChanged(p, true)
@@ -443,7 +489,6 @@ func (m *App) ReceiveDesktopFrame(p *MobileDesktopPage, data []byte, image ui.Im
 	delay := 300 * time.Millisecond
 	switch status := control.Status(err); {
 	case err == nil:
-		hash := sha256.Sum256(data)
 		if p.Image == nil || hash != p.ImageHash {
 			p.Image, p.ImageHash = image, hash
 		}
@@ -451,14 +496,14 @@ func (m *App) ReceiveDesktopFrame(p *MobileDesktopPage, data []byte, image ui.Im
 		m.DesktopLockChanged(p, locked)
 	case status == 410:
 		m.DesktopFinish(p, err.Error())
-		return
+		return 0
 	case status == 409 && !p.WindowOnly && p.DisplaysAvailable:
 		m.desktopChooseDisplays(p)
 		p.appStatus = tr("The display changed or disconnected. Select a desktop.")
-		return
+		return 0
 	case status == 403:
 		m.desktopFail(p, tr("Permission required on Mac"), err)
-		return
+		return 0
 	case status == 423:
 		delay = 750 * time.Millisecond
 		p.Status = tr("Mac is locked")
@@ -469,10 +514,7 @@ func (m *App) ReceiveDesktopFrame(p *MobileDesktopPage, data []byte, image ui.Im
 		delay = 1500 * time.Millisecond
 		p.Status = err.Error()
 	}
-	if p.Floating {
-		delay = max(delay, DesktopFloatPollInterval)
-	}
-	m.desktopAfter(p, delay, func() { m.DesktopPoll(p) })
+	return delay
 }
 
 func (m *App) desktopRefreshActions(p *MobileDesktopPage) {
@@ -533,7 +575,7 @@ func (m *App) desktopPressAction(p *MobileDesktopPage, a desktop.Action) {
 // desktopSend keeps input in order. Consecutive moves keep the latest;
 // consecutive scrolls add up, so a fast swipe cannot flood the Mac.
 func (m *App) DesktopSend(p *MobileDesktopPage, in desktop.Input) {
-	if !p.Active || p.Image == nil || p.Unlock.Locked || p.Unlock.Busy {
+	if !p.Active || p.Floating || p.Image == nil || p.Unlock.Locked || p.Unlock.Busy || p.streamCtx != nil && p.stream == nil {
 		return
 	}
 	if n := len(p.Queue); n > 0 {
@@ -559,37 +601,52 @@ func (m *App) DesktopSend(p *MobileDesktopPage, in desktop.Input) {
 }
 
 func (m *App) desktopPump(p *MobileDesktopPage) {
-	if p.Sending || len(p.Queue) == 0 || !p.Active || p.Unlock.Locked || p.Unlock.Busy {
+	if p.Sending || len(p.Queue) == 0 || !p.Active || p.Floating || p.Unlock.Locked || p.Unlock.Busy {
 		return
 	}
 	in := p.Queue[0]
 	p.Queue = p.Queue[1:]
 	p.Sending = true
 	revision, display := p.targetRevision, p.Display
+	stream, streamCtx := p.stream, p.streamCtx
 	if p.WindowOnly {
 		display = desktop.Display{}
 	}
 	m.desktopDo(p, func(ctx context.Context) func() {
-		err := p.Client.InputForDisplay(ctx, in, display)
+		send := p.Client.InputForDisplay
+		if stream != nil {
+			ctx, send = streamCtx, stream.SendInput
+		}
+		inputCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		started := time.Now()
+		err := send(inputCtx, in, display)
+		if left := time.Until(started.Add(22 * time.Millisecond)); left > 0 {
+			control.Wait(inputCtx, left)
+		}
 		return func() {
 			if revision != p.targetRevision {
 				return
 			}
 			p.Sending = false
+			if stream != p.stream {
+				m.desktopPump(p)
+				return
+			}
 			switch {
 			case control.Status(err) == 410:
 				m.DesktopFinish(p, err.Error())
 				return
 			case err != nil && in.Kind != "move" && in.Kind != "scroll":
 				p.Status = tr("Delivery unconfirmed. Check the screen before retrying.") + err.Error()
-			case err == nil && in.Kind == "text":
+			case err == nil && in.Kind == "text" && stream == nil:
 				p.Status = tr("Sent to the window. Check the screen to confirm.")
 			}
 			if in.Kind != "move" && in.Kind != "scroll" {
 				p.actionsFresh = false
 				m.desktopRefreshActions(p)
 			}
-			m.desktopAfter(p, 30*time.Millisecond, func() { m.desktopPump(p) })
+			m.desktopPump(p)
 		}
 	})
 }

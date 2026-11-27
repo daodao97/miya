@@ -421,6 +421,7 @@ func (m *App) Connect(link string) {
 	m.readPending = nil
 	m.ApprovalPending = nil
 	m.disconnectDesktop(false, !changed && m.DesktopPage != nil && m.DesktopPage.suspended)
+	m.interruptPendingSend(!changed)
 	m.PreviewPaths = nil
 	m.PreviewRetries = nil
 	if changed {
@@ -464,6 +465,7 @@ func (m *App) enterBackground(preserveBrowser bool) {
 		return
 	}
 	m.disconnectDesktop(false, true)
+	m.interruptPendingSend(true)
 }
 
 func (m *App) enterForeground() {
@@ -482,6 +484,7 @@ func (m *App) Disconnect() {
 
 func (m *App) DisconnectDesktop(unregister bool) {
 	m.disconnectDesktop(unregister, false)
+	m.interruptPendingSend(false)
 }
 
 func (m *App) disconnectDesktop(unregister, preserveDesktop bool) {
@@ -536,10 +539,6 @@ func (m *App) disconnectDesktop(unregister, preserveDesktop bool) {
 	m.DesktopClosing = nil // leases end with their connection
 	m.DesktopPreviews = nil
 	m.Autos.Loading = false
-	if m.Sending {
-		m.Sending, m.SendErr = false, tr("Connection lost. The message may not have been sent.")
-		m.failPendingSend()
-	}
 }
 
 // forget unpairs the desktop.
@@ -598,10 +597,7 @@ func (m *App) Run(ctx context.Context, gen int, link string, wake <-chan struct{
 			if m.filesProxy != nil {
 				m.filesProxy.SetConn(nil)
 			}
-			if m.Sending {
-				m.Sending, m.SendErr = false, tr("Connection lost. The message may not have been sent.")
-				m.failPendingSend()
-			}
+			m.interruptPendingSend(true)
 		})
 		timer := time.NewTimer(delay)
 		select {
@@ -641,6 +637,7 @@ func (m *App) read(gen int, conn *remote.Conn) (greeted bool, err error) {
 			m.onMain(gen, func() {
 				m.Host, m.Connected, m.Status, m.err = host, true, "", ""
 				m.RetryAt, m.RetryError = time.Time{}, ""
+				m.clearDisconnectedSendError()
 				_, _ = m.Desktops.Remember(m.Link, host)
 				m.Conn = conn
 				m.CompletionRead = appmodel.DesktopRead{}
@@ -739,7 +736,7 @@ func (m *App) read(gen int, conn *remote.Conn) (greeted bool, err error) {
 			}
 		case "push":
 			message := f.Error
-			m.onMain(gen, func() { m.pushError = message; m.readPending = nil; m.markOpenRead() })
+			m.onMain(gen, func() { m.pushError = tr(message); m.readPending = nil; m.markOpenRead() })
 		case "state":
 			var s phoneproto.State
 			if json.Unmarshal(f.Data, &s) == nil {
@@ -866,6 +863,7 @@ func (m *App) ApplyPhoneState(s phoneproto.State) {
 	m.Viewer.setApprovals(s.Approvals)
 	m.PersistState()
 	m.resumeDesktopPage()
+	m.resumePendingSend()
 }
 
 func (m *App) ReceiveThread(id int, d phoneproto.ThreadDelta) {
@@ -1042,12 +1040,16 @@ func (m *App) sendDraft(steer bool) {
 	if m.Sending || m.voice != nil {
 		return
 	}
-	conn := m.Conn
-	if conn == nil {
-		m.SendErr = m.disconnectedSendError()
+	text := strings.TrimSpace(m.Draft)
+	if text == "" && len(m.Images) == 0 {
 		return
 	}
-	if model.HasAgentReferences(m.Draft, nil) && (m.State.Collaboration == nil || m.State.Collaboration.Version < 1) {
+	offline := m.Conn == nil
+	if offline && !m.retryNow() {
+		m.SendErr = tr("Not connected to desktop")
+		return
+	}
+	if !offline && m.unsupportedAgentTags(text) {
 		m.SendErr = tr("Update the Miya background service to use Agent tags")
 		return
 	}
@@ -1061,7 +1063,11 @@ func (m *App) sendDraft(steer bool) {
 		m.Router().Push("/thread")
 	}
 	r := m.ThreadRequest("send", m.Open)
-	r.Text = strings.TrimSpace(m.Draft)
+	if offline && r.Thread != 0 && r.ServerID == "" {
+		m.SendErr = tr("Available once the session is created")
+		return
+	}
+	r.Text = text
 	r.Steer = steer
 	agent := m.composerAgent()
 	if m.Open != 0 {
@@ -1074,10 +1080,12 @@ func (m *App) sendDraft(steer bool) {
 	if m.Open == 0 {
 		r.Project, r.Agent = m.NewProject, m.NewAgent
 	}
-	if r.Text == "" && len(m.Images) == 0 {
+	m.BeginSend(r, m.Images)
+	if offline {
+		m.sending.waitingForConnection = true
+		m.sending.stage = tr("Will send when the desktop reconnects…")
 		return
 	}
-	m.BeginSend(r, m.Images)
 	m.transmitSend(m.sending)
 }
 
@@ -1887,7 +1895,7 @@ func (m *App) composer(c *ui.Context, agent string, busy bool) {
 						m.openOptions(agent)
 					}
 				}
-				canSend := m.Connected && !m.Sending && m.voice == nil && (strings.TrimSpace(m.Draft) != "" || len(m.Images) > 0)
+				canSend := (m.Connected || m.Cancel != nil) && !m.Sending && m.voice == nil && hasDraft
 				bg, fg, name, label := p.line, p.muted, "arrow-up", tr("Send")
 				if busy && !hasDraft {
 					bg, fg, name, label = p.ink, p.Bg, "x", tr("Stop")

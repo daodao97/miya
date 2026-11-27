@@ -2,15 +2,63 @@ package mobile
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/egoist/mygo/ui"
+
 	"miya/internal/chat/model"
 	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/remote"
 	"miya/internal/uiruntime"
 )
+
+func TestOfflineSendResumesOnceAfterDesktopState(t *testing.T) {
+	t.Setenv("MIYA_ISOLATED_DIR", t.TempDir())
+	m := NewMobileApp()
+	m.Loaded, m.Link = true, "miya://test"
+	m.Cancel, m.Wake = func() {}, make(chan struct{}, 1)
+	project := model.ProjectSnapshot{Name: "Project", Path: "/project", Current: true}
+	m.State = phoneproto.State{Projects: []model.ProjectSnapshot{project}}
+	m.Router().Transition = ui.TransitionNone
+	// A missing attachment lets the real send pipeline report the attempt
+	// without sending a request over an external connection.
+	m.Draft, m.Images = "Offline submission", []string{filepath.Join(t.TempDir(), "missing.png")}
+	m.Send()
+	p := m.sending
+	if p == nil || !p.waitingForConnection || p.attempt != 0 || p.request.Project != project.Path {
+		t.Fatal("offline send did not keep the original project and submission")
+	}
+	m.Draft = "Next draft"
+	m.interruptPendingSend(true)
+	m.ApplyPhoneState(m.State)
+	if m.sending != p || p.attempt != 0 {
+		t.Fatal("the send did not survive another offline attempt")
+	}
+
+	posts := make(chan func(), 2)
+	old := uiruntime.RunOnMain
+	uiruntime.RunOnMain = func(f func()) { posts <- f }
+	defer func() { uiruntime.RunOnMain = old }()
+	m.Conn, m.Connected = new(remote.Conn), true
+	m.SendErr = tr("Not connected to desktop. Reconnecting…")
+	m.clearDisconnectedSendError()
+	m.ApplyPhoneState(m.State)
+	m.ApplyPhoneState(m.State)
+	if m.SendErr != "" || m.sending != p || p.waitingForConnection || p.attempt != 1 {
+		t.Fatal("the fresh desktop state did not resume the submission exactly once")
+	}
+	select {
+	case f := <-posts:
+		f()
+	case <-time.After(5 * time.Second):
+		t.Fatal("resumed attachment upload did not return")
+	}
+	if m.Sending || len(m.Outbox) != 1 || !strings.Contains(p.failure, "Unable to read image") || m.Draft != "Next draft" {
+		t.Fatal("a failed resumed upload lost the pending message or later draft")
+	}
+}
 
 func TestSendButtonShowsMessageBeforeAsyncImageFailure(t *testing.T) {
 	t.Setenv("MIYA_ISOLATED_DIR", t.TempDir())

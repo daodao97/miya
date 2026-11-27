@@ -79,3 +79,10 @@ func (m *App) disconnectedSendError() string {
 	}
 	return tr("Not connected to desktop")
 }
+
+func (m *App) clearDisconnectedSendError() {
+	switch m.SendErr {
+	case tr("Not connected to desktop"), tr("Not connected to desktop. Reconnecting…"):
+		m.SendErr = ""
+	}
+}

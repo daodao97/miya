@@ -56,7 +56,7 @@ Codex 和 Pi 只能使用 Provider 列出的模型，开启后没有模型时设
 
 ### 安装和 Windows / WSL
 
-未安装的内置智能体在设置 → 通用 → 智能体中提供“安装”按钮。Claude Code 使用官方原生安装脚本；Codex、Pi 通过 npm 安装到 Miya 设置目录下的 `agents/npm`，不会要求系统目录写权限；macOS/Linux/WSL 没有 npm 时 Codex 使用官方独立安装器。Pi 和 Windows 原生 Codex 需要先安装 Node.js/npm。安装程序退出后重新执行 CLI 版本检查，无法找到或验证时显示失败并允许重试。
+未安装的内置智能体在设置 → 通用 → 智能体中提供“安装”按钮。Claude Code 和 Windows 原生环境中的 Codex 使用各自的官方独立安装器。macOS、Linux 和 WSL 中的 Codex 优先通过 npm 安装，找不到 npm 时使用官方独立安装器。Pi 需要 Node.js 和 npm。通过 npm 安装的 CLI 写入 Miya 管理的 `agents/npm` 目录。安装程序退出后重新检查 CLI 版本，若无法找到或验证则显示失败并允许重试。
 
 Windows 的 npm shim 只有同时匹配包清单和脚本入口时才按 Node 入口直接启动，避免 `cmd.exe` 把提示词、JSON、空格与特殊字符解释成命令。其他 `.cmd/.bat` 通过受限的批处理启动器执行；不支持安全传递的展开符、引号或换行会明确报错。工具查找补充用户 npm、Claude、Bun、pnpm、Volta 和系统 Node 目录，并读取当前注册表 PATH；安装后无需重启 Miya 才能发现新 CLI。
 

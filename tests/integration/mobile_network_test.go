@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo/ui"
+
 	"miya/internal/mobile"
 	"miya/internal/remote"
 	"miya/internal/uiruntime"
@@ -50,9 +52,14 @@ func TestMobileSendSkipsReconnectBackoff(t *testing.T) {
 		t.Fatal("first dial did not happen")
 	}
 	m.Draft = "hello"
-	m.Send()
-	if m.SendErr != "Not connected to desktop. Reconnecting…" {
-		t.Fatalf("send error = %q", m.SendErr)
+	tt := ui.NewTester(m.ViewRoot, 390, 750)
+	tt.Frame()
+	if err := tt.Click("Send"); err != nil {
+		t.Fatal(err)
+	}
+	if m.SendErr != "" || m.Draft != "" || len(m.Outbox) != 1 || !m.Sending ||
+		!tt.HasText("hello") || !tt.HasText("Will send when the desktop reconnects…") {
+		t.Fatalf("send did not queue while reconnecting: %v", tt.Texts())
 	}
 	if !waitDial(2 * time.Second) {
 		t.Fatal("send did not cut the reconnect wait short")

@@ -32,6 +32,7 @@ type mobilePendingSend struct {
 	beforeUsers          int
 	retainedImages       map[string]bool
 	acknowledged, echoed bool
+	waitingForConnection bool
 	failure, stage       string
 }
 
@@ -96,6 +97,25 @@ func (m *App) composingNewThread(p *mobilePendingSend) bool {
 	return m.Open == 0 && m.NewProject == p.request.Project && m.composerEpoch == p.epoch
 }
 
+func (m *App) unsupportedAgentTags(text string) bool {
+	return (m.State.Collaboration == nil || m.State.Collaboration.Version < 1) && model.HasAgentReferences(text, nil)
+}
+
+// A fresh desktop state includes the capabilities of the new connection.
+func (m *App) resumePendingSend() {
+	p := m.sending
+	if p == nil || !p.waitingForConnection || p.desktop != m.Link || m.Conn == nil {
+		return
+	}
+	if m.unsupportedAgentTags(p.request.Text) {
+		m.failPendingSend(tr("Update the Miya background service to use Agent tags"))
+		return
+	}
+	p.waitingForConnection = false
+	p.stage = sendStage(p.Message.Images)
+	m.transmitSend(p)
+}
+
 func (m *App) transmitSend(p *mobilePendingSend) {
 	conn, gen := m.Conn, m.Generation
 	p.attempt++
@@ -113,8 +133,7 @@ func (m *App) transmitSend(p *mobilePendingSend) {
 				return
 			}
 			if err != nil {
-				m.SendErr = tr("Failed to send: ") + err.Error()
-				m.failPendingSend()
+				m.failPendingSend(tr("Failed to send: ") + err.Error())
 			} else {
 				p.stage = tr("Waiting for desktop…")
 			}
@@ -123,13 +142,21 @@ func (m *App) transmitSend(p *mobilePendingSend) {
 	}()
 }
 
-func (m *App) failPendingSend() {
+func (m *App) interruptPendingSend(keepWaiting bool) {
 	if p := m.sending; p != nil {
-		p.failure = m.SendErr
-		m.sending = nil
-		m.SendErr = ""
+		if !p.waitingForConnection {
+			m.failPendingSend(tr("Connection lost. The message may not have been sent."))
+		} else if !keepWaiting {
+			m.failPendingSend(tr("Not connected to desktop"))
+		}
 	}
-	m.Sending = false
+}
+
+func (m *App) failPendingSend(message string) {
+	if p := m.sending; p != nil {
+		p.failure, p.waitingForConnection = message, false
+	}
+	m.sending, m.Sending = nil, false
 	m.prunePendingSends()
 }
 
@@ -216,7 +243,7 @@ func (m *App) receivePendingSends(t model.Thread) {
 		if p.echoed || !m.pendingFor(p, t) {
 			continue
 		}
-		if p.request.ServerID == "" && t.ServerID != "" {
+		if !p.waitingForConnection && p.request.ServerID == "" && t.ServerID != "" {
 			p.request.ServerID = t.ServerID
 		}
 		seen := 0
@@ -227,13 +254,13 @@ func (m *App) receivePendingSends(t model.Thread) {
 			seen++
 			// Resuming a thread can replace every runtime ID in its old
 			// history. Those earlier occurrences are still not this send.
-			if seen > p.beforeUsers && !p.beforeMessages[msg.ID] && !usedMessages[msg.ID] {
+			if !p.waitingForConnection && seen > p.beforeUsers && !p.beforeMessages[msg.ID] && !usedMessages[msg.ID] {
 				p.echoed, usedMessages[msg.ID] = true, true
 				p.retainedImages = m.keepSentImagePreviews(p.Message.Images, msg.Images)
 				break
 			}
 		}
-		if !p.echoed {
+		if !p.waitingForConnection && !p.echoed {
 			for _, q := range t.Queue {
 				if !p.beforeQueue[q.ID] && !usedQueue[q.ID] && samePendingText(q.Text, p.Message.Content) && len(q.Attachments) >= len(p.Message.Images) {
 					p.echoed, usedQueue[q.ID] = true, true
@@ -311,12 +338,11 @@ func (m *App) pendingSendStatus(c *ui.Context) {
 // composer or a different conversation the user opened during upload.
 func (m *App) Sent(id int, msg string) {
 	p := m.sending
-	if !m.Sending || p == nil {
+	if !m.Sending || p == nil || p.waitingForConnection {
 		return
 	}
 	if msg != "" {
-		m.SendErr = msg
-		m.failPendingSend()
+		m.failPendingSend(msg)
 		mobileFeedback(mygo.Haptics.Error)
 		return
 	}

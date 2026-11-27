@@ -60,8 +60,10 @@ type View struct {
 	// keeps that much room after its last message. The rows under the list
 	// (Latest, background tasks, the turn's status) are then left for
 	// Footer to build in the floating bar, in the same frame.
-	BottomInset float32
-	footer      func()
+	BottomInset   float32
+	footer        func()
+	previewThread int
+	previewImage  ui.ImageSource
 	// jumpTask is the task whose call card a receipt asked to show.
 	jumpTask string
 }
@@ -102,6 +104,9 @@ func (app *View) ListFor(id int) *ui.ListState {
 
 func (app *View) MessageList(c *ui.Context, t model.Thread) {
 	c = c.Key(t.ID)
+	if app.previewThread != t.ID {
+		app.previewThread, app.previewImage = t.ID, nil
+	}
 	groups := app.Groups.ofThread(t, app.C.ViewRevision())
 	status, completedGroup := currentTurnStatus(t, groups)
 	state := app.ListFor(t.ID)
@@ -140,10 +145,9 @@ func (app *View) MessageList(c *ui.Context, t model.Thread) {
 			widgets.MutedText(c, tr("No visible messages (reasoning-only or unsupported items)")).Margin(ui.Auto)
 		}
 	})
-	// Selecting a message must keep its text under the pointer while new
-	// output arrives. Allow following again after focus leaves the messages;
-	// Latest can still explicitly scroll to the end.
-	state.FollowEnd = !list.FocusWithin()
+	// Keep the current message in place while selecting text or viewing an
+	// image. Latest can still explicitly scroll to the end.
+	state.FollowEnd = app.previewImage == nil && !list.FocusWithin()
 	messageScrollbars(c, list)
 	if app.Mobile {
 		// Claim whitespace before the drawer's Draggable ancestor, but keep
@@ -264,6 +268,15 @@ func (app *View) MessageList(c *ui.Context, t model.Thread) {
 		app.footer = footer
 	} else {
 		footer()
+	}
+	if app.previewImage != nil {
+		threadID := t.ID
+		list.OnUnmount(func() {
+			if app.previewThread == threadID {
+				app.previewImage = nil
+			}
+		})
+		app.imageDialog(c.Key("image-dialog"))
 	}
 }
 
@@ -517,18 +530,8 @@ func (app *View) MessageView(c *ui.Context, m model.Message, streaming bool) {
 		ui.Column(c).FillWidth().Gap(8).Children(func() {
 			if len(m.Images) > 0 {
 				ui.Row(c).FillWidth().Wrap().Justify(ui.End).Gap(8).Children(func() {
-					for _, src := range m.Images {
-						loader := widgets.CachedImage
-						if app.ImagePreview != nil {
-							loader = app.ImagePreview
-						}
-						if img := loader(src); img != nil {
-							ui.Image(c.Key(src), img).Size(80, 80).Fit(ui.Cover).Radius(8).Label(tr("Image preview"))
-						} else {
-							ui.Box(c.Key(src)).Size(80, 80).Radius(8).Background(widgets.Bubble).Label(tr("Image preview")).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
-								widgets.Icon(c, "file", 24, widgets.Muted)
-							})
-						}
+					for i, src := range m.Images {
+						app.imageThumbnail(c.Key(i), src)
 					}
 				})
 			}

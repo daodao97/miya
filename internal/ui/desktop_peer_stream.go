@@ -1,12 +1,14 @@
 package desktopui
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
+	"image/jpeg"
 	"net/http"
 	"time"
 
-	"github.com/egoist/mygo/ui"
+	"miya/internal/uiruntime"
 )
 
 func (p *peerDesktop) stopStreaming() {
@@ -43,8 +45,8 @@ func (p *peerDesktop) startStreaming() {
 		}
 		defer stream.Close()
 		apply(func() { p.stream = stream })
-		var image ui.ImageSource
 		var previousHash [32]byte
+		var haveFrame bool
 		for {
 			readCtx, done := context.WithTimeout(ctx, 10*time.Second)
 			data, notice, err := stream.Receive(readCtx)
@@ -53,6 +55,9 @@ func (p *peerDesktop) startStreaming() {
 				return
 			}
 			if notice != nil {
+				if !notice.Input {
+					haveFrame = false
+				}
 				apply(func() {
 					if notice.Input {
 						p.showError(&notice.HTTPError)
@@ -65,15 +70,25 @@ func (p *peerDesktop) startStreaming() {
 				continue
 			}
 			hash := sha256.Sum256(data)
-			if image == nil || hash != previousHash {
-				image, err = ui.DecodeImage(data)
-				if err != nil || image == nil {
-					return
-				}
-				previousHash = hash
+			if haveFrame && hash == previousHash {
+				continue
 			}
-			frame := image
-			apply(func() { p.receiveFrame(frame, hash, false, nil) })
+			frame, err := jpeg.Decode(bytes.NewReader(data))
+			if err != nil {
+				return
+			}
+			previousHash, haveFrame = hash, true
+			applied := make(chan struct{})
+			apply(func() {
+				defer close(applied)
+				bitmap := uiruntime.UpdateStreamBitmap(p.image, frame)
+				p.receiveFrame(bitmap, hash, false, nil)
+			})
+			select {
+			case <-ctx.Done():
+				return
+			case <-applied:
+			}
 		}
 	}()
 }

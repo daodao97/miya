@@ -4,12 +4,10 @@
 
 # Miya
 
-**让 Codex 和 Claude Code 坐到同一张桌子上干活。**
-
 一个窗口管住所有项目和 Agent；人离开电脑，就拿手机接着看。
 
 [![Package](https://github.com/daodao97/miya/actions/workflows/package.yml/badge.svg)](https://github.com/daodao97/miya/actions/workflows/package.yml)
-![Platforms](https://img.shields.io/badge/platform-macOS%20·%20Linux%20server%20·%20iOS%20·%20Android-6c5ce7)
+![Platforms](https://img.shields.io/badge/platform-macOS%20·%20Windows%20·%20Linux%20server%20·%20iOS%20·%20Android-6c5ce7)
 
 <img src="assets/readme/hero.png" alt="Miya 的桌面主窗口和手机端" />
 
@@ -83,6 +81,6 @@ Codex 和 Claude 共用同一份项目记忆：一个踩过的坑，另一个不
 
 ## 参与开发
 
-从源码构建（macOS / iOS / Android / Linux 服务端）、测试、隔离运行和代码结构都在[开发指南](docs/development.md)里。
+从源码构建（macOS / Windows / iOS / Android / Linux 服务端）、测试、隔离运行和代码结构都在[开发指南](docs/development.md)里。
 
 遇到问题欢迎提 [Issue](https://github.com/daodao97/miya/issues)，附上平台、Miya 版本、用的 Agent 和复现步骤。贴日志前记得去掉连接码、凭据和私人对话。

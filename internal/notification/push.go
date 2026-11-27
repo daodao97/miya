@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -13,6 +14,20 @@ import (
 	"miya/internal/apns"
 	"miya/internal/appdir"
 )
+
+const APNsTopic = "com.daodao.miya"
+
+// OpenAPNsProvider checks that the sender is configured for Miya.
+func OpenAPNsProvider(dir string) (*apns.Provider, error) {
+	p, err := apns.OpenProvider(dir)
+	if err != nil {
+		return nil, err
+	}
+	if p.Topic() != APNsTopic {
+		return nil, fmt.Errorf("APNs topic must be %s", APNsTopic)
+	}
+	return p, nil
+}
 
 type Registration struct {
 	ID       string `json:"id"`
@@ -178,10 +193,7 @@ func (h *Hub) run() {
 			h.deliverLive(d.Registration.ID, notice)
 			continue
 		}
-		p, e := apns.OpenProvider(appdir.Dir())
-		if e == nil && p.Topic() != "com.daodao.miya" {
-			e = errors.New("APNs topic must be com.daodao.miya")
-		}
+		p, e := OpenAPNsProvider(h.storageDir)
 		if e == nil {
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			_, e = p.Send(ctx, notice)

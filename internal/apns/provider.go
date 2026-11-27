@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-// ProviderConfig is sender metadata written by `mygo push setup`. Private keys
+// ProviderConfig is sender metadata written by ImportProvider. Private keys
 // are stored separately in the macOS login Keychain or an owner-only file.
 // The file format also accepts existing MyGo application provider settings.
 type ProviderConfig struct {
@@ -169,7 +169,7 @@ func (p *Provider) Topic() string {
 	return p.topic
 }
 
-// OpenProvider loads credentials created by `mygo push setup` from an
+// OpenProvider loads credentials stored by ImportProvider from an
 // application data directory. It never reads mygo.json or embeds a private key.
 func OpenProvider(dir string) (*Provider, error) {
 	if runtime.GOOS == "ios" {
@@ -196,8 +196,11 @@ func (p *Provider) Reload() error {
 
 func (p *Provider) reload() error {
 	f, err := os.Open(filepath.Join(p.dir, "push-config.json"))
+	if errors.Is(err, os.ErrNotExist) {
+		return errors.New("apns: provider is not configured")
+	}
 	if err != nil {
-		return errors.New("apns: provider is not configured; run mygo push setup")
+		return errors.New("apns: unable to open provider configuration")
 	}
 	defer f.Close()
 	raw, err := io.ReadAll(io.LimitReader(f, 8193))
