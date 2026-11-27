@@ -65,7 +65,7 @@ Codex 和 Claude 共用同一份项目记忆：一个踩过的坑，另一个不
 
 1. 在要跑任务的电脑上装好并登录 Agent CLI，比如 Codex 或 Claude Code。
 2. 从 [Releases](https://github.com/daodao97/miya/releases) 下载 Miya，打开后添加项目目录，挑一个 Agent 开聊。
-3. 想用手机：打开「设置 → 手机」，用手机 App 扫码。
+3. 想用手机：iOS 版可通过 [TestFlight 下载](https://testflight.apple.com/join/8uEWJnDZ)。在电脑端打开「设置 → 手机」，用手机 App 扫码。
 4. 想用服务器：按 [Linux 服务器文档](docs/server.md) 部署，再从工作空间菜单添加连接码。
 
 系统要求：macOS 13+（远程桌面需要 14+），iOS 17+。连接码等于对应工作空间的操作权限，只给自己信得过的设备。
