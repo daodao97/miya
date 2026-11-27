@@ -27,6 +27,10 @@ on:
         type: choice
         default: none
         options: [none, internal, public]
+      testflight_sha:
+        description: Commit for the TestFlight build (defaults to the selected branch)
+        type: string
+        required: false
   push:
     branches: [main]
     tags: ['v*']
@@ -236,6 +240,8 @@ jobs:
       IOS_BUILD_NUMBER: ${{ github.run_number }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.testflight != 'none' && inputs.testflight_sha || github.sha }}
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod

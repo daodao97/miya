@@ -92,9 +92,11 @@ Android 标签构建使用 `ANDROID_KEYSTORE_BASE64` 和 `ANDROID_KEYSTORE_PASSW
 
 ### 发布到 TestFlight
 
-在 **Actions → Package → Run workflow** 选择 `main`，将 `testflight` 设为 `internal` 或 `public`。这次运行只打 iOS 包，上传到 App Store Connect 应用 **Miya Agent**，并分发到对应的 **Internal Testers** 或 **Public Beta** 测试组。保留默认值 `none` 时打包所有平台。
+发布 `v*` 标签对应的 GitHub Release 后，**Release TestFlight** 会自动在 `main` 触发 **Package**，使用 Release 标签对应的提交打包 iOS 并发布到 **Public Beta**。推标签生成 Release 草稿时只打包，点 **Publish release** 后才触发 TestFlight。
 
-TestFlight 使用工作流中的 `TESTFLIGHT_VERSION`（目前为 `0.1.0`）和递增的 GitHub Actions 运行编号。同一次运行重试会复用已经上传的构建。如果同版本已有构建在审核，新构建会先上传，等审核结束后重新运行失败的发布任务即可。Apple 要求审核时，公开测试任务会提交审核。
+也可以在 **Actions → Package → Run workflow** 选择 `main`，将 `testflight` 设为 `internal` 或 `public`，手动发布到 App Store Connect 应用 **Miya Agent** 的 **Internal Testers** 或 **Public Beta** 测试组。`testflight_sha` 留空时使用 `main` 的提交。`testflight` 保留默认值 `none` 时打包所有平台。
+
+TestFlight 的版本号固定为工作流中的 `TESTFLIGHT_VERSION`（目前为 `0.1.0`），构建号使用递增的 **Package** 运行编号。同一次运行重试会复用已经上传的构建。如果同版本已有构建在审核，新构建会先上传，等审核结束后重新运行失败的发布任务即可。Apple 要求审核时，公开测试任务会提交审核。
 
 公开测试构建获批后，重新运行公开分发任务即可发布版本、构建号和过期时间到 `miya-testflight` 的 `update-ios.json`。iOS 在有可用的新构建时显示抽屉升级图标，点击打开 TestFlight。
 
