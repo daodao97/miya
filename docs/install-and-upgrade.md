@@ -59,15 +59,15 @@ python3 scripts/package-update.py --merge build/updates --out build/updates
 
 ### 打包并签名 macOS DMG
 
-本机钥匙串中有 Developer ID Application 证书及其私钥时，可用证书名称或 SHA-1 同时签名应用和 DMG。脚本默认构建 universal 包，产物位于 `build/darwin-universal/`。
+正式版 macOS 应用使用 Team ID `XNDA84PBM3` 的 Developer ID Application 签名，应用标识为 `com.daodao.miya`。本机打包或构建用于替换 `/Applications/Miya.app` 的版本时，也使用正式版的签名身份。在未跟踪的 `.mygo/macos-signing-identity` 中保存该证书的 SHA-1 指纹，避免同名证书混用。脚本默认构建 universal 包，产物位于 `build/darwin-universal/`。
 
 ```sh
-MIYA_SIGNING_IDENTITY='Developer ID Application: Your Name (TEAMID)' ./scripts/package-macos.sh
+./scripts/package-macos.sh
 /usr/bin/codesign --verify --deep --strict build/darwin-universal/Miya.app
 /usr/bin/codesign --verify --strict build/darwin-universal/*.dmg
 ```
 
-也可在未跟踪的 `.mygo/macos-signing-identity` 中保存单行签名身份，或用 `-sign` 覆盖当前选择。用 `-platform darwin/arm64` 或 `-platform darwin/amd64` 可打包单架构。未配置签名身份时，应用使用 ad-hoc 签名，DMG 保持未签名。
+已配置本机签名时，构建脚本拒绝冲突的 `MIYA_SIGNING_IDENTITY` 和任何 `-sign` 覆盖。用 `-platform darwin/arm64` 或 `-platform darwin/amd64` 可打包单架构。未配置签名身份的开发构建会使用 ad-hoc 签名，适合独立验证。
 
 GitHub Package 工作流使用 `MACOS_CERTIFICATE_BASE64`（Developer ID Application 证书及私钥的 base64 编码 `.p12`）和 `MACOS_CERTIFICATE_PASSWORD`，并在上传前验签。应用和 DMG 的 Apple 公证还需要 `APPLE_ID`、`APPLE_APP_PASSWORD` 和 `APPLE_TEAM_ID`。
 
@@ -97,7 +97,7 @@ scripts/run-isolated.sh stop       # 请求独立后台退出
 
 macOS 构建使用项目脚本，显式设置 `CGO_ENABLED=0`。远程桌面的 ScreenCaptureKit、键鼠、窗口和遮屏能力由 MyGo 的 `plugins/desktopcontrol` 通过 purego 调用，权限请求使用 `plugins/permissionflow`。应用最低系统版本保持 macOS 13，macOS 14 及以上才启用远程桌面。
 
-有本机开发签名证书时，用 `MIYA_SIGNING_IDENTITY` 或未跟踪的 `.mygo/macos-signing-identity`（单行证书名称或 SHA-1）固定签名身份。同一团队、同一应用标识的稳定签名可避免每次本地重编译都使 TCC 授权失效；从 ad-hoc 迁移时仍需重新授权一次。不要把其他人的证书身份写入共享配置，也不要为了维持权限放宽 designated requirement。没有配置时保持 ad-hoc 构建。
+安装前用 `codesign -d -r- <Miya.app>` 核对新包与已安装正式版的 designated requirement。签名身份从 Apple Development 或 ad-hoc 切换到 Developer ID 时，需要在 macOS 中重新授权一次。正式版证书续期时，核对新证书所属团队、应用标识及签名要求，再同步更新本机指纹和发布凭据。
 
 构建需要访问 Go 缓存，安装需要写入 `/Applications`。遇到沙箱拒绝时，为具体构建或安装命令申请权限提升。没有完成构建、验签之前，不替换现有应用。功能变更应已完成对应验证；仅安装同一份已验证源码时无需重复全量测试。
 

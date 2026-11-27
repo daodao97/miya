@@ -9,8 +9,22 @@ export MYGO_LDFLAGS="${MYGO_LDFLAGS:-} -X miya/internal/selfupdate.Build=miya-re
 # Keep a local signing identity outside version control. Ad-hoc signatures
 # change their designated requirement on every build and invalidate TCC grants.
 SIGNING_IDENTITY=${MIYA_SIGNING_IDENTITY:-}
-if [ -z "$SIGNING_IDENTITY" ] && [ -r .mygo/macos-signing-identity ]; then
-    IFS= read -r SIGNING_IDENTITY < .mygo/macos-signing-identity || :
+if [ -r .mygo/macos-signing-identity ]; then
+    PINNED_IDENTITY=
+    IFS= read -r PINNED_IDENTITY < .mygo/macos-signing-identity || :
+    if [ -z "$PINNED_IDENTITY" ] || { [ -n "$SIGNING_IDENTITY" ] && [ "$SIGNING_IDENTITY" != "$PINNED_IDENTITY" ]; }; then
+        echo 'Use the signing identity pinned in .mygo/macos-signing-identity.' >&2
+        exit 1
+    fi
+    for arg do
+        case "$arg" in
+            -sign|--sign|-sign=*|--sign=*)
+                echo 'Omit -sign when .mygo/macos-signing-identity is configured.' >&2
+                exit 1
+                ;;
+        esac
+    done
+    SIGNING_IDENTITY=$PINNED_IDENTITY
 fi
 if [ -n "$SIGNING_IDENTITY" ]; then
     set -- -sign "$SIGNING_IDENTITY" "$@"
