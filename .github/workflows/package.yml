@@ -6,7 +6,7 @@ name: Package
 # that points at ../mygo is for development and is not committed.
 #
 # Signing is optional. Without secrets the jobs still produce artifacts:
-#   macOS   ad hoc signed DMG (Gatekeeper blocks it on other Macs)
+#   macOS   unsigned DMG with an ad hoc signed app
 #   Windows unsigned NSIS installer
 #   iOS     simulator build (no provisioning profile needed)
 #   Android debug-signed APK
@@ -73,6 +73,7 @@ jobs:
           kc="$dir/signing.keychain-db"; pw=$(openssl rand -hex 32)
           printf '%s' "$MACOS_CERTIFICATE_BASE64" | base64 --decode > "$dir/cert.p12"
           security create-keychain -p "$pw" "$kc"
+          echo "MACOS_KEYCHAIN=$kc" >> "$GITHUB_ENV"
           security set-keychain-settings -lut 7200 "$kc"
           security unlock-keychain -p "$pw" "$kc"
           security list-keychains -d user -s "$kc" $(security list-keychains -d user | tr -d '"')
@@ -82,7 +83,6 @@ jobs:
           identity=$(security find-identity -v -p codesigning "$kc" | sed -n 's/.*"\(Developer ID Application:[^"]*\)".*/\1/p' | head -1)
           if [ -z "$identity" ]; then echo 'No Developer ID Application identity in the certificate' >&2; exit 1; fi
           echo "MIYA_SIGNING_IDENTITY=$identity" >> "$GITHUB_ENV"
-          echo "MACOS_KEYCHAIN=$kc" >> "$GITHUB_ENV"
           if [ -n "$APPLE_ID" ] && [ -n "$APPLE_APP_PASSWORD" ] && [ -n "$APPLE_TEAM_ID" ]; then
             xcrun notarytool store-credentials miya-notary --apple-id "$APPLE_ID" --password "$APPLE_APP_PASSWORD" --team-id "$APPLE_TEAM_ID" --keychain "$kc"
             python3 scripts/ci-config.py --notarize miya-notary "$kc"
@@ -90,14 +90,13 @@ jobs:
       - name: Build the app and disk image
         run: |
           out="$RUNNER_TEMP/dist"
-          version=$(python3 -c 'import json; print(json.load(open("mygo.json"))["version"])')
-          export MYGO_LDFLAGS="-X miya/internal/selfupdate.Build=miya-release:$version:end"
-          sign=()
-          if [ -n "${MIYA_SIGNING_IDENTITY:-}" ]; then sign=(-sign "$MIYA_SIGNING_IDENTITY"); fi
-          go tool mygo build -platform darwin/universal "${sign[@]}" -o "$out"
+          ./scripts/package-macos.sh -o "$out"
           dmg=$(find "$out" -name '*.dmg' -print -quit)
           if [ -z "$dmg" ]; then echo 'mygo build produced no disk image' >&2; exit 1; fi
           codesign --verify --deep --strict "$(find "$out" -maxdepth 2 -name '*.app' -print -quit)"
+          if [ -n "${MIYA_SIGNING_IDENTITY:-}" ]; then
+            codesign --verify --strict "$dmg"
+          fi
           shasum -a 256 "$dmg"
           echo "DMG=$dmg" >> "$GITHUB_ENV"
       - name: Package remote desktop updates

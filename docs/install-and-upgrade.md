@@ -53,6 +53,20 @@ python3 scripts/package-update.py --merge build/updates --out build/updates
 
 将清单和压缩包上传到项目官方 `v1.2.3` Release。清单地址固定为 `https://github.com/daodao97/miya/releases/latest/download/miya-update.json`，包地址必须属于本项目的正式 Release 下载路径。校验值通过 HTTPS 发布，不另设独立离线签名密钥；维护者需保护 GitHub Release 发布权限。升级只接受比运行版本新的兼容正式版本，不自动降级。
 
+### 打包并签名 macOS DMG
+
+本机钥匙串中有 Developer ID Application 证书及其私钥时，可用证书名称或 SHA-1 同时签名应用和 DMG。脚本默认构建 universal 包，产物位于 `build/darwin-universal/`。
+
+```sh
+MIYA_SIGNING_IDENTITY='Developer ID Application: Your Name (TEAMID)' ./scripts/package-macos.sh
+/usr/bin/codesign --verify --deep --strict build/darwin-universal/Miya.app
+/usr/bin/codesign --verify --strict build/darwin-universal/*.dmg
+```
+
+也可在未跟踪的 `.mygo/macos-signing-identity` 中保存单行签名身份，或用 `-sign` 覆盖当前选择。用 `-platform darwin/arm64` 或 `-platform darwin/amd64` 可打包单架构。未配置签名身份时，应用使用 ad-hoc 签名，DMG 保持未签名。
+
+GitHub Package 工作流使用 `MACOS_CERTIFICATE_BASE64`（Developer ID Application 证书及私钥的 base64 编码 `.p12`）和 `MACOS_CERTIFICATE_PASSWORD`，并在上传前验签。应用和 DMG 的 Apple 公证还需要 `APPLE_ID`、`APPLE_APP_PASSWORD` 和 `APPLE_TEAM_ID`。
+
 ## 独立验证（不覆盖已安装应用）
 
 开发中需要实际运行新版本、又要继续使用已安装的 Miya 时，不走安装流程：
