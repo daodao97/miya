@@ -41,6 +41,13 @@ func (app *App) workspaceSelector(c *ui.Context) {
 			}
 		}
 		menu.Separator()
+		if current.ID != workspaces.Local {
+			client := app.C.State().Remote
+			if menu.Item(tr("Remote desktop")).Disabled(!client.Connected() || client.Wire() == nil).Chosen() {
+				m.openPeerDesktop()
+			}
+			menu.Separator()
+		}
 		if menu.Item(tr("Add remote workspace…")).Disabled(m.loadErr != nil).Chosen() {
 			m.CancelConnection()
 			m.Open, m.name, m.link, m.editID, m.Err = true, "", "", "", ""

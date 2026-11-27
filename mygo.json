@@ -1,7 +1,7 @@
 {
   "name": "Miya",
   "identifier": "com.daodao.miya",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "out": "build",
   "macos": {
     "minimumSystemVersion": "13.0",

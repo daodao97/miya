@@ -26,6 +26,7 @@ type DesktopWorkspaces struct {
 	pending            workspaces.Workspace
 	generation         uint64
 	cancel             context.CancelFunc
+	peerDesktop        *peerDesktop
 	Connect            func(context.Context, workspaces.Workspace) (*svcclient.Client, svcproto.State, error)
 }
 
@@ -210,6 +211,10 @@ func (m *DesktopWorkspaces) Close() {
 	}
 	m.closed = true
 	m.CancelConnection()
+	if p := m.peerDesktop; p != nil {
+		p.end("")
+		p.window.Close()
+	}
 	for _, app := range m.Sessions {
 		app.stopUsage()
 		app.closePanels()
