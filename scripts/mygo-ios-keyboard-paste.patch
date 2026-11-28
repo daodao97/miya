@@ -1,0 +1,13 @@
+--- SurfaceWindow.swift
++++ SurfaceWindow.swift
+@@ -661,7 +661,9 @@
+         switch action {
+         case #selector(UIResponderStandardEditActions.cut(_:)): return menuActions.contains("cut")
+         case #selector(UIResponderStandardEditActions.copy(_:)): return menuActions.contains("copy")
+-        case #selector(UIResponderStandardEditActions.paste(_:)): return menuActions.contains("paste")
++        case #selector(UIResponderStandardEditActions.paste(_:)):
++            // The keyboard offers Paste even before an edit menu has been shown.
++            return editing
+         case #selector(UIResponderStandardEditActions.selectAll(_:)): return menuActions.contains("selectAll")
+         default: return false
+         }

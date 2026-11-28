@@ -12,6 +12,18 @@ cd "$ROOT"
 mkdir -p "$ROOT/.mygo"
 STAGE=$(mktemp -d "$ROOT/.mygo/ios-config-XXXXXX")
 trap 'rm -rf "$STAGE"' EXIT
+# Apply the iOS host fix locally until it is included in the pinned MyGo version.
+mygo_dir=$(go list -m -f '{{.Dir}}' github.com/egoist/mygo)
+if [[ -z "$mygo_dir" ]]; then
+    go mod download github.com/egoist/mygo
+    mygo_dir=$(go list -m -f '{{.Dir}}' github.com/egoist/mygo)
+fi
+cp -R "$mygo_dir" "$STAGE/mygo"
+chmod -R u+w "$STAGE/mygo"
+surface="$STAGE/mygo/internal/mobile/ios/Sources/MyGoHost/SurfaceWindow.swift"
+patch -s -f -F 0 "$surface" < "$ROOT/scripts/mygo-ios-keyboard-paste.patch"
+(cd "$STAGE" && go work init "$ROOT")
+go work edit -replace "github.com/egoist/mygo=$STAGE/mygo" "$STAGE/go.work"
 python3 - "$ROOT" "$STAGE" <<'PY'
 import json, sys
 from pathlib import Path
@@ -40,4 +52,4 @@ if config.get('i18n'):
 PY
 build_number=$(python3 -c 'import json; print(json.load(open("mygo.json")).get("ios", {}).get("buildNumber", "1"))')
 export MYGO_LDFLAGS="${MYGO_LDFLAGS:-} -X miya/internal/mobile.mobileBuildNumber=$build_number"
-go tool mygo build -platform "${MIYA_IOS_PLATFORM:-ios/arm64}" "$@" "$STAGE"
+GOWORK="$STAGE/go.work" go tool mygo build -platform "${MIYA_IOS_PLATFORM:-ios/arm64}" "$@" "$STAGE"
