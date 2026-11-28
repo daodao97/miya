@@ -173,7 +173,7 @@ func (app *View) MessageList(c *ui.Context, t model.Thread) {
 	// Keep the current message in place while selecting text or viewing an
 	// image. Latest can still explicitly scroll to the end.
 	state.FollowEnd = app.previewImage == nil && !list.FocusWithin()
-	messageScrollbars(c, list)
+	widgets.ScrollbarsWhileScrolling(c, list)
 	if app.Mobile {
 		// Claim whitespace before the drawer's Draggable ancestor, but keep
 		// child buttons as the innermost click targets. A blanket HandleInput

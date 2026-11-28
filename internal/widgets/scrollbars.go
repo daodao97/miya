@@ -1,4 +1,4 @@
-package view
+package widgets
 
 import (
 	"time"
@@ -6,17 +6,17 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-type messageScroll struct {
+type scrollActivity struct {
 	position ui.ScrollState
 	lastY    float32
 	ready    bool
 	until    time.Time
 }
 
-// The message indicator follows movement instead of hover on both desktop
-// and phone. Keep it briefly after scrolling stops.
-func messageScrollbars(c *ui.Context, list ui.Element) {
-	s := ui.Local(list, "message-scrollbars", func() messageScroll { return messageScroll{} })
+// ScrollbarsWhileScrolling shows the list's scrollbar only while it moves,
+// instead of on hover, and keeps it briefly after scrolling stops.
+func ScrollbarsWhileScrolling(c *ui.Context, list ui.Element) {
+	s := ui.Local(list, "scrollbars-while-scrolling", func() scrollActivity { return scrollActivity{} })
 	list.TrackScroll(&s.position)
 	now := c.Now()
 	if s.ready && s.position.Y != s.lastY {

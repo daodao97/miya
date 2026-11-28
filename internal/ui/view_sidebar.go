@@ -26,7 +26,8 @@ func (app *App) SidebarView(c *ui.Context) {
 			}
 		})
 		// Only the navigation and project list scroll; the footer is a sibling.
-		ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
+		list := ui.Scroll(c).Grow(1).MinHeight(0)
+		list.Children(func() {
 			ui.Column(c).PaddingX(12).Gap(3).Children(func() {
 				if app.nav(c.Key("nav-new"), "edit", tr("New thread")).Clicked() {
 					app.newThread()
@@ -51,6 +52,7 @@ func (app *App) SidebarView(c *ui.Context) {
 				}
 			})
 		})
+		widgets.ScrollbarsWhileScrolling(c, list)
 		ui.Column(c).Padding(12).Shrink(0).Background(widgets.Side).BorderWidth(1, 0, 0, 0).BorderColor(widgets.Line).Children(func() {
 			ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(4).Children(func() {
 				if widgets.ToolButton(c.Key("nav-settings"), "settings", tr("Settings")).Height(34).Tooltip(tr("Settings") + " · " + ShortcutKeys(ui.Cmd, ",")).Clicked() {

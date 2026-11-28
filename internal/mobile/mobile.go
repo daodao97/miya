@@ -1583,7 +1583,9 @@ func (m *App) drawerContent(c *ui.Context) {
 	// Reserve touch drags before the conversation buttons take their presses.
 	// A finger's pan comes to this handler first, as a precise scroll;
 	// stationary taps press the buttons, and vertical scrolls go on to the list.
-	ui.Scroll(c.Key("drawer-projects")).FillWidth().Grow(1).MinHeight(0).HandleInput(func(ev ui.InputEvent) bool {
+	drawerList := ui.Scroll(c.Key("drawer-projects")).FillWidth().Grow(1).MinHeight(0)
+	widgets.ScrollbarsWhileScrolling(c, drawerList)
+	drawerList.HandleInput(func(ev ui.InputEvent) bool {
 		if ev.Kind == ui.InputScroll && ev.Precise && !ev.Momentum && ev.DX > 8 && ev.DX > max(ev.DY, -ev.DY) {
 			m.Menu = false
 			return true
