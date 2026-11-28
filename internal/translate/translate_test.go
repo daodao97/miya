@@ -109,3 +109,30 @@ func TestCache(t *testing.T) {
 		t.Fatalf("cache holds %d/%d", len(c.items), len(c.order))
 	}
 }
+
+func TestCacheOutlastsTheService(t *testing.T) {
+	path := t.TempDir() + "/translations.json.gz"
+	c := NewCache(path)
+	c.Put("Hello there, the tests pass.", "zh-Hans", "你好，测试通过了。")
+	c.Put("Hello there, the tests pass.", "ja", "テストは通りました。")
+
+	again := NewCache(path)
+	if s, ok := again.Get("Hello there, the tests pass.", "zh-Hans"); !ok || s != "你好，测试通过了。" {
+		t.Fatalf("after a restart = %q, %v", s, ok)
+	}
+	key := Key("Hello there, the tests pass.", "ja")
+	if found := again.Lookup([]string{key}); found[key] != "テストは通りました。" {
+		t.Fatalf("lookup after a restart = %q", found)
+	}
+
+	for i := range cacheSize + 1 {
+		again.Put(strings.Repeat("x", i+1), "en", "y")
+	}
+	last := NewCache(path)
+	if _, ok := last.Get("Hello there, the tests pass.", "zh-Hans"); ok {
+		t.Fatal("kept the oldest beyond the limit")
+	}
+	if _, ok := last.Get(strings.Repeat("x", cacheSize+1), "en"); !ok {
+		t.Fatal("lost the newest")
+	}
+}

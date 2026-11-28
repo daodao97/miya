@@ -18,6 +18,8 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf8"
+
+	"miya/internal/fsutil"
 )
 
 // Request asks for Text in the language Lang (a Targets tag, DefaultTarget
@@ -189,14 +191,49 @@ func Needed(text, lang string) bool {
 
 // Cache keeps translations by text, shared by the desktop and its phones:
 // a reply one of them translated shows translated on the others, which ask
-// for it by its Key.
+// for it by its Key. With a path, it keeps them in that file too, so that
+// they outlast the service: a phone, or a window opened after an update,
+// finds them rather than asking the agent again.
 type Cache struct {
 	mu    sync.Mutex
 	items map[string]string
 	order []string
+	path  string
+	// saving keeps the file's writes in the order of the changes they hold.
+	saving sync.Mutex
 }
 
-const cacheSize = 256
+const cacheSize = 1000
+
+// savedEntry is a translation as the file keeps it, oldest first.
+type savedEntry struct {
+	Key  string `json:"key"`
+	Text string `json:"text"`
+}
+
+// NewCache returns a cache kept in the file path, with the translations it
+// already holds; "" keeps them in memory only.
+func NewCache(path string) *Cache {
+	c := &Cache{path: path, items: map[string]string{}}
+	if path == "" {
+		return c
+	}
+	var saved []savedEntry
+	if fsutil.ReadGzipJSON(path, &saved) != nil {
+		return c
+	}
+	for _, e := range saved {
+		if e.Key == "" || e.Text == "" {
+			continue
+		}
+		if _, ok := c.items[e.Key]; !ok {
+			c.order = append(c.order, e.Key)
+		}
+		c.items[e.Key] = e.Text
+	}
+	c.trim()
+	return c
+}
 
 // Key names text's translation into lang, the same on every device that
 // shows the text: hex of a hash, which tells nothing of the text.
@@ -227,10 +264,9 @@ func (c *Cache) Lookup(keys []string) map[string]string {
 }
 
 // Put keeps text's translation into lang, forgetting the oldest beyond
-// cacheSize.
+// cacheSize, and writes the file of a cache with one.
 func (c *Cache) Put(text, lang, translation string) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	if c.items == nil {
 		c.items = map[string]string{}
 	}
@@ -239,8 +275,31 @@ func (c *Cache) Put(text, lang, translation string) {
 		c.order = append(c.order, k)
 	}
 	c.items[k] = translation
+	c.trim()
+	path := c.path
+	c.mu.Unlock()
+	if path != "" {
+		c.save()
+	}
+}
+
+// trim forgets the oldest translations beyond cacheSize. With c.mu held.
+func (c *Cache) trim() {
 	for len(c.order) > cacheSize {
 		delete(c.items, c.order[0])
 		c.order = c.order[1:]
 	}
+}
+
+// save writes the translations kept to the file, off the lock readers take.
+func (c *Cache) save() {
+	c.saving.Lock()
+	defer c.saving.Unlock()
+	c.mu.Lock()
+	saved := make([]savedEntry, 0, len(c.order))
+	for _, k := range c.order {
+		saved = append(saved, savedEntry{k, c.items[k]})
+	}
+	c.mu.Unlock()
+	_ = fsutil.WriteGzipJSON(c.path, saved)
 }

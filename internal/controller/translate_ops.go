@@ -4,13 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"testing"
 	"time"
 
 	"miya/internal/agent/integrations"
+	"miya/internal/appdir"
 	"miya/internal/async"
 	"miya/internal/chat/model"
 	phoneproto "miya/internal/phone/protocol"
@@ -37,6 +40,16 @@ var (
 	flights   = map[string]*flight{}
 )
 
+// translationsPath is the file the translations outlast the service in:
+// windows and phones that show a reply after an update find it translated.
+// Tests keep them in memory.
+var translationsPath = func() string {
+	if testing.Testing() {
+		return ""
+	}
+	return filepath.Join(appdir.Dir(), "translations.json.gz")
+}
+
 // translateWith asks an agent for a translation; tests replace it.
 var translateWith = integrations.Translate
 
@@ -47,7 +60,7 @@ type flight struct {
 }
 
 func translationCache() *translate.Cache {
-	translationsOnce.Do(func() { translations = &translate.Cache{} })
+	translationsOnce.Do(func() { translations = translate.NewCache(translationsPath()) })
 	return translations
 }
 
