@@ -4,7 +4,7 @@
 
 # Miya
 
-简单克制, 刚好够用的 Agnet GUI
+简单克制, 刚好够用的 Agent GUI
 
 [![Package](https://github.com/daodao97/miya/actions/workflows/package.yml/badge.svg)](https://github.com/daodao97/miya/actions/workflows/package.yml)
 ![Platforms](https://img.shields.io/badge/platform-macOS%20·%20Windows%20·%20Linux%20server%20·%20iOS%20·%20Android-6c5ce7)
