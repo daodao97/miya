@@ -1,16 +1,28 @@
 package controller
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 
 	"miya/internal/desktop"
+	"miya/internal/desktopcontrol"
 	"miya/internal/mcp"
 	"miya/internal/service/workspaces"
 )
 
 func RunCommands() bool {
+	if len(os.Args) == 2 && os.Args[1] == desktopcontrol.AccessibilityCheckArg {
+		granted, err := desktopcontrol.AccessibilityAllowed()
+		if err != nil {
+			log.Fatal(err)
+		}
+		if err := json.NewEncoder(os.Stdout).Encode(granted); err != nil {
+			log.Fatal(err)
+		}
+		return true
+	}
 	if len(os.Args) == 2 && os.Args[1] == "-desktop-privacy" {
 		if err := desktop.RunPrivacyHelper(); err != nil {
 			fmt.Fprintln(os.Stderr, err)

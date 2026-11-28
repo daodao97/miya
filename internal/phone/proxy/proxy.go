@@ -61,14 +61,52 @@ func (p *PhoneFileProxy) SetPreview(rel, text string) {
 func NewPhoneFileProxy(conn *remote.Conn, project string) (*PhoneFileProxy, error) {
 	p := new(PhoneFileProxy)
 	p.conn.Store(conn)
-	err := p.Start(project, func(ctx context.Context) (net.Conn, error) {
-		current := p.conn.Load()
-		if current == nil {
-			return nil, errors.New("Desktop connection lost")
-		}
-		return current.DialFiles(ctx)
-	})
+	err := p.Start(project, p.dialFiles)
 	return p, err
+}
+
+// NewRemoteFileProxy gives the viewer access to one desktop file. The browser
+// cannot change the desktop path or pass through its own authorization.
+func NewRemoteFileProxy(conn *remote.Conn, desktopPath string) (*PhoneFileProxy, error) {
+	p := new(PhoneFileProxy)
+	p.conn.Store(conn)
+	target := "/" + desktopPath[strings.LastIndexAny(desktopPath, "/\\")+1:]
+	err := p.startHandler("", func(origin, cookieName string) http.Handler {
+		upstream := p.reverseProxy("", "", origin, cookieName, p.dialFiles)
+		direct := upstream.Director
+		upstream.Director = func(r *http.Request) {
+			download := r.URL.Query().Get("download")
+			direct(r)
+			query := url.Values{"path": {desktopPath}}
+			if download == "1" {
+				query.Set("download", download)
+			}
+			r.URL.Path, r.URL.RawPath, r.URL.RawQuery = remote.RemoteFileEndpoint, "", query.Encode()
+			if current := p.conn.Load(); current != nil {
+				current.AuthorizeRemoteFile(r)
+			}
+		}
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != target {
+				http.NotFound(w, r)
+				return
+			}
+			upstream.ServeHTTP(w, r)
+		})
+	})
+	if err == nil {
+		query := url.Values{"path": {(&url.URL{Path: target}).EscapedPath()}, "single": {"1"}}
+		p.URL += "?" + query.Encode()
+	}
+	return p, err
+}
+
+func (p *PhoneFileProxy) dialFiles(ctx context.Context) (net.Conn, error) {
+	current := p.conn.Load()
+	if current == nil {
+		return nil, errors.New("Desktop connection lost")
+	}
+	return current.DialFiles(ctx)
 }
 
 func (p *PhoneFileProxy) Start(project string, dial func(context.Context) (net.Conn, error)) error {
@@ -81,7 +119,7 @@ func (p *PhoneFileProxy) StartProxy(prefix, webOrigin string, dial func(context.
 	})
 }
 
-func (p *PhoneFileProxy) reverseProxy(prefix, webOrigin, origin, cookieName string, dial func(context.Context) (net.Conn, error)) http.Handler {
+func (p *PhoneFileProxy) reverseProxy(prefix, webOrigin, origin, cookieName string, dial func(context.Context) (net.Conn, error)) *httputil.ReverseProxy {
 	p.transport = &http.Transport{MaxIdleConns: 8, MaxIdleConnsPerHost: 6, IdleConnTimeout: 30 * time.Second, ResponseHeaderTimeout: 20 * time.Second,
 		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
 			ctx, cancel := context.WithTimeout(ctx, 15*time.Second)

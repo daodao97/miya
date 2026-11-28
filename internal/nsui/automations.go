@@ -350,7 +350,7 @@ func (a *automationsState) listView(cx *core.Scope) core.Node {
 					}},
 					ui.Button{TestID: "automation-run-" + id, Text: tr("Run now"), Variant: ui.ButtonGhost, Disabled: func() bool { return a.pending.Get() || get().Running }, OnPress: func() { a.run(id) }},
 				),
-				autoRow(nswidgets.MutedText(cx, func() string { v := get(); return v.ScheduleText + " · " + autoNext(v) }), ui.Badge{TextFunc: func() string { return autoRunLabel(get()) }, VariantFunc: func() ui.BadgeVariant { return autoRunVariant(get()) }},
+				autoRow(nswidgets.MutedText(cx, func() string { v := get(); return v.ScheduleLabel() + " · " + autoNext(v) }), ui.Badge{TextFunc: func() string { return autoRunLabel(get()) }, VariantFunc: func() ui.BadgeVariant { return autoRunVariant(get()) }},
 					core.Show{When: func() bool { r, ok := autoLast(get()); return ok && r.Thread != 0 }, Then: func(cx *core.Scope) core.Node {
 						return autoButton("automation-last-"+id, "Open last conversation", func() { v := get(); r, _ := autoLast(v); a.openThread(automation.Workspace(v.Project, r), r.Thread) })
 					}}),

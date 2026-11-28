@@ -180,6 +180,10 @@ func (s *attachmentSession) publish(id string, item *attachment, data []byte) bo
 
 func (h *attachmentHub) handler(files http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == RemoteFileEndpoint {
+			h.serveRemoteFile(w, r)
+			return
+		}
 		if !strings.HasPrefix(r.URL.Path, attachmentPrefix) {
 			if files != nil {
 				files.ServeHTTP(w, r)

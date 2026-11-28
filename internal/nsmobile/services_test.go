@@ -71,7 +71,10 @@ func TestPhoneVoiceHoldWorksFromComposerOnHome(t *testing.T) {
 				}
 				changePhone(app, m, func() { m.cx.DismissKeyboard() })
 			}
-			app.LongPressAt(target.selector, target.at)
+			finger := app.Touch(target.selector, target.at)
+			finger.Hold(400 * time.Millisecond)
+			app.WaitUntil(time.Second, func() bool { return m.voice != nil && m.voice.session != nil })
+			finger.Lift()
 			app.WaitUntil(time.Second, func() bool { return v.stopped.Load() == 1 })
 			if app.Find("id:mobile-composer").Focused {
 				t.Fatal("holding to speak opened the editor")

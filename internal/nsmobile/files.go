@@ -6,7 +6,6 @@ import (
 	"github.com/nsgo-dev/nsgo/core"
 
 	"miya/internal/chat/model"
-	msgfmt "miya/internal/chat/presentation"
 	phoneproxy "miya/internal/phone/proxy"
 	webservice "miya/internal/runtime/web"
 )
@@ -17,12 +16,7 @@ func (m *App) openMessageLink(raw string) {
 			m.OpenReference(raw)
 			return
 		}
-		if relative, ok := msgfmt.LocalFileLink(m.ComposerProject(), raw); ok {
-			project, file, found := m.FileTarget(relative)
-			if !found {
-				m.SendErr = tr("File is outside the project directory")
-				return
-			}
+		if project, file, ok := m.MessageFileTarget(raw); ok {
 			m.openProjectFile(project, file)
 			return
 		}
@@ -40,27 +34,35 @@ func (m *App) openProjectFile(project, file string) {
 		m.SendErr = tr("Not connected to desktop")
 		return
 	}
-	if !m.State.Files {
+	single := project == "" && file != ""
+	if (single && !m.State.RemoteFiles) || (!single && !m.State.Files) {
 		m.SendErr = tr("Update Miya on your desktop first. If the background service is busy, it will update when idle.")
 		return
 	}
 	m.closeWebServices()
 	m.closeFileBrowser()
-	proxy, err := phoneproxy.NewPhoneFileProxy(m.Conn, project)
+	var proxy *phoneproxy.PhoneFileProxy
+	var err error
+	if single {
+		proxy, err = phoneproxy.NewRemoteFileProxy(m.Conn, file)
+	} else {
+		proxy, err = phoneproxy.NewPhoneFileProxy(m.Conn, project)
+	}
 	if err != nil {
 		m.SendErr = tr("Unable to open project files") + ": " + err.Error()
 		return
 	}
-	if file != "" {
+	if !single && file != "" {
 		proxy.URL += "?path=" + url.QueryEscape((&url.URL{Path: "/" + file}).EscapedPath())
 	}
 	// The proxy's authenticated loopback URL stays inside an app WebView and
 	// is closed on Back, background, disconnect or a replacement connection.
-	m.closeFiles = func() { proxy.Close() }
+	m.closeFiles = proxy.Close
+	m.singleFile = single
 	m.filesURL.Set(proxy.URL)
 }
 func (m *App) closeFileBrowser() {
-	m.webBrowser = false
+	m.webBrowser, m.singleFile = false, false
 	if m.closeFiles != nil {
 		m.closeFiles()
 		m.closeFiles = nil
@@ -72,6 +74,9 @@ func (m *App) closeFileBrowser() {
 func (m *App) fileView(cx *core.Scope) core.Node {
 	conn, owner := m.Conn, m.composerOwner()
 	label, id, failure := tr("Project files"), "project-files-webview", tr("Unable to open project files")
+	if m.singleFile {
+		label, id = tr("Files"), "remote-file-webview"
+	}
 	if m.webBrowser {
 		label, id, failure = tr("Web services"), "web-service-webview", tr("Unable to open web service")
 	}
@@ -83,7 +88,7 @@ func (m *App) fileView(cx *core.Scope) core.Node {
 	})
 	return core.View{Style: core.Style{FlexGrow: 1, MinHeight: core.Pt(0)}, Children: []core.Node{
 		m.navigationBar(cx, label, "close-files", m.closeFileBrowser),
-		core.WebView{Source: core.WebSrc(core.Untracked(cx, m.filesURL.Get)), Label: label, TestID: id, Style: core.Style{FlexGrow: 1},
+		core.WebView{Source: core.WebSrc(core.Untracked(cx, m.filesURL.Get)), Label: label, TestID: id, NoJavaScript: m.singleFile, Style: core.Style{FlexGrow: 1},
 			OnError: func(err error) {
 				m.SendErr = failure + ": " + err.Error()
 				m.closeFileBrowser()

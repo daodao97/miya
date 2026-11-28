@@ -71,7 +71,7 @@ func (m *App) automationList(cx *core.Scope) core.Node {
 	var rows []gRow
 	for _, v := range m.Autos.List {
 		rows = append(rows, gRow{ID: "automation-" + v.ID, Label: v.Name, Icon: "clock", Chevron: true,
-			Detail: filepath.Base(v.Project) + " · " + automationWhen(v), Value: func() string { return automationState(v) },
+			Detail: filepath.Base(v.Project) + " · " + v.ScheduleLabel(), Value: func() string { return automationState(v) },
 			Press: func() { m.Autos.Detail = v.ID; m.pages.Open("automation") }})
 	}
 	if len(rows) > 0 {
@@ -118,12 +118,6 @@ func automationState(v automation.View) string {
 	return tr("Paused")
 }
 
-func automationWhen(v automation.View) string {
-	if v.ScheduleText != "" {
-		return v.ScheduleText
-	}
-	return automation.DescribeCron(v.Schedule)
-}
 func (m *App) automationDetail(cx *core.Scope, v automation.View) core.Node {
 	disabled := live(m, func() bool { return !m.Connected || !m.State.AutomationRun || v.Running || m.Autos.RunRequest != "" })
 	runStatus := live(m, func() string {
@@ -137,7 +131,7 @@ func (m *App) automationDetail(cx *core.Scope, v automation.View) core.Node {
 	})
 	details := []gRow{{Label: v.Name, Detail: model.AgentName(v.Agent) + " · " + v.Project,
 		Icon: "clock", Value: func() string { return automationState(v) }},
-		{Label: tr("Schedule"), Detail: automationWhen(v)},
+		{Label: tr("Schedule"), Detail: v.ScheduleLabel()},
 	}
 	if !v.Next.IsZero() {
 		details = append(details, gRow{Label: tr("Next run"), Value: func() string { return v.Next.Local().Format("2006-01-02 15:04") }})

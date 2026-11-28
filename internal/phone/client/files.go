@@ -3,6 +3,8 @@ package client
 import (
 	"path/filepath"
 	"strings"
+
+	"miya/internal/chat/presentation"
 )
 
 func (m *Client) messageFileTarget(relative string) (project, file string, ok bool) {
@@ -25,4 +27,17 @@ func (m *Client) messageFileTarget(relative string) (project, file string, ok bo
 		}
 	}
 	return
+}
+
+// MessageFileTarget resolves a conversation link in the paired desktop's
+// namespace. An empty project identifies a single file outside project browsing.
+func (m *Client) MessageFileTarget(link string) (project, file string, ok bool) {
+	cwd := m.ComposerProject()
+	if relative, ok := presentation.LocalFileLink(cwd, link); ok {
+		if project, file, ok := m.messageFileTarget(relative); ok {
+			return project, file, true
+		}
+	}
+	file, ok = presentation.RemoteFileLink(cwd, link)
+	return "", file, ok
 }

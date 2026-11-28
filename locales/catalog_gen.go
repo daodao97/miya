@@ -9,6 +9,42 @@ type Messages struct{ locale string }
 // An empty locale selects the source language.
 func In(locale string) Messages { return Messages{locale} }
 
+// RemoteControlPermissionRestartRequired says "Granted · restart required"
+// in the language the app shows.
+func RemoteControlPermissionRestartRequired() string {
+	return In(messageLocale()).RemoteControlPermissionRestartRequired()
+}
+
+// RemoteControlPermissionRestartRequired says "Granted · restart required"
+// in the language of msgs.
+func (msgs Messages) RemoteControlPermissionRestartRequired() string {
+	return Catalog.Format(msgs.locale, "remoteControlPermissionRestartRequired", nil)
+}
+
+// RemoteControlAccessibilityRestartApp says "Accessibility is enabled in System Settings. Reopen Miya to apply it."
+// in the language the app shows.
+func RemoteControlAccessibilityRestartApp() string {
+	return In(messageLocale()).RemoteControlAccessibilityRestartApp()
+}
+
+// RemoteControlAccessibilityRestartApp says "Accessibility is enabled in System Settings. Reopen Miya to apply it."
+// in the language of msgs.
+func (msgs Messages) RemoteControlAccessibilityRestartApp() string {
+	return Catalog.Format(msgs.locale, "remoteControlAccessibilityRestartApp", nil)
+}
+
+// RemoteControlAccessibilityRestartService says "Accessibility is enabled in System Settings. In General, restart the background service when idle to apply it."
+// in the language the app shows.
+func RemoteControlAccessibilityRestartService() string {
+	return In(messageLocale()).RemoteControlAccessibilityRestartService()
+}
+
+// RemoteControlAccessibilityRestartService says "Accessibility is enabled in System Settings. In General, restart the background service when idle to apply it."
+// in the language of msgs.
+func (msgs Messages) RemoteControlAccessibilityRestartService() string {
+	return Catalog.Format(msgs.locale, "remoteControlAccessibilityRestartService", nil)
+}
+
 // PhoneUnread says "Unread"
 // in the language the app shows.
 func PhoneUnread() string { return In(messageLocale()).PhoneUnread() }

@@ -72,7 +72,7 @@ func (a *automationsState) detail(cx *core.Scope, id string) core.Node {
 					return autoButton("automation-delete", "Delete", func() { confirm.Set(true) })
 				}},
 			),
-			autoMuted(cx, filepath.Base(v.Project)+" · "+model.AgentName(v.Agent)+" · "+v.ScheduleText),
+			autoMuted(cx, filepath.Base(v.Project)+" · "+model.AgentName(v.Agent)+" · "+v.ScheduleLabel()),
 			a.stats(cx, v),
 			a.reviewControls(cx, v),
 			assignment,
@@ -309,7 +309,7 @@ func (a *automationsState) runRow(cx *core.Scope, v automation.View, r automatio
 				body = append(body, ui.Badge{Text: tr("Needs attention"), Variant: ui.BadgeWarn})
 			}
 			for _, m := range rep.Metrics {
-				body = append(body, autoText(m.Name+": "+string(m.Value)+m.Unit))
+				body = append(body, autoText(m.Text()))
 			}
 			for _, f := range rep.Findings {
 				body = append(body, autoText("· "+f))

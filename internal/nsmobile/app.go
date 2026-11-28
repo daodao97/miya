@@ -55,7 +55,7 @@ type App struct {
 	fetchRuntime                              runtimeFetcher
 	fetchProjectServices                      func(context.Context, *remote.Conn, string) ([]webservice.Service, error)
 	openWebProxy                              webProxyOpener
-	webBrowser                                bool
+	webBrowser, singleFile                    bool
 	collaborations                            nsrequests.CollaborationUI
 	collaborationOwner                        string
 	requestFields                             map[string]map[string]string

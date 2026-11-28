@@ -1,4 +1,7 @@
 {
+  "remoteControlPermissionRestartRequired": "已授权，待重启生效",
+  "remoteControlAccessibilityRestartApp": "系统设置已授权辅助功能，请重新打开 Miya 使授权生效。",
+  "remoteControlAccessibilityRestartService": "系统设置已授权辅助功能，请在「通用」中选择空闲后重启后台服务，使授权生效。",
   "phoneUnread": "未读",
   "phoneConnectDesktop": "连接到电脑",
   "phoneApprovalsOnDesktop": "请在电脑上处理待审批请求",

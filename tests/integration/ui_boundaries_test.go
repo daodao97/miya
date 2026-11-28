@@ -13,12 +13,16 @@ import (
 // to controllers through Host, and both render through conversation.
 func TestUIPackageBoundaries(t *testing.T) {
 	for dir, forbidden := range map[string][]string{
-		"nsui":       {"controller", "nsmobile"},
-		"nsmobile":   {"controller", "nsui"},
-		"nschat":     {"controller", "nsui", "nsmobile"},
-		"nswidgets":  {"controller", "nsui", "nsmobile", "nschat", "nsrequests"},
-		"nsrequests": {"controller", "nsui", "nsmobile", "nschat"},
-		"controller": {"nsui", "nsmobile", "nschat", "nswidgets", "nsrequests"},
+		"nsui":              {"controller", "nsmobile"},
+		"nsmobile":          {"controller", "nsui"},
+		"nschat":            {"controller", "nsui", "nsmobile"},
+		"nswidgets":         {"controller", "nsui", "nsmobile", "nschat", "nsrequests"},
+		"nsrequests":        {"controller", "nsui", "nsmobile", "nschat"},
+		"controller":        {"nsui", "nsmobile", "nschat", "nswidgets", "nsrequests"},
+		"chat/composer":     {"nsui", "nsmobile", "nschat", "nswidgets", "nsrequests"},
+		"chat/presentation": {"nsui", "nsmobile", "nschat", "nswidgets", "nsrequests"},
+		"phone/client":      {"nsui", "nsmobile", "nschat", "nswidgets", "nsrequests"},
+		"voiceinput":        {"nsui", "nsmobile", "nschat", "nswidgets", "nsrequests"},
 	} {
 		files, err := filepath.Glob(filepath.Join("internal", dir, "*.go"))
 		if err != nil || len(files) == 0 {
@@ -36,6 +40,12 @@ func TestUIPackageBoundaries(t *testing.T) {
 				path, err := strconv.Unquote(imp.Path.Value)
 				if err != nil {
 					t.Fatal(err)
+				}
+				switch dir {
+				case "chat/composer", "chat/presentation", "phone/client", "voiceinput":
+					if strings.HasPrefix(path, "github.com/nsgo-dev/nsgo") || strings.HasPrefix(path, "github.com/egoist/mygo") {
+						t.Errorf("%s imports the UI framework %s", file, path)
+					}
 				}
 				for _, blocked := range forbidden {
 					if path == "miya/internal/"+blocked || strings.HasPrefix(path, "miya/internal/"+blocked+"/") {

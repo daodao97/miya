@@ -6,8 +6,6 @@ import (
 	"errors"
 	"sync"
 	"time"
-
-	"github.com/nsgo-dev/nsgo/microphone"
 )
 
 // SampleRate is the audio the recognizers take: mono signed 16-bit
@@ -26,6 +24,15 @@ type Result struct {
 	Err   error
 }
 
+// CaptureStream is the platform's PCM recording handle.
+type CaptureStream interface {
+	Stop()
+	Ended() <-chan struct{}
+}
+
+// Capture opens the default input at the requested sample rate.
+type Capture func(rate int, samples func([]int16)) (CaptureStream, error)
+
 // Session is a recording being recognized.
 type Session struct{ r *recording }
 
@@ -40,11 +47,11 @@ func (s *Session) Cancel() { s.r.Cancel() }
 // service; dir keeps the service's device identity. emit runs on other
 // goroutines, the last time with a Final Result. Start may wait for the
 // user to answer the microphone prompt, so call it off the UI.
-func Start(ctx context.Context, dir string, emit func(Result)) (*Session, error) {
+func Start(ctx context.Context, dir string, capture Capture, emit func(Result)) (*Session, error) {
 	// MaxDuration ends capture; this bounds the cloud round trips that follow.
 	ctx, cancel := context.WithTimeout(ctx, MaxDuration+30*time.Second)
 	r := &recording{audio: make(chan []byte, 640), cancel: cancel}
-	stream, err := microphone.Capture(SampleRate, r.samples)
+	stream, err := capture(SampleRate, r.samples)
 	if err != nil {
 		cancel()
 		return nil, err
@@ -88,7 +95,7 @@ type recording struct {
 	audio        chan []byte
 	captureError error
 	closed       bool
-	stream       *microphone.Stream
+	stream       CaptureStream
 	cancel       context.CancelFunc
 	stopOnce     sync.Once
 }

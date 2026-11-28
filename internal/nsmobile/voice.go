@@ -9,6 +9,7 @@ import (
 	"github.com/nsgo-dev/nsgo/core"
 	"github.com/nsgo-dev/nsgo/microphone"
 	"github.com/nsgo-dev/nsgo/ui"
+	"miya/internal/chat/composer"
 	"miya/internal/nswidgets"
 	"miya/internal/prefs"
 	"miya/internal/voiceinput"
@@ -23,9 +24,8 @@ type phoneVoice struct {
 	cancel             context.CancelFunc
 	session            voiceSession
 	owner              composerOwner
-	draft, preview     string
+	draft              composer.DictationDraft
 	partial            string
-	anchor, caret      int
 	released, autoSend bool
 	final              *voiceinput.Result
 }
@@ -49,22 +49,15 @@ func (m *App) beginVoice() {
 		return
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	a, b := m.anchor, m.caret
-	if b < 0 || b > len(m.Draft) {
-		b = len(m.Draft)
-		a = b
-	}
-	a = max(0, min(a, len(m.Draft)))
-	if a > b {
-		a, b = b, a
-	}
-	v := &phoneVoice{cancel: cancel, owner: m.composerOwner(), draft: m.Draft, preview: m.Draft, anchor: a, caret: b, autoSend: m.voiceAutoSend}
+	v := &phoneVoice{cancel: cancel, owner: m.composerOwner(), draft: composer.NewDictationDraft(m.Draft, m.anchor, m.caret), autoSend: m.voiceAutoSend}
 	m.voice, m.SendErr = v, ""
 	m.cx.DismissKeyboard()
 	start, dir := m.voiceStart, m.DataDir
 	if start == nil {
 		start = func(ctx context.Context, dir string, emit func(voiceinput.Result)) (voiceSession, error) {
-			return voiceinput.Start(ctx, dir, emit)
+			return voiceinput.Start(ctx, dir, func(rate int, samples func([]int16)) (voiceinput.CaptureStream, error) {
+				return microphone.Capture(rate, samples)
+			}, emit)
 		}
 	}
 	go func() {
@@ -95,7 +88,7 @@ func (m *App) voiceResult(v *phoneVoice, r voiceinput.Result) {
 		}
 		return
 	}
-	if m.Draft != v.preview {
+	if m.Draft != v.draft.Preview {
 		m.cancelVoice()
 		m.SendErr = tr("The draft changed during recording. Please try again.")
 		return
@@ -111,9 +104,7 @@ func (m *App) voiceResult(v *phoneVoice, r voiceinput.Result) {
 }
 func (m *App) previewVoice(v *phoneVoice, s string) {
 	v.partial = s
-	v.preview = v.draft[:v.anchor] + s + v.draft[v.caret:]
-	end := v.anchor + len(s)
-	m.setComposerDraft(v.preview, end, end)
+	m.setComposerDraft(v.draft.Replace(s))
 }
 func (m *App) endVoice() {
 	v := m.voice
@@ -142,8 +133,8 @@ func (m *App) cancelVoice() {
 		if v.session != nil {
 			v.session.Cancel()
 		}
-		if v.owner.link == m.Link && v.owner.epoch == m.ComposerEpoch() && m.Draft == v.preview {
-			m.setComposerDraft(v.draft, v.anchor, v.caret)
+		if v.owner.link == m.Link && v.owner.epoch == m.ComposerEpoch() && m.Draft == v.draft.Preview {
+			m.setComposerDraft(v.draft.Original, v.draft.Start, v.draft.End)
 		}
 	}
 }
@@ -152,7 +143,7 @@ func (m *App) finishVoice(v *phoneVoice, r voiceinput.Result) {
 		m.cancelVoice()
 		return
 	}
-	if m.Draft != v.preview {
+	if m.Draft != v.draft.Preview {
 		m.cancelVoice()
 		m.SendErr = tr("The draft changed during recording. Please try again.")
 		return

@@ -41,6 +41,14 @@ type View struct {
 	Grants  []Grant  `json:"grants,omitempty"`
 }
 
+// ScheduleLabel falls back to the cron description for older snapshots.
+func (v View) ScheduleLabel() string {
+	if v.ScheduleText != "" {
+		return v.ScheduleText
+	}
+	return DescribeCron(v.Schedule)
+}
+
 type Request struct {
 	ID         string      `json:"id,omitempty"`
 	Automation *Automation `json:"automation,omitempty"`

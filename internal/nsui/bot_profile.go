@@ -66,7 +66,7 @@ func botProfile(cx *core.Scope, c Host, b bot.Bot, back func(), showAutomations 
 			}
 			var rows []core.Node
 			for _, v := range *items {
-				rows = append(rows, ui.FormRow{TestID: "bot-duty-" + v.ID, Title: v.Name, Detail: v.ScheduleText,
+				rows = append(rows, ui.FormRow{TestID: "bot-duty-" + v.ID, Title: v.Name, Detail: v.ScheduleLabel(),
 					OnPress: func() { showAutomations(automationShortcut{detail: v.ID}) }})
 			}
 			return ui.FormSection{Children: rows}

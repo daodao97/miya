@@ -1,9 +1,10 @@
 package client
 
 import (
+	"testing"
+
 	"miya/internal/chat/model"
 	phoneproto "miya/internal/phone/protocol"
-	"testing"
 )
 
 func TestNSGoMessageFileTargetUsesConversationAndRegisteredProject(t *testing.T) {
@@ -31,6 +32,25 @@ func TestNSGoMessageFileTargetUsesConversationAndRegisteredProject(t *testing.T)
 	for _, name := range []string{"../../private/secret.txt", "../mygo-other/secret.txt"} {
 		if _, _, ok := m.messageFileTarget(name); ok {
 			t.Fatalf("unregistered file accepted: %q", name)
+		}
+	}
+}
+
+func TestMessageFileTargetFallsBackToSingleDesktopFile(t *testing.T) {
+	m := New()
+	m.State = phoneproto.State{Projects: []model.ProjectSnapshot{
+		{Path: "/workspace/Miya", Threads: []model.Thread{{ID: 7}}},
+	}}
+	m.Open = 7
+	for _, tc := range []struct{ link, project, file string }{
+		{"docs/report.md:4", "/workspace/Miya", "docs/report.md"},
+		{"../worktree/notes.md", "", "/workspace/worktree/notes.md"},
+		{"file:///tmp/%E5%9B%BE%20%23.png", "", "/tmp/图 #.png"},
+		{"https://example.com/screenshot.png", "", ""},
+	} {
+		project, file, ok := m.MessageFileTarget(tc.link)
+		if project != tc.project || file != tc.file || ok != (tc.file != "") {
+			t.Errorf("%q: got %q %q %v", tc.link, project, file, ok)
 		}
 	}
 }

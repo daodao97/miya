@@ -39,3 +39,15 @@ func permissionStatus(allowed bool, err error) PermissionStatus {
 	}
 	return PermissionDenied
 }
+
+// AccessibilityStatus compares the system grant with the process's active permission.
+func (p Permissions) AccessibilityStatus(grant PermissionStatus) (status PermissionStatus, restart bool) {
+	if grant == PermissionUnknown {
+		return p.Accessibility, false
+	}
+	return grant, grant == PermissionGranted && p.Accessibility == PermissionDenied
+}
+
+func CheckAccessibilityGrant() PermissionStatus {
+	return permissionStatus(desktopcontrol.FreshAccessibilityGrant())
+}
