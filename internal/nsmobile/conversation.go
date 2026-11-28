@@ -83,6 +83,7 @@ func (m *App) composerBox(cx *core.Scope, state *chat.ConversationState) core.No
 		}
 	})
 	draft := core.NewMemo(cx, live(m, func() string { return m.Draft }))
+	focused := core.NewSignal(cx, false)
 	agent := core.NewMemo(cx, live(m, m.Agent))
 	busy := core.NewMemo(cx, live(m, func() bool { return m.Viewer.Current().Busy }))
 	content := core.NewMemo(cx, live(m, m.composerHasContent))
@@ -186,6 +187,8 @@ func (m *App) composerBox(cx *core.Scope, state *chat.ConversationState) core.No
 		}
 		return m.agentName(m.Agent())
 	}), TestID: "mobile-composer", Multiline: true, SubmitBehavior: core.SubmitBehaviorNewline,
+		OnFocus: func() { focused.Set(true) },
+		OnBlur:  func() { focused.Set(false) },
 		// The keyboard owns selection while editing, including marked text.
 		// Feeding its reported range back can interrupt native composition.
 		OnSelectionChange: func(r core.TextRange) {
@@ -230,10 +233,22 @@ func (m *App) composerBox(cx *core.Scope, state *chat.ConversationState) core.No
 	return core.View{TestID: "mobile-composer-box", StyleFunc: func() core.Style {
 		return core.Style{Width: core.Pct(100), MinHeight: core.Pt(56), CornerRadius: 26, Background: colors.Bubble()}
 	}, Children: []core.Node{
-		core.View{OnTouch: func(e core.TouchEvent) {
-			// Keep the native text selection gesture when there is a draft.
-			hold(e, m.Draft == "")
-		}, Children: []core.Node{input}},
+		input,
+		// An unfocused, empty editor accepts a tap or a voice hold. Keep
+		// the native field underneath so it cannot take this touch and open the IME.
+		core.Show{When: live(m, func() bool {
+			return m.voicePage() && !focused.Get() && (draft.Get() == "" || m.voice != nil)
+		}), Then: func(*core.Scope) core.Node {
+			return core.View{NoFocus: true,
+				Style:   core.Style{Position: core.Absolute, Top: core.Pt(0), Bottom: core.Pt(0), Left: core.Pt(0), Right: core.Pt(0)},
+				OnTouch: func(e core.TouchEvent) { hold(e, m.Draft == "") },
+				OnPress: func(core.PressEvent) {
+					if m.voice == nil && !time.Now().Before(quiet) {
+						editor.Focus()
+					}
+				},
+			}
+		}},
 		core.View{Style: core.Style{Position: core.Absolute, Left: core.Pt(4), Bottom: core.Pt(6), Direction: core.Row, AlignItems: core.AlignCenter}, Children: []core.Node{
 			tool("add-image", tr("Add image"), nswidgets.Icon("plus", 20, colors.Muted), m.addPhotos),
 			tool("model-options", tr("Model settings"), core.Dynamic(func(cx *core.Scope) core.Node { return nswidgets.AgentIcon(agent.Get(), 20) }), options),

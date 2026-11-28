@@ -60,6 +60,7 @@ func (m *App) beginVoice() {
 	}
 	v := &phoneVoice{cancel: cancel, owner: m.composerOwner(), draft: m.Draft, preview: m.Draft, anchor: a, caret: b, autoSend: m.voiceAutoSend}
 	m.voice, m.SendErr = v, ""
+	m.cx.DismissKeyboard()
 	start, dir := m.voiceStart, m.DataDir
 	if start == nil {
 		start = func(ctx context.Context, dir string, emit func(voiceinput.Result)) (voiceSession, error) {

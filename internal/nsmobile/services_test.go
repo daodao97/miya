@@ -59,13 +59,31 @@ func TestPhoneVoiceHoldWorksFromComposerOnHome(t *testing.T) {
 			if m.voice != nil {
 				t.Fatal("a tap started recording")
 			}
+			if target.selector == "id:mobile-composer" {
+				if !app.Find(target.selector).Focused {
+					t.Fatal("tapping the empty composer did not open the editor")
+				}
+				finger := app.Touch(target.selector, target.at)
+				finger.Hold(400 * time.Millisecond)
+				finger.Lift()
+				if !app.Find(target.selector).Focused || len(ready) != 0 || m.voice != nil {
+					t.Fatal("holding the focused composer interrupted text editing")
+				}
+				changePhone(app, m, func() { m.cx.DismissKeyboard() })
+			}
 			app.LongPressAt(target.selector, target.at)
 			app.WaitUntil(time.Second, func() bool { return v.stopped.Load() == 1 })
+			if app.Find("id:mobile-composer").Focused {
+				t.Fatal("holding to speak opened the editor")
+			}
 			emit := <-ready
 			emit(voiceinput.Result{Text: "语音输入", Final: true})
 			app.WaitUntil(time.Second, func() bool { return m.voice == nil && m.Draft == "语音输入" })
 			if app.Find("id:mobile-composer").Text != "语音输入" || !app.Exists("label:"+tr("Send")) {
 				t.Fatal("the composer did not retain the dictation and return to Send")
+			}
+			if app.Find("id:mobile-composer").Focused {
+				t.Fatal("inserting the recognized text reopened the editor")
 			}
 			select {
 			case r := <-sent:
@@ -90,6 +108,9 @@ func TestPhoneVoiceInsertsPartialsAtSelectionAndFinalOnRelease(t *testing.T) {
 	app.Type("id:mobile-composer", "Hi 😀 old tail")
 	app.Select("id:mobile-composer", 6, 9) // UTF-16 selection replaces "old".
 	finger := holdVoice(t, app, m)
+	if app.Find("id:mobile-composer").Focused {
+		t.Fatal("recording from the microphone button left the editor focused")
+	}
 	emit := <-ready
 	emit(voiceinput.Result{Text: "par"})
 	app.Settle()
