@@ -51,7 +51,14 @@ private final class MiyaFiles: UIViewController, WKNavigationDelegate, WKUIDeleg
     let initial: URL
     let cache: URL
     var isWebService: Bool { initial.path.hasPrefix("/.miya-web-open/") }
-    var viewerTitle: String { miyaText(isWebService ? "Web services" : "Project files") }
+    var isSingleFile: Bool {
+        let items = URLComponents(url: initial, resolvingAgainstBaseURL: false)?.queryItems
+        return items?.contains(URLQueryItem(name: "single", value: "1")) == true
+    }
+    var viewerTitle: String {
+        if isWebService { return miyaText("Web services") }
+        return miyaText(isSingleFile ? "Files" : "Project files")
+    }
     var web: WKWebView!
     var downloads: [ObjectIdentifier: (WKDownload, URL?)] = [:]
     var preview: URL?
@@ -79,7 +86,9 @@ private final class MiyaFiles: UIViewController, WKNavigationDelegate, WKUIDeleg
         NSLayoutConstraint.activate([web.leadingAnchor.constraint(equalTo: view.leadingAnchor), web.trailingAnchor.constraint(equalTo: view.trailingAnchor), web.topAnchor.constraint(equalTo: view.topAnchor), web.bottomAnchor.constraint(equalTo: view.bottomAnchor)])
         navigationItem.title = viewerTitle
         navigationItem.leftBarButtonItem = UIBarButtonItem(barButtonSystemItem: .done, target: self, action: #selector(close))
-        navigationItem.rightBarButtonItem = UIBarButtonItem(title: miyaText(isWebService ? "Home" : "Folder"), style: .plain, target: self, action: #selector(home))
+        if !isSingleFile {
+            navigationItem.rightBarButtonItem = UIBarButtonItem(title: miyaText(isWebService ? "Home" : "Folder"), style: .plain, target: self, action: #selector(home))
+        }
         back = UIBarButtonItem(image: UIImage(systemName: "chevron.left"), style: .plain, target: self, action: #selector(goBack))
         back.accessibilityLabel = miyaText("Back")
         forward = UIBarButtonItem(image: UIImage(systemName: "chevron.right"), style: .plain, target: self, action: #selector(goForward))

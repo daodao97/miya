@@ -46,7 +46,7 @@ func (c *Controller) PhoneSnapshot() phoneproto.State {
 }
 
 func (c *Controller) phoneSnapshot(followUps map[string][]model.ThreadTask) phoneproto.State {
-	s := phoneproto.State{DesktopControl: desktop.Available(), ReferenceSource: c.ReferenceSource, MemoryRevision: c.MemoryRevision, Memory: c.Memories().Store != nil, Files: true, WebPorts: true, WebServices: true, Runtime: true, FileReferences: true, Automations: c.Auto != nil, Status: c.Status(), Approvals: c.Approvals(), Agents: c.phoneAgentOptions(), Quotas: c.PhoneQuotas()}
+	s := phoneproto.State{DesktopControl: desktop.Available(), ReferenceSource: c.ReferenceSource, MemoryRevision: c.MemoryRevision, Memory: c.Memories().Store != nil, Files: true, RemoteFiles: true, WebPorts: true, WebServices: true, Runtime: true, FileReferences: true, Automations: c.Auto != nil, Status: c.Status(), Approvals: c.Approvals(), Agents: c.phoneAgentOptions(), Quotas: c.PhoneQuotas()}
 	s.CompletionUnread = make(map[string]int64, len(c.DesktopUnread))
 	for key, version := range c.DesktopUnread {
 		s.CompletionUnread[key] = version

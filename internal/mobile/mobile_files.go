@@ -69,6 +69,26 @@ func (m *App) openProjectFile(project, file string) {
 	m.openFileBrowser(proxy, tr("Unable to open project files"))
 }
 
+func (m *App) openRemoteFile(file string) {
+	if m.FilesCancel != nil {
+		return
+	}
+	if !m.Connected || m.Conn == nil {
+		m.SendErr = tr("Not connected to desktop")
+		return
+	}
+	if !m.State.RemoteFiles {
+		m.SendErr = tr("Update Miya on your desktop first. If the background service is busy, it will update when idle.")
+		return
+	}
+	proxy, err := phoneproxy.NewRemoteFileProxy(m.Conn, file)
+	if err != nil {
+		m.SendErr = err.Error()
+		return
+	}
+	m.openFileBrowser(proxy, tr("Files"))
+}
+
 func (m *App) openFileBrowser(proxy *phoneproxy.PhoneFileProxy, errorTitle string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	m.filesProxy, m.FilesCancel = proxy, cancel

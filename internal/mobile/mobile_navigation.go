@@ -40,19 +40,21 @@ func (m *App) navigationBack(c *ui.Context, path string) {
 	}
 }
 
-// Conversation links stay inside the connected desktop's namespace on phones.
+// File links resolve on the paired desktop, even when opened from a phone.
 func (m *App) openMessageLink(link string) {
 	if _, ok := model.ParseThreadURL(link); ok {
 		m.openCollaborationThread(link)
 		return
 	}
-	if rel, ok := msgfmt.LocalFileLink(m.ComposerProject(), link); ok {
-		project, file, found := m.messageFileTarget(rel)
-		if !found {
-			m.SendErr = tr("File is outside the project directory")
+	cwd := m.ComposerProject()
+	if rel, ok := msgfmt.LocalFileLink(cwd, link); ok {
+		if project, file, found := m.messageFileTarget(rel); found {
+			m.openProjectFile(project, file)
 			return
 		}
-		m.openProjectFile(project, file)
+	}
+	if file, ok := msgfmt.RemoteFileLink(cwd, link); ok {
+		m.openRemoteFile(file)
 		return
 	}
 	if port, path, ok := webservice.LocalLink(link); ok {

@@ -23,6 +23,7 @@ type State struct {
 	Memory            bool                       `json:"memory,omitempty"`
 	ReferenceSource   string                     `json:"referenceSource"`
 	Files             bool                       `json:"files,omitempty"`
+	RemoteFiles       bool                       `json:"remoteFiles,omitempty"`
 	WebPorts          bool                       `json:"webPorts,omitempty"`
 	Runtime           bool                       `json:"runtime,omitempty"`
 	WebServices       bool                       `json:"webServices,omitempty"`
