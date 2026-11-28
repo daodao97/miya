@@ -71,8 +71,8 @@ func (m *App) composerHasContent() bool {
 // composerBox is the old phone app's rounded composer: the text with + and
 // the agent's icon on its left, Steer, the effort and a round send/voice button
 // on its right. Once the text has a line break or wraps, or Steer shows, the
-// text takes the whole width above the tools. The tools float over the
-// input, so the native editor is never rebuilt when the layout changes.
+// text takes the whole width above the tools. The native editor stays mounted
+// across both layouts.
 func (m *App) composerBox(cx *core.Scope, state *chat.ConversationState) core.Node {
 	colors := nswidgets.ColorsOf(cx)
 	editor := &core.Ref{}
@@ -97,6 +97,7 @@ func (m *App) composerBox(cx *core.Scope, state *chat.ConversationState) core.No
 	// wrapped holds the full-width layout from the length at which the text
 	// wrapped, so the wider text does not flip it back.
 	wrapped := core.NewSignal(cx, false)
+	textHeight := core.NewSignal(cx, core.Points(0))
 	var line core.Points
 	expandAt := 0
 	cx.Effect(func() {
@@ -205,6 +206,7 @@ func (m *App) composerBox(cx *core.Scope, state *chat.ConversationState) core.No
 			}
 		},
 		OnContentSizeChange: func(size core.Size) {
+			textHeight.Set(size.Height)
 			if m.Draft == "" {
 				line = size.Height
 				return
@@ -218,9 +220,12 @@ func (m *App) composerBox(cx *core.Scope, state *chat.ConversationState) core.No
 			}
 		},
 		StyleFunc: func() core.Style {
-			st := core.Style{Width: core.Pct(100), MinHeight: core.Pt(56), MaxHeight: core.Pt(196), FontSize: 16, Color: colors.Ink(), TextAlignVertical: core.TextAlignVerticalTop}
+			st := core.Style{Width: core.Pct(100), Height: core.Pt(56), FontSize: 16, Color: colors.Ink(), TextAlignVertical: core.TextAlignVerticalTop}
 			if expanded.Get() {
-				st.Padding = core.Edges{Top: 14, Left: 14, Right: 14, Bottom: 54}
+				st.Padding = core.Edges{Top: 14, Left: 14, Right: 14, Bottom: 6}
+				// An explicit height bounds both the native scroll viewport and
+				// the card's intrinsic height during parent layout.
+				st.Height = core.Pt(min(120, max(40, textHeight.Get()+st.Padding.Top+st.Padding.Bottom)))
 			} else {
 				right := core.Points(6 + 44 + 8)
 				if e := effort.Get(); e != "" {
@@ -249,37 +254,46 @@ func (m *App) composerBox(cx *core.Scope, state *chat.ConversationState) core.No
 				},
 			}
 		}},
-		core.View{Style: core.Style{Position: core.Absolute, Left: core.Pt(4), Bottom: core.Pt(6), Direction: core.Row, AlignItems: core.AlignCenter}, Children: []core.Node{
-			tool("add-image", tr("Add image"), nswidgets.Icon("plus", 20, colors.Muted), m.addPhotos),
-			tool("model-options", tr("Model settings"), core.Dynamic(func(cx *core.Scope) core.Node { return nswidgets.AgentIcon(agent.Get(), 20) }), options),
-		}},
-		core.View{Style: core.Style{Position: core.Absolute, Right: core.Pt(6), Bottom: core.Pt(6), Direction: core.Row, AlignItems: core.AlignCenter, Gap: 4}, Children: []core.Node{
-			core.Show{When: steer.Get, Then: func(cx *core.Scope) core.Node {
-				return core.View{TestID: "steer", Role: core.RoleButton, Label: tr("Steer now"),
-					Disabled: live(m, func() bool { return m.composing || m.voice != nil || !m.Connected || m.Sending }),
-					OnPress: func(core.PressEvent) {
-						m.act(func() {
-							if !m.composing && m.voice == nil && m.Connected && !m.Sending && m.composerHasContent() {
-								m.Steer()
-								if m.Sending {
-									cx.DismissKeyboard()
+		core.View{PointerEvents: core.PointerEventsBoxNone, StyleFunc: func() core.Style {
+			st := core.Style{Direction: core.Row, AlignItems: core.AlignCenter, JustifyContent: core.JustifySpaceBetween,
+				Padding: core.Edges{Left: 4, Right: 6, Bottom: 6}}
+			if !expanded.Get() {
+				st.Position, st.Left, st.Right, st.Bottom = core.Absolute, core.Pt(0), core.Pt(0), core.Pt(0)
+			}
+			return st
+		}, Children: []core.Node{
+			core.View{PointerEvents: core.PointerEventsBoxNone, Style: core.Style{Direction: core.Row, AlignItems: core.AlignCenter}, Children: []core.Node{
+				tool("add-image", tr("Add image"), nswidgets.Icon("plus", 20, colors.Muted), m.addPhotos),
+				tool("model-options", tr("Model settings"), core.Dynamic(func(cx *core.Scope) core.Node { return nswidgets.AgentIcon(agent.Get(), 20) }), options),
+			}},
+			core.View{PointerEvents: core.PointerEventsBoxNone, Style: core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Gap: 4}, Children: []core.Node{
+				core.Show{When: steer.Get, Then: func(cx *core.Scope) core.Node {
+					return core.View{TestID: "steer", Role: core.RoleButton, Label: tr("Steer now"),
+						Disabled: live(m, func() bool { return m.composing || m.voice != nil || !m.Connected || m.Sending }),
+						OnPress: func(core.PressEvent) {
+							m.act(func() {
+								if !m.composing && m.voice == nil && m.Connected && !m.Sending && m.composerHasContent() {
+									m.Steer()
+									if m.Sending {
+										cx.DismissKeyboard()
+									}
 								}
-							}
-						})()
-					},
-					StyleFunc: func() core.Style {
-						return core.Style{Width: core.Pt(64), Height: core.Pt(44), CornerRadius: 22, FlexShrink: 0, AlignItems: core.AlignCenter, JustifyContent: core.JustifyCenter, Background: colors.Hover()}
-					},
-					Children: []core.Node{core.Text{Content: tr("Steer"), MaxLines: 1, StyleFunc: func() core.Style { return core.Style{FontSize: 12, FontWeight: 600, Color: colors.Ink()} }}}}
+							})()
+						},
+						StyleFunc: func() core.Style {
+							return core.Style{Width: core.Pt(64), Height: core.Pt(44), CornerRadius: 22, FlexShrink: 0, AlignItems: core.AlignCenter, JustifyContent: core.JustifyCenter, Background: colors.Hover()}
+						},
+						Children: []core.Node{core.Text{Content: tr("Steer"), MaxLines: 1, StyleFunc: func() core.Style { return core.Style{FontSize: 12, FontWeight: 600, Color: colors.Ink()} }}}}
+				}},
+				core.Show{When: func() bool { return effort.Get() != "" }, Then: func(cx *core.Scope) core.Node {
+					return core.View{TestID: "composer-effort", Role: core.RoleButton, Label: tr("Model settings"), OnPress: func(core.PressEvent) { m.act(options)() },
+						Style:    core.Style{MinHeight: core.Pt(44), Padding: core.Edges{Left: 4, Right: 4}, JustifyContent: core.JustifyCenter, FlexShrink: 0},
+						Children: []core.Node{core.Text{ContentFunc: effort.Get, MaxLines: 1, StyleFunc: func() core.Style { return core.Style{FontSize: 12, FontWeight: 500, Color: colors.Muted()} }}}}
+				}},
+				core.View{TestID: "voice-hold", Style: core.Style{FlexShrink: 0},
+					OnTouch:  func(e core.TouchEvent) { hold(e, !m.Viewer.Current().Busy) },
+					Children: []core.Node{send}},
 			}},
-			core.Show{When: func() bool { return effort.Get() != "" }, Then: func(cx *core.Scope) core.Node {
-				return core.View{TestID: "composer-effort", Role: core.RoleButton, Label: tr("Model settings"), OnPress: func(core.PressEvent) { m.act(options)() },
-					Style:    core.Style{MinHeight: core.Pt(44), Padding: core.Edges{Left: 4, Right: 4}, JustifyContent: core.JustifyCenter, FlexShrink: 0},
-					Children: []core.Node{core.Text{ContentFunc: effort.Get, MaxLines: 1, StyleFunc: func() core.Style { return core.Style{FontSize: 12, FontWeight: 500, Color: colors.Muted()} }}}}
-			}},
-			core.View{TestID: "voice-hold", Style: core.Style{FlexShrink: 0},
-				OnTouch:  func(e core.TouchEvent) { hold(e, !m.Viewer.Current().Busy) },
-				Children: []core.Node{send}},
 		}},
 	}}
 }

@@ -301,6 +301,50 @@ func TestPhoneKeyboardKeepsEditorMountedAndVisible(t *testing.T) {
 		t.Fatalf("editor outside usable screen: y=%v height=%v", y, v.Frame.Size.Height)
 	}
 }
+func TestPhoneLongDraftKeepsSendAboveKeyboard(t *testing.T) {
+	for _, page := range []string{"home", "thread"} {
+		t.Run(page, func(t *testing.T) {
+			app, m, sent := startPhone(t)
+			if page == "thread" {
+				openPhoneThread(t, app, m, sent)
+			}
+			const editor = "id:mobile-composer"
+			initial := app.Find(editor)
+			id, compactHeight := initial.ID, initial.Frame.Size.Height
+			app.SetEnvironment(core.Environment{OS: core.OSIOS, Idiom: core.IdiomPhone, Locale: "en", SafeArea: core.Edges{Top: 47, Bottom: 34}, KeyboardHeight: 365})
+			draft := strings.Repeat("查看监控 https://example.com/"+strings.Repeat("trace", 50)+"\n", 20) + "这是那个渠道的报错"
+			if page == "home" {
+				draft = strings.ReplaceAll(draft, "\n", " ")
+			}
+			app.Paste(editor, core.PasteEvent{Text: draft})
+			app.Settle()
+
+			field, send := app.Find(editor), app.Find("id:send")
+			if field.ID != id || m.Draft != draft {
+				t.Fatal("expanding the editor replaced it or changed the draft")
+			}
+			bottom := func(v *nsgotest.View) core.Points {
+				y := v.Frame.Origin.Y + v.Frame.Size.Height
+				for p := v.Parent; p != nil; p = p.Parent {
+					y += p.Frame.Origin.Y - p.Offset.Y
+				}
+				return y
+			}
+			if h := field.Frame.Size.Height; h <= compactHeight || h > 120 {
+				t.Errorf("expanded editor height = %v, compact height = %v", h, compactHeight)
+			}
+			if y := bottom(send); y > 844-365 || y-send.Frame.Size.Height < bottom(field) {
+				t.Errorf("send button overlaps editor or keyboard: editor bottom = %v, send bottom = %v", bottom(field), y)
+			}
+			app.Scroll(editor, 80)
+			app.Press("id:send")
+			if r := awaitRequest(t, app, sent, "send"); r.Text != draft {
+				t.Fatal("send did not preserve the full draft")
+			}
+		})
+	}
+}
+
 func TestPhoneHandoffCarriesDraftAndDurableReference(t *testing.T) {
 	app, m, sent := startPhone(t)
 	openPhoneThread(t, app, m, sent)
