@@ -39,7 +39,11 @@ func TestRemoteControlSettingsChecksServicePermissions(t *testing.T) {
 					ScreenRecording: permission,
 					Accessibility:   permissionflow.Granted,
 				}
-				permission = permissionflow.Granted
+				if permission == permissionflow.Denied {
+					permission = permissionflow.Granted
+				} else {
+					permission = permissionflow.Denied
+				}
 			}
 			if encode.Encode(reply) != nil {
 				return
@@ -73,6 +77,15 @@ func TestRemoteControlSettingsChecksServicePermissions(t *testing.T) {
 	if err := tt.Click("Check again"); err != nil {
 		t.Fatal(err)
 	}
+	waitForStatus("Granted", "Not granted")
+	if err := tt.Click("Phone"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.Click("Remote Control"); err != nil {
+		t.Fatal(err)
+	}
+	waitForStatus("Not granted", "")
+	tt.Advance(3 * time.Second)
 	waitForStatus("Granted", "Not granted")
 	client.Close()
 	waitForStatus("Background service disconnected", "Granted")

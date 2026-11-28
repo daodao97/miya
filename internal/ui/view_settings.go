@@ -84,8 +84,11 @@ func (app *App) settingsToolbar(c *ui.Context) {
 				widgets.Icon(c, pane.icon, 22, color)
 				ui.Text(c, pane.title).FontSize(11).FontWeight(weight).TextColor(color).SingleLine()
 			})
-			if b.Clicked() {
+			if b.Clicked() && !chosen {
 				app.SettingsTab = i
+				if i == remoteControlSettingsTab {
+					app.refreshRemotePermissions()
+				}
 			}
 		}
 	})

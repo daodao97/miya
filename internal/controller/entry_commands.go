@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -11,6 +12,12 @@ import (
 )
 
 func RunCommands() bool {
+	if len(os.Args) == 2 && os.Args[1] == desktop.AccessibilityCheckArg {
+		if err := json.NewEncoder(os.Stdout).Encode(desktop.CheckAccessibility()); err != nil {
+			log.Fatal(err)
+		}
+		return true
+	}
 	if len(os.Args) == 2 && os.Args[1] == "-desktop-privacy" {
 		if err := desktop.RunPrivacyHelper(); err != nil {
 			fmt.Fprintln(os.Stderr, err)

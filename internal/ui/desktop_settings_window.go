@@ -23,6 +23,9 @@ func (app *App) openSettings(tab int) bool {
 	if tab >= 0 {
 		app.SettingsTab = tab
 	}
+	if app.SettingsTab == remoteControlSettingsTab {
+		app.refreshRemotePermissions()
+	}
 	if settingsWindowOpener != nil && !app.Mobile {
 		if app.Section == "Settings" {
 			app.Section = ""
@@ -58,6 +61,13 @@ func (app *App) showSettingsWindow() {
 	})
 	settingsWindow = w
 	remove := uiruntime.AddCompanionWindow(w)
+	w.OnFocus(func() {
+		w.Update(func() {
+			if active := hub.Active; active.SettingsTab == remoteControlSettingsTab {
+				active.refreshRemotePermissions()
+			}
+		})
+	})
 	w.OnClosed(func() {
 		remove()
 		if settingsWindow == w {

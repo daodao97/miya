@@ -434,6 +434,54 @@ func (msgs Messages) RemoteControlPermissionsLocalHelp() string {
 	return Catalog.Format(msgs.locale, "remoteControlPermissionsLocalHelp", nil)
 }
 
+// RemoteControlAccessibilityGrantHelp says "Enable Miya in System Settings. If its switch is already on, remove the old entry and add the installed Miya app again."
+// in the language the app shows.
+func RemoteControlAccessibilityGrantHelp() string {
+	return In(i18n.Locale()).RemoteControlAccessibilityGrantHelp()
+}
+
+// RemoteControlAccessibilityGrantHelp says "Enable Miya in System Settings. If its switch is already on, remove the old entry and add the installed Miya app again."
+// in the language of msgs.
+func (msgs Messages) RemoteControlAccessibilityGrantHelp() string {
+	return Catalog.Format(msgs.locale, "remoteControlAccessibilityGrantHelp", nil)
+}
+
+// RemoteControlPermissionRestartRequired says "Granted · restart required"
+// in the language the app shows.
+func RemoteControlPermissionRestartRequired() string {
+	return In(i18n.Locale()).RemoteControlPermissionRestartRequired()
+}
+
+// RemoteControlPermissionRestartRequired says "Granted · restart required"
+// in the language of msgs.
+func (msgs Messages) RemoteControlPermissionRestartRequired() string {
+	return Catalog.Format(msgs.locale, "remoteControlPermissionRestartRequired", nil)
+}
+
+// RemoteControlAccessibilityRestartApp says "Accessibility is enabled in System Settings. Reopen Miya to apply it."
+// in the language the app shows.
+func RemoteControlAccessibilityRestartApp() string {
+	return In(i18n.Locale()).RemoteControlAccessibilityRestartApp()
+}
+
+// RemoteControlAccessibilityRestartApp says "Accessibility is enabled in System Settings. Reopen Miya to apply it."
+// in the language of msgs.
+func (msgs Messages) RemoteControlAccessibilityRestartApp() string {
+	return Catalog.Format(msgs.locale, "remoteControlAccessibilityRestartApp", nil)
+}
+
+// RemoteControlAccessibilityRestartService says "Accessibility is enabled in System Settings. In General, restart the background service when idle to apply it."
+// in the language the app shows.
+func RemoteControlAccessibilityRestartService() string {
+	return In(i18n.Locale()).RemoteControlAccessibilityRestartService()
+}
+
+// RemoteControlAccessibilityRestartService says "Accessibility is enabled in System Settings. In General, restart the background service when idle to apply it."
+// in the language of msgs.
+func (msgs Messages) RemoteControlAccessibilityRestartService() string {
+	return Catalog.Format(msgs.locale, "remoteControlAccessibilityRestartService", nil)
+}
+
 // RemoteControlPermissionsRemoteHelp says "Manage permissions in System Settings on the Mac you want to control."
 // in the language the app shows.
 func RemoteControlPermissionsRemoteHelp() string {
