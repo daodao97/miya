@@ -38,6 +38,29 @@ func (a *automationsState) detail(cx *core.Scope, id string) core.Node {
 		if !found {
 			return autoMuted(cx, tr("No automations yet"))
 		}
+		bots := []ui.Option[string]{{Value: "", Label: tr("No Bot")}}
+		foundBot := false
+		for _, b := range Live(a.host.Bots)() {
+			if b.WorksIn(v.Project) {
+				bots = append(bots, ui.Option[string]{Value: b.ID, Label: b.Name})
+				foundBot = foundBot || b.ID == v.Bot
+			}
+		}
+		if v.Bot != "" && !foundBot {
+			bots = append(bots, ui.Option[string]{Value: v.Bot, Label: v.Bot})
+		}
+		var assignment core.Node
+		if len(bots) > 1 {
+			assignment = ui.FormSection{Children: []core.Node{ui.FormRow{
+				Title: tr("Bot"), Detail: tr("Each run is a new conversation of the Bot, under its charter, with its agent"),
+				Control: settingsSelect{TestID: "automation-bot", Label: tr("Bot"), Options: bots,
+					Value: func() string { return v.Bot }, Disabled: a.pending.Get, OnChange: func(id string) {
+						next := v.Automation
+						next.Bot = id
+						a.save(next)
+					}},
+			}}}
+		}
 		children := []core.Node{
 			autoRow(autoHeading(v.Name), ui.Switch{TestID: "automation-detail-toggle", Label: tr("Enabled"), Checked: func() bool { return v.Enabled }, OnChange: func(on bool) { a.toggle(id, on) }},
 				autoButton("automation-edit", "Edit", func() { a.openForm(&v) }), ui.Button{TestID: "automation-detail-run", Text: tr("Run now"), Disabled: func() bool { return a.pending.Get() || v.Running }, OnPress: func() { a.run(id) }},
@@ -52,6 +75,7 @@ func (a *automationsState) detail(cx *core.Scope, id string) core.Node {
 			autoMuted(cx, filepath.Base(v.Project)+" · "+model.AgentName(v.Agent)+" · "+v.ScheduleText),
 			a.stats(cx, v),
 			a.reviewControls(cx, v),
+			assignment,
 			ui.Select[automation.Access]{TestID: "automation-access", Label: tr("Access"),
 				Options: automationAccessOptions(), Value: func() automation.Access { return v.Access },
 				OnChange: func(access automation.Access) { next := v.Automation; next.Access = access; a.save(next) }},

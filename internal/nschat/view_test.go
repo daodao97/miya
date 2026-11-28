@@ -234,7 +234,8 @@ func TestPhoneImageResolverUpdatesTheExistingImage(t *testing.T) {
 			}
 			return path.Get
 		}}
-	}, nsgotest.Size(390, 844))
+	}, nsgotest.Size(390, 844), nsgotest.Environment(core.Environment{OS: core.OSIOS, Idiom: core.IdiomPhone,
+		SafeArea: core.Edges{Top: 47, Bottom: 34}}))
 	before := app.Find("id:image-1-0")
 	if before.Image.Source.URI != "" {
 		t.Fatal("phone opened desktop filesystem path")
@@ -248,5 +249,39 @@ func TestPhoneImageResolverUpdatesTheExistingImage(t *testing.T) {
 	}
 	if th.Messages[0].Images[0] != "file:///desktop/photo.jpg" {
 		t.Fatal("resolver changed synchronized history")
+	}
+	app.Press("id:preview-image-1-0")
+	full := app.Find("id:message-image-full")
+	if full.Image.Source.URI != after.Image.Source.URI || full.Image.ResizeMode != core.Contain {
+		t.Fatalf("phone preview did not use its cached image: %+v", full.Image)
+	}
+	app.Press("id:message-image-close")
+	if app.Exists("id:message-image-preview") {
+		t.Fatal("image preview did not close")
+	}
+}
+
+func TestTranscriptImagePreviewUsesFullImageAndClosesOnNavigation(t *testing.T) {
+	app, c := start(t, model.Thread{ID: 1, Messages: []model.Message{
+		{ID: 1, Role: "user", Content: "Screenshot", Images: []string{"/tmp/shot image.png"}},
+		{ID: 2, Role: "assistant", Content: `<img src="file:///tmp/report.png" alt="Rendered report" width="80" height="80">`},
+	}}, nil)
+	app.Press("id:preview-image-1-0")
+	img := app.Find("id:message-image-full")
+	if img.Image.Source.URI != "file:///tmp/shot%20image.png" || img.Image.ResizeMode != core.Contain ||
+		img.Bounds().Size.Width <= 80 || img.Bounds().Size.Height <= 80 {
+		t.Fatalf("unexpected preview source or size: %q %v", img.Image.Source.URI, img.Bounds())
+	}
+	app.Key("escape")
+	if app.Exists("id:message-image-preview") {
+		t.Fatal("Escape did not close the image preview")
+	}
+	app.Press("label:Rendered report")
+	if got := app.Find("id:message-image-full").Image.Source.URI; got != "file:///tmp/report.png" {
+		t.Fatalf("Markdown image opened %q", got)
+	}
+	c.change(app, func(th *model.Thread) { *th = model.Thread{ID: 2} })
+	if app.Exists("id:message-image-preview") {
+		t.Fatal("preview stayed open after leaving the conversation")
 	}
 }

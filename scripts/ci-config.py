@@ -11,7 +11,9 @@ from pathlib import Path
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--version')
-parser.add_argument('--build-number', type=int)
+build = parser.add_mutually_exclusive_group()
+build.add_argument('--build-number', type=int)
+build.add_argument('--android-version-code', action='store_true')
 parser.add_argument('--unsigned-ios', action='store_true')
 parser.add_argument('--ios-signing', nargs=3, metavar=('TEAM', 'APP_PROFILE', 'WIDGETS_PROFILE'))
 parser.add_argument('--notarize', metavar='PROFILE')
@@ -23,10 +25,15 @@ if args.version:
     if not re.fullmatch(r'[0-9]+(\.[0-9]+){0,2}([-+][A-Za-z0-9.-]+)?', version):
         raise SystemExit(f'invalid version {args.version!r}')
     config['version'] = version
-if args.build_number is not None:
-    if not 0 < args.build_number <= 2100000000:
+build_number = args.build_number
+if args.android_version_code:
+    parts = re.split(r'[-+]', config['version'], maxsplit=1)[0].split('.')
+    # Keep the same ordering as MyGo so Android accepts an in-place upgrade.
+    build_number = max(1, sum(int(part) * factor for part, factor in zip(parts, (10000, 100, 1))))
+if build_number is not None:
+    if not 0 < build_number <= 2100000000:
         raise SystemExit('build number must be 1..2100000000')
-    config['build_number'] = args.build_number
+    config['build_number'] = build_number
 sign = config.setdefault('sign', {})
 if args.unsigned_ios:
     for key in ('identity', 'profile', 'widgets_profile'):
@@ -42,4 +49,4 @@ if args.ios_signing:
 if args.notarize:
     sign['notarize'] = args.notarize
 path.write_text(json.dumps(config, indent=2, ensure_ascii=False) + '\n')
-print(f"nsgo.yaml: version {config['version']}, mobile build {config['build_number']}")
+print(f"nsgo.yaml: version {config['version']}, build {config['build_number']}")

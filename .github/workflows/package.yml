@@ -56,7 +56,7 @@ jobs:
           scripts/ci-pin-nsgo.sh
       - name: Set the version from the tag
         if: github.ref_type == 'tag'
-        run: python3 scripts/ci-config.py --version "$GITHUB_REF_NAME"
+        run: python3 scripts/ci-config.py --version "$GITHUB_REF_NAME" --build-number "$GITHUB_RUN_NUMBER"
       - name: Import the Developer ID identity
         if: env.MACOS_CERTIFICATE_BASE64 != ''
         run: |
@@ -82,18 +82,33 @@ jobs:
             echo "MACOS_NOTARIZE=1" >> "$GITHUB_ENV"
           fi
       - name: Build the app and disk image
+        env:
+          MIYA_UPDATE_PRIVATE_KEY: ${{ github.ref_type == 'tag' && secrets.MYGO_UPDATER_PRIVATE_KEY || '' }}
         run: |
           flags=()
-          if [ "${MACOS_NOTARIZE:-}" = 1 ]; then flags=(-release); fi
+          if [ "${MACOS_NOTARIZE:-}" = 1 ]; then flags+=(-release); fi
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            export NSGO_UPDATES_KEY
+            NSGO_UPDATES_KEY=$(python3 scripts/nsgo-update-key.py)
+            flags+=(-channel direct)
+          fi
           ./scripts/build-macos.sh -target macos_universal -installers "${flags[@]}"
           app=$(find build -maxdepth 2 -path '*macos_universal/Miya.app' -print -quit)
           dmg=$(find build/releases -name '*.dmg' -print -quit)
           test -n "$app" && test -n "$dmg"
           codesign --verify --deep --strict "$app"
           python3 scripts/verify-package.py "$app"
-          lipo -verify_arch arm64 x86_64 "$app/Contents/MacOS/Miya"
+          archs=$(lipo -archs "$app/Contents/MacOS/Miya")
+          [[ " $archs " == *" arm64 "* && " $archs " == *" x86_64 "* ]]
           shasum -a 256 "$dmg"
           echo "DMG=$dmg" >> "$GITHUB_ENV"
+          if [ "$GITHUB_REF_TYPE" = tag ]; then test -s build/releases/appcast-macos_universal.xml; fi
+      - uses: actions/upload-artifact@v4
+        if: github.ref_type == 'tag'
+        with:
+          name: miya-native-updates-macos
+          path: build/releases/appcast-macos_universal.xml
+          if-no-files-found: error
       - name: Package remote desktop updates
         if: github.ref_type == 'tag'
         run: |
@@ -119,6 +134,47 @@ jobs:
         run: |
           security delete-keychain "$MACOS_KEYCHAIN" || true
           rm -rf "$RUNNER_TEMP/macos-signing"
+
+  windows:
+    name: Windows installer
+    if: inputs.testflight == '' || inputs.testflight == 'none'
+    runs-on: windows-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64, arm64]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Resolve pinned NSGo
+        shell: bash
+        run: scripts/ci-pin-nsgo.sh
+      - name: Set the version from the tag
+        if: github.ref_type == 'tag'
+        run: python scripts/ci-config.py --version "$env:GITHUB_REF_NAME" --build-number "$env:GITHUB_RUN_NUMBER"
+      - name: Build installer
+        env:
+          MIYA_UPDATE_PRIVATE_KEY: ${{ github.ref_type == 'tag' && secrets.MYGO_UPDATER_PRIVATE_KEY || '' }}
+        shell: bash
+        run: |
+          flags=()
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            export NSGO_UPDATES_KEY
+            NSGO_UPDATES_KEY=$(python3 scripts/nsgo-update-key.py)
+            flags+=(-channel direct)
+          fi
+          go tool nsgo build -target windows_${{ matrix.arch }} -installers "${flags[@]}"
+          if [ "$GITHUB_REF_TYPE" = tag ]; then test -s build/releases/appcast-windows_${{ matrix.arch }}.xml; fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: miya-windows-${{ matrix.arch }}
+          path: |
+            build/releases/*.exe
+            build/releases/appcast-windows_${{ matrix.arch }}.xml
+          if-no-files-found: error
 
   ios:
     name: iOS
@@ -293,10 +349,24 @@ jobs:
           scripts/ci-pin-nsgo.sh
       - name: Set the version from the tag
         if: github.ref_type == 'tag'
-        run: python3 scripts/ci-config.py --version "$GITHUB_REF_NAME"
+        run: python3 scripts/ci-config.py --version "$GITHUB_REF_NAME" --android-version-code
       - name: Build the APK
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ github.ref_type == 'tag' && secrets.ANDROID_KEYSTORE_BASE64 || '' }}
+          NSGO_KEYSTORE_PASSWORD: ${{ github.ref_type == 'tag' && secrets.ANDROID_KEYSTORE_PASSWORD || '' }}
         run: |
-          ./scripts/build-android.sh
+          flags=()
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            : "${ANDROID_KEYSTORE_BASE64:?Missing Android release keystore}"
+            : "${NSGO_KEYSTORE_PASSWORD:?Missing Android release key password}"
+            umask 077
+            key="$RUNNER_TEMP/miya-android.p12"
+            trap 'rm -f "$key"' EXIT
+            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$key"
+            unset ANDROID_KEYSTORE_BASE64
+            flags+=(-keystore "$key" -key-alias miya)
+          fi
+          ./scripts/build-android.sh "${flags[@]}"
           python3 scripts/verify-package.py build/releases/*-android-arm64.apk
           sha256sum build/releases/*-android-arm64.apk
       - uses: actions/upload-artifact@v4
@@ -342,7 +412,7 @@ jobs:
   release:
     name: Draft release
     if: github.ref_type == 'tag'
-    needs: [macos, ios, android, server]
+    needs: [macos, windows, ios, android, server]
     runs-on: ubuntu-latest
     permissions:
       contents: write

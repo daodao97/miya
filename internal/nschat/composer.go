@@ -27,7 +27,8 @@ func (v View) composer(cx *core.Scope) core.Node {
 	height := core.NewSignal(cx, core.Points(48))
 	children := []core.Node{}
 	if v.Attachments != nil {
-		children = append(children, v.Attachments)
+		children = append(children, core.Show{When: func() bool { return v.HasAttachments == nil || v.HasAttachments() },
+			Then: func(*core.Scope) core.Node { return v.Attachments }})
 	}
 	children = append(children, ReferenceEditor{ReferenceTitle: v.ReferenceTitle, Commands: v.Commands, Files: v.FileReferences, CaptureKeys: v.CaptureKeys, OnKey: v.OnComposerKey, OnShortcut: v.OnComposerShortcut, OnEdit: v.OnDraftEdit, OnMove: v.OnComposerMove, Owner: v.ComposerOwner, OnInvalidReference: v.OnInvalidReference, Input: core.Input{TestID: "composer", Label: tr("Message"), Value: v.Draft, OnChange: v.OnDraftChange,
 		OnContentSizeChange: func(s core.Size) { height.Set(min(core.Points(200), max(core.Points(48), s.Height))) },

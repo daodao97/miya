@@ -4,8 +4,8 @@
 identifier, marketing version, integer build number, icon, URL schemes, Apple
 permission strings, iOS App Group and Live Activities, and Android permissions.
 
-Local development resolves `github.com/nsgo-dev/nsgo` to the adjacent `../nsgo`
-checkout. CI removes this replacement with `scripts/ci-pin-nsgo.sh` and resolves the
+Local development resolves `github.com/nsgo-dev/nsgo` to the adjacent `../nsgo-miya`
+worktree. CI removes this replacement with `scripts/ci-pin-nsgo.sh` and resolves the
 pinned upstream version in `go.mod`. The packaging scripts call `go tool nsgo build`
 and place build output and the project cache under `build/`.
 
@@ -22,6 +22,10 @@ The macOS scripts produce an app for the host architecture or a universal DMG.
 Set `MIYA_SIGNING_IDENTITY` to select a local Developer ID identity. A release build
 with `-release` can use a notarytool profile via `-notarize PROFILE` or an API key via
 `NSGO_NOTARY_KEY`, `NSGO_NOTARY_KEY_ID`, and `NSGO_NOTARY_ISSUER`.
+Tagged macOS and Windows builds use the direct update channel and a monotonic
+workflow build number. CI uses the existing `MYGO_UPDATER_PRIVATE_KEY` secret
+to sign the installers in the native update feeds. Local previews use the
+`none` channel.
 
 Device distribution requires the app and widget provisioning profiles under
 `sign.profile` and `sign.widgets_profile`, an imported signing identity, and the
@@ -32,6 +36,10 @@ from `main` with both profiles and the App Store Connect credentials.
 The Android build uses the native dataSync foreground service and restricts cleartext
 access to loopback for local previews. To reuse a release signing key, configure
 `sign.keystore`, `sign.key_alias`, `NSGO_KEYSTORE_PASSWORD`, and `NSGO_KEY_PASSWORD`.
+Tagged APKs retain the MyGo signing key, package ID, and version code ordering
+needed for in-place upgrades. The native migration library is checked in as
+`resources/android/legacy-secrets.jar`. Regenerate it with
+`scripts/build-android-legacy-secrets.sh` using JDK 17 and Android SDK 35.
 
 Use `python3 scripts/verify-package.py PATH` to inspect the resulting app, IPA, or
 APK. Pass `--signed` for a distribution IPA to also check its profile entitlements.

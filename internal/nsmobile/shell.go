@@ -33,6 +33,9 @@ func drawerWidth(cx *core.Scope) core.Points { return min(320, cx.Env().Window()
 // button opens it; the page slides right and rounds its corner under a
 // scrim, which closes it.
 func (m *App) shell(cx *core.Scope) core.Node {
+	// The shell's scope is hidden by pushed pages. A global back handler
+	// would prevent NSGo from laying out the page beneath an iOS back swipe.
+	cx.OnBackPress(m.backFromShell)
 	colors := nswidgets.ColorsOf(cx)
 	width := func() core.Points { return drawerWidth(cx) }
 	// The drawer and the page move by native transforms the platform drives
@@ -132,11 +135,36 @@ func (m *App) shell(cx *core.Scope) core.Node {
 		}}
 }
 
+func (m *App) backFromShell() bool {
+	if m.pages.Depth() > 0 {
+		return false
+	}
+	if m.drawerOpen.Get() {
+		m.drawerOpen.Set(false)
+		return true
+	}
+	if m.filesURL.Get() != "" {
+		m.closeFileBrowser()
+		return true
+	}
+	if m.Path == "/desktop" {
+		m.CloseDesktopPage(true)
+		m.change()
+		return true
+	}
+	if m.Path != "/" {
+		m.Home()
+		m.change()
+		return true
+	}
+	return false
+}
+
 // drawerPage reports whether the page under the drawer is one it belongs
 // to: home or a conversation, not the remote desktop or a file browser.
 func (m *App) drawerPage() bool {
 	m.revision.Get()
-	return m.Link != "" && m.filesURL.Get() == "" && (m.Path == "/" || m.Path == "/thread" || m.Path == "")
+	return m.pages.Depth() == 0 && m.Link != "" && m.filesURL.Get() == "" && (m.Path == "/" || m.Path == "/thread" || m.Path == "")
 }
 
 func (m *App) toggleDrawer() { m.drawerOpen.Set(!m.drawerOpen.GetUntracked()) }
@@ -145,6 +173,9 @@ func (m *App) toggleDrawer() { m.drawerOpen.Set(!m.drawerOpen.GetUntracked()) }
 // how fast it was thrown. The platform moves it during the drag.
 func (m *App) drawerPan(cx *core.Scope, width func() core.Points) func(core.PanEvent) {
 	return func(e core.PanEvent) {
+		if !m.drawerPage() || (e.Phase != core.GestureBegan && !m.drawerActive.GetUntracked()) {
+			return
+		}
 		w := float64(width())
 		switch e.Phase {
 		case core.GestureBegan:
@@ -194,6 +225,16 @@ func (m *App) settleDrawer(cx *core.Scope, open bool, w core.Points) {
 	m.drawerRun = cx.StartAnimation(core.Timing(m.drawerPos, to, core.TimingConfig{Duration: d, Easing: core.BezierEasing(drawerCurve)}), done)
 }
 
+// Close before pushing a page so its transition reveals a settled shell,
+// including when a back swipe starts as soon as the pushed page is visible.
+func (m *App) closeDrawerForNavigation() {
+	m.stopDrawer()
+	m.drawerAt = 0
+	m.drawerPos.Set(0)
+	m.drawerOpen.Set(false)
+	m.drawerActive.Set(false)
+}
+
 func (m *App) stopDrawer() {
 	if m.drawerRun != nil {
 		m.drawerRun.Stop()
@@ -214,7 +255,7 @@ func (m *App) desktopLabel() string {
 func (m *App) drawerContent(cx *core.Scope) []core.Node {
 	colors := nswidgets.ColorsOf(cx)
 	go2 := func(route string) func() {
-		return func() { m.drawerOpen.Set(false); m.pages.Open(route) }
+		return func() { m.closeDrawerForNavigation(); m.pages.Open(route) }
 	}
 	return []core.Node{
 		core.View{Style: core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Gap: 8, FlexShrink: 0}, Children: []core.Node{
@@ -244,7 +285,8 @@ func (m *App) drawerContent(cx *core.Scope) []core.Node {
 				Style:     core.Style{MinHeight: core.Pt(44), Padding: core.Symmetric(10, 12), CornerRadius: 12, FontSize: 16, FlexShrink: 0},
 				StyleFunc: func() core.Style { return core.Style{Background: colors.Bubble()} }}
 		}},
-		m.errorText(cx),
+		core.Show{When: live(m, func() bool { return m.SendErr != "" }), Then: m.errorText},
+		core.Func(m.drawerQuotas),
 		// The lists scroll only up and down: their content is held to the
 		// drawer's width, so a long title cannot widen it into a sideways scroll.
 		core.Scroll{Style: core.Style{FlexGrow: 1, FlexShrink: 1, MinHeight: core.Pt(0), Width: core.Pct(100)}, Children: []core.Node{
@@ -290,10 +332,10 @@ func (m *App) drawerKey() string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%v\x00%s\x00%s\x00%d\x00%s\x00", m.drawerSearching.Get(), m.search.Get(), m.ExpandedProject, m.Open, m.Path)
 	thread := func(t model.Thread) {
-		fmt.Fprintf(&b, "%d:%s:%s:%s:%v:%v:%v:%d\x01", t.ID, t.Title, model.ThreadAgent(t), t.Automation, t.Busy, m.CompletionUnread(t), m.ThreadWaiting(t), len(m.ApprovalsFor(t.ServerID)))
+		fmt.Fprintf(&b, "%d:%s:%s:%v:%v:%v:%d\x01", t.ID, t.Title, model.ThreadAgent(t), t.Busy, m.CompletionUnread(t), m.ThreadWaiting(t), len(m.ApprovalsFor(t.ServerID)))
 	}
 	for _, p := range m.State.Projects {
-		fmt.Fprintf(&b, "\x02%s:%s:%v:%v\x02", p.Path, p.Name, m.ThreadListExpanded[p.Path], m.automationRunsShown[p.Path])
+		fmt.Fprintf(&b, "\x02%s:%s:%v\x02", p.Path, p.Name, m.ThreadListExpanded[p.Path])
 		for _, t := range p.Threads {
 			thread(t)
 		}
@@ -332,7 +374,7 @@ func (m *App) drawerRows(cx *core.Scope) core.Node {
 	}
 	nav := func(id, icon, label, route string) core.Node {
 		return core.View{TestID: id, Role: core.RoleButton, Label: label, OnPress: func(core.PressEvent) {
-			m.act(func() { m.drawerOpen.Set(false); m.pages.Open(route) })()
+			m.act(func() { m.closeDrawerForNavigation(); m.pages.Open(route) })()
 		}, Style: core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Gap: 12, MinHeight: core.Pt(48)}, Children: []core.Node{
 			nswidgets.Icon(icon, 21, colors.Ink),
 			core.Text{Content: label, MaxLines: 1, Style: core.Style{FontSize: 17, FlexShrink: 1, MinWidth: core.Pt(0)}},
@@ -340,7 +382,6 @@ func (m *App) drawerRows(cx *core.Scope) core.Node {
 	}
 	nodes = append(nodes,
 		nav("automations", "clock", tr("Automations"), "automations"),
-		nav("quota", "pi", tr("Usage"), "quota"),
 		core.View{Style: core.Style{Height: core.Pt(1), Margin: core.Edges{Top: 16, Bottom: 12}}, StyleFunc: func() core.Style { return core.Style{Background: colors.Line()} }},
 	)
 	waiting, running, completed := m.SidebarActivityThreads()
@@ -363,6 +404,8 @@ func (m *App) drawerRows(cx *core.Scope) core.Node {
 	}
 	return core.View{Style: core.Style{MinWidth: core.Pt(0)}, Children: nodes}
 }
+
+const drawerThreadInset core.Points = 8
 
 // drawerProject is a project's row, which unfolds its conversations.
 func (m *App) drawerProject(cx *core.Scope, p model.ProjectSnapshot) core.Node {
@@ -404,14 +447,11 @@ func (m *App) drawerProject(cx *core.Scope, p model.ProjectSnapshot) core.Node {
 				core.Text{Content: tr("No conversations yet"), StyleFunc: func() core.Style { return core.Style{FontSize: 14, Color: colors.Muted()} }},
 			}})
 		}
-		threads, runs := msgfmt.SplitAutomationThreads(p.Threads, func(t model.Thread) bool {
-			return t.Busy || m.CompletionUnread(t) || m.ThreadWaiting(t) || t.ID == m.Open && m.Path == "/thread"
-		})
 		more := m.ThreadListExpanded[path]
-		for _, t := range msgfmt.DisplayedThreads(threads, more) {
+		for _, t := range msgfmt.DisplayedThreads(p.Threads, more) {
 			nodes = append(nodes, m.drawerThread(cx, t, "thread-"))
 		}
-		if len(threads) > msgfmt.CollapsedThreadCount {
+		if len(p.Threads) > msgfmt.CollapsedThreadCount {
 			label := tr("Expand")
 			if more {
 				label = tr("Collapse")
@@ -425,29 +465,9 @@ func (m *App) drawerProject(cx *core.Scope, p model.ProjectSnapshot) core.Node {
 						m.ThreadListExpanded[path] = !more
 					})()
 				},
-				Style: core.Style{MinHeight: core.Pt(44), JustifyContent: core.JustifyCenter}, Children: []core.Node{
+				Style: core.Style{MinHeight: core.Pt(44), JustifyContent: core.JustifyCenter, Padding: core.Symmetric(0, drawerThreadInset)}, Children: []core.Node{
 					core.Text{Content: label, StyleFunc: func() core.Style { return core.Style{FontSize: 15, Color: colors.Muted()} }},
 				}})
-		}
-		if len(runs) > 0 {
-			shown := m.automationRunsShown[path]
-			label := fmt.Sprintf(tr("Automation runs (%d)"), len(runs))
-			icon := "chevron-right"
-			if shown {
-				icon = "chevron-down"
-			}
-			nodes = append(nodes, core.View{TestID: "automation-runs-" + path, Role: core.RoleButton, Label: label,
-				OnPress: func(core.PressEvent) { m.act(func() { m.automationRunsShown[path] = !shown })() },
-				Style:   core.Style{Direction: core.Row, AlignItems: core.AlignCenter, MinHeight: core.Pt(44), Gap: 8, Padding: core.Symmetric(0, 8)},
-				Children: []core.Node{nswidgets.Icon(icon, 12, colors.Muted), core.Text{Content: label, StyleFunc: func() core.Style {
-					return core.Style{FontSize: 15, Color: colors.Muted()}
-				}}},
-			})
-			if shown {
-				for _, t := range runs {
-					nodes = append(nodes, m.drawerThread(cx, t, "thread-"))
-				}
-			}
 		}
 	}
 	return core.View{Style: core.Style{MinWidth: core.Pt(0)}, Children: nodes}
@@ -459,14 +479,8 @@ func (m *App) drawerThread(cx *core.Scope, t model.Thread, prefix string) core.N
 	colors := nswidgets.ColorsOf(cx)
 	title := msgfmt.NativeText(textutil.FirstNonEmpty(t.Title, tr("Untitled conversation")))
 	open := t.ID == m.Open && m.Path == "/thread"
-	agent := model.ThreadAgent(t)
-	lead := nswidgets.AgentIcon(agent, 18)
-	if t.Automation != "" {
-		tint := nswidgets.AgentTint(agent)
-		lead = nswidgets.Icon("clock", 18, func() core.Color { return tint })
-	}
 	children := []core.Node{
-		lead,
+		nswidgets.AgentIcon(model.ThreadAgent(t), 18),
 		core.Text{Content: title, MaxLines: 1, Style: core.Style{FontSize: 16, FlexGrow: 1, FlexShrink: 1, MinWidth: core.Pt(0)}},
 	}
 	switch {
@@ -485,7 +499,7 @@ func (m *App) drawerThread(cx *core.Scope, t model.Thread, prefix string) core.N
 	return core.View{TestID: prefix + strconv.Itoa(t.ID), Role: core.RoleButton, Label: title,
 		OnPress: func(core.PressEvent) { m.act(func() { m.drawerOpen.Set(false); m.OpenThread(t) })() },
 		StyleFunc: func() core.Style {
-			s := core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Gap: 10, MinHeight: core.Pt(48), Padding: core.Symmetric(0, 8), CornerRadius: 10}
+			s := core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Gap: 10, MinHeight: core.Pt(48), Padding: core.Symmetric(0, drawerThreadInset), CornerRadius: 10}
 			if open {
 				s.Background = colors.Bubble()
 			}

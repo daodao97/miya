@@ -26,7 +26,7 @@ func phoneSettings(cx *core.Scope, c Host) []ui.SettingsGroup {
 		text := func(s string) { nodes = append(nodes, settingsText(cx, func() string { return s })) }
 		if !ok {
 			text(tr("Miya background service is not running. Open Miya first."))
-			return settingsColumn(nodes...)
+			return autoCard(cx, nodes...)
 		}
 		help := tr("Scan with the Miya mobile app to continue conversations and handle approvals. Settings cannot be changed from your phone. Connections use Tailcat end-to-end encryption.")
 		if c.RemoteHost() {
@@ -38,25 +38,31 @@ func phoneSettings(cx *core.Scope, c Host) []ui.SettingsGroup {
 			text(tr("Enabling mobile connections…"))
 		case st.Link == "":
 			text(tr("Enable to generate a QR code, then scan it with your phone."))
-			nodes = append(nodes, settingsButton("phone-start", tr("Enable mobile connections"), action("start"), nil))
+			nodes = append(nodes, settingsActions(ui.Button{TestID: "phone-start", Text: tr("Enable mobile connections"), OnPress: action("start")}))
 		default:
-			nodes = append(nodes, phoneQRCode(st.Link))
 			status := tr("Waiting for your phone to scan…")
 			if st.Peers > 0 {
 				status = fmt.Sprintf(tr("%d phones connected"), st.Peers)
 			}
-			text(status)
 			access := tr("The connection code grants viewing access. Keep it private. Resetting requires your phone to scan again.")
 			if c.RemoteHost() {
 				access = tr("The server connection code lets desktop clients act as the server account. Share only with trusted devices. Resetting requires all devices to reconnect.")
 			}
-			text(access)
-			nodes = append(nodes, settingsActions(settingsButton("phone-copy", tr("Copy connection code"), func() { cx.SetClipboard(st.Link) }, nil), settingsButton("phone-reset", tr("Reset QR code"), action("reset"), nil), settingsButton("phone-stop", tr("Close"), action("stop"), nil)))
+			code := core.View{Style: core.Style{FlexShrink: 0}, Children: []core.Node{phoneQRCode(st.Link)}}
+			details := core.View{Style: core.Style{FlexGrow: 1, FlexShrink: 1, MinWidth: core.Pt(220), FlexBasis: core.Pt(220), Gap: 10}, Children: []core.Node{
+				settingsSectionTitle(status), settingsText(cx, func() string { return access }),
+				settingsActions(
+					settingsButton("phone-copy", tr("Copy connection code"), func() { cx.SetClipboard(st.Link) }, nil),
+					settingsButton("phone-reset", tr("Reset QR code"), action("reset"), nil),
+					settingsButton("phone-stop", tr("Close"), action("stop"), nil),
+				),
+			}}
+			nodes = append(nodes, core.View{Style: core.Style{Direction: core.Row, Wrap: core.Wrap, Gap: 18, AlignItems: core.AlignCenter}, Children: []core.Node{code, details}})
 		}
 		if st.Message != "" {
 			text(st.Message)
 		}
-		return settingsColumn(nodes...)
+		return autoCard(cx, nodes...)
 	})}}}}
 }
 

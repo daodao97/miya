@@ -8,6 +8,7 @@ import (
 	"github.com/nsgo-dev/nsgo/core"
 	"github.com/nsgo-dev/nsgo/desktop"
 	"github.com/nsgo-dev/nsgo/ui"
+	"github.com/nsgo-dev/nsgo/updater"
 
 	"miya/internal/chat/model"
 	msgfmt "miya/internal/chat/presentation"
@@ -16,7 +17,7 @@ import (
 
 // commands are what the menu bar and the window's shortcuts do.
 type commands struct {
-	newThread, openSettings, toggleSidebar, stop, openPalette, shortcuts func()
+	newThread, openSettings, toggleSidebar, stop, openPalette, shortcuts, checkUpdates func()
 	// step selects the conversation step places after the current one in
 	// the open project, before it when negative.
 	step func(step int)
@@ -29,6 +30,7 @@ type commands struct {
 func bindCommands(cx *core.Scope, cmd commands) {
 	if runtime.GOOS == "darwin" {
 		// An effect, so the menu follows the language.
+		cmd.checkUpdates = func() { updater.Check(cx) }
 		cx.Effect(func() { desktop.SetApplicationMenu(cx, appMenu(cmd)) })
 	} else {
 		cx.OnKey("mod+n", cmd.newThread)
@@ -48,6 +50,7 @@ func appMenu(cmd commands) []desktop.MenuItem {
 	return []desktop.MenuItem{
 		{Items: []desktop.MenuItem{
 			{Role: desktop.MenuAbout},
+			{Label: tr("Check for Miya updates"), OnSelect: cmd.checkUpdates},
 			{Separator: true},
 			{Label: tr("Settings…"), Shortcut: "mod+,", OnSelect: cmd.openSettings},
 			{Separator: true},

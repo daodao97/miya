@@ -115,7 +115,7 @@ func MessagePrompt(m model.Message) string {
 	if m.Presentation != nil {
 		m.Content = m.Presentation.Content
 	}
-	text := strings.TrimSpace(model.ImagePlaceholder.ReplaceAllString(chattext.CommandText(m.Content), ""))
+	text := strings.TrimSpace(model.ImagePlaceholder.ReplaceAllString(chattext.CommandText(userMessageText(m.Content)), ""))
 	paths := MessageAttachments(m)
 	for i := len(paths) - 1; i >= 0; i-- {
 		text = strings.TrimSuffix(text, "\n📎 "+filepath.Base(paths[i]))
@@ -548,13 +548,3 @@ func ActivityIcon(m model.Message) string {
 }
 
 func tr(s string) string { return locales.T(s) }
-
-// WithoutBotIntro drops the introduction early Bots added, once, after the
-// message that started their conversation; Bots now carry their charter
-// outside the conversation.
-func WithoutBotIntro(text string) string {
-	if i := strings.Index(text, "\n\n[Miya, sent once] "); i >= 0 {
-		return text[:i]
-	}
-	return text
-}

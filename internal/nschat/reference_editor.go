@@ -175,6 +175,19 @@ func (r ReferenceEditor) Render(cx *core.Scope) core.Node {
 		if key == "Mod-a" {
 			return s.Run(re.SelectAll)
 		}
+		// The native typing sink has no draft text of its own to delete.
+		switch key {
+		case "Backspace", "Shift-Backspace", "Delete":
+			if s.State().Selection.Empty() {
+				dir := -1
+				if key == "Delete" {
+					dir = 1
+				}
+				s.MoveChar(dir, true)
+			}
+			s.Run(re.DeleteSelection)
+			return true
+		}
 		return false
 	}}
 	st := s.State()
@@ -190,6 +203,14 @@ func (r ReferenceEditor) Render(cx *core.Scope) core.Node {
 			Caret:     core.Style{Background: nswidgets.ColorsOf(cx).Ink(), CornerRadius: 1},
 			Selection: core.Style{Background: cx.Palette().Selection},
 			Marks:     map[string]core.Style{}}
+		if in.OnContentSizeChange != nil {
+			// The viewport follows this content's height. A minimum derived
+			// from the viewport would prevent the measurement from shrinking.
+			colors.Content.MinHeight = in.Style.MinHeight
+			if colors.Content.MinHeight == (core.Length{}) {
+				colors.Content.MinHeight = core.Pt(0)
+			}
+		}
 		for _, kind := range []string{"reference", "file", "command"} {
 			colors.Marks[kind] = core.Style{Color: nswidgets.ColorsOf(cx).Link(), Background: nswidgets.ColorsOf(cx).Subtle(), CornerRadius: 5, FontWeight: 500}
 		}

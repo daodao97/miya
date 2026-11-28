@@ -6,6 +6,7 @@ import (
 
 	"github.com/nsgo-dev/nsgo/core"
 	"github.com/nsgo-dev/nsgo/ui"
+	"github.com/nsgo-dev/nsgo/updater"
 
 	"miya/internal/selfupdate"
 	svcclient "miya/internal/service/client"
@@ -240,15 +241,21 @@ func (s *settingsService) groups() []ui.SettingsGroup {
 		if s.phase == "checking" || s.phase == "requesting" || s.phase == "verifying" {
 			label = tr("Working…")
 		}
-		nodes := []core.Node{settingsText(cx, func() string { return help }), settingsButton("restart-server", label, s.checkRestart, s.live(func() bool {
+		nodes := []core.Node{ui.FormRow{Title: tr("Restart background service"), Detail: help, Control: settingsButton("restart-server", label, s.checkRestart, s.live(func() bool {
 			cl := s.c.State().Remote
 			return cl == nil || !cl.Connected() || s.phase != "idle" && s.phase != "done" && s.phase != "failed"
-		}))}
+		}))}}
 		text := ""
 		switch s.phase {
 		case "confirm":
 			text = tr("Background tasks are still running. Restarting now interrupts tasks across all projects and briefly disconnects phones.")
-			nodes = append(nodes, settingsActions(settingsButton("cancel-restart", tr("Cancel"), func() { s.phase = s.back; s.changed() }, nil), settingsButton("restart-idle", tr("Restart when idle"), func() { s.sendRestart(true) }, nil), settingsButton("restart-now", tr("Restart now"), func() { s.sendRestart(false) }, nil)))
+			nodes = append(nodes, ui.FormRow{Title: text})
+			text = ""
+			nodes = append(nodes, settingsFormActions(
+				settingsButton("cancel-restart", tr("Cancel"), func() { s.phase = s.back; s.changed() }, nil),
+				settingsButton("restart-idle", tr("Restart when idle"), func() { s.sendRestart(true) }, nil),
+				ui.Button{TestID: "restart-now", Text: tr("Restart now"), Variant: ui.ButtonDanger, OnPress: func() { s.sendRestart(false) }},
+			))
 		case "failed":
 			text = tr("Restart failed: ") + s.restartError
 		case "requesting", "waiting", "verifying":
@@ -257,22 +264,30 @@ func (s *settingsService) groups() []ui.SettingsGroup {
 				text = tr("Restart scheduled. The window will reconnect after background tasks finish.")
 			}
 			if s.phase == "waiting" && s.whenIdle && s.restartClient.Connected() {
-				nodes = append(nodes, settingsButton("override-restart", tr("Restart now…"), func() { s.phase, s.back = "confirm", "waiting"; s.changed() }, nil))
+				nodes = append(nodes, settingsActions(settingsButton("override-restart", tr("Restart now…"), func() { s.phase, s.back = "confirm", "waiting"; s.changed() }, nil)))
 			}
 		case "done":
 			text = tr("Background service restarted and reconnected.")
 		}
 		nodes = append(nodes, settingsText(cx, func() string { return text }))
-		return settingsColumn(nodes...)
+		return autoCard(cx, nodes...)
 	})
 	groups := []ui.SettingsGroup{{ID: "service", Title: tr("Background service"), Items: []ui.SettingsItem{{ID: "restart-server", Title: tr("Restart background service"), Content: restart}}}}
+	if os := s.cx.Env().OS(); os == core.OSMacOS || os == core.OSWindows {
+		groups = append(groups, ui.SettingsGroup{ID: "local-miya-update", Title: "Miya",
+			Items: []ui.SettingsItem{{ID: "local-update", Title: tr("Miya on this computer"),
+				Control: settingsButton("check-local-miya-update", tr("Check for Miya updates"), func() { updater.Check(s.cx) }, s.cx.UpdateActive)}}})
+	}
 	// The category remains stable across workspace connections; the region hides
 	// remote-only controls when the controller is operating on this computer.
 	groups = append(groups, ui.SettingsGroup{ID: "miya-update", Items: []ui.SettingsItem{{ID: "miya-update", Title: tr("Miya on this workspace"), Content: core.Show{When: Live(func() bool { return s.c.RemoteHost() || s.c.State().Remote != nil }), Then: func(cx *core.Scope) core.Node {
 		return core.Dynamic(func(cx *core.Scope) core.Node {
 			s.revision.Get()
 			status := s.update
-			messages := []string{tr("Miya on this workspace"), fmt.Sprintf(tr("Running version: %s"), status.Current)}
+			var messages []string
+			if status.Current != "" {
+				messages = append(messages, fmt.Sprintf(tr("Running version: %s"), status.Current))
+			}
 			switch status.Phase {
 			case "unsupported":
 				messages = append(messages, tr("Install an updated Miya on the target computer once to enable remote upgrades."))
@@ -295,17 +310,19 @@ func (s *settingsService) groups() []ui.SettingsGroup {
 				messages = append(messages, fmt.Sprintf(tr("Backup on target: %s"), status.Backup))
 			}
 			messages = append(messages, status.Error, s.updateError)
-			var nodes []core.Node
+			nodes := []core.Node{settingsSectionTitle(tr("Miya on this workspace"))}
 			for _, msg := range messages {
 				nodes = append(nodes, settingsText(cx, func() string { return msg }))
 			}
+			var actions []core.Node
 			if status.Phase == "available" {
-				nodes = append(nodes, settingsButton("install-miya-update", tr("Upgrade target"), func() { s.callUpdate("install") }, s.live(func() bool { return s.updateBusy })))
+				actions = append(actions, ui.Button{TestID: "install-miya-update", Text: tr("Upgrade target"), OnPress: func() { s.callUpdate("install") }, Disabled: s.live(func() bool { return s.updateBusy })})
 			}
-			nodes = append(nodes, settingsButton("check-miya-update", tr("Check for Miya updates"), func() { s.callUpdate("check") }, s.live(func() bool {
+			actions = append(actions, settingsButton("check-miya-update", tr("Check for Miya updates"), func() { s.callUpdate("check") }, s.live(func() bool {
 				return s.updateBusy || !s.update.Supported || s.update.Phase == "checking" || s.update.Phase == "installing" || s.update.Phase == "waiting" || s.update.Phase == "installed"
 			})))
-			return settingsColumn(nodes...)
+			nodes = append(nodes, settingsActions(actions...))
+			return autoCard(cx, nodes...)
 		})
 	}}}}})
 	return groups

@@ -17,11 +17,12 @@ var errSecretNotFound = errors.New("secure item not found")
 type scopeSecrets struct {
 	cx        *core.Scope
 	legacyIOS bool
+	migration *legacyMigration
 }
 
 func (m *App) setupNative(cx *core.Scope) {
 	if m.Store == nil {
-		m.Store = scopeSecrets{cx: cx, legacyIOS: cx.Env().OS() == core.OSIOS}
+		m.Store = scopeSecrets{cx: cx, legacyIOS: cx.Env().OS() == core.OSIOS, migration: m.legacyMigration}
 	}
 	m.setupDesktopAuthentication()
 	m.setupNetwork(cx)
@@ -58,9 +59,12 @@ func (s scopeSecrets) read(service, key string) (string, error) {
 
 // Keep the original NSGo base64 format under Miya. MyGo iOS uses raw
 // bytes under the bundle identifier; copy only missing items, and retire
-// the source only after its replacement is durable. Android's older Keystore
-// file format is private to MyGo and cannot be read through NSGo's API.
+// the source only after its replacement is durable. On Android the native
+// migration finishes before any app-facing read or write can touch the store.
 func (s scopeSecrets) Get(key string) ([]byte, error) {
+	if err := s.migration.wait(); err != nil {
+		return nil, err
+	}
 	value, err := s.read("Miya", key)
 	if err == nil {
 		return base64.StdEncoding.DecodeString(value)
@@ -82,6 +86,9 @@ func (s scopeSecrets) Get(key string) ([]byte, error) {
 	return data, nil
 }
 func (s scopeSecrets) Set(key string, value []byte) error {
+	if err := s.migration.wait(); err != nil {
+		return err
+	}
 	ch := make(chan error, 1)
 	encoded := base64.StdEncoding.EncodeToString(value)
 	s.cx.Post(func() {
@@ -97,6 +104,9 @@ func (s scopeSecrets) Set(key string, value []byte) error {
 	}
 }
 func (s scopeSecrets) Delete(key string) error {
+	if err := s.migration.wait(); err != nil {
+		return err
+	}
 	err := s.delete("Miya", key)
 	if err != nil && !errors.Is(err, errSecretNotFound) {
 		return err

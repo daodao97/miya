@@ -38,6 +38,6 @@ MIYA_SNAPSHOT=/tmp/miya-usage-snapshots go test ./tests/integration -run TestUsa
 
 NSGo 使用 `desktop.NewTray`、`desktop.OpenPanel` 和原生菜单。当前依赖只有 macOS 实现这些独立桌面表面，其他平台的 API 返回 nil；侧栏「用量」和「设置 → 用量」仍提供完整读取、重置与菜单栏偏好。账号页保留已连接账号的丰富额度和额外点数，并复用同一组独立 CLI 读数。
 
-当前 NSGo 没有公开的面板内容尺寸更新 API，因此面板固定为 340 × 480，内容滚动，顶部账号切换与底部状态、刷新固定。点击外部或再次点击图标隐藏面板，Esc 也可关闭。偏好沿用 `usageTray`、`usageTrayAgent`、`usageTrayIcon`。没有增加 controller Host 方法。
+面板宽 320 点，高度随用量窗口和重置卡状态变化，最高 480 点。内容可滚动，顶部账号切换和底部状态、刷新固定。点击外部、再次点击图标或按 Esc 可关闭。偏好沿用 `usageTray`、`usageTrayAgent`、`usageTrayIcon`。
 
 NSGo 的面板和设置测试运行 `go test -race ./internal/nsui/...`，覆盖账号预览、刷新、周期时间、偏好持久化、工作区取消与迟到响应、远程读取和重置确认及幂等重试；测试均使用替身账号，不访问真实 CLI。

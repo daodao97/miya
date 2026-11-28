@@ -3,7 +3,6 @@ package nsui
 import (
 	"fmt"
 
-	"github.com/nsgo-dev/nsgo/base"
 	"github.com/nsgo-dev/nsgo/core"
 	"github.com/nsgo-dev/nsgo/ui"
 
@@ -54,23 +53,28 @@ func notificationPolicySettings(cx *core.Scope, c Host) core.Node {
 			return core.Group(nil)
 		}
 		nodes := []core.Node{
-			autoHeading(tr("Phone notification rules")),
-			settingsToggle("quiet-hours", tr("Quiet hours"), func() bool { return v.Quiet.Enabled }, save, pending.Get),
-			settingsText(cx, func() string { return tr("Phone notifications arrive as a badge only, without sound or banner.") }),
+			ui.FormSection{Children: []core.Node{ui.FormRow{Title: tr("Quiet hours"),
+				Detail:  tr("Phone notifications arrive as a badge only, without sound or banner."),
+				Control: settingsToggle("quiet-hours", tr("Quiet hours"), func() bool { return v.Quiet.Enabled }, save, pending.Get),
+			}}},
 		}
 		if v.Quiet.Enabled {
 			nodes = append(nodes, settingsActions(
-				base.Input{TestID: "quiet-hours-start", Label: tr("Quiet hours start"), Placeholder: "22:00", Value: start.Get, OnChange: start.Set},
-				base.Input{TestID: "quiet-hours-end", Label: tr("Quiet hours end"), Placeholder: "08:00", Value: end.Get, OnChange: end.Set},
+				settingsField(tr("Quiet hours start"), ui.Input{TestID: "quiet-hours-start", Label: tr("Quiet hours start"), Placeholder: "22:00", Value: start.Get, OnChange: start.Set, Style: core.Style{Width: core.Pt(105)}}),
+				settingsField(tr("Quiet hours end"), ui.Input{TestID: "quiet-hours-end", Label: tr("Quiet hours end"), Placeholder: "08:00", Value: end.Get, OnChange: end.Set, Style: core.Style{Width: core.Pt(105)}}),
 				settingsButton("quiet-hours-save", tr("Save"), func() { save(true) }, pending.Get),
 			))
 		}
-		for _, r := range v.Rules {
-			label := notificationRuleLabel(r)
-			nodes = append(nodes, settingsActions(core.Text{Content: label},
-				settingsButton("notification-rule-forget-"+r.Category, tr("Alert again"), func() {
-					call("notificationRuleForget", notification.PolicyRequest{Forget: r.Category})
-				}, pending.Get)))
+		if len(v.Rules) > 0 {
+			var rows []core.Node
+			for _, r := range v.Rules {
+				rows = append(rows, ui.FormRow{Title: notificationRuleLabel(r),
+					Control: settingsButton("notification-rule-forget-"+r.Category, tr("Alert again"), func() {
+						call("notificationRuleForget", notification.PolicyRequest{Forget: r.Category})
+					}, pending.Get),
+				})
+			}
+			nodes = append(nodes, ui.FormSection{Children: rows})
 		}
 		return settingsColumn(append(nodes, settingsText(cx, message.Get))...)
 	})

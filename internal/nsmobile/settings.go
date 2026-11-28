@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 	"unicode"
 
 	"github.com/nsgo-dev/nsgo/core"
@@ -128,8 +127,11 @@ func (m *App) options(cx *core.Scope, page string) core.Node {
 					gRow{ID: "pick-effort", Label: tr("Reasoning effort"), Value: text(effortLabel(opts.Effort)), Chevron: true, Press: func() { m.pages.Open("effort") }},
 					gRow{ID: "pick-policy", Label: tr("Permission mode"), Value: text(policy), Chevron: true, Press: func() { m.pages.Open("policy") }},
 				),
-				m.group(cx, "", nil, gRow{ID: "reset-options", Label: tr("Use desktop defaults"), Action: true, Press: func() { delete(m.Options, agent); m.SaveOptions() }}),
 			)
+			if _, customized := m.Options[agent]; customized {
+				groups = append(groups, m.group(cx, "", nil,
+					gRow{ID: "reset-options", Label: tr("Use desktop defaults"), Action: true, Press: func() { delete(m.Options, agent); m.SaveOptions() }}))
+			}
 		case "agent":
 			var rows []gRow
 			for _, d := range m.AgentDescriptors() {
@@ -146,7 +148,7 @@ func (m *App) options(cx *core.Scope, page string) core.Node {
 				}))
 			}
 			if len(rows) == 0 {
-				groups = append(groups, groupedFooter(cx, "", text(tr("Connect to your desktop to select a model"))))
+				groups = append(groups, groupedState(cx, "settings", text(tr("Connect to your desktop to select a model")), nil, nil))
 			} else {
 				groups = append(groups, m.group(cx, "", nil, rows...))
 			}
@@ -191,12 +193,4 @@ func effortLabel(effort string) string {
 		label[0] = unicode.ToUpper(label[0])
 	}
 	return string(label)
-}
-func quotaResetLabel(unix int64) string {
-	if unix <= 0 {
-		return ""
-	}
-	t := time.Unix(unix, 0).Local()
-	days := [...]string{tr("Sun"), tr("Mon"), tr("Tue"), tr("Wed"), tr("Thu"), tr("Fri"), tr("Sat")}
-	return days[t.Weekday()] + t.Format(" 15:04")
 }

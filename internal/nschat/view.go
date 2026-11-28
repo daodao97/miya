@@ -4,13 +4,14 @@
 package nschat
 
 import (
+	"fmt"
 	"net/url"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/nsgo-dev/nsgo/base/diff"
 	"github.com/nsgo-dev/nsgo/base/textview"
 	"github.com/nsgo-dev/nsgo/core"
 	"github.com/nsgo-dev/nsgo/ui"
@@ -19,8 +20,8 @@ import (
 	"miya/internal/appmodel"
 	"miya/internal/chat/model"
 	msgfmt "miya/internal/chat/presentation"
-	"miya/internal/chat/subagent"
 	"miya/internal/nswidgets"
+	"miya/internal/textutil"
 	"miya/locales"
 )
 
@@ -46,10 +47,14 @@ type View struct {
 	SendDisabled  func() bool
 	// Composer overrides the default composer for surfaces with phone controls.
 	Composer core.Node
+	// NewConversation replaces the transcript on a desktop draft without a thread.
+	NewConversation core.Node
 	// OnLink handles thread and desktop-file references in the owning surface.
 	OnLink func(string)
 	// Requests are the pending approvals and questions, above the composer.
 	Requests core.Node
+	// MemoryNotice allows desktop callers to show details and actions for explicit changes.
+	MemoryNotice func(*core.Scope, model.MemoryNotice) core.Node
 	// Above contains app-owned status, suggestions and notices. Accessory and
 	// Trailing are composer controls; Attachments is the removable preview row.
 	Above, Accessory, Trailing, Attachments core.Node
@@ -69,7 +74,7 @@ type View struct {
 	OnDraftEdit        func(string, int)
 	OnComposerMove     func()
 	OnInvalidReference func()
-	// ComposerOwner resets undo when the workspace or conversation changes.
+	// ComposerOwner resets editor undo and desktop transcript rows when the workspace or conversation changes.
 	ComposerOwner func() string
 	OnDropFiles   func([]string)
 	OnPaste       func(core.PasteEvent)
@@ -82,6 +87,8 @@ type View struct {
 	OnOpenReference func(model.ThreadRef)
 	State           *chat.ConversationState
 	TestID          string
+	activityOpen    map[activityDisclosure]bool
+	preview         *core.Signal[imagePreview]
 }
 
 // maxWidth is the column the conversation keeps to on wide windows.
@@ -92,6 +99,18 @@ func (v View) Render(cx *core.Scope) core.Node {
 	if v.State == nil {
 		v.State = chat.NewConversationState(cx)
 	}
+	v.preview = core.NewSignal(cx, imagePreview{})
+	previewOwner := core.NewMemo(cx, func() string {
+		if v.ComposerOwner != nil {
+			return v.ComposerOwner()
+		}
+		return strconv.Itoa(v.Thread().ID)
+	})
+	cx.Effect(func() {
+		previewOwner.Get()
+		v.preview.Set(imagePreview{})
+	})
+	imageDialog := v.imageDialog(cx)
 
 	clockStart, wallStart := cx.Now(), time.Now()
 	now := core.NewSignal(cx, wallStart)
@@ -105,10 +124,10 @@ func (v View) Render(cx *core.Scope) core.Node {
 		stop = cx.AfterFunc(time.Second, tick)
 		cx.Cleanup(func() { stop() })
 	})
-	groups := func() []msgfmt.MessageGroup {
+	groups := core.NewMemoFunc(cx, func() []msgfmt.MessageGroup {
 		t := v.Thread()
 		return msgfmt.ThreadMessageGroups(t, msgfmt.GroupMessages(t.Messages))
-	}
+	}, nil).Get
 	// What shows when there are no groups: nothing, loading, or a failure.
 	empty := core.NewMemo(cx, func() string {
 		t := v.Thread()
@@ -127,17 +146,41 @@ func (v View) Render(cx *core.Scope) core.Node {
 	column := func(children ...core.Node) core.Node {
 		return core.View{Style: core.Style{Width: core.Pct(100), MaxWidth: core.Pt(maxWidth), AlignSelf: core.AlignCenter, Gap: 28}, Children: children}
 	}
-	// The status lines and the composer float over the transcript's end,
-	// as Agio's do: the messages scroll behind them.
+	latest := core.NewMemoFunc(cx, func() msgfmt.MessageGroup {
+		all := groups()
+		if last := len(all) - 1; !v.Thread().Busy && last >= 0 && !all[last].User {
+			return all[last]
+		}
+		return msgfmt.MessageGroup{}
+	}, sameGroup).Get
+	status := core.NewMemo(cx, func() string { return turnStatus(v.Thread(), latest(), now.Get()) })
+	height := core.Points(28)
+	if !cx.Env().Desktop() {
+		height = 44
+	}
 	floating := []core.Node{
 		core.View{TestID: "turn-status", StyleFunc: func() core.Style {
-			return core.Style{Display: displayIf(turnStatus(v.Thread(), groups(), now.Get()) != ""), Direction: core.Row, AlignItems: core.AlignCenter, Gap: 8, MinHeight: core.Pt(28), Padding: core.Symmetric(0, 4)}
-		},
-			Children: []core.Node{nswidgets.WorkingLabel(cx, "clock", func() string { return turnStatus(v.Thread(), groups(), now.Get()) }), v.diffSummary(cx, groups)}},
-
-		core.View{StyleFunc: func() core.Style {
-			return core.Style{Display: displayIf(len(v.Thread().BackgroundTasks) > 0), Padding: core.Symmetric(0, 4)}
-		}, Children: []core.Node{nswidgets.MutedText(cx, func() string { return backgroundTasks(v.Thread()) })}},
+			return core.Style{Display: displayIf(status.Get() != "" || len(latest().Messages) > 0),
+				Direction: core.Row, AlignItems: core.AlignCenter, Gap: 8, MinHeight: core.Pt(height), MinWidth: core.Pt(0)}
+		}, Children: []core.Node{
+			core.Show{When: func() bool { return status.Get() != "" }, Then: func(cx *core.Scope) core.Node {
+				return core.View{Style: core.Style{FlexShrink: 1, MinWidth: core.Pt(0)},
+					Children: []core.Node{nswidgets.WorkingLabel(cx, "clock", status.Get)}}
+			}},
+			diffCounts(cx, func() model.DiffLineStats { return latest().DiffStats }, true),
+			core.Show{When: func() bool { return len(latest().Messages) > 0 }, Then: func(cx *core.Scope) core.Node {
+				return v.responseActions(cx, latest)
+			}},
+		}},
+		core.Show{When: func() bool { t := v.Thread(); return !t.Busy && len(t.BackgroundTasks) > 0 }, Then: func(cx *core.Scope) core.Node {
+			return core.View{Style: core.Style{Gap: 4}, Children: []core.Node{
+				nswidgets.WorkingLabel(cx, "clock", func() string {
+					return fmt.Sprintf(tr("Background tasks running (%d) · Waiting for results"), len(v.Thread().BackgroundTasks))
+				}),
+				core.Text{MaxLines: 2, ContentFunc: func() string { return backgroundTasks(v.Thread()) },
+					StyleFunc: func() core.Style { return core.Style{FontSize: 12, Color: nswidgets.ColorsOf(cx).Muted()} }},
+			}}
+		}},
 	}
 
 	floating = append(floating, core.View{StyleFunc: func() core.Style {
@@ -154,52 +197,119 @@ func (v View) Render(cx *core.Scope) core.Node {
 	} else if v.Draft != nil {
 		floating = append(floating, core.Show{When: func() bool { return v.ComposerVisible == nil || v.ComposerVisible() }, Then: func(cx *core.Scope) core.Node { return v.composer(cx) }})
 	}
-	transcript := column(
-		core.Each(groups, func(g msgfmt.MessageGroup) int { return g.ID },
-			func(cx *core.Scope, group func() msgfmt.MessageGroup, _ func() int) core.Node {
-				return v.groupRow(cx, group)
-			}),
-		core.Dynamic(func(cx *core.Scope) core.Node { return v.emptyState(cx, empty.Get()) }),
-	)
+	transcript := func(cx *core.Scope) core.Node {
+		local := v
+		local.activityOpen = make(map[activityDisclosure]bool)
+		return column(
+			local.transcriptRows(cx, groups, latest),
+			core.Dynamic(func(cx *core.Scope) core.Node { return local.emptyState(cx, empty.Get()) }),
+		)
+	}
 	// On a desktop the composer docks under the transcript, as Miya's window
 	// always had it: the status lines read against the window and no message
 	// shows through between them. A phone floats it on glass.
 	if cx.Env().Desktop() {
+		showIntro := core.NewMemo(cx, func() bool { return v.NewConversation != nil && v.Thread().ID == 0 })
+		bodyTranscript := core.Dynamic(func(cx *core.Scope) core.Node {
+			if v.ComposerOwner != nil {
+				v.ComposerOwner()
+			}
+			return chat.Conversation{State: v.State, JumpLabel: tr("↓ Latest"), TestID: "chat-transcript", Children: []core.Node{transcript(cx)}}
+		})
+		var body core.Node = bodyTranscript
+		if v.NewConversation != nil {
+			body = core.Show{When: showIntro.Get, Then: func(*core.Scope) core.Node { return v.NewConversation }, Else: func(*core.Scope) core.Node { return bodyTranscript }}
+		}
+		dockStyle := func() core.Style {
+			padding := core.Edges{Right: 20, Bottom: 12, Left: 20}
+			if showIntro.Get() {
+				padding = core.Edges{Right: 28, Bottom: 10, Left: 28}
+			}
+			return core.Style{FlexShrink: 0, AlignItems: core.AlignCenter, Padding: padding}
+		}
 		return core.View{TestID: v.TestID, Style: ui.FillRest, Children: []core.Node{
-			chat.Conversation{State: v.State, JumpLabel: tr("↓ Latest"), TestID: "chat-transcript", Children: []core.Node{transcript}},
-			core.View{Style: core.Style{FlexShrink: 0, AlignItems: core.AlignCenter, Padding: core.Edges{Right: 20, Bottom: 12, Left: 20}}, Children: []core.Node{
+			body,
+			core.View{StyleFunc: dockStyle, Children: []core.Node{
 				core.View{TestID: "composer-dock", Style: core.Style{Width: core.Pct(100), MaxWidth: core.Pt(maxWidth), MinWidth: core.Pt(0)}, Children: []core.Node{nswidgets.Stack(cx, 8, floating...)}},
 			}},
+			imageDialog,
 		}}
 	}
-	return chat.FloatingConversation{State: v.State, JumpLabel: tr("↓ Latest"), TestID: v.TestID,
-		Children: []core.Node{transcript},
+	return core.Group{chat.FloatingConversation{State: v.State, JumpLabel: tr("↓ Latest"), TestID: v.TestID,
+		Children: []core.Node{transcript(cx)},
 		Composer: []core.Node{nswidgets.Stack(cx, 6, floating...)},
+	}, imageDialog}
+}
+
+// Retain small transcripts for text selection. Long histories use the same
+// scroll viewport and render only the nearby turns, except during Find when
+// native text search needs to see every reply.
+func (v View) transcriptRows(cx *core.Scope, groups func() []msgfmt.MessageGroup, latest func() msgfmt.MessageGroup) core.Node {
+	row := func(cx *core.Scope, read func() msgfmt.MessageGroup) core.Node {
+		group := core.NewMemoFunc(cx, read, sameGroup).Get
+		id := core.Untracked(cx, func() int { return group().ID })
+		return v.groupRow(cx, group, func() bool {
+			g := latest()
+			return len(g.Messages) == 0 || g.ID != id
+		})
+	}
+	return core.Show{
+		When: func() bool {
+			search := v.State.Search()
+			return len(groups()) > 32 && !(search.IsOpen() && search.Query() != "")
+		},
+		Then: func(*core.Scope) core.Node {
+			return core.List{
+				TestID: "transcript-turns", Viewport: core.ListViewportParent, Gap: 28, EstimatedSize: 150,
+				Count: func() int { return len(groups()) }, Key: func(i int) any { return groups()[i].ID },
+				Row: func(cx *core.Scope, item core.ListRow) core.Node {
+					read := func() msgfmt.MessageGroup {
+						all, i := groups(), item.Index()
+						if i < 0 || i >= len(all) {
+							return msgfmt.MessageGroup{}
+						}
+						return all[i]
+					}
+					type rowKey struct {
+						id, thread int
+						valid      bool
+					}
+					key := core.NewMemo(cx, func() rowKey {
+						g := read()
+						return rowKey{id: g.ID, thread: v.Thread().ID, valid: len(g.Messages) > 0}
+					})
+					return core.Dynamic(func(cx *core.Scope) core.Node {
+						if !key.Get().valid {
+							return nil
+						}
+						return row(cx, read)
+					})
+				},
+			}
+		},
+		Else: func(*core.Scope) core.Node {
+			return core.Each(groups, func(g msgfmt.MessageGroup) int { return g.ID },
+				func(cx *core.Scope, group func() msgfmt.MessageGroup, _ func() int) core.Node { return row(cx, group) })
+		},
 	}
 }
 
-func (v View) diffSummary(cx *core.Scope, groups func() []msgfmt.MessageGroup) core.Node {
-	return core.View{TestID: "turn-diff", StyleFunc: func() core.Style {
-		stats := latestDiff(groups())
-		return core.Style{Display: displayIf(!v.Thread().Busy && stats != (model.DiffLineStats{})), Direction: core.Row, Gap: 8}
-	}, Children: []core.Node{
-		core.Show{When: func() bool { return latestDiff(groups()).Added > 0 }, Then: func(cx *core.Scope) core.Node {
-			return core.Text{TestID: "turn-added", ContentFunc: func() string { return "+" + strconv.Itoa(latestDiff(groups()).Added) }, Style: core.Style{FontSize: 12}, StyleFunc: func() core.Style { return core.Style{Color: nswidgets.ColorsOf(cx).Ink()} }}
-		}},
-		core.Show{When: func() bool { return latestDiff(groups()).Deleted > 0 }, Then: func(cx *core.Scope) core.Node {
-			return core.Text{TestID: "turn-deleted", ContentFunc: func() string { return "−" + strconv.Itoa(latestDiff(groups()).Deleted) }, Style: core.Style{FontSize: 12}, StyleFunc: func() core.Style { return core.Style{Color: nswidgets.ColorsOf(cx).Danger()} }}
-		}},
+func sameGroup(a, b msgfmt.MessageGroup) bool { return reflect.DeepEqual(a, b) }
+
+func diffCounts(cx *core.Scope, stats func() model.DiffLineStats, showZero bool) core.Node {
+	colors := nswidgets.ColorsOf(cx)
+	return core.Show{When: func() bool { return stats() != (model.DiffLineStats{}) }, Then: func(cx *core.Scope) core.Node {
+		return core.View{Style: core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Gap: 4, FlexShrink: 0}, Children: []core.Node{
+			core.Show{When: func() bool { return showZero || stats().Added > 0 }, Then: func(*core.Scope) core.Node {
+				return core.Text{ContentFunc: func() string { return "+" + strconv.Itoa(stats().Added) },
+					StyleFunc: func() core.Style { return core.Style{FontSize: 11, Color: colors.Success()} }}
+			}},
+			core.Show{When: func() bool { return showZero || stats().Deleted > 0 }, Then: func(*core.Scope) core.Node {
+				return core.Text{ContentFunc: func() string { return "−" + strconv.Itoa(stats().Deleted) },
+					StyleFunc: func() core.Style { return core.Style{FontSize: 11, Color: colors.Danger()} }}
+			}},
+		}}
 	}}
-}
-
-// Only the latest response contributes to the floating turn summary.
-func latestDiff(groups []msgfmt.MessageGroup) model.DiffLineStats {
-	for i := len(groups) - 1; i >= 0; i-- {
-		if !groups[i].User {
-			return groups[i].DiffStats
-		}
-	}
-	return model.DiffLineStats{}
 }
 
 func displayIf(on bool) core.Display {
@@ -211,17 +321,17 @@ func displayIf(on bool) core.Display {
 
 // turnStatus is the label above the composer: the running turn's progress,
 // or how long the latest completed response took.
-func turnStatus(t model.Thread, groups []msgfmt.MessageGroup, now time.Time) string {
+func turnStatus(t model.Thread, latest msgfmt.MessageGroup, now time.Time) string {
 	if t.Busy {
 		if label := msgfmt.ThreadReconnectLabel(t); label != "" {
 			return label
 		}
 		return msgfmt.ThreadWorkingLabelAt(t, now)
 	}
-	if last := len(groups) - 1; last >= 0 && !groups[last].User && len(t.BackgroundTasks) == 0 {
-		return msgfmt.TurnElapsedLabel(groups[last].Messages, false)
+	if len(t.BackgroundTasks) > 0 {
+		return ""
 	}
-	return ""
+	return msgfmt.TurnElapsedLabel(latest.Messages, false)
 }
 
 func (v View) stalledHint(now time.Time) string {
@@ -234,9 +344,9 @@ func backgroundTasks(t model.Thread) string {
 	}
 	names := make([]string, 0, len(t.BackgroundTasks))
 	for _, task := range t.BackgroundTasks {
-		names = append(names, strings.Join(strings.Fields(task.Description), " "))
+		names = append(names, textutil.ClipRunes(strings.Join(strings.Fields(task.Description), " "), 100))
 	}
-	return strconv.Itoa(len(t.BackgroundTasks)) + " · " + strings.Join(names, " · ")
+	return strings.Join(names, " · ")
 }
 
 func (v View) emptyState(cx *core.Scope, state string) core.Node {
@@ -263,7 +373,7 @@ func (v View) emptyState(cx *core.Scope, state string) core.Node {
 }
 
 // groupRow is a user prompt or the agent's response to it.
-func (v View) groupRow(cx *core.Scope, group func() msgfmt.MessageGroup) core.Node {
+func (v View) groupRow(cx *core.Scope, group func() msgfmt.MessageGroup, inlineFooter func() bool) core.Node {
 	user := core.NewMemo(cx, func() bool { return group().User })
 	return core.Dynamic(func(cx *core.Scope) core.Node {
 		if user.Get() {
@@ -288,53 +398,36 @@ func (v View) groupRow(cx *core.Scope, group func() msgfmt.MessageGroup) core.No
 		}
 		runs := func() []msgfmt.ActivityRun { return msgfmt.ActivityRuns(group().Messages) }
 		return core.View{Style: core.Style{Gap: 12, MinWidth: core.Pt(0)}, Children: []core.Node{
+			core.Show{When: func() bool { return group().ShowTimestamp }, Then: func(cx *core.Scope) core.Node {
+				return core.Text{ContentFunc: func() string { return msgfmt.FormatMessageTimestamp(group().Timestamp) },
+					StyleFunc: func() core.Style { return core.Style{FontSize: 11, Color: nswidgets.ColorsOf(cx).Muted()} }}
+			}},
 			core.Each(runs, func(r msgfmt.ActivityRun) int { return r.ID },
 				func(cx *core.Scope, run func() msgfmt.ActivityRun, _ func() int) core.Node {
 					return v.runRow(cx, run)
 				}),
-			// A finished response can be copied whole or handed off.
-			core.Show{When: func() bool { g := group(); return !g.Streaming && len(g.Messages) > 0 }, Then: func(cx *core.Scope) core.Node {
-				var extra []core.Node
-				if v.OnHandoff != nil {
-					extra = append(extra, chat.IconAction{Label: tr("Hand off to a new conversation"), Icon: nswidgets.IconOf("arrow-right"),
-						OnPress: v.OnHandoff, TestID: "handoff"})
-				}
-				return chat.Actions{Text: func() string { return msgfmt.MessageGroupText(group()) }, Children: extra,
-					TestID: "actions-" + strconv.Itoa(core.Untracked(cx, func() int { return group().ID }))}
+			core.Show{When: func() bool { return inlineFooter() && !group().Streaming && len(group().Messages) > 0 }, Then: func(cx *core.Scope) core.Node {
+				return core.View{Style: core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Wrap: core.Wrap, Gap: 8}, Children: []core.Node{
+					core.Text{ContentFunc: func() string { return msgfmt.TurnElapsedLabel(group().Messages, false) },
+						StyleFunc: func() core.Style { return core.Style{FontSize: 11, Color: nswidgets.ColorsOf(cx).Muted()} }},
+					diffCounts(cx, func() model.DiffLineStats { return group().DiffStats }, true),
+					v.responseActions(cx, group),
+				}}
 			}},
 		}}
 	})
 }
 
-// runRow is one message, or consecutive activities that fold under a count
-// and expand only when the user asks.
-func (v View) runRow(cx *core.Scope, run func() msgfmt.ActivityRun) core.Node {
-	batch := core.NewMemo(cx, func() bool { r := run(); return r.Activity && len(r.Messages) > 1 })
-	messages := func() []model.Message { return run().Messages }
-	each := func() core.Node {
-		return core.Each(messages, func(m model.Message) int { return m.ID },
-			func(cx *core.Scope, m func() model.Message, _ func() int) core.Node { return v.message(cx, m) })
+func (v View) responseActions(cx *core.Scope, group func() msgfmt.MessageGroup) core.Node {
+	var extra []core.Node
+	if v.OnHandoff != nil {
+		extra = append(extra, chat.IconAction{Label: tr("Hand off to a new conversation"), Icon: nswidgets.IconOf("arrow-right"),
+			OnPress: v.OnHandoff, TestID: "handoff"})
 	}
+	id := core.NewMemo(cx, func() int { return group().ID })
 	return core.Dynamic(func(cx *core.Scope) core.Node {
-		if !batch.Get() {
-			return each()
-		}
-		open := core.NewSignal(cx, false)
-		colors := nswidgets.ColorsOf(cx)
-		return core.View{Style: core.Style{Gap: 4}, Children: []core.Node{
-			core.View{Role: core.RoleButton, TestID: "run-" + strconv.Itoa(core.Untracked(cx, func() int { return run().ID })),
-				Style:   core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Gap: 8, Height: core.Pt(28)},
-				OnPress: func(core.PressEvent) { open.Update(func(b bool) bool { return !b }) },
-				Children: []core.Node{
-					nswidgets.Icon("stack-2", 14, colors.Muted),
-					nswidgets.MutedText(cx, func() string { return strconv.Itoa(len(run().Messages)) + " activities" }),
-				},
-			},
-			// Folded activities are not built at all.
-			core.Show{When: open.Get, Then: func(cx *core.Scope) core.Node {
-				return core.View{Style: core.Style{Gap: 4}, Children: []core.Node{each()}}
-			}},
-		}}
+		return chat.Actions{Text: func() string { return msgfmt.MessageGroupText(group()) }, Children: extra,
+			TestID: "actions-" + strconv.Itoa(id.Get())}
 	})
 }
 
@@ -363,6 +456,14 @@ func (v View) message(cx *core.Scope, m func() model.Message) core.Node {
 			return v.errorCard(cx, m)
 		case "memory":
 			return core.Show{When: func() bool { mm := m().Memory; return mm != nil && mm.Explicit }, Then: func(cx *core.Scope) core.Node {
+				if v.MemoryNotice != nil {
+					return core.Dynamic(func(cx *core.Scope) core.Node {
+						if mm := m().Memory; mm != nil && mm.Explicit {
+							return v.MemoryNotice(cx, *mm)
+						}
+						return nil
+					})
+				}
 				return nswidgets.MutedText(cx, func() string {
 					return tr("Miya memory changed. View it on the memory page; edit on your desktop.")
 				})
@@ -379,19 +480,28 @@ func (v View) userMessage(cx *core.Scope, m func() model.Message) core.Node {
 		msg := m()
 		return strings.Join(msg.Images, "\x00") + "\x01" + strings.Join(msgfmt.MessageFiles(msg), "\x00")
 	})
+	prompt := core.NewMemo(cx, func() string {
+		text, _ := model.SplitReferenceContext(msgfmt.Message(m()).Content)
+		return text
+	})
+	body := func() string { return msgfmt.NativeText(referenceText(prompt.Get(), v.ReferenceTitle)) }
 	return chat.Message{Outgoing: true, Children: []core.Node{
-		v.referenceChips(cx, func() string { return msgfmt.Message(m()).Content }, nil),
+		v.referenceChips(cx, prompt.Get, nil),
 		core.Dynamic(func(cx *core.Scope) core.Node {
 			files.Get()
 			return v.attachments(cx, core.Untracked(cx, m))
 		}),
-		core.Text{TestID: "prompt-" + idOf(cx, m), Selectable: core.SelectableOn,
-			Style: core.Style{FontSize: 13, LineHeight: 19},
-			ContentFunc: func() string {
-				body, _ := model.SplitReferenceContext(msgfmt.Message(m()).Content)
-				return msgfmt.NativeText(referenceText(body, v.ReferenceTitle))
-			}},
+		core.Show{When: func() bool { return body() != "" }, Then: func(cx *core.Scope) core.Node {
+			style := core.Style{FontSize: 13, LineHeight: 19}
+			if !cx.Env().Desktop() {
+				style.FontSize, style.LineHeight = phoneMessageSize, phoneMessageLineHeight
+			}
+			return chat.Bubble{Children: []core.Node{
+				core.Text{TestID: "prompt-" + idOf(cx, m), Selectable: core.SelectableOn, Style: style, ContentFunc: body},
+			}}
+		}},
 	}}
+
 }
 
 // attachments are a prompt's images as framed thumbnails and its other
@@ -404,21 +514,27 @@ func (v View) attachments(cx *core.Scope, m model.Message) core.Node {
 	colors := nswidgets.ColorsOf(cx)
 	var items []core.Node
 	for i, src := range m.Images {
-		source := func() string { return imageURI(src) }
-		if v.ImageSource != nil {
-			source = v.ImageSource(cx, src)
-		}
+		source := v.resolveImage(cx, src)
 		// The frame keeps a light image apart from the page and clips it.
-		items = append(items, core.View{Style: core.Style{Width: core.Pt(80), Height: core.Pt(80), FlexShrink: 0, CornerRadius: 8, BorderWidth: 1, Overflow: core.Hidden},
+		id := strconv.Itoa(m.ID) + "-" + strconv.Itoa(i)
+		label := tr("Image preview")
+		items = append(items, core.View{TestID: "preview-image-" + id, Label: label, Role: core.RoleButton,
+			Disabled: func() bool { return source() == "" },
+			OnPress: func(core.PressEvent) {
+				if uri := source(); uri != "" {
+					v.preview.Set(imagePreview{uri: uri, resolved: true})
+				}
+			},
+			Style:     core.Style{Width: core.Pt(80), Height: core.Pt(80), FlexShrink: 0, CornerRadius: 8, BorderWidth: 1, Overflow: core.Hidden, Cursor: core.CursorPointer},
 			StyleFunc: func() core.Style { return core.Style{BorderColor: colors.Line(), Background: colors.Panel()} },
 			Children: []core.Node{core.Image{SourceFunc: func() core.ImageSource {
 				// A source not resolved yet shows nothing rather than a broken path.
 				if s := source(); s != "" {
-					return core.Src(imageURI(s))
+					return core.Src(s)
 				}
 				return core.ImageSource{}
-			}, ResizeMode: core.Cover, Label: tr("Image preview"),
-				TestID: "image-" + strconv.Itoa(m.ID) + "-" + strconv.Itoa(i),
+			}, ResizeMode: core.Cover, ElementsHidden: true,
+				TestID: "image-" + id,
 				Style:  core.Style{Width: core.Pt(78), Height: core.Pt(78)}}}})
 	}
 	for _, p := range paths {
@@ -450,7 +566,9 @@ func (v View) assistant(cx *core.Scope, m func() model.Message) core.Node {
 	content := func() string { return model.ImagePlaceholder.ReplaceAllString(msgfmt.Message(m()).Content, "") }
 	return core.Dynamic(func(cx *core.Scope) core.Node {
 		return ui.TextView{TestID: id, MarkdownFunc: content, OnLinkPress: v.openLink(cx),
-			Options: textview.Options{Streaming: streaming.Get()}, Selectable: true, NoCodeBlockScrollbar: true}
+			OnImagePress: v.previewMarkdownImage,
+			Styles:       transcriptMarkdownStyles(cx),
+			Options:      textview.Options{Streaming: streaming.Get()}, Selectable: true, NoCodeBlockScrollbar: true}
 	})
 }
 
@@ -476,109 +594,6 @@ func (v View) errorCard(cx *core.Scope, m func() model.Message) core.Node {
 			}},
 		},
 	}
-}
-
-// activity is a tool call, command, edit or plan as one row whose detail
-// expands.
-func (v View) activity(cx *core.Scope, m func() model.Message) core.Node {
-	return activityRow(cx, func() chat.Activity {
-		msg := m()
-		p := msgfmt.Message(msg)
-		a := chat.Activity{ID: strconv.Itoa(msg.ID), Action: msgfmt.NativeText(p.Title), Status: status(msg.Status)}
-		// Sub-agents inside an activity show that it still works.
-		if s := subagent.Summary(msg.Agents); s != "" {
-			a.Detail = msgfmt.NativeText(s)
-		}
-		if subagent.AnyActive(msg.Agents) {
-			a.Status = chat.Running
-		}
-		if svg, ok := nswidgets.LookupSVG(p.Icon); ok {
-			a.Icon = func() *core.SVG { return svg }
-		}
-		hasBody := strings.TrimSpace(p.Content) != "" || len(p.Plan) > 0 || len(p.Changes) > 0
-		switch {
-		case len(msg.Agents) > 0:
-			a.Content = func(cx *core.Scope) core.Node {
-				children := []core.Node{subAgentList(cx, func() []model.SubAgent { return m().Agents })}
-				// An adapter leaves the content empty when the list says it all.
-				children = append(children, core.Show{When: func() bool { return strings.TrimSpace(msgfmt.Message(m()).Content) != "" },
-					Then: func(cx *core.Scope) core.Node {
-						return detailWithLink(cx, func() model.MessagePresentation { return msgfmt.Message(m()) }, v.openLink(cx))
-					}})
-				return core.View{Style: core.Style{Gap: 8, MinWidth: core.Pt(0)}, Children: children}
-			}
-		case hasBody:
-			a.Content = func(cx *core.Scope) core.Node {
-				return detailWithLink(cx, func() model.MessagePresentation { return msgfmt.Message(m()) }, v.openLink(cx))
-			}
-			a.Mono = len(p.Plan) == 0 && (p.Format == "" || p.Format == "text")
-		}
-		return a
-	})
-}
-
-func status(s string) chat.Status {
-	switch s {
-	case "inProgress", "in_progress", "running", "pending":
-		return chat.Running
-	case "failed", "declined":
-		return chat.Failed
-	}
-	return chat.Completed
-}
-
-// detail is an activity's expanded body by its format.
-func detail(cx *core.Scope, p func() model.MessagePresentation) core.Node {
-	return detailWithLink(cx, p, openLink(cx))
-}
-
-func detailWithLink(cx *core.Scope, p func() model.MessagePresentation, onLink func(textview.LinkPressEvent)) core.Node {
-	colors := nswidgets.ColorsOf(cx)
-	format := core.NewMemo(cx, func() string {
-		pp := p()
-		if len(pp.Plan) > 0 {
-			return "plan"
-		}
-		return pp.Format
-	})
-	return core.Dynamic(func(cx *core.Scope) core.Node {
-		switch format.Get() {
-		case "plan":
-			return core.Text{Selectable: core.SelectableOn, Style: core.Style{FontSize: 12, LineHeight: 20}, ContentFunc: func() string {
-				var b strings.Builder
-				for _, s := range p().Plan {
-					marker := "○"
-					switch s.Status {
-					case "completed":
-						marker = "✓"
-					case "in_progress", "inProgress":
-						marker = "◉"
-					}
-					b.WriteString(marker + " " + s.Step + "\n")
-				}
-				return strings.TrimSuffix(b.String(), "\n")
-			}}
-		case "markdown":
-			return ui.TextView{MarkdownFunc: func() string { return p().Content }, Selectable: true, OnLinkPress: onLink}
-		case "diff":
-			return diff.DiffView{Patch: func() string { return p().Content }, Unified: true, Selectable: true}
-		case "files":
-			return diff.DiffView{Unified: true, Selectable: true, Patch: func() string {
-				var b strings.Builder
-				for _, f := range p().Changes {
-					b.WriteString(f.Diff)
-					if !strings.HasSuffix(f.Diff, "\n") {
-						b.WriteString("\n")
-					}
-				}
-				return b.String()
-			}}
-		}
-		return core.Text{Selectable: core.SelectableOn, ContentFunc: func() string { return msgfmt.NativeText(p().Content) },
-			StyleFunc: func() core.Style {
-				return core.Style{FontFamily: nswidgets.MonoFont, FontSize: 12, LineHeight: 18, Color: colors.Ink()}
-			}}
-	})
 }
 
 // idOf reads a row's message ID without tracking it. Rows are keyed by ID,

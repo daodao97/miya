@@ -1935,7 +1935,7 @@
   "nsComposerUnknownCommand": "Unknown command. Type / to choose a supported command.",
   "nsgoPhoneHoldToSpeak": "Hold to speak",
   "nsgoPhoneSlideToCancel": "Slide away to cancel",
-  "nsgoPhoneVoiceHelp": "Hold the microphone button to speak. Release to insert text, or enable automatic sending.",
+  "nsgoPhoneVoiceHelp": "Hold the microphone or the empty input to speak. Release to insert text, or enable automatic sending.",
   "nsgoPhoneDisableNotifications": "Disable notifications",
   "nsgoPhoneNotificationsDisabled": "Notifications disabled",
   "nsgoPhoneRemoteNotificationsUnavailable": "Remote notifications are unavailable in this app build.",
@@ -2200,5 +2200,16 @@
   "providerEndpoint": "%s endpoint",
   "remoteControl": "Remote control",
   "permissionAllowed": "Allowed",
-  "permissionRequired": "Permission required"
+  "permissionRequired": "Permission required",
+  "editMemoryOnDesktop": "Edit or forget memories on your desktop.",
+  "auditAndroidMigrationFailed": "Unable to import the saved Android connection. Restart Miya to retry.",
+  "thisConversation": "This conversation",
+  "projectOverview": "Project overview",
+  "noMatchingBots": "No matching Bots",
+  "miyaMemoryChangedShort": "Miya memory changed",
+  "displays": "Displays",
+  "noMatchingResults": "No matching results",
+  "latestConsolidationIssue": "Latest consolidation issue: ",
+  "latestConsolidationSummary": "Latest consolidation: %s · %d merged · %d marked as conflicts",
+  "miyaOnThisComputer": "Miya on this computer"
 }

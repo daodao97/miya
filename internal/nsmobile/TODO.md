@@ -89,8 +89,9 @@ its asynchronous error result, eliminating a timing failure seen under load.
   for desktop revalidation and loads its authenticated loopback URL in an app
   WebView. Back, sheet dismissal, navigation, background, disconnect and connection
   replacement cancel outstanding work and release the proxy. Failed observation
-  removes old entries. Project-wide candidate listings, manual ports and the
-  background-task details UI remain outside this port.
+  removes old entries. The project overview groups unverified candidates;
+  manual ports use the same authenticated proxy. The conversation view shows
+  its observed background tasks and system processes.
 
 ## Native services and remaining platform gaps
 
@@ -124,9 +125,11 @@ its asynchronous error result, eliminating a timing failure seen under load.
   preferences or ordinary files. On iOS, missing items can also migrate raw
   MyGo entries under `com.daodao.miya`, retiring each source only after a durable
   NSGo copy. This requires the same installed app's Keychain access group.
-  Android's old MyGo Keystore file format is private to its bridge and cannot
-  be imported through NSGo's secret API; it is not read as plaintext or silently
-  replaced. A different app identity must pair again.
+  Android imports legacy `mygo.secrets` entries in the native host, using the
+  original Android Keystore key. Existing NSGo items take precedence. The host
+  retires the old encrypted records only after all new writes succeed.
+  This requires an in-place upgrade with the same app ID and signing identity.
+  A different app identity must pair again.
 - Scan to connect uses `mobile.ScanQRCode` on iOS and Android. Successful codes
   pass the same validation as paste/manual entry; cancellation leaves pairing
   unchanged and errors keep the fallback available. Late results cannot replace

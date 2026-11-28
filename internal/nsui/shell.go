@@ -2,6 +2,7 @@ package nsui
 
 import (
 	"fmt"
+
 	"github.com/nsgo-dev/nsgo/core"
 	"github.com/nsgo-dev/nsgo/ui"
 	"github.com/nsgo-dev/nsgo/ui/chat"
@@ -25,6 +26,7 @@ func root(cx *core.Scope, c Host, sidebarFooter ...core.Node) core.Node {
 	// conversation always goes back to chat.
 	usage := usageFor(cx, c)
 	page := core.NewSignal(cx, "chat")
+	var automationStart automationShortcut
 	// expanded is the project whose conversations the sidebar lists.
 	expanded := core.NewSignal(cx, c.State().Cwd)
 	reads := &readTracker{c: c}
@@ -83,10 +85,17 @@ func root(cx *core.Scope, c Host, sidebarFooter ...core.Node) core.Node {
 	bindCommands(cx, cmd)
 	colors := nswidgets.ColorsOf(cx)
 	convState := chat.NewConversationState(cx)
+	conversationKey := core.NewMemo(cx, Live(func() string {
+		return fmt.Sprintf("%s:%s:%d", c.State().ReferenceSource, c.State().Cwd, c.Current().ID)
+	}))
 	conversation := nschat.View{TestID: "conversation", Thread: current, State: convState,
-		OnRetry:         func(r appmodel.RetryRequest) { _ = c.RetryResponse(r) },
-		OnReload:        func() { c.SelectThread(c.Current()) },
-		OnStop:          c.Stop,
+		ComposerOwner: conversationKey.Get,
+		OnRetry:       func(r appmodel.RetryRequest) { _ = c.RetryResponse(r) },
+		OnReload:      func() { c.SelectThread(c.Current()) },
+		OnStop:        c.Stop,
+		MemoryNotice: func(cx *core.Scope, notice model.MemoryNotice) core.Node {
+			return desktopMemoryNotice(cx, c, notice)
+		},
 		WaitingApproval: Live(func() bool { return c.TaskWaitingApproval(c.Current()) }),
 		Requests: pendingRequests(cx, c, Live(func() []interaction.Request {
 			if st.Approvals == nil {
@@ -102,6 +111,7 @@ func root(cx *core.Scope, c Host, sidebarFooter ...core.Node) core.Node {
 		cx.Untrack(func() { reads.markVisible(showing, atLatest) })
 	})
 	projectNode, openProject := projectDialog(cx, c, expanded)
+	conversation.NewConversation = newConversationIntro(cx, c, openProject)
 	desktopComposer := newDesktopComposer(cx, c)
 	desktopComposer.active = func() bool { return page.Get() == "chat" && !settingsOpen.Get() && !paletteOpen.Get() }
 	desktopComposer.wire(&conversation)
@@ -133,9 +143,6 @@ func root(cx *core.Scope, c Host, sidebarFooter ...core.Node) core.Node {
 		return true
 	}
 
-	conversationKey := core.NewMemo(cx, Live(func() string {
-		return fmt.Sprintf("%s:%s:%d", c.State().ReferenceSource, c.State().Cwd, c.Current().ID)
-	}))
 	cx.Effect(func() {
 		conversationKey.Get()
 		cx.Untrack(func() {
@@ -144,11 +151,6 @@ func root(cx *core.Scope, c Host, sidebarFooter ...core.Node) core.Node {
 			desktopComposer.diffOpen.Set(false)
 		})
 	})
-	conversationNode := core.Dynamic(func(cx *core.Scope) core.Node {
-		conversationKey.Get()
-		return core.Func(func(cx *core.Scope) core.Node { return conversation })
-	})
-
 	var messagePanel *panel
 	panelHead, panelNode := filePanel(cx, c, panelOpen, func(p *panel) { messagePanel = p })
 	conversation.OnLink = func(raw string) {
@@ -171,7 +173,7 @@ func root(cx *core.Scope, c Host, sidebarFooter ...core.Node) core.Node {
 		Right: []core.Node{panelNode}, RightHeader: []core.Node{panelHead}, RightOpen: panelOpen.Get, OnRightOpenChange: panelOpen.Set,
 		RightToggleLabel: tr("Show / Hide right panel"), RightResizeLabel: tr("Resize right panel"),
 		RightWidth: panelWidth.Get, OnRightWidthChange: panelWidth.Set, RightDefaultWidth: 460, RightMinWidth: 320, RightMaxWidth: 960,
-		Sidebar: []core.Node{sidebar(cx, c, shellNav{page: page, expanded: expanded, settings: cmd.openSettings, project: openProject, footer: sidebarFooter})},
+		Sidebar: []core.Node{sidebar(cx, c, shellNav{page: page, expanded: expanded, settings: cmd.openSettings, project: func() { openProject("") }, footer: sidebarFooter})},
 		Header: []core.Node{core.Text{TestID: "current-title", MaxLines: 1,
 			ContentFunc: func() string {
 				switch page.Get() {
@@ -183,7 +185,11 @@ func root(cx *core.Scope, c Host, sidebarFooter ...core.Node) core.Node {
 				if name := Live(func() string { b, _ := c.CurrentBot(); return b.Name })(); name != "" {
 					return name
 				}
-				return threadTitle(current())
+				t := current()
+				if t.ID == 0 {
+					return tr("New thread")
+				}
+				return threadTitle(t)
 			},
 			Style:     core.Style{FontSize: 13, FontWeight: ui.Semibold, FlexShrink: 1, MinWidth: core.Pt(0)},
 			StyleFunc: func() core.Style { return core.Style{Color: colors.Ink()} }}},
@@ -192,10 +198,17 @@ func root(cx *core.Scope, c Host, sidebarFooter ...core.Node) core.Node {
 			// automations exist only while shown, so they poll only then.
 			core.View{StyleFunc: func() core.Style {
 				return ui.FillRest.Merge(core.Style{Display: displayIf(page.Get() == "chat")})
-			}, Children: []core.Node{conversationNode}},
-			core.Show{When: func() bool { return page.Get() == "automations" }, Then: func(cx *core.Scope) core.Node { return automationsPage(cx, c) }},
+			}, Children: []core.Node{conversation}},
+			core.Show{When: func() bool { return page.Get() == "automations" }, Then: func(cx *core.Scope) core.Node {
+				entry := automationStart
+				automationStart = automationShortcut{}
+				return automationsPage(cx, c, entry)
+			}},
 			core.Show{When: func() bool { return page.Get() == "bots" }, Then: func(cx *core.Scope) core.Node {
-				return botsPage(cx, c, func() { page.Set("chat") })
+				return botsPage(cx, c, func() { page.Set("chat") }, func(entry automationShortcut) {
+					automationStart = entry
+					page.Set("automations")
+				})
 			}},
 			commandPalette(cx, paletteOpen, func() []paletteEntry {
 				return paletteEntries(cmd, current(), threadChoices(refProjects()), c.SelectThread)

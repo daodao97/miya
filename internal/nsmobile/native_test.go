@@ -27,6 +27,64 @@ func nativeLink() string {
 	return remote.Link(key.Public.Addr())
 }
 
+func TestPhoneReconnectsWhenReturningThroughInactive(t *testing.T) {
+	if nsgotest.Target() != "" {
+		t.Skip("native test hosts use the system lifecycle")
+	}
+	link := nativeLink()
+	type attempt struct {
+		ctx  context.Context
+		link string
+	}
+	dials := make(chan attempt, 4)
+	app, m, _ := startConfiguredPhone(t, core.OSIOS, func(m *App) {
+		m.Link = link
+		m.PrepareNetwork = func(context.Context, string) error { return nil }
+		m.DialDesktop = func(ctx context.Context, raw string) (*remote.Conn, error) {
+			dials <- attempt{ctx: ctx, link: raw}
+			<-ctx.Done()
+			return nil, ctx.Err()
+		}
+	})
+	t.Cleanup(func() { app.Post(m.Close); app.Settle() })
+	awaitDial := func() attempt {
+		t.Helper()
+		var dial attempt
+		select {
+		case dial = <-dials:
+		case <-time.After(time.Second):
+			t.Fatal("the phone did not start dialing the paired desktop")
+		}
+		if dial.link != link {
+			t.Fatal("the phone dialed a different desktop")
+		}
+		return dial
+	}
+	lifecycle := func(state core.Lifecycle) {
+		app.SetEnvironment(core.Environment{OS: core.OSIOS, Idiom: core.IdiomPhone, Locale: "en", Lifecycle: state})
+		app.Settle()
+	}
+	changePhone(app, m, func() { m.Connect(link); m.Draft = "keep this draft" })
+	first := awaitDial()
+	lifecycle(core.LifecycleInactive)
+	lifecycle(core.LifecycleActive)
+	if first.ctx.Err() != nil {
+		t.Fatal("a foreground interruption cancelled the connection")
+	}
+	lifecycle(core.LifecycleBackground)
+	select {
+	case <-first.ctx.Done():
+	case <-time.After(time.Second):
+		t.Fatal("backgrounding left the old connection running")
+	}
+	lifecycle(core.LifecycleInactive)
+	lifecycle(core.LifecycleActive)
+	awaitDial()
+	if m.Draft != "keep this draft" {
+		t.Fatal("foreground reconnect lost the draft")
+	}
+}
+
 func settleNative(t *testing.T, app *nsgotest.App, ready func() bool) {
 	t.Helper()
 	deadline := time.Now().Add(3 * time.Second)

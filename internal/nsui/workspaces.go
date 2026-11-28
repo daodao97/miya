@@ -305,6 +305,14 @@ func workspaceSelector(cx *core.Scope, m *workspaceHub) core.Node {
 				Checked:  func() bool { return m.store.Get().Active == id },
 				OnSelect: func() { m.selectWorkspace(id) }})
 		}
+		if current.ID != workspaces.Local {
+			items = append(items, ui.MenuSeparator{}, ui.MenuItem{Text: tr("Remote desktop"), TestID: "workspace-remote-desktop",
+				Disabled: Live(func() bool {
+					cl := m.active.Get().State().Remote
+					return cl == nil || !cl.Connected() || cl.Wire() == nil
+				}),
+				OnSelect: m.openPeerDesktop})
+		}
 		items = append(items, ui.MenuSeparator{},
 			ui.MenuItem{Text: tr("Add remote workspace…"), TestID: "add-workspace", Disabled: func() bool { return m.loadErr != nil }, OnSelect: m.openAdd})
 		// Any saved remote workspace can be renamed without switching to it.

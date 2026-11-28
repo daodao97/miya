@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -388,17 +389,33 @@ func (s *Store) Match(agent, project, session string) (int, bool) {
 	return 0, false
 }
 
+const charterPrefix = "\n\n[Miya] In this conversation you are the Bot named "
+const charterIntro = ". The person and other agents return to you over time; work by this charter."
+
 // Charter is the note that follows every message to one of the Bot's
 // conversations. Agents see it each turn, so it holds after compaction; the
 // visible conversation keeps the message as typed.
 func Charter(b Bot) string {
-	text := fmt.Sprintf("\n\n[Miya] In this conversation you are the Bot named %q. The person and other agents return to you over time; work by this charter.", b.Name)
+	text := fmt.Sprintf("%s%q%s", charterPrefix, b.Name, charterIntro)
 	if len(b.Projects) > 0 {
 		text += "\nYou work in these projects, and may read and change each of them: " + strings.Join(b.AllProjects(), ", ")
 	}
 	text += "\nKeep what this work teaches: when the person tells you a preference, a decision or a fact about it, save it with the remember tool, scope bot, so that you know it next time."
 	if b.Note != "" {
 		text += "\nYour charter, in the person's words:\n" + b.Note
+	}
+	return text
+}
+
+// StripCharter removes the Bot instructions from a user turn loaded from native history.
+func StripCharter(text string) string {
+	if i := strings.Index(text, "\n\n[Miya, sent once] "); i >= 0 {
+		text = text[:i]
+	}
+	if before, after, ok := strings.Cut(text, charterPrefix); ok {
+		if name, err := strconv.QuotedPrefix(after); err == nil && strings.HasPrefix(after[len(name):], charterIntro+"\n") {
+			return before
+		}
 	}
 	return text
 }

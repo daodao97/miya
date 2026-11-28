@@ -55,10 +55,10 @@ func (m *App) requestSheet(cx *core.Scope, id string) core.Node {
 		}
 		return ""
 	}))
-	return scroll(m.sheetBack("request-back", tr("Back"), ""), core.Dynamic(func(cx *core.Scope) core.Node {
+	return m.groupedPage(cx, core.Dynamic(func(cx *core.Scope) core.Node {
 		version := key.Get()
 		if version == "" {
-			return text(tr("This request has been resolved"))
+			return groupedState(cx, "check", func() string { return tr("This request has been resolved") }, nil, nil)
 		}
 		for _, a := range m.State.Approvals {
 			if string(a.ID) == id {

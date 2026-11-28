@@ -30,7 +30,9 @@ func (h phoneCollaborationHost) OpenReference(raw string) {
 }
 func (m *App) delegationsSheet(cx *core.Scope) core.Node {
 	if m.State.Collaboration == nil || m.State.Collaboration.Version < 1 || m.Open == 0 {
-		return scroll(text(tr("Update the Miya background service to use Agent tasks")), m.sheetBack("delegations-close", tr("Done"), ""))
+		return m.groupedPage(cx, groupedState(cx, "stack-2", func() string {
+			return tr("Update the Miya background service to use Agent tasks")
+		}, nil, nil))
 	}
 	if m.collaborationOwner != m.Link {
 		m.collaborations = nsrequests.CollaborationUI{}
@@ -42,7 +44,7 @@ func (m *App) delegationsSheet(cx *core.Scope) core.Node {
 	call := nsrequests.CollaborationCall(func(r appmodel.CollaborationRequest, done func(json.RawMessage, error)) {
 		m.CallCollaboration(r, func(raw json.RawMessage, err error) { done(raw, err); m.change() })
 	})
-	m.pollSheet(cx, func() { p.Refresh(m.State.Collaboration, call, false) })
+	m.pollSheet(cx, "delegations", func() { p.Refresh(m.State.Collaboration, call, false) })
 	p.LoadedAt = time.Time{}
-	return scroll(text(tr("Agent tasks")), m.sheetBack("delegations-close", tr("Done"), ""), nsrequests.CollaborationContent(cx, phoneCollaborationHost{m}, p, call, m.change, func() { m.revision.Get() }))
+	return m.groupedPage(cx, nsrequests.CollaborationContent(cx, phoneCollaborationHost{m}, p, call, m.change, func() { m.revision.Get() }))
 }

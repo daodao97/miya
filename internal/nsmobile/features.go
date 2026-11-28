@@ -6,13 +6,9 @@ import (
 	"github.com/nsgo-dev/nsgo/core"
 )
 
-func (m *App) sheetBack(id, title, to string) core.Node {
-	return m.button(id, title, nil, func() { m.pages.Open(to) })
-}
-
 // A sheet owns its polling timer. Closing it stops reads without discarding
 // cached data or an uncertain mutation's identity.
-func (m *App) pollSheet(cx *core.Scope, poll func()) {
+func (m *App) pollSheet(cx *core.Scope, route string, poll func()) {
 	active := true
 	var stop func() bool
 	var tick func()
@@ -20,9 +16,11 @@ func (m *App) pollSheet(cx *core.Scope, poll func()) {
 		if !active {
 			return
 		}
-		m.TickFeatures()
-		poll()
-		m.change()
+		if core.Untracked(cx, m.pages.Top) == route {
+			m.TickFeatures()
+			poll()
+			m.change()
+		}
 		stop = cx.AfterFunc(time.Second, tick)
 	}
 	cx.Post(tick)

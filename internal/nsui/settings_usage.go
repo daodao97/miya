@@ -24,8 +24,8 @@ func (d *desktopUsage) groups() []ui.SettingsGroup {
 				prefs.Save("usageTray", v)
 				d.changed()
 			}, nil)},
-			{ID: "usage-agent", Title: tr("Account to show"), Control: ui.Select[string]{TestID: "usage-agent", Label: tr("Tray account"), Options: agents, Value: func() string { d.revision.Get(); return d.agent }, OnChange: func(v string) { d.agent = v; prefs.Save("usageTrayAgent", v); d.changed() }}},
-			{ID: "usage-icon", Title: tr("Icon"), Control: ui.Select[string]{TestID: "usage-icon", Label: tr("Tray icon"), Options: []ui.Option[string]{{Value: "miya", Label: "Miya"}, {Value: "agent", Label: tr("Agent")}}, Value: func() string {
+			{ID: "usage-agent", Title: tr("Account to show"), Control: settingsSelect{TestID: "usage-agent", Label: tr("Tray account"), Options: agents, Value: func() string { d.revision.Get(); return d.agent }, OnChange: func(v string) { d.agent = v; prefs.Save("usageTrayAgent", v); d.changed() }}},
+			{ID: "usage-icon", Title: tr("Icon"), Control: settingsSelect{TestID: "usage-icon", Label: tr("Tray icon"), Options: []ui.Option[string]{{Value: "miya", Label: "Miya"}, {Value: "agent", Label: tr("Agent")}}, Value: func() string {
 				d.revision.Get()
 				if d.agentIcon {
 					return "agent"
@@ -33,12 +33,12 @@ func (d *desktopUsage) groups() []ui.SettingsGroup {
 				return "miya"
 			}, OnChange: func(v string) { d.agentIcon = v == "agent"; prefs.Save("usageTrayIcon", v); d.changed() }}},
 		}},
-		{ID: "usage-subscriptions", Title: tr("Usage"), Actions: []core.Node{settingsButton("usage-settings-refresh", tr("Refresh subscription quota"), func() { d.c.RefreshAccount(); d.refresh() }, func() bool { d.revision.Get(); return d.busy })}, Items: []ui.SettingsItem{{ID: "usage-readings", Content: core.Func(func(cx *core.Scope) core.Node {
+		{ID: "usage-subscriptions", Title: tr("Quota"), Actions: []core.Node{settingsButton("usage-settings-refresh", tr("Refresh subscription quota"), func() { d.c.RefreshAccount(); d.refresh() }, func() bool { d.revision.Get(); return d.busy })}, Items: []ui.SettingsItem{{ID: "usage-readings", Content: core.Func(func(cx *core.Scope) core.Node {
 			title, help := tr("Local subscriptions"), tr("Refreshes every 3 minutes using the Codex and Claude Code accounts signed in on this computer.")
 			if d.c.RemoteHost() {
 				title, help = tr("Server subscriptions"), tr("Refreshes every 3 minutes using the Codex and Claude Code accounts signed in on the server.")
 			}
-			nodes := []core.Node{settingsText(cx, func() string { return title + "\n" + help })}
+			nodes := []core.Node{settingsSectionTitle(title), settingsText(cx, func() string { return help })}
 			for _, agent := range usageAgents() {
 				nodes = append(nodes, d.subscriptionCard(cx, agent))
 			}

@@ -368,3 +368,54 @@ func TestSettingsMemoryEditorRequiresPreviewAndDeleteConfirmation(t *testing.T) 
 	app.WaitUntil(time.Second, deleted.Load)
 	app.WaitForGone("id:memory-entry-one", time.Second)
 }
+
+func TestSettingsSearchFindsRemotePermissions(t *testing.T) {
+	app, _ := startSettings(t, settingsHost(), true)
+	app.Type("id:settings-search", "screen recording")
+	if !app.Exists("id:settings-remote-control-remote-control-permissions") {
+		t.Fatal("search missed the screen recording settings")
+	}
+	if app.Exists("id:appearance") {
+		t.Fatal("search left unrelated settings on screen")
+	}
+	app.Press("id:settings-nav-general")
+	if got := app.Find("id:settings-search").Text; got != "" {
+		t.Fatalf("search stayed active after choosing a category: %q", got)
+	}
+	if !app.Exists("id:appearance") {
+		t.Fatal("general settings did not return after search")
+	}
+}
+
+func TestSettingsSelectKeepsKeyboardAndSelectionBehavior(t *testing.T) {
+	var value *core.Signal[string]
+	app := nsgotest.Start(t, func(cx *core.Scope) core.Node {
+		value = core.NewSignal(cx, "")
+		return settingsSelect{
+			TestID: "mode", Label: "Appearance",
+			Options: []ui.Option[string]{{Value: "", Label: "System"}, {Value: "light", Label: "Light"}, {Value: "dark", Label: "Dark"}},
+			Value:   value.Get, OnChange: value.Set,
+		}
+	}, nsgotest.Environment(core.Environment{OS: core.OSMacOS, Idiom: core.IdiomDesktop}))
+
+	app.Focus("id:mode")
+	app.Key("Down")
+	if !app.Find("role:option System").Props.Selected {
+		t.Fatal("opening did not mark the saved value")
+	}
+	app.Key("Down")
+	if app.Find("role:option Light").Props.Selected {
+		t.Fatal("moving the highlight committed the value")
+	}
+	app.Key("Enter")
+	if got := value.GetUntracked(); got != "light" || app.Exists("role:listbox") || !app.Find("id:mode").Focused {
+		t.Fatalf("keyboard selection has value %q, expected light with the menu closed and focus restored", got)
+	}
+
+	app.Key("Down")
+	app.Key("Down")
+	app.Key("Escape")
+	if got := value.GetUntracked(); got != "light" || app.Exists("role:listbox") {
+		t.Fatalf("canceling the menu has value %q, expected light with the menu closed", got)
+	}
+}

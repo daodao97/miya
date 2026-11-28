@@ -66,16 +66,10 @@ func TestMigratedSheetsReturnToConversationWithoutLosingDraft(t *testing.T) {
 	openPhoneThread(t, app, m, sent)
 	app.Type("id:mobile-composer", "keep this draft")
 	before := app.Find("id:mobile-composer").ID
-	for _, sheet := range []string{"actions", "options", "settings", "language", "desktops", "memory", "automations", "quota"} {
+	for _, sheet := range []string{"actions", "options", "settings", "language", "desktops", "memory", "automations"} {
 		changePhone(app, m, func() { m.pages.Open(sheet) })
-		if sheet == "actions" {
-			// The system's action sheet takes back itself: its Cancel.
-			actions := app.Alerts()[0].Actions
-			app.Answer(len(actions) - 1)
-			app.Settle()
-		} else {
-			app.Back()
-		}
+		app.Back()
+		app.Settle()
 		if m.pages.Top() != "" || m.Open != 7 || m.Draft != "keep this draft" || app.Find("id:mobile-composer").ID != before {
 			t.Fatalf("sheet %s changed conversation", sheet)
 		}
@@ -234,22 +228,114 @@ func TestMigratedManualDisconnectEndsDesktopLease(t *testing.T) {
 
 func TestMigratedQuotaInspectionDoesNotChangeAgent(t *testing.T) {
 	app, m, _ := startPhone(t)
-	changePhone(app, m, func() {
-		m.State.Agent = model.AgentClaude
-		m.State.Quotas = []phoneproto.AgentQuota{{Agent: model.AgentCodex, Windows: []phoneproto.QuotaWindow{{Label: "Weekly", UsedPercent: 81}}}}
-	})
 	openPhoneDrawer(app)
-	app.Press("id:quota")
-	if !strings.Contains(phoneTexts(app), "81% used") || !strings.Contains(phoneTexts(app), "Weekly") {
+	if app.Exists("id:drawer-quotas") || app.Exists("id:quota") {
+		t.Fatal("usage should take no space until there are quota windows")
+	}
+	reset := time.Date(2026, 11, 25, 14, 30, 0, 0, time.Local).Unix()
+	changePhone(app, m, func() {
+		m.Connected, m.Error = true, ""
+		m.State.Agent = model.AgentClaude
+		m.State.Quotas = []phoneproto.AgentQuota{
+			{Agent: model.AgentCodex, Windows: []phoneproto.QuotaWindow{{Label: "5-hour quota", UsedPercent: 34}, {Label: "Weekly", UsedPercent: 81, ResetsAt: reset}}},
+			{Agent: model.AgentClaude, Windows: []phoneproto.QuotaWindow{{Label: "Weekly", UsedPercent: 100}}},
+			{Agent: "empty"},
+		}
+	})
+	if app.Exists("id:drawer-quota-empty") || app.Find("id:drawer-quota-remaining-codex").Text != "66" ||
+		app.Find("id:drawer-quota-remaining-"+model.AgentClaude).Text != "0" {
+		t.Fatal("drawer quotas should show remaining use for agents with quota windows")
+	}
+	captureNativePage(app, "drawer-quotas")
+	app.Press("id:drawer-quota-codex")
+	panel := app.WaitFor("id:drawer-quota-details", time.Second)
+	trigger := app.Find("id:drawer-quota-codex").Bounds()
+	if panel.Bounds().Origin.Y < trigger.Origin.Y+trigger.Size.Height || m.pages.Depth() != 0 || !m.drawerOpen.GetUntracked() {
+		t.Fatal("quota details should open below the trigger in the drawer")
+	}
+	if !app.Exists("text:81% used") || !app.Exists("text:34% used") || !app.Exists("text:Wed 14:30") {
 		t.Fatal(phoneTexts(app))
+	}
+	captureNativePage(app, "drawer-quota-details")
+	// A fresh reading updates the same card and its ring.
+	changePhone(app, m, func() {
+		m.State.Quotas[0].Windows = []phoneproto.QuotaWindow{{Label: "Weekly", UsedPercent: 50}}
+	})
+	app.WaitFor("text:50% used", time.Second)
+	if app.Find("id:drawer-quota-remaining-codex").Text != "50" {
+		t.Fatal("the ring did not update with the new reading")
+	}
+	app.Press("id:drawer-quota-" + model.AgentClaude)
+	if !app.Exists("text:100% used") || app.Exists("text:50% used") {
+		t.Fatal("one tap should switch the detail card to the other agent")
 	}
 	if m.State.Agent != model.AgentClaude {
 		t.Fatal("quota inspection changed agent")
 	}
+	app.Back()
+	if app.Exists("id:drawer-quota-details") || !m.drawerOpen.GetUntracked() {
+		t.Fatal("back should dismiss the quota card before closing the drawer")
+	}
+	app.Press("id:drawer-quota-codex")
 	changePhone(app, m, func() { m.State.Quotas = nil })
-	if strings.Contains(phoneTexts(app), "81% used") {
+	if app.Exists("id:drawer-quotas") || app.Exists("id:drawer-quota-details") {
 		t.Fatal("removed quota remained visible")
 	}
+}
+
+func TestPhoneTranscriptTypographyFollowsSystemTextSize(t *testing.T) {
+	app, m, sent := startPhone(t)
+	openPhoneThread(t, app, m, sent)
+	changePhone(app, m, func() {
+		m.Connected, m.Error, m.Status = true, "", ""
+		thread := m.Viewer.Current()
+		thread.Title = "构建核对"
+		thread.Messages = []model.Message{
+			{ID: 101, Role: "user", TurnID: "preview", Content: "核对今天的构建结果，并整理交付说明。"},
+			{ID: 102, Role: "activity", TurnID: "preview", Status: "completed", Presentation: &model.MessagePresentation{
+				Title: "已核对构建", Format: "markdown", Content: "活动详情和消息正文使用相同字号。",
+			}},
+			{ID: 103, Role: "assistant", TurnID: "preview", Status: "completed",
+				Content: "## 构建结果\n\n构建和测试均已通过。交付说明在 `README.md` 中。\n\n" +
+					"- 中文和 English 在同一段内清晰可读。\n- 确认安装包签名后即可交付。\n\n" +
+					"```sh\ngo test ./...\n```\n\n| 项目 | 结果 |\n| --- | --- |\n| 签名校验 | 通过 |"},
+		}
+		m.ShowThread(thread)
+	})
+	check := func(scale core.Points) {
+		t.Helper()
+		for _, sample := range []struct {
+			selector         string
+			size, lineHeight core.Points
+		}{
+			{"text:核对今天的构建结果", 17, 25.5},
+			{"text:构建和测试均已通过", 17, 25.5},
+			{"id:reply-103 >> text:构建结果", 22.95, 27.54},
+			{"text:中文和 English", 17, 25.5},
+			{"text:签名校验", 17, 25.5},
+			{"text:README.md", 14.875, 0},
+			{"text:go test ./...", 14.875, 20.825},
+			{"text:已核对构建", 12, 0},
+		} {
+			style := app.SpanStyle(sample.selector)
+			if diff := style.Font.Size - sample.size*scale; diff < -0.02 || diff > 0.02 {
+				t.Errorf("%s has size %v, want %v", sample.selector, style.Font.Size, sample.size*scale)
+			}
+			if diff := style.LineHeight - sample.lineHeight*scale; sample.lineHeight > 0 && (diff < -0.02 || diff > 0.02) {
+				t.Errorf("%s has line height %v, want %v", sample.selector, style.LineHeight, sample.lineHeight*scale)
+			}
+		}
+	}
+	check(1)
+	captureNativePage(app, "phone-transcript-typography")
+	app.Press("id:activity-102")
+	if size := app.SpanStyle("text:活动详情和消息正文").Font.Size; size != 17 {
+		t.Fatalf("activity Markdown uses %v points", size)
+	}
+	app.SetEnvironment(core.Environment{OS: core.OSIOS, Idiom: core.IdiomPhone, Locale: "en", FontScale: 1.4,
+		SafeArea: core.Edges{Top: 47, Bottom: 34}})
+	app.Settle()
+	check(1.4)
 }
 
 func TestMigratedTableAndTranscriptScrollKeepConversation(t *testing.T) {

@@ -43,9 +43,9 @@ func (c *Controller) withFollowUps(t model.Thread, tasks map[string][]model.Thre
 	return t
 }
 
-// prepareTaskAction leaves durable timer cancellation to the worker. The
+// PrepareTaskAction leaves durable timer cancellation to the worker. The
 // other controls still use the native task's normal main-thread handler.
-func (c *Controller) prepareTaskAction(threadID int, taskID, action string) any {
+func (c *Controller) PrepareTaskAction(threadID int, taskID, action string) any {
 	if (action == "cancel" || action == "dismiss" || action == "stop") &&
 		c.Collaboration != nil && c.Collaboration.Manager != nil {
 		if d, ok := c.Collaboration.Manager.Delivery(taskID); ok && d.IsFollowUp() {

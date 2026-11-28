@@ -24,7 +24,7 @@ type automationRecipes struct {
 	problems []string
 }
 type automationFormState struct {
-	editing                     *core.Signal[string]
+	editing, botID              *core.Signal[string]
 	id, request, project, agent *core.Signal[string]
 	enabled, drafting, saving   *core.Signal[bool]
 	draft                       *core.Signal[*automation.View]
@@ -34,7 +34,7 @@ type automationFormState struct {
 }
 
 func newAutomationForm(cx *core.Scope) *automationFormState {
-	return &automationFormState{editing: core.NewSignal(cx, ""), id: core.NewSignal(cx, ""), request: core.NewSignal(cx, ""), project: core.NewSignal(cx, ""), agent: core.NewSignal(cx, ""), enabled: core.NewSignal(cx, true), drafting: core.NewSignal(cx, false), saving: core.NewSignal(cx, false), draft: core.NewSignal[*automation.View](cx, nil), err: core.NewSignal(cx, ""), generation: core.NewSignal(cx, 0), recipes: core.NewSignalFunc(cx, automationRecipes{}, func(a, b automationRecipes) bool { return reflect.DeepEqual(a, b) })}
+	return &automationFormState{editing: core.NewSignal(cx, ""), botID: core.NewSignal(cx, ""), id: core.NewSignal(cx, ""), request: core.NewSignal(cx, ""), project: core.NewSignal(cx, ""), agent: core.NewSignal(cx, ""), enabled: core.NewSignal(cx, true), drafting: core.NewSignal(cx, false), saving: core.NewSignal(cx, false), draft: core.NewSignal[*automation.View](cx, nil), err: core.NewSignal(cx, ""), generation: core.NewSignal(cx, 0), recipes: core.NewSignalFunc(cx, automationRecipes{}, func(a, b automationRecipes) bool { return reflect.DeepEqual(a, b) })}
 }
 func (f *automationFormState) invalidate() {
 	f.editing.Set("")
@@ -47,6 +47,7 @@ func (a *automationsState) openForm(v *automation.View) {
 	f := a.form
 	f.invalidate()
 	f.id.Set("")
+	f.botID.Set("")
 	f.request.Set("")
 	f.project.Set(a.host.State().Cwd)
 	f.agent.Set(model.Backends[0])
@@ -57,6 +58,7 @@ func (a *automationsState) openForm(v *automation.View) {
 	if v != nil {
 		copy := *v
 		f.id.Set(v.ID)
+		f.botID.Set(v.Bot)
 		f.request.Set(textutil.FirstNonEmpty(v.Request, v.Instructions))
 		f.project.Set(v.Project)
 		f.agent.Set(v.Agent)
@@ -114,6 +116,7 @@ func (a *automationsState) saveForm(run bool) {
 	}
 	next := autoClone(f.draft.Get().Automation)
 	next.ID, next.Request, next.Project, next.Agent, next.Enabled = f.id.Get(), strings.TrimSpace(f.request.Get()), f.project.Get(), f.agent.Get(), f.enabled.Get()
+	next.Bot = f.botID.Get()
 	// Validate before sending, keeping a new record's ID service-owned.
 	id := next.ID
 	if err := next.Normalize(); err != nil {

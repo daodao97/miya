@@ -41,16 +41,27 @@ func byteUTF16Offset(s string, offset int) int {
 	}
 	return units
 }
-func (m *App) selectedRange() core.TextRange {
-	a, b := m.anchor, m.caret
-	if b < 0 || b > len(m.Draft) {
-		a, b = len(m.Draft), len(m.Draft)
+
+// setComposerDraft is for app-owned edits. Native edits only report the
+// selection so that typing never moves the keyboard's caret from Go.
+func (m *App) setComposerDraft(text string, anchor, caret int) {
+	m.Draft, m.anchor, m.caret = text, anchor, caret
+	if m.composerInput != nil && !m.composing {
+		m.composerInput.SetSelection(byteUTF16Offset(text, anchor), byteUTF16Offset(text, caret))
 	}
-	return core.TextRange{Start: byteUTF16Offset(m.Draft, max(0, a)), End: byteUTF16Offset(m.Draft, b)}
+}
+
+func (m *App) acceptComposerSuggestion(text string) {
+	if !m.composing {
+		m.setComposerDraft(text, len(text), len(text))
+	}
 }
 func (m *App) references(cx *core.Scope) core.Node {
 	return core.Dynamic(func(cx *core.Scope) core.Node {
 		m.revision.Get()
+		if m.composing {
+			return nil
+		}
 		end := m.caret
 		if end < 0 || end > len(m.Draft) {
 			end = len(m.Draft)
@@ -64,8 +75,7 @@ func (m *App) references(cx *core.Scope) core.Node {
 			}
 			for _, choice := range composer.AgentChoices(token.Query, enabled) {
 				nodes = append(nodes, m.button("agent-reference-"+choice.Agent, choice.Name, nil, func() {
-					m.Draft = composer.InsertAgentReference(m.Draft, token, choice.Agent, choice.Name)
-					m.caret = -1
+					m.acceptComposerSuggestion(composer.InsertAgentReference(m.Draft, token, choice.Agent, choice.Name))
 				}))
 			}
 		}
@@ -76,8 +86,7 @@ func (m *App) references(cx *core.Scope) core.Node {
 					title := appmodel.ThreadRefTitle(t)
 					nodes = append(nodes, m.button("reference-"+strconv.Itoa(t.ID), title, nil, func() {
 						ref := model.ThreadRef{Source: m.State.ReferenceSource, Backend: model.ThreadAgent(t), SessionID: t.ServerID}
-						m.Draft = composer.InsertThreadReference(m.Draft, token, ref, title)
-						m.caret = -1
+						m.acceptComposerSuggestion(composer.InsertThreadReference(m.Draft, token, ref, title))
 						m.Action(remote.Request{Op: "prefetch", Reference: ref.URL()})
 					}))
 				}
@@ -92,7 +101,9 @@ func (m *App) references(cx *core.Scope) core.Node {
 				}
 			}
 			for _, choice := range files.Choices {
-				nodes = append(nodes, m.button("file-reference-"+choice.Name, choice.Name, nil, func() { m.Draft = composer.InsertFileReference(m.Draft, token, choice.Name); m.caret = -1 }))
+				nodes = append(nodes, m.button("file-reference-"+choice.Name, choice.Name, nil, func() {
+					m.acceptComposerSuggestion(composer.InsertFileReference(m.Draft, token, choice.Name))
+				}))
 			}
 		}
 		if strings.HasPrefix(m.Draft, "/") && !strings.ContainsAny(m.Draft, " \n") {
@@ -103,7 +114,9 @@ func (m *App) references(cx *core.Scope) core.Node {
 			query := strings.ToLower(strings.TrimPrefix(m.Draft, "/"))
 			for _, choice := range choices {
 				if strings.Contains(strings.ToLower(choice.Name), query) {
-					nodes = append(nodes, m.button("command-"+choice.Name, "/"+choice.Name, nil, func() { m.Draft = "/" + choice.Name + " "; m.caret = -1 }))
+					nodes = append(nodes, m.button("command-"+choice.Name, "/"+choice.Name, nil, func() {
+						m.acceptComposerSuggestion("/" + choice.Name + " ")
+					}))
 				}
 			}
 		}

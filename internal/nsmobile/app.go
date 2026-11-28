@@ -4,10 +4,12 @@ package nsmobile
 
 import (
 	"context"
+	"runtime"
 	"strings"
 	"time"
 
 	"github.com/nsgo-dev/nsgo"
+	"github.com/nsgo-dev/nsgo/base"
 	"github.com/nsgo-dev/nsgo/core"
 	"github.com/nsgo-dev/nsgo/ui"
 
@@ -18,6 +20,7 @@ import (
 	phoneproto "miya/internal/phone/protocol"
 	"miya/internal/prefs"
 	"miya/internal/remote"
+	webservice "miya/internal/runtime/web"
 	"miya/locales"
 )
 
@@ -37,18 +40,20 @@ type App struct {
 	drawerRun                                 *core.AnimationRun
 	drawerAt                                  float64
 	drawerExpanded                            bool
-	automationRunsShown                       map[string]bool
 	scanning                                  bool
 	optionsAgent                              string
 	filesURL                                  *core.Signal[string]
 	closeFiles                                func()
 	caret, anchor                             int
+	composerInput                             *core.Ref
+	composing                                 bool
 	voice                                     *phoneVoice
 	voiceStart                                voiceStart
 	voiceAutoSend                             bool
 	push                                      phonePush
 	web                                       *webServices
 	fetchRuntime                              runtimeFetcher
+	fetchProjectServices                      func(context.Context, *remote.Conn, string) ([]webservice.Service, error)
 	openWebProxy                              webProxyOpener
 	webBrowser                                bool
 	collaborations                            nsrequests.CollaborationUI
@@ -57,6 +62,7 @@ type App struct {
 	authentication                            desktopAuthentication
 	appUpdate                                 mobileUpdate
 	nextUpdateCheck                           time.Time
+	legacyMigration                           *legacyMigration
 }
 
 func NewMobileApp() *App {
@@ -69,9 +75,14 @@ func MobileEntry() {
 	nsgo.Run(func(cx *core.Scope) {
 		m := NewMobileApp()
 		m.DataDir = cx.DataDir()
+		if runtime.GOOS == "android" {
+			m.legacyMigration = &legacyMigration{done: make(chan struct{})}
+		}
 		nsgo.SetMainView(cx, m.Render)
 		cx.OnQuit(func(context.Context) { m.Close() })
-	}, nsgo.WindowSize(390, 844))
+	}, nsgo.WindowSize(390, 844), nsgo.Component(legacySecretsComponent, func(*core.NativeContext) core.NativeComponent {
+		return legacySecretsView{}
+	}))
 }
 
 // live binds plain client getters to the adapter's revision. The component
@@ -87,9 +98,7 @@ func (m *App) Render(cx *core.Scope) core.Node {
 	m.cx = cx
 	m.revision = core.NewSignal(cx, uint64(0))
 	m.pages = newPages(cx)
-	m.pages.actions = m.showActions
 	m.drawerOpen = core.NewSignal(cx, false)
-	m.automationRunsShown = map[string]bool{}
 	m.drawerSearching = core.NewSignal(cx, false)
 	m.drawerActive = core.NewSignal(cx, false)
 	m.drawerPos = core.NewAnimatedValue(cx, 0)
@@ -114,6 +123,9 @@ func (m *App) Render(cx *core.Scope) core.Node {
 		}
 	})
 	cx.SetTheme(nswidgets.Theme())
+	if cx.Env().OS() == core.OSIOS {
+		base.SetScrollbarTheme(cx, ui.ScrollbarTheme(cx))
+	}
 	cx.SetLocale(prefs.NormalizeInterfaceLanguage(prefs.Load("interfaceLanguage")))
 	m.setupPush(cx)
 	cx.Effect(func() {
@@ -123,27 +135,31 @@ func (m *App) Render(cx *core.Scope) core.Node {
 		}
 	})
 	lifecycle := cx.Env().Lifecycle()
+	backgrounded := lifecycle == core.LifecycleBackground
 	cx.Effect(func() {
 		next := cx.Env().Lifecycle()
 		if next == lifecycle {
 			return
 		}
-		prev := lifecycle
 		lifecycle = next
 		if next == core.LifecycleActive {
 			m.refreshDesktopAuthentication()
 			m.checkMobileUpdate()
+			// iOS reports Inactive before Active on the way back from the background.
+			if backgrounded {
+				backgrounded = false
+				m.EnterForeground()
+				m.push.foreground.attempted = 0
+				m.requestPush(false)
+				m.change()
+			}
 		}
 		if next == core.LifecycleBackground {
+			backgrounded = true
 			m.cancelVoice()
 			m.closeWebServices()
 			m.closeFileBrowser()
 			m.EnterBackground()
-			m.change()
-		} else if prev == core.LifecycleBackground && next == core.LifecycleActive {
-			m.EnterForeground()
-			m.push.foreground.attempted = 0
-			m.requestPush(false)
 			m.change()
 		}
 	})
@@ -169,31 +185,6 @@ func (m *App) Render(cx *core.Scope) core.Node {
 			cx.Cleanup(func() { stop() })
 		}
 	})
-	cx.OnBackPress(func() bool {
-		if m.drawerOpen.Get() {
-			m.drawerOpen.Set(false)
-			return true
-		}
-		// A pushed page is the stack's to pop; its OnDismiss releases it.
-		if m.pages.Depth() > 0 {
-			return false
-		}
-		if m.filesURL.Get() != "" {
-			m.closeFileBrowser()
-			return true
-		}
-		if m.Path == "/desktop" {
-			m.CloseDesktopPage(true)
-			m.change()
-			return true
-		}
-		if m.Path != "/" {
-			m.Home()
-			m.change()
-			return true
-		}
-		return false
-	})
 	cx.Cleanup(func() {
 		m.cancelVoice()
 		m.closeWebServices()
@@ -218,20 +209,37 @@ func (m *App) root(cx *core.Scope) core.Node {
 	colors := nswidgets.ColorsOf(cx)
 	return core.View{TestID: "mobile-root", StyleFunc: func() core.Style {
 		safe := cx.Env().SafeArea()
+		// The stack's frame stays fixed while its screens slide. Each page
+		// reserves its own keyboard and home-indicator clearance.
+		safe.Bottom = 0
 		m.revision.Get()
-		if m.Path == "/thread" && m.Link != "" && m.filesURL.Get() == "" {
-			// FloatingConversation owns the home-indicator inset; the outer
-			// surface only keeps it above the keyboard.
-			safe.Bottom = cx.Env().KeyboardHeight()
-		} else {
-			safe.Bottom = max(safe.Bottom, cx.Env().KeyboardHeight())
+		background := colors.Canvas()
+		if m.pages.Depth() > 0 || m.Loaded && m.Link == "" {
+			background = groupedBackground(cx)
 		}
-		return core.Style{Width: core.Pct(100), Height: core.Pct(100), Padding: safe, Background: colors.Canvas(), Color: colors.Ink(), MinHeight: core.Pt(0)}
+		return core.Style{Width: core.Pct(100), Height: core.Pct(100), Padding: safe, Background: background, Color: colors.Ink(), MinHeight: core.Pt(0)}
 	}, Children: []core.Node{
 		m.stack(cx),
 		m.desktopFloat(cx),
+		m.conversationActions(cx),
+		androidMigrationView(m.legacyMigration),
 	}}
 }
+
+func (m *App) hasFloatingComposer() bool {
+	m.revision.Get()
+	return m.Path == "/thread" && m.Link != "" && m.filesURL.Get() == ""
+}
+
+func pageBottomInset(cx *core.Scope, floatingComposer bool) core.Points {
+	keyboard := cx.Env().KeyboardHeight()
+	if floatingComposer {
+		// The conversation's floating composer already owns the home indicator inset.
+		return keyboard
+	}
+	return max(cx.Env().SafeArea().Bottom, keyboard)
+}
+
 func (m *App) page(cx *core.Scope) core.Node {
 	// The memo subscribes broadly, but notifies this region only if its key
 	// changes, so network deltas keep the transcript and native input mounted.
@@ -253,7 +261,7 @@ func (m *App) page(cx *core.Scope) core.Node {
 		case "loading":
 			return ui.Spinner{}
 		case "pair":
-			return m.pairView(cx)
+			return m.pairView(cx, true)
 		case "files":
 			return m.fileView(cx)
 		case "/desktop":

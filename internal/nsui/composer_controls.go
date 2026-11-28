@@ -131,8 +131,9 @@ func (d *desktopComposer) agentPicker() core.Node {
 	}
 	popover := d.composerPopover("agent", tr("Agents"), core.AlignStart, 220, func(cx *core.Scope) []core.Node {
 		colors := nswidgets.ColorsOf(cx)
+		agentID := core.NewMemo(cx, agent)
 		return []core.Node{
-			core.Dynamic(func(cx *core.Scope) core.Node { return nswidgets.AgentIcon(agent(), 16) }),
+			core.Dynamic(func(cx *core.Scope) core.Node { return nswidgets.AgentIcon(agentID.Get(), 16) }),
 			menuText(func() string { return model.AgentName(agent()) }, core.Style{FontSize: 13}, colors.Ink, 1),
 			badge(cx, agent),
 			core.View{StyleFunc: func() core.Style { return core.Style{Display: displayWhen(!fixed())} }, Children: []core.Node{nswidgets.Icon("chevron-down", 10, colors.Faint)}},
@@ -193,8 +194,9 @@ func (d *desktopComposer) permissionsPicker() core.Node {
 	policy := Live(d.host.CurrentPermissionPolicy)
 	popover := d.composerPopover("permissions", tr("Permissions"), core.AlignEnd, 340, func(cx *core.Scope) []core.Node {
 		colors := nswidgets.ColorsOf(cx)
+		selected := core.NewMemo(cx, func() permissionChoice { return permissionChoiceFor(policy()) })
 		return []core.Node{core.Dynamic(func(cx *core.Scope) core.Node {
-			choice := permissionChoiceFor(policy())
+			choice := selected.Get()
 			tint := colors.Muted
 			if choice.warn {
 				tint = func() core.Color { return fullAccessTint }
@@ -243,7 +245,7 @@ func (d *desktopComposer) suggestions() core.Node {
 				StyleFunc: func() core.Style {
 					return core.Style{Background: colors.Subtle(), Hover: &core.Style{Background: colors.Hover()}, FocusVisible: ui.FocusRing(cx, 2)}
 				},
-				Children: []core.Node{nswidgets.Icon(s.icon, 20, colors.Faint), menuText(title, core.Style{FontSize: 12}, colors.Ink, 2)}})
+				Children: []core.Node{nswidgets.Icon(s.icon, 20, colors.Faint), menuText(title, core.Style{FontSize: 11}, colors.Ink, 2)}})
 		}
 		return core.View{Style: core.Style{Gap: 8, MinWidth: core.Pt(0)}, Children: []core.Node{
 			menuText(func() string { return tr("A few ideas to get started") }, core.Style{FontSize: 11, AlignSelf: core.AlignEnd}, colors.Muted, 1),

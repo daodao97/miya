@@ -124,7 +124,7 @@ func (h *fakeHost) SelectThread(t model.Thread) {
 	uiruntime.Invalidate()
 }
 
-func startBridged(t *testing.T, h Host) *nsgotest.App {
+func startBridged(t *testing.T, h Host, opts ...nsgotest.Option) *nsgotest.App {
 	t.Helper()
 	t.Cleanup(func() {
 		uiruntime.SetAppWindow(nil)
@@ -134,7 +134,7 @@ func startBridged(t *testing.T, h Host) *nsgotest.App {
 		installBridge(cx)
 		cx.SetTheme(nswidgets.Theme())
 		return root(cx, h)
-	}, nsgotest.Size(900, 600))
+	}, append([]nsgotest.Option{nsgotest.Size(900, 600)}, opts...)...)
 }
 
 func TestBridgeShowsControllerState(t *testing.T) {
@@ -399,6 +399,7 @@ func (h *fakeHost) Rewind(t, m int, text string) {
 func (h *fakeHost) PrefetchReference(ref model.ThreadRef)                 { h.prefetched = append(h.prefetched, ref) }
 func (h *fakeHost) SavedReferenceTitle(model.ThreadRef) (string, bool)    { return "", false }
 func (h *fakeHost) RunThreadCommand(string) string                        { return "" }
+func (h *fakeHost) PrepareTaskAction(int, string, string) any             { return "" }
 func (h *fakeHost) TaskAction(int, string, string) string                 { return "" }
 func (h *fakeHost) TaskWaitingApproval(model.Thread) bool                 { return false }
 func (h *fakeHost) CollaborationCapabilities() *model.CollaborationStatus { return h.collab }

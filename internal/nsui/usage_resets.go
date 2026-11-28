@@ -7,9 +7,11 @@ import (
 	"time"
 
 	"github.com/nsgo-dev/nsgo/core"
+	"github.com/nsgo-dev/nsgo/ui"
 
 	"miya/internal/agent/account"
 	"miya/internal/agent/quota"
+	"miya/internal/nswidgets"
 	svcproto "miya/internal/service/protocol"
 )
 
@@ -55,8 +57,9 @@ func usageResetOutcome(outcome string) string {
 func (d *desktopUsage) resetMatches(r quota.Reading) bool {
 	return d.reset != nil && d.reset.Agent == r.Agent && d.reset.AccountKey == r.AccountKey && d.reset.Home == r.Home
 }
-func (d *desktopUsage) resetSection(cx *core.Scope, r quota.Reading) core.Node {
-	var nodes []core.Node
+func (d *desktopUsage) resetSection(cx *core.Scope, r quota.Reading, compact bool) core.Node {
+	colors := nswidgets.ColorsOf(cx)
+	nodes := []core.Node{usageDivider(cx)}
 	if r.Resets != nil {
 		label := tr("Use a card…")
 		if d.resetRetry && d.resetMatches(r) {
@@ -65,17 +68,33 @@ func (d *desktopUsage) resetSection(cx *core.Scope, r quota.Reading) core.Node {
 		if d.resetting {
 			label = tr("Using card…")
 		}
-		nodes = append(nodes, settingsActions(settingsText(cx, func() string { return fmt.Sprintf(tr("%d reset cards"), r.Resets.AvailableCount) }), settingsButton("usage-reset-"+r.Agent, label, func() { d.beginReset(r) }, func() bool {
-			d.revision.Get()
-			return d.busy || r.Error != "" || r.AccountKey == "" || r.Home == "" || r.Resets.AvailableCount == 0 && !(d.resetRetry && d.resetMatches(r))
-		})))
+		button := ui.Button{TestID: "usage-reset-" + r.Agent, Text: label, Label: tr("Use Codex reset"), Variant: ui.ButtonSecondary,
+			OnPress: func() { d.beginReset(r) }, Disabled: func() bool {
+				d.revision.Get()
+				return d.busy || r.Error != "" || r.AccountKey == "" || r.Home == "" || r.Resets.AvailableCount == 0 && !(d.resetRetry && d.resetMatches(r))
+			}}
+		if compact {
+			button.TextStyle.FontSize = 11
+			button.Style.Height = core.Pt(25)
+		}
+		nodes = append(nodes, core.View{Style: core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Gap: 8},
+			Children: []core.Node{nswidgets.Icon("refresh", 13, colors.Muted),
+				core.Text{Content: fmt.Sprintf(tr("%d reset cards"), r.Resets.AvailableCount), MaxLines: 1,
+					Style: core.Style{FontSize: 12, FontWeight: 500, FlexGrow: 1, FlexShrink: 1, MinWidth: core.Pt(0)}},
+				button}})
 		text, details := usageResetExpiryText(r.Resets)
-		nodes = append(nodes, settingsText(cx, func() string { return text + "\n" + details }))
+		if compact {
+			expiry := core.Text{Content: text, MaxLines: 1, Style: core.Style{FontSize: 11},
+				StyleFunc: func() core.Style { return core.Style{Color: colors.Muted()} }}
+			nodes = append(nodes, ui.Tooltip{Text: details, Trigger: expiry})
+		} else {
+			nodes = append(nodes, settingsText(cx, func() string { return strings.TrimSpace(text + "\n" + details) }))
+		}
 	}
 	if d.resetMessage != "" {
 		nodes = append(nodes, settingsText(cx, func() string { return d.resetMessage }))
 	}
-	return settingsColumn(nodes...)
+	return core.View{Style: core.Style{Gap: 8, MinWidth: core.Pt(0)}, Children: nodes}
 }
 func (d *desktopUsage) beginReset(r quota.Reading) {
 	if !d.active || d.busy {
@@ -111,7 +130,17 @@ func (d *desktopUsage) resetConfirmation(cx *core.Scope) core.Node {
 	if d.resetting {
 		label = tr("Using card…")
 	}
-	return settingsColumn(settingsText(cx, func() string { return title }), settingsText(cx, func() string { return d.resetReading.Account }), settingsText(cx, func() string { return body }), settingsText(cx, func() string { return selection }), settingsText(cx, func() string { return d.resetMessage }), settingsActions(settingsButton("usage-reset-cancel", tr("Cancel"), func() { d.resetOpen = false; d.changed() }, func() bool { d.revision.Get(); return d.resetting }), settingsButton("usage-reset-confirm", label, d.consumeReset, func() bool { d.revision.Get(); return d.busy })))
+	return core.View{Style: core.Style{Gap: 12}, Children: []core.Node{
+		core.Text{Content: title, Style: core.Style{FontSize: 15, FontWeight: ui.Semibold}},
+		settingsText(cx, func() string { return d.resetReading.Account }),
+		settingsText(cx, func() string { return body }),
+		settingsText(cx, func() string { return selection }),
+		settingsText(cx, func() string { return d.resetMessage }),
+		core.View{Style: core.Style{Direction: core.Row, JustifyContent: core.JustifyEnd, Gap: 8}, Children: []core.Node{
+			settingsButton("usage-reset-cancel", tr("Cancel"), func() { d.resetOpen = false; d.changed() }, func() bool { d.revision.Get(); return d.resetting }),
+			settingsButton("usage-reset-confirm", label, d.consumeReset, func() bool { d.revision.Get(); return d.busy }),
+		}},
+	}}
 }
 func (d *desktopUsage) consumeReset() {
 	if !d.active || d.busy || !d.resetOpen || d.reset == nil {

@@ -47,3 +47,41 @@ func TestLongToolCallStaysInsideMessageColumn(t *testing.T) {
 		})
 	}
 }
+
+func TestActivitySummaryAndHeaderlessFileDetailsOnPhone(t *testing.T) {
+	thread := model.Thread{ID: 1, Messages: []model.Message{
+		{ID: 1, Role: "user", Content: "Edit two files"},
+		{ID: 2, Role: "activity", Kind: "fileChange", Status: "completed", Presentation: &model.MessagePresentation{
+			Title: "Updated files", Format: "files", Changes: []model.PresentedFileChange{
+				{Path: "first.go", Diff: "@@ -1 +1 @@\n-old line\n+new line"},
+				{Path: "second.go", Diff: "+another line"},
+			},
+		}},
+		{ID: 3, Role: "tool", Kind: "webSearch", Status: "completed", Agents: []model.SubAgent{{ID: "review", Name: "Review", Status: "running"}}},
+		{ID: 4, Role: "assistant", Content: "Checking the result."},
+		{ID: 5, Role: "tool", Kind: "commandExecution", Status: "failed", Item: &model.Activity{Command: "go test"}},
+	}}
+	app := nsgotest.Start(t, func(cx *core.Scope) core.Node {
+		cx.SetTheme(nswidgets.Theme())
+		return View{Thread: func() model.Thread { return thread }}
+	}, nsgotest.Size(320, 750), nsgotest.Environment(core.Environment{OS: core.OSIOS, Idiom: core.IdiomPhone, FontScale: 1.6}))
+	header := app.Find("id:run-2")
+	if header.Frame.Size.Height < 44 || header.Frame.Size.Width > 320 || !app.Exists("id:activity-run-working") {
+		t.Fatal("phone summary does not fit or lacks the live activity indicator")
+	}
+	for _, want := range []string{"Edited 2 files · 1 search · 1 Running", "+2", "−1", "Checking the result.", "Failed · go test"} {
+		if !strings.Contains(joined(app), want) {
+			t.Fatalf("missing %q in %s", want, joined(app))
+		}
+	}
+	if strings.Contains(joined(app), "first.go") {
+		t.Fatal("collapsed activity rendered file details")
+	}
+	app.Press("id:run-2")
+	app.Press("id:activity-2")
+	for _, want := range []string{"first.go", "second.go", "-old line", "+new line", "+another line"} {
+		if !strings.Contains(joined(app), want) {
+			t.Fatalf("missing %q in %s", want, joined(app))
+		}
+	}
+}

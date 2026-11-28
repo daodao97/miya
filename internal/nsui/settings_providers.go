@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/nsgo-dev/nsgo/base"
 	"github.com/nsgo-dev/nsgo/core"
+	"github.com/nsgo-dev/nsgo/ui"
 
 	"miya/internal/agent/provider"
 	"miya/internal/chat/model"
+	"miya/internal/nswidgets"
 )
 
 func providerSettings(cx *core.Scope, c Host) core.Node {
@@ -39,25 +40,31 @@ func providerSettings(cx *core.Scope, c Host) core.Node {
 		finish(local())
 	}
 	return settingsColumn(
-		settingsButton("provider-new", tr("Add provider"), func() { editing.Set(&provider.View{}) }, saving.Get),
 		settingsText(cx, errText.Get),
 		core.Dynamic(func(cx *core.Scope) core.Node {
 			if draft := editing.Get(); draft != nil {
 				return providerForm(cx, c, *draft, saving.Get, func(edit provider.Edit) {
 					call("providerSave", edit, func() error { return c.SaveProvider(edit) }, func() { editing.Set(nil) })
-				}, func() { editing.Set(nil) })
+				}, func() { errText.Set(""); editing.Set(nil) })
 			}
 			views := Live(c.ProviderViews)()
 			use := Live(c.ProviderUse)()
-			nodes := []core.Node{}
+			nodes := []core.Node{settingsFormActions(ui.Button{TestID: "provider-new", Text: tr("Add provider"), Icon: nswidgets.IconOf("plus"),
+				OnPress: func() { errText.Set(""); editing.Set(&provider.View{}) }, Disabled: saving.Get})}
+			if len(views) == 0 {
+				nodes = append(nodes, settingsText(cx, func() string {
+					return tr("No providers yet. Add an API key and base URL to use them in Claude Code, Codex or Pi.")
+				}))
+			}
 			for _, v := range views {
 				body := []core.Node{
-					autoHeading(v.Name),
+					settingsSectionTitle(v.Name),
 					settingsText(cx, func() string { return strings.Join(v.Models, ", ") }),
 				}
+				var bindings []core.Node
 				for _, agent := range provider.Agents {
 					if provider.Supports(agent, v.Endpoints) {
-						body = append(body, settingsToggle("provider-"+v.ID+"-"+agent, model.AgentName(agent),
+						bindings = append(bindings, ui.FormRow{Title: model.AgentName(agent), Control: settingsToggle("provider-"+v.ID+"-"+agent, model.AgentName(agent),
 							func() bool { return use[agent] == v.ID }, func(on bool) {
 								id := v.ID
 								if !on {
@@ -65,18 +72,22 @@ func providerSettings(cx *core.Scope, c Host) core.Node {
 								}
 								call("providerUse", provider.Use{Agent: agent, ID: id},
 									func() error { return c.EnableProvider(agent, v.ID, on) }, nil)
-							}, saving.Get))
+							}, saving.Get)})
 					}
 				}
+				if len(bindings) > 0 {
+					body = append(body, ui.FormSection{Children: bindings})
+				}
 				confirm := core.NewSignal(cx, false)
-				body = append(body, settingsActions(
+				body = append(body, settingsFormActions(
 					settingsButton("provider-edit-"+v.ID, tr("Edit"), func() { editing.Set(&v) }, saving.Get),
 					settingsButton("provider-delete-"+v.ID, tr("Delete"), func() { confirm.Set(true) }, saving.Get),
 				), core.Show{When: confirm.Get, Then: func(cx *core.Scope) core.Node {
-					return settingsActions(
-						settingsButton("provider-confirm-"+v.ID, tr("Confirm deletion"), func() {
+					return settingsFormActions(
+						settingsButton("", tr("Cancel"), func() { confirm.Set(false) }, saving.Get),
+						ui.Button{TestID: "provider-confirm-" + v.ID, Text: tr("Confirm deletion"), Variant: ui.ButtonDanger, Disabled: saving.Get, OnPress: func() {
 							call("providerDelete", v.ID, func() error { return c.DeleteProvider(v.ID) }, func() { confirm.Set(false) })
-						}, saving.Get), settingsButton("", tr("Cancel"), func() { confirm.Set(false) }, saving.Get),
+						}},
 					)
 				}})
 				nodes = append(nodes, autoCard(cx, body...))
@@ -93,13 +104,19 @@ func providerForm(cx *core.Scope, c Host, v provider.View, saving func() bool, s
 	busy := core.NewSignal(cx, false)
 	message := core.NewSignal(cx, "")
 	endpoints := map[provider.API]*core.Signal[string]{}
-	keyPrompt := tr("API key")
-	if v.KeyHint != "" {
-		keyPrompt += " · ••••" + v.KeyHint
+	keyHint := ""
+	title := tr("Add provider")
+	if v.ID != "" {
+		title = tr("Edit provider")
 	}
+	if v.KeyHint != "" {
+		keyHint = fmt.Sprintf(tr("Leave blank to keep ••••%s"), v.KeyHint)
+	}
+	disabled := func() bool { return busy.Get() || saving() }
 	nodes := []core.Node{
-		base.Input{TestID: "provider-name", Label: tr("Name"), Placeholder: tr("Name"), Value: name.Get, OnChange: name.Set},
-		base.Input{TestID: "provider-key", Label: tr("API key"), Placeholder: keyPrompt, Masked: true, Value: key.Get, OnChange: key.Set},
+		settingsSectionTitle(title),
+		settingsInlineField(tr("Name"), ui.Input{TestID: "provider-name", Label: tr("Name"), Placeholder: tr("My provider"), Value: name.Get, OnChange: name.Set, Disabled: disabled}),
+		settingsInlineField(tr("API key"), ui.Input{TestID: "provider-key", Label: tr("API key"), Placeholder: keyHint, Masked: true, Value: key.Get, OnChange: key.Set, Disabled: disabled}),
 	}
 	for _, api := range provider.APIs {
 		value := ""
@@ -109,8 +126,15 @@ func providerForm(cx *core.Scope, c Host, v provider.View, saving func() bool, s
 			}
 		}
 		endpoints[api] = core.NewSignal(cx, value)
-		label := fmt.Sprintf(tr("%s endpoint"), string(api))
-		nodes = append(nodes, base.Input{TestID: "provider-endpoint-" + string(api), Label: label, Placeholder: label, Value: endpoints[api].Get, OnChange: endpoints[api].Set})
+		label := tr("Anthropic Messages")
+		switch api {
+		case provider.Responses:
+			label = tr("OpenAI Responses")
+		case provider.Chat:
+			label = tr("OpenAI Chat Completions")
+		}
+		nodes = append(nodes, settingsInlineField(label, ui.Input{TestID: "provider-endpoint-" + string(api), Label: label,
+			Placeholder: "https://", Value: endpoints[api].Get, OnChange: endpoints[api].Set, Disabled: disabled}))
 	}
 	edit := func() provider.Edit {
 		result := provider.Edit{ID: v.ID, Name: name.Get(), APIKey: key.Get()}
@@ -148,14 +172,18 @@ func providerForm(cx *core.Scope, c Host, v provider.View, saving func() bool, s
 			})
 		}()
 	}
-	disabled := func() bool { return busy.Get() || saving() }
-	nodes = append(nodes, base.Input{TestID: "provider-models", Label: tr("Models"), Placeholder: tr("Models"), Multiline: true, Value: models.Get, OnChange: models.Set},
-		settingsText(cx, message.Get), settingsActions(
-			settingsButton("provider-fetch", tr("Fetch models"), fetch, disabled),
-			settingsButton("provider-save", tr("Save"), func() { save(edit()) }, disabled),
+	nodes = append(nodes,
+		settingsField(tr("Models"), ui.Input{TestID: "provider-models", Label: tr("Models"), Placeholder: tr("One model ID per line; the first is the default"),
+			Multiline: true, Value: models.Get, OnChange: models.Set, Disabled: disabled}),
+		settingsText(cx, message.Get),
+		settingsFormActions(
+			ui.Button{TestID: "provider-fetch", Text: tr("Fetch models"), Variant: ui.ButtonSecondary, OnPress: fetch, Disabled: saving, Busy: busy.Get},
 			settingsButton("provider-cancel", tr("Cancel"), cancel, saving),
+			ui.Button{TestID: "provider-save", Text: tr("Save"), OnPress: func() { save(edit()) }, Disabled: func() bool {
+				return disabled() || v.ID == "" && strings.TrimSpace(key.Get()) == "" || len(edit().Endpoints) == 0
+			}},
 		))
-	return settingsColumn(nodes...)
+	return autoCard(cx, nodes...)
 }
 
 func agentEnvironmentSettings(cx *core.Scope, c Host) core.Node {
@@ -173,7 +201,7 @@ func agentEnvironmentSettings(cx *core.Scope, c Host) core.Node {
 			}, busy),
 			core.Show{When: func() bool { return get().WSL != "" }, Then: func(cx *core.Scope) core.Node {
 				return settingsActions(
-					base.Input{TestID: "agent-wsl-distribution", Label: tr("WSL distribution"), Placeholder: tr("Default distribution"), Value: draft.Get, OnChange: draft.Set, Disabled: busy},
+					ui.Input{TestID: "agent-wsl-distribution", Label: tr("WSL distribution"), Placeholder: tr("Default distribution"), Value: draft.Get, OnChange: draft.Set, Disabled: busy},
 					settingsButton("agent-wsl-save", tr("Save"), func() {
 						value := strings.TrimSpace(draft.Get())
 						if value == "" {

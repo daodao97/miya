@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/nsgo-dev/nsgo/core"
+	"github.com/nsgo-dev/nsgo/ui"
 	"miya/internal/agent"
 	"miya/internal/appmodel"
 	"miya/internal/chat/composer"
@@ -17,16 +18,17 @@ import (
 )
 
 type composerCompletion struct {
-	d          *desktopComposer
-	token      composer.ComposerToken
-	source     string
-	generation int
-	cancel     context.CancelFunc
-	open       *core.Signal[bool]
-	choices    *core.Signal[[]model.ComposerChoice]
-	selected   *core.Signal[int]
-	status     *core.Signal[string]
-	files      *core.Signal[[]string]
+	d           *desktopComposer
+	token       composer.ComposerToken
+	source      string
+	generation  int
+	cancel      context.CancelFunc
+	pendingMove int
+	open        *core.Signal[bool]
+	choices     *core.Signal[[]model.ComposerChoice]
+	selected    *core.Signal[int]
+	status      *core.Signal[string]
+	files       *core.Signal[[]string]
 }
 
 func newComposerCompletion(cx *core.Scope, d *desktopComposer) *composerCompletion {
@@ -36,6 +38,7 @@ func newComposerCompletion(cx *core.Scope, d *desktopComposer) *composerCompleti
 }
 func (m *composerCompletion) close() {
 	m.generation++
+	m.pendingMove = 0
 	if m.cancel != nil {
 		m.cancel()
 		m.cancel = nil
@@ -117,11 +120,18 @@ func (m *composerCompletion) editAt(value string, end int) {
 			if generation != m.generation || c.State().Cwd != project || c.State().ReferenceSource != source || c.Current().ID != thread {
 				return
 			}
+			m.cancel = nil
+			move := m.pendingMove
+			m.pendingMove = 0
 			if err != nil {
 				m.status.Set(tr("Unable to search files: ") + err.Error())
 				return
 			}
-			m.choices.Set(append(append([]model.ComposerChoice(nil), refs...), matches...))
+			items := append(slices.Clone(refs), matches...)
+			m.choices.Set(items)
+			if len(items) > 0 && move != 0 {
+				m.selected.Set((move%len(items) + len(items)) % len(items))
+			}
 			m.status.Set(tr("No matching files"))
 		})
 	}()
@@ -187,6 +197,7 @@ func (m *composerCompletion) choose(index int) {
 }
 func (m *composerCompletion) view() core.Node {
 	return core.Show{When: Live(m.visible), Then: func(cx *core.Scope) core.Node {
+		colors := nswidgets.ColorsOf(cx)
 		return core.View{TestID: "composer-completion", StyleFunc: nswidgets.CardStyle(cx), Children: []core.Node{
 			nswidgets.MutedText(cx, func() string {
 				switch m.token.Kind {
@@ -199,13 +210,7 @@ func (m *composerCompletion) view() core.Node {
 			}),
 			core.Each(Live(m.items), choiceKey, func(cx *core.Scope, get func() model.ComposerChoice, index func() int) core.Node {
 				key := core.Untracked(cx, func() string { return choiceKey(get()) })
-				return core.View{StyleFunc: func() core.Style {
-					s := core.Style{Display: displayIf(index()/6 == m.selected.Get()/6)}
-					if index() == m.selected.Get() {
-						s.Background = nswidgets.ColorsOf(cx).Selected()
-					}
-					return s
-				}, Children: []core.Node{composerButton("completion-"+key, func() string {
+				text := func() string {
 					item := get()
 					prefix := ""
 					if m.token.Kind == '/' {
@@ -215,8 +220,16 @@ func (m *composerCompletion) view() core.Node {
 						prefix = "#"
 					}
 					return prefix + item.Name + " · " + tr(item.Detail)
-				}, func() { m.choose(index()) })}}
-
+				}
+				selected := func() bool { return index() == m.selected.Get() }
+				return core.View{TestID: "completion-" + key, Role: core.RoleButton, LabelFunc: text, Selected: selected,
+					OnPress: func(core.PressEvent) { m.choose(index()) },
+					Style:   core.Style{Padding: core.All(6), CornerRadius: 6},
+					StyleFunc: func() core.Style {
+						return core.Style{Display: displayIf(index()/6 == m.selected.Get()/6),
+							Selected: &core.Style{Background: ui.Alpha(colors.Link(), 0.18)}}
+					},
+					Children: []core.Node{core.Text{ContentFunc: text, Style: core.Style{FontSize: 12}}}}
 			}),
 			nswidgets.MutedText(cx, Live(func() string {
 				if len(m.items()) == 0 {
@@ -250,14 +263,14 @@ func (m *composerCompletion) onKey(key string) {
 	case "escape":
 		m.close()
 	case "up", "down":
-		items := m.items()
-		if len(items) == 0 {
-			return
-		}
 		step := 1
 		if key == "up" {
 			step = -1
 		}
-		m.selected.Set((m.selected.Get() + step + len(items)) % len(items))
+		if count := len(m.items()); count > 0 {
+			m.selected.Set((m.selected.Get() + step + count) % count)
+		} else if m.token.Kind == '@' && m.cancel != nil {
+			m.pendingMove += step
+		}
 	}
 }

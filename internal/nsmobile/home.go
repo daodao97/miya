@@ -1,7 +1,6 @@
 package nsmobile
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/nsgo-dev/nsgo/base"
@@ -9,7 +8,6 @@ import (
 	"github.com/nsgo-dev/nsgo/ui"
 	"github.com/nsgo-dev/nsgo/ui/chat"
 
-	"miya/internal/chat/model"
 	"miya/internal/nswidgets"
 )
 
@@ -99,30 +97,40 @@ func (m *App) agentPill(cx *core.Scope, id, name string, current func() string) 
 		}}}}
 }
 
-func (m *App) pairView(cx *core.Scope) core.Node {
-	return scroll(text(tr("Connect to your desktop")), text(tr("Scan on your phone, or paste a desktop connection code")),
-		m.button("pair-scan", tr("Scan to connect"), live(m, func() bool { return m.scanning }), m.scan),
-		base.Input{Label: tr("Desktop connection code"), Placeholder: tr("Or paste a connection code"), Value: m.pairCode.Get, OnChange: m.pairCode.Set, TestID: "pair-code", NoAutoCorrect: true, AutoCapitalize: core.AutoCapitalizeNone, Style: core.Style{MinHeight: core.Pt(48), FontSize: 16, Padding: core.All(12)}},
-		m.button("paste-code", tr("Paste"), nil, func() { cx.ReadClipboard(func(value string) { m.pairCode.Set(value) }) }),
-		m.button("pair-connect", tr("Connect"), nil, func() {
-			m.pair(m.pairCode.Get())
-		}),
-		core.Text{TestID: "pair-error", ContentFunc: live(m, func() string { return m.Error + "\n" + m.PersistenceError }), Style: core.Style{FontSize: 14}},
+func (m *App) pairView(cx *core.Scope, atRoot bool) core.Node {
+	var sections []core.Node
+	if atRoot {
+		sections = append(sections, core.View{Style: core.Style{AlignItems: core.AlignCenter, Gap: 12, Padding: core.Edges{Top: 20, Bottom: 4}}, Children: []core.Node{
+			nswidgets.Icon("device-desktop", 36, nswidgets.ColorsOf(cx).Link),
+			core.Text{Content: tr("Connect to your desktop"), Role: core.RoleHeader, Style: core.Style{FontSize: 26, FontWeight: 600, TextAlign: core.TextAlignCenter}},
+		}})
+	}
+	paste := func() { cx.ReadClipboard(func(value string) { m.pairCode.Set(value) }) }
+	connect := func() {
+		cx.DismissKeyboard()
+		m.pair(m.pairCode.Get())
+	}
+	disabled := func() bool { return strings.TrimSpace(m.pairCode.Get()) == "" }
+	sections = append(sections,
+		m.group(cx, "", groupedFooter(cx, "", func() string { return tr("Scan on your phone, or paste a desktop connection code") }),
+			gRow{ID: "pair-scan", Label: tr("Scan to connect"), Icon: "device-mobile", Chevron: true, Disabled: live(m, func() bool { return m.scanning }), Press: m.scan}),
+		groupedSection(cx, tr("Connection code"), nil,
+			base.Input{Label: tr("Desktop connection code"), Placeholder: tr("Or paste a connection code"), Value: m.pairCode.Get, OnChange: m.pairCode.Set,
+				TestID: "pair-code", NoAutoCorrect: true, AutoCapitalize: core.AutoCapitalizeNone,
+				OnSubmit: func(string) {
+					if !disabled() {
+						m.act(connect)()
+					}
+				},
+				Style: core.Style{MinHeight: core.Pt(52), FontSize: 16, Padding: core.Symmetric(12, 16)}},
+			m.groupedRow(cx, gRow{ID: "paste-code", Label: tr("Paste"), Icon: "copy", Action: true, Press: paste})),
+		ui.Button{Text: tr("Connect"), TestID: "pair-connect", Size: ui.SizeLarge, Variant: ui.ButtonPrimary, Disabled: disabled,
+			OnPress: m.act(connect), Style: core.Style{MinHeight: core.Pt(48)}},
+		groupedState(cx, "alert-circle", live(m, func() string { return strings.TrimSpace(m.Error + "\n" + m.PersistenceError) }), nil, func() bool { return true }),
 	)
+	return m.groupedPage(cx, sections...)
 }
-func (m *App) quotas(cx *core.Scope) core.Node {
-	return scroll(text(tr("Usage")), core.Dynamic(func(cx *core.Scope) core.Node {
-		m.revision.Get()
-		var nodes []core.Node
-		for _, q := range m.State.Quotas {
-			nodes = append(nodes, text(m.agentName(q.Agent)))
-			for _, w := range q.Windows {
-				nodes = append(nodes, text(fmt.Sprintf(tr("%.0f%% used"), w.UsedPercent)+" · "+tr(w.Label)+" · "+quotaResetLabel(w.ResetsAt)))
-			}
-		}
-		return column(nodes...)
-	}))
-}
+
 func (m *App) agentName(id string) string {
 	for _, d := range m.AgentDescriptors() {
 		if d.ID == id {
@@ -133,14 +141,24 @@ func (m *App) agentName(id string) string {
 }
 
 func (m *App) projects(cx *core.Scope) core.Node {
-	return scroll(text(tr("Select project")), core.Each(live(m, func() []model.ProjectSnapshot { return m.State.Projects }), func(p model.ProjectSnapshot) string { return p.Path }, func(cx *core.Scope, p func() model.ProjectSnapshot, _ func() int) core.Node {
-		return m.button("select-"+p().Path, p().Name, nil, func() {
-			m.Selected = p().Path
-			m.ExpandedProject = p().Path
-			if m.NewProject != "" {
-				m.NewProject = p().Path
-			}
-			m.pages.Open("")
-		})
+	return m.groupedPage(cx, core.Dynamic(func(cx *core.Scope) core.Node {
+		m.revision.Get()
+		if len(m.State.Projects) == 0 {
+			return groupedState(cx, "folder", func() string { return tr("No projects on this desktop yet") }, nil, nil)
+		}
+		var rows []gRow
+		for _, p := range m.State.Projects {
+			rows = append(rows, gRow{ID: "select-" + p.Path, Label: p.Name, Icon: "folder",
+				Checked: live(m, func() bool { return m.SelectedProject().Path == p.Path }),
+				Press: func() {
+					m.Selected = p.Path
+					m.ExpandedProject = p.Path
+					if m.NewProject != "" {
+						m.NewProject = p.Path
+					}
+					m.pages.Pop()
+				}})
+		}
+		return m.group(cx, "", nil, rows...)
 	}))
 }

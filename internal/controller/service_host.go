@@ -248,7 +248,7 @@ func (c *Controller) ServiceRequest(req svcproto.Request) (any, error) {
 		if err := json.Unmarshal(req.Args, &a); err != nil {
 			return nil, err
 		}
-		return c.prepareTaskAction(a.Thread, a.Task, a.Action), nil
+		return c.PrepareTaskAction(a.Thread, a.Task, a.Action), nil
 	case "command":
 		var a svcproto.Command
 		_ = arg(&a)

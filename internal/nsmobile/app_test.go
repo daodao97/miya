@@ -274,7 +274,7 @@ func TestPhoneModelEffortAndPolicySheets(t *testing.T) {
 	if o.Effort != "low" || o.Policy != "never" {
 		t.Fatalf("message options: %#v", o)
 	}
-	app.Press("id:page-back")
+	app.Back()
 	app.Settle()
 	app.Type("id:mobile-composer", "options")
 	app.Press("id:send")
@@ -333,23 +333,11 @@ func TestPhoneThreadReferenceSuggestionsUseDurableSource(t *testing.T) {
 	}
 }
 
-// choosePhoneAction opens the conversation actions, the system's action
-// sheet, and chooses the action labeled label.
+// choosePhoneAction opens and selects a row in the conversation action sheet.
 func choosePhoneAction(t *testing.T, app *nsgotest.App, label string) {
 	t.Helper()
-	app.OnAlert = func(a core.AlertConfig) int {
-		app.OnAlert = nil
-		if a.Title != tr("Conversation actions") || !a.Sheet || a.Actions[len(a.Actions)-1].Role != core.AlertCancel {
-			t.Errorf("actions sheet %#v", a)
-		}
-		for i, b := range a.Actions {
-			if b.Label == label {
-				return i
-			}
-		}
-		t.Errorf("no action %q in %#v", label, a.Actions)
-		return -1
-	}
 	app.Press("id:conversation-actions")
+	app.WaitFor("id:conversation-actions-sheet", time.Second)
+	app.Press("id:conversation-actions-sheet >> label:" + label)
 	app.Settle()
 }

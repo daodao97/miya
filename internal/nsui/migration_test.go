@@ -14,7 +14,10 @@ import (
 	"miya/internal/agent/cliupdate"
 	"miya/internal/agent/quota"
 	"miya/internal/appmodel"
+	"miya/internal/async"
 	"miya/internal/chat/model"
+	"miya/internal/memory"
+	"miya/internal/memory/manager"
 	"miya/internal/nswidgets"
 	"miya/internal/selfupdate"
 	svcproto "miya/internal/service/protocol"
@@ -41,6 +44,11 @@ func (h *migrationHost) UpgradeAgent(id string) {
 func (h *migrationHost) TaskAction(thread int, id, action string) string {
 	h.taskCalls = append(h.taskCalls, fmt.Sprintf("%d:%s:%s", thread, id, action))
 	return ""
+}
+
+func (h *migrationHost) PrepareTaskAction(thread int, id, action string) any {
+	h.TaskAction(thread, id, action)
+	return async.Reply(func() (any, error) { return "", nil })
 }
 
 func TestMigratedShellShortcutsAndPalette(t *testing.T) {
@@ -196,6 +204,63 @@ func TestMigratedTaskActionsAndSubagentStayWithConversation(t *testing.T) {
 	app.Press("id:thread-2")
 	if app.Exists("id:active-subagent-child") || app.Exists("id:task-pause-g") {
 		t.Fatal("task UI leaked across conversation")
+	}
+}
+
+func TestDesktopFollowUpActionsUseDurableTaskHandler(t *testing.T) {
+	h := &migrationHost{fakeHost: newFakeHost(model.Thread{ID: 1, Tasks: []model.ThreadTask{
+		{ID: "waiting", Kind: "follow_up", Status: "waiting"},
+		{ID: "blocked", Kind: "follow_up", Status: "blocked"},
+	}}, model.Thread{ID: 2, ReadOnly: true, Tasks: []model.ThreadTask{{ID: "readonly", Kind: "follow_up", Status: "waiting"}}})}
+	app := startBridged(t, h)
+	app.Press("id:task-cancel-waiting")
+	app.Press("id:task-dismiss-blocked")
+	if strings.Join(h.taskCalls, ",") != "1:waiting:cancel,1:blocked:dismiss" {
+		t.Fatal(h.taskCalls)
+	}
+	app.Press("id:thread-2")
+	if app.Exists("id:task-cancel-waiting") || app.Enabled("id:task-cancel-readonly") {
+		t.Fatal("follow-up controls lost conversation or read-only scope")
+	}
+}
+
+func TestDesktopMemoryNoticeLoadsOnRequestAndUndoesExactVersion(t *testing.T) {
+	h := newFakeHost(model.Thread{ID: 1, Messages: []model.Message{{ID: 1, Role: "memory", Memory: &model.MemoryNotice{
+		Explicit: true, Project: "/work", Scope: "project", ID: "entry", Version: 3,
+	}}}})
+	var reads atomic.Int32
+	undone := false
+	h.state.Remote = settingsTestService(t, func(r svcproto.Request) (any, error) {
+		if r.Op != "memoryGet" && r.Op != "memoryForget" {
+			return nil, nil
+		}
+		var req manager.Request
+		if err := json.Unmarshal(r.Args, &req); err != nil {
+			return nil, err
+		}
+		if req.Project != "/work" || req.Scope != "project" || req.ID != "entry" || req.Version != 3 {
+			return nil, fmt.Errorf("wrong memory request: %+v", req)
+		}
+		if r.Op == "memoryGet" {
+			reads.Add(1)
+		} else {
+			undone = true
+		}
+		if undone {
+			return memory.Entry{ID: "entry", Version: 4, State: memory.EntryForgotten}, nil
+		}
+		return memory.Entry{ID: "entry", Version: 3, State: memory.EntryActive, Content: "Remember to run the checks"}, nil
+	})
+	app := startBridged(t, h)
+	if reads.Load() != 0 {
+		t.Fatal("notice loaded memory before expanding")
+	}
+	app.Press("label:Miya memory changed · Current project")
+	app.WaitFor("text:Remember to run the checks", time.Second)
+	app.Press("id:memory-notice-undo-entry")
+	app.WaitForGone("id:memory-notice-undo-entry", time.Second)
+	if app.Exists("text:Remember to run the checks") || reads.Load() != 2 {
+		t.Fatal("memory notice did not refresh after undo", app.Texts())
 	}
 }
 

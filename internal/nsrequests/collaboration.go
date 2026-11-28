@@ -10,6 +10,7 @@ import (
 
 	"miya/internal/chat/model"
 	dg "miya/internal/delegation"
+	"miya/internal/nswidgets"
 )
 
 type CollaborationHost interface {
@@ -24,9 +25,41 @@ func settingsColumn(n ...core.Node) core.Node {
 func settingsActions(n ...core.Node) core.Node {
 	return core.View{Style: core.Style{Direction: core.Row, Wrap: core.Wrap, Gap: 8}, Children: n}
 }
-func taskButton(id string, label func() string, press func()) core.Node {
-	return TouchButton(id, label, nil, press)
+func collaborationTaskRow(cx *core.Scope, id string, get func() CollaborationTaskView, press func()) core.Node {
+	colors := nswidgets.ColorsOf(cx)
+	state := func() string {
+		t := get()
+		return model.AgentName(t.Agent) + " · " + collaborationStateLabel(t.State)
+	}
+	subtitle := func() string {
+		t := get()
+		return firstSettingsText(t.ResultSummary, t.Progress)
+	}
+	if cx.Env().Desktop() {
+		return TouchButton(id, func() string {
+			return get().Title + " · " + state() + "\n" + subtitle() + "\n" + collaborationNotificationLabel(get().Notification)
+		}, nil, press)
+	}
+	return core.View{TestID: id, Role: core.RoleButton, LabelFunc: func() string { return get().Title + " · " + state() },
+		Style: core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Gap: 12, Padding: core.All(14), MinHeight: core.Pt(52), CornerRadius: 14},
+		StyleFunc: func() core.Style {
+			return core.Style{Background: colors.Panel(), Active: &core.Style{Background: colors.Hover()}}
+		},
+		OnPress: func(core.PressEvent) { press() },
+		Children: []core.Node{
+			nswidgets.Icon("stack-2", 19, colors.Link),
+			core.View{Style: core.Style{FlexGrow: 1, FlexShrink: 1, MinWidth: core.Pt(0), Gap: 4}, Children: []core.Node{
+				core.Text{ContentFunc: func() string { return get().Title }, Style: core.Style{FontSize: 16, FontWeight: 600}},
+				nswidgets.MutedText(cx, state),
+				core.Show{When: func() bool { return subtitle() != "" }, Then: func(cx *core.Scope) core.Node {
+					return core.Text{ContentFunc: subtitle, MaxLines: 2, EllipsizeMode: core.EllipsizeTail,
+						StyleFunc: func() core.Style { return core.Style{FontSize: 13, Color: colors.Muted()} }}
+				}},
+			}},
+			nswidgets.Icon("chevron-right", 14, colors.Muted),
+		}}
 }
+
 func firstSettingsText(values ...string) string {
 	for _, v := range values {
 		if v != "" {
@@ -50,13 +83,25 @@ func CollaborationContent(cx *core.Scope, c CollaborationHost, p *CollaborationP
 	selected := core.NewMemo(cx, func() string { read(); return p.Selected })
 	list := core.Show{When: func() bool { return selected.Get() == "" }, Then: func(cx *core.Scope) core.Node {
 		return settingsColumn(
-			core.Show{When: func() bool { read(); return p.Loaded && len(p.Rows) == 0 }, Then: func(cx *core.Scope) core.Node { return core.Text{Content: tr("No collaboration tasks yet")} }},
+			core.Show{When: func() bool { read(); return len(p.Rows) == 0 && p.Err == "" }, Then: func(cx *core.Scope) core.Node {
+				colors := nswidgets.ColorsOf(cx)
+				loading := func() bool { read(); return !p.Loaded }
+				return core.View{Style: core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Gap: 12, Padding: core.All(14), MinHeight: core.Pt(52), CornerRadius: 14},
+					StyleFunc: func() core.Style { return core.Style{Background: colors.Panel()} },
+					Children: []core.Node{
+						core.Show{When: loading, Then: func(*core.Scope) core.Node { return ui.Spinner{Size: 18} },
+							Else: func(*core.Scope) core.Node { return nswidgets.Icon("stack-2", 18, colors.Muted) }},
+						nswidgets.MutedText(cx, func() string {
+							if loading() {
+								return tr("Loading…")
+							}
+							return tr("No collaboration tasks yet")
+						}),
+					}}
+			}},
 			core.Each(func() []CollaborationTaskView { read(); return p.Rows }, func(t CollaborationTaskView) string { return t.ID }, func(cx *core.Scope, get func() CollaborationTaskView, _ func() int) core.Node {
 				id := core.Untracked(cx, func() string { return get().ID })
-				return taskButton("collaboration-task-"+id, func() string {
-					t := get()
-					return t.Title + " · " + model.AgentName(t.Agent) + " · " + collaborationStateLabel(t.State) + "\n" + firstSettingsText(t.ResultSummary, t.Progress) + "\n" + collaborationNotificationLabel(t.Notification)
-				}, func() { p.Read(id, call); bump() })
+				return collaborationTaskRow(cx, "collaboration-task-"+id, get, func() { p.Read(id, call); bump() })
 			}),
 			core.Show{When: func() bool { read(); return p.next != "" }, Then: func(cx *core.Scope) core.Node {
 				return button("more", tr("Load more"), func() bool { read(); return p.loading }, func() { p.Refresh(c.CollaborationCapabilities(), call, true) })
@@ -146,19 +191,23 @@ func CollaborationContent(cx *core.Scope, c CollaborationHost, p *CollaborationP
 			}),
 		)
 	}}
+	storageError := func() string {
+		read()
+		if cap := c.CollaborationCapabilities(); cap != nil {
+			return firstSettingsText(p.storageError, cap.StorageError)
+		}
+		return ""
+	}
 	return core.Scroll{Style: core.Style{MaxHeight: core.Pt(420)}, Children: []core.Node{settingsColumn(
-		core.Text{ContentFunc: func() string {
-			read()
-			cap := c.CollaborationCapabilities()
-			if cap != nil && (p.storageError != "" || cap.StorageError != "") {
-				return tr("Task storage unavailable: ") + firstSettingsText(p.storageError, cap.StorageError)
-			}
-			return ""
+		core.Show{When: func() bool { return storageError() != "" }, Then: func(*core.Scope) core.Node {
+			return core.Text{ContentFunc: func() string { return tr("Task storage unavailable: ") + storageError() }}
 		}},
 		core.Show{When: func() bool { read(); return p.paused }, Then: func(cx *core.Scope) core.Node {
 			return settingsColumn(core.Text{Content: tr("Receiving results is paused")}, button("resume", tr("Resume receiving results"), locked, func() { p.Submit("resume", nil, call) }))
 		}},
-		core.Text{ContentFunc: func() string { read(); return p.Err }, Selectable: core.SelectableOn},
+		core.Show{When: func() bool { read(); return p.Err != "" }, Then: func(*core.Scope) core.Node {
+			return core.Text{ContentFunc: func() string { read(); return p.Err }, Selectable: core.SelectableOn}
+		}},
 		core.Show{When: func() bool { read(); return p.Pending != nil }, Then: func(cx *core.Scope) core.Node {
 			return button("retry", tr("Retry the same request"), func() bool { read(); return p.Busy }, func() { p.Retry(call) })
 		}}, list, detail,

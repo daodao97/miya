@@ -1,5 +1,3 @@
-@/Users/daodao/.codex/RTK.md
-
 # Miya 项目约定
 
 ## 构建、安装与后台服务升级

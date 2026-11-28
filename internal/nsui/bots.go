@@ -1,7 +1,9 @@
 package nsui
 
 import (
+	"reflect"
 	"slices"
+	"strings"
 
 	"github.com/nsgo-dev/nsgo/base"
 	"github.com/nsgo-dev/nsgo/core"
@@ -13,10 +15,13 @@ import (
 	"miya/internal/nswidgets"
 )
 
-func botsPage(cx *core.Scope, c Host, showChat func()) core.Node {
+func botsPage(cx *core.Scope, c Host, showChat func(), showAutomations func(automationShortcut)) core.Node {
 	editing := core.NewSignal[*bot.Bot](cx, nil)
+	profile := core.NewSignal(cx, "")
+	query := core.NewSignal(cx, "")
 	pending := core.NewSignal(cx, false)
 	message := core.NewSignal(cx, "")
+	bots := core.NewMemoFunc(cx, Live(c.Bots), func(a, b []bot.Bot) bool { return reflect.DeepEqual(a, b) })
 	call := func(op string, req bot.Request, done func()) {
 		if pending.Get() {
 			return
@@ -65,6 +70,9 @@ func botsPage(cx *core.Scope, c Host, showChat func()) core.Node {
 			autoRow(autoHeading(tr("Bots")), autoButton("bot-new", "New Bot", func() {
 				editing.Set(&bot.Bot{Agent: c.CurrentAgent(), Project: c.State().Cwd})
 			})),
+			core.Show{When: func() bool { return editing.Get() == nil && profile.Get() == "" }, Then: func(*core.Scope) core.Node {
+				return ui.Input{TestID: "bot-search", Label: tr("Search Bots"), Placeholder: tr("Search Bots"), Value: query.Get, OnChange: query.Set}
+			}},
 			core.Text{TestID: "bots-error", ContentFunc: message.Get, StyleFunc: func() core.Style { return core.Style{Color: colors.Danger()} }},
 			core.Dynamic(func(cx *core.Scope) core.Node {
 				if draft := editing.Get(); draft != nil {
@@ -72,8 +80,20 @@ func botsPage(cx *core.Scope, c Host, showChat func()) core.Node {
 						call("botSave", bot.Request{Bot: b}, func() { editing.Set(nil) })
 					}, func() { editing.Set(nil) })
 				}
+				items := bots.Get()
+				if id := profile.Get(); id != "" {
+					for _, b := range items {
+						if b.ID == id {
+							return botProfile(cx, c, b, func() { profile.Set("") }, showAutomations)
+						}
+					}
+				}
 				var nodes []core.Node
-				for _, b := range Live(c.Bots)() {
+				wanted := strings.ToLower(strings.TrimSpace(query.Get()))
+				for _, b := range items {
+					if wanted != "" && !strings.Contains(strings.ToLower(b.Name+" "+b.Note), wanted) {
+						continue
+					}
 					row := []core.Node{
 						autoRow(nswidgets.AgentIcon(b.Agent, 20), autoHeading(b.Name)),
 						autoMuted(cx, model.AgentName(b.Agent)+" · "+b.Project),
@@ -94,6 +114,7 @@ func botsPage(cx *core.Scope, c Host, showChat func()) core.Node {
 					confirm := core.NewSignal(cx, "")
 					row = append(row, autoRow(
 						autoButton("bot-open-"+b.ID, "Open conversation", func() { talk(b) }),
+						autoButton("bot-profile-"+b.ID, "Bot profile", func() { profile.Set(b.ID) }),
 						autoButton("bot-edit-"+b.ID, "Edit", func() { editing.Set(&b) }),
 						autoButton("bot-reset-"+b.ID, "New conversation", func() { confirm.Set("botReset") }),
 						autoButton("bot-delete-"+b.ID, "Delete", func() { confirm.Set("botDelete") }),
@@ -106,6 +127,9 @@ func botsPage(cx *core.Scope, c Host, showChat func()) core.Node {
 					nodes = append(nodes, autoCard(cx, row...))
 				}
 				if len(nodes) == 0 {
+					if wanted != "" {
+						return autoMuted(cx, tr("No matching Bots"))
+					}
 					return autoMuted(cx, tr("No Bots yet"))
 				}
 				return autoColumn(nodes...)

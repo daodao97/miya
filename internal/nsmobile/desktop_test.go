@@ -177,17 +177,26 @@ func TestDesktopManagerRenamesSwitchesAndRestoresComposer(t *testing.T) {
 	a, b := nsDesktopLink(), nsDesktopLink()
 	changePhone(app, m, func() { m.Connect(a); m.Draft = "draft A"; m.Connect(b); m.Draft = "draft B"; m.pages.Open("desktops") })
 	idA, idB := m.Desktops.Items[0].ID, m.Desktops.Items[1].ID
+	app.Press("id:desktop-entry-" + idA)
 	app.Clear("id:desktop-name-" + idA)
 	app.Type("id:desktop-name-"+idA, "Office")
 	app.Press("id:desktop-rename-" + idA)
 	if m.Desktops.Items[0].Name != "Office" || !m.Desktops.Items[0].Renamed {
 		t.Fatal("rename not saved")
 	}
+	app.Press("id:desktop-entry-" + idA)
 	app.Press("id:desktop-switch-" + idA)
 	if m.Link != a || m.Draft != "draft A" {
 		t.Fatal("desktop A draft not restored")
 	}
 	changePhone(app, m, func() { m.pages.Open("desktops") })
+	app.Press("id:desktop-entry-" + idB)
+	app.OnAlert = func(a core.AlertConfig) int {
+		if len(a.Actions) != 2 || a.Actions[1].Role != core.AlertDestructive {
+			t.Errorf("expected a destructive confirmation, got %#v", a)
+		}
+		return 1
+	}
 	app.Press("id:desktop-remove-" + idB)
 	if len(m.Desktops.Items) != 1 || m.Link != a {
 		t.Fatal("removing inactive desktop changed owner")

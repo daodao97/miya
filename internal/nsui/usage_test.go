@@ -58,7 +58,7 @@ func startUsagePanel(t *testing.T, r quota.Reading) (*nsgotest.App, *desktopUsag
 		d.readings = []quota.Reading{r}
 		d.panelAgent = "codex"
 		return d.panelView(cx)
-	}, nsgotest.Size(340, 480))
+	}, nsgotest.Size(usagePanelWidth, usagePanelLimit))
 	return app, d
 }
 func TestUsagePanelSwitchRefreshAndResetTimes(t *testing.T) {
@@ -79,12 +79,26 @@ func TestUsagePanelSwitchRefreshAndResetTimes(t *testing.T) {
 	if !app.Exists("id:usage-window-codex-0-time") {
 		t.Fatal("cycle time marker missing")
 	}
+	panel := app.Find("id:usage-panel").Bounds()
+	if panel.Size.Width != usagePanelWidth || panel.Size.Height >= usagePanelLimit {
+		t.Fatalf("usage panel did not fit the active reading: %v", panel)
+	}
+	pace, reset := app.Find("id:usage-window-codex-0-pace").Bounds(), app.Find("id:usage-window-codex-0-reset").Bounds()
+	if pace.Origin.Y != reset.Origin.Y || pace.Origin.X+pace.Size.Width > reset.Origin.X {
+		t.Fatalf("pace and reset should share one row: %v and %v", pace, reset)
+	}
+	if !app.Find("id:usage-tab-codex").Props.Selected || app.Find("id:usage-tab-claude").Props.Selected {
+		t.Fatal("wrong selected tab")
+	}
 	app.Press("id:usage-tab-claude")
 	if !strings.Contains(strings.Join(app.Texts(), "\n"), "No usage data") {
 		t.Fatal("empty account missing")
 	}
 	if d.agent != "" {
 		t.Fatal("preview changed tray preference")
+	}
+	if got := app.Find("id:usage-panel").Bounds().Size.Height; got >= panel.Size.Height || !app.Find("id:usage-tab-claude").Props.Selected {
+		t.Fatalf("panel did not resize or select the new tab: height %v", got)
 	}
 	app.Press("id:usage-tab-codex")
 	app.Press("id:usage-refresh")

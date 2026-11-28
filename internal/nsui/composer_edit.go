@@ -46,8 +46,19 @@ func (d *desktopComposer) userContent(cx *core.Scope, get func() model.Message, 
 				settingsActions(ui.Button{Text: tr("Cancel"), TestID: "edit-cancel-" + id, OnPress: func() { editing.Set(false) }}, ui.Button{Text: tr("Send"), TestID: "edit-send-" + id, OnPress: save, Disabled: func() bool { return strings.TrimSpace(text.Get()) == "" }}),
 			}}
 		}
-		return settingsColumn(body, core.Show{When: editable, Then: func(cx *core.Scope) core.Node {
-			return core.View{Style: core.Style{AlignSelf: core.AlignEnd}, Children: []core.Node{ui.IconButton{TestID: "edit-message-" + id, Label: tr("Edit message"), Icon: nswidgets.IconOf("edit"), OnPress: func() { text.Set(editBody(get())); editing.Set(true) }}}}
-		}})
+		hovered := core.NewSignal(cx, false)
+		return core.View{Style: core.Style{Gap: 4, MinWidth: core.Pt(0)},
+			OnMouseEnter: func(core.MouseEvent) { hovered.Set(true) },
+			OnMouseLeave: func(core.MouseEvent) { hovered.Set(false) },
+			Children: []core.Node{body, core.Show{When: editable, Then: func(cx *core.Scope) core.Node {
+				colors := nswidgets.ColorsOf(cx)
+				return core.View{Style: core.Style{Height: core.Pt(24), AlignItems: core.AlignEnd}, Children: []core.Node{
+					core.Show{When: hovered.Get, Then: func(*core.Scope) core.Node {
+						return ui.IconButton{TestID: "edit-message-" + id, Label: tr("Edit message"), Icon: nswidgets.IconOf("edit"),
+							Size: 24, IconSize: 14, Tint: colors.Muted, OnPress: func() { text.Set(editBody(get())); editing.Set(true) }}
+					}},
+				}}
+			}}},
+		}
 	})
 }

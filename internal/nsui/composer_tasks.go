@@ -6,9 +6,11 @@ import (
 	"github.com/nsgo-dev/nsgo/core"
 	"github.com/nsgo-dev/nsgo/ui"
 	"miya/internal/appmodel"
+	"miya/internal/async"
 	"miya/internal/chat/model"
 	"miya/internal/chat/subagent"
 	"miya/internal/nswidgets"
+	svcproto "miya/internal/service/protocol"
 )
 
 func taskStatus(cx *core.Scope, c Host, notice *core.Signal[string]) core.Node {
@@ -16,14 +18,53 @@ func taskStatus(cx *core.Scope, c Host, notice *core.Signal[string]) core.Node {
 	return core.View{TestID: "task-status", Children: []core.Node{
 		core.Each(func() []model.ThreadTask { return thread().Tasks }, func(t model.ThreadTask) string { return t.ID }, func(cx *core.Scope, get func() model.ThreadTask, _ func() int) core.Node {
 			id := core.Untracked(cx, func() string { return get().ID })
+			pending := core.NewSignal(cx, false)
 			button := func(label, action, icon string) core.Node {
-				return ui.IconButton{TestID: "task-" + action + "-" + id, Label: label, Icon: nswidgets.IconOf(icon), Disabled: func() bool { t := thread(); return t.ReadOnly || t.TaskPending || t.TaskStopping }, OnPress: func() { notice.Set(c.TaskAction(c.Current().ID, id, action)) }}
+				disabled := func() bool { t := thread(); return pending.Get() || t.ReadOnly || t.TaskPending || t.TaskStopping }
+				return ui.IconButton{TestID: "task-" + action + "-" + id, Label: label, Icon: nswidgets.IconOf(icon), Disabled: disabled, OnPress: func() {
+					threadID := c.Current().ID
+					if get().Kind != "follow_up" {
+						notice.Set(c.TaskAction(threadID, id, action))
+						return
+					}
+					pending.Set(true)
+					finish := func(value any, err error) {
+						pending.Set(false)
+						if c.Current().ID == threadID {
+							message, _ := value.(string)
+							if err != nil {
+								message = err.Error()
+							}
+							notice.Set(message)
+						}
+					}
+					if cl := c.State().Remote; cl != nil {
+						go func() {
+							var message string
+							err := cl.Call("task", svcproto.TaskAction{Thread: threadID, Task: id, Action: action}, &message)
+							cx.Post(func() { finish(message, err) })
+						}()
+						return
+					}
+					switch reply := c.PrepareTaskAction(threadID, id, action).(type) {
+					case async.Reply:
+						go func() {
+							value, err := reply()
+							cx.Post(func() { finish(value, err) })
+						}()
+					default:
+						finish(reply, nil)
+					}
+				}}
 			}
 			return core.View{StyleFunc: nswidgets.CardStyle(cx), Children: []core.Node{
 				core.Text{ContentFunc: func() string {
 					kind := tr("Goal")
-					if get().Kind == "loop" {
+					switch get().Kind {
+					case "loop":
 						kind = tr("Loop")
+					case "follow_up":
+						kind = tr("Follow-up")
 					}
 					return kind + " · " + appmodel.TaskStatusLabel(thread(), get(), c.TaskWaitingApproval(thread())) + " · " + get().Title
 				}},
@@ -31,7 +72,13 @@ func taskStatus(cx *core.Scope, c Host, notice *core.Signal[string]) core.Node {
 				core.Dynamic(func(cx *core.Scope) core.Node {
 					t := get()
 					var actions []core.Node
-					if t.Kind == "goal" {
+					if t.Kind == "follow_up" {
+						if t.Status == "blocked" {
+							actions = append(actions, button(tr("Dismiss follow-up"), "dismiss", "trash-2"))
+						} else {
+							actions = append(actions, button(tr("Cancel follow-up"), "cancel", "x"))
+						}
+					} else if t.Kind == "goal" {
 						switch t.Status {
 						case "active":
 							actions = append(actions, button(tr("Pause goal"), "pause", "player-pause"))

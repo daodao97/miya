@@ -97,7 +97,21 @@ func TestRichReferenceChipsCopyCutPasteAndUndo(t *testing.T) {
 		t.Fatal("paste all lost wire identity", draft.GetUntracked())
 	}
 	assertAtoms(4)
-
+	app.Post(func() {
+		tr := s.State().Tr().SetSelection(re.TextSelectionAt(s.State().Doc, 4, 4))
+		s.Dispatch(re.CloseHistory(tr))
+	})
+	app.Settle()
+	app.Key("backspace")
+	if draft.GetUntracked() != strings.Replace(copied, thread, "", 1) {
+		t.Fatal("Backspace did not delete the whole reference", draft.GetUntracked())
+	}
+	assertAtoms(3)
+	app.Key("mod+z")
+	if draft.GetUntracked() != copied {
+		t.Fatal("undo did not restore the reference", draft.GetUntracked())
+	}
+	assertAtoms(4)
 }
 
 func TestRichPasteReferenceMenuImageBytesAndReadonly(t *testing.T) {

@@ -5,6 +5,7 @@ import (
 
 	"github.com/nsgo-dev/nsgo/base"
 	"github.com/nsgo-dev/nsgo/core"
+	"github.com/nsgo-dev/nsgo/ui"
 
 	"miya/internal/nswidgets"
 )
@@ -16,8 +17,6 @@ type pageStack struct {
 	cx   *core.Scope
 	nav  *base.Nav[string]
 	menu *core.Signal[bool]
-	// actions shows the conversation actions sheet.
-	actions func()
 }
 
 func newPages(cx *core.Scope) *pageStack {
@@ -47,11 +46,7 @@ func (p *pageStack) Open(route string) {
 		p.nav.PopToRoot()
 		return
 	case "actions":
-		if p.actions != nil {
-			p.actions()
-		} else {
-			p.menu.Set(true)
-		}
+		p.menu.Set(true)
 		return
 	}
 	p.menu.Set(false)
@@ -71,6 +66,9 @@ func (p *pageStack) Pop() { p.nav.Pop(1) }
 func pageTitle(route string) string {
 	if strings.HasPrefix(route, "request:") {
 		return tr("Pending approval")
+	}
+	if strings.HasPrefix(route, "desktop-edit:") {
+		return tr("Desktop name")
 	}
 	switch route {
 	case "settings":
@@ -105,8 +103,6 @@ func pageTitle(route string) string {
 		return tr("Web services")
 	case "delegations":
 		return tr("Agent tasks")
-	case "quota":
-		return tr("Usage")
 	case "projects":
 		return tr("Select project")
 	}
@@ -127,39 +123,110 @@ func (m *App) stack(cx *core.Scope) core.Node {
 	fill := core.Style{FlexGrow: 1, FlexShrink: 1, MinHeight: core.Pt(0), Width: core.Pct(100)}
 	return m.pages.nav.Stack(fill, func(cx *core.Scope, route string, _ func() int) base.NavPage {
 		if route == "" {
-			return base.NavPage{TestID: "page-root", HeaderHidden: true, NoPopOnBack: true, NoPopOnSwipe: true, Style: fill, Children: []core.Node{m.shell(cx)}}
+			return base.NavPage{TestID: "page-root", HeaderHidden: true, HeaderBackTitle: tr("Back"), NoPopOnBack: true, NoPopOnSwipe: true, Style: fill,
+				StyleFunc: func() core.Style {
+					bottom := pageBottomInset(cx, m.hasFloatingComposer())
+					background := colors.Canvas()
+					if m.Loaded && m.Link == "" {
+						background = groupedBackground(cx)
+					}
+					return core.Style{Padding: core.Edges{Bottom: bottom}, Background: background}
+				}, Children: []core.Node{core.Func(m.shell)}}
 		}
-		return base.NavPage{TestID: "page-" + route, HeaderHidden: true, Style: fill,
+		title := pageTitle(route)
+		trailing := m.pageActions(cx, route)
+		// The platform stack still handles swiping back. Draw the control
+		// in the screen so UIKit cannot drop its custom bar view on a push.
+		return base.NavPage{TestID: "page-" + route, Title: title, HeaderHidden: true, Style: fill,
 			StyleFunc: func() core.Style {
-				bg := colors.Canvas()
-				if groupedRoute(route) {
-					bg = groupedBackground(cx)
-				}
-				return core.Style{Background: bg, Color: colors.Ink()}
+				return core.Style{Background: groupedBackground(cx), Color: colors.Ink(), Padding: core.Edges{Bottom: pageBottomInset(cx, false)}}
 			},
 			OnDismiss: func() { m.leave(route); m.change() },
 			Children: []core.Node{
-				m.pageHeader(cx, route),
+				m.navigationBar(cx, title, "page-back", m.pages.Pop, trailing...),
 				core.View{Style: fill, Children: []core.Node{m.pageContent(cx, route)}},
-			}}
+			},
+		}
 	})
 }
 
-// pageHeader is a pushed page's bar: a round back button and the title.
-func (m *App) pageHeader(cx *core.Scope, route string) core.Node {
-	return core.View{Style: core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Height: core.Pt(56), Padding: core.Symmetric(0, 12), Gap: 8, FlexShrink: 0}, Children: []core.Node{
-		m.circle(cx, "page-back", tr("Back"), "arrow-left", func() { m.leave(route); m.pages.Pop() }),
-		core.View{Style: core.Style{FlexGrow: 1, FlexShrink: 1, MinWidth: core.Pt(0), AlignItems: core.AlignCenter}, Children: []core.Node{
-			core.Text{TestID: "page-title", Content: pageTitle(route), MaxLines: 1, Style: core.Style{FontSize: 16, FontWeight: 600}},
-		}},
-		core.View{Style: core.Style{Width: core.Pt(44), FlexShrink: 0}},
-	}}
+const (
+	navigationButtonSize core.Points = 44
+	navigationButtonGap  core.Points = 8
+)
+
+func (m *App) navigationBar(cx *core.Scope, title, backID string, back func(), trailing ...core.Node) core.Node {
+	backIcon := func() *core.SVG {
+		if cx.Env().RTL() {
+			return nswidgets.SVG("arrow-right")
+		}
+		return nswidgets.SVG("arrow-left")
+	}
+	// Match the width of both sides so the title stays centered with zero,
+	// one, or two toolbar actions.
+	sideWidth := navigationButtonSize + core.Points(max(0, len(trailing)-1))*(navigationButtonSize+navigationButtonGap)
+	side := core.Style{Direction: core.Row, AlignItems: core.AlignCenter, FlexShrink: 0,
+		Width: core.Pt(sideWidth), Gap: navigationButtonGap}
+	return core.View{TestID: "page-header", Style: core.Style{Direction: core.Row, AlignItems: core.AlignCenter,
+		Width: core.Pct(100), MinHeight: core.Pt(56), FlexShrink: 0, Gap: 8, Padding: core.Symmetric(6, 12)},
+		Children: []core.Node{
+			core.View{Style: side, Children: []core.Node{m.navigationAction(cx, backID, tr("Back"), backIcon, nil, back)}},
+			core.Text{TestID: "page-title", Content: title, MaxLines: 2, Role: core.RoleHeader,
+				Style: core.Style{FontSize: 17, FontWeight: 600, TextAlign: core.TextAlignCenter, FlexGrow: 1, FlexShrink: 1, MinWidth: core.Pt(0)}},
+			core.View{Style: side.Merge(core.Style{JustifyContent: core.JustifyEnd}), Children: trailing},
+		}}
+}
+
+func (m *App) navigationAction(cx *core.Scope, id, label string, icon func() *core.SVG, disabled func() bool, press func()) ui.IconButton {
+	colors := nswidgets.ColorsOf(cx)
+	return ui.IconButton{
+		TestID: id, Label: label, Disabled: disabled, OnPress: m.act(press),
+		Icon: icon, IconSize: 20, Size: navigationButtonSize, Variant: ui.IconButtonFilled,
+		Tint: colors.Ink, Fill: func() core.Color {
+			return ui.Mix(groupedBackground(cx), colors.Ink(), 0.075)
+		},
+	}
+}
+
+func (m *App) pageActions(cx *core.Scope, route string) []core.Node {
+	action := func(id, label, icon string, disabled func() bool, press func()) core.Node {
+		return m.navigationAction(cx, id, label, nswidgets.IconOf(icon), disabled, press)
+	}
+	switch route {
+	case "memory":
+		return []core.Node{action("memory-refresh", tr("Refresh memory"), "refresh", live(m, func() bool {
+			return !m.Connected || !m.State.Memory || m.Memories.Loading
+		}), m.LoadMemory)}
+	case "web-services":
+		return []core.Node{action("refresh-web", tr("Refresh web services"), "refresh", live(m, func() bool {
+			return m.web == nil || m.web.loading || !m.Connected
+		}), func() {
+			if m.web != nil {
+				m.refreshWebServices(m.web)
+			}
+		})}
+	case "automations":
+		return []core.Node{
+			action("automations-refresh", tr("Refresh automations"), "refresh", live(m, func() bool {
+				return !m.Connected || !m.State.Automations || m.Autos.Loading
+			}), m.LoadAutomations),
+			action("automation-new", tr("New automation"), "plus", live(m, func() bool {
+				return !m.Connected || !m.State.AutomationCreate
+			}), func() { m.OpenAutomationCreate(); m.pages.Open("automation-new") }),
+		}
+	case "desktops":
+		return []core.Node{action("desktop-add", tr("Add desktop"), "plus", nil, func() { m.pages.Open("pair") })}
+	}
+	return nil
 }
 
 // pageContent is a pushed page's body.
 func (m *App) pageContent(cx *core.Scope, route string) core.Node {
 	if strings.HasPrefix(route, "request:") {
 		return m.requestSheet(cx, strings.TrimPrefix(route, "request:"))
+	}
+	if strings.HasPrefix(route, "desktop-edit:") {
+		return m.desktopEdit(cx, strings.TrimPrefix(route, "desktop-edit:"))
 	}
 	switch route {
 	case "web-services":
@@ -184,10 +251,8 @@ func (m *App) pageContent(cx *core.Scope, route string) core.Node {
 		return m.projects(cx)
 	case "options", "agent", "model", "effort", "policy":
 		return m.options(cx, route)
-	case "quota":
-		return m.quotas(cx)
 	case "pair":
-		return m.pairView(cx)
+		return m.pairView(cx, false)
 	}
 	return core.View{}
 }

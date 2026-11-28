@@ -88,7 +88,7 @@ func TestPhoneQuestionsAndFormValidation(t *testing.T) {
 			t.Fatal("invalid form sent")
 		}
 		app.Type("label:Repository", "miya")
-		app.Press("id:request-back")
+		app.Back()
 		app.Settle()
 		app.Press("id:review-" + string(m.State.Approvals[0].ID))
 		app.Settle()
@@ -163,6 +163,7 @@ func TestPhoneAutomationListDetailRunAndCreateRetry(t *testing.T) {
 	changePhone(app, m, func() {
 		m.ReceiveAutomationRun(phoneJSON(phoneproto.AutomationRunResult{RequestID: run.RequestID, List: []automation.View{v}}), "")
 	})
+	app.Back()
 	app.Press("id:automation-new")
 	app.Settle()
 	app.Type("id:automation-request", "Review issues daily")

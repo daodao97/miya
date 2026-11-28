@@ -51,6 +51,7 @@ type Host interface {
 	SavedReferenceTitle(ref model.ThreadRef) (string, bool)
 	RunThreadCommand(command string) string
 	TaskAction(threadID int, taskID string, action string) string
+	PrepareTaskAction(threadID int, taskID string, action string) any
 	TaskWaitingApproval(t model.Thread) bool
 	CollaborationCapabilities() *model.CollaborationStatus
 	CollaborationUserOp(r appmodel.CollaborationRequest) (any, error)

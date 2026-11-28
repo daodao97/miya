@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"strings"
 
+	"miya/internal/bot"
 	"miya/internal/chat/model"
 	chattext "miya/internal/chat/text"
+	"miya/internal/memory"
 	"miya/internal/textutil"
 	"miya/locales"
 )
@@ -16,6 +18,9 @@ import (
 func Message(m model.Message) model.MessagePresentation {
 	if m.Presentation != nil {
 		out := *m.Presentation
+		if m.Role == "user" {
+			out.Content = userMessageText(out.Content)
+		}
 		if strings.EqualFold(m.Kind, "reasoning") {
 			out.Content = ReasoningContent(out.Content)
 		}
@@ -23,7 +28,7 @@ func Message(m model.Message) model.MessagePresentation {
 	}
 	out := model.MessagePresentation{Content: m.Content, Title: legacyActivityTitle(m), Icon: ActivityIcon(m), Format: "text"}
 	if m.Role == "user" {
-		out.Content = chattext.CommandText(m.Content)
+		out.Content = chattext.CommandText(userMessageText(m.Content))
 	}
 	switch strings.ToLower(m.Kind) {
 	case "reasoning":
@@ -45,6 +50,11 @@ func Message(m model.Message) model.MessagePresentation {
 		out.Plan = append(out.Plan, model.PresentedPlanStep{Step: step.Step, Status: step.Status})
 	}
 	return out
+}
+
+// Native sessions may store the augmented input rather than the typed prompt.
+func userMessageText(text string) string {
+	return bot.StripCharter(memory.StripLegacyContact(memory.StripContext(text)))
 }
 
 // ReasoningContent removes old status placeholders from summary bodies,

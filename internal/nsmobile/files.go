@@ -3,7 +3,6 @@ package nsmobile
 import (
 	"net/url"
 
-	"github.com/nsgo-dev/nsgo/base"
 	"github.com/nsgo-dev/nsgo/core"
 
 	"miya/internal/chat/model"
@@ -12,50 +11,6 @@ import (
 	webservice "miya/internal/runtime/web"
 )
 
-// showActions is the conversation actions menu as the system's action sheet
-// (UIAlertController's on iOS), as the old phone app's: the actions
-// available now, then Cancel.
-func (m *App) showActions() {
-	type item struct {
-		label string
-		on    func()
-	}
-	var items []item
-	add := func(ok bool, label string, on func()) {
-		if ok {
-			items = append(items, item{label, on})
-		}
-	}
-	add(true, tr("Automations"), func() { m.pages.Open("automations") })
-	add(true, tr("Shared memory"), func() { m.pages.Open("memory") })
-	add(m.Open != 0 && m.State.Collaboration != nil && m.State.Collaboration.Version >= 1, tr("Agent tasks"), func() { m.pages.Open("delegations") })
-	add(m.Connected && m.Open != 0 && m.Viewer.Current().ServerID != "", tr("Web services"), m.openWebServices)
-	add(m.Connected && m.ComposerProject() != "", tr("Project files"), func() { m.pages.Open(""); m.openProjectFile(m.ComposerProject(), "") })
-	add(true, tr("New conversation"), func() {
-		project, agent := m.ComposerProject(), m.Agent()
-		m.StartConversation(project, agent)
-		m.Path = "/thread"
-		m.pages.Open("")
-	})
-	add(m.Open != 0 && !m.Sending, tr("Hand off to a new conversation"), func() { m.Handoff(); m.Path = "/thread"; m.pages.Open("") })
-	add(m.Connected && m.State.DesktopControl && m.DesktopRequest == "", tr("Open remote desktop"), func() { m.closeFileBrowser(); m.pages.Open(""); m.OpenRemoteDesktop() })
-	actions := make([]core.AlertAction, 0, len(items)+1)
-	for _, it := range items {
-		actions = append(actions, core.AlertAction{Label: it.label})
-	}
-	actions = append(actions, core.AlertAction{Label: tr("Cancel"), Role: core.AlertCancel})
-	m.pages.menu.Set(true)
-	base.ShowAlertDialog(m.cx, base.AlertDialog{Title: tr("Conversation actions"), Presentation: base.AlertPresentActionSheet, Actions: actions}, func(label string) {
-		m.pages.menu.Set(false)
-		for _, it := range items {
-			if it.label == label {
-				m.act(it.on)()
-				return
-			}
-		}
-		m.change()
-	})
-}
 func (m *App) openMessageLink(raw string) {
 	m.act(func() {
 		if _, ok := model.ParseThreadURL(raw); ok {
@@ -127,7 +82,7 @@ func (m *App) fileView(cx *core.Scope) core.Node {
 		}
 	})
 	return core.View{Style: core.Style{FlexGrow: 1, MinHeight: core.Pt(0)}, Children: []core.Node{
-		m.button("close-files", tr("Back"), nil, m.closeFileBrowser),
+		m.navigationBar(cx, label, "close-files", m.closeFileBrowser),
 		core.WebView{Source: core.WebSrc(core.Untracked(cx, m.filesURL.Get)), Label: label, TestID: id, Style: core.Style{FlexGrow: 1},
 			OnError: func(err error) {
 				m.SendErr = failure + ": " + err.Error()

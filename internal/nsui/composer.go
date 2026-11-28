@@ -70,9 +70,6 @@ func (d *desktopComposer) wire(v *nschat.View) {
 	v.FileReferences = d.complete.files.Get
 	v.OnDraftEdit = d.complete.editAt
 	v.OnComposerMove = d.complete.close
-	v.ComposerOwner = Live(func() string {
-		return fmt.Sprintf("%s:%s:%d", c.State().ReferenceSource, c.State().Cwd, c.Current().ID)
-	})
 	v.Commands = Live(func() []model.ComposerChoice {
 		return c.CurrentAgentControls().Commands(c.State().Cwd, true).Filter("")
 	})

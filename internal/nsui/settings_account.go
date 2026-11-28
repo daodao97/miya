@@ -227,7 +227,7 @@ func (a *settingsAccount) loginCard(p agentmeta.Descriptor) core.Node {
 		st := s.state
 		action := func(op string) func() { return func() { a.loginAction(p.UsageID, op) } }
 		disabled := func() bool { a.revision.Get(); return s.busy }
-		nodes := []core.Node{settingsText(cx, func() string { return p.Name }), settingsButton("login-check-"+p.UsageID, tr("Check sign-in status"), action("check"), disabled)}
+		nodes := []core.Node{settingsSectionTitle(p.Name)}
 		text := tr("Sign-in status not checked")
 		if s.busy && st.SessionID == "" {
 			text = tr("Checking sign-in status…")
@@ -248,16 +248,19 @@ func (a *settingsAccount) loginCard(p agentmeta.Descriptor) core.Node {
 			if p.LoginMethod == "device" {
 				label = tr("Generate device code")
 			}
-			nodes = append(nodes, settingsButton("login-start-"+p.UsageID, label, action("start"), disabled))
+			nodes = append(nodes, settingsActions(
+				settingsButton("login-check-"+p.UsageID, tr("Check sign-in status"), action("check"), disabled),
+				ui.Button{TestID: "login-start-" + p.UsageID, Text: label, OnPress: action("start"), Disabled: disabled, Variant: ui.ButtonTinted},
+			))
 		} else {
 			if st.URL != "" {
 				detail := tr("Open the official authorization page, then paste the complete code shown there, including #state.")
 				if p.LoginMethod == "device" {
 					detail = st.UserCode + "\n" + tr("Open the official authorization page and enter this device code. Sign-in completes automatically here.")
 				}
-				nodes = append(nodes, settingsText(cx, func() string { return detail + "\n" + st.URL }), settingsActions(settingsButton("login-open-"+p.UsageID, tr("Open authorization page"), func() { cx.OpenURL(st.URL, nil) }, nil), settingsButton("login-copy-link-"+p.UsageID, tr("Copy link"), func() { cx.SetClipboard(st.URL) }, nil)))
+				nodes = append(nodes, settingsText(cx, func() string { return detail }), settingsActions(settingsButton("login-open-"+p.UsageID, tr("Open authorization page"), func() { cx.OpenURL(st.URL, nil) }, nil), settingsButton("login-copy-link-"+p.UsageID, tr("Copy link"), func() { cx.SetClipboard(st.URL) }, nil)))
 				if st.UserCode != "" {
-					nodes = append(nodes, settingsButton("login-copy-code-"+p.UsageID, tr("Copy device code"), func() { cx.SetClipboard(st.UserCode) }, nil))
+					nodes = append(nodes, settingsActions(settingsButton("login-copy-code-"+p.UsageID, tr("Copy device code"), func() { cx.SetClipboard(st.UserCode) }, nil)))
 				}
 				if p.LoginMethod == "browser" {
 					submit := func() {
@@ -275,7 +278,7 @@ func (a *settingsAccount) loginCard(p agentmeta.Descriptor) core.Node {
 			if st.Phase == "submitting" {
 				message = tr("Completing native sign-in…")
 			}
-			nodes = append(nodes, settingsText(cx, func() string { return message }), settingsButton("login-cancel-"+p.UsageID, tr("Cancel sign-in"), action("cancel"), disabled))
+			nodes = append(nodes, settingsText(cx, func() string { return message }), settingsFormActions(settingsButton("login-cancel-"+p.UsageID, tr("Cancel sign-in"), action("cancel"), disabled)))
 		}
 		if st.Phase == "succeeded" {
 			nodes = append(nodes, settingsText(cx, func() string { return tr("Sign-in completed and verified.") }))
@@ -285,7 +288,7 @@ func (a *settingsAccount) loginCard(p agentmeta.Descriptor) core.Node {
 				nodes = append(nodes, settingsText(cx, func() string { return tr(msg) }))
 			}
 		}
-		return settingsColumn(nodes...)
+		return autoCard(cx, nodes...)
 	})
 }
 func (a *settingsAccount) subscriptionView() core.Node {
@@ -304,7 +307,7 @@ func (a *settingsAccount) subscriptionView() core.Node {
 			title = tr("Server subscriptions")
 			help = tr("Refreshes every 3 minutes using the Codex and Claude Code accounts signed in on the server.")
 		}
-		add(title)
+		nodes = append(nodes, settingsSectionTitle(title))
 		add(help)
 		add(d.Notice)
 		switch {
@@ -380,7 +383,7 @@ func (a *settingsAccount) subscriptionView() core.Node {
 			}
 			nodes = append(nodes, a.usage.subscriptionCard(cx, provider.UsageID))
 		}
-		return settingsColumn(nodes...)
+		return autoCard(cx, nodes...)
 	})
 }
 func settingsQuota(cx *core.Scope, label string, used float64) core.Node {
@@ -420,10 +423,10 @@ func (a *settingsAccount) resetCard(cx *core.Scope, d account.Display) core.Node
 		if retry {
 			label = tr("Check last reset result")
 		}
-		nodes = append(nodes, settingsButton("ask-account-reset", label, a.c.AskAccountReset, Live(func() bool {
+		nodes = append(nodes, settingsActions(settingsButton("ask-account-reset", label, a.c.AskAccountReset, Live(func() bool {
 			d := a.c.State().AccountState
 			return !ready() || a.c.State().AccountReset.Busy || d.Refreshing || d.UsageError != "" || d.Notice != ""
-		})))
+		}))))
 	}
 	if action.Confirming && action.Attempt.Matches(d) {
 		add(tr("Use a reset card?"))

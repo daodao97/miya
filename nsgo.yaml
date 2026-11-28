@@ -35,6 +35,7 @@
   },
   "android": {
     "target_sdk": 36,
+    "classes": ["resources/android/legacy-secrets.jar"],
     "permissions": [
       "POST_NOTIFICATIONS",
       "FOREGROUND_SERVICE",
@@ -57,7 +58,10 @@
     "open": false
   },
   "updates": {
-    "channel": "none"
+    "channel": "none",
+    "key": "p695dgWtjT/8eulkCbReOvamkC3wBjeTd8W9C7EqcaI=",
+    "feed": "https://github.com/daodao97/miya/releases/latest/download/",
+    "automatic": false
   },
   "url_schemes": [
     "miya"

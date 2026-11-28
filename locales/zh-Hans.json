@@ -1935,7 +1935,7 @@
   "nsComposerUnknownCommand": "未知命令。输入 / 选择支持的命令。",
   "nsgoPhoneHoldToSpeak": "按住说话",
   "nsgoPhoneSlideToCancel": "滑开以取消",
-  "nsgoPhoneVoiceHelp": "按住麦克风按钮说话，松开后插入文字，也可开启自动发送。",
+  "nsgoPhoneVoiceHelp": "按住麦克风或空白输入框说话，松开后插入文字，也可开启自动发送。",
   "nsgoPhoneDisableNotifications": "关闭通知",
   "nsgoPhoneNotificationsDisabled": "通知已关闭",
   "nsgoPhoneRemoteNotificationsUnavailable": "此应用构建暂不支持远程通知。",
@@ -2200,5 +2200,16 @@
   "providerEndpoint": "%s 端点",
   "remoteControl": "远程控制",
   "permissionAllowed": "已允许",
-  "permissionRequired": "需要权限"
+  "permissionRequired": "需要权限",
+  "editMemoryOnDesktop": "请在桌面端编辑或忘记记忆。",
+  "auditAndroidMigrationFailed": "无法导入已保存的 Android 桌面连接。请重开 Miya 后重试。",
+  "thisConversation": "当前对话",
+  "projectOverview": "项目概览",
+  "noMatchingBots": "没有匹配的 Bot",
+  "miyaMemoryChangedShort": "Miya 记忆已更新",
+  "displays": "显示器",
+  "noMatchingResults": "没有匹配的结果",
+  "latestConsolidationIssue": "最近一次合并异常：",
+  "latestConsolidationSummary": "最近一次合并：%s · 已合并 %d 条 · 标记冲突 %d 条",
+  "miyaOnThisComputer": "本机的 Miya"
 }

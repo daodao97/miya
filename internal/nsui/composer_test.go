@@ -11,9 +11,41 @@ import (
 	"github.com/nsgo-dev/nsgo/core"
 	"github.com/nsgo-dev/nsgo/nsgotest"
 	"miya/internal/appmodel"
+	"miya/internal/bot"
 	"miya/internal/chat/model"
 	"miya/internal/uiruntime"
 )
+
+func TestComposerBackspaceEditsDraft(t *testing.T) {
+	h := newFakeHost(model.Thread{})
+	h.draft = "中文👩‍💻"
+	app := startBridged(t, h)
+	app.Focus("label:Message")
+
+	app.Key("backspace")
+	if h.draft != "中文" {
+		t.Fatalf("Backspace did not remove the emoji: draft = %q", h.draft)
+	}
+	app.Key("shift+left")
+	app.Key("backspace")
+	if h.draft != "中" {
+		t.Fatalf("Backspace did not remove the selection: draft = %q", h.draft)
+	}
+	app.Key("left")
+	app.Key("delete")
+	if h.draft != "" {
+		t.Fatalf("forward Delete did not clear the draft: draft = %q", h.draft)
+	}
+	app.Key("backspace")
+	if len(h.sent) != 0 || app.Enabled("id:composer-send") {
+		t.Fatal("deleting the draft enabled sending or sent a message")
+	}
+	app.Type("id:composer", "abc")
+	app.Key("backspace")
+	if h.draft != "ab" {
+		t.Fatalf("Backspace did not remove the last typed character: draft = %q", h.draft)
+	}
+}
 
 func TestComposerEmptyThreadSuggestions(t *testing.T) {
 	h := newFakeHost(model.Thread{})
@@ -32,6 +64,50 @@ func TestComposerEmptyThreadSuggestions(t *testing.T) {
 		t.Fatal("suggestion did not enable Send")
 	}
 }
+
+func TestDesktopNewConversationHome(t *testing.T) {
+	h := projectHost()
+	h.NewThread()
+	h.controls.model, h.controls.effort = "gpt-test", "medium"
+	app := startBridged(t, h, nsgotest.Size(1180, 820), nsgotest.Offscreen(),
+		nsgotest.Environment(core.Environment{OS: core.OSMacOS, Idiom: core.IdiomDesktop, Locale: "en"}))
+	if nsgotest.Target() == "macos" {
+		app.Screenshot("new-conversation")
+	}
+	heading := app.Find("id:new-conversation-heading")
+	project := app.Find("id:new-conversation-project")
+	ideas := app.Find("id:suggestion-bug")
+	editor := app.Find("id:composer-card")
+	if heading.Text != tr("Let’s build") || !app.Exists("text:miya") {
+		t.Fatal("the new conversation does not show the title and current project")
+	}
+	center := func(v *nsgotest.View) core.Points {
+		frame := v.Bounds()
+		return frame.Origin.X + frame.Size.Width/2
+	}
+	if delta := center(heading) - center(editor); delta < -1 || delta > 1 {
+		t.Fatalf("new conversation title is not centered over the composer: delta %v", delta)
+	}
+	if heading.Bounds().Origin.Y >= project.Bounds().Origin.Y || project.Bounds().Origin.Y >= ideas.Bounds().Origin.Y || ideas.Bounds().Origin.Y >= editor.Bounds().Origin.Y {
+		t.Fatal("the page should show the title, project, ideas, and composer in that order")
+	}
+	app.Press("id:new-conversation-project")
+	if !app.Exists("id:project-dialog") || app.Find("label:Project name").Text != "miya" || app.Find("label:Project folder").Text != "/workspace" {
+		t.Fatal("the project dialog did not open with the current project")
+	}
+	app.Press("id:project-cancel")
+	app.Press("id:picker-agent")
+	app.Press("id:pick-agent-" + model.AgentClaude)
+	if h.CurrentAgent() != model.AgentClaude {
+		t.Fatal("the new conversation did not switch agents")
+	}
+	app.Press("id:thread-1")
+	app.Settle()
+	if app.Exists("id:new-conversation-heading") || app.Exists("id:suggestion-bug") || !app.Exists("id:chat-transcript") {
+		t.Fatal("the new conversation intro leaked into an existing conversation")
+	}
+}
+
 func TestComposerQueueEditingAndSteering(t *testing.T) {
 	h := newFakeHost(model.Thread{ID: 7, Busy: true, Queue: []model.QueuedMessage{{ID: 11, SendRequest: model.SendRequest{Text: "next change", Attachments: []string{"/tmp/notes.md"}}}}})
 	h.draft = "existing draft"
@@ -79,9 +155,30 @@ func TestComposerPausedQueue(t *testing.T) {
 	}
 }
 func TestComposerEditsSentPrompt(t *testing.T) {
-	h := newFakeHost(model.Thread{ID: 9, HistoryLoaded: true, Messages: []model.Message{{ID: 1, Role: "user", Content: "Original prompt\n📎 /tmp/file.txt", TurnID: "t1"}}})
+	content := "Original prompt\n📎 /tmp/file.txt" + bot.Charter(bot.Bot{Name: "Ops"})
+	h := newFakeHost(model.Thread{ID: 9, HistoryLoaded: true, Messages: []model.Message{{ID: 1, Role: "user", Content: content, TurnID: "t1"}}})
 	h.canRewind = true
-	app := startBridged(t, h)
+	app := startDesktop(t, h)
+	if got := app.Find("id:prompt-1").Text; got != "Original prompt\n📎 /tmp/file.txt" {
+		t.Fatalf("prompt = %q", got)
+	}
+	if app.Exists("id:edit-message-1") {
+		t.Fatal("edit button visible before hover")
+	}
+	prompt := app.Find("id:prompt-1").Bounds()
+	app.Hover("id:prompt-1")
+	if !app.Exists("id:edit-message-1") || app.Find("id:prompt-1").Bounds() != prompt {
+		t.Fatal("hover should show the edit button without moving the prompt")
+	}
+	app.Hover("id:edit-message-1")
+	if !app.Exists("id:edit-message-1") {
+		t.Fatal("edit button vanished when the pointer moved onto it")
+	}
+	app.HoverOut()
+	if app.Exists("id:edit-message-1") {
+		t.Fatal("edit button still visible after hover")
+	}
+	app.Hover("id:prompt-1")
 	app.Press("id:edit-message-1")
 	app.Settle()
 	if got := app.Find("id:edit-message-input-1").Text; got != "Original prompt" {
@@ -93,6 +190,8 @@ func TestComposerEditsSentPrompt(t *testing.T) {
 	if h.rewound.messageID != 0 {
 		t.Fatal("cancel rewound conversation")
 	}
+	app.HoverOut()
+	app.Hover("id:prompt-1")
 	app.Press("id:edit-message-1")
 	app.Type("id:edit-message-input-1", " revised")
 	app.Press("id:edit-send-1")
@@ -345,6 +444,70 @@ func TestComposerCompletionKeysDoNotSendOrEdit(t *testing.T) {
 	}
 	app.Find("text:#Claude")
 
+}
+
+func TestComposerMentionArrowsChooseDifferentFiles(t *testing.T) {
+	h := newFakeHost(model.Thread{ID: 1}, model.Thread{ID: 2})
+	h.state.Cwd = t.TempDir()
+	for _, name := range []string{"a.txt", "b.txt", "c.txt"} {
+		if err := os.WriteFile(h.state.Cwd+"/"+name, nil, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	app := startDesktop(t, h)
+	app.Press("id:thread-2")
+	for _, tc := range []struct {
+		key, file string
+	}{{"down", "b.txt"}, {"up", "c.txt"}} {
+		app.Type("id:composer", "@")
+		app.WaitFor("id:completion-c.txt", time.Second)
+		app.Key(tc.key)
+		picked, first := app.Find("id:completion-"+tc.file), app.Find("id:completion-a.txt")
+		if !picked.Props.Selected || first.Props.Selected || picked.Style.Background == first.Style.Background || h.draft != "@" {
+			t.Fatalf("%s did not highlight %s", tc.key, tc.file)
+		}
+		app.Key("enter")
+		if h.draft != "@"+tc.file+" " || h.current != 2 || len(h.sent) != 0 {
+			t.Fatalf("%s then Enter: draft=%q current=%d sent=%v", tc.key, h.draft, h.current, h.sent)
+		}
+		app.Post(func() { h.RememberDraft("") })
+		app.Settle()
+	}
+}
+
+func TestComposerMentionArrowDuringFileSearch(t *testing.T) {
+	h := newFakeHost(model.Thread{ID: 1})
+	h.state.Cwd = t.TempDir()
+	for _, name := range []string{"a.txt", "b.txt"} {
+		if err := os.WriteFile(h.state.Cwd+"/"+name, nil, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	app := startDesktop(t, h)
+	app.Type("id:composer", "@")
+	app.Key("down")
+	app.WaitFor("id:completion-b.txt", time.Second)
+	if !app.Find("id:completion-b.txt").Props.Selected {
+		t.Fatal("arrow input was lost while results were loading")
+	}
+}
+
+func TestComposerShrinksAfterSendingMultilineDraft(t *testing.T) {
+	h := newFakeHost(model.Thread{ID: 1})
+	app := startDesktop(t, h)
+	resting := app.Find("id:composer").Bounds().Size.Height
+	app.Type("id:composer", "first")
+	for _, line := range []string{"second", "third", "fourth", "fifth"} {
+		app.Key("shift+enter")
+		app.Type("id:composer", line)
+	}
+	if got := app.Find("id:composer").Bounds().Size.Height; got <= resting {
+		t.Fatalf("multiline draft height %v did not exceed %v", got, resting)
+	}
+	app.Key("enter")
+	if got := app.Find("id:composer").Bounds().Size.Height; got != resting || h.draft != "" || len(h.sent) != 1 {
+		t.Fatalf("sent draft height=%v want=%v, draft=%q, sends=%v", got, resting, h.draft, h.sent)
+	}
 }
 
 func TestComposerAttachmentOnlyEnterAndLoading(t *testing.T) {

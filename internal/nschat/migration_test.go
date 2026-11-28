@@ -19,7 +19,9 @@ func TestMigratedActivityRunsRequireManualExpansion(t *testing.T) {
 		{ID: 2, Role: "tool", Kind: "commandExecution", Status: "inProgress", Item: &model.Activity{Command: "pwd"}, Content: "private output"},
 		{ID: 3, Role: "tool", Kind: "commandExecution", Status: "completed", Item: &model.Activity{Command: "ls"}, Content: "second output"},
 	}}, nil)
-	if !app.Exists("id:run-2") || strings.Contains(joined(app), "private output") {
+	header := app.Find("id:run-2")
+	if !header.Props.Expandable || header.Props.Expanded || !app.Exists("id:activity-run-working") ||
+		!strings.Contains(joined(app), "Ran 1 command · 1 running") || app.Exists("id:activity-2") {
 		t.Fatal(joined(app))
 	}
 	c.change(app, func(th *model.Thread) {
@@ -27,8 +29,10 @@ func TestMigratedActivityRunsRequireManualExpansion(t *testing.T) {
 		th.Messages = append(th.Messages, model.Message{ID: 4, Role: "assistant", Content: "done", Status: "completed"})
 		th.Busy = false
 	})
-	if !app.Exists("id:run-2") || strings.Contains(joined(app), "private output") {
-		t.Fatal("completion expanded activities")
+	if after := app.Find("id:run-2"); after.ID != header.ID || after.Props.Expanded ||
+		app.Exists("id:activity-run-working") || !strings.Contains(joined(app), "Ran 2 commands") ||
+		app.Exists("id:activity-2") {
+		t.Fatalf("completion replaced the header or expanded activities: %s", joined(app))
 	}
 	app.Press("id:run-2")
 	if !strings.Contains(joined(app), "Ran pwd") {
@@ -41,6 +45,10 @@ func TestMigratedActivityRunsRequireManualExpansion(t *testing.T) {
 	app.Press("id:run-2")
 	if strings.Contains(joined(app), "private output") {
 		t.Fatal("collapse retained detail")
+	}
+	app.Press("id:run-2")
+	if !strings.Contains(joined(app), "private output") {
+		t.Fatal("reopening the group lost the expanded command")
 	}
 }
 

@@ -32,6 +32,50 @@ func holdVoice(t *testing.T, app *nsgotest.App, m *App) *nsgotest.Finger {
 	app.WaitUntil(time.Second, func() bool { return m.voice != nil && m.voice.session != nil })
 	return finger
 }
+
+func TestPhoneVoiceHoldWorksFromComposerOnHome(t *testing.T) {
+	for _, target := range []struct {
+		selector string
+		at       core.Point
+	}{
+		{"id:mobile-composer", core.Point{X: 150, Y: 26}},
+		{"id:voice-hold", core.Point{X: 22, Y: 22}},
+	} {
+		t.Run(target.selector, func(t *testing.T) {
+			v := &testVoice{}
+			ready := make(chan func(voiceinput.Result), 1)
+			app, m, sent := startConfiguredPhone(t, core.OSIOS, func(m *App) {
+				m.voiceAutoSend = false
+				m.voiceStart = func(_ context.Context, _ string, emit func(voiceinput.Result)) (voiceSession, error) {
+					ready <- emit
+					return v, nil
+				}
+			})
+			if !app.Exists("id:mobile-home") || !app.Exists("label:"+tr("Hold to speak")) {
+				t.Fatal("the empty composer does not show a voice control")
+			}
+			app.PressAt(target.selector, target.at)
+			app.Advance(400 * time.Millisecond)
+			if m.voice != nil {
+				t.Fatal("a tap started recording")
+			}
+			app.LongPressAt(target.selector, target.at)
+			app.WaitUntil(time.Second, func() bool { return v.stopped.Load() == 1 })
+			emit := <-ready
+			emit(voiceinput.Result{Text: "语音输入", Final: true})
+			app.WaitUntil(time.Second, func() bool { return m.voice == nil && m.Draft == "语音输入" })
+			if app.Find("id:mobile-composer").Text != "语音输入" || !app.Exists("label:"+tr("Send")) {
+				t.Fatal("the composer did not retain the dictation and return to Send")
+			}
+			select {
+			case r := <-sent:
+				t.Fatalf("dictation sent a request with auto-send off: %s", r.Op)
+			default:
+			}
+		})
+	}
+}
+
 func TestPhoneVoiceInsertsPartialsAtSelectionAndFinalOnRelease(t *testing.T) {
 	app, m, sent := startPhone(t)
 	openPhoneThread(t, app, m, sent)
@@ -307,11 +351,57 @@ func TestPhoneWebServicesRejectStaleResultsAndClearFailedRefresh(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("no fetch")
 	}
-	app.Press("id:web-done")
+	app.Back()
 	close(release)
 	app.Settle()
 	if m.web != nil || m.pages.Top() != "" {
 		t.Fatal("stale result reopened sheet")
+	}
+}
+
+func TestPhoneWebServicesSwitchScopeAndOpenManualPort(t *testing.T) {
+	app, m, sent := startPhone(t)
+	openPhoneThread(t, app, m, sent)
+	var opened webservice.Service
+	changePhone(app, m, func() {
+		m.State.Runtime, m.State.WebPorts = true, true
+		m.fetchRuntime = func(_ context.Context, _ *remote.Conn, _ string, ref model.ThreadRef) (tracker.ConversationRuntime, error) {
+			return tracker.ConversationRuntime{View: rt.View{Key: tracker.KeyOf(ref),
+				Tasks:     []rt.Task{{Description: "Watch assets", Status: "running"}},
+				Processes: []rt.Process{{Name: "node", Identity: rt.Identity{PID: 123}}}}}, nil
+		}
+		m.fetchProjectServices = func(_ context.Context, _ *remote.Conn, project string) ([]webservice.Service, error) {
+			if project != "/work" {
+				t.Errorf("requested project %q", project)
+			}
+			return []webservice.Service{{Host: "127.0.0.1", Port: 4321}, {Host: "external.example", Port: 4322}}, nil
+		}
+		m.openWebProxy = func(_ *remote.Conn, service webservice.Service) (string, func(), error) {
+			opened = service
+			return "http://127.0.0.1:12345/auth/", func() {}, nil
+		}
+	})
+	choosePhoneAction(t, app, "Web services")
+	app.WaitFor("id:web-runtime", time.Second)
+	app.Press("id:web-runtime")
+	if !app.Exists("text:Watch assets") || !app.Exists("text:node · PID 123") {
+		t.Fatal("runtime details missing", app.Texts())
+	}
+	app.Press("id:web-scope")
+	app.WaitFor("id:web-service-4321", time.Second)
+	if app.Exists("id:web-service-4322") || app.Exists("text:Watch assets") {
+		t.Fatal("project overview retained unrelated observations", app.Texts())
+	}
+	app.Press("id:web-manual")
+	app.Type("id:web-manual-port", "65536")
+	if app.Enabled("id:web-manual-open") {
+		t.Fatal("out-of-range port can be opened")
+	}
+	app.Clear("id:web-manual-port")
+	app.Type("id:web-manual-port", "8443")
+	app.Press("id:web-manual-open")
+	if opened.Port != 8443 || opened.Host != "" || opened.RuntimeToken != "" || !app.Exists("id:web-service-webview") {
+		t.Fatalf("unexpected manual endpoint: %+v", opened)
 	}
 }
 

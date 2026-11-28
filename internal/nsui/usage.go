@@ -275,7 +275,8 @@ func (d *desktopUsage) syncTray() {
 			}
 		}
 		if d.tray == nil {
-			d.panel = desktop.OpenPanel(d.cx, desktop.PanelOptions{Width: 340, Height: 480, HideOnBlur: true, Material: desktop.WindowMaterialPopover}, d.panelView)
+			d.panel = desktop.OpenPanel(d.cx, desktop.PanelOptions{Width: usagePanelWidth, Height: usagePanelLimit,
+				FitContent: true, HideOnBlur: true, Material: desktop.WindowMaterialPopover}, d.panelView)
 			d.tray = desktop.NewTray(d.cx, desktop.TrayOptions{Icon: UsageTrayIconFor(agent), Template: true, Title: title, Tooltip: tip, Panel: d.panel, Menu: d.menu})
 		} else {
 			d.tray.SetIcon(UsageTrayIconFor(agent), true)

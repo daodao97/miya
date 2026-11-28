@@ -69,12 +69,20 @@ func (m *App) composerHasContent() bool {
 }
 
 // composerBox is the old phone app's rounded composer: the text with + and
-// the agent's icon on its left, Steer, the effort and one round send button
+// the agent's icon on its left, Steer, the effort and a round send/voice button
 // on its right. Once the text has a line break or wraps, or Steer shows, the
 // text takes the whole width above the tools. The tools float over the
 // input, so the native editor is never rebuilt when the layout changes.
 func (m *App) composerBox(cx *core.Scope, state *chat.ConversationState) core.Node {
 	colors := nswidgets.ColorsOf(cx)
+	editor := &core.Ref{}
+	m.composerInput = editor
+	cx.Cleanup(func() {
+		if m.composerInput == editor {
+			m.composerInput, m.composing = nil, false
+		}
+	})
+	draft := core.NewMemo(cx, live(m, func() string { return m.Draft }))
 	agent := core.NewMemo(cx, live(m, m.Agent))
 	busy := core.NewMemo(cx, live(m, func() bool { return m.Viewer.Current().Busy }))
 	content := core.NewMemo(cx, live(m, m.composerHasContent))
@@ -111,19 +119,22 @@ func (m *App) composerBox(cx *core.Scope, state *chat.ConversationState) core.No
 			return sendLook{"arrow-up", tr("Add to queue"), true}
 		case content.Get() && m.Connected:
 			return sendLook{"arrow-up", tr("Send"), true}
+		case !content.Get() && m.Connected:
+			return sendLook{"microphone", tr("Hold to speak"), false}
 		}
 		return sendLook{"arrow-up", tr("Send"), false}
 	}))
 	// quiet keeps the press that ends a recording from also sending.
 	var quiet time.Time
+	hold := m.voiceHold(cx, &quiet)
 	send := core.View{TestID: "send", Role: core.RoleButton, LabelFunc: func() string { return look.Get().label },
-		Disabled: live(m, func() bool { return m.Sending || !m.Connected && !m.composerHasContent() }),
+		Disabled: live(m, func() bool { return m.composing || m.Sending || !m.Connected && !m.composerHasContent() }),
 		OnPress: func(core.PressEvent) {
 			if time.Now().Before(quiet) {
 				return
 			}
 			m.act(func() {
-				if m.Sending || m.voice != nil {
+				if m.composing || m.Sending || m.voice != nil {
 					return
 				}
 				if !m.composerHasContent() {
@@ -164,52 +175,65 @@ func (m *App) composerBox(cx *core.Scope, state *chat.ConversationState) core.No
 			Children: []core.Node{icon}}
 	}
 	options := func() { m.optionsAgent = m.Agent(); m.pages.Open("options") }
+	input := base.Input{Ref: editor, Value: draft.Get, OnChange: func(s string) {
+		m.caret = composer.ComposerEditEnd(m.Draft, s)
+		m.anchor = m.caret
+		m.Draft = s
+		m.change()
+	}, Label: tr("Message"), PlaceholderFunc: live(m, func() string {
+		if name := m.SendOptions(m.Agent()).Model; name != "" {
+			return name
+		}
+		return m.agentName(m.Agent())
+	}), TestID: "mobile-composer", Multiline: true, SubmitBehavior: core.SubmitBehaviorNewline,
+		// The keyboard owns selection while editing, including marked text.
+		// Feeding its reported range back can interrupt native composition.
+		OnSelectionChange: func(r core.TextRange) {
+			anchor, caret := utf16ByteOffset(m.Draft, r.Start), utf16ByteOffset(m.Draft, r.End)
+			if m.anchor != anchor || m.caret != caret {
+				m.anchor, m.caret = anchor, caret
+				m.change()
+			}
+		},
+		OnCompositionChange: func(c core.Composition) {
+			if c.Composing != m.composing {
+				m.composing = c.Composing
+				m.change()
+			}
+		},
+		OnContentSizeChange: func(size core.Size) {
+			if m.Draft == "" {
+				line = size.Height
+				return
+			}
+			if line <= 0 {
+				line = 21
+			}
+			if !wrapped.GetUntracked() && size.Height > line*1.5 {
+				expandAt = utf8.RuneCountInString(m.Draft)
+				wrapped.Set(true)
+			}
+		},
+		StyleFunc: func() core.Style {
+			st := core.Style{Width: core.Pct(100), MinHeight: core.Pt(56), MaxHeight: core.Pt(196), FontSize: 16, Color: colors.Ink(), TextAlignVertical: core.TextAlignVerticalTop}
+			if expanded.Get() {
+				st.Padding = core.Edges{Top: 14, Left: 14, Right: 14, Bottom: 54}
+			} else {
+				right := core.Points(6 + 44 + 8)
+				if e := effort.Get(); e != "" {
+					right += core.Points(len(e))*8 + 12
+				}
+				st.Padding = core.Edges{Top: 17, Bottom: 17, Left: 96, Right: right}
+			}
+			return st
+		}}
 	return core.View{TestID: "mobile-composer-box", StyleFunc: func() core.Style {
 		return core.Style{Width: core.Pct(100), MinHeight: core.Pt(56), CornerRadius: 26, Background: colors.Bubble()}
 	}, Children: []core.Node{
-		base.Input{Value: live(m, func() string { return m.Draft }), OnChange: func(s string) {
-			m.caret = composer.ComposerEditEnd(m.Draft, s)
-			m.anchor = m.caret
-			m.Draft = s
-			m.change()
-		}, Label: tr("Message"), PlaceholderFunc: live(m, func() string {
-			if name := m.SendOptions(m.Agent()).Model; name != "" {
-				return name
-			}
-			return m.agentName(m.Agent())
-		}), TestID: "mobile-composer", Multiline: true, SubmitBehavior: core.SubmitBehaviorNewline,
-			SelectedRange: live(m, m.selectedRange),
-			OnSelectionChange: func(r core.TextRange) {
-				m.anchor = utf16ByteOffset(m.Draft, r.Start)
-				m.caret = utf16ByteOffset(m.Draft, r.End)
-				m.change()
-			},
-			OnContentSizeChange: func(size core.Size) {
-				if m.Draft == "" {
-					line = size.Height
-					return
-				}
-				if line <= 0 {
-					line = 21
-				}
-				if !wrapped.GetUntracked() && size.Height > line*1.5 {
-					expandAt = utf8.RuneCountInString(m.Draft)
-					wrapped.Set(true)
-				}
-			},
-			StyleFunc: func() core.Style {
-				st := core.Style{Width: core.Pct(100), MinHeight: core.Pt(56), MaxHeight: core.Pt(196), FontSize: 16, Color: colors.Ink(), TextAlignVertical: core.TextAlignVerticalTop}
-				if expanded.Get() {
-					st.Padding = core.Edges{Top: 14, Left: 14, Right: 14, Bottom: 54}
-				} else {
-					right := core.Points(6 + 44 + 8)
-					if e := effort.Get(); e != "" {
-						right += core.Points(len(e))*8 + 12
-					}
-					st.Padding = core.Edges{Top: 17, Bottom: 17, Left: 96, Right: right}
-				}
-				return st
-			}},
+		core.View{OnTouch: func(e core.TouchEvent) {
+			// Keep the native text selection gesture when there is a draft.
+			hold(e, m.Draft == "")
+		}, Children: []core.Node{input}},
 		core.View{Style: core.Style{Position: core.Absolute, Left: core.Pt(4), Bottom: core.Pt(6), Direction: core.Row, AlignItems: core.AlignCenter}, Children: []core.Node{
 			tool("add-image", tr("Add image"), nswidgets.Icon("plus", 20, colors.Muted), m.addPhotos),
 			tool("model-options", tr("Model settings"), core.Dynamic(func(cx *core.Scope) core.Node { return nswidgets.AgentIcon(agent.Get(), 20) }), options),
@@ -217,10 +241,10 @@ func (m *App) composerBox(cx *core.Scope, state *chat.ConversationState) core.No
 		core.View{Style: core.Style{Position: core.Absolute, Right: core.Pt(6), Bottom: core.Pt(6), Direction: core.Row, AlignItems: core.AlignCenter, Gap: 4}, Children: []core.Node{
 			core.Show{When: steer.Get, Then: func(cx *core.Scope) core.Node {
 				return core.View{TestID: "steer", Role: core.RoleButton, Label: tr("Steer now"),
-					Disabled: live(m, func() bool { return m.voice != nil || !m.Connected || m.Sending }),
+					Disabled: live(m, func() bool { return m.composing || m.voice != nil || !m.Connected || m.Sending }),
 					OnPress: func(core.PressEvent) {
 						m.act(func() {
-							if m.voice == nil && m.Connected && !m.Sending && m.composerHasContent() {
+							if !m.composing && m.voice == nil && m.Connected && !m.Sending && m.composerHasContent() {
 								m.Steer()
 								if m.Sending {
 									cx.DismissKeyboard()
@@ -238,7 +262,9 @@ func (m *App) composerBox(cx *core.Scope, state *chat.ConversationState) core.No
 					Style:    core.Style{MinHeight: core.Pt(44), Padding: core.Edges{Left: 4, Right: 4}, JustifyContent: core.JustifyCenter, FlexShrink: 0},
 					Children: []core.Node{core.Text{ContentFunc: effort.Get, MaxLines: 1, StyleFunc: func() core.Style { return core.Style{FontSize: 12, FontWeight: 500, Color: colors.Muted()} }}}}
 			}},
-			m.voiceHold(cx, &quiet, send),
+			core.View{TestID: "voice-hold", Style: core.Style{FlexShrink: 0},
+				OnTouch:  func(e core.TouchEvent) { hold(e, !m.Viewer.Current().Busy) },
+				Children: []core.Node{send}},
 		}},
 	}}
 }

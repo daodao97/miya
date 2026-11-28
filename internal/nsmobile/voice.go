@@ -38,11 +38,14 @@ type composerOwner struct {
 func (m *App) composerOwner() composerOwner {
 	return composerOwner{m.Link, m.ComposerProject(), m.Agent(), m.Path, m.Generation, m.ComposerEpoch()}
 }
+func (m *App) voicePage() bool {
+	return m.Connected && (m.Path == "/" || m.Path == "/thread") && m.pages.Top() == ""
+}
 func (m *App) voiceValid(v *phoneVoice) bool {
-	return m.voice == v && v.owner == m.composerOwner() && m.Connected && m.Path == "/thread" && m.pages.Top() == ""
+	return m.voice == v && v.owner == m.composerOwner() && m.voicePage()
 }
 func (m *App) beginVoice() {
-	if m.voice != nil || m.Sending || !m.Connected || m.Path != "/thread" || m.pages.Top() != "" {
+	if m.composing || m.voice != nil || m.Sending || !m.voicePage() {
 		return
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -108,8 +111,8 @@ func (m *App) voiceResult(v *phoneVoice, r voiceinput.Result) {
 func (m *App) previewVoice(v *phoneVoice, s string) {
 	v.partial = s
 	v.preview = v.draft[:v.anchor] + s + v.draft[v.caret:]
-	m.Draft = v.preview
-	m.anchor, m.caret = v.anchor+len(s), v.anchor+len(s)
+	end := v.anchor + len(s)
+	m.setComposerDraft(v.preview, end, end)
 }
 func (m *App) endVoice() {
 	v := m.voice
@@ -139,8 +142,7 @@ func (m *App) cancelVoice() {
 			v.session.Cancel()
 		}
 		if v.owner.link == m.Link && v.owner.epoch == m.ComposerEpoch() && m.Draft == v.preview {
-			m.Draft = v.draft
-			m.anchor, m.caret = v.anchor, v.caret
+			m.setComposerDraft(v.draft, v.anchor, v.caret)
 		}
 	}
 }
@@ -174,13 +176,12 @@ func (m *App) finishVoice(v *phoneVoice, r voiceinput.Result) {
 	}
 }
 
-// voiceHold makes child, the send button, also the push-to-talk control, as
-// the old app's long press on the composer was: a finger held there 350ms
-// while no reply runs records, lifting it finishes and sliding 60 points
-// away cancels. quiet keeps the press that ends a recording from sending.
-func (m *App) voiceHold(cx *core.Scope, quiet *time.Time, child core.Node) core.Node {
+// voiceHold shares one recording gesture between the editor and the right
+// button. Lifting finishes the recording and sliding away cancels it.
+func (m *App) voiceHold(cx *core.Scope, quiet *time.Time) func(core.TouchEvent, bool) {
 	var stop func() bool
 	var origin core.Point
+	var started bool
 	stopTimer := func() {
 		if stop != nil {
 			stop()
@@ -189,43 +190,50 @@ func (m *App) voiceHold(cx *core.Scope, quiet *time.Time, child core.Node) core.
 	}
 	finish := func(end func()) {
 		stopTimer()
-		if m.voice != nil {
+		if started {
+			started = false
 			*quiet = time.Now().Add(400 * time.Millisecond)
 			end()
 			m.change()
 		}
 	}
 	cx.Cleanup(func() { stopTimer(); m.cancelVoice() })
-	return core.View{TestID: "voice-hold", Style: core.Style{FlexShrink: 0},
-		OnTouch: func(e core.TouchEvent) {
-			switch e.Phase {
-			case core.TouchStart:
-				if len(e.Touches) != 1 {
-					finish(m.cancelVoice)
-					return
-				}
-				origin = e.Touches[0].PagePosition
-				stopTimer()
-				if m.Connected && !m.Sending && !m.Viewer.Current().Busy {
-					stop = cx.AfterFunc(350*time.Millisecond, func() {
-						stop = nil
-						m.beginVoice()
-						m.change()
-					})
-				}
-			case core.TouchMove:
-				for _, t := range e.Touches {
-					if dx, dy := t.PagePosition.X-origin.X, t.PagePosition.Y-origin.Y; dx*dx+dy*dy > 60*60 {
-						finish(m.cancelVoice)
-					}
-				}
-			case core.TouchEnd:
-				finish(m.endVoice)
-			case core.TouchCancel:
+	return func(e core.TouchEvent, allowStart bool) {
+		switch e.Phase {
+		case core.TouchStart:
+			if len(e.Touches) != 1 {
 				finish(m.cancelVoice)
+				return
 			}
-		},
-		Children: []core.Node{child}}
+			stopTimer()
+			if allowStart && m.voicePage() {
+				origin = e.Touches[0].PagePosition
+				owner := m.composerOwner()
+				stop = cx.AfterFunc(350*time.Millisecond, func() {
+					stop = nil
+					if owner == m.composerOwner() && m.voice == nil {
+						m.beginVoice()
+						started = m.voice != nil
+						m.change()
+					}
+				})
+			}
+		case core.TouchMove:
+			limit := core.Points(12)
+			if started {
+				limit = 60
+			}
+			for _, t := range e.Touches {
+				if dx, dy := t.PagePosition.X-origin.X, t.PagePosition.Y-origin.Y; dx*dx+dy*dy > limit*limit {
+					finish(m.cancelVoice)
+				}
+			}
+		case core.TouchEnd:
+			finish(m.endVoice)
+		case core.TouchCancel:
+			finish(m.cancelVoice)
+		}
+	}
 }
 
 // voiceStatus keeps the recognized words visible without taking the active touch.
@@ -280,7 +288,7 @@ func (m *App) voiceStatus(cx *core.Scope) core.Node {
 
 func (m *App) voiceSettings(cx *core.Scope) core.Node {
 	return m.groupedPage(cx, m.group(cx, "", groupedFooter(cx, "", func() string {
-		return tr("Hold the microphone button to speak. Release to insert text, or enable automatic sending.")
+		return tr("Hold the microphone or the empty input to speak. Release to insert text, or enable automatic sending.")
 	}), gRow{Label: tr("Send when done speaking"), Switch: &ui.Switch{TestID: "voice-auto-send", Label: tr("Send when done speaking"),
 		Checked: live(m, func() bool { return m.voiceAutoSend }), OnChange: func(on bool) {
 			m.voiceAutoSend = on

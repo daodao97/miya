@@ -434,7 +434,7 @@ func (ps *phoneSession) onTask(r remote.Request) bool {
 			return "Conversation is no longer on the desktop"
 		}
 		id, action, _ := strings.Cut(r.Text, " ")
-		return ps.c.prepareTaskAction(t.Thread.ID, id, action)
+		return ps.c.PrepareTaskAction(t.Thread.ID, id, action)
 	})
 	if !ok {
 		return false

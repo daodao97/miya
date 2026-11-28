@@ -27,14 +27,14 @@ func settingsDialog(cx *core.Scope, c Host, open *core.Signal[bool]) core.Node {
 	cx.SetLocale(prefs.NormalizeInterfaceLanguage(prefs.Load("interfaceLanguage")))
 	setSettingsAppearance(cx, prefs.NormalizeAppearance(prefs.Load("appearance")))
 	return ui.SettingsDialog{Open: open.Get, OnOpenChange: func(v bool, _ base.Reason) { open.Set(v) },
-		Label: tr("Settings"), TestID: "settings-dialog", Content: func(narrow func() bool) core.Node {
+		Label: tr("Settings"), TestID: "settings-dialog", Content: func(_ func() bool) core.Node {
 			return core.Show{When: open.Get, Then: func(cx *core.Scope) core.Node {
-				return settingsContent(cx, c, usage, service, narrow, func() { open.Set(false) })
+				return settingsContent(cx, c, usage, service, func() { open.Set(false) }, true)
 			}}
 		}}
 }
 
-func settingsContent(cx *core.Scope, c Host, usage *desktopUsage, service *settingsService, narrow func() bool, closeSettings func()) core.Node {
+func settingsContent(cx *core.Scope, c Host, usage *desktopUsage, service *settingsService, closeSettings func(), dialog bool) core.Node {
 	category, query := usage.category, core.NewSignal(cx, "")
 	c.EnsureAgentUpdates()
 	drafts := map[string]*settingsDraft{}
@@ -50,21 +50,21 @@ func settingsContent(cx *core.Scope, c Host, usage *desktopUsage, service *setti
 		}
 		locales.SetCurrent(tag)
 		return core.Func(func(cx *core.Scope) core.Node {
-			return ui.Settings{Category: category, Query: query, Narrow: narrow, TestID: "settings",
-				Title: tr("Settings"), SearchLabel: tr("Search settings"), SearchPlaceholder: tr("Search settings"),
-				ResultsTitle: tr("Settings"), EmptyText: tr("No matching settings."), CloseLabel: tr("Close"),
-				OnClose: func() { closeSettings() }, Categories: []ui.SettingsCategory{
-					{ID: "general", Title: tr("General"), Icon: nswidgets.IconOf("settings"), Groups: generalSettings(cx, c, service, drafts)},
-					{ID: "providers", Title: tr("Model providers"), Icon: nswidgets.IconOf("settings"), Groups: []ui.SettingsGroup{{
-						ID: "providers", Title: tr("Model providers"), Items: []ui.SettingsItem{{ID: "providers", Content: core.Func(func(cx *core.Scope) core.Node {
-							return providerSettings(cx, c)
-						})}},
-					}}},
-					{ID: "account", Title: tr("Account"), Icon: nswidgets.IconOf("user-circle"), Groups: account.groups()},
-					{ID: "usage", Title: tr("Usage"), Icon: nswidgets.IconOf("pi"), Groups: usage.groups()},
-					{ID: "phone", Title: tr("Phone"), Icon: nswidgets.IconOf("device-mobile"), Groups: append(phoneSettings(cx, c), phoneNotificationGroup(cx, c), remoteControlSettings(cx, c))},
-					{ID: "memory", Title: tr("Memory"), Icon: nswidgets.IconOf("bulb"), Description: tr("Saved locally and shared by Codex and Claude. Current instructions and project files take priority. Forgetting removes Miya's content, but not agent history or backups."), Groups: memory.groups()},
-				}}
+			categories := []ui.SettingsCategory{
+				{ID: "general", Title: tr("General"), Icon: nswidgets.IconOf("settings"), Groups: generalSettings(cx, c, service, drafts)},
+				{ID: "providers", Title: tr("Model providers"), Icon: nswidgets.IconOf("server"), Groups: []ui.SettingsGroup{{
+					ID: "providers", Title: tr("Model providers"), Items: []ui.SettingsItem{{ID: "providers", Content: core.Func(func(cx *core.Scope) core.Node {
+						return providerSettings(cx, c)
+					})}},
+				}}},
+				{ID: "account", Title: tr("Account"), Icon: nswidgets.IconOf("user-circle"), Groups: account.groups()},
+				{ID: "usage", Title: tr("Usage"), Icon: nswidgets.IconOf("pi"), Groups: usage.groups()},
+				{ID: "phone", Title: tr("Phone"), Icon: nswidgets.IconOf("device-mobile"), Groups: append(phoneSettings(cx, c), phoneNotificationGroup(cx, c))},
+				{ID: "memory", Title: tr("Memory"), Icon: nswidgets.IconOf("bulb"), Description: tr("Saved locally and shared by Codex and Claude. Current instructions and project files take priority. Forgetting removes Miya's content, but not agent history or backups."), Groups: memory.groups()},
+				{ID: "webhook", Title: tr("Webhook"), Icon: nswidgets.IconOf("webhook"), Groups: []ui.SettingsGroup{webhookSettings(c)}},
+				{ID: "remote-control", Title: tr("Remote control"), Icon: nswidgets.IconOf("device-desktop"), Groups: []ui.SettingsGroup{remoteControlSettings(c)}},
+			}
+			return desktopSettingsPage(cx, category, query, categories, closeSettings, dialog)
 		})
 	})
 }
@@ -75,13 +75,15 @@ func openSettingsWindow(cx *core.Scope, c Host, usage *desktopUsage) bool {
 		Title: tr("Settings"), Key: "miya-settings", Width: 780, Height: 700,
 		Constraints: core.WindowConstraints{MinWidth: 560, MinHeight: 420},
 	}, func(cx *core.Scope) core.Node {
+		// The companion window resolves its own palette, including the colors
+		// used by menus opened above its forms.
+		cx.SetTheme(nswidgets.Theme())
 		return settingsContent(cx, c, usage, newSettingsService(cx, c),
-			func() bool { return cx.Env().Window().Width < 680 },
 			func() {
 				if window != nil {
 					window.Close()
 				}
-			})
+			}, false)
 	})
 	return window != nil
 }
@@ -104,10 +106,12 @@ func settingsActions(nodes ...core.Node) core.Node {
 	return core.View{Style: core.Style{Direction: core.Row, Wrap: core.Wrap, Gap: 8, AlignItems: core.AlignCenter}, Children: nodes}
 }
 func settingsText(cx *core.Scope, value func() string) core.Node {
-	return core.Text{ContentFunc: value, Selectable: core.SelectableOn, Style: core.Style{FontSize: 12}, StyleFunc: func() core.Style { return core.Style{Color: nswidgets.ColorsOf(cx).Muted()} }}
+	return core.Show{When: func() bool { return value() != "" }, Then: func(*core.Scope) core.Node {
+		return core.Text{ContentFunc: value, Selectable: core.SelectableOn, Style: core.Style{FontSize: 12, LineHeight: 17}, StyleFunc: func() core.Style { return core.Style{Color: nswidgets.ColorsOf(cx).Muted()} }}
+	}}
 }
 func settingsButton(id, title string, press func(), disabled func() bool) core.Node {
-	return ui.Button{TestID: id, Text: title, OnPress: press, Disabled: disabled, Variant: ui.ButtonOutline}
+	return ui.Button{TestID: id, Text: title, OnPress: press, Disabled: disabled, Variant: ui.ButtonSecondary}
 }
 func settingsSwitch(id, title, description string, get func() bool, set func(bool), disabled func() bool) ui.SettingsItem {
 	return ui.SettingsItem{ID: id, Title: tr(title), Description: tr(description), Control: settingsToggle(id, tr(title), Live(get), set, disabled)}
@@ -125,7 +129,7 @@ func generalSettings(cx *core.Scope, c Host, service *settingsService, drafts ma
 	interfaceLanguage, saveLanguage := settingsPreference(cx, "interfaceLanguage")
 	appearance, saveAppearance := settingsPreference(cx, "appearance")
 	general := ui.SettingsGroup{ID: "general", Title: tr("General"), Items: []ui.SettingsItem{
-		{ID: "language", Title: tr("Interface language"), Description: tr("Changes apply immediately on this device."), Control: ui.Select[string]{TestID: "interface-language", Label: tr("Interface language"), Options: []ui.Option[string]{{Value: "", Label: tr("Follow system")}, {Value: "zh-Hans", Label: display.Self.Name(language.SimplifiedChinese)}, {Value: "en", Label: display.Self.Name(language.English)}}, Value: func() string { return prefs.NormalizeInterfaceLanguage(interfaceLanguage()) }, OnChange: func(v string) {
+		{ID: "language", Title: tr("Interface language"), Description: tr("Changes apply immediately on this device."), Control: settingsSelect{TestID: "interface-language", Label: tr("Interface language"), Options: []ui.Option[string]{{Value: "", Label: tr("Follow system")}, {Value: "zh-Hans", Label: display.Self.Name(language.SimplifiedChinese)}, {Value: "en", Label: display.Self.Name(language.English)}}, Value: func() string { return prefs.NormalizeInterfaceLanguage(interfaceLanguage()) }, OnChange: func(v string) {
 			saved := v
 			if saved == "" {
 				saved = "system"
@@ -133,7 +137,7 @@ func generalSettings(cx *core.Scope, c Host, service *settingsService, drafts ma
 			saveLanguage(saved)
 			cx.SetLocale(v)
 		}}},
-		{ID: "appearance", Title: tr("Appearance"), Control: ui.Select[string]{TestID: "appearance", Label: tr("Appearance"), Options: []ui.Option[string]{{Value: "", Label: tr("System")}, {Value: "light", Label: tr("Light")}, {Value: "dark", Label: tr("Dark")}}, Value: func() string { return prefs.NormalizeAppearance(appearance()) }, OnChange: func(v string) { saveAppearance(v); setSettingsAppearance(cx, v) }}},
+		{ID: "appearance", Title: tr("Appearance"), Control: settingsSelect{TestID: "appearance", Label: tr("Appearance"), Options: []ui.Option[string]{{Value: "", Label: tr("System")}, {Value: "light", Label: tr("Light")}, {Value: "dark", Label: tr("Dark")}}, Value: func() string { return prefs.NormalizeAppearance(appearance()) }, OnChange: func(v string) { saveAppearance(v); setSettingsAppearance(cx, v) }}},
 	}}
 	notifications := ui.SettingsGroup{ID: "notifications", Title: tr("Notifications")}
 	for _, o := range []struct{ key, title, help string }{{"completion", "Task finished", "Notify when a conversation finishes its turn."}, {"waiting", "Waiting for approval", "Notify when an action needs your approval."}} {
@@ -155,7 +159,9 @@ func generalSettings(cx *core.Scope, c Host, service *settingsService, drafts ma
 			}
 		}}})
 	}
-	groups := []ui.SettingsGroup{general, notifications, permissions, {ID: "agents", Title: tr("Agents"), Actions: []core.Node{settingsButton("recheck-agents", tr("Check again"), c.RecheckAgents, Live(c.AgentUpdateBusy))}, Items: []ui.SettingsItem{{ID: "agents", Title: tr("Agents"), Description: tr("Turn agents on or off for new conversations. Existing conversations keep their agent."), Content: settingsColumn(agentEnvironmentSettings(cx, c), agentSettings(cx, c, drafts))}}}}
+	groups := []ui.SettingsGroup{general, notifications, permissions, {ID: "agents", Title: tr("Agents"), Actions: []core.Node{settingsButton("recheck-agents", tr("Check again"), c.RecheckAgents, Live(c.AgentUpdateBusy))}, Items: []ui.SettingsItem{{ID: "agents", Title: tr("Agents"), Content: settingsColumn(settingsText(cx, func() string {
+		return tr("Turn agents on or off for new conversations. Existing conversations keep their agent.")
+	}), agentEnvironmentSettings(cx, c), agentSettings(cx, c, drafts))}}}}
 	return append(groups, service.groups()...)
 }
 
@@ -189,7 +195,7 @@ func agentSettings(cx *core.Scope, c Host, drafts map[string]*settingsDraft) cor
 				info := settingsText(cx, Live(func() string {
 					a := get()
 					u := c.AgentUpdates()[id]
-					parts := []string{a.Name, a.Path}
+					parts := []string{a.Path}
 					if !a.Installed() {
 						parts = append(parts, firstSettingsText(a.Problem, tr("Not installed")))
 					}
@@ -210,7 +216,7 @@ func agentSettings(cx *core.Scope, c Host, drafts map[string]*settingsDraft) cor
 					if u.Command != "" && (u.Update || u.Error != "") {
 						parts = append(parts, fmt.Sprintf(tr("Update command: %s"), u.Command))
 					}
-					return strings.Join(parts, "\n")
+					return strings.TrimSpace(strings.Join(parts, "\n"))
 				}))
 				upgrade := core.Dynamic(func(cx *core.Scope) core.Node {
 					u := Live(c.AgentUpdates)()[id]
@@ -223,15 +229,17 @@ func agentSettings(cx *core.Scope, c Host, drafts map[string]*settingsDraft) cor
 					}
 					return settingsButton("upgrade-agent-"+id, label, func() { c.UpgradeAgent(id) }, Live(func() bool { return c.AgentUpdateBusy() || c.AgentUpdates()[id].Checking }))
 				})
-				rows = append(rows, settingsColumn(info, settingsActions(upgrade, settingsToggle("agent-"+id, tr("Enable ")+a.Name, Live(func() bool { return get().Enabled }), func(on bool) { c.SetAgentEnabled(id, on) }, Live(func() bool {
-					n := 0
-					for _, a := range c.Agents() {
-						if a.Enabled {
-							n++
+				rows = append(rows, ui.FormSection{Children: []core.Node{ui.FormRow{
+					Title: a.Name, Below: settingsColumn(info, settingsActions(upgrade)),
+					Control: settingsToggle("agent-"+id, tr("Enable ")+a.Name, Live(func() bool { return get().Enabled }), func(on bool) { c.SetAgentEnabled(id, on) }, Live(func() bool {
+						n := 0
+						for _, a := range c.Agents() {
+							if a.Enabled {
+								n++
+							}
 						}
-					}
-					return get().Enabled && n <= 1
-				})))))
+						return get().Enabled && n <= 1
+					}))}}})
 			}
 			for _, s := range c.AgentSettings() {
 				rows = append(rows, agentSetting(cx, c, s.ID, drafts))

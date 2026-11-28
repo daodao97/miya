@@ -14,12 +14,18 @@ import (
 
 	"miya/internal/async"
 	"miya/internal/automation"
+	"miya/internal/bot"
 	"miya/internal/chat/model"
 	"miya/internal/nswidgets"
 	"miya/internal/textutil"
 )
 
 type automationRoute struct{ page, id string }
+
+type automationShortcut struct {
+	detail string
+	duty   *bot.Bot
+}
 
 // All page state belongs to the engine. Service calls capture their inputs
 // here, do the blocking work elsewhere, and post their replies back here.
@@ -36,12 +42,23 @@ type automationsState struct {
 	form                     *automationFormState
 }
 
-func automationsPage(cx *core.Scope, c Host) core.Node {
+func automationsPage(cx *core.Scope, c Host, start ...automationShortcut) core.Node {
 	a := &automationsState{cx: cx, host: c, route: core.NewSignal(cx, automationRoute{}),
 		list: core.NewSignalFunc[[]automation.View](cx, nil, func(a, b []automation.View) bool { return reflect.DeepEqual(a, b) }), webhook: core.NewSignal[*automation.WebhookView](cx, nil),
 		loaded: core.NewSignal(cx, false), loading: core.NewSignal(cx, false), pending: core.NewSignal(cx, false),
 		err: core.NewSignal(cx, ""), listErr: core.NewSignal(cx, ""), generation: core.NewSignal(cx, 0)}
 	a.form = newAutomationForm(cx)
+	if len(start) != 0 {
+		entry := start[0]
+		if b := entry.duty; b != nil {
+			a.openForm(nil)
+			a.form.project.Set(b.Project)
+			a.form.agent.Set(b.Agent)
+			a.form.botID.Set(b.ID)
+		} else if entry.detail != "" {
+			a.route.Set(automationRoute{"detail", entry.detail})
+		}
+	}
 	var refresh func()
 	refresh = func() { a.load(); cx.AfterFunc(5*time.Second, refresh) }
 	cx.Post(refresh)
@@ -73,7 +90,11 @@ func automationsPage(cx *core.Scope, c Host) core.Node {
 // call also accepts deferred local replies. A desktop mirror routes the
 // same protocol through its service client, as the MyGo page does.
 func (a *automationsState) call(op string, req automation.Request, done func(json.RawMessage, error)) {
-	remote := a.host.State().Remote
+	callAutomationService(a.cx, a.host, op, req, done)
+}
+
+func callAutomationService(cx *core.Scope, host Host, op string, req automation.Request, done func(json.RawMessage, error)) {
+	remote := host.State().Remote
 	go func() {
 		var raw json.RawMessage
 		var err error
@@ -81,7 +102,7 @@ func (a *automationsState) call(op string, req automation.Request, done func(jso
 			err = remote.Call(op, req, &raw)
 		} else {
 			var out any
-			out, err = a.host.AutomationOp(op, req)
+			out, err = host.AutomationOp(op, req)
 			if reply, ok := out.(async.Reply); ok && err == nil {
 				out, err = reply()
 			}
@@ -89,7 +110,7 @@ func (a *automationsState) call(op string, req automation.Request, done func(jso
 				raw, err = json.Marshal(out)
 			}
 		}
-		a.cx.Post(func() { done(raw, err) })
+		cx.Post(func() { done(raw, err) })
 	}()
 }
 

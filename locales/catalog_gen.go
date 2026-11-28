@@ -20803,11 +20803,11 @@ func (msgs Messages) NsgoPhoneSlideToCancel() string {
 	return Catalog.Format(msgs.locale, "nsgoPhoneSlideToCancel", nil)
 }
 
-// NsgoPhoneVoiceHelp says "Hold the microphone button to speak. Release to insert text, or enable automatic sending."
+// NsgoPhoneVoiceHelp says "Hold the microphone or the empty input to speak. Release to insert text, or enable automatic sending."
 // in the language the app shows.
 func NsgoPhoneVoiceHelp() string { return In(messageLocale()).NsgoPhoneVoiceHelp() }
 
-// NsgoPhoneVoiceHelp says "Hold the microphone button to speak. Release to insert text, or enable automatic sending."
+// NsgoPhoneVoiceHelp says "Hold the microphone or the empty input to speak. Release to insert text, or enable automatic sending."
 // in the language of msgs.
 func (msgs Messages) NsgoPhoneVoiceHelp() string {
 	return Catalog.Format(msgs.locale, "nsgoPhoneVoiceHelp", nil)
@@ -23537,4 +23537,114 @@ func PermissionRequired() string { return In(messageLocale()).PermissionRequired
 // in the language of msgs.
 func (msgs Messages) PermissionRequired() string {
 	return Catalog.Format(msgs.locale, "permissionRequired", nil)
+}
+
+// EditMemoryOnDesktop says "Edit or forget memories on your desktop."
+// in the language the app shows.
+func EditMemoryOnDesktop() string { return In(messageLocale()).EditMemoryOnDesktop() }
+
+// EditMemoryOnDesktop says "Edit or forget memories on your desktop."
+// in the language of msgs.
+func (msgs Messages) EditMemoryOnDesktop() string {
+	return Catalog.Format(msgs.locale, "editMemoryOnDesktop", nil)
+}
+
+// AuditAndroidMigrationFailed says "Unable to import the saved Android connection. Restart Miya to retry."
+// in the language the app shows.
+func AuditAndroidMigrationFailed() string { return In(messageLocale()).AuditAndroidMigrationFailed() }
+
+// AuditAndroidMigrationFailed says "Unable to import the saved Android connection. Restart Miya to retry."
+// in the language of msgs.
+func (msgs Messages) AuditAndroidMigrationFailed() string {
+	return Catalog.Format(msgs.locale, "auditAndroidMigrationFailed", nil)
+}
+
+// ThisConversation says "This conversation"
+// in the language the app shows.
+func ThisConversation() string { return In(messageLocale()).ThisConversation() }
+
+// ThisConversation says "This conversation"
+// in the language of msgs.
+func (msgs Messages) ThisConversation() string {
+	return Catalog.Format(msgs.locale, "thisConversation", nil)
+}
+
+// ProjectOverview says "Project overview"
+// in the language the app shows.
+func ProjectOverview() string { return In(messageLocale()).ProjectOverview() }
+
+// ProjectOverview says "Project overview"
+// in the language of msgs.
+func (msgs Messages) ProjectOverview() string {
+	return Catalog.Format(msgs.locale, "projectOverview", nil)
+}
+
+// NoMatchingBots says "No matching Bots"
+// in the language the app shows.
+func NoMatchingBots() string { return In(messageLocale()).NoMatchingBots() }
+
+// NoMatchingBots says "No matching Bots"
+// in the language of msgs.
+func (msgs Messages) NoMatchingBots() string {
+	return Catalog.Format(msgs.locale, "noMatchingBots", nil)
+}
+
+// MiyaMemoryChangedShort says "Miya memory changed"
+// in the language the app shows.
+func MiyaMemoryChangedShort() string { return In(messageLocale()).MiyaMemoryChangedShort() }
+
+// MiyaMemoryChangedShort says "Miya memory changed"
+// in the language of msgs.
+func (msgs Messages) MiyaMemoryChangedShort() string {
+	return Catalog.Format(msgs.locale, "miyaMemoryChangedShort", nil)
+}
+
+// Displays says "Displays"
+// in the language the app shows.
+func Displays() string { return In(messageLocale()).Displays() }
+
+// Displays says "Displays"
+// in the language of msgs.
+func (msgs Messages) Displays() string {
+	return Catalog.Format(msgs.locale, "displays", nil)
+}
+
+// NoMatchingResults says "No matching results"
+// in the language the app shows.
+func NoMatchingResults() string { return In(messageLocale()).NoMatchingResults() }
+
+// NoMatchingResults says "No matching results"
+// in the language of msgs.
+func (msgs Messages) NoMatchingResults() string {
+	return Catalog.Format(msgs.locale, "noMatchingResults", nil)
+}
+
+// LatestConsolidationIssue says "Latest consolidation issue: "
+// in the language the app shows.
+func LatestConsolidationIssue() string { return In(messageLocale()).LatestConsolidationIssue() }
+
+// LatestConsolidationIssue says "Latest consolidation issue: "
+// in the language of msgs.
+func (msgs Messages) LatestConsolidationIssue() string {
+	return Catalog.Format(msgs.locale, "latestConsolidationIssue", nil)
+}
+
+// LatestConsolidationSummary says "Latest consolidation: %s · %d merged · %d marked as conflicts"
+// in the language the app shows.
+func LatestConsolidationSummary() string { return In(messageLocale()).LatestConsolidationSummary() }
+
+// LatestConsolidationSummary says "Latest consolidation: %s · %d merged · %d marked as conflicts"
+// in the language of msgs.
+func (msgs Messages) LatestConsolidationSummary() string {
+	return Catalog.Format(msgs.locale, "latestConsolidationSummary", nil)
+}
+
+// MiyaOnThisComputer says "Miya on this computer"
+// in the language the app shows.
+func MiyaOnThisComputer() string { return In(messageLocale()).MiyaOnThisComputer() }
+
+// MiyaOnThisComputer says "Miya on this computer"
+// in the language of msgs.
+func (msgs Messages) MiyaOnThisComputer() string {
+	return Catalog.Format(msgs.locale, "miyaOnThisComputer", nil)
 }
