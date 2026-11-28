@@ -239,14 +239,18 @@ func (m *App) composerBox(cx *core.Scope, state *chat.ConversationState) core.No
 		return core.Style{Width: core.Pct(100), MinHeight: core.Pt(56), CornerRadius: 26, Background: colors.Bubble()}
 	}, Children: []core.Node{
 		input,
-		// An unfocused, empty editor accepts a tap or a voice hold. Keep
-		// the native field underneath so it cannot take this touch and open the IME.
+		// Route touches on the unfocused editor through the gesture surface.
+		// A tap focuses the native field. A hold keeps it out of the IME.
 		core.Show{When: live(m, func() bool {
-			return m.voicePage() && !focused.Get() && (draft.Get() == "" || m.voice != nil)
+			return m.voicePage() && !focused.Get()
 		}), Then: func(*core.Scope) core.Node {
 			return core.View{NoFocus: true,
-				Style:   core.Style{Position: core.Absolute, Top: core.Pt(0), Bottom: core.Pt(0), Left: core.Pt(0), Right: core.Pt(0)},
-				OnTouch: func(e core.TouchEvent) { hold(e, m.Draft == "") },
+				Style:          core.Style{Position: core.Absolute, Top: core.Pt(0), Bottom: core.Pt(0), Left: core.Pt(0), Right: core.Pt(0)},
+				DelayLongPress: voiceHoldDelay,
+				// NSGo suppresses OnPress for recognized holds. Raw touches
+				// still own recording, slide-to-cancel and release.
+				OnLongPress: func(core.PressEvent) {},
+				OnTouch:     func(e core.TouchEvent) { hold(e, true) },
 				OnPress: func(core.PressEvent) {
 					if m.voice == nil && !time.Now().Before(quiet) {
 						editor.Focus()

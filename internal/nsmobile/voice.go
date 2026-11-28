@@ -168,6 +168,8 @@ func (m *App) finishVoice(v *phoneVoice, r voiceinput.Result) {
 	}
 }
 
+const voiceHoldDelay = 350 * time.Millisecond
+
 // voiceHold shares one recording gesture between the editor and the right
 // button. Lifting finishes the recording and sliding away cancels it.
 func (m *App) voiceHold(cx *core.Scope, quiet *time.Time) func(core.TouchEvent, bool) {
@@ -201,7 +203,7 @@ func (m *App) voiceHold(cx *core.Scope, quiet *time.Time) func(core.TouchEvent, 
 			if allowStart && m.voicePage() {
 				origin = e.Touches[0].PagePosition
 				owner := m.composerOwner()
-				stop = cx.AfterFunc(350*time.Millisecond, func() {
+				stop = cx.AfterFunc(voiceHoldDelay, func() {
 					stop = nil
 					if owner == m.composerOwner() && m.voice == nil {
 						m.beginVoice()

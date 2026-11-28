@@ -97,6 +97,44 @@ func TestPhoneVoiceHoldWorksFromComposerOnHome(t *testing.T) {
 	}
 }
 
+func TestPhoneVoiceHoldWithDraftKeepsEditorUnfocused(t *testing.T) {
+	app, m, sent := startPhone(t)
+	openPhoneThread(t, app, m, sent)
+
+	const editor = "id:mobile-composer"
+	const draft = "Existing draft"
+	at := core.Point{X: 150, Y: 26}
+	v := &testVoice{}
+	ready := make(chan func(voiceinput.Result), 1)
+	changePhone(app, m, func() {
+		m.setComposerDraft(draft, len(draft), len(draft))
+		m.voiceAutoSend = false
+		m.voiceStart = func(_ context.Context, _ string, emit func(voiceinput.Result)) (voiceSession, error) {
+			ready <- emit
+			return v, nil
+		}
+	})
+
+	finger := app.Touch(editor, at)
+	if app.Find(editor).Focused {
+		t.Fatal("touch down focused the draft before the gesture was recognized")
+	}
+	finger.Hold(400 * time.Millisecond)
+	app.WaitUntil(time.Second, func() bool { return m.voice != nil && m.voice.session != nil })
+	if app.Find(editor).Focused {
+		t.Fatal("the editor took focus during dictation")
+	}
+	emit := <-ready
+	emit(voiceinput.Result{Text: " continued", Final: false})
+	app.WaitUntil(time.Second, func() bool { return m.Draft == draft+" continued" })
+	finger.Lift()
+	emit(voiceinput.Result{Text: "continued", Final: true})
+	app.WaitUntil(time.Second, func() bool { return m.voice == nil && m.Draft == draft+"continued" })
+	if app.Find(editor).Focused {
+		t.Fatal("releasing dictation and inserting its result reopened the keyboard")
+	}
+}
+
 func TestPhoneVoiceInsertsPartialsAtSelectionAndFinalOnRelease(t *testing.T) {
 	app, m, sent := startPhone(t)
 	openPhoneThread(t, app, m, sent)
