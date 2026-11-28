@@ -2135,5 +2135,20 @@
   "botProjectUnknown": "先把项目添加到 Miya，再为它创建 Bot",
   "botGone": "这个 Bot 已不存在",
   "botConversationNotLoaded": "这个 Bot 的对话还没有加载。请稍后再试，或在 Bot 的菜单里开始新对话",
-  "botMessagePlaceholder": "给 %s 发消息… / 命令 · @ 文件"
+  "botMessagePlaceholder": "给 %s 发消息… / 命令 · @ 文件",
+  "showOriginal_68cdea": "显示原文",
+  "nothingToTranslate_ef30c2": "没有可翻译的内容",
+  "thisReplyIsTooLongTo_780294": "这条回复太长，无法翻译",
+  "theAgentReturnedNoTranslation_3ed475": "Agent 没有返回译文",
+  "translationIsBusyTryAgainShortly_42e0ef": "正在翻译其他内容，请稍后再试。",
+  "translateToS_a51017": "翻译成%s",
+  "replyTranslation_a43db3": "回复翻译",
+  "translateReplies_73a798": "翻译回复",
+  "translateInto_9ba6d1": "翻译成",
+  "conversationSAgent_dea33a": "对话所用的 Agent",
+  "translatingAgent_730e8b": "翻译用的 Agent",
+  "translatingModel_ba2327": "翻译用的模型",
+  "translateAutomatically_11403b": "自动翻译",
+  "translatesRepliesInAnotherLanguageAs_2f0b3d": "其他语言的回复出现在屏幕上时直接翻译，不用点按钮。",
+  "repliesInAnotherLanguageGetA_1c2721": "其他语言的回复末尾显示翻译按钮。翻译由电脑上的 Agent 完成，会消耗它的额度。这些设置保存在电脑上，桌面和手机共用。"
 }

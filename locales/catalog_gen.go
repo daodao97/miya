@@ -22835,3 +22835,161 @@ func BotMessagePlaceholder() string { return In(i18n.Locale()).BotMessagePlaceho
 func (msgs Messages) BotMessagePlaceholder() string {
 	return Catalog.Format(msgs.locale, "botMessagePlaceholder", nil)
 }
+
+// ShowOriginal68cdea says "Show original"
+// in the language the app shows.
+func ShowOriginal68cdea() string { return In(i18n.Locale()).ShowOriginal68cdea() }
+
+// ShowOriginal68cdea says "Show original"
+// in the language of msgs.
+func (msgs Messages) ShowOriginal68cdea() string {
+	return Catalog.Format(msgs.locale, "showOriginal_68cdea", nil)
+}
+
+// NothingToTranslateEf30c2 says "Nothing to translate"
+// in the language the app shows.
+func NothingToTranslateEf30c2() string { return In(i18n.Locale()).NothingToTranslateEf30c2() }
+
+// NothingToTranslateEf30c2 says "Nothing to translate"
+// in the language of msgs.
+func (msgs Messages) NothingToTranslateEf30c2() string {
+	return Catalog.Format(msgs.locale, "nothingToTranslate_ef30c2", nil)
+}
+
+// ThisReplyIsTooLongTo780294 says "This reply is too long to translate"
+// in the language the app shows.
+func ThisReplyIsTooLongTo780294() string { return In(i18n.Locale()).ThisReplyIsTooLongTo780294() }
+
+// ThisReplyIsTooLongTo780294 says "This reply is too long to translate"
+// in the language of msgs.
+func (msgs Messages) ThisReplyIsTooLongTo780294() string {
+	return Catalog.Format(msgs.locale, "thisReplyIsTooLongTo_780294", nil)
+}
+
+// TheAgentReturnedNoTranslation3ed475 says "The agent returned no translation"
+// in the language the app shows.
+func TheAgentReturnedNoTranslation3ed475() string {
+	return In(i18n.Locale()).TheAgentReturnedNoTranslation3ed475()
+}
+
+// TheAgentReturnedNoTranslation3ed475 says "The agent returned no translation"
+// in the language of msgs.
+func (msgs Messages) TheAgentReturnedNoTranslation3ed475() string {
+	return Catalog.Format(msgs.locale, "theAgentReturnedNoTranslation_3ed475", nil)
+}
+
+// TranslationIsBusyTryAgainShortly42e0ef says "Translation is busy. Try again shortly."
+// in the language the app shows.
+func TranslationIsBusyTryAgainShortly42e0ef() string {
+	return In(i18n.Locale()).TranslationIsBusyTryAgainShortly42e0ef()
+}
+
+// TranslationIsBusyTryAgainShortly42e0ef says "Translation is busy. Try again shortly."
+// in the language of msgs.
+func (msgs Messages) TranslationIsBusyTryAgainShortly42e0ef() string {
+	return Catalog.Format(msgs.locale, "translationIsBusyTryAgainShortly_42e0ef", nil)
+}
+
+// TranslateToSA51017 says "Translate to %s"
+// in the language the app shows.
+func TranslateToSA51017() string { return In(i18n.Locale()).TranslateToSA51017() }
+
+// TranslateToSA51017 says "Translate to %s"
+// in the language of msgs.
+func (msgs Messages) TranslateToSA51017() string {
+	return Catalog.Format(msgs.locale, "translateToS_a51017", nil)
+}
+
+// ReplyTranslationA43db3 says "Reply translation"
+// in the language the app shows.
+func ReplyTranslationA43db3() string { return In(i18n.Locale()).ReplyTranslationA43db3() }
+
+// ReplyTranslationA43db3 says "Reply translation"
+// in the language of msgs.
+func (msgs Messages) ReplyTranslationA43db3() string {
+	return Catalog.Format(msgs.locale, "replyTranslation_a43db3", nil)
+}
+
+// TranslateReplies73a798 says "Translate replies"
+// in the language the app shows.
+func TranslateReplies73a798() string { return In(i18n.Locale()).TranslateReplies73a798() }
+
+// TranslateReplies73a798 says "Translate replies"
+// in the language of msgs.
+func (msgs Messages) TranslateReplies73a798() string {
+	return Catalog.Format(msgs.locale, "translateReplies_73a798", nil)
+}
+
+// TranslateInto9ba6d1 says "Translate into"
+// in the language the app shows.
+func TranslateInto9ba6d1() string { return In(i18n.Locale()).TranslateInto9ba6d1() }
+
+// TranslateInto9ba6d1 says "Translate into"
+// in the language of msgs.
+func (msgs Messages) TranslateInto9ba6d1() string {
+	return Catalog.Format(msgs.locale, "translateInto_9ba6d1", nil)
+}
+
+// ConversationSAgentDea33a says "Conversation's agent"
+// in the language the app shows.
+func ConversationSAgentDea33a() string { return In(i18n.Locale()).ConversationSAgentDea33a() }
+
+// ConversationSAgentDea33a says "Conversation's agent"
+// in the language of msgs.
+func (msgs Messages) ConversationSAgentDea33a() string {
+	return Catalog.Format(msgs.locale, "conversationSAgent_dea33a", nil)
+}
+
+// TranslatingAgent730e8b says "Translating agent"
+// in the language the app shows.
+func TranslatingAgent730e8b() string { return In(i18n.Locale()).TranslatingAgent730e8b() }
+
+// TranslatingAgent730e8b says "Translating agent"
+// in the language of msgs.
+func (msgs Messages) TranslatingAgent730e8b() string {
+	return Catalog.Format(msgs.locale, "translatingAgent_730e8b", nil)
+}
+
+// TranslatingModelBa2327 says "Translating model"
+// in the language the app shows.
+func TranslatingModelBa2327() string { return In(i18n.Locale()).TranslatingModelBa2327() }
+
+// TranslatingModelBa2327 says "Translating model"
+// in the language of msgs.
+func (msgs Messages) TranslatingModelBa2327() string {
+	return Catalog.Format(msgs.locale, "translatingModel_ba2327", nil)
+}
+
+// TranslateAutomatically11403b says "Translate automatically"
+// in the language the app shows.
+func TranslateAutomatically11403b() string { return In(i18n.Locale()).TranslateAutomatically11403b() }
+
+// TranslateAutomatically11403b says "Translate automatically"
+// in the language of msgs.
+func (msgs Messages) TranslateAutomatically11403b() string {
+	return Catalog.Format(msgs.locale, "translateAutomatically_11403b", nil)
+}
+
+// TranslatesRepliesInAnotherLanguageAs2f0b3d says "Translates replies in another language as they show, without a click."
+// in the language the app shows.
+func TranslatesRepliesInAnotherLanguageAs2f0b3d() string {
+	return In(i18n.Locale()).TranslatesRepliesInAnotherLanguageAs2f0b3d()
+}
+
+// TranslatesRepliesInAnotherLanguageAs2f0b3d says "Translates replies in another language as they show, without a click."
+// in the language of msgs.
+func (msgs Messages) TranslatesRepliesInAnotherLanguageAs2f0b3d() string {
+	return Catalog.Format(msgs.locale, "translatesRepliesInAnotherLanguageAs_2f0b3d", nil)
+}
+
+// RepliesInAnotherLanguageGetA1c2721 says "Replies in another language get a translate button. The agent translates them on your computer, using its quota. Thes…"
+// in the language the app shows.
+func RepliesInAnotherLanguageGetA1c2721() string {
+	return In(i18n.Locale()).RepliesInAnotherLanguageGetA1c2721()
+}
+
+// RepliesInAnotherLanguageGetA1c2721 says "Replies in another language get a translate button. The agent translates them on your computer, using its quota. Thes…"
+// in the language of msgs.
+func (msgs Messages) RepliesInAnotherLanguageGetA1c2721() string {
+	return Catalog.Format(msgs.locale, "repliesInAnotherLanguageGetA_1c2721", nil)
+}

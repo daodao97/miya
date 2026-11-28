@@ -21,6 +21,7 @@ import (
 	phoneserver "miya/internal/phone/server"
 	"miya/internal/remote"
 	"miya/internal/thumbnail"
+	"miya/internal/translate"
 )
 
 // phoneSession is one phone connection's state, shared by servePhoneConnection
@@ -32,6 +33,7 @@ type phoneSession struct {
 	send              func(f remote.Frame) bool
 	collaborationJobs chan remote.Request
 	drafts            chan remote.Request
+	translations      chan remote.Request
 	previews          chan previewRequest
 	deviceID          string
 	lastState         []byte
@@ -55,35 +57,38 @@ type previewRequest struct {
 
 // phoneRequests answer a phone's requests by their Op; unknown ones are ignored.
 var phoneRequests = map[string]func(*phoneSession, remote.Request) bool{
-	"desktop-preview":     (*phoneSession).onDesktopPreview,
-	"desktop-action":      (*phoneSession).onDesktopPreview,
-	"desktop-open":        (*phoneSession).onDesktopOpen,
-	"desktop-close":       (*phoneSession).onDesktopClose,
-	"image":               (*phoneSession).onImage,
-	"memory":              (*phoneSession).onMemory,
-	"collaboration":       (*phoneSession).onCollaboration,
-	"automation-draft":    (*phoneSession).onAutomationDraft,
-	"automation-create":   (*phoneSession).onAutomationCreate,
-	"automation-run":      (*phoneSession).onAutomationRun,
-	"automations":         (*phoneSession).onAutomations,
-	"automation-webhook":  (*phoneSession).onAutomationWebhook,
-	"automation-briefing": (*phoneSession).onAutomationBriefing,
-	"automation-review":   (*phoneSession).onAutomationReview,
-	"quota":               (*phoneSession).onQuota,
-	"push":                (*phoneSession).onPush,
-	"read":                (*phoneSession).onRead,
-	"read-all":            (*phoneSession).onRead,
-	"subscribe":           (*phoneSession).onSubscribe,
-	"send":                (*phoneSession).onSend,
-	"prefetch":            (*phoneSession).onPrefetch,
-	"stop":                (*phoneSession).onStop,
-	"task":                (*phoneSession).onTask,
-	"retry":               (*phoneSession).onRetry,
-	"dequeue":             (*phoneSession).onQueueAction,
-	"steer-queued":        (*phoneSession).onQueueAction,
-	"drain-queue":         (*phoneSession).onQueueAction,
-	"respond":             (*phoneSession).onRespond,
-	"commands":            (*phoneSession).onCommands,
+	"desktop-preview":      (*phoneSession).onDesktopPreview,
+	"desktop-action":       (*phoneSession).onDesktopPreview,
+	"desktop-open":         (*phoneSession).onDesktopOpen,
+	"desktop-close":        (*phoneSession).onDesktopClose,
+	"image":                (*phoneSession).onImage,
+	"memory":               (*phoneSession).onMemory,
+	"collaboration":        (*phoneSession).onCollaboration,
+	"automation-draft":     (*phoneSession).onAutomationDraft,
+	"translate":            (*phoneSession).onTranslate,
+	"translation-lookup":   (*phoneSession).onTranslationLookup,
+	"translation-settings": (*phoneSession).onTranslationSettings,
+	"automation-create":    (*phoneSession).onAutomationCreate,
+	"automation-run":       (*phoneSession).onAutomationRun,
+	"automations":          (*phoneSession).onAutomations,
+	"automation-webhook":   (*phoneSession).onAutomationWebhook,
+	"automation-briefing":  (*phoneSession).onAutomationBriefing,
+	"automation-review":    (*phoneSession).onAutomationReview,
+	"quota":                (*phoneSession).onQuota,
+	"push":                 (*phoneSession).onPush,
+	"read":                 (*phoneSession).onRead,
+	"read-all":             (*phoneSession).onRead,
+	"subscribe":            (*phoneSession).onSubscribe,
+	"send":                 (*phoneSession).onSend,
+	"prefetch":             (*phoneSession).onPrefetch,
+	"stop":                 (*phoneSession).onStop,
+	"task":                 (*phoneSession).onTask,
+	"retry":                (*phoneSession).onRetry,
+	"dequeue":              (*phoneSession).onQueueAction,
+	"steer-queued":         (*phoneSession).onQueueAction,
+	"drain-queue":          (*phoneSession).onQueueAction,
+	"respond":              (*phoneSession).onRespond,
+	"commands":             (*phoneSession).onCommands,
 }
 
 // onDesktopPreview answers a phone's "desktop-preview", "desktop-action" request; false ends the connection.
@@ -239,6 +244,36 @@ func (ps *phoneSession) onAutomationDraft(r remote.Request) bool {
 	case ps.drafts <- r:
 	default:
 		if !ps.send(phoneAutomationFormFrame(r, nil, fmt.Errorf("Another automation is being generated. Try again shortly."))) {
+			return false
+		}
+	}
+	return true
+}
+
+// onTranslationLookup answers a phone's "translation-lookup" request with
+// the translations kept of its keys; false ends the connection.
+func (ps *phoneSession) onTranslationLookup(r remote.Request) bool {
+	data, _ := json.Marshal(phoneproto.TranslationLookupResult{RequestID: r.RequestID, Translations: translationCache().Lookup(r.Keys)})
+	return ps.send(remote.Frame{Type: "translation-lookup", Data: data})
+}
+
+// onTranslationSettings keeps the settings a phone changed; the state it
+// is sent next shows them. False ends the connection.
+func (ps *phoneSession) onTranslationSettings(r remote.Request) bool {
+	var s translate.Settings
+	if json.Unmarshal(r.Translation, &s) != nil {
+		return true
+	}
+	_, ok := async.OnMain(ps.ctx, ps.c.Dispatch, func() bool { ps.c.applyTranslationSettings(s); return true })
+	return ok
+}
+
+// onTranslate answers a phone's "translate" request; false ends the connection.
+func (ps *phoneSession) onTranslate(r remote.Request) bool {
+	select {
+	case ps.translations <- r:
+	default:
+		if !ps.send(phoneTranslateFrame(r, "", fmt.Errorf("Translation is busy. Try again shortly."))) {
 			return false
 		}
 	}

@@ -104,6 +104,15 @@ func (app *App) generalSettings(c *ui.Context) {
 	permissionList(c.Key("default-permissions"), tr("Default permissions for new conversations"),
 		tr("Change them for the current conversation from the composer."),
 		cc.SelectedPermissionPolicy(), cc.State().SetPermissionPolicy)
+	widgets.TranslationSettings(c.Key("reply-translation"), func(agent string) []widgets.TranslationModel {
+		var models []widgets.TranslationModel
+		for _, m := range cc.AgentModels(agent) {
+			if m.Value != "" {
+				models = append(models, widgets.TranslationModel{Value: m.Value, Label: textutil.FirstNonEmpty(m.Label, m.Value)})
+			}
+		}
+		return models
+	})
 	app.agentSettings(c)
 	app.providerSettings(c.Key("model-providers"))
 	app.ServiceSettings(c)

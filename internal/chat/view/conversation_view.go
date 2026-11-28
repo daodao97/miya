@@ -52,9 +52,34 @@ type View struct {
 	NeedsReadFrame   func(model.Thread, *ui.ListState, int) bool
 	PasteAttachments func(transfer.Data) bool
 	SetNotice        func(string)
-	Lists            map[int]*ui.ListState
-	Groups           GroupCache
-	Copied, Open     map[int]bool
+	// Translate asks for a reply of t in the language lang and calls done
+	// on the main thread. Nil shows no translate button; CanTranslate, if
+	// set, says whether it works now, as with a phone's desktop too old to
+	// translate. The device's settings say whether replies offer it, and
+	// into which language (widgets.TranslationTarget).
+	Translate    func(t model.Thread, text, lang string, done func(string, error))
+	CanTranslate func() bool
+	// LookupTranslations asks where the agents run for the translations
+	// kept of keys (translate.Key), calling done with those found on the
+	// main thread, and reporting whether it could ask; TranslationRevision
+	// counts them, and the view asks again for a reply it shows untranslated
+	// as it changes.
+	LookupTranslations  func(keys []string, done func(map[string]string)) bool
+	TranslationRevision func() uint64
+	// TranslatingElsewhere reports whether the translation of key is under
+	// way where the agents run, asked by another window or phone: the
+	// reply shows translating here too.
+	TranslatingElsewhere func(key string) bool
+	translations         map[string]*translation
+	// translationIDs are the translations by the id of their button's link.
+	translationIDs    map[int]*translation
+	translationSerial int
+	translateHooked   bool
+	// autoTranslating counts the automatic translations under way.
+	autoTranslating int
+	Lists           map[int]*ui.ListState
+	Groups          GroupCache
+	Copied, Open    map[int]bool
 	// BottomInset is the height of what floats over the bottom of the
 	// messages, as the phone's composer: the list scrolls under it and
 	// keeps that much room after its last message. The rows under the list
@@ -549,7 +574,7 @@ func (app *View) MessageView(c *ui.Context, m model.Message, streaming bool) {
 		})
 		return
 	case "assistant":
-		app.markdown(c, m, streaming && m.Status != "completed")
+		app.assistantText(c, m, streaming && m.Status != "completed")
 		return
 	}
 	hasDetails := strings.TrimSpace(m.Content) != "" || len(presented.Plan) > 0 || len(presented.Changes) > 0 || len(m.Agents) > 0

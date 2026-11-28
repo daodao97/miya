@@ -13,32 +13,45 @@ import (
 	"miya/internal/memory/manager"
 	"miya/internal/notification"
 	"miya/internal/remote"
+	"miya/internal/translate"
 )
 
 type State struct {
-	Collaboration     *model.CollaborationStatus `json:"collaboration,omitempty"`
-	DesktopWindows    bool                       `json:"desktopWindows,omitempty"`
-	DesktopControl    bool                       `json:"desktopControl,omitempty"`
-	MemoryRevision    uint64                     `json:"memoryRevision,omitempty"`
-	Memory            bool                       `json:"memory,omitempty"`
-	ReferenceSource   string                     `json:"referenceSource"`
-	Files             bool                       `json:"files,omitempty"`
-	RemoteFiles       bool                       `json:"remoteFiles,omitempty"`
-	WebPorts          bool                       `json:"webPorts,omitempty"`
-	Runtime           bool                       `json:"runtime,omitempty"`
-	WebServices       bool                       `json:"webServices,omitempty"`
-	FileReferences    bool                       `json:"fileReferences,omitempty"`
-	AutomationWebhook bool                       `json:"automationWebhook,omitempty"`
+	Collaboration  *model.CollaborationStatus `json:"collaboration,omitempty"`
+	DesktopWindows bool                       `json:"desktopWindows,omitempty"`
+	DesktopControl bool                       `json:"desktopControl,omitempty"`
+	MemoryRevision uint64                     `json:"memoryRevision,omitempty"`
+	// TranslationRevision counts the replies the desktop translated: the
+	// phone asks for those it shows untranslated (translation-lookup) as it
+	// changes.
+	TranslationRevision uint64 `json:"translationRevision,omitempty"`
+	// Translation is how replies translate, the desktop's, which the phone
+	// shows and changes (translation-settings); Translating the keys of
+	// the translations under way on the desktop.
+	Translation       *translate.Settings `json:"translation,omitempty"`
+	Translating       []string            `json:"translating,omitempty"`
+	Memory            bool                `json:"memory,omitempty"`
+	ReferenceSource   string              `json:"referenceSource"`
+	Files             bool                `json:"files,omitempty"`
+	RemoteFiles       bool                `json:"remoteFiles,omitempty"`
+	WebPorts          bool                `json:"webPorts,omitempty"`
+	Runtime           bool                `json:"runtime,omitempty"`
+	WebServices       bool                `json:"webServices,omitempty"`
+	FileReferences    bool                `json:"fileReferences,omitempty"`
+	AutomationWebhook bool                `json:"automationWebhook,omitempty"`
 	// AutomationBriefing says the desktop reads and sets the daily briefing
 	// through automation-briefing.
 	AutomationBriefing bool `json:"automationBriefing,omitempty"`
 	// AutomationReview says the desktop decides on reviews and revokes
 	// grants from a phone (docs/action-review.md).
-	AutomationReview bool                    `json:"automationReview,omitempty"`
-	Automations      bool                    `json:"automations,omitempty"`
-	AutomationRun    bool                    `json:"automationRun,omitempty"`
-	AutomationCreate bool                    `json:"automationCreate,omitempty"`
-	Projects         []model.ProjectSnapshot `json:"projects"`
+	AutomationReview bool `json:"automationReview,omitempty"`
+	Automations      bool `json:"automations,omitempty"`
+	AutomationRun    bool `json:"automationRun,omitempty"`
+	AutomationCreate bool `json:"automationCreate,omitempty"`
+	// Translate says the desktop translates replies with an agent, into the
+	// language a translate request's Lang names.
+	Translate bool                    `json:"translate,omitempty"`
+	Projects  []model.ProjectSnapshot `json:"projects"`
 	// An empty map is authoritative; nil means an older desktop that only
 	// provides per-phone push unread state.
 	CompletionUnread map[string]int64 `json:"completionUnread"`
@@ -122,6 +135,20 @@ type MemoryResult struct {
 type AutomationRunResult struct {
 	RequestID string            `json:"requestId"`
 	List      []automation.View `json:"list"`
+}
+
+// TranslationLookupResult answers a translation-lookup request: the
+// translations the desktop keeps of its Keys, by key.
+type TranslationLookupResult struct {
+	RequestID    string            `json:"requestId"`
+	Translations map[string]string `json:"translations,omitempty"`
+}
+
+// TranslateResult answers a translate request: Text is the request's Text
+// in the language it asked for.
+type TranslateResult struct {
+	RequestID string `json:"requestId"`
+	Text      string `json:"text,omitempty"`
 }
 
 type AutomationFormResult struct {

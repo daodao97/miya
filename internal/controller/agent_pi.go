@@ -28,8 +28,10 @@ type piAgentHost struct{ agentWorkspace }
 
 var _ piagent.Host = piAgentHost{}
 
-func (h piAgentHost) Snapshot() piagent.State {
-	c := h.Controller
+func (h piAgentHost) Snapshot() piagent.State { return h.Controller.piSnapshot() }
+
+// piSnapshot is how pi runs here: its command, provider and models.
+func (c *Controller) piSnapshot() piagent.State {
 	return piagent.State{Binary: c.Pi.Binary, Error: c.Pi.Error, Command: c.Pi.Command, Args: c.Pi.Args, Env: c.Pi.Env, Model: c.Pi.Model, Effort: c.Pi.Effort, Provider: c.piProvider(), ClaudeModel: textFirst(c.ClaudeModel, c.claudeDefaultModel)}
 }
 func (h piAgentHost) Run(id int) *pinative.Client { return h.Pi.Runs[id] }

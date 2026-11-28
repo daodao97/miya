@@ -29,6 +29,7 @@ import (
 	svcproto "miya/internal/service/protocol"
 	serviceserver "miya/internal/service/server"
 	"miya/internal/statecard"
+	"miya/internal/translate"
 	"miya/internal/uiruntime"
 )
 
@@ -170,6 +171,25 @@ func (c *Controller) ServiceRequest(req svcproto.Request) (any, error) {
 			return nil, err
 		}
 		return c.AutomationOp(req.Op, r)
+	case "translate":
+		var r translate.Request
+		if err := arg(&r); err != nil {
+			return nil, err
+		}
+		return c.prepareTranslate(c.Ctx, r)
+	case "translationSettings":
+		var s translate.Settings
+		if err := arg(&s); err != nil {
+			return nil, err
+		}
+		c.applyTranslationSettings(s)
+		return nil, nil
+	case "translationLookup":
+		var r translate.Lookup
+		if err := arg(&r); err != nil {
+			return nil, err
+		}
+		return translationCache().Lookup(r.Keys), nil
 	case "botSave", "botDelete", "botReset", "botRead":
 		var r bot.Request
 		if err := arg(&r); err != nil {
@@ -373,7 +393,7 @@ func (c *Controller) ServiceBusy() bool {
 	if c.Collaboration != nil && c.Collaboration.Context().Err() == nil && c.Collaboration.Pending() > 0 {
 		return true
 	}
-	if c.RemoteTerminals.Load() > 0 {
+	if c.RemoteTerminals.Load() > 0 || translating.Load() > 0 {
 		return true
 	}
 	if c.desktopBusy() {
@@ -451,17 +471,21 @@ func (c *Controller) SnapshotState() svcproto.State {
 		}
 		projectThreads[path] = items
 	}
+	translation := c.Translation
 	return svcproto.State{
-		Collaboration:   c.CollaborationCapabilities(),
-		ReferenceSource: c.ReferenceSource,
-		MemoryRevision:  c.MemoryRevision,
-		FastMode:        c.fastMode,
-		ProjectBusy:     busy,
-		ProjectThreads:  projectThreads,
-		DesktopUnread:   c.DesktopUnread,
-		Waiting:         c.WaitingThreads(),
-		Bots:            c.Bots(),
-		Cwd:             c.Cwd, Projects: c.Projects(), Threads: threads, Approvals: c.Approvals(),
+		Collaboration:       c.CollaborationCapabilities(),
+		ReferenceSource:     c.ReferenceSource,
+		MemoryRevision:      c.MemoryRevision,
+		TranslationRevision: c.TranslationRevision,
+		Translation:         &translation,
+		Translating:         translatingKeys(),
+		FastMode:            c.fastMode,
+		ProjectBusy:         busy,
+		ProjectThreads:      projectThreads,
+		DesktopUnread:       c.DesktopUnread,
+		Waiting:             c.WaitingThreads(),
+		Bots:                c.Bots(),
+		Cwd:                 c.Cwd, Projects: c.Projects(), Threads: threads, Approvals: c.Approvals(),
 		Status: c.Status(), HistoryStatus: c.HistoryStatus(), Ready: c.Ready(),
 		Models: snapshotModels(c.Models()), Model: c.Model(), Effort: c.Effort(), PermissionPolicy: c.PermissionPolicy(), Locale: c.Locale(),
 		ClaudeCommand: c.ClaudeCommand, ClaudeError: c.ClaudeError, ClaudeBinary: c.ClaudeBinary, ClaudeArgs: c.ClaudeArgs, ClaudeEnv: c.ClaudeEnv, ClaudeModel: c.ClaudeModel, ClaudeEffort: c.ClaudeEffort, ClaudeDefaultModel: c.claudeDefaultModel, ClaudeModels: snapshotClaudeModels(c.claudeModels),

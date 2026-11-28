@@ -19,6 +19,7 @@ import (
 	"miya/internal/chat/model"
 	"miya/internal/interaction"
 	projectmodel "miya/internal/project/model"
+	"miya/internal/translate"
 )
 
 const Version = 2
@@ -41,39 +42,45 @@ type Envelope struct {
 
 // State is everything a window shows but the messages.
 type State struct {
-	Collaboration      *model.CollaborationStatus `json:"collaboration,omitempty"`
-	MemoryRevision     uint64                     `json:"memoryRevision,omitempty"`
-	ReferenceSource    string                     `json:"referenceSource"`
-	FastMode           bool                       `json:"fastMode"`
-	Cwd                string                     `json:"cwd"`
-	Projects           []projectmodel.Project     `json:"projects"`
-	ProjectBusy        map[string]bool            `json:"projectBusy,omitempty"`
-	Threads            []model.Thread             `json:"threads"`
-	Approvals          []interaction.Request      `json:"approvals"`
-	Status             string                     `json:"status"`
-	HistoryStatus      string                     `json:"historyStatus"`
-	Ready              bool                       `json:"ready"`
-	Models             []LegacyModel              `json:"models"`
-	Model              string                     `json:"model"`
-	Effort             string                     `json:"effort"`
-	PermissionPolicy   string                     `json:"permissionPolicy"`
-	Locale             string                     `json:"locale"`
-	ClaudeCommand      string                     `json:"claudeCommand"`
-	ClaudeError        string                     `json:"claudeError"`
-	ClaudeBinary       string                     `json:"claudeBinary"`
-	ClaudeArgs         []string                   `json:"claudeArgs"`
-	ClaudeEnv          []string                   `json:"claudeEnv"`
-	ClaudeModel        string                     `json:"claudeModel"`
-	ClaudeEffort       string                     `json:"claudeEffort"`
-	ClaudeDefaultModel string                     `json:"claudeDefaultModel"`
-	ClaudeModels       []ClaudeModel              `json:"claudeModels,omitempty"`
-	PiCommand          string                     `json:"piCommand,omitempty"`
-	PiError            string                     `json:"piError,omitempty"`
-	PiBinary           string                     `json:"piBinary,omitempty"`
-	PiArgs             []string                   `json:"piArgs,omitempty"`
-	PiEnv              []string                   `json:"piEnv,omitempty"`
-	PiModel            string                     `json:"piModel,omitempty"`
-	PiEffort           string                     `json:"piEffort,omitempty"`
+	Collaboration  *model.CollaborationStatus `json:"collaboration,omitempty"`
+	MemoryRevision uint64                     `json:"memoryRevision,omitempty"`
+	// TranslationRevision counts the replies translated (translationLookup).
+	TranslationRevision uint64 `json:"translationRevision,omitempty"`
+	// Translation is how replies translate (translationSettings sets it),
+	// Translating the keys of the translations under way.
+	Translation        *translate.Settings    `json:"translation,omitempty"`
+	Translating        []string               `json:"translating,omitempty"`
+	ReferenceSource    string                 `json:"referenceSource"`
+	FastMode           bool                   `json:"fastMode"`
+	Cwd                string                 `json:"cwd"`
+	Projects           []projectmodel.Project `json:"projects"`
+	ProjectBusy        map[string]bool        `json:"projectBusy,omitempty"`
+	Threads            []model.Thread         `json:"threads"`
+	Approvals          []interaction.Request  `json:"approvals"`
+	Status             string                 `json:"status"`
+	HistoryStatus      string                 `json:"historyStatus"`
+	Ready              bool                   `json:"ready"`
+	Models             []LegacyModel          `json:"models"`
+	Model              string                 `json:"model"`
+	Effort             string                 `json:"effort"`
+	PermissionPolicy   string                 `json:"permissionPolicy"`
+	Locale             string                 `json:"locale"`
+	ClaudeCommand      string                 `json:"claudeCommand"`
+	ClaudeError        string                 `json:"claudeError"`
+	ClaudeBinary       string                 `json:"claudeBinary"`
+	ClaudeArgs         []string               `json:"claudeArgs"`
+	ClaudeEnv          []string               `json:"claudeEnv"`
+	ClaudeModel        string                 `json:"claudeModel"`
+	ClaudeEffort       string                 `json:"claudeEffort"`
+	ClaudeDefaultModel string                 `json:"claudeDefaultModel"`
+	ClaudeModels       []ClaudeModel          `json:"claudeModels,omitempty"`
+	PiCommand          string                 `json:"piCommand,omitempty"`
+	PiError            string                 `json:"piError,omitempty"`
+	PiBinary           string                 `json:"piBinary,omitempty"`
+	PiArgs             []string               `json:"piArgs,omitempty"`
+	PiEnv              []string               `json:"piEnv,omitempty"`
+	PiModel            string                 `json:"piModel,omitempty"`
+	PiEffort           string                 `json:"piEffort,omitempty"`
 	// Providers are those configured in Miya, never their keys, and
 	// ProviderUse the one each agent uses.
 	Providers     []provider.View   `json:"providers,omitempty"`

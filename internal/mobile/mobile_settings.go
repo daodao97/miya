@@ -128,6 +128,10 @@ func (m *App) settingsView(c *ui.Context) {
 			if m.settingsNavigation(c.Key("message-options"), tr("Model and permissions"), "").Clicked() {
 				m.openOptions(m.composerAgent())
 			}
+			m.settingsSeparator(c)
+			if m.settingsNavigation(c.Key("translation"), tr("Reply translation"), translationSettingValue()).Clicked() {
+				m.Router().Push("/settings/translation")
+			}
 		})
 		if m.State.AutomationWebhook {
 			m.loadPhoneWebhook()

@@ -262,7 +262,13 @@ func Start(parent context.Context, o Options, onEvent func(Event), onDone func(e
 
 // launch is pi's command line and the variables Miya adds for its extension.
 func launch(o Options) (args, env []string) {
-	args = append(append([]string(nil), o.Args...), "--mode", "rpc")
+	return launchIn(o, "--mode", "rpc")
+}
+
+// launchIn is launch with mode, pi's options of how it runs, in place of
+// a conversation's RPC.
+func launchIn(o Options, mode ...string) (args, env []string) {
+	args = append(append([]string(nil), o.Args...), mode...)
 	env = append([]string(nil), o.Env...)
 	if o.Provider.Usable() && o.Extension != "" {
 		models, _ := json.Marshal(o.Models)

@@ -73,6 +73,9 @@ func svgIcon(name string) *ui.SVG {
 	return s
 }
 
+// IconSVG is the icon of name, for a Painter to draw.
+func IconSVG(name string) *ui.SVG { return svgIcon(name) }
+
 func Icon(c *ui.Context, name string, size float32, color ui.Color) ui.Element {
 	return ui.Icon(c, svgIcon(name)).FontSize(size).TextColor(color).Shrink(0)
 }

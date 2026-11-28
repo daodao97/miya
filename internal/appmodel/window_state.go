@@ -2,6 +2,7 @@ package appmodel
 
 import (
 	"context"
+	"miya/internal/translate"
 
 	"miya/internal/agent/account"
 	"miya/internal/chat/model"
@@ -29,6 +30,14 @@ type WindowState struct {
 	HistoryStatus   func() string
 	LastSubmitError string
 	MemoryRevision  uint64
+	// TranslationRevision counts the replies translated where the agents
+	// run: a window asks for those it shows untranslated as it changes.
+	TranslationRevision uint64
+	// Translation is how replies translate, kept where the agents run and
+	// shared by windows and phones; Translating are the keys
+	// (translate.Key) of the translations under way there.
+	Translation     translate.Settings
+	Translating     []string
 	Model           func() string
 	ProjectCache    map[string][]model.Thread
 	Projects        func() []projectmodel.Project

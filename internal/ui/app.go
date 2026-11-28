@@ -25,6 +25,8 @@ import (
 	"miya/internal/prefs"
 	projectmodel "miya/internal/project/model"
 	svcproto "miya/internal/service/protocol"
+	"miya/internal/textutil"
+	"miya/internal/translate"
 	"miya/internal/uiruntime"
 	"miya/internal/widgets"
 	"miya/locales"
@@ -136,6 +138,26 @@ func NewChatAppWithController(c Host) *App {
 	app.MemoryNotice = app.memoryNoticeView
 	app.PasteAttachments = app.pasteAttachmentsData
 	app.SetNotice = func(s string) { app.Notice = s }
+	app.LookupTranslations = func(keys []string, done func(map[string]string)) bool {
+		go func() {
+			found, err := c.TranslationLookup(keys)
+			if err == nil && len(found) > 0 {
+				c.Dispatch(func() { done(found) })
+			}
+		}()
+		return true
+	}
+	app.TranslationRevision = func() uint64 { return c.State().TranslationRevision }
+	app.TranslatingElsewhere = func(key string) bool { return slices.Contains(c.State().Translating, key) }
+	app.Translate = func(t model.Thread, text, lang string, done func(string, error)) {
+		choice := widgets.Translation()
+		r := translate.Request{Text: text, Lang: lang, Agent: textutil.FirstNonEmpty(choice.Agent, model.ThreadAgent(t)), Model: choice.Model,
+			Project: textutil.FirstNonEmpty(t.Project, c.State().Cwd)}
+		go func() {
+			out, err := c.Translate(r)
+			c.Dispatch(func() { done(out, err) })
+		}()
+	}
 	app.NeedsReadFrame = func(t model.Thread, state *ui.ListState, groups int) bool {
 		return !app.ProjectDialog && !app.Switcher.Open && !app.ShortcutsOpen && !app.CommandPalette.Open && !t.Busy && !t.Loading && t.HistoryLoaded && groups > 0 && c.DesktopThreadUnread(t) && state.AtEnd()
 	}
@@ -518,6 +540,9 @@ func (app *App) Render(ctx *ui.Context) {
 	widgets.UseInterfaceLanguage(ctx)
 	app.Md.LinkMenu = widgets.MessageLinkMenu(ctx, app.C.State().Cwd)
 	app.MarkVisibleThreadRead()
+	// Reply translation is the service's, shared with the phones.
+	widgets.SetTranslationSettings(app.C.State().Translation)
+	widgets.SaveTranslationSettings = app.C.SetTranslationSettings
 	if app.MemoryRevisionSeen != app.C.State().MemoryRevision {
 		app.MemoryRevisionSeen = app.C.State().MemoryRevision
 		app.MemoryNotes = nil

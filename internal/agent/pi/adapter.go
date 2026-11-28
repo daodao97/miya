@@ -241,3 +241,22 @@ func (b Adapter) ModelOptions() []agent.ModelOption {
 	}
 	return out
 }
+
+// Print asks pi once, as its conversations run it with the state s: its
+// provider, and model, or the conversations' default when "". See
+// pinative.Print.
+func Print(ctx context.Context, s State, cwd, model, system, prompt string) (string, error) {
+	opts := pinative.Options{Binary: s.Binary, Args: s.Args, Env: s.Env, Cwd: cwd, Provider: s.Provider, Models: providerModels(s)}
+	if model == "" {
+		model = textutil.FirstNonEmpty(s.Model, defaultModel(s))
+	}
+	opts.Model = model
+	if s.Provider.Usable() {
+		ext, err := pinative.EnsureExtension()
+		if err != nil {
+			return "", err
+		}
+		opts.Extension = ext
+	}
+	return pinative.Print(ctx, opts, system, prompt)
+}

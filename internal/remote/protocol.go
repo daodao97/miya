@@ -99,12 +99,22 @@ type Request struct {
 	Thread            int             `json:"thread"`
 	// ServerID is the durable identity; Thread is a desktop-local number.
 	// Optional for compatibility with phones that only send Thread.
-	ServerID string          `json:"serverId,omitempty"`
-	Project  string          `json:"project,omitempty"`
-	Agent    string          `json:"agent,omitempty"`
-	Text     string          `json:"text,omitempty"`
-	Approval json.RawMessage `json:"approval,omitempty"`
-	Allow    bool            `json:"allow,omitempty"`
+	ServerID string `json:"serverId,omitempty"`
+	Project  string `json:"project,omitempty"`
+	Agent    string `json:"agent,omitempty"`
+	Text     string `json:"text,omitempty"`
+	// Lang is the language a translate request asks for; older desktops
+	// ignore it and translate into Simplified Chinese. Model is the model of
+	// Agent that translates, its default when empty.
+	Lang  string `json:"lang,omitempty"`
+	Model string `json:"model,omitempty"`
+	// Keys are the translations a translation-lookup asks for
+	// (translate.Key).
+	Keys []string `json:"keys,omitempty"`
+	// Translation is the settings a translation-settings request keeps.
+	Translation json.RawMessage `json:"translation,omitempty"`
+	Approval    json.RawMessage `json:"approval,omitempty"`
+	Allow       bool            `json:"allow,omitempty"`
 	// Images go with a send, as attachments of the message.
 	Images []Image `json:"images,omitempty"`
 	// Have is what the phone holds of Thread as it subscribes.

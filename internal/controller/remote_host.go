@@ -46,7 +46,8 @@ func (c *Controller) PhoneSnapshot() phoneproto.State {
 }
 
 func (c *Controller) phoneSnapshot(followUps map[string][]model.ThreadTask) phoneproto.State {
-	s := phoneproto.State{DesktopControl: desktop.Available(), ReferenceSource: c.ReferenceSource, MemoryRevision: c.MemoryRevision, Memory: c.Memories().Store != nil, Files: true, RemoteFiles: true, WebPorts: true, WebServices: true, Runtime: true, FileReferences: true, Automations: c.Auto != nil, Status: c.Status(), Approvals: c.Approvals(), Agents: c.phoneAgentOptions(), Quotas: c.PhoneQuotas()}
+	translation := c.Translation
+	s := phoneproto.State{DesktopControl: desktop.Available(), ReferenceSource: c.ReferenceSource, MemoryRevision: c.MemoryRevision, TranslationRevision: c.TranslationRevision, Translation: &translation, Translating: translatingKeys(), Memory: c.Memories().Store != nil, Files: true, RemoteFiles: true, WebPorts: true, WebServices: true, Runtime: true, FileReferences: true, Automations: c.Auto != nil, Status: c.Status(), Approvals: c.Approvals(), Agents: c.phoneAgentOptions(), Quotas: c.PhoneQuotas()}
 	s.CompletionUnread = make(map[string]int64, len(c.DesktopUnread))
 	for key, version := range c.DesktopUnread {
 		s.CompletionUnread[key] = version
@@ -61,6 +62,7 @@ func (c *Controller) phoneSnapshot(followUps map[string][]model.ThreadTask) phon
 	s.DesktopWindows = s.DesktopControl
 	s.AutomationRun = c.Auto != nil
 	s.AutomationCreate = c.Auto != nil
+	s.Translate = true
 	s.AutomationWebhook = c.Auto != nil
 	s.AutomationBriefing = c.Auto != nil
 	s.AutomationReview = c.Auto != nil
@@ -266,6 +268,23 @@ func (c *Controller) ServePhoneConnection(ctx context.Context, conn phoneConnect
 		}
 	}()
 	defer func() { cancel(); <-draftDone }()
+	translations := make(chan remote.Request, 4)
+	translateDone := make(chan struct{})
+	go func() {
+		defer close(translateDone)
+		for {
+			select {
+			case r := <-translations:
+				if !send(c.phoneTranslate(ctx, r)) {
+					cancel()
+					return
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	defer func() { cancel(); <-translateDone }()
 	go func() {
 		defer close(requests)
 		defer cancel() // Revoke desktop control immediately when Receive sees EOF.
@@ -315,7 +334,7 @@ func (c *Controller) ServePhoneConnection(ctx context.Context, conn phoneConnect
 	}()
 	ticker := time.NewTicker(phonePollInterval)
 	defer ticker.Stop()
-	ps := &phoneSession{c: c, ctx: ctx, send: send, collaborationJobs: collaborationJobs, drafts: drafts, previews: previews, lastRevision: -1}
+	ps := &phoneSession{c: c, ctx: ctx, send: send, collaborationJobs: collaborationJobs, drafts: drafts, translations: translations, previews: previews, lastRevision: -1}
 	type snapshot struct {
 		state    phoneproto.State
 		revision int

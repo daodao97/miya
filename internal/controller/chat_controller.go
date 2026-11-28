@@ -41,6 +41,7 @@ import (
 	svcproto "miya/internal/service/protocol"
 	"miya/internal/statecard"
 	"miya/internal/textutil"
+	"miya/internal/translate"
 	"miya/internal/uiruntime"
 )
 
@@ -204,6 +205,7 @@ func newChatController() *Controller {
 	c.claudeDefaultModel = prefs.Load("claudeDefaultModel")
 	c.claudeModels = loadClaudeModels()
 	c.loadPiSettings()
+	c.Translation = translate.LoadSettings(prefs.Load)
 	c.loadProviders()
 	c.agents = loadAgentSwitches()
 	c.Draft, c.SetDraft = uiruntime.CreateSignal("")

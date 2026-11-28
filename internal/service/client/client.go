@@ -229,13 +229,13 @@ func (cl *Client) Call(op string, args, out any) error {
 }
 
 // CallTimeout is how long a request may take: most answer at once,
-// a draft waits for an agent, and a confirmation card for the person.
+// a draft or a translation waits for an agent, and a confirmation card for the person.
 func CallTimeout(op string) time.Duration {
 	if mcpproto.WaitsForUser(op) {
 		return CardTimeout + time.Minute
 	}
 	switch op {
-	case "automationDraft":
+	case "automationDraft", "translate":
 		return 3 * time.Minute
 	}
 	return 15 * time.Second

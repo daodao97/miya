@@ -2135,5 +2135,20 @@
   "botProjectUnknown": "Add the project to Miya before giving it a Bot",
   "botGone": "This Bot no longer exists",
   "botConversationNotLoaded": "This Bot's conversation is not loaded yet. Try again in a moment, or start a new conversation from the Bot's menu",
-  "botMessagePlaceholder": "Message %s… / Commands · @ Files"
+  "botMessagePlaceholder": "Message %s… / Commands · @ Files",
+  "showOriginal_68cdea": "Show original",
+  "nothingToTranslate_ef30c2": "Nothing to translate",
+  "thisReplyIsTooLongTo_780294": "This reply is too long to translate",
+  "theAgentReturnedNoTranslation_3ed475": "The agent returned no translation",
+  "translationIsBusyTryAgainShortly_42e0ef": "Translation is busy. Try again shortly.",
+  "translateToS_a51017": "Translate to %s",
+  "replyTranslation_a43db3": "Reply translation",
+  "translateReplies_73a798": "Translate replies",
+  "translateInto_9ba6d1": "Translate into",
+  "conversationSAgent_dea33a": "Conversation's agent",
+  "translatingAgent_730e8b": "Translating agent",
+  "translatingModel_ba2327": "Translating model",
+  "translateAutomatically_11403b": "Translate automatically",
+  "translatesRepliesInAnotherLanguageAs_2f0b3d": "Translates replies in another language as they show, without a click.",
+  "repliesInAnotherLanguageGetA_1c2721": "Replies in another language get a translate button. The agent translates them on your computer, using its quota. These settings are your computer's, shared by its windows and phones."
 }

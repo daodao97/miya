@@ -19,6 +19,7 @@ import (
 	"miya/internal/runtime/tracker"
 	svcclient "miya/internal/service/client"
 	svcproto "miya/internal/service/protocol"
+	"miya/internal/translate"
 )
 
 // Host is the controller contract for one desktop workspace. UI state stays in App.
@@ -55,6 +56,15 @@ type Host interface {
 	AskAccountReset()
 	AttachService(cl *svcclient.Client, st svcproto.State)
 	AutomationOp(op string, r automation.Request) (any, error)
+	// Translate puts a reply into the language r.Lang with an agent.
+	// It waits for the agent: call it off the main thread.
+	Translate(r translate.Request) (string, error)
+	// TranslationLookup returns the translations kept of keys
+	// (translate.Key), off the main thread.
+	TranslationLookup(keys []string) (map[string]string, error)
+	// SetTranslationSettings keeps a change of how replies translate where
+	// the agents run, on the main thread.
+	SetTranslationSettings(s translate.Settings)
 	BackendReady() bool
 	// Bots are the named assistants. BotThread is a Bot's standing
 	// conversation among the loaded ones; CurrentBot is the Bot whose

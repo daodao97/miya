@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 
@@ -128,6 +129,10 @@ type App struct {
 	Autos              mobileAutomations
 	Collaborations     widgets.CollaborationUI
 	CollaborationCalls map[string]*MobileCollaborationCall
+	// TranslateCalls wait for the desktop to translate a reply, by request ID;
+	// LookupCalls for the translations it keeps.
+	TranslateCalls map[string]func(string, error)
+	LookupCalls    map[string]func(map[string]string)
 	// selected is the phone's workspace for new conversations.
 	Selected            string
 	ExpandedProject     string
@@ -268,6 +273,12 @@ func NewMobileApp() *App {
 	}
 	m.View.ImagePreview = m.MessageImage
 	m.View.OnHandoff = m.handoffToNewThread
+	m.View.Translate = m.translateReply
+	m.View.LookupTranslations = m.lookupTranslations
+	m.View.TranslationRevision = func() uint64 { return m.State.TranslationRevision }
+	m.View.TranslatingElsewhere = func(key string) bool { return slices.Contains(m.State.Translating, key) }
+	widgets.SaveTranslationSettings = m.saveTranslationSettings
+	m.View.CanTranslate = func() bool { return m.Connected && m.State.Translate }
 	m.View.WorkingAccessory = m.collaborationToggle
 	m.View.OnRetry = func(req appmodel.RetryRequest) {
 		r := m.ThreadRequest("retry", req.ThreadID)
@@ -494,6 +505,7 @@ func (m *App) disconnectDesktop(unregister, preserveDesktop bool) {
 		m.DesktopApproval = MobileDesktopApproval{}
 	}
 	m.interruptAutomationRequest()
+	m.interruptTranslations()
 	m.clearFileReferences()
 	m.clearWebServices()
 	if !m.RetryAt.IsZero() {
@@ -593,6 +605,7 @@ func (m *App) Run(ctx context.Context, gen int, link string, wake <-chan struct{
 			m.Conn, m.Connected, m.Status = nil, false, message
 			m.DesktopPreviews = nil
 			m.interruptAutomationRequest()
+			m.interruptTranslations()
 			m.RetryAt, m.RetryError = retryAt, retryError
 			if m.filesProxy != nil {
 				m.filesProxy.SetConn(nil)
@@ -708,6 +721,12 @@ func (m *App) read(gen int, conn *remote.Conn) (greeted bool, err error) {
 		case "automation-review":
 			data, message := f.Data, f.Error
 			m.onMain(gen, func() { m.ReceiveAutomationReview(data, message) })
+		case "translate":
+			data, message := f.Data, f.Error
+			m.onMain(gen, func() { m.ReceiveTranslation(data, message) })
+		case "translation-lookup":
+			data := f.Data
+			m.onMain(gen, func() { m.ReceiveTranslationLookup(data) })
 		case "automation-draft", "automation-create":
 			op, data, message := f.Type, f.Data, f.Error
 			m.onMain(gen, func() { m.ReceiveAutomationForm(op, data, message) })
@@ -804,6 +823,10 @@ func (m *App) read(gen int, conn *remote.Conn) (greeted bool, err error) {
 // The desktop may renumber threads after a restart or while repairing an old
 // cache. Rebind the open page by durable identity before handling its deltas.
 func (m *App) ApplyPhoneState(s phoneproto.State) {
+	if s.Translation != nil {
+		// The desktop's: the phone shows and changes them.
+		widgets.SetTranslationSettings(*s.Translation)
+	}
 	m.CloseResolvedDesktopControl(s.Approvals)
 	if m.State.MemoryRevision != s.MemoryRevision {
 		m.Memories.List = manager.List{}
@@ -1218,6 +1241,8 @@ func (m *App) ViewRoot(c *ui.Context) {
 					m.languageSettingsPage(c)
 				case "/settings/voice":
 					m.voiceSettingsPage(c)
+				case "/settings/translation":
+					m.translationSettingsPage(c)
 				case "/settings/webhook":
 					m.webhookSettingsPage(c)
 				case "/automation":

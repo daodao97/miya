@@ -293,6 +293,11 @@ func (c *Controller) ApplyState(s svcproto.State) {
 	c.CollaborationRemote = s.Collaboration
 	c.ReferenceSource = s.ReferenceSource
 	c.MemoryRevision = s.MemoryRevision
+	c.TranslationRevision = s.TranslationRevision
+	if s.Translation != nil {
+		c.Translation = *s.Translation
+	}
+	c.Translating = s.Translating
 	c.fastMode = s.FastMode
 	c.Cwd = windowCwd
 	c.ProjectCache = projects
